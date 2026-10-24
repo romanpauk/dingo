@@ -103,8 +103,9 @@ def variants(spec):
 
 
 def form_layer(pattern, where):
-    """Where a pattern of a route form is: "element" for a variable, "kind"
-    for the kind that has the form, "target" for the kind it leads to.
+    """Where a pattern of an operation is: "element" for a variable,
+    "semantics" for the wrapper semantics that has the operation, "target" for
+    the wrapper semantics it leads to.
 
     Patterns are a variable or one layer applied to a variable; anything else
     needs the generator to grow.
@@ -114,13 +115,13 @@ def form_layer(pattern, where):
     if pattern.form.value != "layer" or len(pattern.args) != 1:
         raise GeneratorError(f"{where}: pattern is not a layer of one argument")
     if pattern.name == "K":
-        return "kind"
+        return "semantics"
     if pattern.name == "T":
         return "target"
-    raise GeneratorError(f"{where}: pattern names the layer kind {pattern.name}")
+    raise GeneratorError(f"{where}: pattern names the wrapper semantics {pattern.name}")
 
 
-# The property bits of a layer kind, in the order of LayerTrait, then whether
+# The property bits of a wrapper semantics, in the order of LayerTrait, then whether
 # it is variadic and has an extent.
 LAYER_PROPERTIES = (
     "owning",
@@ -162,7 +163,7 @@ def storage_form_fields(form):
 
 
 def layer_property_names(kind):
-    """The property names of a layer kind, in the order of their bits."""
+    """The property names of a wrapper semantics, in the order of their bits."""
     names = {trait.value for trait in kind.traits}
     if kind.variadic:
         names.add("variadic")
@@ -197,15 +198,15 @@ def scope_fields(scope, form_ids):
     }
 
 
-def form_fields(name, rule, of_kind, where):
-    """The fields of a route form, or of a rule of a leaf, from its template
+def form_fields(name, rule, of_semantics, where):
+    """The fields of a operation, or of a rule of a leaf, from its template
     or its route."""
     for pattern in (rule.from_shape, rule.to_shape):
         if pattern.category is None:
             raise GeneratorError(f"{where}: pattern has no value category")
     return {
         "id": name,
-        "of_kind": of_kind,
+        "of_semantics": of_semantics,
         "from_layer": form_layer(rule.from_shape, where),
         "from_category": rule.from_shape.category.value,
         "to_layer": form_layer(rule.to_shape, where),
@@ -216,18 +217,18 @@ def form_fields(name, rule, of_kind, where):
         "upcast": rule.via is not None and rule.via.value == "upcast",
         "converts": rule.via is not None and rule.via.value == "convert",
         "cached": rule.cache is not None,
-        "kind_properties": sum(
+        "semantics_properties": sum(
             LAYER_PROPERTY_BITS[t.value] for t in getattr(rule, "kind_traits", ())
         ),
     }
 
 
-def route_form_entries(spec):
-    """The route forms and the rules of a leaf in the order of the algebra,
+def operation_entries(spec):
+    """The operations and the rules of a leaf in the order of the algebra,
     the order of their first routes."""
-    templates = {template.form: template for template in spec.route_forms}
+    templates = {template.form: template for template in spec.operations}
     entries, seen = [], set()
-    for route in spec.routes:
+    for route in spec.rules:
         key = route.form if route.form is not None else route.id
         if key in seen:
             continue
@@ -237,11 +238,11 @@ def route_form_entries(spec):
         else:
             template = templates[route.form]
             entries.append(
-                form_fields(route.form.value, template, True, f"route_forms.{template.id}")
+                form_fields(route.form.value, template, True, f"operations.{template.id}")
             )
     for form, template in templates.items():
         if form not in seen:
-            entries.append(form_fields(form.value, template, True, f"route_forms.{template.id}"))
+            entries.append(form_fields(form.value, template, True, f"operations.{template.id}"))
     return entries
 
 
@@ -266,26 +267,26 @@ def selection_fields(rule):
     }
 
 
-def route_forms(spec):
-    """include/dingo/conversion/route_forms.gen.h from the layer kinds and the
-    route forms."""
+def operations(spec):
+    """include/dingo/conversion/operations.gen.h from the wrapper semantics and the
+    operations."""
     from spec.schema import Access, ValueCategory
 
     content = render(
-        "route_forms.gen.h.j2",
+        "operations.gen.h.j2",
         layer_properties=[
             {"name": name, "bit": bit} for name, bit in LAYER_PROPERTY_BITS.items()
         ],
         value_categories=[c.value for c in ValueCategory],
         accesses=[a.value for a in Access],
         requirements=[{"name": name, "bit": bit} for name, bit in REQUIREMENT_BITS.items()],
-        route_forms=route_form_entries(spec),
+        operations=operation_entries(spec),
     )
     return [
         GeneratedFile(
-            path="include/dingo/conversion/route_forms.gen.h",
+            path="include/dingo/conversion/operations.gen.h",
             content=content,
-            spec_ids=("layer_kinds", "route_forms", "routes"),
+            spec_ids=("wrapper_semantics", "operations", "routes"),
         )
     ]
 
@@ -356,34 +357,36 @@ def key_kinds(spec):
     ]
 
 
-def layer_kinds(spec):
-    """include/dingo/conversion/layer_kinds.gen.h from the layer kinds and
-    cpp.kind_projections: the tag of each layer kind of the library and its
-    layer_kind_traits, the declaration a kind of the user makes too."""
-    spellings = {p.kind: p.spelling for p in spec.cpp.kind_projections}
+def wrapper_semantics(spec):
+    """include/dingo/conversion/wrapper_semantics.gen.h from the wrapper semantics
+    and cpp.semantics_tags: the tag of each wrapper semantics of the library and
+    its wrapper_semantics, the declaration the semantics of a user make too."""
+    spellings = {p.semantics: p.spelling for p in spec.cpp.semantics_tags}
     namespaces = {spelling.rpartition("::")[0] for spelling in spellings.values()}
     if len(namespaces) != 1:
-        raise GeneratorError("cpp.kind_projections: tags span several namespaces")
-    names = {kind: spelling.rpartition("::")[2] for kind, spelling in spellings.items()}
-    kinds = [
+        raise GeneratorError("cpp.semantics_tags: tags span several namespaces")
+    names = {key: spelling.rpartition("::")[2] for key, spelling in spellings.items()}
+    semantics_list = [
         {
-            "id": kind.id,
-            "name": names[kind.id],
-            "properties": layer_property_names(kind),
-            "forms": [
-                {"form": form.form.value, "target": names.get(form.target)}
-                for form in kind.forms
+            "id": semantics.id,
+            "name": names[semantics.id],
+            "properties": layer_property_names(semantics),
+            "operations": [
+                {"operation": operation.form.value, "target": names.get(operation.target)}
+                for operation in semantics.forms
             ],
         }
-        for kind in spec.layer_kinds
+        for semantics in spec.wrapper_semantics
     ]
     return [
         GeneratedFile(
-            path="include/dingo/conversion/layer_kinds.gen.h",
+            path="include/dingo/conversion/wrapper_semantics.gen.h",
             content=render(
-                "layer_kinds.gen.h.j2", namespace=namespaces.pop(), kinds=kinds
+                "wrapper_semantics.gen.h.j2",
+                namespace=namespaces.pop(),
+                semantics_list=semantics_list,
             ),
-            spec_ids=("cpp.kind_projections", "layer_kinds"),
+            spec_ids=("cpp.semantics_tags", "wrapper_semantics"),
         )
     ]
 
@@ -544,12 +547,12 @@ def diagnostic_tests(spec):
 EMITTERS = (
     capabilities,
     variants,
-    route_forms,
+    operations,
     storage_forms,
     scopes,
     selection_rules,
     key_kinds,
-    layer_kinds,
+    wrapper_semantics,
     diagnostics,
     diagnostic_tests,
 )

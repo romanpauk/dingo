@@ -85,7 +85,7 @@ template <typename T, typename U> struct @STORAGE_TRAITS@<dingo::shared, @H@<T>,
 WRAPPER_TRAITS = """\
 struct api_wrapper_traits_family {};
 template <typename T> struct {name}<@H@<T>> {
-  using kind = dingo::shared_kind;
+  using semantics = dingo::semantics::shared_owner;
   using family = api_wrapper_traits_family;
   using arguments = dingo::type_list<T>;
   template <typename U> using rebind = @H@<U>;
@@ -116,7 +116,7 @@ def path(api: str, spelling: str) -> CppApiBinding:
     return CppApiBinding(id=f"{api}_cpp", api=api, spelling=spelling)
 
 
-# A sharing kind of the user and a handle of it, for the layer kind entry.
+# A sharing kind of the user and a handle of it, for the wrapper semantics entry.
 LAYER_KIND_TRAITS = """\
 struct @P@kind {};
 template <> struct {name}<@P@kind> {
@@ -125,14 +125,14 @@ template <> struct {name}<@P@kind> {
       dingo::layer_property::nullable | dingo::layer_property::borrowable |
       dingo::layer_property::constructible | dingo::layer_property::copyable |
       dingo::layer_property::wrapper;
-  using forms = dingo::type_list<
-      dingo::kind_form<dingo::route_form::borrow>,
-      dingo::kind_form<dingo::route_form::adopt, dingo::pointer_kind>,
-      dingo::kind_form<dingo::route_form::upcast_copied>>;
+  using operations = dingo::type_list<
+      dingo::op<dingo::operation::borrow>,
+      dingo::op<dingo::operation::adopt, dingo::semantics::pointer>,
+      dingo::op<dingo::operation::upcast_copied>>;
 };
 struct @P@family {};
 template <typename T> struct dingo::wrapper_traits<@H@<T>> {
-  using kind = @P@kind;
+  using semantics = @P@kind;
   using family = @P@family;
   using arguments = dingo::type_list<T>;
   template <typename U> using rebind = @H@<U>;
@@ -1089,12 +1089,12 @@ service &borrowed = container.resolve<service &>();
         declarations=wrapper(HANDLE_CLASS + WRAPPER_TRAITS),
     ),
     name(
-        "layer_kind_traits",
-        "dingo::layer_kind_traits",
+        "wrapper_semantics",
+        "dingo::wrapper_semantics",
         TYPE_TRAITS,
         TYPES
         + handle(
-            "layer_kind_traits",
+            "wrapper_semantics",
             """\
 dingo::container<> container;
 container.register_type<dingo::scope<dingo::shared>, dingo::storage<@H@<service>>>();
@@ -1106,7 +1106,7 @@ service &borrowed = container.resolve<service &>();
 (void)copy;
 """,
         ),
-        declarations=handle("layer_kind_traits", HANDLE_CLASS + LAYER_KIND_TRAITS),
+        declarations=handle("wrapper_semantics", HANDLE_CLASS + LAYER_KIND_TRAITS),
     ),
     name(
         "conversion_traits",

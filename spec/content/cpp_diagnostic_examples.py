@@ -31,7 +31,7 @@ struct config {
 """
 
 
-# A user wrapper of the layer kind `handle_kind`, whose layer_kind_traits each
+# A user wrapper of the wrapper semantics `handle_kind`, whose wrapper_semantics each
 # example declares wrongly in its own way.
 HANDLE = """\
 #include <cstdint>
@@ -47,7 +47,7 @@ template <typename T> struct handle {
 struct handle_kind {};
 
 template <typename T> struct dingo::wrapper_traits<handle<T>> {
-  using kind = handle_kind;
+  using semantics = handle_kind;
   using arguments = dingo::type_list<T>;
   template <typename U> using rebind = handle<U>;
   static T &element(const handle<T> &value) { return *value.pointer; }
@@ -67,7 +67,7 @@ int main() {
 
 
 def kind_example(diagnostic, traits, subject="handle_kind"):
-    """A program whose handle kind has the layer_kind_traits `traits`."""
+    """A program whose handle kind has the wrapper_semantics `traits`."""
     return example(diagnostic, SHARED, HANDLE + traits + REGISTER_HANDLE, subject)
 
 
@@ -81,9 +81,9 @@ HANDLE_PROPERTIES = (
 
 def kind_traits(forms, properties=HANDLE_PROPERTIES):
     return f"""
-template <> struct dingo::layer_kind_traits<handle_kind> {{
+template <> struct dingo::wrapper_semantics<handle_kind> {{
   static constexpr std::uint16_t properties = {properties};
-  using forms = {forms};
+  using operations = {forms};
 }};
 """
 
@@ -749,45 +749,45 @@ int main() {
 }
 """,
     ),
-    kind_example("layer_kind_undeclared", ""),
+    kind_example("semantics_undeclared", ""),
     kind_example(
-        "kind_forms_malformed",
-        kind_traits("dingo::kind_form<dingo::route_form::borrow>"),
+        "operations_malformed",
+        kind_traits("dingo::op<dingo::operation::borrow>"),
     ),
     kind_example(
-        "kind_form_of_leaf",
-        kind_traits("dingo::type_list<dingo::kind_form<dingo::route_form::copy>>"),
+        "operation_of_leaf",
+        kind_traits("dingo::type_list<dingo::op<dingo::operation::copy>>"),
     ),
     kind_example(
-        "kind_form_needs_target",
-        kind_traits("dingo::type_list<dingo::kind_form<dingo::route_form::share>>"),
+        "operation_needs_target",
+        kind_traits("dingo::type_list<dingo::op<dingo::operation::share>>"),
     ),
     kind_example(
-        "kind_form_takes_no_target",
+        "operation_takes_no_target",
         kind_traits(
             "dingo::type_list<\n"
-            "      dingo::kind_form<dingo::route_form::borrow, dingo::shared_kind>>"
+            "      dingo::op<dingo::operation::borrow, dingo::semantics::shared_owner>>"
         ),
     ),
     kind_example(
-        "kind_form_repeated",
+        "operation_repeated",
         kind_traits(
-            "dingo::type_list<dingo::kind_form<dingo::route_form::borrow>,\n"
-            "                                 dingo::kind_form<dingo::route_form::borrow>>"
+            "dingo::type_list<dingo::op<dingo::operation::borrow>,\n"
+            "                                 dingo::op<dingo::operation::borrow>>"
         ),
     ),
     kind_example(
-        "kind_property_unknown",
+        "property_unknown",
         kind_traits(
-            "dingo::type_list<dingo::kind_form<dingo::route_form::borrow>>",
+            "dingo::type_list<dingo::op<dingo::operation::borrow>>",
             properties=HANDLE_PROPERTIES + " |\n      std::uint16_t(1) << 15",
         ),
     ),
     kind_example(
-        "kind_form_needs_property",
+        "operation_needs_property",
         kind_traits(
             "dingo::type_list<\n"
-            "      dingo::kind_form<dingo::route_form::release, dingo::pointer_kind>>"
+            "      dingo::op<dingo::operation::release, dingo::semantics::pointer>>"
         ),
     ),
 )

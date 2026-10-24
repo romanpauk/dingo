@@ -170,8 +170,8 @@ When working from a checkout, the top-level CMake project also supports
 - Explicit variant construction plus whole-variant or held-alternative
   resolution
 - Custom allocator hooks, with no dependency on RTTI
-- Extension points for wrappers, layer kinds, scopes, conversions, and lookup
-  indexes
+- Extension points for wrappers, wrapper semantics, scopes, conversions, and
+  lookup indexes
 - Extensive generated matrix tests across features, registration modes, scopes,
   stored types, resolved types, and containers. See the
   [generated matrix test model](test/matrix/README.md).

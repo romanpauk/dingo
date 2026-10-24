@@ -121,17 +121,17 @@ def valid_request(shape, kind):
 
 
 def steps_of(model):
-    """The route form and the C++ tag of the kind of each route id."""
-    tags = {p.kind: p.spelling for p in model.spec.cpp.kind_projections}
+    """The operation and the C++ tag of the kind of each route id."""
+    tags = {p.semantics: p.spelling for p in model.spec.cpp.semantics_tags}
     kinds = {
-        form.id: kind.id for kind in model.spec.layer_kinds for form in kind.forms
+        form.id: kind.id for kind in model.spec.wrapper_semantics for form in kind.forms
     }
     return {
         route.id: {
             "form": route.form.value if route.form is not None else route.id,
             "kind": tags[kinds[route.id]] if route.id in kinds else None,
         }
-        for route in model.routes
+        for route in model.rules
     }
 
 

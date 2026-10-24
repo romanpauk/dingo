@@ -223,7 +223,7 @@ private:
   template <std::size_t Term>
   static constexpr bool borrows =
       plan_v<Binding, Term>.kind != completion::construct ||
-      has_properties(kind_of(Binding::published.items[Term].value),
+      has_properties(semantics_of(Binding::published.items[Term].value),
                      layer_property::immovable);
 
   template <std::size_t Term>
@@ -960,7 +960,7 @@ private:
   // returns visit.unsupported().
   template <typename Made, typename Visit>
   static decltype(auto) visit_layers(const request_plan &plan, Visit &visit) {
-    const route_form *forms = plan.creating;
+    const operation *forms = plan.creating;
     switch (plan.created) {
     case 0:
       return visit.template apply<created_layers<Made>>();
@@ -968,10 +968,10 @@ private:
       return visit_layer<Made>(forms[0], visit);
     case 2:
       switch (forms[1]) {
-      case route_form::wrap:
-        return visit_layer<Made, route_form::wrap>(forms[0], visit);
-      case route_form::adopt:
-        return visit_layer<Made, route_form::adopt>(forms[0], visit);
+      case operation::wrap:
+        return visit_layer<Made, operation::wrap>(forms[0], visit);
+      case operation::adopt:
+        return visit_layer<Made, operation::adopt>(forms[0], visit);
       default:
         break;
       }
@@ -984,15 +984,15 @@ private:
 
   // Calls `visit` with the created layers of `Outer...` over the layer the
   // creating form `form` makes.
-  template <typename Made, route_form... Outer, typename Visit>
-  static decltype(auto) visit_layer(route_form form, Visit &visit) {
+  template <typename Made, operation... Outer, typename Visit>
+  static decltype(auto) visit_layer(operation form, Visit &visit) {
     switch (form) {
-    case route_form::wrap:
+    case operation::wrap:
       return visit
-          .template apply<created_layers<Made, Outer..., route_form::wrap>>();
-    case route_form::adopt:
+          .template apply<created_layers<Made, Outer..., operation::wrap>>();
+    case operation::adopt:
       return visit
-          .template apply<created_layers<Made, Outer..., route_form::adopt>>();
+          .template apply<created_layers<Made, Outer..., operation::adopt>>();
     default:
       return visit.unsupported();
     }

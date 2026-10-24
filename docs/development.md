@@ -122,8 +122,8 @@ The route tools compare what the library does with the route rules of the spec,
   `spec/content/diagnostics.py`.
 - [`test/routes/summarize.py`](../test/routes/summarize.py) lists where the
   runtime, static, and mixed containers differ from each other.
-- The library is also probed with layer kinds of the user, declared once in
-  [`test/routes/user_kinds.py`](../test/routes/user_kinds.py): kinds of the
+- The library is also probed with wrapper semantics of the user, declared once
+  in [`test/routes/user_kinds.py`](../test/routes/user_kinds.py): kinds of the
   properties and forms of library kinds, a variant, an array that moves, and
   mutations that differ from a library kind by one form or property. The
   extractor generates their C++ declarations, over the wrappers of

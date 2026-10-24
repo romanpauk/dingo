@@ -54,19 +54,18 @@ template <typename... Subjects> struct key_alias_limit_carrier {};
 template <typename... Subjects> struct key_interface_undeclared_carrier {};
 template <typename... Subjects> struct key_type_values_carrier {};
 template <typename... Subjects> struct key_value_not_of_key_type_carrier {};
-template <typename... Subjects> struct kind_form_needs_property_carrier {};
-template <typename... Subjects> struct kind_form_needs_target_carrier {};
-template <typename... Subjects> struct kind_form_of_leaf_carrier {};
-template <typename... Subjects> struct kind_form_repeated_carrier {};
-template <typename... Subjects> struct kind_form_takes_no_target_carrier {};
-template <typename... Subjects> struct kind_forms_malformed_carrier {};
-template <typename... Subjects> struct kind_property_unknown_carrier {};
-template <typename... Subjects> struct layer_kind_undeclared_carrier {};
 template <typename... Subjects> struct lookup_already_registered_carrier {};
 template <typename... Subjects> struct lookup_backend_without_index_carrier {};
 template <typename... Subjects> struct lookup_declared_twice_carrier {};
 template <typename... Subjects> struct no_default_factory_carrier {};
 template <typename... Subjects> struct no_interface_served_carrier {};
+template <typename... Subjects> struct operation_needs_property_carrier {};
+template <typename... Subjects> struct operation_needs_target_carrier {};
+template <typename... Subjects> struct operation_of_leaf_carrier {};
+template <typename... Subjects> struct operation_repeated_carrier {};
+template <typename... Subjects> struct operation_takes_no_target_carrier {};
+template <typename... Subjects> struct operations_malformed_carrier {};
+template <typename... Subjects> struct property_unknown_carrier {};
 template <typename... Subjects>
 struct registration_dependencies_twice_carrier {};
 template <typename... Subjects> struct registration_key_twice_carrier {};
@@ -78,6 +77,7 @@ template <typename... Subjects> struct registration_without_storage_carrier {};
 template <typename... Subjects> struct scope_form_not_stored_carrier {};
 template <typename... Subjects> struct scope_nested_layers_carrier {};
 template <typename... Subjects> struct scope_undeclared_carrier {};
+template <typename... Subjects> struct semantics_undeclared_carrier {};
 template <typename... Subjects> struct static_instances_carrier {};
 template <typename... Subjects> struct type_ambiguous_carrier {};
 template <typename... Subjects> struct type_index_out_of_range_carrier {};
@@ -107,19 +107,18 @@ enum class diag : std::uint8_t {
   key_interface_undeclared,
   key_type_values,
   key_value_not_of_key_type,
-  kind_form_needs_property,
-  kind_form_needs_target,
-  kind_form_of_leaf,
-  kind_form_repeated,
-  kind_form_takes_no_target,
-  kind_forms_malformed,
-  kind_property_unknown,
-  layer_kind_undeclared,
   lookup_already_registered,
   lookup_backend_without_index,
   lookup_declared_twice,
   no_default_factory,
   no_interface_served,
+  operation_needs_property,
+  operation_needs_target,
+  operation_of_leaf,
+  operation_repeated,
+  operation_takes_no_target,
+  operations_malformed,
+  property_unknown,
   registration_dependencies_twice,
   registration_key_twice,
   registration_key_value_missing,
@@ -129,6 +128,7 @@ enum class diag : std::uint8_t {
   scope_form_not_stored,
   scope_nested_layers,
   scope_undeclared,
+  semantics_undeclared,
   static_instances,
   type_ambiguous,
   type_index_out_of_range,
@@ -141,8 +141,8 @@ enum class diag : std::uint8_t {
 
 // The number of subjects of each diagnostic, one per placeholder.
 inline constexpr std::uint8_t diag_subjects[] = {
-    1, 0, 1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 3, 1, 2, 1, 1, 1, 1, 3, 1, 0, 0, 1, 1, 1, 0, 1, 1, 2, 1, 2, 2, 1};
+    1, 0, 1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 1, 2, 1, 1, 3, 1, 2, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 3, 1, 0, 0, 1, 1, 1, 1, 0, 1, 1, 2, 1, 2, 2, 1};
 
 #if DINGO_HAS_STATIC_ASSERT_MESSAGE
 // The text of a diagnostic around its placeholders, and its carrier.
@@ -280,74 +280,6 @@ template <> struct diag_text<diag::key_value_not_of_key_type> {
       "the value of a dingo::key_type does not construct its key type ", ""};
 };
 
-// spec: diagnostics.kind_form_needs_property
-template <> struct diag_text<diag::kind_form_needs_property> {
-  template <typename... Subjects>
-  using carrier = ::dingo::kind_form_needs_property_carrier<Subjects...>;
-  static constexpr std::string_view pieces[] = {
-      "the layer kind ",
-      " declares a form that needs a property it does not have"};
-};
-
-// spec: diagnostics.kind_form_needs_target
-template <> struct diag_text<diag::kind_form_needs_target> {
-  template <typename... Subjects>
-  using carrier = ::dingo::kind_form_needs_target_carrier<Subjects...>;
-  static constexpr std::string_view pieces[] = {
-      "the layer kind ",
-      " declares a form that leads to another kind without naming it"};
-};
-
-// spec: diagnostics.kind_form_of_leaf
-template <> struct diag_text<diag::kind_form_of_leaf> {
-  template <typename... Subjects>
-  using carrier = ::dingo::kind_form_of_leaf_carrier<Subjects...>;
-  static constexpr std::string_view pieces[] = {
-      "the layer kind ", " declares a rule of a leaf as one of its forms"};
-};
-
-// spec: diagnostics.kind_form_repeated
-template <> struct diag_text<diag::kind_form_repeated> {
-  template <typename... Subjects>
-  using carrier = ::dingo::kind_form_repeated_carrier<Subjects...>;
-  static constexpr std::string_view pieces[] = {
-      "the layer kind ", " declares a form more than once"};
-};
-
-// spec: diagnostics.kind_form_takes_no_target
-template <> struct diag_text<diag::kind_form_takes_no_target> {
-  template <typename... Subjects>
-  using carrier = ::dingo::kind_form_takes_no_target_carrier<Subjects...>;
-  static constexpr std::string_view pieces[] = {
-      "the layer kind ",
-      " names a kind for a form that leads to no other kind"};
-};
-
-// spec: diagnostics.kind_forms_malformed
-template <> struct diag_text<diag::kind_forms_malformed> {
-  template <typename... Subjects>
-  using carrier = ::dingo::kind_forms_malformed_carrier<Subjects...>;
-  static constexpr std::string_view pieces[] = {
-      "the forms of the layer kind ", " are not a type_list of kind_form"};
-};
-
-// spec: diagnostics.kind_property_unknown
-template <> struct diag_text<diag::kind_property_unknown> {
-  template <typename... Subjects>
-  using carrier = ::dingo::kind_property_unknown_carrier<Subjects...>;
-  static constexpr std::string_view pieces[] = {
-      "the layer kind ", " declares a property bit that is no layer_property"};
-};
-
-// spec: diagnostics.layer_kind_undeclared
-template <> struct diag_text<diag::layer_kind_undeclared> {
-  template <typename... Subjects>
-  using carrier = ::dingo::layer_kind_undeclared_carrier<Subjects...>;
-  static constexpr std::string_view pieces[] = {
-      "", " is not a layer kind: no layer_kind_traits declares its properties "
-          "and forms"};
-};
-
 // spec: diagnostics.lookup_already_registered
 template <> struct diag_text<diag::lookup_already_registered> {
   template <typename... Subjects>
@@ -386,6 +318,67 @@ template <> struct diag_text<diag::no_interface_served> {
   using carrier = ::dingo::no_interface_served_carrier<Subjects...>;
   static constexpr std::string_view pieces[] = {"no interface the binding of ",
                                                 " declares can be served"};
+};
+
+// spec: diagnostics.operation_needs_property
+template <> struct diag_text<diag::operation_needs_property> {
+  template <typename... Subjects>
+  using carrier = ::dingo::operation_needs_property_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "the wrapper semantics ",
+      " declares a form that needs a property it does not have"};
+};
+
+// spec: diagnostics.operation_needs_target
+template <> struct diag_text<diag::operation_needs_target> {
+  template <typename... Subjects>
+  using carrier = ::dingo::operation_needs_target_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "the wrapper semantics ",
+      " declares a form that leads to another kind without naming it"};
+};
+
+// spec: diagnostics.operation_of_leaf
+template <> struct diag_text<diag::operation_of_leaf> {
+  template <typename... Subjects>
+  using carrier = ::dingo::operation_of_leaf_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "the wrapper semantics ",
+      " declares a rule of a leaf as one of its forms"};
+};
+
+// spec: diagnostics.operation_repeated
+template <> struct diag_text<diag::operation_repeated> {
+  template <typename... Subjects>
+  using carrier = ::dingo::operation_repeated_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "the wrapper semantics ", " declares a form more than once"};
+};
+
+// spec: diagnostics.operation_takes_no_target
+template <> struct diag_text<diag::operation_takes_no_target> {
+  template <typename... Subjects>
+  using carrier = ::dingo::operation_takes_no_target_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "the wrapper semantics ",
+      " names a kind for a form that leads to no other kind"};
+};
+
+// spec: diagnostics.operations_malformed
+template <> struct diag_text<diag::operations_malformed> {
+  template <typename... Subjects>
+  using carrier = ::dingo::operations_malformed_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "the forms of the wrapper semantics ", " are not a type_list of op"};
+};
+
+// spec: diagnostics.property_unknown
+template <> struct diag_text<diag::property_unknown> {
+  template <typename... Subjects>
+  using carrier = ::dingo::property_unknown_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "the wrapper semantics ",
+      " declares a property bit that is no layer_property"};
 };
 
 // spec: diagnostics.registration_dependencies_twice
@@ -462,6 +455,15 @@ template <> struct diag_text<diag::scope_undeclared> {
   using carrier = ::dingo::scope_undeclared_carrier<Subjects...>;
   static constexpr std::string_view pieces[] = {
       "", " is not a scope: it has no dingo::scope_traits"};
+};
+
+// spec: diagnostics.semantics_undeclared
+template <> struct diag_text<diag::semantics_undeclared> {
+  template <typename... Subjects>
+  using carrier = ::dingo::semantics_undeclared_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "", " is not a wrapper semantics: no wrapper_semantics declares its "
+          "properties and forms"};
 };
 
 // spec: diagnostics.static_instances
@@ -713,91 +715,6 @@ struct diag_report<diag::key_value_not_of_key_type, Subjects...> {
   }
 };
 
-// spec: diagnostics.kind_form_needs_property
-template <typename... Subjects>
-struct diag_report<diag::kind_form_needs_property, Subjects...> {
-  static constexpr void fail() {
-    static_assert(
-        dependent_false<::dingo::kind_form_needs_property_carrier<Subjects...>>,
-        "the layer kind {kind} declares a form that needs a property it does "
-        "not have");
-  }
-};
-
-// spec: diagnostics.kind_form_needs_target
-template <typename... Subjects>
-struct diag_report<diag::kind_form_needs_target, Subjects...> {
-  static constexpr void fail() {
-    static_assert(
-        dependent_false<::dingo::kind_form_needs_target_carrier<Subjects...>>,
-        "the layer kind {kind} declares a form that leads to another kind "
-        "without naming it");
-  }
-};
-
-// spec: diagnostics.kind_form_of_leaf
-template <typename... Subjects>
-struct diag_report<diag::kind_form_of_leaf, Subjects...> {
-  static constexpr void fail() {
-    static_assert(
-        dependent_false<::dingo::kind_form_of_leaf_carrier<Subjects...>>,
-        "the layer kind {kind} declares a rule of a leaf as one of its forms");
-  }
-};
-
-// spec: diagnostics.kind_form_repeated
-template <typename... Subjects>
-struct diag_report<diag::kind_form_repeated, Subjects...> {
-  static constexpr void fail() {
-    static_assert(
-        dependent_false<::dingo::kind_form_repeated_carrier<Subjects...>>,
-        "the layer kind {kind} declares a form more than once");
-  }
-};
-
-// spec: diagnostics.kind_form_takes_no_target
-template <typename... Subjects>
-struct diag_report<diag::kind_form_takes_no_target, Subjects...> {
-  static constexpr void fail() {
-    static_assert(dependent_false<
-                      ::dingo::kind_form_takes_no_target_carrier<Subjects...>>,
-                  "the layer kind {kind} names a kind for a form that leads to "
-                  "no other kind");
-  }
-};
-
-// spec: diagnostics.kind_forms_malformed
-template <typename... Subjects>
-struct diag_report<diag::kind_forms_malformed, Subjects...> {
-  static constexpr void fail() {
-    static_assert(
-        dependent_false<::dingo::kind_forms_malformed_carrier<Subjects...>>,
-        "the forms of the layer kind {kind} are not a type_list of kind_form");
-  }
-};
-
-// spec: diagnostics.kind_property_unknown
-template <typename... Subjects>
-struct diag_report<diag::kind_property_unknown, Subjects...> {
-  static constexpr void fail() {
-    static_assert(
-        dependent_false<::dingo::kind_property_unknown_carrier<Subjects...>>,
-        "the layer kind {kind} declares a property bit that is no "
-        "layer_property");
-  }
-};
-
-// spec: diagnostics.layer_kind_undeclared
-template <typename... Subjects>
-struct diag_report<diag::layer_kind_undeclared, Subjects...> {
-  static constexpr void fail() {
-    static_assert(
-        dependent_false<::dingo::layer_kind_undeclared_carrier<Subjects...>>,
-        "{kind} is not a layer kind: no layer_kind_traits declares its "
-        "properties and forms");
-  }
-};
-
 // spec: diagnostics.lookup_already_registered
 template <typename... Subjects>
 struct diag_report<diag::lookup_already_registered, Subjects...> {
@@ -847,6 +764,81 @@ struct diag_report<diag::no_interface_served, Subjects...> {
     static_assert(
         dependent_false<::dingo::no_interface_served_carrier<Subjects...>>,
         "no interface the binding of {stored} declares can be served");
+  }
+};
+
+// spec: diagnostics.operation_needs_property
+template <typename... Subjects>
+struct diag_report<diag::operation_needs_property, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<::dingo::operation_needs_property_carrier<Subjects...>>,
+        "the wrapper semantics {kind} declares a form that needs a property it "
+        "does not have");
+  }
+};
+
+// spec: diagnostics.operation_needs_target
+template <typename... Subjects>
+struct diag_report<diag::operation_needs_target, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<::dingo::operation_needs_target_carrier<Subjects...>>,
+        "the wrapper semantics {kind} declares a form that leads to another "
+        "kind without naming it");
+  }
+};
+
+// spec: diagnostics.operation_of_leaf
+template <typename... Subjects>
+struct diag_report<diag::operation_of_leaf, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<::dingo::operation_of_leaf_carrier<Subjects...>>,
+        "the wrapper semantics {kind} declares a rule of a leaf as one of its "
+        "forms");
+  }
+};
+
+// spec: diagnostics.operation_repeated
+template <typename... Subjects>
+struct diag_report<diag::operation_repeated, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<::dingo::operation_repeated_carrier<Subjects...>>,
+        "the wrapper semantics {kind} declares a form more than once");
+  }
+};
+
+// spec: diagnostics.operation_takes_no_target
+template <typename... Subjects>
+struct diag_report<diag::operation_takes_no_target, Subjects...> {
+  static constexpr void fail() {
+    static_assert(dependent_false<
+                      ::dingo::operation_takes_no_target_carrier<Subjects...>>,
+                  "the wrapper semantics {kind} names a kind for a form that "
+                  "leads to no other kind");
+  }
+};
+
+// spec: diagnostics.operations_malformed
+template <typename... Subjects>
+struct diag_report<diag::operations_malformed, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<::dingo::operations_malformed_carrier<Subjects...>>,
+        "the forms of the wrapper semantics {kind} are not a type_list of op");
+  }
+};
+
+// spec: diagnostics.property_unknown
+template <typename... Subjects>
+struct diag_report<diag::property_unknown, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<::dingo::property_unknown_carrier<Subjects...>>,
+        "the wrapper semantics {kind} declares a property bit that is no "
+        "layer_property");
   }
 };
 
@@ -945,6 +937,17 @@ struct diag_report<diag::scope_undeclared, Subjects...> {
     static_assert(
         dependent_false<::dingo::scope_undeclared_carrier<Subjects...>>,
         "{scope} is not a scope: it has no dingo::scope_traits");
+  }
+};
+
+// spec: diagnostics.semantics_undeclared
+template <typename... Subjects>
+struct diag_report<diag::semantics_undeclared, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<::dingo::semantics_undeclared_carrier<Subjects...>>,
+        "{kind} is not a wrapper semantics: no wrapper_semantics declares its "
+        "properties and forms");
   }
 };
 

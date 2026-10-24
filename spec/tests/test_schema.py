@@ -78,11 +78,11 @@ def test_sample_spec_is_hashable():
 def test_spec_sections():
     names = [field.name for field in dataclasses.fields(Spec)]
     assert names == [
-        "layer_kinds",
+        "wrapper_semantics",
         "storage_forms",
         "scopes",
-        "route_forms",
-        "routes",
+        "operations",
+        "rules",
         "key_kinds",
         "decorations",
         "lookup_filters",

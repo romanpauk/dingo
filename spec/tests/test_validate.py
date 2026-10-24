@@ -60,12 +60,12 @@ def test_load_spec_raises_with_all_errors(monkeypatch):
     import spec as package
 
     bad = replace_first(sample_spec(), "scopes", id="Bad")
-    bad = replace_first(bad, "layer_kinds", id="Worse")
+    bad = replace_first(bad, "wrapper_semantics", id="Worse")
     monkeypatch.setattr(package, "build_spec", lambda: bad)
     with pytest.raises(SpecError) as raised:
         package.load_spec()
     assert "scopes: id 'Bad' is not snake_case" in str(raised.value)
-    assert "layer_kinds: id 'Worse' is not snake_case" in str(raised.value)
+    assert "wrapper_semantics: id 'Worse' is not snake_case" in str(raised.value)
 
 
 @pytest.mark.parametrize("bad", ["Upper", "has-dash", "_lead", "trail_", "dou__ble", "1digit", ""])
@@ -76,8 +76,8 @@ def test_ids_must_be_snake_case(bad):
 
 def test_ids_must_be_unique_within_a_section():
     spec = sample_spec()
-    duplicate = replace(spec, layer_kinds=(*spec.layer_kinds, spec.layer_kinds[0]))
-    assert_one_error(duplicate, "layer_kinds: duplicate id 'val'")
+    duplicate = replace(spec, wrapper_semantics=(*spec.wrapper_semantics, spec.wrapper_semantics[0]))
+    assert_one_error(duplicate, "wrapper_semantics: duplicate id 'val'")
 
 
 def test_ids_may_repeat_across_sections():
@@ -114,58 +114,58 @@ def test_scope_phases_and_needs_are_snake_case_and_unique():
     assert any("phases entry 'Publish' is not snake_case" in error for error in errors)
 
 
-def test_layer_kind_parameters():
-    spec = replace_first(sample_spec(), "layer_kinds", parameters=-1)
+def test_wrapper_semantics_parameters():
+    spec = replace_first(sample_spec(), "wrapper_semantics", parameters=-1)
     assert_one_error(spec, "parameters is negative")
-    spec = replace_first(sample_spec(), "layer_kinds", variadic=True)
+    spec = replace_first(sample_spec(), "wrapper_semantics", variadic=True)
     assert_one_error(spec, "variadic needs at least one parameter")
 
 
-def test_layer_kind_traits_unique():
+def test_wrapper_semantics_unique():
     from spec.schema import LayerTrait
 
     spec = replace_first(
-        sample_spec(), "layer_kinds", traits=(LayerTrait.OWNING, LayerTrait.OWNING)
+        sample_spec(), "wrapper_semantics", traits=(LayerTrait.OWNING, LayerTrait.OWNING)
     )
     assert_one_error(spec, "traits has duplicates")
 
 
-def test_route_unknown_layer_kind():
-    spec = replace_first(sample_spec(), "routes", to_shape=layer("missing", variable("X")))
-    assert_one_error(spec, "layer kind 'missing' does not exist")
+def test_route_unknown_wrapper_semantics():
+    spec = replace_first(sample_spec(), "rules", to_shape=layer("missing", variable("X")))
+    assert_one_error(spec, "wrapper semantics 'missing' does not exist")
 
 
 def test_route_layer_argument_count():
-    spec = replace_first(sample_spec(), "routes", to_shape=layer("ptr"))
+    spec = replace_first(sample_spec(), "rules", to_shape=layer("ptr"))
     assert_one_error(spec, "ptr takes 1 arguments")
-    spec = replace_first(sample_spec(), "routes", to_shape=layer("val", variable("X")))
+    spec = replace_first(sample_spec(), "rules", to_shape=layer("val", variable("X")))
     assert_one_error(spec, "val takes 0 arguments")
 
 
 def test_route_variadic_layer_needs_minimum_arguments():
     ok = replace_first(
-        sample_spec(), "routes", to_shape=layer("alt", variable("X"), variable("Y"))
+        sample_spec(), "rules", to_shape=layer("alt", variable("X"), variable("Y"))
     )
     assert errors_of(ok) == []
-    bad = replace_first(sample_spec(), "routes", to_shape=layer("alt"))
+    bad = replace_first(sample_spec(), "rules", to_shape=layer("alt"))
     assert_one_error(bad, "alt takes at least 1 arguments")
 
 
 def test_route_pattern_forms_are_well_formed():
     spec = replace_first(
         sample_spec(),
-        "routes",
+        "rules",
         from_shape=ShapePattern(form=PatternForm.VARIABLE, name="lower"),
     )
     assert_one_error(spec, "pattern variable 'lower' is malformed")
     spec = replace_first(
         sample_spec(),
-        "routes",
+        "rules",
         from_shape=ShapePattern(form=PatternForm.WRAPPER, name="W"),
     )
     assert_one_error(spec, "wrapper 'W' takes one argument")
     spec = replace_first(
-        sample_spec(), "routes", to_shape=ShapePattern(form=PatternForm.ROUTE)
+        sample_spec(), "rules", to_shape=ShapePattern(form=PatternForm.ROUTE)
     )
     assert_one_error(spec, "route pattern takes one argument")
 
@@ -173,15 +173,15 @@ def test_route_pattern_forms_are_well_formed():
 def test_route_requirement_subject_must_be_bound():
     spec = replace_first(
         sample_spec(),
-        "routes",
+        "rules",
         requires=(Requirement(predicate=Predicate.COPYABLE, subject="Z"),),
     )
     assert_one_error(spec, "requirement subject 'Z' is not a pattern variable")
 
 
 def test_route_cache_pattern_is_checked():
-    spec = replace_first(sample_spec(), "routes", cache=layer("missing"))
-    assert_one_error(spec, "layer kind 'missing' does not exist")
+    spec = replace_first(sample_spec(), "rules", cache=layer("missing"))
+    assert_one_error(spec, "wrapper semantics 'missing' does not exist")
 
 
 def test_lookup_filter_dimensions():

@@ -1,6 +1,6 @@
 """The reference implementation of registration and route derivation.
 
-It interprets the storage forms, scope descriptors, layer kinds, and route
+It interprets the storage forms, scope descriptors, wrapper semantics, and route
 rules of the spec over abstract shapes, and computes, for a binding and a
 request, whether the binding can be registered, whether the request finds the
 binding and is served, and what serving it observably does: how many leaves
@@ -8,18 +8,18 @@ are constructed and copied, where the leaf of the result lives, and whether a
 repeated request yields the same leaf. It is the oracle the C++
 implementations are compared against; see test/routes/conform.py.
 
-It names no layer kind: a rule is a form of a kind, and what a layer is, is
+It names no wrapper semantics: a rule is a form of a kind, and what a layer is, is
 the properties of its kind, so a kind of the user is interpreted as one of the
 library is. Layers of the wrapper kinds carry an opaque wrapper family. The
 spec names no concrete wrapper; the family only tells two wrappers of the same
 kind apart. A family of ANY stands for a layer a rule creates, which a wrapper
-of any family that provides the layer kind can serve.
+of any family that provides the wrapper semantics can serve.
 """
 
 from dataclasses import dataclass, field, replace
 
-from spec.content.layer_kinds import layer_kinds
-from spec.content.routes import routes_of
+from spec.content.wrapper_semantics import wrapper_semantics
+from spec.content.rules import rules_of
 from spec.schema import (
     Access,
     ExposureRule,
@@ -28,7 +28,7 @@ from spec.schema import (
     PatternForm,
     Predicate,
     RequestCategory,
-    RouteForm,
+    Operation,
     Slot,
     Spec,
     ValueCategory,
@@ -49,9 +49,9 @@ ARGUMENT = "@argument"
 # so the request is found and refused as ALTERNATIVE_NOT_HELD.
 HELD_ALTERNATIVE = 0
 ALTERNATIVE_NOT_HELD = "the object holds another alternative than the route takes"
-# The layer kinds of the library, which name the family of a wrapper shape
+# The wrapper semantics of the library, which name the family of a wrapper shape
 # made without a model.
-KINDS = {kind.id: kind for kind in layer_kinds}
+KINDS = {kind.id: kind for kind in wrapper_semantics}
 # The class of the handles a binding of an interface may serve it by: a
 # nullable layer that refers to its element rather than holding it.
 INTERFACE_HANDLE = LayerClass(has=(LayerTrait.NULLABLE,), lacks=(LayerTrait.IN_PLACE,))
@@ -78,7 +78,7 @@ class Leaf:
 
 @dataclass(frozen=True, slots=True)
 class Shape:
-    """A leaf (`layer` is None) or a layer kind applied to argument shapes."""
+    """A leaf (`layer` is None) or a wrapper semantics applied to argument shapes."""
 
     layer: str | None = None
     args: tuple["Shape", ...] = ()
@@ -154,7 +154,7 @@ class Derivation:
 
 @dataclass
 class Model:
-    """The spec, with the layer kinds of a user beside those of the library,
+    """The spec, with the wrapper semantics of a user beside those of the library,
     which the model derives the routes of as it does those of the library."""
 
     spec: Spec
@@ -167,17 +167,17 @@ class Model:
     relaxed: frozenset = frozenset()
     layers: dict = field(init=False)
     scopes: dict = field(init=False)
-    routes: tuple = field(init=False)
+    rules: tuple = field(init=False)
 
     def __post_init__(self):
-        kinds = (*self.spec.layer_kinds, *self.kinds)
+        kinds = (*self.spec.wrapper_semantics, *self.kinds)
         self.layers = {kind.id: kind for kind in kinds}
         self.scopes = {scope.id: scope for scope in self.spec.scopes}
-        self.routes = routes_of(kinds) if self.kinds else self.spec.routes
-        self.routes_by_id = {route.id: route for route in self.routes}
+        self.rules = rules_of(kinds) if self.kinds else self.spec.rules
+        self.rules_by_id = {route.id: route for route in self.rules}
 
     def route(self, route_id: str):
-        return self.routes_by_id[route_id]
+        return self.rules_by_id[route_id]
 
 
 # Shape properties
@@ -187,9 +187,9 @@ def has_trait(model: "Model", shape: Shape, trait: LayerTrait) -> bool:
     return shape.layer is not None and trait in model.layers[shape.layer].traits
 
 
-def has_form(model: "Model", shape: Shape, form: RouteForm) -> bool:
+def has_form(model: "Model", shape: Shape, form: Operation) -> bool:
     return shape.layer is not None and any(
-        kind_form.form is form for kind_form in model.layers[shape.layer].forms
+        op.form is form for op in model.layers[shape.layer].forms
     )
 
 
@@ -244,7 +244,7 @@ def leaves_held_by_value(model: "Model", shape: Shape) -> int:
 def addressable(model: "Model", shape: Shape) -> bool:
     """Whether a shape is an object that can be referred to and pointed to:
     anything but an address, a layer of a kind of the address form."""
-    return not has_form(model, shape, RouteForm.ADDRESS)
+    return not has_form(model, shape, Operation.ADDRESS)
 
 
 def innermost_leaf(shape: Shape) -> Leaf:
@@ -413,12 +413,12 @@ def creates(model: Model, rule) -> bool:
     A creating form applies at the request, which names the kind it creates."""
     if rule.form is None:
         return False
-    template = next(t for t in model.spec.route_forms if t.form is rule.form)
-    to_kind = template.to_shape.form is PatternForm.LAYER and template.to_shape.name == "K"
-    from_kind = (
+    template = next(t for t in model.spec.operations if t.form is rule.form)
+    to_semantics = template.to_shape.form is PatternForm.LAYER and template.to_shape.name == "K"
+    from_semantics = (
         template.from_shape.form is PatternForm.LAYER and template.from_shape.name == "K"
     )
-    return to_kind and not from_kind
+    return to_semantics and not from_semantics
 
 
 def derive(
@@ -438,7 +438,7 @@ def derive(
     results = [start]
     while queue:
         term = queue.pop(0)
-        for rule in model.routes:
+        for rule in model.rules:
             if creates(model, rule):
                 continue
             if rule.from_shape.category not in (None, term.category):
@@ -483,7 +483,7 @@ def completion_class(model: Model, term: Derivation) -> str:
     last = model.route(term.rules[-1])
     if last.id == "copy":
         return "copy"
-    return "decay" if last.form is RouteForm.DECAY else "other"
+    return "decay" if last.form is Operation.DECAY else "other"
 
 
 def add_sibling(model: Model, primary: Derivation, derived: Derivation) -> None:
@@ -637,7 +637,7 @@ def created(model: "Model", scope, terms, goal: Shape, exposed: set, bound: int,
     if goal.layer is None or depth == 0 or not goal.args:
         return []
     results = []
-    for rule in model.routes:
+    for rule in model.rules:
         if not creates(model, rule) or rule.to_shape.name != goal.layer:
             continue
         if exposure_refuses(model, rule, exposed):
@@ -694,7 +694,7 @@ def serve(model: "Model", scope_id, stored, request, interfaces) -> Derivation |
     # forms and not the kinds, then the one derived first.
     order = {}
     first = {}
-    for index, rule in enumerate(model.routes):
+    for index, rule in enumerate(model.rules):
         key = rule.form if rule.form is not None else rule.id
         order[rule.id] = first.setdefault(key, index)
     return min(

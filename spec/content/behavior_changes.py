@@ -259,7 +259,7 @@ behavior_changes: tuple[BehaviorChange, ...] = (
     BehaviorChange(
         id="user_wrappers_are_layers",
         description=(
-            "A user wrapper behaves as the layer kind its traits declare, in every "
+            "A user wrapper behaves as the wrapper semantics its traits declare, in every "
             "scope, as the standard wrappers do."
         ),
         cases=("routes:*/*/shared_cyclical/user_shared<*>/*#registration",),
@@ -285,7 +285,7 @@ behavior_changes: tuple[BehaviorChange, ...] = (
             "handle is rebound to an interface."
         ),
         now=(
-            "dingo::wrapper_traits declares the layer kind, the family, the "
+            "dingo::wrapper_traits declares the wrapper semantics, the family, the "
             "element types, rebind, element, and make, and adopt and share for "
             "the handles that own their element. The storage traits and the "
             "interface rebinding trait are not part of the public API."
@@ -293,24 +293,24 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         decision=DECISION,
     ),
     BehaviorChange(
-        id="layer_kind_extension_point",
+        id="wrapper_semantics_extension_point",
         description=(
-            "A layer kind is a declaration: a tag type whose public "
-            "dingo::layer_kind_traits give its properties and forms, as the "
+            "A wrapper semantics is a declaration: a tag type whose public "
+            "dingo::wrapper_semantics give its properties and forms, as the "
             "kinds of the library are declared, so a user adds a kind of a "
             "wrapper the library has none of."
         ),
-        cases=("api:layer_kind_traits",),
+        cases=("api:wrapper_semantics",),
         baseline=(
             "The kinds of handles are fixed by the implementation: a user "
             "wrapper behaves as a unique, shared, or optional handle at most."
         ),
         now=(
-            "dingo::layer_kind_traits declares the layer_property bits and the "
-            "forms of a kind, each a dingo::route_form with the kind it leads "
-            "to; the library's unique_kind, shared_kind, optional_kind, "
-            "alternative_kind, array_kind, unsized_array_kind, pointer_kind, "
-            "and reference_kind are declared so too."
+            "dingo::wrapper_semantics declares the layer_property bits and the "
+            "forms of a kind, each a dingo::operation with the kind it leads "
+            "to; the library's ::dingo::semantics::sole_owner, ::dingo::semantics::shared_owner, ::dingo::semantics::optional_value, "
+            "::dingo::semantics::variant_value, ::dingo::semantics::fixed_array, ::dingo::semantics::dynamic_array, ::dingo::semantics::pointer, "
+            "and ::dingo::semantics::reference are declared so too."
         ),
         decision=DECISION,
     ),

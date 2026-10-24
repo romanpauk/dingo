@@ -1,0 +1,55 @@
+#pragma once
+
+#include <dingo/base/mechanics.h>
+#include <dingo/conversion/operations.gen.h>
+
+#include <cstdint>
+
+// The tags of the wrapper semantics of the library, and the wrapper_semantics
+// that make a tag type a wrapper semantics. The library declares its semantics
+// as a user declares the semantics of their own wrappers: the conversion rules
+// know a semantics only by its properties and its operations.
+
+namespace {{ namespace }} {
+{% for semantics in semantics_list %}
+
+// spec: wrapper_semantics.{{ semantics.id }}
+struct {{ semantics.name }} {};
+{% endfor %}
+
+} // namespace {{ namespace }}
+
+namespace dingo {
+
+using operation = core::operation;
+using layer_property = core::layer_property;
+
+// An operation of a wrapper semantics, and the semantics it leads to for an
+// operation that leads to another semantics, such as the sharing semantics a
+// sole owner shares its element with.
+template <operation Operation, typename Target = void> struct op {};
+
+// Makes `Semantics` a wrapper semantics. A specialization declares
+//
+//   static constexpr std::uint16_t properties = ...;
+//   using operations = type_list<op<...>, ...>;
+//
+// the layer_property bits of the semantics and the operations it has. A wrapper
+// has the semantics its wrapper_traits name.
+template <typename Semantics> struct wrapper_semantics;
+{% for semantics in semantics_list %}
+
+template <> struct wrapper_semantics<::{{ namespace }}::{{ semantics.name }}> {
+  static constexpr std::uint16_t properties = {% for property in semantics.properties %}layer_property::{{ property }}{{ " | " if not loop.last }}{% endfor %}{% if not semantics.properties %}0{% endif %};
+  using operations = core::type_list<{% for operation in semantics.operations %}op<operation::{{ operation.operation }}{% if operation.target %}, ::{{ namespace }}::{{ operation.target }}{% endif %}>{{ ", " if not loop.last }}{% endfor %}>;
+};
+{% endfor %}
+
+} // namespace dingo
+
+namespace dingo::core {
+
+// The wrapper semantics of the library, in the order of the spec.
+using library_semantics = type_list<{% for semantics in semantics_list %}::{{ namespace }}::{{ semantics.name }}{{ ", " if not loop.last }}{% endfor %}>;
+
+} // namespace dingo::core

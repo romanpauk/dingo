@@ -132,7 +132,7 @@ factory returns the stored object.
 
 ### Routes And Walks
 
-A route is a sequence of route forms from the stored shape to the requested
+A route is a sequence of operations from the stored shape to the requested
 shape, as described in the [Conversion Model](conversion-model.md). The engine
 derives the routes of a binding at compile time. `walk` in
 [conversion/convert.h](../../include/dingo/conversion/convert.h) applies the

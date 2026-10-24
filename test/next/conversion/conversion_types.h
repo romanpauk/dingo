@@ -9,7 +9,7 @@
 
 // The types of the generated engine cases: leaves with the properties the
 // route rules depend on, an implementation of two interfaces, and a user
-// wrapper family of each wrapper layer kind.
+// wrapper family of each wrapper wrapper semantics.
 
 #include <dingo/conversion/layer_traits.h>
 
@@ -62,19 +62,19 @@ template <typename Type> struct user_optional {
 namespace dingo {
 
 template <typename Type> struct wrapper_traits<next_test::user_unique<Type>> {
-  using kind = unique_kind;
+  using semantics = ::dingo::semantics::sole_owner;
   using family = next_test::user_family;
   using arguments = type_list<Type>;
 };
 
 template <typename Type> struct wrapper_traits<next_test::user_shared<Type>> {
-  using kind = shared_kind;
+  using semantics = ::dingo::semantics::shared_owner;
   using family = next_test::user_family;
   using arguments = type_list<Type>;
 };
 
 template <typename Type> struct wrapper_traits<next_test::user_optional<Type>> {
-  using kind = optional_kind;
+  using semantics = ::dingo::semantics::optional_value;
   using family = next_test::user_family;
   using arguments = type_list<Type>;
 };

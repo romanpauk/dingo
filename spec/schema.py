@@ -30,7 +30,7 @@ __all__ = [
     "CppApiBinding",
     "CppContractProbe",
     "CppDiagnosticExample",
-    "CppKindProjection",
+    "CppSemanticsTag",
     "CppProjection",
     "CppScopeProjection",
     "Decoration",
@@ -46,9 +46,9 @@ __all__ = [
     "GraphRule",
     "IndexStructure",
     "KeyKind",
-    "KindForm",
+    "SemanticsOperation",
     "LayerClass",
-    "LayerKind",
+    "WrapperSemantics",
     "LayerTrait",
     "LookupDeclaration",
     "LookupFilter",
@@ -57,10 +57,10 @@ __all__ = [
     "PublicApiEntry",
     "RecursionGuard",
     "RequestCategory",
-    "RouteForm",
-    "RouteFormTemplate",
+    "Operation",
+    "OperationTemplate",
     "Requirement",
-    "Route",
+    "Rule",
     "Scope",
     "SelectionMode",
     "SelectionOutcome",
@@ -96,7 +96,7 @@ class Entity:
 
 
 class LayerTrait(Enum):
-    """Properties of a layer kind that route rules and wrappers refer to."""
+    """Properties of a wrapper semantics that route rules and wrappers refer to."""
 
     OWNING = "owning"
     SHARING = "sharing"
@@ -121,7 +121,7 @@ class LayerTrait(Enum):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class LayerKind(Entity):
+class WrapperSemantics(Entity):
     """An abstract shape constructor such as Val, Ptr, Own, or Array.
 
     `parameters` is the number of shape arguments. `has_extent` marks a
@@ -134,7 +134,7 @@ class LayerKind(Entity):
     has_extent: bool = False
     traits: tuple[LayerTrait, ...] = ()
     # The forms of the kind, from which its routes are made.
-    forms: tuple["KindForm", ...] = ()
+    forms: tuple["SemanticsOperation", ...] = ()
 
 
 # Scopes
@@ -324,10 +324,10 @@ class Via(Enum):
     UPCAST = "upcast"
 
 
-class RouteForm(Enum):
+class Operation(Enum):
     """The forms of the routes of a layer, each executed by one operation of
     the traits of a layer of the kind. The forms, the rules of a leaf, and the
-    value categories are the algebra of shapes; a layer kind, of the library or
+    value categories are the algebra of shapes; a wrapper semantics, of the library or
     of the user, is a declaration of the forms it has."""
 
     # A borrowed layer reaches its element (element).
@@ -363,12 +363,12 @@ class RouteForm(Enum):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class RouteFormTemplate(Entity):
+class OperationTemplate(Entity):
     """The route of a form, whose patterns name the kind that has the form
     `K` and the kind it leads to `T`. `kind_traits` are the traits every kind
     of the form has, which the form relies on."""
 
-    form: RouteForm
+    form: Operation
     from_shape: "ShapePattern"
     to_shape: "ShapePattern"
     access: "Access"
@@ -380,17 +380,17 @@ class RouteFormTemplate(Entity):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class KindForm(Entity):
-    """A form a layer kind has: the route `id` of it, and the kind it leads
+class SemanticsOperation(Entity):
+    """A form a wrapper semantics has: the route `id` of it, and the kind it leads
     to, for a form whose template names `T`."""
 
-    form: RouteForm
+    form: Operation
     description: str
-    target: str | None = None  # layer kind id
+    target: str | None = None  # wrapper semantics id
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class Route(Entity):
+class Rule(Entity):
     """A route rule: a derivation from one shape pattern to another.
 
     The `category` of `from_shape` is the category of the term the rule
@@ -408,8 +408,8 @@ class Route(Entity):
     where: tuple[Requirement, ...] = ()
     via: Via | None = None
     cache: ShapePattern | None = None
-    # The form a route of a layer kind is of; None for a rule of a leaf.
-    form: RouteForm | None = None
+    # The form a route of a wrapper semantics is of; None for a rule of a leaf.
+    form: Operation | None = None
 
 
 # Requests and keys
@@ -846,11 +846,11 @@ class CppScopeProjection(Entity):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class CppKindProjection(Entity):
-    """The C++ tag of a layer kind of the library, whose layer_kind_traits
-    declare it as a kind of the user is declared."""
+class CppSemanticsTag(Entity):
+    """The C++ tag of a wrapper semantics of the library, whose wrapper_semantics
+    declare it as the semantics of a user's wrappers are declared."""
 
-    kind: str  # layer kind id
+    semantics: str  # wrapper semantics id
     spelling: str
 
 
@@ -907,7 +907,7 @@ class CppDiagnosticExample(Entity):
 class CppProjection:
     capabilities: tuple[Capability, ...] = ()
     scope_projections: tuple[CppScopeProjection, ...] = ()
-    kind_projections: tuple[CppKindProjection, ...] = ()
+    semantics_tags: tuple[CppSemanticsTag, ...] = ()
     api_bindings: tuple[CppApiBinding, ...] = ()
     contract_probes: tuple[CppContractProbe, ...] = ()
     diagnostic_examples: tuple[CppDiagnosticExample, ...] = ()
@@ -918,11 +918,11 @@ class CppProjection:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Spec:
-    layer_kinds: tuple[LayerKind, ...] = ()
+    wrapper_semantics: tuple[WrapperSemantics, ...] = ()
     storage_forms: tuple[StorageForm, ...] = ()
     scopes: tuple[Scope, ...] = ()
-    route_forms: tuple[RouteFormTemplate, ...] = ()
-    routes: tuple[Route, ...] = ()
+    operations: tuple[OperationTemplate, ...] = ()
+    rules: tuple[Rule, ...] = ()
     key_kinds: tuple[KeyKind, ...] = ()
     decorations: tuple[Decoration, ...] = ()
     lookup_filters: tuple[LookupFilter, ...] = ()

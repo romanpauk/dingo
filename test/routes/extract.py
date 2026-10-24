@@ -53,7 +53,7 @@ Universe (the tables below):
   does; their storage_traits are written like the built-in cells of the
   matching std handle, so a wrapped wrapper is published as well, and no
   storage_traits exist for shared_cyclical; the next implementation declares
-  each of a layer kind of the user instead, see user_kinds.py), and the
+  each of a wrapper semantics of the user instead, see user_kinds.py), and the
   combinations user_X<std_Y<T>> and std_Y<user_X<T>> for X, Y in {unique,
   shared, optional}.
 - requests: the carriers value, &, const &, &&, *, const * applied to T,

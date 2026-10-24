@@ -4,13 +4,13 @@
 #include <cstdint>
 
 // The shape algebra of the spec as constexpr data: the value categories, the
-// properties of layer kinds, and the route forms with the rules of a leaf. The
-// layer kinds themselves are declarations, see layer_kinds.gen.h.
+// properties of wrapper semantics, and the operations with the rules of a leaf. The
+// wrapper semantics themselves are declarations, see wrapper_semantics.gen.h.
 
 namespace dingo::core {
 
-// The properties of a layer kind, as bits of the properties a
-// dingo::layer_kind_traits declares. spec: layer_kinds
+// The properties of a wrapper semantics, as bits of the properties a
+// dingo::wrapper_semantics declares. spec: wrapper_semantics
 struct layer_property {
 {% for property in layer_properties %}
   static constexpr std::uint16_t {{ property.name }} = {{ property.bit }};
@@ -31,17 +31,17 @@ enum class access : std::uint8_t {
 {% endfor %}
 };
 
-// spec: route_forms, routes
+// spec: operations, routes
 // The forms of the routes in the order of the algebra, with the rules of a
 // leaf among them: a derivation prefers, of two routes of as many rules, the
 // one whose forms come first.
-enum class route_form : std::uint8_t {
-{% for form in route_forms %}
+enum class operation : std::uint8_t {
+{% for form in operations %}
   {{ form.id }},
 {% endfor %}
 };
 
-inline constexpr std::size_t route_form_count = {{ route_forms | length }};
+inline constexpr std::size_t operation_count = {{ operations | length }};
 
 // Requirements of a form on its pattern variable, as bits.
 enum class requirement : std::uint8_t {
@@ -53,14 +53,14 @@ enum class requirement : std::uint8_t {
 
 // Where a pattern of a form is: the element, a variable; the layer of the
 // kind that has the form; or the layer of the kind the form leads to.
-enum class form_layer : std::uint8_t { element, kind, target };
+enum class form_layer : std::uint8_t { element, semantics, target };
 
-// A route form derives the term (to_layer(X), to_category) from the term
+// A operation derives the term (to_layer(X), to_category) from the term
 // (from_layer(X), from_category). A rule of a leaf is a form of no kind,
 // between elements.
-struct route_form_info {
-  route_form form;
-  bool of_kind;
+struct operation_info {
+  operation form;
+  bool of_semantics;
   form_layer from_layer;
   value_category from_category;
   form_layer to_layer;
@@ -77,17 +77,17 @@ struct route_form_info {
   // to: the conversion cache.
   bool cached;
   // The layer_property bits every kind of the form has.
-  std::uint16_t kind_properties;
+  std::uint16_t semantics_properties;
 };
 
-inline constexpr route_form_info route_forms[] = {
-{% for form in route_forms %}
-    {route_form::{{ form.id }}, {{ form.of_kind | lower }}, form_layer::{{ form.from_layer }}, value_category::{{ form.from_category }}, form_layer::{{ form.to_layer }}, value_category::{{ form.to_category }}, access::{{ form.access }}, {{ form.exposure }}, {{ form.requires }}, {{ form.upcast | lower }}, {{ form.converts | lower }}, {{ form.cached | lower }}, {{ form.kind_properties }}},
+inline constexpr operation_info operations[] = {
+{% for form in operations %}
+    {operation::{{ form.id }}, {{ form.of_semantics | lower }}, form_layer::{{ form.from_layer }}, value_category::{{ form.from_category }}, form_layer::{{ form.to_layer }}, value_category::{{ form.to_category }}, access::{{ form.access }}, {{ form.exposure }}, {{ form.requires }}, {{ form.upcast | lower }}, {{ form.converts | lower }}, {{ form.cached | lower }}, {{ form.semantics_properties }}},
 {% endfor %}
 };
 
-constexpr const route_form_info &info(route_form form) {
-  return route_forms[static_cast<std::size_t>(form)];
+constexpr const operation_info &info(operation form) {
+  return operations[static_cast<std::size_t>(form)];
 }
 
 } // namespace dingo::core

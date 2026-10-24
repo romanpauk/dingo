@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <dingo/conversion/route_forms.gen.h>
+#include <dingo/conversion/operations.gen.h>
 #include <dingo/conversion/storage_forms.gen.h>
 
 #include <cstddef>

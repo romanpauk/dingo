@@ -79,8 +79,8 @@ def test_enums_export_as_values_and_tuples_as_lists():
     assert scope["slot"] == "two_phase"
     assert scope["materializes"] == "lvalue"
     assert scope["phases"] == ["publish", "complete"]
-    assert isinstance(data["routes"], list)
-    route = data["routes"][0]
+    assert isinstance(data["rules"], list)
+    route = data["rules"][0]
     assert route["from_shape"] == {
         "args": [],
         "category": "lvalue",

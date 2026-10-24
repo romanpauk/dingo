@@ -450,12 +450,12 @@ See:
 ## Custom Wrappers, Layer Kinds, And Scopes
 
 A wrapper of the user becomes a layer of the shape algebra through
-`dingo::wrapper_traits`, which names its layer kind, its family, and its element
-types, and tells how to rebind it, reach its element, and make it. The standard
-wrappers specialize it the same way, so a user wrapper serves the same requests
-in every scope as the standard wrapper of its kind. A wrapper that no kind of
-the library describes declares a kind of its own with
-`dingo::layer_kind_traits`: its properties and its route forms.
+`dingo::wrapper_traits`, which names its wrapper semantics, its family, and its
+element types, and tells how to rebind it, reach its element, and make it. The
+standard wrappers specialize it the same way, so a user wrapper serves the same
+requests in every scope as the standard wrapper of its kind. A wrapper that no
+kind of the library describes declares a kind of its own with
+`dingo::wrapper_semantics`: its properties and its operations.
 
 A scope is a tag type whose `dingo::scope_traits` hold its
 `dingo::scope_descriptor`. A user scope may copy the descriptor of a built-in
@@ -486,7 +486,7 @@ point with complete examples.
 See:
 
 - [include/dingo/type/type_traits.h](../include/dingo/type/type_traits.h)
-- [include/dingo/conversion/layer_kinds.gen.h](../include/dingo/conversion/layer_kinds.gen.h)
+- [include/dingo/conversion/wrapper_semantics.gen.h](../include/dingo/conversion/wrapper_semantics.gen.h)
 - [include/dingo/conversion/scopes.gen.h](../include/dingo/conversion/scopes.gen.h)
 - [test/next/containers/scopes.cpp](../test/next/containers/scopes.cpp)
 

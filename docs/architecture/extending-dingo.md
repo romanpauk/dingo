@@ -4,13 +4,14 @@ Dingo's extensibility is trait-driven. The key is to specialize the trait that
 matches the problem actually being solved.
 
 Dingo's container and resolution pipeline do not hard-code a closed list of
-supported wrapper forms, layer kinds, scopes, or lookup indexes. The standard
-smart pointers, `std::optional`, and `std::variant` are layers through the same
-`wrapper_traits` a user wrapper specializes, the layer kinds of the library are
-declared by the same `layer_kind_traits` a user kind is, the built-in scopes are
-specializations of `scope_traits`, and the lookup backends of the library name
-their indexes as a user backend does. Adding another wrapper, kind, scope, or
-index follows the same path as Dingo's built-in support.
+supported wrapper forms, wrapper semantics, scopes, or lookup indexes. The
+standard smart pointers, `std::optional`, and `std::variant` are layers through
+the same `wrapper_traits` a user wrapper specializes, the wrapper semantics of
+the library are declared by the same `wrapper_semantics` a user kind is, the
+built-in scopes are specializations of `scope_traits`, and the lookup backends
+of the library name their indexes as a user backend does. Adding another
+wrapper, kind, scope, or index follows the same path as Dingo's built-in
+support.
 
 ## Wrappers
 
@@ -19,8 +20,10 @@ Specialize `dingo::wrapper_traits` in
 make a wrapper or handle type a layer of the shape algebra. A specialization
 declares:
 
-- `kind`: the layer kind of the wrapper, such as `unique_kind`, `shared_kind`,
-  `optional_kind`, `alternative_kind`, or a kind of the user
+- `kind`: the wrapper semantics of the wrapper, such as
+  `::dingo::semantics::sole_owner`, `::dingo::semantics::shared_owner`,
+  `::dingo::semantics::optional_value`, `::dingo::semantics::variant_value`, or
+  a kind of the user
 - `family`: a type naming the family of the wrapper; a route converts a wrapper
   only to another wrapper of its family, such as a sole-owner handle to a
   sharing handle
@@ -74,7 +77,7 @@ private:
 struct handle_family {};
 
 template <typename T> struct dingo::wrapper_traits<handle<T>> {
-  using kind = dingo::shared_kind;
+  using semantics = dingo::semantics::shared_owner;
   using family = handle_family;
   using arguments = dingo::type_list<T>;
   template <typename U> using rebind = handle<U>;
@@ -126,11 +129,11 @@ generated matrix uses.
 
 ## Layer Kinds
 
-Specialize `dingo::layer_kind_traits` for a tag type to declare a layer kind,
-when no kind of the library describes a wrapper. A specialization declares the
-`layer_property` bits of the kind and its forms, each a
-`kind_form<route_form, Target>`, where `Target` is the kind a form that leads to
-another kind leads to:
+Specialize `dingo::wrapper_semantics` for a tag type to declare a wrapper
+semantics, when no kind of the library describes a wrapper. A specialization
+declares the `layer_property` bits of the kind and its forms, each a
+`op<operation, Target>`, where `Target` is the kind a form that leads to another
+kind leads to:
 
 - the properties: `owning`, `sharing`, `nullable`, `borrowable`, `in_place`,
   `unsized`, `constructible`, `copyable`, `immovable`, `wrapper`, `variadic`,
@@ -140,10 +143,12 @@ another kind leads to:
   `retain`; their meanings are listed in the
   [Conversion Model](conversion-model.md#terms-and-route-forms)
 
-The kinds of the library, `unique_kind`, `shared_kind`, `optional_kind`,
-`alternative_kind`, `array_kind`, `unsized_array_kind`, `pointer_kind`, and
-`reference_kind`, are declared so in
-[conversion/layer_kinds.gen.h](../../include/dingo/conversion/layer_kinds.gen.h).
+The kinds of the library, `::dingo::semantics::sole_owner`,
+`::dingo::semantics::shared_owner`, `::dingo::semantics::optional_value`,
+`::dingo::semantics::variant_value`, `::dingo::semantics::fixed_array`,
+`::dingo::semantics::dynamic_array`, `::dingo::semantics::pointer`, and
+`::dingo::semantics::reference`, are declared so in
+[conversion/wrapper_semantics.gen.h](../../include/dingo/conversion/wrapper_semantics.gen.h).
 A wrapper of a kind behaves as its properties and forms say, not as its C++ type
 does. A sharing handle without the retain form:
 
@@ -154,20 +159,20 @@ does. A sharing handle without the retain form:
 // form, so no request refers to a handle of an interface the binding keeps.
 struct pinned_kind {};
 
-template <> struct dingo::layer_kind_traits<pinned_kind> {
+template <> struct dingo::wrapper_semantics<pinned_kind> {
   static constexpr std::uint16_t properties =
       dingo::layer_property::owning | dingo::layer_property::sharing |
       dingo::layer_property::nullable | dingo::layer_property::borrowable |
       dingo::layer_property::constructible | dingo::layer_property::copyable |
       dingo::layer_property::wrapper;
-  using forms = dingo::type_list<
-      dingo::kind_form<dingo::route_form::borrow>,
-      dingo::kind_form<dingo::route_form::adopt, dingo::pointer_kind>,
-      dingo::kind_form<dingo::route_form::upcast_copied>>;
+  using operations = dingo::type_list<
+      dingo::op<dingo::operation::borrow>,
+      dingo::op<dingo::operation::adopt, dingo::semantics::pointer>,
+      dingo::op<dingo::operation::upcast_copied>>;
 };
 
 template <typename T> struct dingo::wrapper_traits<pinned_handle<T>> {
-  using kind = pinned_kind;
+  using semantics = pinned_kind;
   using family = pinned_family;
   using arguments = dingo::type_list<T>;
   template <typename U> using rebind = pinned_handle<U>;
@@ -416,7 +421,7 @@ declarations that take a backend.
 ## Good Source Companions
 
 - [include/dingo/conversion/layer_traits.h](../../include/dingo/conversion/layer_traits.h)
-- [include/dingo/conversion/layer_kinds.gen.h](../../include/dingo/conversion/layer_kinds.gen.h)
+- [include/dingo/conversion/wrapper_semantics.gen.h](../../include/dingo/conversion/wrapper_semantics.gen.h)
 - [include/dingo/conversion/type_conversion.h](../../include/dingo/conversion/type_conversion.h)
 - [include/dingo/conversion/scopes.gen.h](../../include/dingo/conversion/scopes.gen.h)
 - [include/dingo/backend/slot.h](../../include/dingo/backend/slot.h)

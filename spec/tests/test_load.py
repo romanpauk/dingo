@@ -64,6 +64,6 @@ def test_every_section_has_a_content_module():
 
 
 def test_package_exports_schema_types():
-    for name in ("Spec", "Capability", "Scope", "Route", "Diagnostic", "Contract"):
+    for name in ("Spec", "Capability", "Scope", "Rule", "Diagnostic", "Contract"):
         assert getattr(spec, name) is getattr(spec.schema, name)
     assert callable(spec.validate)

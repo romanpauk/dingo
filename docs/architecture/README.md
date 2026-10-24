@@ -2,7 +2,7 @@
 
 This section documents Dingo's internal model: how a registration becomes a
 binding, how a request selects a binding and a route, and where custom wrappers,
-layer kinds, scopes, conversions, and lookup indexes plug in.
+wrapper semantics, scopes, conversions, and lookup indexes plug in.
 
 Read these pages in order for the full picture:
 
@@ -16,7 +16,7 @@ Read these pages in order for the full picture:
   layers and leaves, `leaf_type_t`, `rebind_type_t`, and how a request finds its
   bindings.
 - [Extending Dingo](extending-dingo.md): which trait to specialize for a new
-  wrapper, layer kind, scope, conversion, or lookup index.
+  wrapper, wrapper semantics, scope, conversion, or lookup index.
 - [Conversion Model](conversion-model.md): how Dingo derives the value,
   reference, pointer, and wrapper routes a binding serves.
 

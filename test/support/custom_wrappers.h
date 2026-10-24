@@ -123,7 +123,7 @@ private:
 struct test_wrapper_family {};
 
 template <typename T> struct wrapper_traits<test_shared<T>> {
-  using kind = shared_kind;
+  using semantics = ::dingo::semantics::shared_owner;
   using family = test_wrapper_family;
   using arguments = type_list<T>;
   template <typename U> using rebind = test_shared<U>;
@@ -146,7 +146,7 @@ template <typename T> struct wrapper_traits<test_shared<T>> {
 };
 
 template <typename T> struct wrapper_traits<test_unique<T>> {
-  using kind = unique_kind;
+  using semantics = ::dingo::semantics::sole_owner;
   using family = test_wrapper_family;
   using arguments = type_list<T>;
   template <typename U> using rebind = test_unique<U>;
@@ -168,7 +168,7 @@ template <typename T> struct wrapper_traits<test_unique<T>> {
 };
 
 template <typename T> struct wrapper_traits<test_optional<T>> {
-  using kind = optional_kind;
+  using semantics = ::dingo::semantics::optional_value;
   using family = test_wrapper_family;
   using arguments = type_list<T>;
   template <typename U> using rebind = test_optional<U>;

@@ -26,7 +26,7 @@ namespace dingo {
 struct probe_user_family {};
 
 template <typename T> struct wrapper_traits<user_shared<T>> {
-  using kind = user_shared_kind;
+  using semantics = user_shared_kind;
   using family = probe_user_family;
   using arguments = type_list<T>;
   template <typename U> using rebind = user_shared<U>;
@@ -48,7 +48,7 @@ template <typename T> struct wrapper_traits<user_shared<T>> {
 };
 
 template <typename T> struct wrapper_traits<user_unique<T>> {
-  using kind = user_unique_kind;
+  using semantics = user_unique_kind;
   using family = probe_user_family;
   using arguments = type_list<T>;
   template <typename U> using rebind = user_unique<U>;
@@ -69,7 +69,7 @@ template <typename T> struct wrapper_traits<user_unique<T>> {
 };
 
 template <typename T> struct wrapper_traits<user_optional<T>> {
-  using kind = user_optional_kind;
+  using semantics = user_optional_kind;
   using family = probe_user_family;
   using arguments = type_list<T>;
   template <typename U> using rebind = user_optional<U>;

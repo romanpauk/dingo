@@ -86,7 +86,7 @@ private:
 namespace dingo {
 
 template <typename Type> struct wrapper_traits<user_shared<Type>> {
-  using kind = shared_kind;
+  using semantics = ::dingo::semantics::shared_owner;
   using family = user_family;
   using arguments = type_list<Type>;
   template <typename Other> using rebind = user_shared<Other>;
@@ -106,7 +106,7 @@ template <typename Type> struct wrapper_traits<user_shared<Type>> {
 };
 
 template <typename Type> struct wrapper_traits<user_optional<Type>> {
-  using kind = optional_kind;
+  using semantics = ::dingo::semantics::optional_value;
   using family = user_family;
   using arguments = type_list<Type>;
   template <typename Other> using rebind = user_optional<Other>;

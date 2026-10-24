@@ -75,7 +75,7 @@ LEAVES = {
     "other_iface": Leaf("other_iface", copyable=False, constructible=False),
 }
 
-# The wrappers the extractor uses, with the layer kind and the wrapper family
+# The wrappers the extractor uses, with the wrapper semantics and the wrapper family
 # they map to through the wrapper-traits extension point; the user wrappers
 # are of the kinds of the user of user_kinds.py.
 WRAPPERS = {

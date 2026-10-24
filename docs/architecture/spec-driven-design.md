@@ -248,15 +248,15 @@ change and is declared like one.
 
 ### Shape Algebra
 
-A shape is a leaf wrapped in layers. Layer kinds are abstract classes of handles
-defined by their traits, owning, sharing, nullable, and borrowable, such as a
-sole-owner handle, a sharing handle, an optional value, an alternative, a
+A shape is a leaf wrapped in layers. Wrapper semantics are abstract classes of
+handles defined by their traits, owning, sharing, nullable, and borrowable, such
+as a sole-owner handle, a sharing handle, an optional value, an alternative, a
 pointer, a reference, and an array. Leaf extraction and rebinding are defined
 generically on the algebra.
 
 The spec does not name concrete wrapper types. Users extend the library with
 their own sole-owner, sharing, and optional handles through the wrapper-traits
-extension point, so a concrete wrapper is mapped to a layer kind by that
+extension point, so a concrete wrapper is mapped to a wrapper semantics by that
 extension point in the C++ library, not by the spec. The standard library
 wrappers, `std::unique_ptr`, `std::shared_ptr`, and `std::optional`, are the
 built-in uses of the same extension point and get no special treatment.
@@ -549,14 +549,14 @@ These principles are written into the spec, ordered by expected payoff.
 ### Precompute The Closed Semantics
 
 Route derivation for the built-in shapes is a finite, per-layer table: layer
-kind, scope, and request layer kind to operation, access, and stability. The
-generator evaluates the route rules offline and emits `constexpr` data. Nested
-shapes are handled by a `constexpr` walk over a short array of layer kinds
-instead of template recursion. Custom wrappers enter the table through their
-declared traits. Custom `type_conversion_traits` remain a lazily instantiated
-template escape hatch per source and target pair. Because the table is data, the
-runtime backend matches against it directly instead of instantiating route
-templates.
+kind, scope, and request wrapper semantics to operation, access, and stability.
+The generator evaluates the route rules offline and emits `constexpr` data.
+Nested shapes are handled by a `constexpr` walk over a short array of wrapper
+semantics instead of template recursion. Custom wrappers enter the table through
+their declared traits. Custom `type_conversion_traits` remain a lazily
+instantiated template escape hatch per source and target pair. Because the table
+is data, the runtime backend matches against it directly instead of
+instantiating route templates.
 
 ### Split Operations At The Erasure Boundary
 
@@ -930,7 +930,7 @@ records the decision when it is made.
   the new ones.
 - The wrapper extension point. Decision: `dingo::wrapper_traits`, declared in
   `dingo/type/type_traits.h`, which the standard wrappers specialize too. A
-  specialization declares the layer kind, the family, the element types,
+  specialization declares the wrapper semantics, the family, the element types,
   `rebind`, `element`, and `make`; an owning handle adds `adopt`, a sharing
   handle a scope publishes before its element exists also adopts an address with
   a deleter, and a sole-owner handle adds `share`, which hands its element to
@@ -1102,12 +1102,12 @@ Status: done.
 Specify the shape algebra, the C++ projection, and the four scopes as
 descriptors.
 
-The spec records 8 layer kinds, 10 storage forms as patterns over layer kinds,
-and the four scopes with their slot, materialized category, stability, source
-access, recursion guard, source retention, and the request categories they
-publish per storage form. `shared_cyclical` publishes the leaf and a sharing
-handle whatever the stored form, which its descriptor records as its own
-exposure rule. The C++ projection names only the scope tags. The
+The spec records 8 wrapper semantics, 10 storage forms as patterns over wrapper
+semantics, and the four scopes with their slot, materialized category,
+stability, source access, recursion guard, source retention, and the request
+categories they publish per storage form. `shared_cyclical` publishes the leaf
+and a sharing handle whatever the stored form, which its descriptor records as
+its own exposure rule. The C++ projection names only the scope tags. The
 [Scope Check](../development.md#scope-check) compares the descriptors with the
 current scope policies.
 
@@ -1238,11 +1238,11 @@ diagnostic.
 `primitives/shape.h` describes the shape of a C++ type as a constexpr preorder
 array of nodes, comparable in constant expressions, without knowing the layer
 kinds of the spec. `conversion/layer_traits.h`, a layer between the vocabulary
-and the engine, classifies C++ types into layer kinds: pointers, references, and
-arrays as language layers, and the standard wrappers through the same
-`layer_traits` a user wrapper specializes. `primitives/slot.h` holds the lazy
-and external lifetime slots; the lazy slot reports a recursion while its object
-is being constructed and is empty again after a failed construction.
+and the engine, classifies C++ types into wrapper semantics: pointers,
+references, and arrays as language layers, and the standard wrappers through the
+same `layer_traits` a user wrapper specializes. `primitives/slot.h` holds the
+lazy and external lifetime slots; the lazy slot reports a recursion while its
+object is being constructed and is empty again after a failed construction.
 `primitives/constructor.h` detects the constructor of a type and calls it with
 arguments that resolve their parameter types, the `detected_constructor` factory
 kind of the spec, or by the constructor a type declares with
@@ -1266,14 +1266,14 @@ Status: in progress.
 Generate the vocabulary enums, the public tag types, the descriptor structs, and
 `descriptor_v`.
 
-`conversion/layer_kinds.gen.h`, `route_forms.gen.h`, `storage_forms.gen.h`, and
-`scopes.gen.h` hold the layer kinds with their traits, the value and request
-categories, the storage forms, the scope descriptors with their exposure tables,
-and the route rules as constexpr data, generated from the spec. `shape_v<T>` is
-the descriptor of a type. Remaining: the public tag types. Since M10.3,
-`route_forms.gen.h` holds the shape algebra, the value categories, the layer
-properties, and the route forms, apart from the tables of the other sections,
-and `layer_kinds.gen.h` declares the kinds of the library.
+`conversion/wrapper_semantics.gen.h`, `operations.gen.h`, `storage_forms.gen.h`,
+and `scopes.gen.h` hold the wrapper semantics with their traits, the value and
+request categories, the storage forms, the scope descriptors with their exposure
+tables, and the route rules as constexpr data, generated from the spec.
+`shape_v<T>` is the descriptor of a type. Remaining: the public tag types. Since
+M10.3, `operations.gen.h` holds the shape algebra, the value categories, the
+layer properties, and the operations, apart from the tables of the other
+sections, and `wrapper_semantics.gen.h` declares the kinds of the library.
 
 #### M2.5: Walking Skeleton
 
@@ -1350,10 +1350,10 @@ Status: done.
 
 Generate the per-layer route table as `constexpr` data.
 
-The route rules are part of `route_forms.gen.h`. A rule is a layer kind and
-value category it starts from and a layer kind and value category it derives,
-which every rule of the spec is; the generator rejects any other. Since M10.3
-the generated data is the route forms of `route_forms.gen.h`, from which the
+The route rules are part of `operations.gen.h`. A rule is a wrapper semantics
+and value category it starts from and a wrapper semantics and value category it
+derives, which every rule of the spec is; the generator rejects any other. Since
+M10.3 the generated data is the operations of `operations.gen.h`, from which the
 routes of a kind follow.
 
 #### M3.2: Request Matcher
@@ -1897,22 +1897,22 @@ operation of a wrapper's traits (reaching the element, taking it, wrapping it,
 adopting an owned pointer, sharing an owned handle, taking an address, decaying
 or releasing an array, and upcasting or keeping an interface handle); the rules
 of a leaf, which copy it, upcast it, or convert it; and the value categories.
-Every layer kind is a declaration: a tag type whose public `layer_kind_traits`
-give its properties, owning, sharing, nullable, borrowable, in place, unsized,
-constructible, copyable, immovable, wrapper, variadic, and extent, and its
-forms, with the kind a form leads to, such as the sharing kind of a family. The
-kinds of the library, unique, shared, optional, variant, the arrays, the
-pointer, and the reference, are generated from the spec as such declarations,
-and `std::` and language types map onto them through `wrapper_traits` as a user
-type does. The engine knows no kind by name: a node of a shape holds the
-identity of its kind, its properties, and its forms, and the rules of a
-derivation are the forms of its kinds. A storage form is a classification of the
-properties of the outer layers, which a scope exposes categories for. A
-derivation prefers, of two routes of as many rules, the one whose forms come
-first in the order of the algebra; it orders forms, not kinds, so of routes that
-differ only in their kinds the one derived first is preferred. Neither the route
-table nor the selection table observes the difference from the former order,
-which also ordered the kinds.
+Every wrapper semantics is a declaration: a tag type whose public
+`wrapper_semantics` give its properties, owning, sharing, nullable, borrowable,
+in place, unsized, constructible, copyable, immovable, wrapper, variadic, and
+extent, and its forms, with the kind a form leads to, such as the sharing kind
+of a family. The kinds of the library, unique, shared, optional, variant, the
+arrays, the pointer, and the reference, are generated from the spec as such
+declarations, and `std::` and language types map onto them through
+`wrapper_traits` as a user type does. The engine knows no kind by name: a node
+of a shape holds the identity of its kind, its properties, and its forms, and
+the rules of a derivation are the forms of its kinds. A storage form is a
+classification of the properties of the outer layers, which a scope exposes
+categories for. A derivation prefers, of two routes of as many rules, the one
+whose forms come first in the order of the algebra; it orders forms, not kinds,
+so of routes that differ only in their kinds the one derived first is preferred.
+Neither the route table nor the selection table observes the difference from the
+former order, which also ordered the kinds.
 
 A form that creates a layer, wrapping or adopting, applies at the request: a
 binding cannot know every kind requested of it, so a request of a layer whose
@@ -1937,7 +1937,7 @@ implementation takes an object of a variadic layer to hold its first
 alternative, as the default factory makes it.
 
 A form may rely on properties of the kinds that have it, which its template
-states and the spec and `layer_kind_traits` check: only an immovable array,
+states and the spec and `wrapper_semantics` check: only an immovable array,
 which a scope allocates for the request, releases its elements, and only a
 copyable handle retains a converted copy of itself. Releasing an array whole
 needs an array of the language, of an extent and immovable.
@@ -1953,7 +1953,7 @@ over wrappers that provide every operation, so a route a kind does not allow is
 refused because of its declaration. A layer is copied as its kind declares, not
 as its C++ type is.
 
-The steps are done. The public API records `dingo::layer_kind_traits`, and the
+The steps are done. The public API records `dingo::wrapper_semantics`, and the
 user wrappers of the route probes are of kinds of the user in the next
 implementation, declared with the properties and forms of the kinds they stand
 in for, which the reference implementation derives the routes of as it does
@@ -1970,8 +1970,8 @@ element adopts an address the binding serves.
 
 Steps, each checked against the route table, which must not change:
 
-1. the spec states the routes as the forms of the layer kinds and the rules of a
-   leaf, from which the reference implementation derives the table
+1. the spec states the routes as the forms of the wrapper semantics and the
+   rules of a leaf, from which the reference implementation derives the table
 2. the engine takes kinds as identities and the rules from their forms; the
    kinds of the library, and the mapping of the `std::` and language types, are
    generated through the public extension point, and the closed list of layer
@@ -2076,8 +2076,8 @@ its bindings are known, which the selection rule asks at a declared step.
   configuration treats the generated-file marker as a comment pragma, so it is
   never reflowed.
 
-- 2026-10-19: The spec names no concrete wrapper types. Layer kinds are classes
-  of handles defined by traits, and concrete wrappers, the standard ones
+- 2026-10-19: The spec names no concrete wrapper types. Wrapper semantics are
+  classes of handles defined by traits, and concrete wrappers, the standard ones
   included, map to them through the wrapper-traits extension point of the C++
   library, which users extend with their own handles.
 
@@ -2106,8 +2106,8 @@ its bindings are known, which the selection rule asks at a declared step.
   the same terms before a request as a static one selects from.
 
 - 2026-10-20: A wrapper becomes a layer through one public trait,
-  `dingo::wrapper_traits`, with the layer kind, the family, the element types,
-  `rebind`, `element`, and `make`. The standard wrappers use it as a user
+  `dingo::wrapper_traits`, with the wrapper semantics, the family, the element
+  types, `rebind`, `element`, and `make`. The standard wrappers use it as a user
   wrapper does, and the storage traits and the interface rebinding trait leave
   the public API. The public API check requires an entry a behavior change
   declares with an `api:` pattern to be missing from the current implementation.

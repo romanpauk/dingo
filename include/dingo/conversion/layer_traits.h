@@ -7,25 +7,25 @@
 
 #pragma once
 
-// The layer kind a C++ type is: the projection of the shape algebra of the spec
-// onto C++ types. Raw pointers, references, and arrays are language layers, of
-// the pointer, reference, and array kinds of the library. Wrappers are
-// classified by layer_traits, which the standard wrappers specialize here and
-// user wrappers through the public extension point; no wrapper gets other
-// treatment. A layer kind is a tag whose layer_kind_traits declare its
+// The wrapper semantics a C++ type is: the projection of the shape algebra of
+// the spec onto C++ types. Raw pointers, references, and arrays are language
+// layers, of the pointer, reference, and array kinds of the library. Wrappers
+// are classified by layer_traits, which the standard wrappers specialize here
+// and user wrappers through the public extension point; no wrapper gets other
+// treatment. A wrapper semantics is a tag whose wrapper_semantics declare its
 // properties and forms, and the library's kinds are declared as a user's are.
 //
-// A specialization names the layer kind, the wrapper family, and the argument
-// types, and provides `rebind`, the same layer of other argument types,
-// `element`, which reaches the element of a layer object, and `make`, which
-// makes a layer object from the arguments of its element. A handle that owns
-// its element also adopts an element it is given the address of, and a
+// A specialization names the wrapper semantics, the wrapper family, and the
+// argument types, and provides `rebind`, the same layer of other argument
+// types, `element`, which reaches the element of a layer object, and `make`,
+// which makes a layer object from the arguments of its element. A handle that
+// owns its element also adopts an element it is given the address of, and a
 // sole-owner handle hands its element to the sharing handle of its family.
 
 #include <dingo/base/mechanics.h>
 #include <dingo/conversion/collection.h>
-#include <dingo/conversion/layer_kinds.gen.h>
-#include <dingo/conversion/route_forms.gen.h>
+#include <dingo/conversion/operations.gen.h>
+#include <dingo/conversion/wrapper_semantics.gen.h>
 #include <dingo/primitives/compile_diagnostics.gen.h>
 #include <dingo/primitives/constructor.h>
 #include <dingo/primitives/shape.h>
@@ -43,9 +43,12 @@ namespace dingo {
 // The public extension point that makes a wrapper type a layer of the shape
 // algebra. A specialization declares
 //
-//   kind       the layer kind of the wrapper, a tag whose layer_kind_traits
-//              declare it, such as unique_kind, shared_kind, optional_kind,
-//              alternative_kind, or a kind of the user
+//   kind       the wrapper semantics of the wrapper, a tag whose
+//   wrapper_semantics
+//              declare it, such as ::dingo::semantics::sole_owner,
+//              ::dingo::semantics::shared_owner,
+//              ::dingo::semantics::optional_value,
+//              ::dingo::semantics::variant_value, or a kind of the user
 //   family     a type naming the family of the wrapper; a route converts a
 //              wrapper only to another wrapper of its family, such as a
 //              sole-owner handle to a sharing handle
@@ -79,7 +82,7 @@ template <typename... Types> using type_list = core::type_list<Types...>;
 struct standard_family {};
 
 template <typename Type> struct wrapper_traits<std::unique_ptr<Type>> {
-  using kind = unique_kind;
+  using semantics = ::dingo::semantics::sole_owner;
   using family = standard_family;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = std::unique_ptr<Element>;
@@ -102,7 +105,7 @@ template <typename Type> struct wrapper_traits<std::unique_ptr<Type>> {
 
 // A handle of an array of runtime size: its element is the array.
 template <typename Type> struct wrapper_traits<std::unique_ptr<Type[]>> {
-  using kind = unique_kind;
+  using semantics = ::dingo::semantics::sole_owner;
   using family = standard_family;
   using arguments = type_list<Type[]>;
   template <typename Element> using rebind = std::unique_ptr<Element>;
@@ -114,7 +117,7 @@ template <typename Type> struct wrapper_traits<std::unique_ptr<Type[]>> {
 };
 
 template <typename Type> struct wrapper_traits<std::shared_ptr<Type[]>> {
-  using kind = shared_kind;
+  using semantics = ::dingo::semantics::shared_owner;
   using family = standard_family;
   using arguments = type_list<Type[]>;
   template <typename Element> using rebind = std::shared_ptr<Element>;
@@ -126,7 +129,7 @@ template <typename Type> struct wrapper_traits<std::shared_ptr<Type[]>> {
 };
 
 template <typename Type> struct wrapper_traits<std::shared_ptr<Type>> {
-  using kind = shared_kind;
+  using semantics = ::dingo::semantics::shared_owner;
   using family = standard_family;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = std::shared_ptr<Element>;
@@ -149,7 +152,7 @@ template <typename Type> struct wrapper_traits<std::shared_ptr<Type>> {
 };
 
 template <typename Type> struct wrapper_traits<std::optional<Type>> {
-  using kind = optional_kind;
+  using semantics = ::dingo::semantics::optional_value;
   using family = standard_family;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = std::optional<Element>;
@@ -172,7 +175,7 @@ template <typename Type> struct wrapper_traits<std::optional<Type>> {
 };
 
 template <typename... Types> struct wrapper_traits<std::variant<Types...>> {
-  using kind = alternative_kind;
+  using semantics = ::dingo::semantics::variant_value;
   using family = standard_family;
   using arguments = type_list<Types...>;
   template <typename... Elements> using rebind = std::variant<Elements...>;
@@ -206,33 +209,34 @@ template <typename... Types> struct wrapper_traits<std::variant<Types...>> {
 namespace dingo::core {
 
 namespace detail {
-template <typename Kind> constexpr kind_descriptor make_kind();
+template <typename Kind> constexpr semantics_descriptor make_semantics();
 } // namespace detail
 
-// The descriptor of the layer kind `Kind`, from its layer_kind_traits.
+// The descriptor of the wrapper semantics `Kind`, from its wrapper_semantics.
 template <typename Kind>
-inline constexpr kind_descriptor kind_v = detail::make_kind<Kind>();
+inline constexpr semantics_descriptor semantics_v =
+    detail::make_semantics<Kind>();
 
 namespace detail {
-// Whether a type declares a layer kind: its layer_kind_traits give its
+// Whether a type declares a wrapper semantics: its wrapper_semantics give its
 // properties and its forms.
 template <typename Kind, typename = void>
-struct declares_kind : std::false_type {};
+struct declares_semantics : std::false_type {};
 
 template <typename Kind>
-struct declares_kind<
-    Kind, std::void_t<decltype(::dingo::layer_kind_traits<Kind>::properties),
-                      typename ::dingo::layer_kind_traits<Kind>::forms>>
+struct declares_semantics<
+    Kind, std::void_t<decltype(::dingo::wrapper_semantics<Kind>::properties),
+                      typename ::dingo::wrapper_semantics<Kind>::operations>>
     : std::true_type {};
 
 // Whether a form leads to another kind, which a kind of it names.
-constexpr bool leads_to_kind(route_form form) {
+constexpr bool leads_to_semantics(operation form) {
   return info(form).from_layer == form_layer::target ||
          info(form).to_layer == form_layer::target;
 }
 
-template <route_form... Forms> constexpr bool distinct_forms() {
-  constexpr route_form forms[] = {Forms..., route_form{}};
+template <operation... Forms> constexpr bool distinct_forms() {
+  constexpr operation forms[] = {Forms..., operation{}};
   for (std::size_t left = 0; left < sizeof...(Forms); ++left) {
     for (std::size_t right = left + 1; right < sizeof...(Forms); ++right) {
       if (forms[left] == forms[right]) {
@@ -243,60 +247,61 @@ template <route_form... Forms> constexpr bool distinct_forms() {
   return true;
 }
 
-template <route_form Form, typename Target> struct kind_form_of {
-  static constexpr void add(kind_descriptor &kind) {
+template <operation Form, typename Target> struct semantics_operation_of {
+  static constexpr void add(semantics_descriptor &kind) {
     kind.forms |= std::uint32_t(1) << static_cast<unsigned>(Form);
     if constexpr (!std::is_void_v<Target>) {
       kind.targeted |= std::uint32_t(1) << static_cast<unsigned>(Form);
-      kind.targets[static_cast<std::size_t>(Form)] = &kind_v<Target>;
+      kind.targets[static_cast<std::size_t>(Form)] = &semantics_v<Target>;
     }
   }
 };
 
-// The forms of the kind `Kind`, a type_list of kind_form, which are forms of a
+// The forms of the kind `Kind`, a type_list of op, which are forms of a
 // kind, each named once, with a kind exactly when the form leads to one.
-template <typename Kind, typename List> struct kind_forms_of {
+template <typename Kind, typename List> struct semantics_operations_of {
   static_assert(
-      require<dependent_false<List>, diag::kind_forms_malformed, Kind>());
-  static constexpr void add(kind_descriptor & /*kind*/) {}
+      require<dependent_false<List>, diag::operations_malformed, Kind>());
+  static constexpr void add(semantics_descriptor & /*kind*/) {}
 };
 
-template <typename Kind, route_form... Forms, typename... Targets>
-struct kind_forms_of<Kind, type_list<::dingo::kind_form<Forms, Targets>...>> {
+template <typename Kind, operation... Forms, typename... Targets>
+struct semantics_operations_of<Kind,
+                               type_list<::dingo::op<Forms, Targets>...>> {
+  static_assert(require<(info(Forms).of_semantics && ...),
+                        diag::operation_of_leaf, Kind>());
   static_assert(
-      require<(info(Forms).of_kind && ...), diag::kind_form_of_leaf, Kind>());
+      require<((!leads_to_semantics(Forms) || !std::is_void_v<Targets>) && ...),
+              diag::operation_needs_target, Kind>());
   static_assert(
-      require<((!leads_to_kind(Forms) || !std::is_void_v<Targets>) && ...),
-              diag::kind_form_needs_target, Kind>());
+      require<((leads_to_semantics(Forms) || std::is_void_v<Targets>) && ...),
+              diag::operation_takes_no_target, Kind>());
   static_assert(
-      require<((leads_to_kind(Forms) || std::is_void_v<Targets>) && ...),
-              diag::kind_form_takes_no_target, Kind>());
-  static_assert(
-      require<distinct_forms<Forms...>(), diag::kind_form_repeated, Kind>());
-  static_assert(
-      require<(((::dingo::layer_kind_traits<Kind>::properties &
-                 info(Forms).kind_properties) == info(Forms).kind_properties) &&
-               ...),
-              diag::kind_form_needs_property, Kind>());
+      require<distinct_forms<Forms...>(), diag::operation_repeated, Kind>());
+  static_assert(require<(((::dingo::wrapper_semantics<Kind>::properties &
+                           info(Forms).semantics_properties) ==
+                          info(Forms).semantics_properties) &&
+                         ...),
+                        diag::operation_needs_property, Kind>());
 
-  static constexpr void add(kind_descriptor &kind) {
-    (kind_form_of<Forms, Targets>::add(kind), ...);
+  static constexpr void add(semantics_descriptor &kind) {
+    (semantics_operation_of<Forms, Targets>::add(kind), ...);
   }
 };
 
-template <typename Kind> constexpr kind_descriptor make_kind() {
-  static_assert(route_form_count <= max_kind_forms);
-  static_assert(
-      require<declares_kind<Kind>::value, diag::layer_kind_undeclared, Kind>());
-  kind_descriptor kind;
-  if constexpr (declares_kind<Kind>::value) {
-    using traits = ::dingo::layer_kind_traits<Kind>;
+template <typename Kind> constexpr semantics_descriptor make_semantics() {
+  static_assert(operation_count <= max_semantics_operations);
+  static_assert(require<declares_semantics<Kind>::value,
+                        diag::semantics_undeclared, Kind>());
+  semantics_descriptor kind;
+  if constexpr (declares_semantics<Kind>::value) {
+    using traits = ::dingo::wrapper_semantics<Kind>;
     static_assert(require<(traits::properties & ~layer_property::all) == 0,
-                          diag::kind_property_unknown, Kind>());
+                          diag::property_unknown, Kind>());
     kind.id = type_id_v<Kind>;
     kind.layer = true;
     kind.properties = traits::properties;
-    kind_forms_of<Kind, typename traits::forms>::add(kind);
+    semantics_operations_of<Kind, typename traits::operations>::add(kind);
   }
   return kind;
 }
@@ -304,17 +309,17 @@ template <typename Kind> constexpr kind_descriptor make_kind() {
 
 // A type that is not a layer is a leaf, of no kind.
 template <typename Type, typename = void> struct layer_traits {
-  using kind = void;
+  using semantics = void;
 };
 
 // A wrapper is the layer its wrapper_traits declare.
 template <typename Type>
-struct layer_traits<Type,
-                    std::void_t<typename ::dingo::wrapper_traits<Type>::kind>>
+struct layer_traits<
+    Type, std::void_t<typename ::dingo::wrapper_traits<Type>::semantics>>
     : ::dingo::wrapper_traits<Type> {};
 
 template <typename Type> struct layer_traits<Type *> {
-  using kind = ::dingo::pointer_kind;
+  using semantics = ::dingo::semantics::pointer;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = Element *;
 
@@ -330,7 +335,7 @@ template <typename Type> struct layer_traits<Type *> {
 };
 
 template <typename Type> struct layer_traits<Type &> {
-  using kind = ::dingo::reference_kind;
+  using semantics = ::dingo::semantics::reference;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = Element &;
 
@@ -339,7 +344,7 @@ template <typename Type> struct layer_traits<Type &> {
 
 // An array decays to the address of its first element.
 template <typename Type, std::size_t Extent> struct layer_traits<Type[Extent]> {
-  using kind = ::dingo::array_kind;
+  using semantics = ::dingo::semantics::fixed_array;
   static constexpr std::size_t extent = Extent;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = Element[Extent];
@@ -350,7 +355,7 @@ template <typename Type, std::size_t Extent> struct layer_traits<Type[Extent]> {
 };
 
 template <typename Type> struct layer_traits<Type[]> {
-  using kind = ::dingo::unsized_array_kind;
+  using semantics = ::dingo::semantics::dynamic_array;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = Element[];
 
@@ -360,22 +365,23 @@ template <typename Type> struct layer_traits<Type[]> {
 };
 
 namespace detail {
-template <typename Kind> struct kind_of_type {
-  static constexpr const kind_descriptor *value = &kind_v<Kind>;
+template <typename Kind> struct semantics_of_type {
+  static constexpr const semantics_descriptor *value = &semantics_v<Kind>;
 };
 
-template <> struct kind_of_type<void> {
-  static constexpr const kind_descriptor *value = &leaf_kind;
+template <> struct semantics_of_type<void> {
+  static constexpr const semantics_descriptor *value = &leaf_semantics;
 };
 } // namespace detail
 
-// The layer kind of a type, or void for a leaf.
+// The wrapper semantics of a type, or void for a leaf.
 template <typename Type>
-using layer_kind_t = typename layer_traits<std::remove_cv_t<Type>>::kind;
+using wrapper_semantics_t =
+    typename layer_traits<std::remove_cv_t<Type>>::semantics;
 
 // Whether a type is a layer rather than a leaf.
 template <typename Type>
-inline constexpr bool is_layer_v = !std::is_void_v<layer_kind_t<Type>>;
+inline constexpr bool is_layer_v = !std::is_void_v<wrapper_semantics_t<Type>>;
 
 // Whether the layer traits of `Type` release what an object of it owns beyond
 // itself when the slot that keeps it destroys it.
@@ -387,20 +393,21 @@ inline constexpr bool
     has_dispose_v<Type, std::void_t<decltype(layer_traits<Type>::dispose(
                             std::declval<Type &>()))>> = true;
 
-// The descriptor of the layer kind of a type, or the leaf kind.
+// The descriptor of the wrapper semantics of a type, or the leaf kind.
 template <typename Type>
-inline constexpr const kind_descriptor *layer_kind_v =
-    detail::kind_of_type<layer_kind_t<Type>>::value;
+inline constexpr const semantics_descriptor *wrapper_semantics_v =
+    detail::semantics_of_type<wrapper_semantics_t<Type>>::value;
 
 // The kind of the addresses of the language.
-inline constexpr const kind_descriptor *address_kind_v = layer_kind_v<char *>;
+inline constexpr const semantics_descriptor *address_semantics_v =
+    wrapper_semantics_v<char *>;
 
 // Whether a type is a layer of a kind of all of the layer_property bits
 // `Properties`.
 template <typename Type, std::uint16_t Properties>
 inline constexpr bool has_layer_properties_v =
     is_layer_v<Type> &&
-    (detail::kind_of_type<layer_kind_t<Type>>::value->properties &
+    (detail::semantics_of_type<wrapper_semantics_t<Type>>::value->properties &
      Properties) == Properties;
 
 namespace detail {
@@ -467,7 +474,7 @@ template <typename Type> constexpr shape make_shape() {
   using traits = layer_traits<value_type>;
   shape result;
   shape_node &node = result.nodes[0];
-  node.kind = layer_kind_v<value_type>;
+  node.kind = wrapper_semantics_v<value_type>;
   // Only a leaf has an identity of its own; a layer is its kind and family.
   if constexpr (!is_layer_v<value_type>) {
     node.type = type_id_v<value_type>;

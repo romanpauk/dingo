@@ -17,17 +17,18 @@ The full conversion behavior comes from a few sources of data:
 - the scope descriptor, held by `scope_traits`, says which value category the
   slot materializes its object as, whether its objects keep their addresses, and
   which request categories it exposes for each storage form
-- the route forms, the rules of the shape algebra, say which term each rule
+- the operations, the rules of the shape algebra, say which term each rule
   derives from which, with which access and requirements
-- the `layer_kind_traits` of each layer kind say which forms its layers have
+- the `wrapper_semantics` of each wrapper semantics say which forms its layers
+  have
 - `type_conversion_traits` declares a conversion of a wrapper to the wrapper of
   an interface, or of a leaf to an interface, that is not a converting
   constructor
 
 The important source files are:
 
-- [include/dingo/conversion/route_forms.gen.h](../../include/dingo/conversion/route_forms.gen.h)
-- [include/dingo/conversion/layer_kinds.gen.h](../../include/dingo/conversion/layer_kinds.gen.h)
+- [include/dingo/conversion/operations.gen.h](../../include/dingo/conversion/operations.gen.h)
+- [include/dingo/conversion/wrapper_semantics.gen.h](../../include/dingo/conversion/wrapper_semantics.gen.h)
 - [include/dingo/conversion/scopes.gen.h](../../include/dingo/conversion/scopes.gen.h)
 - [include/dingo/conversion/route.h](../../include/dingo/conversion/route.h)
 - [include/dingo/conversion/convert.h](../../include/dingo/conversion/convert.h)
@@ -61,12 +62,12 @@ an object for every request. Each rule derives a term from a term:
   the binding keeps so a request can refer to it
 
 `copy`, `upcast_reference`, and the two conversions are rules of a leaf. The
-others are forms of a layer kind, and a layer has the forms its kind declares: a
-`std::unique_ptr` borrows, shares, adopts, and upcasts a consumed handle, and a
-`std::shared_ptr` borrows, adopts, upcasts, and retains. A form that leads to
-another kind names it, such as the sharing kind a sole-owner handle shares its
-element with, and a route converts a wrapper only to another wrapper of its
-family.
+others are forms of a wrapper semantics, and a layer has the forms its kind
+declares: a `std::unique_ptr` borrows, shares, adopts, and upcasts a consumed
+handle, and a `std::shared_ptr` borrows, adopts, upcasts, and retains. A form
+that leads to another kind names it, such as the sharing kind a sole-owner
+handle shares its element with, and a route converts a wrapper only to another
+wrapper of its family.
 
 Each rule borrows its source, consumes it, or inherits the access of the term it
 starts from. A borrowing scope exposes nothing consumed, so a request of a

@@ -1,7 +1,7 @@
 """Content of the storage forms section.
 
 A storage form classifies a stored shape by the properties of the kinds of its
-outer layers, so a layer kind of the user is of a form as a kind of the
+outer layers, so a wrapper semantics of the user is of a form as a kind of the
 library is. The scopes publish request lists per form, see
 spec/content/scopes.py. The forms are those of the current implementation's
 storage_form, described in include/dingo/storage/storage_scope_policy.h, plus

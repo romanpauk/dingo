@@ -2,7 +2,7 @@
 
 The routes are the rules of the algebra of shapes: the rules of a leaf, which
 copy it, upcast it to a declared interface, or convert it to one, and the
-route forms of the layer kinds, each a form of route_forms with the kind and
+operations of the wrapper semantics, each a form of operations with the kind and
 the kind it leads to filled in. A kind of the user has its routes as a kind of
 the library does. The routes are in the order of the algebra, the forms in
 their order with the rules of a leaf among them, and the kinds of a form in
@@ -10,7 +10,7 @@ their order: a derivation prefers, of two routes of as many rules, the one of
 the rules that come first.
 """
 
-from spec.content.layer_kinds import layer_kinds
+from spec.content.wrapper_semantics import wrapper_semantics
 from spec.content.patterns import (
     KIND,
     LVALUE,
@@ -21,21 +21,21 @@ from spec.content.patterns import (
     substitute,
     variable,
 )
-from spec.content.route_forms import route_forms
+from spec.content.operations import operations
 from spec.schema import (
     Access,
     Predicate,
     RequestCategory,
     Requirement,
-    Route,
-    RouteForm,
+    Rule,
+    Operation,
     Via,
 )
 
 LEAF = (Requirement(predicate=Predicate.LEAF, subject="L"),)
 
 # The rules of a leaf.
-COPY = Route(
+COPY = Rule(
     id="copy",
     description="Copies a borrowed object.",
     from_shape=variable("X", LVALUE),
@@ -44,7 +44,7 @@ COPY = Route(
     exposure=RequestCategory.VALUE,
     requires=(Requirement(predicate=Predicate.COPYABLE, subject="X"),),
 )
-UPCAST_REFERENCE = Route(
+UPCAST_REFERENCE = Rule(
     id="upcast_reference",
     description="Refers to a borrowed leaf as one of its interfaces.",
     from_shape=leaf_variable(LVALUE),
@@ -53,7 +53,7 @@ UPCAST_REFERENCE = Route(
     requires=LEAF,
     via=Via.UPCAST,
 )
-CONVERT_BORROWED = Route(
+CONVERT_BORROWED = Rule(
     id="convert_borrowed",
     description=(
         "Makes an object of an interface from a borrowed leaf by the conversion "
@@ -66,7 +66,7 @@ CONVERT_BORROWED = Route(
     requires=LEAF,
     via=Via.CONVERT,
 )
-CONVERT_CONSUMED = Route(
+CONVERT_CONSUMED = Rule(
     id="convert_consumed",
     description=(
         "Makes an object of an interface from a consumed leaf by the conversion "
@@ -81,38 +81,38 @@ CONVERT_CONSUMED = Route(
 
 # The order of the algebra: the forms, with the rules of a leaf among them.
 ORDER = (
-    RouteForm.BORROW,
+    Operation.BORROW,
     COPY,
-    RouteForm.ADDRESS,
-    RouteForm.DECAY,
-    RouteForm.TAKE,
-    RouteForm.WRAP,
-    RouteForm.SHARE,
-    RouteForm.ADOPT,
-    RouteForm.RELEASE,
-    RouteForm.RELEASE_WHOLE,
+    Operation.ADDRESS,
+    Operation.DECAY,
+    Operation.TAKE,
+    Operation.WRAP,
+    Operation.SHARE,
+    Operation.ADOPT,
+    Operation.RELEASE,
+    Operation.RELEASE_WHOLE,
     UPCAST_REFERENCE,
-    RouteForm.UPCAST_COPIED,
-    RouteForm.UPCAST_CONSUMED,
+    Operation.UPCAST_COPIED,
+    Operation.UPCAST_CONSUMED,
     CONVERT_BORROWED,
     CONVERT_CONSUMED,
-    RouteForm.RETAIN,
+    Operation.RETAIN,
 )
 
 
-def kind_routes(kinds, form):
+def semantics_rules(kinds, form):
     """The routes of `form` of `kinds`, in their order."""
-    template = next(t for t in route_forms if t.form is form)
+    template = next(t for t in operations if t.form is form)
     for kind in kinds:
-        for kind_form in kind.forms:
-            if kind_form.form is not form:
+        for op in kind.forms:
+            if op.form is not form:
                 continue
             names = {KIND: kind.id}
-            if kind_form.target is not None:
-                names[TARGET] = kind_form.target
-            yield Route(
-                id=kind_form.id,
-                description=kind_form.description,
+            if op.target is not None:
+                names[TARGET] = op.target
+            yield Rule(
+                id=op.id,
+                description=op.description,
                 from_shape=substitute(template.from_shape, names),
                 to_shape=substitute(template.to_shape, names),
                 access=template.access,
@@ -124,15 +124,15 @@ def kind_routes(kinds, form):
             )
 
 
-def routes_of(kinds):
-    """The routes of the algebra for the layer kinds `kinds`."""
+def rules_of(kinds):
+    """The routes of the algebra for the wrapper semantics `kinds`."""
     result = []
     for entry in ORDER:
-        if isinstance(entry, Route):
+        if isinstance(entry, Rule):
             result.append(entry)
         else:
-            result.extend(kind_routes(kinds, entry))
+            result.extend(semantics_rules(kinds, entry))
     return tuple(result)
 
 
-routes: tuple[Route, ...] = routes_of(layer_kinds)
+rules: tuple[Rule, ...] = rules_of(wrapper_semantics)

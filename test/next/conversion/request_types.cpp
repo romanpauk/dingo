@@ -60,7 +60,7 @@ template <typename Type> struct user_unique {
 
 namespace dingo {
 template <typename Type> struct wrapper_traits<user_shared<Type>> {
-  using kind = shared_kind;
+  using semantics = ::dingo::semantics::shared_owner;
   using family = user_family;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = user_shared<Element>;
@@ -68,7 +68,7 @@ template <typename Type> struct wrapper_traits<user_shared<Type>> {
 };
 
 template <typename Type> struct wrapper_traits<user_unique<Type>> {
-  using kind = unique_kind;
+  using semantics = ::dingo::semantics::sole_owner;
   using family = user_family;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = user_unique<Element>;

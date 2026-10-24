@@ -1,6 +1,6 @@
-"""Content of the route forms section.
+"""Content of the operations section.
 
-The route of each form of a layer kind: `K` is the kind that has the form and
+The route of each form of a wrapper semantics: `K` is the kind that has the form and
 `T` the kind it leads to. A kind's routes are its forms with `K` and `T`
 replaced; a kind of the user has them as the kinds of the library do.
 """
@@ -21,8 +21,8 @@ from spec.schema import (
     Predicate,
     RequestCategory,
     Requirement,
-    RouteForm,
-    RouteFormTemplate,
+    Operation,
+    OperationTemplate,
     Via,
 )
 
@@ -30,7 +30,7 @@ LEAF = (Requirement(predicate=Predicate.LEAF, subject="L"),)
 
 
 def upcast(form, category, access=Access.INHERIT):
-    return RouteFormTemplate(
+    return OperationTemplate(
         id=form.value,
         form=form,
         from_shape=layer(KIND, leaf_variable(None), category=category),
@@ -41,66 +41,66 @@ def upcast(form, category, access=Access.INHERIT):
     )
 
 
-route_forms: tuple[RouteFormTemplate, ...] = (
-    RouteFormTemplate(
+operations: tuple[OperationTemplate, ...] = (
+    OperationTemplate(
         id="borrow",
-        form=RouteForm.BORROW,
+        form=Operation.BORROW,
         from_shape=layer(KIND, variable("X"), category=LVALUE),
         to_shape=variable("X", LVALUE),
         access=Access.INHERIT,
     ),
-    RouteFormTemplate(
+    OperationTemplate(
         id="take",
-        form=RouteForm.TAKE,
+        form=Operation.TAKE,
         from_shape=layer(KIND, variable("X"), category=RVALUE),
         to_shape=variable("X", RVALUE),
         access=Access.CONSUME,
         exposure=RequestCategory.RVALUE,
     ),
-    RouteFormTemplate(
+    OperationTemplate(
         id="wrap",
-        form=RouteForm.WRAP,
+        form=Operation.WRAP,
         from_shape=variable("X", RVALUE),
         to_shape=layer(KIND, variable("X"), category=RVALUE),
         access=Access.CONSUME,
         exposure=RequestCategory.RVALUE,
     ),
-    RouteFormTemplate(
+    OperationTemplate(
         id="adopt",
-        form=RouteForm.ADOPT,
+        form=Operation.ADOPT,
         from_shape=layer(TARGET, variable("X"), category=RVALUE),
         to_shape=layer(KIND, variable("X"), category=RVALUE),
         access=Access.CONSUME,
         exposure=RequestCategory.RVALUE,
     ),
-    RouteFormTemplate(
+    OperationTemplate(
         id="share",
-        form=RouteForm.SHARE,
+        form=Operation.SHARE,
         from_shape=layer(KIND, variable("X"), category=RVALUE),
         to_shape=layer(TARGET, variable("X"), category=RVALUE),
         access=Access.CONSUME,
         exposure=RequestCategory.RVALUE,
     ),
-    RouteFormTemplate(
+    OperationTemplate(
         id="address",
-        form=RouteForm.ADDRESS,
+        form=Operation.ADDRESS,
         from_shape=variable("X", LVALUE),
         to_shape=layer(KIND, variable("X"), category=PRVALUE),
         access=Access.BORROW,
         exposure=RequestCategory.POINTER,
         requires=(Requirement(predicate=Predicate.ADDRESSABLE, subject="X"),),
     ),
-    RouteFormTemplate(
+    OperationTemplate(
         id="decay",
-        form=RouteForm.DECAY,
+        form=Operation.DECAY,
         from_shape=layer(KIND, variable("X"), category=LVALUE),
         to_shape=layer(TARGET, variable("X"), category=PRVALUE),
         access=Access.BORROW,
         exposure=RequestCategory.POINTER,
     ),
-    RouteFormTemplate(
+    OperationTemplate(
         id="release",
-        form=RouteForm.RELEASE,
+        form=Operation.RELEASE,
         from_shape=layer(KIND, variable("X"), category=RVALUE),
         to_shape=layer(TARGET, variable("X"), category=PRVALUE),
         access=Access.CONSUME,
@@ -109,20 +109,20 @@ route_forms: tuple[RouteFormTemplate, ...] = (
         # a value, hands out its elements: one that moves dies with them.
         kind_traits=(LayerTrait.IMMOVABLE,),
     ),
-    RouteFormTemplate(
+    OperationTemplate(
         id="release_whole",
-        form=RouteForm.RELEASE_WHOLE,
+        form=Operation.RELEASE_WHOLE,
         from_shape=variable("A", RVALUE),
         to_shape=layer(KIND, variable("A"), category=PRVALUE),
         access=Access.CONSUME,
         exposure=RequestCategory.POINTER,
         requires=(Requirement(predicate=Predicate.ARRAY, subject="A"),),
     ),
-    upcast(RouteForm.UPCAST_COPIED, PRVALUE),
-    upcast(RouteForm.UPCAST_CONSUMED, RVALUE),
-    RouteFormTemplate(
+    upcast(Operation.UPCAST_COPIED, PRVALUE),
+    upcast(Operation.UPCAST_CONSUMED, RVALUE),
+    OperationTemplate(
         id="retain",
-        form=RouteForm.RETAIN,
+        form=Operation.RETAIN,
         from_shape=layer(KIND, leaf_variable(None), category=LVALUE),
         to_shape=layer(KIND, leaf_variable(None), category=LVALUE),
         access=Access.BORROW,

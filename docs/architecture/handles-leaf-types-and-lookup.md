@@ -13,21 +13,24 @@ describes the shape of `T` as a `constexpr` value: an array of nodes in
 preorder, defined in
 [primitives/shape.h](../../include/dingo/primitives/shape.h), so a layer is
 followed by the shapes of its arguments. A node of a layer holds the descriptor
-of its layer kind, the family of its wrapper, and its cv-qualifiers; a node of a
-leaf holds the identity of the leaf type, the address of a per-type tag.
+of its wrapper semantics, the family of its wrapper, and its cv-qualifiers; a
+node of a leaf holds the identity of the leaf type, the address of a per-type
+tag.
 
 ### Layer
 
-A layer is of a layer kind, a tag type whose `layer_kind_traits` declare its
-properties and forms. The kinds of the library are declared so in
-[conversion/layer_kinds.gen.h](../../include/dingo/conversion/layer_kinds.gen.h),
+A layer is of a wrapper semantics, a tag type whose `wrapper_semantics` declare
+its properties and forms. The kinds of the library are declared so in
+[conversion/wrapper_semantics.gen.h](../../include/dingo/conversion/wrapper_semantics.gen.h),
 and the engine knows a kind only by its properties and forms:
 
-- `T*` is a layer of `pointer_kind`, `T&` of `reference_kind`, `T[N]` of
-  `array_kind`, and `T[]` of `unsized_array_kind`
-- `std::unique_ptr<T>` is a layer of `unique_kind`, `std::shared_ptr<T>` of
-  `shared_kind`, `std::optional<T>` of `optional_kind`, and `std::variant<T...>`
-  of `alternative_kind`, by their `wrapper_traits`
+- `T*` is a layer of `::dingo::semantics::pointer`, `T&` of
+  `::dingo::semantics::reference`, `T[N]` of `::dingo::semantics::fixed_array`,
+  and `T[]` of `::dingo::semantics::dynamic_array`
+- `std::unique_ptr<T>` is a layer of `::dingo::semantics::sole_owner`,
+  `std::shared_ptr<T>` of `::dingo::semantics::shared_owner`, `std::optional<T>`
+  of `::dingo::semantics::optional_value`, and `std::variant<T...>` of
+  `::dingo::semantics::variant_value`, by their `wrapper_traits`
 - a custom wrapper is a layer of the kind its `wrapper_traits` name
 
 The language layers are classified by `core::layer_traits`, and every wrapper by
@@ -124,11 +127,12 @@ and parent sources then pass one descriptor through the selection.
 
 ## Why This Exists
 
-Without shapes and layer kinds, every conversion rule would have to special-case
-every supported wrapper combination. Dingo instead factors the problem into:
+Without shapes and wrapper semantics, every conversion rule would have to
+special-case every supported wrapper combination. Dingo instead factors the
+problem into:
 
 - the layer a wrapper is, in `wrapper_traits`
-- the properties and forms of a layer kind, in `layer_kind_traits`
+- the properties and forms of a wrapper semantics, in `wrapper_semantics`
 - the routes, derived from the forms of the kinds of a shape and the rules of a
   leaf
 

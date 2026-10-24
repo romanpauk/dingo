@@ -9,7 +9,7 @@
 
 // Shapes of C++ types as constexpr values. A shape is a leaf wrapped in layers;
 // it is stored in preorder, so a layer is followed by the shapes of its
-// arguments. A layer is of a layer kind, which the shapes know by its
+// arguments. A layer is of a wrapper semantics, which the shapes know by its
 // descriptor: its identity, properties, and forms. Every layer of a wrapper
 // carries the identity of the wrapper's family, so two wrappers of the same
 // kind stay apart, while a family of any_family stands for a layer a route
@@ -81,34 +81,36 @@ template <typename Type>
 inline constexpr type_id type_id_v = detail::type_id_of<Type>::value;
 
 // The family of a layer that a route creates, which a wrapper of any family
-// providing the layer kind serves.
+// providing the wrapper semantics serves.
 struct any_family_tag {};
 inline constexpr type_id any_family = type_id_v<any_family_tag>;
 
 inline constexpr std::size_t shape_capacity = 16;
-inline constexpr std::size_t max_kind_forms = 32;
+inline constexpr std::size_t max_semantics_operations = 32;
 
-// A layer kind: the identity of its tag, its layer_property bits, the route
-// forms it has, by bit, and for each form that leads to another kind, by bit
-// of `targeted`, that kind. A leaf is of the leaf kind, which is no layer.
+// A wrapper semantics: the identity of its tag, its layer_property bits, the
+// route forms it has, by bit, and for each form that leads to another kind, by
+// bit of `targeted`, that kind. A leaf is of the leaf kind, which is no layer.
 // Kinds compare by their identity, never by address, which a compiler may not
 // compare in a constant expression.
-struct kind_descriptor {
+struct semantics_descriptor {
   type_id id = nullptr;
   bool layer = false;
   std::uint16_t properties = 0;
   std::uint32_t forms = 0;
   std::uint32_t targeted = 0;
-  const kind_descriptor *targets[max_kind_forms] = {};
+  const semantics_descriptor *targets[max_semantics_operations] = {};
 };
 
-inline constexpr kind_descriptor leaf_kind{};
+inline constexpr semantics_descriptor leaf_semantics{};
 
-constexpr bool is_layer(const kind_descriptor *kind) { return kind->layer; }
+constexpr bool is_layer(const semantics_descriptor *kind) {
+  return kind->layer;
+}
 
 // Whether two layers are of one kind, or are both leaves.
-constexpr bool same_kind(const kind_descriptor *left,
-                         const kind_descriptor *right) {
+constexpr bool same_semantics(const semantics_descriptor *left,
+                              const semantics_descriptor *right) {
   if (!left->layer || !right->layer) {
     return left->layer == right->layer;
   }
@@ -117,7 +119,7 @@ constexpr bool same_kind(const kind_descriptor *left,
 
 struct shape_node {
   // The kind of a layer, or the leaf kind.
-  const kind_descriptor *kind = &leaf_kind;
+  const semantics_descriptor *kind = &leaf_semantics;
   std::uint8_t arity = 0;
   std::uint32_t extent = 0;
   type_id family = nullptr;
@@ -176,7 +178,7 @@ constexpr bool shapes_match(const shape &derived, const shape &requested) {
   for (std::size_t index = 0; index < derived.size; ++index) {
     const shape_node &d = derived.nodes[index];
     const shape_node &r = requested.nodes[index];
-    if (!same_kind(d.kind, r.kind) || d.arity != r.arity ||
+    if (!same_semantics(d.kind, r.kind) || d.arity != r.arity ||
         d.extent != r.extent) {
       return false;
     }
@@ -199,7 +201,7 @@ constexpr bool operator==(const shape &left, const shape &right) {
   for (std::size_t index = 0; index < left.size; ++index) {
     const shape_node &l = left.nodes[index];
     const shape_node &r = right.nodes[index];
-    if (!same_kind(l.kind, r.kind) || l.arity != r.arity ||
+    if (!same_semantics(l.kind, r.kind) || l.arity != r.arity ||
         l.extent != r.extent || l.family != r.family || l.type != r.type ||
         l.copyable != r.copyable || l.constructible != r.constructible ||
         l.qualifiers != r.qualifiers) {
@@ -214,8 +216,9 @@ constexpr bool operator!=(const shape &left, const shape &right) {
 }
 
 // A layer of `kind` of `family` applied to `argument`.
-constexpr shape wrap(const kind_descriptor *kind, type_id family, bool copyable,
-                     const shape &argument, std::uint32_t extent = 0) {
+constexpr shape wrap(const semantics_descriptor *kind, type_id family,
+                     bool copyable, const shape &argument,
+                     std::uint32_t extent = 0) {
   shape result;
   result.size = argument.size + 1;
   result.nodes[0] =

@@ -8,7 +8,7 @@
 #pragma once
 
 // The wrappers of the kind probes: a standard type in a wrapper of a layer
-// kind of the user, `Kind`, whose layer_kind_traits user_kinds.py declares.
+// kind of the user, `Kind`, whose wrapper_semantics user_kinds.py declares.
 // Each provides every operation its kind may have a form of, so a route the
 // declaration of the kind does not allow is not served because of the
 // declaration, never because of the wrapper.
@@ -33,7 +33,7 @@ template <typename Forms> struct share_target {
 };
 
 template <typename Target, typename... Rest>
-struct share_target<type_list<kind_form<route_form::share, Target>, Rest...>> {
+struct share_target<type_list<op<operation::share, Target>, Rest...>> {
   using type = Target;
 };
 
@@ -43,7 +43,7 @@ struct share_target<type_list<First, Rest...>>
 
 template <typename Kind>
 using share_target_t =
-    typename share_target<typename layer_kind_traits<Kind>::forms>::type;
+    typename share_target<typename wrapper_semantics<Kind>::operations>::type;
 } // namespace probe_detail
 } // namespace dingo
 
@@ -138,7 +138,7 @@ struct probe_kinded_family {};
 
 template <typename Kind, typename T>
 struct wrapper_traits<kinded_unique<Kind, T>> {
-  using kind = Kind;
+  using semantics = Kind;
   using family = probe_kinded_family;
   using arguments = type_list<T>;
   template <typename U> using rebind = kinded_unique<Kind, U>;
@@ -168,7 +168,7 @@ struct wrapper_traits<kinded_unique<Kind, T>> {
 
 template <typename Kind, typename T>
 struct wrapper_traits<kinded_shared<Kind, T>> {
-  using kind = Kind;
+  using semantics = Kind;
   using family = probe_kinded_family;
   using arguments = type_list<T>;
   template <typename U> using rebind = kinded_shared<Kind, U>;
@@ -196,7 +196,7 @@ struct wrapper_traits<kinded_shared<Kind, T>> {
 
 template <typename Kind, typename T>
 struct wrapper_traits<kinded_optional<Kind, T>> {
-  using kind = Kind;
+  using semantics = Kind;
   using family = probe_kinded_family;
   using arguments = type_list<T>;
   template <typename U> using rebind = kinded_optional<Kind, U>;
@@ -217,7 +217,7 @@ struct wrapper_traits<kinded_optional<Kind, T>> {
 
 template <typename Kind, typename... Types>
 struct wrapper_traits<kinded_variant<Kind, Types...>> {
-  using kind = Kind;
+  using semantics = Kind;
   using family = probe_kinded_family;
   using arguments = type_list<Types...>;
   template <typename... Us> using rebind = kinded_variant<Kind, Us...>;
@@ -248,7 +248,7 @@ struct wrapper_traits<kinded_variant<Kind, Types...>> {
 
 template <typename Kind, typename T, std::size_t Extent>
 struct wrapper_traits<kinded_array<Kind, T, Extent>> {
-  using kind = Kind;
+  using semantics = Kind;
   using family = probe_kinded_family;
   using arguments = type_list<T>;
   static constexpr std::size_t extent = Extent;

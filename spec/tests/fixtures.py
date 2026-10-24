@@ -4,9 +4,9 @@ The shipped content leaves most sections empty, so the tests build their own
 spec with one or more entities of every section and mutate it.
 """
 
-from spec.content.route_forms import route_forms as ROUTE_FORMS
+from spec.content.operations import operations as ROUTE_FORMS
 from spec.schema import (
-    CppKindProjection,
+    CppSemanticsTag,
     LayerClass,
     SelectionSourceTime,
     SourceTime,
@@ -39,7 +39,7 @@ from spec.schema import (
     IndexStructure,
     KeyKind,
     LookupDeclaration,
-    LayerKind,
+    WrapperSemantics,
     LayerTrait,
     LookupFilter,
     PatternForm,
@@ -47,7 +47,7 @@ from spec.schema import (
     PublicApiEntry,
     RequestCategory,
     Requirement,
-    Route,
+    Rule,
     Scope,
     SelectionMode,
     SelectionOutcome,
@@ -78,17 +78,17 @@ def layer(name, *args):
 
 def sample_spec() -> Spec:
     return Spec(
-        layer_kinds=(
-            LayerKind(id="val", description="A value."),
-            LayerKind(id="ptr", description="A pointer.", parameters=1),
-            LayerKind(
+        wrapper_semantics=(
+            WrapperSemantics(id="val", description="A value."),
+            WrapperSemantics(id="ptr", description="A pointer.", parameters=1),
+            WrapperSemantics(
                 id="own",
                 description="An owning wrapper.",
                 parameters=1,
                 traits=(LayerTrait.OWNING, LayerTrait.NULLABLE),
             ),
-            LayerKind(id="alt", description="An alternative.", parameters=1, variadic=True),
-            LayerKind(id="array", description="A sized array.", parameters=1, has_extent=True),
+            WrapperSemantics(id="alt", description="An alternative.", parameters=1, variadic=True),
+            WrapperSemantics(id="array", description="A sized array.", parameters=1, has_extent=True),
         ),
         storage_forms=(
             StorageForm(id="plain", description="The leaf."),
@@ -127,8 +127,8 @@ def sample_spec() -> Spec:
                 needs=("instance",),
             ),
         ),
-        routes=(
-            Route(
+        rules=(
+            Rule(
                 id="address_of",
                 description="Takes the address of a stable lvalue.",
                 from_shape=ShapePattern(
@@ -138,7 +138,7 @@ def sample_spec() -> Spec:
                 access=Access.BORROW,
                 requires=(Requirement(predicate=Predicate.STABLE, subject="X"),),
             ),
-            Route(
+            Rule(
                 id="deref",
                 description="Dereferences a pointer.",
                 from_shape=layer("ptr", variable("X")),
@@ -147,7 +147,7 @@ def sample_spec() -> Spec:
                 ),
                 access=Access.INHERIT,
             ),
-            Route(
+            Rule(
                 id="wrapper_borrow",
                 description="Borrows from a wrapper.",
                 from_shape=ShapePattern(
@@ -157,7 +157,7 @@ def sample_spec() -> Spec:
                 access=Access.INHERIT,
                 where=(Requirement(predicate=Predicate.BORROWABLE, subject="W"),),
             ),
-            Route(
+            Rule(
                 id="retain",
                 description="Converts and caches.",
                 from_shape=variable("S"),
@@ -236,7 +236,7 @@ def sample_spec() -> Spec:
                 ),
             ),
         ),
-        route_forms=ROUTE_FORMS,
+        operations=ROUTE_FORMS,
         selection_sources=tuple(
             SelectionSourceTime(
                 id=source.value,
@@ -362,9 +362,11 @@ def sample_spec() -> Spec:
                     header="dingo/storage/shared_cyclical.h",
                 ),
             ),
-            kind_projections=tuple(
-                CppKindProjection(id=f"{kind}_tag", kind=kind, spelling=f"dingo::{kind}_kind")
-                for kind in ("val", "ptr", "own", "alt", "array")
+            semantics_tags=tuple(
+                CppSemanticsTag(
+                    id=f"{name}_tag", semantics=name, spelling=f"dingo::semantics::{name}"
+                )
+                for name in ("val", "ptr", "own", "alt", "array")
             ),
             api_bindings=(
                 CppApiBinding(

@@ -124,14 +124,14 @@ def universe(model):
 def witnessed_routes(model):
     """The routes that must have a witness: the rules of a leaf and the forms
     of the kinds of the library and of the kind probes."""
-    kinds = {kind.id for kind in model.spec.layer_kinds}
+    kinds = {kind.id for kind in model.spec.wrapper_semantics}
     kinds |= {user.kind.id for user in kind_probes}
     owners = {
         form.id: kind.id for kind in model.layers.values() for form in kind.forms
     }
     return [
         route.id
-        for route in model.routes
+        for route in model.rules
         if route.id not in owners or owners[route.id] in kinds
     ]
 
@@ -140,7 +140,7 @@ def conditions(model):
     """The conditions of the witnessed routes, as (route id, condition)."""
     witnessed = set(witnessed_routes(model))
     found = []
-    for route in model.routes:
+    for route in model.rules:
         if route.id not in witnessed:
             continue
         # An upcast or a conversion requires a leaf, which is what it converts,

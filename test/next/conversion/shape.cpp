@@ -23,8 +23,8 @@ struct move_only {
   move_only(move_only &&) = default;
 };
 
-template <typename Kind> constexpr const kind_descriptor *kind() {
-  return &kind_v<Kind>;
+template <typename Kind> constexpr const semantics_descriptor *kind() {
+  return &semantics_v<Kind>;
 }
 
 static_assert(shape_v<leaf>.size == 1);
@@ -36,23 +36,23 @@ static_assert(!shape_v<move_only>.nodes[0].copyable);
 
 using shared = std::shared_ptr<std::optional<leaf>>;
 static_assert(shape_v<shared>.size == 3);
-static_assert(same_kind(shape_v<shared>.nodes[0].kind,
-                        kind<dingo::shared_kind>()));
+static_assert(same_semantics(shape_v<shared>.nodes[0].kind,
+                             kind<dingo::semantics::shared_owner>()));
 static_assert(shape_v<shared>.nodes[0].family ==
               type_id_v<dingo::standard_family>);
 static_assert(shape_v<shared>.nodes[0].copyable);
-static_assert(same_kind(shape_v<shared>.nodes[1].kind,
-                        kind<dingo::optional_kind>()));
+static_assert(same_semantics(shape_v<shared>.nodes[1].kind,
+                             kind<dingo::semantics::optional_value>()));
 static_assert(shape_v<shared>.nodes[2].type == type_id_v<leaf>);
 static_assert(subtree(shape_v<shared>, 1) == shape_v<std::optional<leaf>>);
 
-static_assert(same_kind(shape_v<leaf *>.nodes[0].kind,
-                        kind<dingo::pointer_kind>()));
+static_assert(same_semantics(shape_v<leaf *>.nodes[0].kind,
+                             kind<dingo::semantics::pointer>()));
 static_assert(shape_v<leaf *>.nodes[0].family == nullptr);
 static_assert(shape_v<leaf[2]>.nodes[0].extent == 2);
 static_assert(!shape_v<leaf[2]>.nodes[0].copyable);
-static_assert(same_kind(shape_v<std::unique_ptr<leaf[]>>.nodes[1].kind,
-                        kind<dingo::unsized_array_kind>()));
+static_assert(same_semantics(shape_v<std::unique_ptr<leaf[]>>.nodes[1].kind,
+                             kind<dingo::semantics::dynamic_array>()));
 
 using alternative = std::variant<leaf, std::unique_ptr<leaf>>;
 static_assert(shape_v<alternative>.nodes[0].arity == 2);
@@ -62,8 +62,8 @@ static_assert(subtree(shape_v<alternative>, 2) ==
               shape_v<std::unique_ptr<leaf>>);
 
 // A created layer of any family serves a wrapper of every family.
-constexpr shape created =
-    wrap(kind<dingo::optional_kind>(), any_family, true, shape_v<leaf>);
+constexpr shape created = wrap(kind<dingo::semantics::optional_value>(),
+                               any_family, true, shape_v<leaf>);
 static_assert(shapes_match(created, shape_v<std::optional<leaf>>));
 static_assert(!(created == shape_v<std::optional<leaf>>));
 static_assert(!shapes_match(shape_v<std::unique_ptr<leaf>>,

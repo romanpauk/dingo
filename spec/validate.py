@@ -5,7 +5,7 @@ error starts with the section and the entity id it concerns. The checks are:
 
 - ids are snake_case and unique within their section
 - references between sections resolve
-- shape patterns use known layer kinds with the right number of arguments,
+- shape patterns use known wrapper semantics with the right number of arguments,
   and requirements name pattern variables
 - scope inheritance has no cycle
 - diagnostic message placeholders match the declared placeholders
@@ -25,7 +25,7 @@ import string
 from collections.abc import Iterable, Iterator
 
 from spec.schema import (
-    RouteForm,
+    Operation,
     ApiKind,
     BindingTime,
     Bound,
@@ -70,19 +70,19 @@ def validate(spec: Spec) -> list[str]:
     """Returns the errors of the spec, in a deterministic order."""
     errors: list[str] = []
     check_ids(spec, errors)
-    check_layer_kinds(spec, errors)
+    check_wrapper_semantics(spec, errors)
     check_storage_forms(spec, errors)
     check_scopes(spec, errors)
-    check_routes(spec, errors)
+    check_rules(spec, errors)
     check_lookups(spec, errors)
     check_selection_rules(spec, errors)
-    check_route_forms(spec, errors)
+    check_operations(spec, errors)
     check_selection_sources(spec, errors)
     check_transaction_rules(spec, errors)
     check_graph_rules(spec, errors)
     check_diagnostics(spec, errors)
     check_diagnostic_examples(spec, errors)
-    check_kind_projections(spec, errors)
+    check_semantics_tags(spec, errors)
     check_binding_time_constraints(spec, errors)
     check_variant_points(spec, errors)
     check_contracts(spec, errors)
@@ -117,7 +117,7 @@ def check_unique(errors: list[str], where: str, what: str, values: Iterable) -> 
 
 
 def layer_class_holds(layer_class, kind) -> bool:
-    """Whether a layer kind is of a layer class."""
+    """Whether a wrapper semantics is of a layer class."""
     traits = set(kind.traits)
     return (
         all(trait in traits for trait in layer_class.has)
@@ -137,7 +137,7 @@ def check_storage_forms(spec: Spec, errors: list[str]) -> None:
     if sum(form.outer is None for form in spec.storage_forms) != 1:
         errors.append("storage_forms: one form, the plain one, has no class")
     # A layer of a kind, and of a kind over one, is of one form at each depth.
-    for outer in spec.layer_kinds:
+    for outer in spec.wrapper_semantics:
         single = [
             form.id
             for form in spec.storage_forms
@@ -147,9 +147,9 @@ def check_storage_forms(spec: Spec, errors: list[str]) -> None:
         ]
         if len(single) > 1:
             errors.append(
-                f"layer_kinds.{outer.id}: is of the storage forms {', '.join(single)}"
+                f"wrapper_semantics.{outer.id}: is of the storage forms {', '.join(single)}"
             )
-        for inner in spec.layer_kinds:
+        for inner in spec.wrapper_semantics:
             double = [
                 form.id
                 for form in spec.storage_forms
@@ -159,7 +159,7 @@ def check_storage_forms(spec: Spec, errors: list[str]) -> None:
             ]
             if len(double) > 1:
                 errors.append(
-                    f"layer_kinds.{outer.id} of {inner.id}: is of the storage "
+                    f"wrapper_semantics.{outer.id} of {inner.id}: is of the storage "
                     f"forms {', '.join(double)}"
                 )
 
@@ -199,9 +199,9 @@ def check_scopes(spec: Spec, errors: list[str]) -> None:
                     errors.append(f"{where}: {what} entry {value!r} is not snake_case")
 
 
-def check_layer_kinds(spec: Spec, errors: list[str]) -> None:
-    for kind in spec.layer_kinds:
-        where = f"layer_kinds.{kind.id}"
+def check_wrapper_semantics(spec: Spec, errors: list[str]) -> None:
+    for kind in spec.wrapper_semantics:
+        where = f"wrapper_semantics.{kind.id}"
         if kind.parameters < 0:
             errors.append(f"{where}: parameters is negative")
         if kind.variadic and kind.parameters < 1:
@@ -223,7 +223,7 @@ def check_pattern(
     if form is PatternForm.LAYER:
         layer = layers.get(pattern.name)
         if layer is None:
-            errors.append(f"{where}: layer kind {pattern.name!r} does not exist")
+            errors.append(f"{where}: wrapper semantics {pattern.name!r} does not exist")
         elif layer.variadic and len(pattern.args) < layer.parameters:
             errors.append(
                 f"{where}: {pattern.name} takes at least {layer.parameters} arguments"
@@ -249,9 +249,9 @@ def check_pattern(
         check_pattern(arg, where, layers, errors)
 
 
-def check_routes(spec: Spec, errors: list[str]) -> None:
-    layers = {kind.id: kind for kind in spec.layer_kinds}
-    for route in spec.routes:
+def check_rules(spec: Spec, errors: list[str]) -> None:
+    layers = {kind.id: kind for kind in spec.wrapper_semantics}
+    for route in spec.rules:
         where = f"routes.{route.id}"
         patterns = [route.from_shape, route.to_shape]
         if route.cache is not None:
@@ -344,8 +344,8 @@ def check_selection_rules(spec: Spec, errors: list[str]) -> None:
             errors.append(f"{where}: outcomes must cover empty, one, and many")
 
 
-def route_form_signature(route) -> tuple:
-    """A route without its layer kinds, which the routes of a form share."""
+def operation_signature(route) -> tuple:
+    """A route without its wrapper semantics, which the routes of a form share."""
     return (
         route.from_shape.category,
         route.to_shape.category,
@@ -363,50 +363,50 @@ def names_target(pattern) -> bool:
     return pattern.name == "T" or any(names_target(arg) for arg in pattern.args)
 
 
-def check_kind_forms(spec: Spec, errors: list[str]) -> None:
-    templates = {template.form: template for template in spec.route_forms}
-    for form in RouteForm:
+def check_semantics_operations(spec: Spec, errors: list[str]) -> None:
+    templates = {template.form: template for template in spec.operations}
+    for form in Operation:
         if form not in templates:
-            errors.append(f"route_forms: no template of the form {form.value}")
-    kinds = ids(spec.layer_kinds)
-    for kind in spec.layer_kinds:
+            errors.append(f"operations: no template of the form {form.value}")
+    kinds = ids(spec.wrapper_semantics)
+    for kind in spec.wrapper_semantics:
         check_unique(
-            errors, f"layer_kinds.{kind.id}", "forms", (f.form for f in kind.forms)
+            errors, f"wrapper_semantics.{kind.id}", "forms", (f.form for f in kind.forms)
         )
-        for kind_form in kind.forms:
-            where = f"layer_kinds.{kind.id}.{kind_form.id}"
-            template = templates.get(kind_form.form)
+        for op in kind.forms:
+            where = f"wrapper_semantics.{kind.id}.{op.id}"
+            template = templates.get(op.form)
             if template is None:
                 continue
             targets = names_target(template.from_shape) or names_target(
                 template.to_shape
             )
-            if targets and kind_form.target is None:
-                errors.append(f"{where}: the form {kind_form.form.value} needs a target kind")
-            if not targets and kind_form.target is not None:
-                errors.append(f"{where}: the form {kind_form.form.value} takes no target kind")
-            if kind_form.target is not None:
-                require_ref(errors, where, "target kind", kind_form.target, kinds)
+            if targets and op.target is None:
+                errors.append(f"{where}: the form {op.form.value} needs a target kind")
+            if not targets and op.target is not None:
+                errors.append(f"{where}: the form {op.form.value} takes no target kind")
+            if op.target is not None:
+                require_ref(errors, where, "target kind", op.target, kinds)
             for trait in template.kind_traits:
                 if trait not in kind.traits:
                     errors.append(
-                        f"{where}: the form {kind_form.form.value} needs a kind "
+                        f"{where}: the form {op.form.value} needs a kind "
                         f"that is {trait.value}"
                     )
 
 
-def check_route_forms(spec: Spec, errors: list[str]) -> None:
-    check_kind_forms(spec, errors)
+def check_operations(spec: Spec, errors: list[str]) -> None:
+    check_semantics_operations(spec, errors)
     signatures: dict = {}
-    for route in spec.routes:
+    for route in spec.rules:
         if route.form is None:
             continue
-        signature = route_form_signature(route)
+        signature = operation_signature(route)
         first = signatures.setdefault(route.form, (route.id, signature))
         if first[1] != signature:
             errors.append(
                 f"routes.{route.id}: differs from routes.{first[0]} of the form "
-                f"{route.form.value} in more than its layer kinds"
+                f"{route.form.value} in more than its wrapper semantics"
             )
 
 
@@ -495,15 +495,19 @@ def check_diagnostics(spec: Spec, errors: list[str]) -> None:
             )
 
 
-def check_kind_projections(spec: Spec, errors: list[str]) -> None:
-    kinds = ids(spec.layer_kinds)
-    projected = [projection.kind for projection in spec.cpp.kind_projections]
-    check_unique(errors, "cpp.kind_projections", "kinds", projected)
-    for kind in kinds:
-        if kind not in projected:
-            errors.append(f"cpp.kind_projections: no C++ tag of the layer kind {kind}")
-    for projection in spec.cpp.kind_projections:
-        require_ref(errors, f"cpp.kind_projections.{projection.id}", "kind", projection.kind, kinds)
+def check_semantics_tags(spec: Spec, errors: list[str]) -> None:
+    known = ids(spec.wrapper_semantics)
+    tagged = [tag.semantics for tag in spec.cpp.semantics_tags]
+    check_unique(errors, "cpp.semantics_tags", "semantics", tagged)
+    for semantics in known:
+        if semantics not in tagged:
+            errors.append(
+                f"cpp.semantics_tags: no C++ tag of the wrapper semantics {semantics}"
+            )
+    for tag in spec.cpp.semantics_tags:
+        require_ref(
+            errors, f"cpp.semantics_tags.{tag.id}", "semantics", tag.semantics, known
+        )
 
 
 def check_diagnostic_examples(spec: Spec, errors: list[str]) -> None:
