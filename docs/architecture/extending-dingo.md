@@ -16,8 +16,8 @@ support.
 ## Wrappers
 
 Specialize `dingo::wrapper_traits` in
-[include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h) to
-make a wrapper or handle type a wrapper of the conversion rules. A
+[include/dingo/type/wrapper_traits.h](../../include/dingo/type/wrapper_traits.h)
+to make a wrapper or handle type a wrapper of the conversion rules. A
 specialization declares:
 
 - `kind`: the wrapper semantics of the wrapper, such as
@@ -50,7 +50,7 @@ declared interface, by its converting constructor, or by a
 `type_conversion_traits` specialization. A sharing handle of the user:
 
 ```c++
-#include <dingo/type/type_traits.h>
+#include <dingo/type/wrapper_traits.h>
 
 #include <memory>
 #include <type_traits>
@@ -153,7 +153,7 @@ A wrapper of a kind behaves as its properties and forms say, not as its C++ type
 does. A sharing handle without the retain form:
 
 ```c++
-#include <dingo/type/type_traits.h>
+#include <dingo/type/wrapper_traits.h>
 
 // A sharing handle that a binding hands out only as copies: it has no retain
 // form, so no request refers to a handle of an interface the binding keeps.
@@ -220,7 +220,7 @@ specialization without `required_access` is rejected with the diagnostic
 
 ```c++
 #include <dingo/type/type_conversion_traits.h>
-#include <dingo/type/type_traits.h>
+#include <dingo/type/wrapper_traits.h>
 
 // A handle without a converting constructor.
 template <typename T> class plain_handle {

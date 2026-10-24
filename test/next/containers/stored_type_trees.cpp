@@ -20,7 +20,7 @@
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 #include <dingo/type/type_conversion_traits.h>
-#include <dingo/type/type_traits.h>
+#include <dingo/type/wrapper_traits.h>
 
 #include <gtest/gtest.h>
 

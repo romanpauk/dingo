@@ -14,7 +14,7 @@ from spec.schema import CppApiBinding
 
 CONTAINER = "dingo/container.h"
 LOOKUP = "dingo/lookup/lookup.h"
-TYPE_TRAITS = "dingo/type/type_traits.h"
+WRAPPER_TRAITS_HEADER = "dingo/type/wrapper_traits.h"
 CONVERSION = "dingo/type/type_conversion_traits.h"
 
 # Local types of the usages: a service, and an interface with an implementation.
@@ -185,7 +185,7 @@ cpp_api_bindings: tuple[CppApiBinding, ...] = (
     path("include_constructor_annotation", "dingo/registration/constructor.h"),
     path("include_annotated", "dingo/type/annotated.h"),
     path("include_lookup", LOOKUP),
-    path("include_wrapper_traits", TYPE_TRAITS),
+    path("include_wrapper_traits", WRAPPER_TRAITS_HEADER),
     path("include_conversion_traits", CONVERSION),
     path("include_collection_traits", "dingo/type/collection_traits.h"),
     path("include_auto_constructible", "dingo/type/auto_constructible.h"),
@@ -1047,7 +1047,7 @@ try {
     name(
         "type_list",
         "dingo::type_list",
-        TYPE_TRAITS,
+        WRAPPER_TRAITS_HEADER,
         "using list = {name}<int, long>;\nstatic_assert(!std::is_void_v<list>);",
     ),
     name(
@@ -1072,7 +1072,7 @@ try {
     name(
         "wrapper_traits",
         "dingo::wrapper_traits",
-        TYPE_TRAITS,
+        WRAPPER_TRAITS_HEADER,
         TYPES
         + wrapper(
             """\
@@ -1091,7 +1091,7 @@ service &borrowed = container.resolve<service &>();
     name(
         "wrapper_semantics",
         "dingo::wrapper_semantics",
-        TYPE_TRAITS,
+        WRAPPER_TRAITS_HEADER,
         TYPES
         + handle(
             "wrapper_semantics",

@@ -16,7 +16,7 @@
 #include "probe_types.h"
 #include "user_kinds_next.h"
 
-#include <dingo/type/type_traits.h>
+#include <dingo/type/wrapper_traits.h>
 
 #include <memory>
 #include <utility>

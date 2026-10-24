@@ -930,7 +930,7 @@ records the decision when it is made.
   layout dropped), so the switch deletes the current internals without moving
   the new ones.
 - The wrapper extension point. Decision: `dingo::wrapper_traits`, declared in
-  `dingo/type/type_traits.h`, which the standard wrappers specialize too. A
+  `dingo/type/wrapper_traits.h`, which the standard wrappers specialize too. A
   specialization declares the wrapper semantics, the family, the element types,
   `rebind`, `element`, and `make`; an owning handle adds `adopt`, a sharing
   handle a scope publishes before its element exists also adopts an address with

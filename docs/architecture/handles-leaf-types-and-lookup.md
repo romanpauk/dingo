@@ -141,7 +141,7 @@ The conversion rules is what allows those three parts to compose.
 ## Good Source Companions
 
 - [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h)
-- [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
+- [include/dingo/type/wrapper_traits.h](../../include/dingo/type/wrapper_traits.h)
 - [include/dingo/type/wrapper_traits.h](../../include/dingo/type/wrapper_traits.h)
 - [include/dingo/type/type_tree.h](../../include/dingo/type/type_tree.h)
 - [include/dingo/conversion/route.h](../../include/dingo/conversion/route.h)

@@ -268,7 +268,7 @@ auto shared = shared_container.resolve<std::shared_ptr<cell[]>>();
 
 See:
 
-- [include/dingo/type/type_traits.h](../include/dingo/type/type_traits.h)
+- [include/dingo/type/wrapper_traits.h](../include/dingo/type/wrapper_traits.h)
 
 ## Variants
 
@@ -358,7 +358,7 @@ assert(&held == &std::get<A>(existing));
 See:
 
 - [test/matrix/README.md](../test/matrix/README.md)
-- [include/dingo/type/type_traits.h](../include/dingo/type/type_traits.h)
+- [include/dingo/type/wrapper_traits.h](../include/dingo/type/wrapper_traits.h)
 
 ## Factories
 

@@ -15,7 +15,7 @@
 
 #include "probe_types.h"
 
-#include <dingo/type/type_traits.h>
+#include <dingo/type/wrapper_traits.h>
 
 #include <array>
 #include <cstddef>

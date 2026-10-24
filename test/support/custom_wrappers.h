@@ -13,12 +13,12 @@
 // wrapper_extension_point of the spec declares the difference.
 #if !defined(DINGO_MATRIX_BASELINE)
 #include <dingo/type/type_conversion_traits.h>
-#include <dingo/type/type_traits.h>
+#include <dingo/type/wrapper_traits.h>
 #else
 #include <dingo/base/exceptions.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/type_conversion_traits.h>
-#include <dingo/type/type_traits.h>
+#include <dingo/type/wrapper_traits.h>
 #endif
 
 #include <memory>
