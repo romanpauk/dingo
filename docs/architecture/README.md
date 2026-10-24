@@ -8,7 +8,7 @@ Read these pages in order for the full picture:
 
 - [Containers](containers.md): the public entry points, and how the combined,
   runtime-only, and static-only containers relate.
-- [Overview](overview.md): the header layers, the main data flow, and the key
+- [Overview](overview.md): the components, the main data flow, and the key
   owners.
 - [Registration And Resolution](registration-and-resolution.md): runtime and
   compile-time registration, selection, and the path of `resolve<T>()`.
@@ -34,8 +34,8 @@ include/dingo/static_container.h   -> static-only container
 ```
 
 These and the other public include paths under `include/dingo/` are the API of
-the library, over its modules, in the header layers described in
-[Header Layers](overview.md#header-layers).
+the library, over its components, described in
+[Components](overview.md#components).
 
 Both registration modes reduce to one binding type, and both backends serve a
 request through the same engine:

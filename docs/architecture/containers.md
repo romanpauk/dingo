@@ -13,8 +13,8 @@ The top-level include set is intentionally small:
 - [include/dingo/static_container.h](../../include/dingo/static_container.h):
   static-only container
 
-They are the API of the library, over its modules, described in
-[Header Layers](overview.md#header-layers).
+They are the API of the library, over its components, described in
+[Components](overview.md#components).
 
 ## Unified Container
 

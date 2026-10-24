@@ -10,43 +10,68 @@ Dingo is easiest to understand when separated into four concerns:
 - execution: the slot that keeps the object of a binding, the factory that makes
   it, and the walk of a route over the stored object
 
-## Header Layers
+## Components
 
-The modules of the library are the directories of `include/dingo/` that the list
-below names, and the public headers are every other header under
-`include/dingo/`, the topmost header layer, which holds the public include
-paths. A header may include headers of the header layers below its own and of
-its own module; modules that share a header layer do not include each other, and
-no module below the public headers includes them. The `layers-check` target
-enforces this, and the list of header layers lives in
-[tools/layers.py](../../tools/layers.py).
+The library is a set of components. Each is a directory of `include/dingo/` that
+holds the generated declarations, the extension points, and the functions of one
+subject, and each depends only on the components listed for it, so the
+dependencies form a graph without cycles. The public headers that no component
+holds, the containers and the registration declarations, are the top of the
+graph and may include any component. The `layers-check` target enforces this,
+and the dependencies live in [tools/layers.py](../../tools/layers.py).
 
-From the lowest header layer to the highest:
+The four concerns above are spread over them: registration is the public
+headers, type trees and routes are `type`, `conversion`, and the declarations of
+`storage`, selection is `lookup` and `selection`, and execution is `memory`,
+`factory`, `storage`, and `backend`. From the lowest component to the highest:
 
-1. `base/`: the configuration macros of `config.h`, the generated language
-   capabilities and compiler variants, and the mechanics: the type list,
-   `dependent_false`, and `pack_at_t`.
-2. `primitives/`: the primitives that make no decision of the spec: the lifetime
-   slots and the transaction log, allocation, retained objects, constructor
-   detection, the type trees of C++ types, type names and the path of the types
-   being constructed, messages, the exception types, and the diagnostics
-   generated from the spec.
-3. `conversion/`: the conversion rules as C++. The declarations generated from
-   the spec: the operations and properties, the wrapper semantics of the
-   library, the scope tags and descriptors, the storage forms, the selection
-   rules, and the key kinds. The extension points over them: the wrapper traits,
-   keys, annotations, collections, conversions, auto-construction, and the
-   factories of a stored type tree. And the `constexpr` functions over
-   descriptors: the registration, derivation, and route selection of `route.h`,
-   the lookup declarations of `lookup.h`, the request descriptor of `request.h`,
-   and the binding type and the walk of a reachable type of `convert.h`.
-4. `backend/`: the backends: the static and the runtime backend, the memo of a
-   request and the index of its key values, the slots of the scopes, the local
-   bindings of a registration, the diagnostics of a backend, and the selection,
-   the interpreter of the selection rules over the sources of a container.
-5. The public headers: the containers, the registration declarations, the
-   container traits with their lookup declarations and indexes, and the public
-   include paths, which include what they declare and define it.
+01. `base/`: the configuration macros of `config.h`, the generated language
+    capabilities and compiler variants, and the mechanics: the type list,
+    `dependent_false`, and `pack_at_t`. Depends on nothing. Spec:
+    `cpp_capabilities`, `variant_points`.
+02. `diagnostics/`: the messages of a diagnostic, the exception types, the
+    diagnostics generated from the spec, the names of types, and the path of the
+    types being constructed. Depends on `base`. Spec: `diagnostics`.
+03. `memory/`: the aligned allocation, the objects a request retains, and the
+    lifetime slots that say where a binding keeps its object. Depends on `base`.
+04. `constructor/`: the detection of the constructor a factory calls, in the
+    portable and the msvc backends, with its arity and its signature. Depends on
+    `base`.
+05. `type/`: what a stored type is made of: the type tree of a C++ type, the
+    wrapper semantics and the operations of the conversion rules, the wrapper
+    traits, the annotated interfaces, the collection traits, the conversions of
+    a wrapper, and auto-construction. These are the public `type/` headers.
+    Depends on `base`, `diagnostics`, and `constructor`. Spec:
+    `wrapper_semantics`, `operations`.
+06. `lookup/`: how a binding is found by a key: the keys with their key kinds,
+    the keys of annotated requests, the lookup declarations of a container, and
+    the indexes of key values. These are the public `lookup/` headers and
+    `key.h`. Depends on `base`, `diagnostics`, and `type`. Spec: `key_kinds`,
+    `lookup_declarations`, `index_structures`, `lookup_filters`.
+07. `storage/`: the scopes and the storage forms: the scope descriptors and tags
+    and the request categories each exposes for a storage form. These are the
+    public `storage/` headers. Depends on `base` and `type`. Spec:
+    `storage_forms`, `scopes`.
+08. `factory/`: the factories of a stored type tree, which construct the leaf
+    and make its wrappers. These are the public `factory/` headers. Depends on
+    `base`, `diagnostics`, `type`, and `constructor`. Spec: `factory_kinds`.
+09. `conversion/`: the conversion rules as C++: the registration, derivation,
+    and route selection of `route.h`, the binding type and the walk of a
+    reachable type of `convert.h`, and where two bindings conflict in
+    `binding_conflicts.h`. Depends on `type`, `lookup`, `storage`, `factory`,
+    `memory`, `diagnostics`, and `base`. Spec: `rules`.
+10. `selection/`: which binding answers a request: the request descriptor, the
+    selection rules and their interpreter over the sources of a container, and
+    the reports of its outcomes. Depends on `conversion` and below. Spec:
+    `selection_rules`, `selection_sources`, `decorations`.
+11. `backend/`: the static and the runtime backend, the memo of a request, the
+    slot of a binding, and the local bindings of a registration. Depends on
+    `selection` and below. Spec: `transaction_rules`, `graph_rules`,
+    `binding_time_constraints`.
+12. The public headers: the containers, the registration declarations, the
+    container traits, the collection requests, and the runtime type information.
+    A public header in the directory of a component that includes
+    `registration.h` is one of them. Spec: `public_api`.
 
 ## Main Owners
 

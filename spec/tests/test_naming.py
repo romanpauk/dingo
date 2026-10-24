@@ -60,9 +60,17 @@ ALLOWED_PHRASES = (
     "importlib.util",
 )
 # Directories that must not exist, as names of a directory under the include
-# directory or under test/next: the modules of the library are directly under
-# include/dingo, and the tests of the conversions are in test/next/conversion.
-BANNED_DIRECTORIES = ("core", "api", "vocabulary", "projection", "engine")
+# directory or under test/next: the components of the library are directly under
+# include/dingo and the tests of a component are in test/next/<component>.
+BANNED_DIRECTORIES = (
+    "core",
+    "api",
+    "vocabulary",
+    "projection",
+    "engine",
+    "primitives",
+    "request",
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # Scanned recursively, as files or directories; each must exist.
