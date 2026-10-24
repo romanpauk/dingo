@@ -9,8 +9,8 @@
 // created by the first registration through its proxy, once, so a
 // registration without any has none.
 
+#include <dingo/backend/local.h>
 #include <dingo/container.h>
-#include <dingo/core/backend/local.h>
 
 #include <gtest/gtest.h>
 

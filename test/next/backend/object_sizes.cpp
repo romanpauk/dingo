@@ -14,11 +14,11 @@
 // object_size_* of spec/content/contracts.py, which test/contracts/probe.py
 // measures. spec: contracts
 
+#include <dingo/backend/slot.h>
 #include <dingo/container.h>
-#include <dingo/core/backend/slot.h>
-#include <dingo/core/engine/execute.h>
-#include <dingo/core/primitives/retained.h>
-#include <dingo/core/primitives/slot.h>
+#include <dingo/conversion/convert.h>
+#include <dingo/primitives/retained.h>
+#include <dingo/primitives/slot.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/shared_cyclical.h>

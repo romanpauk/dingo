@@ -1,11 +1,12 @@
 """Verifies that the headers form a layered hierarchy.
 
-The modules of the library are the directories under include/dingo/core,
-layered as LAYERS lists them, and the API, every other header under
-include/dingo, which forms the topmost layer and holds the public include
-paths. A header may include headers of the layers below its own and headers of
-its own module, and modules that share a layer are independent of each other,
-so core never includes the API.
+The modules of the library are the directories under include/dingo that LAYERS
+lists, from the lowest layer to the highest. The public headers, every other
+header under include/dingo, form the topmost layer: they hold the public include
+paths, and each may include the others. A header may include headers of the
+layers below its own and headers of its own module, and modules that share a
+layer are independent of each other, so no lower module includes the public
+headers.
 """
 
 import argparse
@@ -14,15 +15,15 @@ import re
 import sys
 
 # The modules of the library, from the lowest layer to the highest. See
-# docs/architecture/overview.md, Header Layers.
+# docs/architecture/overview.md, Header Layers. PUBLIC is the module of the
+# headers that no other entry lists.
+PUBLIC = "public"
 LAYERS = [
-    ("core/base",),
-    ("core/primitives",),
-    ("core/vocabulary",),
-    ("core/projection",),
-    ("core/engine",),
-    ("core/backend",),
-    ("api",),
+    ("base",),
+    ("primitives",),
+    ("conversion",),
+    ("backend",),
+    (PUBLIC,),
 ]
 
 INCLUDE = re.compile(r"^\s*#\s*include\s*<dingo/([^>]+)>")
@@ -30,9 +31,9 @@ INCLUDE = re.compile(r"^\s*#\s*include\s*<dingo/([^>]+)>")
 
 def module_of(path):
     parts = Path(path).parts
-    if parts[0] == "core":
-        return "/".join(parts[:2]) if len(parts) > 2 else "core"
-    return "api"
+    if len(parts) > 1 and any(parts[0] in modules for modules in LAYERS):
+        return parts[0]
+    return PUBLIC
 
 
 def layer_of(module):

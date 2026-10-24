@@ -11,7 +11,7 @@
 // factory, which constructs the leaf by its detected constructor, or by the one
 // of the declared argument types.
 
-#include <dingo/core/projection/construct.h>
+#include <dingo/conversion/construct.h>
 #include <dingo/registration.h>
 #include <dingo/registration/constructor.h> // IWYU pragma: export
 

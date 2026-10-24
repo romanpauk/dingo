@@ -39,7 +39,7 @@ def capability_fields(capability):
 
 
 def capabilities(spec):
-    """include/dingo/core/base/capabilities.gen.h from cpp.capabilities."""
+    """include/dingo/base/capabilities.gen.h from cpp.capabilities."""
     entries = sorted(spec.cpp.capabilities, key=lambda capability: capability.id)
     headers = sorted(
         {capability.header for capability in entries if capability.header}
@@ -51,7 +51,7 @@ def capabilities(spec):
     )
     return [
         GeneratedFile(
-            path="include/dingo/core/base/capabilities.gen.h",
+            path="include/dingo/base/capabilities.gen.h",
             content=content,
             spec_ids=("cpp.capabilities",),
         )
@@ -59,7 +59,7 @@ def capabilities(spec):
 
 
 def variants(spec):
-    """include/dingo/core/base/variants.gen.h from the language tiers and the
+    """include/dingo/base/variants.gen.h from the language tiers and the
     compiler variants.
 
     Each variant point gets a DINGO_VARIANT_<ID> macro that can be defined to
@@ -95,7 +95,7 @@ def variants(spec):
         )
     return [
         GeneratedFile(
-            path="include/dingo/core/base/variants.gen.h",
+            path="include/dingo/base/variants.gen.h",
             content=render("variants.gen.h.j2", variants=fields),
             spec_ids=("variant_points",),
         )
@@ -267,7 +267,7 @@ def selection_fields(rule):
 
 
 def vocabulary(spec):
-    """include/dingo/core/vocabulary/vocabulary.gen.h from the semantic sections."""
+    """include/dingo/conversion/vocabulary.gen.h from the semantic sections."""
     from spec.schema import (
         Access,
         ExposureRule,
@@ -322,12 +322,12 @@ def vocabulary(spec):
     )
     return [
         GeneratedFile(
-            path="include/dingo/core/vocabulary/route_forms.gen.h",
+            path="include/dingo/conversion/route_forms.gen.h",
             content=algebra,
             spec_ids=("layer_kinds", "route_forms", "routes"),
         ),
         GeneratedFile(
-            path="include/dingo/core/vocabulary/vocabulary.gen.h",
+            path="include/dingo/conversion/vocabulary.gen.h",
             content=content,
             spec_ids=("key_kinds", "scopes", "selection_rules", "storage_forms"),
         ),
@@ -335,7 +335,7 @@ def vocabulary(spec):
 
 
 def layer_kinds(spec):
-    """include/dingo/core/vocabulary/layer_kinds.gen.h from the layer kinds and
+    """include/dingo/conversion/layer_kinds.gen.h from the layer kinds and
     cpp.kind_projections: the tag of each layer kind of the library and its
     layer_kind_traits, the declaration a kind of the user makes too."""
     spellings = {p.kind: p.spelling for p in spec.cpp.kind_projections}
@@ -357,7 +357,7 @@ def layer_kinds(spec):
     ]
     return [
         GeneratedFile(
-            path="include/dingo/core/vocabulary/layer_kinds.gen.h",
+            path="include/dingo/conversion/layer_kinds.gen.h",
             content=render(
                 "layer_kinds.gen.h.j2", namespace=namespaces.pop(), kinds=kinds
             ),
@@ -367,7 +367,7 @@ def layer_kinds(spec):
 
 
 def scope_tags(spec):
-    """include/dingo/core/vocabulary/scope_tags.gen.h from cpp.scope_projections
+    """include/dingo/conversion/scope_tags.gen.h from cpp.scope_projections
     and the scopes: the tag of each built-in scope and its scope_traits, which
     hold its descriptor."""
     forms = sorted(spec.storage_forms, key=lambda form: form.id)
@@ -390,7 +390,7 @@ def scope_tags(spec):
         raise GeneratorError("cpp.scope_projections: tags span several namespaces")
     return [
         GeneratedFile(
-            path="include/dingo/core/vocabulary/scope_tags.gen.h",
+            path="include/dingo/conversion/scope_tags.gen.h",
             content=render("scope_tags.gen.h.j2", namespace=namespaces.pop(), tags=tags),
             spec_ids=("cpp.scope_projections",),
         )
@@ -414,7 +414,7 @@ def message_pieces(message):
 
 
 def diagnostics(spec):
-    """include/dingo/core/vocabulary/diagnostics.gen.h and
+    """include/dingo/primitives/diagnostics.gen.h and
     compile_diagnostics.gen.h from the diagnostics.
 
     A diagnostic reported at runtime gets a function that throws its exception
@@ -444,14 +444,14 @@ def diagnostics(spec):
     carriers = sorted({field["carrier"] for field in fields if field["compile"]})
     return [
         GeneratedFile(
-            path="include/dingo/core/vocabulary/compile_diagnostics.gen.h",
+            path="include/dingo/primitives/compile_diagnostics.gen.h",
             content=render(
                 "compile_diagnostics.gen.h.j2", diagnostics=fields, carriers=carriers
             ),
             spec_ids=("diagnostics",),
         ),
         GeneratedFile(
-            path="include/dingo/core/vocabulary/diagnostics.gen.h",
+            path="include/dingo/primitives/diagnostics.gen.h",
             content=render("diagnostics.gen.h.j2", diagnostics=fields),
             spec_ids=("diagnostics",),
         )

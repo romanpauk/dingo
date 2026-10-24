@@ -10,11 +10,11 @@
 // The registration vocabulary of the public API and its reduction to a binding
 // type of the next implementation.
 
+#include <dingo/base/mechanics.h>
 #include <dingo/collection.h>
-#include <dingo/core/base/mechanics.h>
-#include <dingo/core/engine/execute.h>
-#include <dingo/core/vocabulary/compile_diagnostics.gen.h>
-#include <dingo/core/vocabulary/scope_tags.gen.h> // IWYU pragma: export
+#include <dingo/conversion/convert.h>
+#include <dingo/conversion/scope_tags.gen.h> // IWYU pragma: export
+#include <dingo/primitives/compile_diagnostics.gen.h>
 
 #include <type_traits>
 

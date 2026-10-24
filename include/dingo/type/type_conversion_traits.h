@@ -10,4 +10,4 @@
 // dingo/type/type_conversion_traits.h of the next implementation: the
 // conversion extension point.
 
-#include <dingo/core/projection/conversion.h> // IWYU pragma: export
+#include <dingo/conversion/type_conversion.h> // IWYU pragma: export

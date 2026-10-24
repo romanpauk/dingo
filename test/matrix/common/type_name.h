@@ -13,7 +13,7 @@
 #include <string>
 
 #if !defined(DINGO_MATRIX_BASELINE)
-#include <dingo/core/primitives/type_name.h>
+#include <dingo/primitives/type_name.h>
 #else
 #include <dingo/base/type_name.h>
 #endif

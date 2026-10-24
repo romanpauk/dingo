@@ -10,12 +10,12 @@
 // The operations every container of the next implementation provides on its
 // selection.
 
+#include <dingo/base/mechanics.h>
 #include <dingo/collection.h>
-#include <dingo/core/base/mechanics.h>
-#include <dingo/core/primitives/type_path.h>
-#include <dingo/core/projection/construct.h>
-#include <dingo/core/vocabulary/compile_diagnostics.gen.h>
+#include <dingo/conversion/construct.h>
 #include <dingo/factory/callable.h>
+#include <dingo/primitives/compile_diagnostics.gen.h>
+#include <dingo/primitives/type_path.h>
 #include <dingo/registration.h>
 
 #include <functional>

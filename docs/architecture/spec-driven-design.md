@@ -924,9 +924,10 @@ records the decision when it is made.
   do not commit them. Decision: open.
 - Baseline commit. Decision: `ced6760`, recorded in
   `test/differential/baseline-commit`, see M0.2.
-- Location of the new implementation. Decision: `include/dingo/core/`, its final
-  location, so the switch deletes the current internals without moving the new
-  ones. It is a layer-0 module until the primitive layer of M2.3 refines it.
+- Location of the new implementation. Decision: modules directly under
+  `include/dingo/` (first under `include/dingo/core/`, whose prefix the final
+  layout dropped), so the switch deletes the current internals without moving
+  the new ones.
 - The wrapper extension point. Decision: `dingo::wrapper_traits`, declared in
   `dingo/type/type_traits.h`, which the standard wrappers specialize too. A
   specialization declares the layer kind, the family, the element types,
@@ -1060,8 +1061,8 @@ changes, and a first generated header is committed.
 
 The generator is described in
 [Generated Code](../development.md#generated-code). The first generated header
-is `include/dingo/core/base/capabilities.gen.h`, which defines a `DINGO_HAS_*`
-macro per language capability for the mechanics of M2.2. Build ordering after
+is `include/dingo/base/capabilities.gen.h`, which defines a `DINGO_HAS_*` macro
+per language capability for the mechanics of M2.2. Build ordering after
 `generate` is verified with Ninja only. The clean-tree CI step has not run on
 GitHub yet.
 
@@ -1211,7 +1212,7 @@ and compiler variants in the spec.
 Done when no header outside the mechanics header tests a standard version or a
 compiler, and every standard C++ variant is tested in Linux CI.
 
-`include/dingo/core/base/` holds the generated `capabilities.gen.h` and
+`include/dingo/base/` holds the generated `capabilities.gen.h` and
 `variants.gen.h`, the configuration macros of the public API in `config.h`, and
 `mechanics.h` with the type list, `dependent_false`, and `pack_at_t`. Each
 variant point of the spec gets a `DINGO_VARIANT_*` macro that defaults to its
@@ -1234,29 +1235,29 @@ the thunk shape. Add the layer rule to `layers-check`.
 Done when no primitive header refers to a scope, shape kind, rule, or
 diagnostic.
 
-`core/primitives/shape.h` describes the shape of a C++ type as a constexpr
-preorder array of nodes, comparable in constant expressions, without knowing the
-layer kinds of the spec. `core/projection/layer_traits.h`, a layer between the
-vocabulary and the engine, classifies C++ types into layer kinds: pointers,
-references, and arrays as language layers, and the standard wrappers through the
-same `layer_traits` a user wrapper specializes. `core/primitives/slot.h` holds
-the lazy and external lifetime slots; the lazy slot reports a recursion while
-its object is being constructed and is empty again after a failed construction.
-`core/primitives/constructor.h` detects the constructor of a type and calls it
-with arguments that resolve their parameter types, the `detected_constructor`
-factory kind of the spec, or by the constructor a type declares with
+`primitives/shape.h` describes the shape of a C++ type as a constexpr preorder
+array of nodes, comparable in constant expressions, without knowing the layer
+kinds of the spec. `conversion/layer_traits.h`, a layer between the vocabulary
+and the engine, classifies C++ types into layer kinds: pointers, references, and
+arrays as language layers, and the standard wrappers through the same
+`layer_traits` a user wrapper specializes. `primitives/slot.h` holds the lazy
+and external lifetime slots; the lazy slot reports a recursion while its object
+is being constructed and is empty again after a failed construction.
+`primitives/constructor.h` detects the constructor of a type and calls it with
+arguments that resolve their parameter types, the `detected_constructor` factory
+kind of the spec, or by the constructor a type declares with
 `DINGO_CONSTRUCTOR`. Its detection is the shape mode of
-`core/primitives/constructor_detection.h`, which has a portable and an msvc
-backend, selected by the compiler variant `constructor_detection_msvc`, and a
-signature mode that recovers the argument types of the detected constructor.
-`core/projection/construct.h` holds the other factory kinds: a declared
-constructor, which list-initializes the leaf from its declared argument types
-inside the layers of the stored shape, and a function or callable object, whose
-result is the stored object. A slot keeps the factory of its binding, empty
-unless it holds a callable object, and a declared factory lifts the check that
-the stored leaf is constructible. The containers construct an object no binding
-stores with `construct`. Remaining: conversion primitives, index structures, the
-arena, and the thunk shape.
+`primitives/constructor_detection.h`, which has a portable and an msvc backend,
+selected by the compiler variant `constructor_detection_msvc`, and a signature
+mode that recovers the argument types of the detected constructor.
+`conversion/construct.h` holds the other factory kinds: a declared constructor,
+which list-initializes the leaf from its declared argument types inside the
+layers of the stored shape, and a function or callable object, whose result is
+the stored object. A slot keeps the factory of its binding, empty unless it
+holds a callable object, and a declared factory lifts the check that the stored
+leaf is constructible. The containers construct an object no binding stores with
+`construct`. Remaining: conversion primitives, index structures, the arena, and
+the thunk shape.
 
 #### M2.4: Vocabulary And Descriptors
 
@@ -1265,12 +1266,12 @@ Status: in progress.
 Generate the vocabulary enums, the public tag types, the descriptor structs, and
 `descriptor_v`.
 
-`core/vocabulary/vocabulary.gen.h` holds the layer kinds with their traits, the
-value and request categories, the storage forms, the scope descriptors with
-their exposure tables, and the route rules as constexpr data, generated from the
-spec. `shape_v<T>` is the descriptor of a type. Remaining: the public tag types.
-Since M10.3, `route_forms.gen.h` holds the shape algebra, the value categories,
-the layer properties, and the route forms, apart from the tables of the other
+`conversion/vocabulary.gen.h` holds the layer kinds with their traits, the value
+and request categories, the storage forms, the scope descriptors with their
+exposure tables, and the route rules as constexpr data, generated from the spec.
+`shape_v<T>` is the descriptor of a type. Remaining: the public tag types. Since
+M10.3, `route_forms.gen.h` holds the shape algebra, the value categories, the
+layer properties, and the route forms, apart from the tables of the other
 sections, and `layer_kinds.gen.h` declares the kinds of the library.
 
 #### M2.5: Walking Skeleton
@@ -1281,7 +1282,7 @@ Make `container<>` and `static_container` serve shared and external bindings end
 to end through the descriptors, the engine, and both backends, before the
 remaining primitives grow around them.
 
-`core/engine/execute.h` walks the rules of a term on C++ objects, one operation
+`conversion/convert.h` walks the rules of a term on C++ objects, one operation
 per rule as the rule table describes it, through `layer_traits`. The static
 backend selects the binding and the term at compile time and walks it directly.
 The runtime backend publishes the terms of a binding at registration with a
@@ -1360,10 +1361,10 @@ Status: done.
 
 Implement one descriptor-based request matcher, used by both backends.
 
-`core/engine/derive.h` registers a binding, finds and derives the terms it
-serves, and selects the term that serves a request, as constexpr functions over
-shapes. It is cross-tested against the reference implementation:
-`test/next/engine_cases.py` generates 35,616 cases into the build tree, over
+`conversion/route.h` registers a binding, finds and derives the terms it serves,
+and selects the term that serves a request, as constexpr functions over shapes.
+It is cross-tested against the reference implementation:
+`test/next/conversion_cases.py` generates 35,616 cases into the build tree, over
 every scope, a copyable, a move-only, and an implementation leaf with one and
 two interfaces, stored shapes of up to two layers in the standard and a user
 wrapper family, and every request kind, and `dingo_next_test` requires the
@@ -1379,9 +1380,9 @@ materialization from the scope descriptor.
 Done when adding a scope with an existing slot primitive requires only a spec
 entry.
 
-`core/backend/slot.h` selects the slot of a binding by the slot kind of its
-scope descriptor, and its materialization, borrowed or consumed, follows from
-the descriptor too; the scope tags are generated from the spec.
+`backend/slot.h` selects the slot of a binding by the slot kind of its scope
+descriptor, and its materialization, borrowed or consumed, follows from the
+descriptor too; the scope tags are generated from the spec.
 
 #### M3.4: Route Conformance
 
@@ -1445,7 +1446,7 @@ Following the route engine of M3.2, the selection engine is a generic
 interpreter of generated selection rule tables rather than generated code.
 
 The selection rules are generated into `vocabulary.gen.h`, and
-`core/backend/selection.h` interprets them over the sources of a container: its
+`backend/selection.h` interprets them over the sources of a container: its
 static bindings, its runtime bindings, its parent, and auto-construction. A step
 whose sources all know what they name when the request is compiled is decided
 then, and reported at compile time when nothing at runtime can change it; any
@@ -1821,14 +1822,14 @@ the one of the next implementation, and the codegen probes record the sizes of
 the next implementation where Clang 18 and GCC 13 do not fold its static
 requests as later versions do.
 
-The internals of the current implementation are deleted. The API layer, which
-was `include/dingo/core/api/`, is `include/dingo/`: its headers are the public
-include paths, which hold what they declare, and `include/next`, the generated
-forwarders, the `dingo_next` target, and `DINGO_IMPLEMENTATION_NEXT` are gone.
-The core never includes the API, which `layers-check` verifies. The matrix
-asserts the behavior of the baseline where a behavior change declares a
-difference under `DINGO_MATRIX_BASELINE`, which a differential build of the
-baseline defines.
+The internals of the current implementation are deleted. The public headers,
+which were `include/dingo/core/api/`, are `include/dingo/`: their headers are
+the public include paths, which hold what they declare, and `include/next`, the
+generated forwarders, the `dingo_next` target, and `DINGO_IMPLEMENTATION_NEXT`
+are gone. The modules below the public headers never include them, which
+`layers-check` verifies. The matrix asserts the behavior of the baseline where a
+behavior change declares a difference under `DINGO_MATRIX_BASELINE`, which a
+differential build of the baseline defines.
 
 #### M9.3: Matrix Migration
 

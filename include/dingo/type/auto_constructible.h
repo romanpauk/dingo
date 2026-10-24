@@ -10,4 +10,4 @@
 // dingo/type/auto_constructible.h of the next implementation: the
 // auto-construction extension point.
 
-#include <dingo/core/projection/auto_constructible.h> // IWYU pragma: export
+#include <dingo/conversion/auto_constructible.h> // IWYU pragma: export

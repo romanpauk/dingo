@@ -57,15 +57,16 @@ ALLOWED_PHRASES = (
     "layers.py",
 )
 # Directories that must not exist, as names of a directory under the include
-# directory or under test/next. Empty until the headers are moved.
-BANNED_DIRECTORIES = ()
+# directory or under test/next: the modules of the library are directly under
+# include/dingo, and the tests of the conversions are in test/next/conversion.
+BANNED_DIRECTORIES = ("core", "api", "vocabulary", "projection", "engine")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # Scanned recursively, as files or directories; each must exist.
 SCANNED = (
     "benchmark",
     "examples",
-    "include/dingo/core/base",
+    "include/dingo/base",
     "include/dingo/registration",
     "include/dingo/rtti",
     "test/matrix/common",

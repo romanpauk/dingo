@@ -340,7 +340,7 @@ directed dependency edges.
 ### Constructor Detection Backend
 
 The family tests `core::constructor_detection` of
-[`include/dingo/core/primitives/constructor_detection.h`](../../include/dingo/core/primitives/constructor_detection.h)
+[`include/dingo/primitives/constructor_detection.h`](../../include/dingo/primitives/constructor_detection.h)
 with each backend:
 
 - `portable`: `core::portable_constructor_detection`, the default on GCC and

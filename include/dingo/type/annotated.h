@@ -10,4 +10,4 @@
 // dingo/type/annotated.h of the next implementation: annotated interfaces and
 // requests.
 
-#include <dingo/core/projection/annotated.h> // IWYU pragma: export
+#include <dingo/conversion/annotated.h> // IWYU pragma: export

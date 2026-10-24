@@ -8,20 +8,19 @@ or a stored type from the underlying type that is actually being matched.
 ### Shape
 
 A shape is a leaf wrapped in layers. `core::shape_v<T>`, of
-[core/projection/layer_traits.h](../../include/dingo/core/projection/layer_traits.h),
+[conversion/layer_traits.h](../../include/dingo/conversion/layer_traits.h),
 describes the shape of `T` as a `constexpr` value: an array of nodes in
 preorder, defined in
-[core/primitives/shape.h](../../include/dingo/core/primitives/shape.h), so a
-layer is followed by the shapes of its arguments. A node of a layer holds the
-descriptor of its layer kind, the family of its wrapper, and its cv-qualifiers;
-a node of a leaf holds the identity of the leaf type, the address of a per-type
-tag.
+[primitives/shape.h](../../include/dingo/primitives/shape.h), so a layer is
+followed by the shapes of its arguments. A node of a layer holds the descriptor
+of its layer kind, the family of its wrapper, and its cv-qualifiers; a node of a
+leaf holds the identity of the leaf type, the address of a per-type tag.
 
 ### Layer
 
 A layer is of a layer kind, a tag type whose `layer_kind_traits` declare its
 properties and forms. The kinds of the library are declared so in
-[core/vocabulary/layer_kinds.gen.h](../../include/dingo/core/vocabulary/layer_kinds.gen.h),
+[conversion/layer_kinds.gen.h](../../include/dingo/conversion/layer_kinds.gen.h),
 and the engine knows a kind only by its properties and forms:
 
 - `T*` is a layer of `pointer_kind`, `T&` of `reference_kind`, `T[N]` of
@@ -81,7 +80,7 @@ the `rebind` of each layer's traits: `std::shared_ptr<A>` becomes
 ## Lookup
 
 A request is matched in two steps, both in
-[core/engine/derive.h](../../include/dingo/core/engine/derive.h).
+[conversion/route.h](../../include/dingo/conversion/route.h).
 
 First, the lookup filter names the bindings of a request: a binding is named
 when it serves the interface of the request, the leaf of its shape, with a key
@@ -114,7 +113,7 @@ engine does not read the marker.
 ## Request Type
 
 `core::request_traits<Request, Key>` in
-[core/engine/request.h](../../include/dingo/core/engine/request.h) is the
+[conversion/request.h](../../include/dingo/conversion/request.h) is the
 descriptor of a request: its kind, value, lvalue reference, or rvalue reference;
 `value_type`, the type it asks for without references; `made_type`, the type a
 binding makes the object of a constructed request as; and `descriptor`, its
@@ -139,7 +138,7 @@ The shape algebra is what allows those three parts to compose.
 
 - [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h)
 - [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
-- [include/dingo/core/projection/layer_traits.h](../../include/dingo/core/projection/layer_traits.h)
-- [include/dingo/core/primitives/shape.h](../../include/dingo/core/primitives/shape.h)
-- [include/dingo/core/engine/derive.h](../../include/dingo/core/engine/derive.h)
-- [include/dingo/core/engine/request.h](../../include/dingo/core/engine/request.h)
+- [include/dingo/conversion/layer_traits.h](../../include/dingo/conversion/layer_traits.h)
+- [include/dingo/primitives/shape.h](../../include/dingo/primitives/shape.h)
+- [include/dingo/conversion/route.h](../../include/dingo/conversion/route.h)
+- [include/dingo/conversion/request.h](../../include/dingo/conversion/request.h)

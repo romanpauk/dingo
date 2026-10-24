@@ -9,7 +9,7 @@
 // not a pointer or a reference, with its cv-qualifiers in front, and pointers
 // and references composed around it.
 
-#include <dingo/core/primitives/type_name.h>
+#include <dingo/primitives/type_name.h>
 
 #include <gtest/gtest.h>
 

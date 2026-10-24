@@ -9,7 +9,7 @@
 // request by a key without a value, and the indexing a lookup declaration
 // names for its domain. spec: index_structures, lookup_declarations
 
-#include <dingo/core/backend/memo.h>
+#include <dingo/backend/memo.h>
 #include <dingo/lookup/lookup.h>
 
 #include <gtest/gtest.h>

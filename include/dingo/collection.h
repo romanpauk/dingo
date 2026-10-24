@@ -11,9 +11,9 @@
 // arguments of construct_collection, and the factory of a binding that stores
 // a collection.
 
-#include <dingo/core/projection/collection.h>
-#include <dingo/core/projection/key.h>
-#include <dingo/core/vocabulary/compile_diagnostics.gen.h>
+#include <dingo/conversion/collection.h>
+#include <dingo/conversion/key.h>
+#include <dingo/primitives/compile_diagnostics.gen.h>
 
 #include <type_traits>
 #include <utility>

@@ -8,7 +8,7 @@
 // The list of types of the next implementation: its size, the element at an
 // index, and the position of the first element of a type.
 
-#include <dingo/core/base/mechanics.h>
+#include <dingo/base/mechanics.h>
 
 #include <gtest/gtest.h>
 

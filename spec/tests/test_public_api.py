@@ -196,7 +196,7 @@ def test_shipped_macros_are_the_user_definable_ones_of_config_h():
         for b in spec.cpp.api_bindings
         if kinds[b.api] is ApiKind.CONFIGURATION_MACRO
     }
-    config = (PROJECT_ROOT / "include" / "dingo" / "core" / "base" / "config.h").read_text()
+    config = (PROJECT_ROOT / "include" / "dingo" / "base" / "config.h").read_text()
     assert macros == set(re.findall(r"#if !defined\((DINGO_\w+)\)", config))
 
 

@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 //
 
-#include <dingo/core/base/mechanics.h>
+#include <dingo/base/mechanics.h>
 
 #include <gtest/gtest.h>
 

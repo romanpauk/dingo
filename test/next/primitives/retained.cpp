@@ -10,8 +10,8 @@
 // transaction recorded, in the reverse order they were kept.
 // spec: transaction_rules
 
-#include <dingo/core/primitives/retained.h>
-#include <dingo/core/primitives/slot.h>
+#include <dingo/primitives/retained.h>
+#include <dingo/primitives/slot.h>
 
 #include <gtest/gtest.h>
 

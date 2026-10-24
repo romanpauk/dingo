@@ -9,17 +9,17 @@
 
 // dingo/static_container.h of the next implementation.
 
+#include <dingo/backend/selection.h>
+#include <dingo/backend/static_backend.h>
 #include <dingo/collection.h>
 #include <dingo/container_operations.h>
-#include <dingo/container_traits.h> // IWYU pragma: export
-#include <dingo/core/backend/selection.h>
-#include <dingo/core/backend/static_backend.h>
-#include <dingo/core/primitives/exceptions.h> // IWYU pragma: export
-#include <dingo/factory/callable.h>           // IWYU pragma: export
-#include <dingo/factory/constructor.h>        // IWYU pragma: export
-#include <dingo/factory/function.h>           // IWYU pragma: export
-#include <dingo/key.h>                        // IWYU pragma: export
+#include <dingo/container_traits.h>    // IWYU pragma: export
+#include <dingo/factory/callable.h>    // IWYU pragma: export
+#include <dingo/factory/constructor.h> // IWYU pragma: export
+#include <dingo/factory/function.h>    // IWYU pragma: export
+#include <dingo/key.h>                 // IWYU pragma: export
 #include <dingo/lookup/lookup.h>
+#include <dingo/primitives/exceptions.h> // IWYU pragma: export
 #include <dingo/registration.h>
 
 #include <type_traits>

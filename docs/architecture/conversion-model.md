@@ -26,12 +26,12 @@ The full conversion behavior comes from a few sources of data:
 
 The important source files are:
 
-- [include/dingo/core/vocabulary/route_forms.gen.h](../../include/dingo/core/vocabulary/route_forms.gen.h)
-- [include/dingo/core/vocabulary/layer_kinds.gen.h](../../include/dingo/core/vocabulary/layer_kinds.gen.h)
-- [include/dingo/core/vocabulary/scope_tags.gen.h](../../include/dingo/core/vocabulary/scope_tags.gen.h)
-- [include/dingo/core/engine/derive.h](../../include/dingo/core/engine/derive.h)
-- [include/dingo/core/engine/execute.h](../../include/dingo/core/engine/execute.h)
-- [include/dingo/core/projection/conversion.h](../../include/dingo/core/projection/conversion.h)
+- [include/dingo/conversion/route_forms.gen.h](../../include/dingo/conversion/route_forms.gen.h)
+- [include/dingo/conversion/layer_kinds.gen.h](../../include/dingo/conversion/layer_kinds.gen.h)
+- [include/dingo/conversion/scope_tags.gen.h](../../include/dingo/conversion/scope_tags.gen.h)
+- [include/dingo/conversion/route.h](../../include/dingo/conversion/route.h)
+- [include/dingo/conversion/convert.h](../../include/dingo/conversion/convert.h)
+- [include/dingo/conversion/type_conversion.h](../../include/dingo/conversion/type_conversion.h)
 
 ## Terms And Route Forms
 
@@ -75,13 +75,13 @@ its object over.
 
 ## Derivation
 
-`derive` in [core/engine/derive.h](../../include/dingo/core/engine/derive.h)
-applies every form that does not create a layer to the terms of a binding, in
-the order of the algebra, and keeps the terms it finds. A route derives shapes
-at most one layer larger than the stored shape, so a binding can publish every
-term it serves before any request is known. A static binding derives its terms
-when the container type is compiled, and a runtime binding when its registration
-is compiled.
+`derive` in [conversion/route.h](../../include/dingo/conversion/route.h) applies
+every form that does not create a layer to the terms of a binding, in the order
+of the algebra, and keeps the terms it finds. A route derives shapes at most one
+layer larger than the stored shape, so a binding can publish every term it
+serves before any request is known. A static binding derives its terms when the
+container type is compiled, and a runtime binding when its registration is
+compiled.
 
 A form that creates a layer, `wrap`, `adopt`, or `address`, applies at the
 request instead: a binding cannot know every kind requested of it, so a request
@@ -116,7 +116,7 @@ container keeps the address a term borrows once the slot is settled.
 
 ## Execution
 
-`walk` in [core/engine/execute.h](../../include/dingo/core/engine/execute.h)
+`walk` in [conversion/convert.h](../../include/dingo/conversion/convert.h)
 applies the rules of one term to the stored object, one C++ operation per form:
 the operation of the layer traits of the object, or of the language for an
 address. The binding applies the rules of a term up to its boundary, and the

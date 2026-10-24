@@ -4,7 +4,7 @@
 // RUN: %dingo_cxx -fsyntax-only -DDINGO_VARIANT_PACK_AT_BUILTIN=0 \
 // RUN:   -DDINGO_VARIANT_PACK_AT_INDEXING=0 %s
 
-#include <dingo/core/base/mechanics.h>
+#include <dingo/base/mechanics.h>
 
 #include <type_traits>
 

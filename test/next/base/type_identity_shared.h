@@ -13,7 +13,7 @@
 // names the type in its signatures by it.
 
 #include <dingo/container.h>
-#include <dingo/core/primitives/shape.h>
+#include <dingo/primitives/shape.h>
 
 namespace next_type_identity {
 

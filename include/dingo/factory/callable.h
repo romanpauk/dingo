@@ -11,8 +11,8 @@
 // which calls a callable object passed at registration whose result is the
 // stored object.
 
-#include <dingo/core/base/mechanics.h>
-#include <dingo/core/projection/construct.h>
+#include <dingo/base/mechanics.h>
+#include <dingo/conversion/construct.h>
 
 #include <type_traits>
 #include <utility>

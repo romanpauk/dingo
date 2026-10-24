@@ -143,7 +143,7 @@ another kind leads to:
 The kinds of the library, `unique_kind`, `shared_kind`, `optional_kind`,
 `alternative_kind`, `array_kind`, `unsized_array_kind`, `pointer_kind`, and
 `reference_kind`, are declared so in
-[core/vocabulary/layer_kinds.gen.h](../../include/dingo/core/vocabulary/layer_kinds.gen.h).
+[conversion/layer_kinds.gen.h](../../include/dingo/conversion/layer_kinds.gen.h).
 A wrapper of a kind behaves as its properties and forms say, not as its C++ type
 does. A sharing handle without the retain form:
 
@@ -327,8 +327,8 @@ template <> struct dingo::scope_traits<per_process> {
 The routes of a binding are derived from its descriptor as for a built-in scope,
 and the cycle rule allows a cycle through the scopes with a two-phase slot. A
 static container with a slot class of the user keeps a transaction log that
-grows. [test/next/api/scopes.cpp](../../test/next/api/scopes.cpp) tests both
-scopes in every container.
+grows. [test/next/containers/scopes.cpp](../../test/next/containers/scopes.cpp)
+tests both scopes in every container.
 
 ## Lookup Indexes
 
@@ -337,8 +337,8 @@ A lookup backend, the last argument of
 `base<Cardinality, Backend>` in
 [include/dingo/lookup/lookup.h](../../include/dingo/lookup/lookup.h), is a type
 that names a member template `index<Value, Candidate>`, an index as
-[core/backend/index.h](../../include/dingo/core/backend/index.h) describes it.
-An index is default constructible and assignable and has:
+[backend/index.h](../../include/dingo/backend/index.h) describes it. An index is
+default constructible and assignable and has:
 
 ```c++
 void build(const dingo::index_item<Value, Candidate> *items, std::size_t count);
@@ -415,13 +415,13 @@ declarations that take a backend.
 
 ## Good Source Companions
 
-- [include/dingo/core/projection/layer_traits.h](../../include/dingo/core/projection/layer_traits.h)
-- [include/dingo/core/vocabulary/layer_kinds.gen.h](../../include/dingo/core/vocabulary/layer_kinds.gen.h)
-- [include/dingo/core/projection/conversion.h](../../include/dingo/core/projection/conversion.h)
-- [include/dingo/core/vocabulary/scope_tags.gen.h](../../include/dingo/core/vocabulary/scope_tags.gen.h)
-- [include/dingo/core/backend/slot.h](../../include/dingo/core/backend/slot.h)
-- [include/dingo/core/backend/index.h](../../include/dingo/core/backend/index.h)
+- [include/dingo/conversion/layer_traits.h](../../include/dingo/conversion/layer_traits.h)
+- [include/dingo/conversion/layer_kinds.gen.h](../../include/dingo/conversion/layer_kinds.gen.h)
+- [include/dingo/conversion/type_conversion.h](../../include/dingo/conversion/type_conversion.h)
+- [include/dingo/conversion/scope_tags.gen.h](../../include/dingo/conversion/scope_tags.gen.h)
+- [include/dingo/backend/slot.h](../../include/dingo/backend/slot.h)
+- [include/dingo/backend/index.h](../../include/dingo/backend/index.h)
 - [include/dingo/lookup/indexes.h](../../include/dingo/lookup/indexes.h)
 - [test/support/custom_wrappers.h](../../test/support/custom_wrappers.h)
-- [test/next/api/scopes.cpp](../../test/next/api/scopes.cpp)
-- [test/next/api/lookups.cpp](../../test/next/api/lookups.cpp)
+- [test/next/containers/scopes.cpp](../../test/next/containers/scopes.cpp)
+- [test/next/containers/lookups.cpp](../../test/next/containers/lookups.cpp)

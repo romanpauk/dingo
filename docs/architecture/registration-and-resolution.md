@@ -54,9 +54,9 @@ dingo::container<app_bindings> container;
 
 Each `bind<...>` entry is reduced by the same `core::registration` as a runtime
 registration, and the bindings form a `core::static_backend` of
-[core/backend/static_backend.h](../../include/dingo/core/backend/static_backend.h)
-with the lookup declarations of the traits. When the container type is formed,
-the static backend rejects a second binding of a key of an interface, unless the
+[backend/static_backend.h](../../include/dingo/backend/static_backend.h) with
+the lookup declarations of the traits. When the container type is formed, the
+static backend rejects a second binding of a key of an interface, unless the
 lookup declarations declare the domain many, and an illegal cycle of the
 dependencies the factories declare. A static container also rejects a declared
 dependency that names no binding when that is decided when it is compiled.
@@ -86,11 +86,11 @@ declares can be served from its stored type.
 ## Resolution
 
 The public `resolve<T>()` and `resolve<T>(key)` are members of `core::selection`
-in [core/backend/selection.h](../../include/dingo/core/backend/selection.h). A
-key is a `key_type` object, a `key_value`, or a value of the key type. At that
-boundary Dingo describes the request with
+in [backend/selection.h](../../include/dingo/backend/selection.h). A key is a
+`key_type` object, a `key_value`, or a value of the key type. At that boundary
+Dingo describes the request with
 `core::request_traits<Request, Key>::descriptor` of
-[core/engine/request.h](../../include/dingo/core/engine/request.h): its kind,
+[conversion/request.h](../../include/dingo/conversion/request.h): its kind,
 value, lvalue reference, or rvalue reference; its shape, whose leaf is the
 interface it names, annotated when the request is; and its key.
 
@@ -153,8 +153,8 @@ cannot be undone.
 
 ## Factory Path
 
-The slot of a binding, in
-[core/backend/slot.h](../../include/dingo/core/backend/slot.h), keeps:
+The slot of a binding, in [backend/slot.h](../../include/dingo/backend/slot.h),
+keeps:
 
 - the stored object, as the slot kind of its scope keeps it
 - the factory of the binding, empty unless it holds a callable object
@@ -178,9 +178,9 @@ local runtime bindings, which are created by the first such registration and
 follow the lookup declarations of the container.
 
 The object of the registration resolves its dependencies through a view, in
-[core/backend/local.h](../../include/dingo/core/backend/local.h), whose local
-sources are those bindings, whose container sources are the host's own bindings,
-and whose parent is the host's parent:
+[backend/local.h](../../include/dingo/backend/local.h), whose local sources are
+those bindings, whose container sources are the host's own bindings, and whose
+parent is the host's parent:
 
 - local bindings shadow the host's for singular requests
 - local bindings shadow the host's for collection requests: a collection holds
@@ -196,12 +196,11 @@ parent.
 If no level names a binding, a request of a value or a const lvalue reference of
 an unregistered type that `is_auto_constructible` declares, a complete aggregate
 by default, and whose constructor is detected, constructs it. That rule is in
-[core/projection/auto_constructible.h](../../include/dingo/core/projection/auto_constructible.h).
+[conversion/auto_constructible.h](../../include/dingo/conversion/auto_constructible.h).
 
 The detection lives in
-[core/primitives/constructor_detection.h](../../include/dingo/core/primitives/constructor_detection.h)
-and
-[core/primitives/constructor.h](../../include/dingo/core/primitives/constructor.h).
+[primitives/constructor_detection.h](../../include/dingo/primitives/constructor_detection.h)
+and [primitives/constructor.h](../../include/dingo/primitives/constructor.h).
 Constructor detection probes the type with arguments that convert to any
 parameter type, from the largest arity down to zero, so the constructor with the
 most parameters wins, and it ignores the copy constructor. It reports the kind
@@ -227,9 +226,9 @@ These files are useful while reading this flow:
 - [include/dingo/container.h](../../include/dingo/container.h)
 - [include/dingo/registration.h](../../include/dingo/registration.h)
 - [include/dingo/registration_proxy.h](../../include/dingo/registration_proxy.h)
-- [include/dingo/core/backend/selection.h](../../include/dingo/core/backend/selection.h)
-- [include/dingo/core/backend/runtime_backend.h](../../include/dingo/core/backend/runtime_backend.h)
-- [include/dingo/core/backend/static_backend.h](../../include/dingo/core/backend/static_backend.h)
-- [include/dingo/core/backend/memo.h](../../include/dingo/core/backend/memo.h)
-- [include/dingo/core/backend/slot.h](../../include/dingo/core/backend/slot.h)
-- [include/dingo/core/primitives/constructor_detection.h](../../include/dingo/core/primitives/constructor_detection.h)
+- [include/dingo/backend/selection.h](../../include/dingo/backend/selection.h)
+- [include/dingo/backend/runtime_backend.h](../../include/dingo/backend/runtime_backend.h)
+- [include/dingo/backend/static_backend.h](../../include/dingo/backend/static_backend.h)
+- [include/dingo/backend/memo.h](../../include/dingo/backend/memo.h)
+- [include/dingo/backend/slot.h](../../include/dingo/backend/slot.h)
+- [include/dingo/primitives/constructor_detection.h](../../include/dingo/primitives/constructor_detection.h)

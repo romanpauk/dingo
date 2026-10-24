@@ -8,8 +8,8 @@
 // The message of a diagnostic reported when a program is compiled names its
 // subjects as a diagnostic reported at runtime does.
 
-#include <dingo/core/primitives/diagnostic_message.h>
-#include <dingo/core/vocabulary/compile_diagnostics.gen.h>
+#include <dingo/primitives/compile_diagnostics.gen.h>
+#include <dingo/primitives/diagnostic_message.h>
 
 #include <gtest/gtest.h>
 

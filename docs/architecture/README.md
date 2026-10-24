@@ -34,7 +34,7 @@ include/dingo/static_container.h   -> static-only container
 ```
 
 These and the other public include paths under `include/dingo/` are the API of
-the library, over its core, `include/dingo/core/`, in the layers described in
+the library, over its modules, in the layers described in
 [Header Layers](overview.md#header-layers).
 
 Both registration modes reduce to one binding type, and both backends serve a
@@ -56,10 +56,10 @@ The main owners are:
 - [include/dingo/runtime_container.h](../../include/dingo/runtime_container.h)
 - [include/dingo/static_container.h](../../include/dingo/static_container.h)
 - [include/dingo/registration.h](../../include/dingo/registration.h)
-- [include/dingo/core/engine/derive.h](../../include/dingo/core/engine/derive.h)
-- [include/dingo/core/engine/execute.h](../../include/dingo/core/engine/execute.h)
-- [include/dingo/core/backend/selection.h](../../include/dingo/core/backend/selection.h)
-- [include/dingo/core/backend/static_backend.h](../../include/dingo/core/backend/static_backend.h)
-- [include/dingo/core/backend/runtime_backend.h](../../include/dingo/core/backend/runtime_backend.h)
-- [include/dingo/core/backend/slot.h](../../include/dingo/core/backend/slot.h)
-- [include/dingo/core/projection/layer_traits.h](../../include/dingo/core/projection/layer_traits.h)
+- [include/dingo/conversion/route.h](../../include/dingo/conversion/route.h)
+- [include/dingo/conversion/convert.h](../../include/dingo/conversion/convert.h)
+- [include/dingo/backend/selection.h](../../include/dingo/backend/selection.h)
+- [include/dingo/backend/static_backend.h](../../include/dingo/backend/static_backend.h)
+- [include/dingo/backend/runtime_backend.h](../../include/dingo/backend/runtime_backend.h)
+- [include/dingo/backend/slot.h](../../include/dingo/backend/slot.h)
+- [include/dingo/conversion/layer_traits.h](../../include/dingo/conversion/layer_traits.h)

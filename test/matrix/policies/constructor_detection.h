@@ -11,9 +11,9 @@
 #include "matrix/fixtures/constructor_detection.h"
 #include "matrix/fixtures/dependency_shapes.h"
 
-#include <dingo/core/primitives/constructor.h>
-#include <dingo/core/primitives/constructor_detection.h>
-#include <dingo/core/primitives/type_name.h>
+#include <dingo/primitives/constructor.h>
+#include <dingo/primitives/constructor_detection.h>
+#include <dingo/primitives/type_name.h>
 
 #include <cstddef>
 #include <memory>

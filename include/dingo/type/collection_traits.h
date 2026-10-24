@@ -10,4 +10,4 @@
 // dingo/type/collection_traits.h of the next implementation: the collection
 // extension point.
 
-#include <dingo/core/projection/collection.h> // IWYU pragma: export
+#include <dingo/conversion/collection.h> // IWYU pragma: export

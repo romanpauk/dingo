@@ -392,8 +392,8 @@ See:
 
 - [include/dingo/lookup/lookup.h](../include/dingo/lookup/lookup.h)
 - [include/dingo/lookup/indexes.h](../include/dingo/lookup/indexes.h)
-- [include/dingo/core/backend/index.h](../include/dingo/core/backend/index.h)
-- [test/next/api/lookups.cpp](../test/next/api/lookups.cpp)
+- [include/dingo/backend/index.h](../include/dingo/backend/index.h)
+- [test/next/containers/lookups.cpp](../test/next/containers/lookups.cpp)
 
 ## Annotated Types
 
@@ -486,9 +486,9 @@ point with complete examples.
 See:
 
 - [include/dingo/type/type_traits.h](../include/dingo/type/type_traits.h)
-- [include/dingo/core/vocabulary/layer_kinds.gen.h](../include/dingo/core/vocabulary/layer_kinds.gen.h)
-- [include/dingo/core/vocabulary/scope_tags.gen.h](../include/dingo/core/vocabulary/scope_tags.gen.h)
-- [test/next/api/scopes.cpp](../test/next/api/scopes.cpp)
+- [include/dingo/conversion/layer_kinds.gen.h](../include/dingo/conversion/layer_kinds.gen.h)
+- [include/dingo/conversion/scope_tags.gen.h](../include/dingo/conversion/scope_tags.gen.h)
+- [test/next/containers/scopes.cpp](../test/next/containers/scopes.cpp)
 
 ## Runtime And Compile-Time Registration
 
@@ -552,7 +552,7 @@ unique, constructor detected, by value           75       52
 A shared link with a detected constructor costs about 14 levels in Clang and
 about 17 in GCC: at twice the default depth, Clang 18 compiles 142 links and GCC
 13 compiles 105.
-[test/next/api/dependency_chain.cpp](../test/next/api/dependency_chain.cpp)
+[test/next/containers/dependency_chain.cpp](../test/next/containers/dependency_chain.cpp)
 resolves a chain of 64 links on Clang and 48 on GCC, in a static and in a
 runtime container.
 
@@ -630,8 +630,8 @@ assert(nested_container.resolve<B>().value == 1);
 See:
 
 - [test/matrix/README.md](../test/matrix/README.md)
-- [test/next/api/parents.cpp](../test/next/api/parents.cpp)
-- [test/next/api/static_parents.cpp](../test/next/api/static_parents.cpp)
+- [test/next/containers/parents.cpp](../test/next/containers/parents.cpp)
+- [test/next/containers/static_parents.cpp](../test/next/containers/static_parents.cpp)
 
 ## Moving Containers
 
@@ -655,7 +655,7 @@ bindings at its new address.
 
 See:
 
-- [test/next/api/container_move.cpp](../test/next/api/container_move.cpp)
+- [test/next/containers/container_move.cpp](../test/next/containers/container_move.cpp)
 
 ## Custom RTTI
 
@@ -707,9 +707,9 @@ container<dingo::dynamic_container_traits, std::allocator<char>>
 
 See:
 
-- [include/dingo/core/primitives/allocation.h](../include/dingo/core/primitives/allocation.h)
+- [include/dingo/primitives/allocation.h](../include/dingo/primitives/allocation.h)
 - [include/dingo/container_traits.h](../include/dingo/container_traits.h)
-- [test/next/api/allocator.cpp](../test/next/api/allocator.cpp)
+- [test/next/containers/allocator.cpp](../test/next/containers/allocator.cpp)
 
 ## Runtime Notes
 

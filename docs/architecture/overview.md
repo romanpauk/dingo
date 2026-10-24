@@ -12,39 +12,38 @@ Dingo is easiest to understand when separated into four concerns:
 
 ## Header Layers
 
-The core of the library is under `include/dingo/core/`, whose modules are its
-directories, and the API is every other header under `include/dingo/`, the
-topmost layer, which holds the public include paths. A header may include
-headers of the layers below its own and of its own module; modules that share a
-layer do not include each other, and no header of the core includes the API. The
-`layers-check` target enforces this, and the layer list lives in
-[tools/layers.py](../../tools/layers.py).
+The modules of the library are the directories of `include/dingo/` that the list
+below names, and the public headers are every other header under
+`include/dingo/`, the topmost layer, which holds the public include paths. A
+header may include headers of the layers below its own and of its own module;
+modules that share a layer do not include each other, and no module below the
+public headers includes them. The `layers-check` target enforces this, and the
+layer list lives in [tools/layers.py](../../tools/layers.py).
 
 From the lowest layer to the highest:
 
-1. `core/base/`: the configuration macros of `config.h`, the generated language
+1. `base/`: the configuration macros of `config.h`, the generated language
    capabilities and compiler variants, and the mechanics: the type list,
    `dependent_false`, and `pack_at_t`.
-2. `core/primitives/`: the primitives that make no decision of the spec: the
-   lifetime slots and the transaction log, allocation, retained objects,
-   constructor detection, the shapes of C++ types, type names and the path of
-   the types being constructed, messages, and the exception types.
-3. `core/vocabulary/`: the vocabulary generated from the spec: the route forms
-   and layer properties, the layer kinds of the library, the scope tags and
-   descriptors, the storage forms, the selection rules, and the diagnostics.
-4. `core/projection/`: the projection of the vocabulary onto C++ types: the
-   layer traits and `wrapper_traits`, keys, annotations, collections,
-   conversions, auto-construction, and the factories of a stored shape.
-5. `core/engine/`: the engine, `constexpr` functions over descriptors: the
-   registration, derivation, and route selection of `derive.h`, the lookup
-   declarations of `lookup.h`, the request descriptor of `request.h`, and the
-   binding type and the walk of a term of `execute.h`.
-6. `core/backend/`: the backends: the static and the runtime backend, the memo
-   of a request and the index of its key values, the slots of the scopes, the
-   local bindings of a registration, the diagnostics of a backend, and the
-   selection, the interpreter of the selection rules over the sources of a
-   container.
-7. `include/dingo/`: the API: the containers, the registration vocabulary, the
+2. `primitives/`: the primitives that make no decision of the spec: the lifetime
+   slots and the transaction log, allocation, retained objects, constructor
+   detection, the type trees of C++ types, type names and the path of the types
+   being constructed, messages, the exception types, and the diagnostics
+   generated from the spec.
+3. `conversion/`: the conversion rules as C++. The declarations generated from
+   the spec: the operations and properties, the wrapper semantics of the
+   library, the scope tags and descriptors, the storage forms, the selection
+   rules, and the key kinds. The extension points over them: the wrapper traits,
+   keys, annotations, collections, conversions, auto-construction, and the
+   factories of a stored type tree. And the `constexpr` functions over
+   descriptors: the registration, derivation, and route selection of `route.h`,
+   the lookup declarations of `lookup.h`, the request descriptor of `request.h`,
+   and the binding type and the walk of a reachable type of `convert.h`.
+4. `backend/`: the backends: the static and the runtime backend, the memo of a
+   request and the index of its key values, the slots of the scopes, the local
+   bindings of a registration, the diagnostics of a backend, and the selection,
+   the interpreter of the selection rules over the sources of a container.
+5. The public headers: the containers, the registration declarations, the
    container traits with their lookup declarations and indexes, and the public
    include paths, which include what they declare and define it.
 
@@ -93,7 +92,7 @@ container keeps its static backend in place. See
 [registration.h](../../include/dingo/registration.h) reduces a
 `register_type<...>()` declaration, and a `bind<...>` entry of `bindings<...>`,
 to a `core::binding_type` of
-[core/engine/execute.h](../../include/dingo/core/engine/execute.h):
+[conversion/convert.h](../../include/dingo/conversion/convert.h):
 
 - the scope tag, whose `scope_traits` hold the scope descriptor
 - the stored type
@@ -107,14 +106,14 @@ to a `core::binding_type` of
 - the local static bindings of a `bindings<...>` part
 
 The binding type computes its descriptor and, by
-[core/engine/derive.h](../../include/dingo/core/engine/derive.h), the terms it
+[conversion/route.h](../../include/dingo/conversion/route.h), the terms it
 serves, when it is compiled. Both registration modes produce the same binding
 type for the same policies.
 
 ### Slots And Factories
 
-[core/backend/slot.h](../../include/dingo/core/backend/slot.h) selects the slot
-of a binding by the slot kind of its scope descriptor, or the slot class its
+[backend/slot.h](../../include/dingo/backend/slot.h) selects the slot of a
+binding by the slot kind of its scope descriptor, or the slot class its
 `scope_traits` name:
 
 - `unique`: no slot; the factory makes an object for every request, which the
@@ -126,17 +125,17 @@ of a binding by the slot kind of its scope descriptor, or the slot class its
 
 The slot keeps the factory of its binding, empty unless it holds a callable
 object, and constructs the stored object by it.
-[core/projection/construct.h](../../include/dingo/core/projection/construct.h)
-holds the factories: a constructor factory constructs the leaf by its detected
-or declared constructor and makes every layer around it in place, and a function
-or callable factory returns the stored object.
+[conversion/construct.h](../../include/dingo/conversion/construct.h) holds the
+factories: a constructor factory constructs the leaf by its detected or declared
+constructor and makes every layer around it in place, and a function or callable
+factory returns the stored object.
 
 ### Routes And Walks
 
 A route is a sequence of route forms from the stored shape to the requested
 shape, as described in the [Conversion Model](conversion-model.md). The engine
 derives the routes of a binding at compile time. `walk` in
-[core/engine/execute.h](../../include/dingo/core/engine/execute.h) applies the
+[conversion/convert.h](../../include/dingo/conversion/convert.h) applies the
 rules of one term to the stored object, one C++ operation per form, through the
 layer traits of each layer. The binding walks a term up to its boundary, and the
 request completes it: it refers to the object, copies it, takes its address, or
@@ -148,19 +147,18 @@ selected.
 
 ### Selection
 
-[core/backend/selection.h](../../include/dingo/core/backend/selection.h)
-interprets the selection rules of the spec over the sources of a container: the
-local bindings of the registration whose object is being constructed, the static
-and runtime bindings of the container, its parent, auto-construction of an
-unregistered type, and the factory of a request to construct an object. A step
-whose sources all know what they name when the request is compiled is decided
-then, and any other step when the request is resolved.
+[backend/selection.h](../../include/dingo/backend/selection.h) interprets the
+selection rules of the spec over the sources of a container: the local bindings
+of the registration whose object is being constructed, the static and runtime
+bindings of the container, its parent, auto-construction of an unregistered
+type, and the factory of a request to construct an object. A step whose sources
+all know what they name when the request is compiled is decided then, and any
+other step when the request is resolved.
 
 The local bindings of a registration are in
-[core/backend/local.h](../../include/dingo/core/backend/local.h): the static
-bindings it declares with `bindings<...>`, and the runtime bindings registered
-through the proxy `register_type` returns, which are created by the first such
-registration.
+[backend/local.h](../../include/dingo/backend/local.h): the static bindings it
+declares with `bindings<...>`, and the runtime bindings registered through the
+proxy `register_type` returns, which are created by the first such registration.
 
 ## Resolution Sketch
 
@@ -197,9 +195,9 @@ For the core path in source order, start here:
 - [include/dingo/container.h](../../include/dingo/container.h)
 - [include/dingo/static_container.h](../../include/dingo/static_container.h)
 - [include/dingo/registration.h](../../include/dingo/registration.h)
-- [include/dingo/core/backend/selection.h](../../include/dingo/core/backend/selection.h)
-- [include/dingo/core/backend/static_backend.h](../../include/dingo/core/backend/static_backend.h)
-- [include/dingo/core/backend/runtime_backend.h](../../include/dingo/core/backend/runtime_backend.h)
-- [include/dingo/core/backend/slot.h](../../include/dingo/core/backend/slot.h)
-- [include/dingo/core/engine/derive.h](../../include/dingo/core/engine/derive.h)
-- [include/dingo/core/engine/execute.h](../../include/dingo/core/engine/execute.h)
+- [include/dingo/backend/selection.h](../../include/dingo/backend/selection.h)
+- [include/dingo/backend/static_backend.h](../../include/dingo/backend/static_backend.h)
+- [include/dingo/backend/runtime_backend.h](../../include/dingo/backend/runtime_backend.h)
+- [include/dingo/backend/slot.h](../../include/dingo/backend/slot.h)
+- [include/dingo/conversion/route.h](../../include/dingo/conversion/route.h)
+- [include/dingo/conversion/convert.h](../../include/dingo/conversion/convert.h)

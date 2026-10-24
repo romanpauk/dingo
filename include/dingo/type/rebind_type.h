@@ -11,7 +11,7 @@
 // the type with its leaf rebound, through its layers, and the marker of a
 // request that names its wrapper exactly.
 
-#include <dingo/core/projection/layer_traits.h>
+#include <dingo/conversion/layer_traits.h>
 
 namespace dingo {
 

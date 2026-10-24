@@ -9,7 +9,7 @@
 // that a linear scan of the candidates does, in the order of registration.
 // spec: index_structures
 
-#include <dingo/core/backend/memo.h>
+#include <dingo/backend/memo.h>
 #include <dingo/lookup/lookup.h>
 
 #include <gtest/gtest.h>

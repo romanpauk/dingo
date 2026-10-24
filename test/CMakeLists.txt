@@ -205,52 +205,52 @@ set(DINGO_NEXT_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/next")
 file(GLOB_RECURSE DINGO_NEXT_SPEC_SOURCES CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/spec/*.py")
 add_custom_command(
-    OUTPUT "${DINGO_NEXT_GENERATED_DIR}/engine_cases.cpp"
+    OUTPUT "${DINGO_NEXT_GENERATED_DIR}/conversion_cases.cpp"
     COMMAND ${CMAKE_COMMAND} -E env PYTHONDONTWRITEBYTECODE=1
         ${DINGO_UV_RUN_COMMAND} python
-        "${CMAKE_CURRENT_SOURCE_DIR}/next/engine_cases.py"
-        --output "${DINGO_NEXT_GENERATED_DIR}/engine_cases.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/next/conversion_cases.py"
+        --output "${DINGO_NEXT_GENERATED_DIR}/conversion_cases.cpp"
     DEPENDS
-        "${CMAKE_CURRENT_SOURCE_DIR}/next/engine_cases.py"
-        "${CMAKE_CURRENT_SOURCE_DIR}/next/templates/engine_cases.cpp.j2"
+        "${CMAKE_CURRENT_SOURCE_DIR}/next/conversion_cases.py"
+        "${CMAKE_CURRENT_SOURCE_DIR}/next/templates/conversion_cases.cpp.j2"
         ${DINGO_NEXT_SPEC_SOURCES}
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
     COMMENT "Generating the engine cases of the next implementation"
     VERBATIM)
 
 add_executable(dingo_next_test
-    next/api/allocator.cpp
-    next/api/annotated.cpp
-    next/api/array_handles.cpp
-    next/api/collections.cpp
-    next/api/construct.cpp
-    next/api/construction.cpp
-    next/api/container.cpp
-    next/api/container_move.cpp
-    next/api/dependency_chain.cpp
-    next/api/diagnostics.cpp
-    next/api/factories.cpp
-    next/api/incomplete_resolve.cpp
-    next/api/incomplete_resolve_fixture.cpp
-    next/api/keyed_diagnostics.cpp
-    next/api/keys.cpp
-    next/api/local.cpp
-    next/api/lookups.cpp
-    next/api/mixed.cpp
-    next/api/nested_requests.cpp
-    next/api/object_routes.cpp
-    next/api/parents.cpp
-    next/api/recursion.cpp
-    next/api/runtime_registration.cpp
-    next/api/scope_headers.cpp
-    next/api/scopes.cpp
-    next/api/shared_cyclical.cpp
-    next/api/static_bindings.cpp
-    next/api/static_parents.cpp
-    next/api/stored_shapes.cpp
-    next/api/transactions.cpp
-    next/api/unique.cpp
-    next/api/variants.cpp
+    next/containers/allocator.cpp
+    next/containers/annotated.cpp
+    next/containers/array_handles.cpp
+    next/containers/collections.cpp
+    next/containers/construct.cpp
+    next/containers/construction.cpp
+    next/containers/container.cpp
+    next/containers/container_move.cpp
+    next/containers/dependency_chain.cpp
+    next/containers/diagnostics.cpp
+    next/containers/factories.cpp
+    next/containers/incomplete_resolve.cpp
+    next/containers/incomplete_resolve_fixture.cpp
+    next/containers/keyed_diagnostics.cpp
+    next/containers/keys.cpp
+    next/containers/local.cpp
+    next/containers/lookups.cpp
+    next/containers/mixed.cpp
+    next/containers/nested_requests.cpp
+    next/containers/object_routes.cpp
+    next/containers/parents.cpp
+    next/containers/recursion.cpp
+    next/containers/runtime_registration.cpp
+    next/containers/scope_headers.cpp
+    next/containers/scopes.cpp
+    next/containers/shared_cyclical.cpp
+    next/containers/static_bindings.cpp
+    next/containers/static_parents.cpp
+    next/containers/stored_shapes.cpp
+    next/containers/transactions.cpp
+    next/containers/unique.cpp
+    next/containers/variants.cpp
     next/backend/index.cpp
     next/backend/local.cpp
     next/backend/memo.cpp
@@ -261,19 +261,19 @@ add_executable(dingo_next_test
     next/base/type_identity.cpp
     next/base/type_identity_fixture.cpp
     next/base/type_list.cpp
-    next/engine/engine_conformance.cpp
-    next/engine/execute.cpp
-    next/engine/registration.cpp
-    next/engine/routes.cpp
+    next/conversion/conversion_conformance.cpp
+    next/conversion/execute.cpp
+    next/conversion/registration.cpp
+    next/conversion/routes.cpp
     next/primitives/allocation.cpp
     next/primitives/constructor.cpp
     next/primitives/diagnostic_message.cpp
     next/primitives/retained.cpp
     next/primitives/transaction_log.cpp
     next/primitives/type_name.cpp
-    next/projection/request_types.cpp
-    next/projection/shape.cpp
-    "${DINGO_NEXT_GENERATED_DIR}/engine_cases.cpp"
+    next/conversion/request_types.cpp
+    next/conversion/shape.cpp
+    "${DINGO_NEXT_GENERATED_DIR}/conversion_cases.cpp"
 )
 target_include_directories(dingo_next_test PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/next")

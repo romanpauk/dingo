@@ -18,7 +18,7 @@ Each entry has one disposition:
   new test.
 - **replaced**: the test is rewritten as a test of the next implementation that
   does the same job, such as a test of an index instead of a lookup backend. The
-  entry names the new test and the header of `include/dingo/core` it tests.
+  entry names the new test and the header of `include/dingo` it tests.
 - **covered**: another test asserts the same property. The entry names it.
 - **changed**: the behavior changed on purpose. The entry names the behavior
   change and the test of the new behavior.
@@ -64,7 +64,7 @@ The ledger leaves these open:
   transaction log use the global allocator. The configuration macros
   `DINGO_CONTEXT_ARENA_BUFFER_SIZE` and `DINGO_RUNTIME_ARENA_BLOCK_SIZE`
   (`config_context_arena_buffer_size`, `config_runtime_arena_block_size`) are
-  defined in `core/base/config.h` and read by nothing.
+  defined in `base/config.h` and read by nothing.
 - **`dense_index::build` writes without a bound check.** A key at or past the
   bound of the index is undefined behavior. A container cannot reach it, as the
   runtime backend rejects such a key before it indexes it, but a direct use of
@@ -99,14 +99,14 @@ The ledger leaves these open:
     compared, as it rejects a fixed key in a runtime registration.
 - **A long chain of declared constructors exceeds the constexpr steps of Clang
   18.** The cycle search of the static dependency graph
-  (`dependency_graph::find` in `core/backend/static_backend.h`) grows with the
-  cube of the length of a chain, so with `-ftemplate-depth=4096` Clang 18 fails
-  a chain of more than 86 links by `-fconstexpr-steps`, not by its depth.
+  (`dependency_graph::find` in `backend/static_backend.h`) grows with the cube
+  of the length of a chain, so with `-ftemplate-depth=4096` Clang 18 fails a
+  chain of more than 86 links by `-fconstexpr-steps`, not by its depth.
 
 ## Group A: container and factory
 
 The cases of `test/container/` and `test/factory/`. Making detection try arity 0
-first, in a scratch copy of `include/dingo/core`, fails the `static_assert`s of
+first, in a scratch copy of `include/dingo`, fails the `static_assert`s of
 `test/next/primitives/constructor.cpp` and four `next_recursion` tests, and
 ignoring `dingo_constructor_type` in `invoke_constructor` fails
 `next_construct.auto_constructs_a_dependency_by_its_declared_constructor`. The
@@ -135,43 +135,43 @@ came from `test/support/containers.h`, because `dingo_next_test` does not have
 
 - `container_move_test.is_movable_but_not_copyable` (typed, 7 types): every
   runtime container is move-constructible and move-assignable, and not copyable.
-  **ported**: `test/next/api/container_move.cpp`
+  **ported**: `test/next/containers/container_move.cpp`
   `next_container_move.is_movable_but_not_copyable`.
 - `container_move_test.move_construction_keeps_bindings_and_instances` (typed):
   the moved-to container serves the same instances and bindings after the source
-  slot is reused. **ported**: `test/next/api/container_move.cpp`
+  slot is reused. **ported**: `test/next/containers/container_move.cpp`
   `next_container_move.move_construction_keeps_bindings_and_instances`.
 - `container_move_test.move_assignment_replaces_bindings` (typed): move
   assignment takes over the source's bindings and instances and drops the
-  target's old ones. **ported**: `test/next/api/container_move.cpp`
+  target's old ones. **ported**: `test/next/containers/container_move.cpp`
   `next_container_move.move_assignment_replaces_bindings`.
 - `container_move_test.moved_container_keeps_registration_containers` (typed):
   the child container returned by `register_type` stays at its address, and
   registering into it after the move still works. **ported**:
-  `test/next/api/container_move.cpp`
+  `test/next/containers/container_move.cpp`
   `next_container_move.moved_container_keeps_registration_containers`.
 - `container_move_test.moved_container_keeps_static_registration_containers`
   (typed): the same, for a registration that has local compile-time bindings.
-  **ported**: `test/next/api/container_move.cpp`
+  **ported**: `test/next/containers/container_move.cpp`
   `next_container_move.moved_container_keeps_static_registration_containers`.
 - `container_move_test.moved_container_keeps_collection_factories`: a collection
   registered with an insertion function still collects after the move.
-  **ported**: `test/next/api/container_move.cpp`
+  **ported**: `test/next/containers/container_move.cpp`
   `next_container_move_untyped.moved_container_keeps_collection_factories`.
 - `container_move_test.builder_hands_container_to_host`: a builder moves its
   container into a host, and instances made before the move stay valid.
-  **ported**: `test/next/api/container_move.cpp`
+  **ported**: `test/next/containers/container_move.cpp`
   `next_container_move_untyped.builder_hands_container_to_host`.
 - `container_move_parent_test.child_follows_moved_parent` (typed: runtime child,
   `container<bindings, container<>>` child): a child resolves through its parent
   after the parent is moved and the old slot is reused. **ported**:
-  `test/next/api/container_move.cpp`
+  `test/next/containers/container_move.cpp`
   `next_container_move_parent.child_follows_moved_parent`. The guard on
   `std::is_move_constructible_v<TypeParam>` became a trait that names the child
   with a compile-time binding of the service, which registers none.
 - `container_move_test.compile_time_binding_containers_are_not_movable`:
   `container<bindings<...>>` and `static_container<bindings<...>>` are neither
-  movable nor copyable. **ported**: `test/next/api/container_move.cpp`
+  movable nor copyable. **ported**: `test/next/containers/container_move.cpp`
   `next_container_move_untyped.compile_time_binding_containers_are_not_movable`
   (the `static_assert`s are `EXPECT_FALSE`s). A mixed container without static
   bindings, `container<bindings<>>`, moves and its children follow it: behavior
@@ -182,14 +182,14 @@ came from `test/support/containers.h`, because `dingo_next_test` does not have
 
 - `dependency_chain_test.static_chain`: a static chain of detected-constructor
   shared links compiles at the default template depth and resolves to one
-  instance. **ported**: `test/next/api/dependency_chain.cpp`
+  instance. **ported**: `test/next/containers/dependency_chain.cpp`
   `next_dependency_chain.resolves_a_static_chain`. Accepted limit (decision of
   the user): at the default template depth Clang 18 compiles 69 links (baseline
   144\) and GCC 13 52 (baseline 53), so the test uses 64 links on Clang (was 100)
   and 48 on GCC (unchanged)
 - `dependency_chain_test.runtime_chain`: a runtime-registered chain of the same
   length resolves to one instance. **ported**:
-  `test/next/api/dependency_chain.cpp`
+  `test/next/containers/dependency_chain.cpp`
   `next_dependency_chain.resolves_a_runtime_chain`. It shares `chain_length`, so
   on Clang it now has 64 links instead of 100. Runtime resolution is type-erased
   and does not depend on depth.
@@ -200,10 +200,10 @@ came from `test/support/containers.h`, because `dingo_next_test` does not have
   not-found message of a keyed request with a path is
   `type not found: R (index type: K) (required by P)` (old internal
   `detail::make_type_not_found_exception`, old header `dingo/base/type_name.h`)
-  **replaced**: `test/next/api/keyed_diagnostics.cpp`
+  **replaced**: `test/next/containers/keyed_diagnostics.cpp`
   `next_diagnostics.names_the_key_and_the_path_of_a_missing_dependency`. It goes
-  through the public API to `raise_not_found` in `core/backend/diagnose.h` and
-  the generated `raise_type_not_found_keyed_required_by` (spec
+  through the public API to `raise_not_found` in `backend/diagnose.h` and the
+  generated `raise_type_not_found_keyed_required_by` (spec
   `diagnostics.type_not_found_keyed_required_by`), and checks the whole message.
 
 ### test/container/incomplete_resolve.cpp (+ incomplete_resolve_fixture.cpp, incomplete_resolve_shared.h)
@@ -211,14 +211,14 @@ came from `test/support/containers.h`, because `dingo_next_test` does not have
 - `container_test.resolve_incomplete_pointer_and_reference`: `resolve<T*>` and
   `resolve<T&>` compile and agree where `T` is incomplete, when `T` is
   registered in a TU where it is complete. **ported**:
-  `test/next/api/incomplete_resolve.cpp`
+  `test/next/containers/incomplete_resolve.cpp`
   `next_incomplete_resolve.resolves_a_pointer_and_a_reference_to_an_incomplete_type`
-  (+ `test/next/api/incomplete_resolve_fixture.cpp`,
-  `test/next/api/incomplete_resolve_shared.h`)
+  (+ `test/next/containers/incomplete_resolve_fixture.cpp`,
+  `test/next/containers/incomplete_resolve_shared.h`)
 - `container_test.construct_registered_type_with_incomplete_reference_dependency`:
   a registered type whose constructor takes a reference to an incomplete type is
   constructed and gets the registered instance. **ported**:
-  `test/next/api/incomplete_resolve.cpp`
+  `test/next/containers/incomplete_resolve.cpp`
   `next_incomplete_resolve.injects_a_reference_to_an_incomplete_type`.
 
 ### test/container/parent_container_resolution.cpp
@@ -256,26 +256,28 @@ standards. They use only public includes (`dingo/container.h`,
 
 - `recursion_test.container_default_constructible_cycle`: a shared cycle through
   the largest-arity constructors of default-constructible types is a recursion.
-  **ported**: `test/next/api/recursion.cpp`
+  **ported**: `test/next/containers/recursion.cpp`
   `next_recursion.a_cycle_of_default_constructible_types_is_a_recursion` (body
   unchanged)
 - `recursion_test.container_unique_default_constructible_cycle`: the same cycle
-  with unique bindings is a recursion. **ported**: `test/next/api/recursion.cpp`
+  with unique bindings is a recursion. **ported**:
+  `test/next/containers/recursion.cpp`
   `next_recursion.a_unique_cycle_of_default_constructible_types`. The
   constructors take `T&&` instead of `T&`, because under
   `consumed_objects_are_never_borrowed` a unique binding no longer serves `T&`
   (unchanged, the old test throws `type_not_convertible_exception`)
 - `recursion_test.container_bindings_default_constructible_cycle`: the same
-  cycle in `container<bindings<...>>`. **ported**: `test/next/api/recursion.cpp`
+  cycle in `container<bindings<...>>`. **ported**:
+  `test/next/containers/recursion.cpp`
   `next_recursion.a_bound_cycle_of_default_constructible_types` (body unchanged)
 - `recursion_test.static_container_detected_constructor_cycle`: the same cycle
   in `static_container` throws at runtime. **ported**:
-  `test/next/api/recursion.cpp`
+  `test/next/containers/recursion.cpp`
   `next_recursion.a_static_cycle_of_default_constructible_types` (body
   unchanged)
 - `recursion_test.static_container_detected_constructor_chain`: an acyclic
   static chain of detected constructors is not a recursion. **ported**:
-  `test/next/api/recursion.cpp`
+  `test/next/containers/recursion.cpp`
   `next_recursion.a_static_chain_of_detected_constructors_is_no_recursion` (body
   unchanged)
 
@@ -285,7 +287,7 @@ This file includes old internal headers
 (`dingo/factory/constructor_detection.h`,
 `matrix/fixtures/constructor_detection.h` →
 `dingo/factory/detail/constructor_detection_msvc.hpp`). In next, constructor
-detection lives in `include/dingo/core/primitives/constructor.h` and
+detection lives in `include/dingo/primitives/constructor.h` and
 `constructor_detection.h`, with the backends portable and msvc, selected by the
 compiler variant `constructor_detection_msvc`, and the modes shape and
 signature.
@@ -297,7 +299,7 @@ signature.
   `next_constructor.value_initializes_a_scalar`,
   `next_constructor.detects_the_constructor_of_the_largest_arity`,
   `next_constructor.takes_the_declared_constructor_arguments`; tests
-  `core/primitives/constructor.h`. The per-type
+  `primitives/constructor.h`. The per-type
   `constructor_detection_traits::max_arity` is an old internal, not public API,
   and next has no equivalent.
 - `constructor_detection_test.public_constructor_argument_metadata`:
@@ -308,20 +310,20 @@ signature.
   `(double, const char*)` and `(int)` lists) and
   `next_constructor.detects_the_constructor_of_the_largest_arity` (arity 2 / 0),
   and `next_constructor.the_signature_mode_recovers_the_argument_types` (int,
-  float); tests `core/primitives/constructor.h` and
-  `core/primitives/constructor_detection.h`.
+  float); tests `primitives/constructor.h` and
+  `primitives/constructor_detection.h`.
 - `constructor_detection_test.unresolved_signature_arguments_fall_back_to_void`:
   old `detail::constructor_signature_arguments` yields `void` for an argument
   category it cannot resolve. **replaced**:
   `test/next/primitives/constructor.cpp`
   `next_constructor.an_unrecorded_argument_category_is_not_recovered`; tests
-  `core/primitives/constructor_signature.h`.
+  `primitives/constructor_signature.h`.
 - `constructor_detection_test.traits_limit_only_the_public_search`: a per-type
   arity limit bounds the public search but not an explicit search with a higher
   limit. **replaced**: `test/next/primitives/constructor.cpp`
   `next_constructor.detects_the_constructor_of_the_largest_arity`
   (`find_arity<T, 2>` finds 2 where the unbounded search finds 3); tests
-  `core/primitives/constructor.h`. The only limit in next is
+  `primitives/constructor.h`. The only limit in next is
   `DINGO_CONSTRUCTOR_DETECTION_ARGS` (`config_constructor_detection_args`)
 - `constructor_detection_test.public_detection_defaults_to_shape`: the public
   `constructor_detection<T>` is the `constructor_shape` detection mode.
@@ -329,10 +331,10 @@ signature.
   `next_constructor.the_signature_mode_recovers_the_argument_types` (the shape
   mode reports no argument types) and
   `next_constructor.the_engine_detects_by_the_selected_backend`; tests
-  `core/primitives/constructor_detection.h`.
+  `primitives/constructor_detection.h`.
 - `constructor_detection_test.auto_construction_uses_public_selection`: an
   auto-constructible dependency is made by its `DINGO_CONSTRUCTOR`-selected
-  constructor. **ported**: `test/next/api/construct.cpp`
+  constructor. **ported**: `test/next/containers/construct.cpp`
   `next_construct.auto_constructs_a_dependency_by_its_declared_constructor`.
   This is stronger than the old test: an `int` is registered, so detection alone
   would pick the other constructor.
@@ -341,7 +343,7 @@ signature.
   order (old `constructor_traits<std::array>`) **replaced**:
   `test/next/primitives/constructor.cpp`
   `next_constructor.constructs_an_array_of_move_only_handles_in_order`; tests
-  `invoke_constructor` (list-initialization) in `core/primitives/constructor.h`.
+  `invoke_constructor` (list-initialization) in `primitives/constructor.h`.
 - `constructor_detection_test.array_traits_construct_nested_move_only_elements_in_place`:
   the same for a nested array of unique_ptr. **replaced**:
   `test/next/primitives/constructor.cpp`
@@ -361,26 +363,27 @@ signature.
 - `constructor_detection_test.selected_alternative_uses_the_conversion_operation`:
   `construct<optional<variant>, constructor<A>>`, doubly nested optional and
   `variant*` build the named alternative. **ported**:
-  `test/next/api/construct.cpp`
+  `test/next/containers/construct.cpp`
   `next_construct.constructs_a_named_alternative_inside_layers` (body unchanged)
 - `constructor_detection_test.ordinary_wrapper_construction_remains_in_place`:
   `optional<immovable>` is constructed in place (old
-  `detail::construction_dispatch`) **ported**: `test/next/api/construct.cpp`
+  `detail::construction_dispatch`) **ported**:
+  `test/next/containers/construct.cpp`
   `next_construct.constructs_the_element_of_an_optional_in_place` (through
   `container.construct`)
 - `constructor_detection_test.selected_conversion_route_is_executed`: a
   `variant<int,long>` gets its `long` alternative built from an int source (old
   `detail::target_alternative_type_conversion`) **ported**:
-  `test/next/api/construct.cpp`
+  `test/next/containers/construct.cpp`
   `next_construct.a_named_leaf_converts_to_the_alternative_it_names`
   (`constructor<long(int)>`; the leaf converts into the stored variant through
-  `constructor_factory` in `core/projection/construct.h`)
+  `constructor_factory` in `conversion/construct.h`)
 
 ## Group B: lookup
 
 The cases of `test/lookup/`. The new tests are in `test/next/backend/index.cpp`
-(`next_index`) and `test/next/api/lookups.cpp` (`next_lookups`). They are not
-mutation-checked. The covered rows were read and assert the same property.
+(`next_index`) and `test/next/containers/lookups.cpp` (`next_lookups`). They are
+not mutation-checked. The covered rows were read and assert the same property.
 
 ### test/lookup/lookup_index.cpp
 
@@ -388,13 +391,13 @@ mutation-checked. The covered rows were read and assert the same property.
   (`is_static_lookup_key_v`) and what `make_lookup_key` returns for each
   selector. **replaced**: `test/next/backend/index.cpp` file-scope
   `static_assert`s on `key_has_value`, `key_of_t`, `request_key_of`; tests
-  `core/projection/key.h`.
+  `conversion/key.h`.
 - `index_test.lookup_backend_inserts_key_value_rows`: a `one`/ordered key-value
   backend finds the row of a key, refuses a second row, and forgets the row once
   it is erased. **replaced**:
   `next_index.finds_the_candidate_of_a_key_value_and_no_other` and
   `next_index.a_rebuilt_index_holds_only_the_candidates_of_its_last_build`;
-  tests `core/backend/index.h`. In next the backend rejects duplicates, not the
+  tests `backend/index.h`. In next the backend rejects duplicates, not the
   index: see `next_keys.rejects_a_second_binding_of_a_key` and
   `next_lookups.an_unordered_domain_of_one_selects_by_key_value`.
 - `index_test.lookup_backend_iterates_many_key_value_rows`: a `many`/unordered
@@ -402,34 +405,34 @@ mutation-checked. The covered rows were read and assert the same property.
   **replaced**:
   `next_index.visits_the_candidates_of_a_key_in_order_until_told_to_stop` and
   `next_index.a_rebuilt_index_holds_only_the_candidates_of_its_last_build` (both
-  run linear, sorted, hashed and dense); tests `core/backend/index.h`.
+  run linear, sorted, hashed and dense); tests `backend/index.h`.
 - `index_test.lookup_backend_inserts_no_key_rows`: a no-key `one` backend holds
   a row, refuses a second, finds it, and erases it. **replaced**:
   `next_index.a_memo_of_a_key_without_a_value_visits_every_candidate`
-  (`no_key`); tests `core/backend/memo.h`. The rejection is
+  (`no_key`); tests `backend/memo.h`. The rejection is
   `next_lookups.a_second_binding_of_a_key_of_a_domain_of_one_is_rejected`.
 - `index_test.lookup_backend_inserts_key_type_rows`: a tag-key `one` backend
   holds a row, finds it, and erases it. **replaced**:
   `next_index.a_memo_of_a_key_without_a_value_visits_every_candidate`
-  (`tag_key`); tests `core/backend/memo.h`.
+  (`tag_key`); tests `backend/memo.h`.
 - `index_test.lookup_backend_iterates_many_static_key_rows`: a no-key `many`
   backend visits its rows in insertion order, and after the first is erased
   `find` gives the next. **replaced**:
   `next_index.a_memo_of_a_key_without_a_value_visits_every_candidate` (checks
   order, stopping after the first, and clear followed by re-index); tests
-  `core/backend/memo.h`.
+  `backend/memo.h`.
 - `index_test.lookup_index_get_returns_lookup_backend`: the lookup index gives
   each lookup entry its own backend. **replaced**:
   `next_index.a_domain_is_indexed_by_the_index_of_its_declaration` and
   `next_index.a_default_declaration_indexes_every_other_domain`; tests
-  `declaration_list` in `core/engine/lookup.h` and `backend_indexing` in
+  `declaration_list` in `conversion/lookup.h` and `backend_indexing` in
   `dingo/lookup/lookup.h`.
 
 ### test/lookup/index_registration.cpp
 
 - `index_test.normal_unkeyed_singular_registration_uses_allocator_owned_storage`:
   an unkeyed binding, including a large one, is allocated from the container
-  allocator and released. **ported**: `test/next/api/lookups.cpp`
+  allocator and released. **ported**: `test/next/containers/lookups.cpp`
   `next_lookups.a_binding_is_allocated_from_the_container_allocator` (case
   `keyed false`)
 - `index_test.shared_resolution_without_local_bindings_avoids_allocation`:
@@ -679,13 +682,13 @@ The old arena (`dingo/memory/arena_allocator.h`), object store
 (`dingo/memory/object_store.h`), container runtime, and runtime transaction
 (`dingo/runtime/*`) have no one-to-one counterpart. In the next implementation
 each binding is one allocation from the container allocator
-(`core/primitives/allocation.h`); `core/primitives/retained.h` keeps the objects
-of a container, which a failed transaction destroys back to its mark; and
-`basic_transaction_log` of `core/primitives/slot.h` is the undo log of the
-requests of a container, in which every request undoes its own effects when it
-fails. The next implementation has no commit or finish actions, no action state,
-no scratch or inline arena, and no block-size policy, which is why several rows
-are obsolete.
+(`primitives/allocation.h`); `primitives/retained.h` keeps the objects of a
+container, which a failed transaction destroys back to its mark; and
+`basic_transaction_log` of `primitives/slot.h` is the undo log of the requests
+of a container, in which every request undoes its own effects when it fails. The
+next implementation has no commit or finish actions, no action state, no scratch
+or inline arena, and no block-size policy, which is why several rows are
+obsolete.
 
 ### test/memory/arena_allocator.cpp
 
@@ -693,27 +696,26 @@ are obsolete.
   buffer-backed arena serves from its buffer and takes overflow blocks from its
   allocator. **obsolete**: next has no arena and no caller-supplied buffer: each
   binding is its own allocation from the container allocator, tested by
-  `test/next/api/allocator.cpp`
+  `test/next/containers/allocator.cpp`
   `next_allocator.a_container_allocates_its_bindings_from_its_allocator`.
 - `arena_allocator_test.buffer_backed_reset_releases_overflow_and_rewinds`:
   reset gives the overflow blocks back to the allocator and rewinds to the
   buffer. **replaced**: `test/next/primitives/allocation.cpp`
   `next_allocation.frees_the_bytes_it_allocated` (same pointers and byte counts
-  handed back); tests `core/primitives/allocation.h`. Rewinding has no
-  counterpart.
+  handed back); tests `primitives/allocation.h`. Rewinding has no counterpart.
 - `arena_allocator_test.checkpoint_rewind_reuses_storage_after_mark`: rewinding
   to a mark drops the allocations after it. **replaced**:
   `test/next/primitives/retained.cpp`
   `next_retained.a_failed_transaction_destroys_the_objects_kept_during_it`,
   `next_retained.objects_kept_after_an_undo_follow_the_remaining_ones`; tests
-  `core/primitives/retained.h` (undo to the mark). Address reuse is
-  arena-specific and obsolete.
+  `primitives/retained.h` (undo to the mark). Address reuse is arena-specific
+  and obsolete.
 - `arena_allocator_test.checkpoint_rewind_releases_later_overflow_blocks`:
   rewinding frees the blocks allocated after the mark. **replaced**:
-  `test/next/api/allocator.cpp`
+  `test/next/containers/allocator.cpp`
   `next_allocator.a_failed_request_frees_the_binding_it_registered` (an
   allocation made during a failed transaction goes back to the allocator); tests
-  `core/backend/runtime_backend.h` undo_add + `allocation.h`.
+  `backend/runtime_backend.h` undo_add + `allocation.h`.
 - `arena_allocator_test.inline_arena_uses_its_embedded_buffer`: an inline arena
   serves from storage inside itself. **obsolete**: next has no inline arena. Its
   nearest relative, the inline journal of `basic_transaction_log<Inline>`, is
@@ -721,7 +723,8 @@ are obsolete.
   `next_transaction_log.undoes_more_effects_than_it_records_inline`. Staying
   allocation-free is a codegen property that no test checks.
 - `arena_allocator_test.heap_arena_reset_releases_all_blocks`: reset gives every
-  owned block back to the allocator. **replaced**: `test/next/api/allocator.cpp`
+  owned block back to the allocator. **replaced**:
+  `test/next/containers/allocator.cpp`
   `next_allocator.a_container_allocates_its_bindings_from_its_allocator` (when
   the container is destroyed, deallocations equal allocations and freed bytes
   equal allocated bytes)
@@ -750,7 +753,7 @@ are obsolete.
   stored objects are destroyed in reverse order of construction. **replaced**:
   `test/next/primitives/retained.cpp`
   `next_retained.destroys_its_objects_in_the_reverse_order_they_were_kept`;
-  tests `core/primitives/retained.h`.
+  tests `primitives/retained.h`.
 - `object_store_test.object_store_first_destructor_record_stays_in_inline_arena`:
   the first destructor record fits the inline arena. **obsolete**: next has no
   destructor records and no inline arena: every kept object is a heap holder
@@ -777,7 +780,7 @@ are obsolete.
   the runtime destroys its objects in reverse order. **replaced**:
   `test/next/primitives/retained.cpp`
   `next_retained.destroys_its_objects_in_the_reverse_order_they_were_kept`;
-  tests `core/primitives/retained.h`.
+  tests `primitives/retained.h`.
 - `container_runtime_test.container_runtime_rollback_destroys_objects_after_checkpoint`:
   rollback destroys only the objects after the mark, in reverse; earlier ones
   live until the end. **replaced**:
@@ -834,8 +837,7 @@ are obsolete.
   rollback actions run in reverse order (then their states are destroyed)
   **replaced**: `test/next/primitives/transaction_log.cpp`
   `next_transaction_log.a_failed_request_undoes_its_effects_in_reverse`; tests
-  `core/primitives/slot.h` `basic_transaction_log`. State destruction is
-  obsolete.
+  `primitives/slot.h` `basic_transaction_log`. State destruction is obsolete.
 - `runtime_transaction_test.runtime_transaction_action_state_finishes_once`: a
   finish action runs once, on commit or on rollback. **obsolete**: no finish
   actions in next. Undone-once is covered for undo entries by
@@ -848,7 +850,7 @@ are obsolete.
   a nested commit holds only until the root finishes. **replaced**:
   `next_transaction_log.every_request_undoes_its_own_effects` (block 1: a nested
   request returns, the outer one fails, and both are undone inner first); tests
-  `core/primitives/slot.h` `basic_transaction_log`. Public side:
+  `primitives/slot.h` `basic_transaction_log`. Public side:
   `next_nested_requests.a_failure_undoes_the_effects_of_the_requests_that_returned`.
 - `runtime_transaction_test.transactions_on_different_runtimes_finish_independently`:
   transactions of two runtimes commit and roll back independently. **replaced**:
@@ -864,7 +866,7 @@ are obsolete.
   a nested request that returned are destroyed when the outer one fails)
 - `runtime_transaction_test.nested_runtime_transaction_rollback_preserves_root_state`:
   an inner rollback destroys the inner objects at once; the root still commits
-  its own. **ported**: `test/next/api/nested_requests.cpp`
+  its own. **ported**: `test/next/containers/nested_requests.cpp`
   `next_nested_requests.a_failure_caught_inside_a_request_undoes_its_effects`
   (the failed nested request destroys its object before the outer request
   returns, which keeps its own); log level:
@@ -879,7 +881,7 @@ are obsolete.
   store.
 - `runtime_transaction_test.runtime_transaction_rolls_back_without_runtime_context`:
   rollback destroys the object constructed in it and resets the slot that
-  published it. **ported**: `test/next/api/nested_requests.cpp`
+  published it. **ported**: `test/next/containers/nested_requests.cpp`
   `next_nested_requests.a_failed_request_forgets_the_objects_it_constructed`
   (destroyed once; the slot constructs again afterwards and keeps the new
   object). Related:
@@ -907,7 +909,7 @@ are obsolete.
   **replaced**: `test/next/primitives/transaction_log.cpp`
   `next_transaction_log.an_effect_recorded_while_undoing_is_undone` (an undo
   records an effect while the log, grown out of line to its capacity, is undone;
-  the recorded effect is undone too); tests `core/primitives/slot.h`
+  the recorded effect is undone too); tests `primitives/slot.h`
   `basic_transaction_log`.
 - `runtime_transaction_test.inner_rollback_discards_inner_actions_and_preserves_outer_actions`:
   an inner rollback undoes the inner actions at once and the outer transaction
@@ -934,7 +936,7 @@ are obsolete.
   `type_identity_fixture.cpp` + `type_identity_shared.h`
   `next_type_identity.the_identity_of_a_type_is_one_across_units` (also
   static_asserts on equality during constant evaluation); tests
-  `core/primitives/shape.h` `type_id_v`, `core/base/mechanics.h`
+  `primitives/shape.h` `type_id_v`, `base/mechanics.h`
   `type_tag`/`named_type_ids`. Passes with the default variant and with
   `-DDINGO_VARIANT_NAMED_TYPE_ID=1`.
 - `type_identity_test.descriptors_of_different_types_compare_unequal`:
@@ -952,7 +954,7 @@ are obsolete.
 - `type_list_test.meta_utilities`: cat, size, head, to_type_list, contains,
   unique, merge. **replaced**: `test/next/base/type_list.cpp` static_asserts and
   `next_type_list.finds_the_first_element_of_each_type`; tests
-  `core/base/mechanics.h` `type_list::size`, `type_list_at_t` (head = index 0),
+  `base/mechanics.h` `type_list::size`, `type_list_at_t` (head = index 0),
   `type_list_index_of` (contains = index < size; a nested list is one element).
   cat, unique, merge and to_type_list have no counterpart in next and are
   obsolete.
@@ -964,15 +966,15 @@ are obsolete.
   hits only the first matching element; a missing type or an empty list hits
   nothing. **replaced**: `next_type_list.finds_the_first_element_of_each_type` +
   static_asserts on `type_list_index_of` (first match of a duplicate, size when
-  missing, 0 for an empty list); tests `core/base/mechanics.h`. Next has no
-  runtime type-index dispatch.
+  missing, 0 for an empty list); tests `base/mechanics.h`. Next has no runtime
+  type-index dispatch.
 
 ### test/type/type_name.cpp
 
 - `type_name_test.value_type_name`: the raw name of a class is the compiler
   spelling. **replaced**: `test/next/primitives/type_name.cpp`
   `next_type_name.spells_a_class_as_the_compiler_does` (+ static_assert on
-  `spelled_type_name`); tests `core/primitives/type_name.h`.
+  `spelled_type_name`); tests `primitives/type_name.h`.
 - `type_name_test.array_type_name_keeps_closing_bracket`: an array name keeps
   `[3]`. **replaced**: `next_type_name.keeps_the_extent_of_an_array`.
 - `type_name_test.const_reference_type_name`: `const X&` spelling. **replaced**:
@@ -1020,22 +1022,22 @@ are obsolete.
 
 - `type_traits_test.annotated_copies_non_default_constructible_copy_only_values`:
   `annotated<T, Tag>` copies a T that is copyable but neither movable nor
-  default-constructible. **replaced**: `test/next/projection/request_types.cpp`
+  default-constructible. **replaced**: `test/next/conversion/request_types.cpp`
   `next_request_types.an_annotated_value_copies_a_copy_only_value` (annotated
-  and keyed, from an lvalue and an rvalue); tests `core/projection/annotated.h`
-  and `core/projection/key.h` `keyed`.
+  and keyed, from an lvalue and an rvalue); tests `conversion/annotated.h` and
+  `conversion/key.h` `keyed`.
 - (file-scope static_asserts) `detail::recursion_guard` not copyable or movable:
   the old RAII recursion guard cannot be copied. **obsolete**: next guards
-  recursion with a local guard struct in `core/backend/slot.h`, not a type.
-  Recursion behavior is covered by `next_construction.reports_a_recursion` /
+  recursion with a local guard struct in `backend/slot.h`, not a type. Recursion
+  behavior is covered by `next_construction.reports_a_recursion` /
   `next_unique.reports_a_recursion`.
 - (file-scope static_asserts)
   `is_interface_storage_rebindable_v<test_shared/test_unique<Class>, IClass>`:
   user wrappers rebind to an interface of their element. **replaced**:
-  static_asserts in `test/next/projection/request_types.cpp` on
+  static_asserts in `test/next/conversion/request_types.cpp` on
   `core::replace_leaf_t<user_shared<impl>, iface>`,
   `dingo::rebind_type_t<user_unique<impl>, iface>`, `leaf_type_t`; tests
-  `core/projection/layer_traits.h`, `api/type/rebind_type.h`.
+  `conversion/layer_traits.h`, `api/type/rebind_type.h`.
 - (file-scope static_asserts) `dingo::is_copy_constructible_v` of wrappers and
   std containers: shared and optional copy; unique, vector<unique>, map\<int,
   unique_ptr> do not. **replaced**: static_asserts on
@@ -1050,8 +1052,8 @@ are obsolete.
   static_asserts on `core::request_traits` (kind, value_type, made_type),
   `core::leaf_of_t`, `core::resolved_t`, `core::annotated_request`,
   `annotated_traits`, and the annotated request descriptor leaf
-  (`type_id_v<annotated<service, tag>>`); tests `core/engine/request.h`,
-  `core/backend/selection.h`, `core/projection/annotated.h`. The
+  (`type_id_v<annotated<service, tag>>`); tests `conversion/request.h`,
+  `backend/selection.h`, `conversion/annotated.h`. The
   `removes_rvalue_references` mode has no counterpart (obsolete)
 - (file-scope static_asserts) annotated constructibility (shared_ptr yes,
   unique_ptr from const& no): annotated values copy copyable values and refuse
@@ -1083,24 +1085,25 @@ are not observed through the public API of the baseline and are recorded only:
 - `type_registration_test.runtime_local_bindings_declare_the_registration_container`:
   a registration with `bindings<...>` resolves its dependencies from its local
   static bindings (and the proxy and container types it gets) **ported**:
-  `test/next/api/stored_shapes.cpp`
+  `test/next/containers/stored_shapes.cpp`
   `next_stored_shapes.local_static_bindings_resolve_the_dependencies_of_their_registration`.
-  The type-level part is replaced by `test/next/engine/registration.cpp`
+  The type-level part is replaced by `test/next/conversion/registration.cpp`
   `next_engine.local_bindings_are_binding_types_of_the_registration`, which
   tests `dingo/registration.h` (`binding::locals`)
 - `type_registration_test.conversion_availability_uses_source_access`: a
   conversion is available only when the source access (borrow/consume) allows
   it, for declared conversions, converting constructors, handles, optionals,
   variants, addresses, arrays, and volatile bindings. **replaced**:
-  `test/next/engine/routes.cpp`:
+  `test/next/conversion/routes.cpp`:
   `next_engine.a_conversion_needs_the_access_it_declares` (tests
-  `core/projection/conversion.h` `converts`),
+  `conversion/type_conversion.h` `converts`),
   `next_engine.a_consumed_object_is_moved_wrapped_or_adopted` (`int*` makes a
   `shared_ptr` only when consumed),
   `next_engine.a_qualified_object_is_served_with_its_qualifiers` (volatile
   binding and volatile variant),
   `next_engine.an_array_of_arrays_serves_its_rows_and_itself`; these test
-  `core/engine/derive.h` and `request.h`. Also `test/next/api/stored_shapes.cpp`
+  `conversion/route.h` and `request.h`. Also
+  `test/next/containers/stored_shapes.cpp`
   `next_stored_shapes.volatile_storage_keeps_the_volatile_qualifier`. Not
   carried over: the user types described through the old `dingo::type_traits`
   (replaced by `wrapper_extension_point`), `void*` from a variant lvalue and the
@@ -1109,17 +1112,17 @@ are not observed through the public API of the baseline and are recorded only:
   `interface_in_array` status)
 - `type_registration_test.inferred_borrowed_conversion_uses_const_source`: a
   borrowed conversion by converting constructor uses the const source and leaves
-  it intact. **replaced**: `test/next/engine/routes.cpp`
+  it intact. **replaced**: `test/next/conversion/routes.cpp`
   `next_engine.a_borrowed_conversion_leaves_its_source`
-  (`core/projection/conversion.h` `convert_to`);
-  `test/next/api/stored_shapes.cpp`
+  (`conversion/type_conversion.h` `convert_to`);
+  `test/next/containers/stored_shapes.cpp`
   `next_stored_shapes.a_borrowed_user_handle_converts_from_a_const_source` (the
-  `keep_step` of `core/engine/execute.h` converts `std::as_const`)
+  `keep_step` of `conversion/convert.h` converts `std::as_const`)
 - `type_registration_test.same_type_custom_conversion_is_preserved`: a declared
   conversion whose target is its source type is used, not the identity.
-  **replaced**: `test/next/engine/routes.cpp`
+  **replaced**: `test/next/conversion/routes.cpp`
   `next_engine.a_declared_conversion_is_used_for_its_target`; tests
-  `core/projection/conversion.h`.
+  `conversion/type_conversion.h`.
 - `type_registration_test.borrowed_optional_conversion_uses_const_contained_value`:
   converting an optional of an owner to an optional of a copy borrows the
   contained value as const. **replaced**: the const-source property:
@@ -1130,45 +1133,47 @@ are not observed through the public API of the baseline and are recorded only:
   `next_stored_shapes.a_pointer_to_an_optional_serves_no_optional_of_its_interface`.
 - `type_registration_test.inferred_mutable_lvalue_conversion_consumes_source`: a
   consuming conversion takes the source's resource. **replaced**:
-  `test/next/engine/routes.cpp`
+  `test/next/conversion/routes.cpp`
   `next_engine.a_borrowed_conversion_leaves_its_source` (consumed half:
   `convert_to` of an rvalue moves the source out);
-  `test/next/api/stored_shapes.cpp`
+  `test/next/containers/stored_shapes.cpp`
   `next_stored_shapes.a_consumed_user_handle_converts_by_its_traits`. Next
   passes a consumed source as an rvalue, not as a mutable lvalue.
 - `type_registration_test.borrowed_custom_conversion_executes_non_owning_result`:
   a declared borrowing conversion that returns an alternative type builds the
-  variant target. **replaced**: `test/next/engine/routes.cpp`
+  variant target. **replaced**: `test/next/conversion/routes.cpp`
   `next_engine.a_declared_conversion_is_used_for_its_target` (a conversion that
   returns an object the target is constructed from); tests
-  `core/projection/conversion.h`.
+  `conversion/type_conversion.h`.
 - `type_registration_test.borrowed_storage_publishes_fresh_move_only_conversion_results`:
   external `move_source*` with interfaces serves a move-only interface by value
-  through the declared conversion. **ported**: `test/next/api/stored_shapes.cpp`
+  through the declared conversion. **ported**:
+  `test/next/containers/stored_shapes.cpp`
   `next_stored_shapes.a_borrowed_leaf_converts_to_a_new_interface_value`.
 - `type_registration_test.borrowed_storage_publishes_copyable_custom_value_conversion`:
   a declared conversion to a copyable interface is selected over a copy.
-  **ported**: `test/next/api/stored_shapes.cpp`
+  **ported**: `test/next/containers/stored_shapes.cpp`
   `next_stored_shapes.a_borrowed_leaf_converts_to_a_new_interface_value`
   (`copy_target` gets 47 from the conversion, not 23 from a copy)
 - `type_registration_test.consumed_binding_executes_custom_type_conversion`: a
   unique user handle converts to the handle of its interface by its conversion
-  traits. **ported**: `test/next/api/stored_shapes.cpp`
+  traits. **ported**: `test/next/containers/stored_shapes.cpp`
   `next_stored_shapes.a_consumed_user_handle_converts_by_its_traits`.
 - `type_registration_test.binding_model_rewrites_single_interface_storage_leaf`:
   with one interface the stored `shared_ptr<A>` is rebound to `shared_ptr<I>`.
-  **changed**: `interfaces_do_not_rebind_storage`; `test/next/engine/routes.cpp`
+  **changed**: `interfaces_do_not_rebind_storage`;
+  `test/next/conversion/routes.cpp`
   `next_engine.interfaces_do_not_rebind_the_stored_shape`.
 - `type_registration_test.binding_model_preserves_storage_for_multi_interface_registration`:
   with several interfaces the storage is kept and the binding serves each
-  interface. **replaced**: `test/next/engine/routes.cpp`
+  interface. **replaced**: `test/next/conversion/routes.cpp`
   `next_engine.interfaces_do_not_rebind_the_stored_shape` (part `two`: one
-  descriptor serves `I` and `J`, not `A`); tests `core/engine/derive.h` and
+  descriptor serves `I` and `J`, not `A`); tests `conversion/route.h` and
   `dingo/registration.h`.
 - `type_registration_test.recursive_leaf_and_rebind_traits`: leaf and rebind
   traits, request lookup types, qualification matching of requests, and the
   values, references, and pointers each stored shape publishes. **replaced**:
-  `test/next/engine/routes.cpp`:
+  `test/next/conversion/routes.cpp`:
   `next_engine.a_pointer_serves_the_object_it_points_to_and_its_copy`,
   `next_engine.a_move_only_object_is_never_copied`,
   `next_engine.a_consumed_object_is_moved_wrapped_or_adopted`,
@@ -1193,7 +1198,7 @@ are not observed through the public API of the baseline and are recorded only:
   pointer storage (`optional<T>*`, `const array*`, `shared_ptr*`, move-only,
   null, shared, unique) serves the exact request shapes, and an
   `optional<impl>*` serves `optional<interface>`. **ported**:
-  `test/next/api/stored_shapes.cpp`:
+  `test/next/containers/stored_shapes.cpp`:
   `next_stored_shapes.a_pointer_to_a_layer_serves_the_layer_and_a_copy`,
   `.a_pointer_to_a_move_only_object_serves_no_copy`,
   `.a_null_external_pointer_is_served_as_null`,
@@ -1205,64 +1210,65 @@ are not observed through the public API of the baseline and are recorded only:
 - `type_registration_test.const_reference_storage_preserves_const_access`:
   `const T&`, `const optional&`, a const user optional, and nested
   optional/variant storage serve only const access, and an empty optional serves
-  a null pointer. **ported**: `test/next/api/stored_shapes.cpp`
+  a null pointer. **ported**: `test/next/containers/stored_shapes.cpp`
   `next_stored_shapes.const_storage_serves_only_const_access` and
   `.const_nested_layers_serve_only_const_access`; with `interfaces<int>`,
   `next_stored_shapes.a_handle_of_a_const_object_serves_only_const_interfaces`;
-  `test/next/engine/routes.cpp`
+  `test/next/conversion/routes.cpp`
   `next_engine.a_qualified_object_is_served_with_its_qualifiers`. The empty
   optional: `next_stored_shapes.the_element_of_an_empty_optional_is_null` (its
   element is a null address; a reference or a value of it is refused with
   element_not_held, behavior change `empty_elements_are_refused`)
 - `type_registration_test.const_external_smart_pointer_storage_preserves_const_access`:
   a const `shared_ptr`/`unique_ptr` to a const object serves only const borrows,
-  also through an interface. **ported**: `test/next/api/stored_shapes.cpp`
+  also through an interface. **ported**:
+  `test/next/containers/stored_shapes.cpp`
   `next_stored_shapes.a_handle_of_a_const_object_serves_only_const_access`;
   through an interface,
   `next_stored_shapes.a_handle_of_a_const_object_serves_only_const_interfaces`.
 - `type_registration_test.const_alternative_storage_only_publishes_const_borrows`:
   a const variant serves only const borrows of its alternative. **ported**:
-  `test/next/api/stored_shapes.cpp`
+  `test/next/containers/stored_shapes.cpp`
   `next_stored_shapes.a_const_alternative_serves_only_const_access`; with
   `interfaces<int>`,
   `next_stored_shapes.a_handle_of_a_const_object_serves_only_const_interfaces`;
-  `test/next/engine/routes.cpp`
+  `test/next/conversion/routes.cpp`
   `next_engine.a_qualified_object_is_served_with_its_qualifiers`.
 - `type_registration_test.multidimensional_array_storage_preserves_exact_and_row_shapes`:
   `int[2][3]` serves `int(&)[2][3]`, row and whole pointers with added cv
-  qualifiers, and no value. **ported**: `test/next/api/stored_shapes.cpp`
+  qualifiers, and no value. **ported**: `test/next/containers/stored_shapes.cpp`
   `next_stored_shapes.an_array_of_arrays_serves_its_rows_and_itself`;
-  `test/next/engine/routes.cpp`
+  `test/next/conversion/routes.cpp`
   `next_engine.an_array_of_arrays_serves_its_rows_and_itself`.
 - `type_registration_test.normalized_type_trait`: the normalized (lookup) type
   of a request through cv, references, pointers, handles, arrays, and
   annotations, and which requests may escape. **replaced**:
-  `test/next/engine/routes.cpp`
+  `test/next/conversion/routes.cpp`
   `next_engine.a_request_names_the_leaf_through_its_layers`; tests
-  `core/engine/request.h` (`request_traits::descriptor`, `kind`, `made_type`)
-  and `core/projection/layer_traits.h` (`leaf_of_t`). `request_may_escape_v` is
-  replaced by `request_kind`: an lvalue reference refers to a kept object. The
-  retention of rvalue requests is in
+  `conversion/request.h` (`request_traits::descriptor`, `kind`, `made_type`) and
+  `conversion/layer_traits.h` (`leaf_of_t`). `request_may_escape_v` is replaced
+  by `request_kind`: an lvalue reference refers to a kept object. The retention
+  of rvalue requests is in
   `next_unique.retains_the_object_of_an_rvalue_reference`.
 
 ### test/registration/type_registration.cpp
 
 - `type_registration_test.get_type`: finds the part of a kind in a list of
-  registration parts. **replaced**: `test/next/engine/registration.cpp`
+  registration parts. **replaced**: `test/next/conversion/registration.cpp`
   `next_engine.a_registration_takes_the_first_part_of_each_kind`; tests
   `dingo/registration.h` (`find_part`, via `registration::*_part`)
 - `type_registration_test.registration_basic`: a registration exposes its scope,
   storage, interfaces, and factory parts. **replaced**:
-  `test/next/engine/registration.cpp`
+  `test/next/conversion/registration.cpp`
   `next_engine.a_registration_takes_the_first_part_of_each_kind` (`reordered`);
   tests `dingo/registration.h`.
 - `type_registration_test.registration_prefers_first_explicit_match`: the first
-  part of each kind wins. **replaced**: `test/next/engine/registration.cpp`
+  part of each kind wins. **replaced**: `test/next/conversion/registration.cpp`
   `next_engine.a_registration_takes_the_first_part_of_each_kind`. The
   `conversions<>` part is obsolete: next has no conversions policy.
 - `type_registration_test.registration_deduction`: storage is deduced from the
   factory, interfaces from storage or factory, and the factory from storage.
-  **replaced**: `test/next/engine/registration.cpp`
+  **replaced**: `test/next/conversion/registration.cpp`
   `next_engine.a_registration_without_interfaces_is_named_by_its_stored_leaf`
   (an empty interface list names the stored leaf, `detected_factory` is the
   default); tests `dingo/registration.h`. Deducing storage from `factory<T>` is
@@ -1272,18 +1278,18 @@ are not observed through the public API of the baseline and are recorded only:
 - `type_registration_test.registration_default_interface_and_conversions`: the
   default interface is the stored type, and the default conversions are
   `conversions<shared, int, runtime_type>`. **replaced**:
-  `test/next/engine/registration.cpp`
+  `test/next/conversion/registration.cpp`
   `next_engine.a_registration_without_interfaces_is_named_by_its_stored_leaf`.
   The conversions part is obsolete: next derives the served requests from the
-  stored shape and the scope descriptor (`core/engine/derive.h`), as the
-  `test/next/engine/routes.cpp` cases check.
+  stored shape and the scope descriptor (`conversion/route.h`), as the
+  `test/next/conversion/routes.cpp` cases check.
 - `type_registration_test.registration_dependencies_default_from_factory_traits`:
   a registration's dependencies default to the declared constructor, the
   annotated constructor, or the function arguments. **replaced**:
-  `test/next/engine/registration.cpp`
+  `test/next/conversion/registration.cpp`
   `next_engine.a_factory_declares_the_arguments_of_its_leaf`; tests
-  `core/projection/construct.h` `declared_arguments` (what the static graph of
-  `core/backend/static_backend.h` reads)
+  `conversion/construct.h` `declared_arguments` (what the static graph of
+  `backend/static_backend.h` reads)
 - `type_registration_test.registration_dependencies_prefer_explicit_metadata`:
   `dependencies<>` overrides the dependencies of a declared factory.
   **changed**: `dependencies_are_declared_once`: a registration declares its
@@ -1294,17 +1300,17 @@ are not observed through the public API of the baseline and are recorded only:
 - `type_registration_test.registration_explicit_dependencies_shape_default_constructor_factory`:
   `dependencies<double, bool>` without a factory selects
   `constructor<T(double, bool)>`. **replaced**:
-  `test/next/engine/registration.cpp`
+  `test/next/conversion/registration.cpp`
   `next_engine.dependencies_declare_the_constructor_of_a_registration`; tests
-  `dingo/registration.h` `declared_factory` and `core/projection/construct.h`.
+  `dingo/registration.h` `declared_factory` and `conversion/construct.h`.
 - `type_registration_test.factory_traits_report_dependencies`: factory_traits
   report the dependencies, explicitness, and compile-time bindability of
   constructor, detected, function, and callable factories. **replaced**:
-  `test/next/engine/registration.cpp`
+  `test/next/conversion/registration.cpp`
   `next_engine.a_factory_declares_the_arguments_of_its_leaf`; tests
-  `core/projection/construct.h` `declared_arguments`. In next a detected,
-  unannotated constructor declares `void`, because its arguments are known only
-  at construction, where the old code reported `type_list<>`.
+  `conversion/construct.h` `declared_arguments`. In next a detected, unannotated
+  constructor declares `void`, because its arguments are known only at
+  construction, where the old code reported `type_list<>`.
   `has_explicit_dependencies` has no next equivalent. Compile-time bindability
   is the rejection of a callable factory in static bindings:
   `test/lit/static-bindings-callable-factory-is-rejected.cpp`
@@ -1314,7 +1320,7 @@ are not observed through the public API of the baseline and are recorded only:
   conversion cache is empty; plain bindings are no larger than handle bindings.
   **changed**: `interfaces_do_not_rebind_storage` (and
   `wrapper_extension_point`, which removes `is_interface_storage_rebindable_v`
-  from the public API); `test/next/engine/routes.cpp`
+  from the public API); `test/next/conversion/routes.cpp`
   `next_engine.interfaces_do_not_rebind_the_stored_shape` (the nested
   `shared_ptr<unique_ptr<A>>` keeps its type) and
   `next_engine.a_binding_keeps_objects_only_for_its_cached_routes`
@@ -1339,7 +1345,7 @@ ported retention tests declare their dependencies, as the old ones did.
   replaces a default borrow or identity copy of the same source. **obsolete**:
   Tested an internal optimization of the old planner
   (`detail::binding_object_resolutions` vs `storage_resolutions_t`). Next has
-  one derivation (`core/engine/derive.h` `derive`/`select_route`) and nothing to
+  one derivation (`conversion/route.h` `derive`/`select_route`) and nothing to
   merge. Which requests each binding serves is checked against the reference by
   `engine.computes_what_the_reference_computes` (every scope x leaf/interfaces x
   stored shape of up to two layers x request: found, served, rules) and by the
@@ -1348,22 +1354,23 @@ ported retention tests declare their dependencies, as the old ones did.
   request matching gives the same answer for merged and separate routes, over
   220 request variants per binding. **obsolete**: Same reason as above: next has
   no separate route lists to compare. The type-erased side is the runtime
-  backend's memo of the derived terms (`core/backend/memo.h`). Its found/served
+  backend's memo of the derived terms (`backend/memo.h`). Its found/served
   decisions equal the reference's in
   `engine.computes_what_the_reference_computes`.
 - `object_routes_test.a_pointer_route_serves_the_reference_of_its_object`: a
   shared leaf serves `&`, `const &`, `*`, `const *`, value and const value, but
-  not `&&` or another leaf. **ported**: `test/next/api/object_routes.cpp`
+  not `&&` or another leaf. **ported**: `test/next/containers/object_routes.cpp`
   `next_object_routes.a_shared_leaf_serves_its_references_and_copies`,
   `next_object_routes.a_shared_leaf_serves_no_move_and_no_other_leaf`.
 - `object_routes_test.a_const_object_does_not_serve_a_mutable_request`: an
   external `const leaf &` serves const references and pointers only. **ported**:
-  `test/next/api/object_routes.cpp`
+  `test/next/containers/object_routes.cpp`
   `next_object_routes.a_const_object_serves_no_mutable_reference`,
   `next_object_routes.a_const_object_serves_const_references_and_copies`.
 - `object_routes_test.wrapper_leaf_routes_keep_a_route_per_category`: a shared
   `shared_ptr<leaf>` serves the handle by its address and the leaf by reference
-  and pointer (3 internal routes) **ported**: `test/next/api/object_routes.cpp`
+  and pointer (3 internal routes) **ported**:
+  `test/next/containers/object_routes.cpp`
   `next_object_routes.a_shared_handle_serves_itself_and_its_leaf`. The served
   requests are ported. The internal route count has no counterpart.
 - `object_routes_test.one_route_serves_reference_pointer_and_copy`: `&`, `*`,
@@ -1439,9 +1446,9 @@ ported retention tests declare their dependencies, as the old ones did.
   each scope: lazy object+state, external one pointer, unique one bool,
   two-phase bound, +1 pointer for kept handles, not polymorphic),
   `next_object_sizes.kept_objects_are_a_list_of_one_pointer`. Tests
-  `core/backend/slot.h`, `core/primitives/slot.h`, `core/primitives/retained.h`.
-  Growth of container size is contract `object_size_runtime_container`
-  (constant) and `object_size_static_*`/`object_size_mixed_container` in
+  `backend/slot.h`, `primitives/slot.h`, `primitives/retained.h`. Growth of
+  container size is contract `object_size_runtime_container` (constant) and
+  `object_size_static_*`/`object_size_mixed_container` in
   `spec/content/contracts.py`, measured by `test/contracts/probe.py`
   (`object_size/runtime` = 96 in `baseline-next.json` for gcc13/clang18. I
   measured 96 here with both). The old lookup-backend, registry and
@@ -1452,7 +1459,7 @@ ported retention tests declare their dependencies, as the old ones did.
 - `resolution_operation_test.alternative_projectors_reject_unrelated_targets_with_runtime_exception`:
   projecting a variant to a type that is not one of its alternatives throws at
   runtime instead of failing to compile. **ported**:
-  `test/next/engine/execute.cpp`
+  `test/next/conversion/execute.cpp`
   `next_execute.an_alternative_refuses_unrelated_targets_when_resolved`
   (`type_not_found_exception` for `&` and `*`, since next's `finds` rejects the
   request before any projection). The case of an alternative that is not held is
@@ -1465,20 +1472,20 @@ ported retention tests declare their dependencies, as the old ones did.
   materialized for an rvalue source is destroyed once. **covered**:
   `next_unique.retains_the_object_of_an_rvalue_reference` (read: two `&&`
   requests keep two live objects, `live == 0` after the container is gone).
-  Mechanism `core/primitives/retained.h`. Partly confirmed, see Unresolved.
+  Mechanism `primitives/retained.h`. Partly confirmed, see Unresolved.
 - `resolution_operation_test.nested_conversions_publish_retained_cache_types`: a
   retaining conversion nested in borrow, alternative, wrapper,
   target-alternative and construction conversions still publishes its cache
   type. **replaced**:
   `next_execute.a_binding_keeps_objects_only_for_a_retaining_route`. Tests
-  `core/engine/execute.h` `keeps_objects`/`binding_type::keeps`/`context_type`:
-  a retained upcast handle at depth 1 and inside `optional`/`variant` keeps
+  `conversion/convert.h` `keeps_objects`/`binding_type::keeps`/`context_type`: a
+  retained upcast handle at depth 1 and inside `optional`/`variant` keeps
   objects, while plain leaves, leaf handles and consumed handles keep none.
 - `resolution_operation_test.traits_conversion_explicitly_constructs_the_target_from_its_result`:
   a `type_conversion_traits` whose `convert` returns another type constructs the
   target explicitly from it. **replaced**:
   `next_execute.a_declared_conversion_constructs_its_target_explicitly`. Tests
-  `core/projection/conversion.h` (`declares_conversion`, `converts`,
+  `conversion/type_conversion.h` (`declares_conversion`, `converts`,
   `convert_to`)
 - `resolution_operation_test.shared_fixed_array_storage_reset_destroys_elements_in_reverse_order`:
   a shared `T[3]` destroys its elements in reverse order. **ported**:
@@ -1492,29 +1499,28 @@ ported retention tests declare their dependencies, as the old ones did.
   `const T&` apart. **replaced**: `test/next/backend/slot.cpp`
   `next_slot.a_settled_stable_object_is_borrowed_once_per_request_type`. A
   counting user slot shows that a repeated `T&` does not reach the slot, while
-  `const T&` and `T*` each reach it once more. Tests
-  `core/backend/runtime_backend.h` (`candidate::resolved`) and
-  `core/backend/memo.h` (`request_id` per request type). In next every borrowing
-  completion keeps its address, not only `&`/`*`.
+  `const T&` and `T*` each reach it once more. Tests `backend/runtime_backend.h`
+  (`candidate::resolved`) and `backend/memo.h` (`request_id` per request type).
+  In next every borrowing completion keeps its address, not only `&`/`*`.
 - `cache_test.state_stores_entries_only_when_enabled`: an enabled cache state
   stores an entry, and a disabled one is empty. **replaced**:
   `next_slot.a_binding_without_cached_rules_keeps_nothing_beside_its_object`
   (`no_kept_objects` empty, `binding_context` empty, slot size = object size,
   and a binding with a cached rule adds `kept_objects`),
   `next_slot.keeps_a_derived_object_until_its_object_is_reset`. Tests
-  `core/backend/slot.h`, `core/primitives/retained.h`.
+  `backend/slot.h`, `primitives/retained.h`.
 - `cache_test.stable_storage_trait_requires_explicit_stability`: only storage
   that declares itself stable is cached. **replaced**:
   `next_slot.an_unstable_scope_is_reached_by_every_request` (scope descriptors:
   `shared`/`external` stable, `unique`/`shared_cyclical` not. A user scope whose
   descriptor sets `stable = false` is reached by every request). Tests
-  `core/backend/runtime_backend.h` `settled` and the `scope_descriptor`.
+  `backend/runtime_backend.h` `settled` and the `scope_descriptor`.
 - `cache_test.conversion_cache_reuses_value_until_reset`: the conversion cache
   returns its first object until reset. **replaced**:
   `next_slot.keeps_a_derived_object_until_its_object_is_reset`
   (`binding_slot<lazy>` context: `get_or_emplace` makes the handle once, and it
   is forgotten when a failed transaction resets the slot). Tests
-  `core/backend/slot.h` + `core/primitives/retained.h` `kept_objects`. Not
+  `backend/slot.h` + `primitives/retained.h` `kept_objects`. Not
   mutation-checked.
 - `cache_test.tracked_conversion_clears_slot_on_rollback`: a tracked cache entry
   is cleared by the context's rollback. **replaced**:
@@ -1543,7 +1549,7 @@ ported retention tests declare their dependencies, as the old ones did.
 The file and its helper `type_registration_common.h` include old internal
 headers (`dingo/runtime/*`, `dingo/registration/*`, `dingo/binding/*`, ...), so
 no case is kept as is. `RR` below stands for
-`test/next/api/runtime_registration.cpp`.
+`test/next/containers/runtime_registration.cpp`.
 
 - `resolution_access_test.borrowed_raw_pointers_respect_wrapper_ownership`
   (TYPED, 6 old container types): an external `int*` is never adopted by
@@ -1631,7 +1637,7 @@ no case is kept as is. `RR` below stands for
   ephemeral objects of a context die with it in reverse order, persistent ones
   with the runtime. **replaced**: `test/next/primitives/retained.cpp`
   `next_retained.destroys_its_objects_in_the_reverse_order_they_were_kept`
-  (tests `core/primitives/retained.h`); public lifetimes: `RR`
+  (tests `primitives/retained.h`); public lifetimes: `RR`
   `next_runtime_registration.a_value_dependency_lives_as_long_as_the_request`,
   `next_runtime_registration.a_shared_object_does_not_outlive_its_rvalue_dependency`.
 - `type_registration_test.runtime_context_detection_construction_uses_explicit_scope`:
@@ -1640,7 +1646,7 @@ no case is kept as is. `RR` below stands for
   `next_runtime_registration.a_value_dependency_lives_as_long_as_the_request`
   (detected constructor) and
   `next_runtime_registration.a_shared_object_does_not_outlive_its_rvalue_dependency`;
-  tests `core/primitives/retained.h` through `runtime_backend::make_with`.
+  tests `primitives/retained.h` through `runtime_backend::make_with`.
 - `type_registration_test.runtime_context_detection_construction_copies_copy_only_values`:
   a copy-only (move deleted) type is constructed by value and as `T&&`.
   **ported**: `RR` `next_runtime_registration.constructs_a_copy_only_object` and
@@ -1653,7 +1659,7 @@ no case is kept as is. `RR` below stands for
   **replaced**: `test/next/primitives/retained.cpp`
   `next_retained.destroys_its_objects_in_the_reverse_order_they_were_kept` and
   `next_retained.a_failed_transaction_destroys_the_objects_kept_during_it`
-  (tests `core/primitives/retained.h`)
+  (tests `primitives/retained.h`)
 - `type_registration_test.runtime_context_scratch_destructor_runs_once_on_commit`:
   a temporary of a request that returns is destroyed exactly once. **replaced**:
   `RR`
@@ -1668,7 +1674,7 @@ no case is kept as is. `RR` below stands for
   rollback actions recorded during a request still run when it fails.
   **replaced**: `test/next/primitives/transaction_log.cpp`
   `next_transaction_log.a_failed_request_undoes_its_effects_in_reverse` (tests
-  `core/primitives/slot.h` `basic_transaction_log`)
+  `primitives/slot.h` `basic_transaction_log`)
 - `type_registration_test.successful_runtime_registration_keeps_state_until_container_destruction`:
   the factory object of a registration lives until the container is destroyed.
   **ported**: `RR`
@@ -1695,7 +1701,7 @@ no case is kept as is. `RR` below stands for
   the child container of a runtime binding is constructed on first use, once.
   **replaced**: `test/next/backend/local.cpp`
   `next_local_bindings.creates_the_runtime_bindings_on_demand_once` (tests
-  `core/backend/local.h` `local_bindings::runtime_or_create`)
+  `backend/local.h` `local_bindings::runtime_or_create`)
 - `type_registration_test.runtime_unique_registration_constructs_nested_container_on_demand`:
   a unique registration resolves a `&` dependency from a local unique binding
   made by a function. **changed (`consumed_objects_are_never_borrowed`)**: `RR`
@@ -1751,9 +1757,9 @@ no such context. Temporaries live on the stack, the objects of rvalue requests
 in `retained_objects`, and the only precomputed bound is that of the transaction
 log (`static_transactions`). Each case is replaced by a behavioral test of the
 same paths and by the test of the bound; the frame depth, the slot counts, and
-the topological order have no counterpart. In a scratch copy of
-`include/dingo/core`, flipping four of the `next_static_graph` expectations one
-at a time breaks the build each time.
+the topological order have no counterpart. In a scratch copy of `include/dingo`,
+flipping four of the `next_static_graph` expectations one at a time breaks the
+build each time.
 
 ### test/registration/binding_graph.cpp
 
@@ -1766,59 +1772,57 @@ none can be kept. The file does not compile against next.
   the graph is acyclic, and it has a topological order and frame depth.
   **replaced**: `test/next/backend/static_graph.cpp`
   `next_static_graph.declared_dependencies_are_edges_to_the_bindings_they_name`;
-  tests `core/backend/static_backend.h`
-  (`detail::dependency_graph::make`/`find`). The topological order and the
-  retained frame depth have no counterpart: next precomputes no order or frame
-  and resolves slots on demand.
+  tests `backend/static_backend.h` (`detail::dependency_graph::make`/`find`).
+  The topological order and the retained frame depth have no counterpart: next
+  precomputes no order or frame and resolves slots on demand.
 - `static_graph_test.detects_cycles_without_invalidating_compile_time_bindings_source`:
   a shared a\<->b cycle is found while each binding on its own stays valid.
   **replaced**:
   `next_static_graph.a_cycle_of_declared_dependencies_is_found_with_its_path`
   (each binding `registers<>()`, `find()` gives path 0->1->0); tests
-  `core/backend/static_backend.h`. Rejecting the container: lit
+  `backend/static_backend.h`. Rejecting the container: lit
   `test/lit/static-container-rejects-a-declared-cycle.cpp`.
 - `static_graph_test.allows_cycles_when_every_cycle_binding_is_shared_cyclical`:
   a cycle made only of shared_cyclical bindings is legal, and a shared owner of
   a node in it resolves. **replaced**:
   `next_static_graph.a_cycle_of_shared_cyclical_bindings_is_legal` (edges
-  present, `find().length == 0`); tests `core/backend/static_backend.h`.
-  Resolution of such a declared cycle:
+  present, `find().length == 0`); tests `backend/static_backend.h`. Resolution
+  of such a declared cycle:
   `next_shared_cyclical.resolves_a_declared_cycle_statically` (read)
 - `static_graph_test.rejects_cycles_when_any_cycle_binding_is_not_shared_cyclical`:
   a cycle through a binding that is not shared_cyclical is illegal.
   **replaced**:
   `next_static_graph.a_cycle_through_a_binding_that_is_not_shared_cyclical_is_found`
   (path 1->0->1, starting at the shared binding); tests
-  `core/backend/static_backend.h`. Rejecting the container with that exact
-  binding shape: lit `test/lit/static-container-rejects-a-declared-cycle.cpp`.
+  `backend/static_backend.h`. Rejecting the container with that exact binding
+  shape: lit `test/lit/static-container-rejects-a-declared-cycle.cpp`.
 - `static_graph_test.partial_analysis_detects_static_cycles_even_with_runtime_dependencies`:
   a dependency with no static binding (one that runtime registrations could
   answer) does not hide a static cycle. **replaced**:
   `next_static_graph.a_dependency_no_static_binding_answers_adds_no_edge_and_hides_no_cycle`;
-  tests `core/backend/static_backend.h`, whose `static_backend` is the static
-  part of both `static_container` and the mixed `container`.
+  tests `backend/static_backend.h`, whose `static_backend` is the static part of
+  both `static_container` and the mixed `container`.
 - `static_execution_traits_test.unique_only_paths_use_one_temporary_slot_per_unique_binding`:
   a static context is sized with one temporary slot per unique binding of a
-  chain. **replaced**: `test/next/api/static_bindings.cpp`
+  chain. **replaced**: `test/next/containers/static_bindings.cpp`
   `next_static_bindings.constructs_unique_dependencies_and_destroys_their_temporaries`
   (leaf->middle->root, nothing left alive) and
   `next_static_graph.a_static_container_logs_only_the_slots_that_construct_an_object`
   (a unique-only container has `no_transaction_log`); tests
-  `core/backend/static_backend.h`. The old chain passed `leaf &` from a unique
+  `backend/static_backend.h`. The old chain passed `leaf &` from a unique
   binding, which next refuses (behavior change
   `consumed_objects_are_never_borrowed`), so the new chain passes by value.
 - `static_execution_traits_test.sibling_unique_dependencies_do_not_accumulate_nested_peaks`:
   sibling unique dependencies of one constructor share their temporary peak.
   **replaced**:
   `next_static_bindings.constructs_unique_dependencies_and_destroys_their_temporaries`
-  (`pair_root` takes two unique siblings); tests
-  `core/backend/static_backend.h`. next keeps temporaries on the stack, so there
-  is no peak to size.
+  (`pair_root` takes two unique siblings); tests `backend/static_backend.h`.
+  next keeps temporaries on the stack, so there is no peak to size.
 - `static_execution_traits_test.detected_auto_constructor_dependencies_control_context_bounds`:
   the arguments of a detected constructor decide whether a binding can be
   analysed at compile time. **replaced**:
   `next_static_graph.a_detected_constructor_declares_no_dependencies_and_a_declared_one_does`;
-  tests `core/projection/construct.h` `declared_arguments` and
+  tests `conversion/construct.h` `declared_arguments` and
   `dependency_graph::any` (spec `graph_rules.cycle`: detected-constructor
   dependencies are known only at construction)
 - `static_execution_traits_test.resolution_operations_publish_static_temporary_requirements`:
@@ -1826,19 +1830,19 @@ none can be kept. The file does not compile against next.
   destructible unique value) **replaced**:
   `next_static_bindings.keeps_the_object_of_an_rvalue_request_until_the_container_is_destroyed`
   (`payload &&` and `std::optional<payload>` from a unique binding; live
-  counts); tests `static_backend::resolve_from` and
-  `core/primitives/retained.h`. next has no published temporary-type list: it
-  keeps what an rvalue request refers to in `retained_objects`.
+  counts); tests `static_backend::resolve_from` and `primitives/retained.h`.
+  next has no published temporary-type list: it keeps what an rvalue request
+  refers to in `retained_objects`.
 - `static_execution_traits_test.static_context_frames_are_not_polymorphic`: the
   static context frame has no vtable. **replaced**:
   `next_static_graph.a_static_container_logs_only_the_slots_that_construct_an_object`
   (`!std::is_polymorphic_v` of the static backend); tests
-  `core/backend/static_backend.h`. next has no context frame.
+  `backend/static_backend.h`. next has no context frame.
 - `static_execution_traits_test.default_stable_leaf_bindings_skip_conversion_cache_discovery`:
   direct and wrapped shared bindings need no conversion cache, while custom
   conversions do. **replaced**:
   `next_static_graph.a_binding_keeps_objects_only_when_a_route_derives_one`
-  (`binding_type::keeps`, `context_type` of `core/engine/execute.h`). The
+  (`binding_type::keeps`, `context_type` of `conversion/convert.h`). The
   converted `shared_ptr<service>` -> interface binding now keeps a handle
   (behavior change `interface_handles_are_retained`, asserted in the same test).
   The old `detail::conversions` custom-conversion assertion has no counterpart
@@ -1848,8 +1852,8 @@ none can be kept. The file does not compile against next.
   leaf resolution, and that an array binding serves `T*` but not `T&`.
   **replaced**:
   `next_static_graph.a_binding_serves_the_requests_its_route_reaches`
-  (`static_backend::serves_named`); tests `core/backend/static_backend.h`. The
-  "skip discovery" shortcut is old-only. `T&&` is refused (behavior change
+  (`static_backend::serves_named`); tests `backend/static_backend.h`. The "skip
+  discovery" shortcut is old-only. `T&&` is refused (behavior change
   `borrowing_never_moves`); the old test only said it was not a *direct*
   resolution.
 - `static_execution_traits_test.retained_frame_depth_counts_retaining_bindings_across_non_retaining_edges`:
@@ -1858,7 +1862,7 @@ none can be kept. The file does not compile against next.
   `next_static_bindings.a_shared_object_keeps_nothing_of_its_consumed_dependencies`
   and
   `next_static_graph.a_static_container_logs_only_the_slots_that_construct_an_object`
-  (log bound = constructing slots + 1); tests `core/backend/static_backend.h`
+  (log bound = constructing slots + 1); tests `backend/static_backend.h`
   `static_transactions`. Frame depth itself has no counterpart. The old chain
   borrowed from unique bindings, see `consumed_objects_are_never_borrowed`.
 - `static_execution_traits_test.unique_wrapper_storage_paths_account_for_wrapper_materialization_slots`:
@@ -1889,7 +1893,7 @@ none can be kept. The file does not compile against next.
   annotated dependency is an edge to the binding of the annotated interface.
   **replaced**:
   `next_static_graph.an_annotated_dependency_is_an_edge_to_the_annotated_interface`;
-  tests `core/backend/static_backend.h` (`argument_request<annotated>`)
+  tests `backend/static_backend.h` (`argument_request<annotated>`)
 
 ### test/registration/static_bindings_source.cpp
 
@@ -1901,7 +1905,7 @@ pass against next unchanged (checked).
 - `static_bindings_source_test.borrowable_storage_constructs_and_borrows_its_value`:
   a shared `optional<int>` with interface int serves int, const int, and a
   reference and pointer into the optional. **ported**:
-  `test/next/api/static_bindings.cpp`
+  `test/next/containers/static_bindings.cpp`
   `next_static_bindings.borrows_the_value_of_a_borrowable_storage` (body
   unchanged)
 - `static_bindings_source_test.nested_borrowable_storage_uses_the_published_conversion`:
@@ -1915,27 +1919,26 @@ pass against next unchanged (checked).
   `next_static_graph.declared_dependencies_are_edges_to_the_bindings_they_name`
   (service -> config edge); `dependency<config &> == config &` in
   `next_static_graph.a_keyed_dependency_is_an_edge_to_the_binding_of_its_key`;
-  tests `core/backend/static_backend.h`. The old `registration_types`/`model<>`
+  tests `backend/static_backend.h`. The old `registration_types`/`model<>`
   accessors have no counterpart.
 - `static_bindings_source_test.zero_argument_detected_constructor_is_known`: a
   detected zero-argument constructor has an empty dependency list. **replaced**:
   `next_static_graph.a_detected_constructor_declares_no_dependencies_and_a_declared_one_does`
   (`declared_arguments` of a detected constructor is void, including the
   zero-argument one: known only at construction, spec `graph_rules.cycle`);
-  tests `core/projection/construct.h`.
+  tests `conversion/construct.h`.
 - `static_bindings_source_test.constructor_typedef_bindings_reuse_detected_dependencies`:
   a `DINGO_CONSTRUCTOR` binding publishes its declared arguments as
   dependencies. **replaced**:
   `next_static_graph.a_detected_constructor_declares_no_dependencies_and_a_declared_one_does`
   (`type_list<config &>` and the edge); resolution in
   `next_static_bindings.resolves_the_dependencies_of_a_constructor`; tests
-  `core/projection/construct.h`.
+  `conversion/construct.h`.
 - `static_bindings_source_test.plain_constructor_dependencies_follow_default_detection_metadata`:
   a plain constructor's dependencies are whatever detection reports.
   **replaced**:
   `next_static_graph.a_detected_constructor_declares_no_dependencies_and_a_declared_one_does`
-  (void, no edges); tests `core/projection/construct.h`,
-  `core/backend/static_backend.h`.
+  (void, no edges); tests `conversion/construct.h`, `backend/static_backend.h`.
 - `static_bindings_source_test.plain_constructor_resolves_default_detected_dependencies`:
   a detected constructor gets the shared config of the static container.
   **ported**: `next_static_bindings.resolves_the_dependencies_of_a_constructor`
@@ -1944,7 +1947,7 @@ pass against next unchanged (checked).
   an annotated dependency resolves to the annotated interface's binding.
   **replaced**:
   `next_static_graph.an_annotated_dependency_is_an_edge_to_the_annotated_interface`;
-  tests `core/backend/static_backend.h`.
+  tests `backend/static_backend.h`.
 - `static_bindings_source_test.container_invokes_annotated_static_bindings_by_tag`:
   `invoke` of a mixed container passes annotated `shared_ptr` interfaces chosen
   by tag. **ported**:
@@ -1971,7 +1974,7 @@ pass against next unchanged (checked).
   a `dependency<config &, key_type<K>>` resolves to the binding with key K.
   **replaced**:
   `next_static_graph.a_keyed_dependency_is_an_edge_to_the_binding_of_its_key`
-  (`core/backend/static_backend.h`) and
+  (`backend/static_backend.h`) and
   `next_static_bindings.resolves_a_keyed_dependency_from_the_binding_of_its_key`
   (identity of the injected config)
 - `static_bindings_source_test.static_container_resolves_shared_cyclical_bindings`:
@@ -2002,8 +2005,8 @@ pass against next unchanged (checked).
 
 Includes only public headers. Against next, only case 1 fails to compile; the
 other six compile and pass unchanged (checked with g++ and clang++). Because the
-file cannot be kept whole, all seven move to `test/next/api/static_parents.cpp`,
-with the six bodies unchanged.
+file cannot be kept whole, all seven move to
+`test/next/containers/static_parents.cpp`, with the six bodies unchanged.
 
 - `static_parent_container_test.child_dependency_ambiguity_does_not_fall_back_to_parent`:
   two static bindings of config in a mixed child make the child's `service`
@@ -2013,7 +2016,7 @@ with the six bodies unchanged.
   `lookup already registered` static_assert is that change: the child is now
   rejected when it is formed, and with many declared a request among two static
   bindings is rejected at compile time. New behavior:
-  `test/next/api/static_parents.cpp`
+  `test/next/containers/static_parents.cpp`
   `next_static_parents.child_dependency_ambiguity_does_not_fall_back_to_parent`
   (many declared, one static and one runtime binding in the child: throws
   `type_ambiguous_exception` and does not fall back to the parent),
@@ -2083,9 +2086,9 @@ follows the default declaration, which is the new behavior of both.
 - `construction-bounded-array-rejects-too-many-initializers.cpp`:
   `constructor_traits<int[2]>::construct(1,2,3)` is rejected. **obsolete**: Next
   has no way to build an array from element initializers. A stored array is
-  value-initialized in place (`construct_stored` in
-  core/projection/construct.h), and no factory can return an array type.
-  `constructor_traits` is internal to the old code.
+  value-initialized in place (`construct_stored` in conversion/construct.h), and
+  no factory can return an array type. `constructor_traits` is internal to the
+  old code.
 - `construction-dynamic-array-requires-size-or-initializers.cpp`: building an
   unbounded array needs an explicit size or initializers. **ported**:
   `test/lit/construction-dynamic-array-requires-size-or-initializers.cpp`:
@@ -2138,7 +2141,7 @@ follows the default declaration, which is the new behavior of both.
 - `indexed-external-string-selector.cpp`: an external request injects a
   `std::string` key into constructor injection (runs) **covered**:
   `next_lookups.injects_a_fixed_string_key_into_a_string_domain`
-  (test/next/api/lookups.cpp): same injection through the public
+  (test/next/containers/lookups.cpp): same injection through the public
   `key_type<std::string, fixed_string{"json"}>`. The old program used internal
   `dingo::detail` hooks, which next lacks, so next rejects it.
 - `key-invalid-fixed-value-is-rejected.cpp`: `key_type<T, V>` with V not usable
@@ -2288,7 +2291,7 @@ follows the default declaration, which is the new behavior of both.
 - `storage-header-is-required.cpp`: `scope<dingo::unique>` without
   `<dingo/storage/unique.h>` is rejected. **changed**:
   `scope_tags_need_no_header`: next accepts the old program. New behavior:
-  `test/next/api/scope_headers.cpp`
+  `test/next/containers/scope_headers.cpp`
   `next_scope_headers.the_container_declares_the_scopes_of_the_library`.
   `test/lit/storage-header-is-required.cpp` keeps the old name for another
   program: a scope tag without `dingo::scope_traits` is rejected with
@@ -2368,7 +2371,7 @@ which a differential build of the baseline defines, as M9.2 describes:
 - `constructor_detection` family: crosses the detection backends (portable,
   msvc) and modes (shape, signature) with constructor shapes, and argument
   storages with conversion categories. **kept**, against the detection of the
-  next implementation (`core/primitives/constructor_detection.h`, the backends
+  next implementation (`primitives/constructor_detection.h`, the backends
   `portable_constructor_detection` and `msvc_constructor_detection`, the modes
   `constructor_shape` and `constructor_signature`): the same axes, the selected
   shapes spelled by `dingo::dependency<T, key_type<S>>`, and each storage and
@@ -2411,7 +2414,7 @@ which a differential build of the baseline defines, as M9.2 describes:
   implementation. **changed**: `scopes_check.py` compares against the baseline,
   with a `--cxx-command` that names its include directory, and is no lit test;
   the scopes of the next implementation are generated from
-  `spec/content/scopes.py` (`core/vocabulary/scope_tags.gen.h`).
+  `spec/content/scopes.py` (`conversion/scope_tags.gen.h`).
 - `test/lit/codegen-static-probes.cpp`: checks the size and the instructions of
   representative static and runtime resolutions. **kept** with next as
   implementation. The limits of Clang 18 and of the mixed probes of GCC 13 are
