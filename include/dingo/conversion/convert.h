@@ -141,12 +141,14 @@ struct binding_type {
   static constexpr registration_status status = register_status(descriptor);
   // The reachable types of the binding, in an array of exactly as many: the
   // derivation counts them first, with room that doubles while it is full.
-  static constexpr std::size_t published_count =
+  static constexpr detail::reachable_sizes published_sizes =
       derive_then<initial_room(descriptor)>(descriptor,
-                                            detail::count_reachable_types{});
-  static constexpr reachable_type_array<published_count> published_array =
-      derive_array<published_count>(descriptor);
-  static constexpr reachable_types published = published_array.view();
+                                            detail::measure_reachable_types{});
+  static constexpr reachable_table<published_sizes.items, published_sizes.nodes>
+      published_table = derive_then<initial_room(descriptor)>(
+          descriptor, detail::copy_reachable_types<published_sizes.items,
+                                                   published_sizes.nodes>{});
+  static constexpr reachable_types published = published_table.view();
   static constexpr std::uint8_t exposed = exposed_categories(descriptor);
   // Whether a reachable type keeps an object it derives, in the context of the
   // walk.

@@ -235,7 +235,7 @@ private:
   template <std::size_t ReachableType>
   static constexpr bool borrows =
       plan_v<route<ReachableType>>.kind != completion::construct ||
-      has_properties(semantics_of(route<ReachableType>::value.value),
+      has_properties(semantics_of(Binding::published.tree(ReachableType)),
                      property::immovable);
 
   template <std::size_t ReachableType>
