@@ -35,10 +35,18 @@ struct lookup_descriptor {
   std::size_t bound = unbounded;
 };
 
+// The declarations of the lookups of a container, as a view of an array of
+// exactly as many.
 struct lookup_table {
-  static constexpr std::size_t capacity = 32;
-  lookup_descriptor items[capacity] = {};
+  const lookup_descriptor *items = nullptr;
   std::size_t size = 0;
+};
+
+// An array of exactly `Count` declarations, or of one when there are none.
+template <std::size_t Count> struct lookup_array {
+  lookup_descriptor items[Count != 0 ? Count : 1] = {};
+
+  constexpr lookup_table view() const { return {items, Count}; }
 };
 
 // The declaration of the domain of `interface` and `key`: its own, or the
@@ -212,20 +220,26 @@ struct lookup_table_of<type_list<Declarations...>> {
   }
   static_assert(declared_once());
 
-  static constexpr lookup_table make() {
-    lookup_table table;
-    (append<Declarations>(table), ...);
+  // The number of declarations of all of them.
+  static constexpr std::size_t count =
+      (std::size_t(0) + ... + Declarations::size);
+
+  static constexpr lookup_array<count> make() {
+    lookup_array<count> table;
+    [[maybe_unused]] std::size_t size = 0;
+    (append<Declarations>(table, size), ...);
     return table;
   }
 
-  template <typename Declaration>
-  static constexpr void append(lookup_table &table) {
+  template <typename Declaration, std::size_t Count>
+  static constexpr void append(lookup_array<Count> &table, std::size_t &size) {
     for (std::size_t index = 0; index < Declaration::size; ++index) {
-      table.items[table.size++] = Declaration::items[index];
+      table.items[size++] = Declaration::items[index];
     }
   }
 
-  static constexpr lookup_table value = make();
+  static constexpr lookup_array<count> array = make();
+  static constexpr lookup_table value = array.view();
 };
 
 } // namespace dingo

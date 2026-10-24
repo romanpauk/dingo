@@ -25,6 +25,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 
 namespace dingo {
 
@@ -55,6 +56,19 @@ constexpr bool holds_elements(const semantics_descriptor *kind) {
          has_properties(kind, property::unsized);
 }
 
+// The kind the form `form` of `kind` leads to, which it has one for: its place
+// among the targets of the kind is the number of forms before it that have one.
+constexpr const semantics_descriptor *
+target_of(const semantics_descriptor *kind, operation form) {
+  std::size_t rank = 0;
+  for (unsigned bit = 0; bit < static_cast<unsigned>(form); ++bit) {
+    if ((kind->targeted & (std::uint32_t(1) << bit)) != 0) {
+      ++rank;
+    }
+  }
+  return kind->targets[rank];
+}
+
 // A step of a route: a rule of a leaf, of the leaf kind, or a form of a kind.
 struct route_step {
   operation form = operation{};
@@ -70,7 +84,7 @@ constexpr const semantics_descriptor *semantics_at(const route_step &step,
     return step.kind;
   case type_position::target:
     if ((step.kind->targeted & operation_bit(step.form)) != 0) {
-      return step.kind->targets[static_cast<std::size_t>(step.form)];
+      return target_of(step.kind, step.form);
     }
     return &leaf_semantics;
   default:
@@ -115,9 +129,11 @@ struct semantics_buffer {
       return;
     }
     items[size++] = kind;
-    for (std::size_t form = 0; form < max_semantics_operations; ++form) {
+    std::size_t rank = 0;
+    for (unsigned form = 0; form < std::numeric_limits<std::uint32_t>::digits;
+         ++form) {
       if ((kind->targeted & (std::uint32_t(1) << form)) != 0) {
-        add(kind->targets[form]);
+        add(kind->targets[rank++]);
       }
     }
   }
@@ -277,15 +293,15 @@ struct tree_span {
 // A derived reachable type and how it was reached: by the last rule of its
 // route from the reachable type `parent`, which the route continues. The rules
 // of a route are read along the reachable types it continues, by rule_at.
-// `Value` is how its type tree is held: a type_tree that has room for more
-// nodes, while it is derived, or the span of an array of exactly as many.
+// `Value` is how its type tree is held: a basic_type_tree that has room for
+// more nodes, while it is derived, or the span of an array of exactly as many.
 template <typename Value> struct basic_reachable_type {
   Value value;
   value_category category = value_category::lvalue;
   // The last rule of the route, and the argument of the source wrapper it
   // reached, or for an upcast, the index of the interface it converted to.
   route_step step = {};
-  std::uint8_t argument = 0;
+  std::uint32_t argument = 0;
   // The reachable type, among the ones the route is published with, that the
   // route continues, or no_reachable_type for the stored one.
   std::size_t parent = no_reachable_type;
@@ -674,7 +690,7 @@ extend(const reachable_scratch<Nodes> &from, std::size_t parent,
   derived.value = copy_of<Nodes>(value);
   derived.category = rule.to_category;
   derived.step = step;
-  derived.argument = static_cast<std::uint8_t>(argument);
+  derived.argument = static_cast<std::uint32_t>(argument);
   derived.parent = parent;
   ++derived.rule_count;
   derived.variadic =

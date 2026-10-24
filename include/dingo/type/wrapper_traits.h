@@ -32,6 +32,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <type_traits>
@@ -299,10 +300,45 @@ template <operation Form, typename Target> struct semantics_operation_of {
     kind.forms |= std::uint32_t(1) << static_cast<unsigned>(Form);
     if constexpr (!std::is_void_v<Target>) {
       kind.targeted |= std::uint32_t(1) << static_cast<unsigned>(Form);
-      kind.targets[static_cast<std::size_t>(Form)] = &semantics_v<Target>;
     }
   }
 };
+
+// The kinds the forms of a kind lead to, in the order of the bits of the forms,
+// in an array of exactly as many, or of one when there are none.
+template <typename List> struct semantics_targets_of;
+
+template <operation... Forms, typename... Targets>
+struct semantics_targets_of<type_list<::dingo::op<Forms, Targets>...>> {
+  static constexpr std::size_t count =
+      (std::size_t(0) + ... + (std::is_void_v<Targets> ? 0 : 1));
+
+  struct list {
+    const semantics_descriptor *items[count != 0 ? count : 1] = {};
+  };
+
+  template <typename Target>
+  static constexpr void place(list &result, std::size_t &rank) {
+    if constexpr (!std::is_void_v<Target>) {
+      result.items[rank++] = &semantics_v<Target>;
+    }
+  }
+
+  static constexpr list make() {
+    list result;
+    std::size_t rank = 0;
+    for (std::size_t bit = 0; bit < operation_count; ++bit) {
+      ((static_cast<std::size_t>(Forms) == bit ? place<Targets>(result, rank)
+                                               : void()),
+       ...);
+    }
+    return result;
+  }
+};
+
+template <typename Kind>
+inline constexpr auto semantics_targets_v = semantics_targets_of<
+    typename ::dingo::wrapper_semantics<Kind>::operations>::make();
 
 // The forms of the kind `Kind`, a type_list of op, which are forms of a
 // kind, each named once, with a kind exactly when the form leads to one.
@@ -337,7 +373,8 @@ struct semantics_operations_of<Kind,
 };
 
 template <typename Kind> constexpr semantics_descriptor make_semantics() {
-  static_assert(operation_count <= max_semantics_operations);
+  static_assert(operation_count <= std::numeric_limits<std::uint32_t>::digits,
+                "the operations are the bits of a mask of a word");
   static_assert(require<declares_semantics<Kind>::value,
                         diag::semantics_undeclared, Kind>());
   semantics_descriptor kind;
@@ -349,6 +386,7 @@ template <typename Kind> constexpr semantics_descriptor make_semantics() {
     kind.wrapper = true;
     kind.properties = traits::properties;
     semantics_operations_of<Kind, typename traits::operations>::add(kind);
+    kind.targets = semantics_targets_v<Kind>.items;
   }
   return kind;
 }
@@ -515,7 +553,7 @@ constexpr std::size_t fill_type_nodes(type_tree_node *out) {
   if constexpr (is_wrapper_v<value_type>) {
     node.family = wrapper_family<traits>::value;
     node.extent = wrapper_extent<traits>::value;
-    node.arity = static_cast<std::uint8_t>(traits::arguments::size);
+    node.arity = static_cast<std::uint32_t>(traits::arguments::size);
     size += fill_argument_nodes(out + 1, typename traits::arguments{});
     node.copyable = copies_wrapper(type_tree_view{out, size});
     // The elements of an array have the qualifiers of the array.
@@ -543,16 +581,6 @@ inline constexpr auto type_tree_nodes_v = make_type_tree_nodes<Type>();
 template <typename Type>
 inline constexpr type_tree_view type_tree_view_v =
     type_tree_nodes_v<Type>.view();
-
-// The type tree of a C++ type as a value that can be changed, which has room
-// for type_tree_capacity nodes.
-template <typename Type>
-inline constexpr type_tree type_tree_v = [] {
-  static_assert(
-      detail::count_type_nodes<Type>() <= type_tree_capacity,
-      "a type of more nodes than type_tree_capacity has no type_tree");
-  return copy_of(type_tree_view_v<Type>);
-}();
 
 namespace detail {
 template <typename Type, typename = void> struct canonical {

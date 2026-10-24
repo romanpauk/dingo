@@ -25,7 +25,7 @@ dingo::type_id defaulted_spelling_id() {
 
 dingo::type_id defaulted_spelling_leaf_id() {
   constexpr dingo::type_id id =
-      dingo::type_tree_v<defaulted_spelling>.nodes[1].type;
+      dingo::type_tree_view_v<defaulted_spelling>.nodes[1].type;
   return id;
 }
 

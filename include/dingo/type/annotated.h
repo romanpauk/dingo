@@ -131,9 +131,4 @@ template <typename Interface>
 inline constexpr type_tree_view interface_view_v =
     interface_nodes_v<Interface>.view();
 
-// The type tree of a declared interface as a value that can be changed.
-template <typename Interface>
-inline constexpr type_tree interface_type_tree_v =
-    copy_of(interface_view_v<Interface>);
-
 } // namespace dingo

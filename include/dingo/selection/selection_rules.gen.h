@@ -44,13 +44,10 @@ enum class step_condition : std::uint8_t {
 
 enum class selection_status : std::uint8_t { ok, ambiguous, not_found };
 
-inline constexpr std::size_t max_selection_steps = 5;
-inline constexpr std::size_t max_step_sources = 2;
-
 // The union of the sources of a step, taken when the request meets its
 // condition `when`.
 struct selection_step {
-  selection_source sources[max_step_sources];
+  const selection_source *sources;
   std::size_t source_count;
   step_condition when;
 };
@@ -61,61 +58,72 @@ struct selection_step {
 struct selection_rule {
   selection_mode mode;
   bool first_non_empty;
-  selection_step steps[max_selection_steps];
+  const selection_step *steps;
   std::size_t step_count;
   selection_status empty;
   selection_status one;
   selection_status many;
 };
 
+// The sources of each step of each rule, and the steps of each rule, in arrays
+// of exactly as many.
+inline constexpr selection_source singular_sources_0[] = {
+    selection_source::local_static, selection_source::local_runtime};
+inline constexpr selection_source singular_sources_1[] = {
+    selection_source::container_static, selection_source::container_runtime};
+inline constexpr selection_source singular_sources_2[] = {
+    selection_source::elements};
+inline constexpr selection_source singular_sources_3[] = {
+    selection_source::parent};
+inline constexpr selection_source singular_sources_4[] = {
+    selection_source::auto_construct};
+
+inline constexpr selection_step singular_steps[] = {
+    {singular_sources_0, 2, step_condition::always},
+    {singular_sources_1, 2, step_condition::always},
+    {singular_sources_2, 1, step_condition::collection},
+    {singular_sources_3, 1, step_condition::always},
+    {singular_sources_4, 1, step_condition::constructible},
+};
+inline constexpr selection_source collection_sources_0[] = {
+    selection_source::local_runtime, selection_source::local_static};
+inline constexpr selection_source collection_sources_1[] = {
+    selection_source::container_runtime, selection_source::container_static};
+inline constexpr selection_source collection_sources_2[] = {
+    selection_source::parent};
+
+inline constexpr selection_step collection_steps[] = {
+    {collection_sources_0, 2, step_condition::always},
+    {collection_sources_1, 2, step_condition::always},
+    {collection_sources_2, 1, step_condition::always},
+};
+inline constexpr selection_source construct_sources_0[] = {
+    selection_source::local_static, selection_source::local_runtime};
+inline constexpr selection_source construct_sources_1[] = {
+    selection_source::container_static, selection_source::container_runtime};
+inline constexpr selection_source construct_sources_2[] = {
+    selection_source::parent};
+inline constexpr selection_source construct_sources_3[] = {
+    selection_source::factory};
+
+inline constexpr selection_step construct_steps[] = {
+    {construct_sources_0, 2, step_condition::always},
+    {construct_sources_1, 2, step_condition::always},
+    {construct_sources_2, 1, step_condition::always},
+    {construct_sources_3, 1, step_condition::has_factory},
+};
+
 inline constexpr selection_rule selection_rules[] = {
     // spec: selection_rules.singular
-    {selection_mode::singular,
-     true,
-     {{{selection_source::local_static, selection_source::local_runtime},
-       2,
-       step_condition::always},
-      {{selection_source::container_static,
-        selection_source::container_runtime},
-       2,
-       step_condition::always},
-      {{selection_source::elements}, 1, step_condition::collection},
-      {{selection_source::parent}, 1, step_condition::always},
-      {{selection_source::auto_construct}, 1, step_condition::constructible}},
-     5,
-     selection_status::not_found,
-     selection_status::ok,
+    {selection_mode::singular, true, singular_steps, 5,
+     selection_status::not_found, selection_status::ok,
      selection_status::ambiguous},
     // spec: selection_rules.collection
-    {selection_mode::collection,
-     true,
-     {{{selection_source::local_runtime, selection_source::local_static},
-       2,
-       step_condition::always},
-      {{selection_source::container_runtime,
-        selection_source::container_static},
-       2,
-       step_condition::always},
-      {{selection_source::parent}, 1, step_condition::always}},
-     3,
-     selection_status::ok,
-     selection_status::ok,
-     selection_status::ok},
+    {selection_mode::collection, true, collection_steps, 3,
+     selection_status::ok, selection_status::ok, selection_status::ok},
     // spec: selection_rules.construct
-    {selection_mode::construct,
-     true,
-     {{{selection_source::local_static, selection_source::local_runtime},
-       2,
-       step_condition::always},
-      {{selection_source::container_static,
-        selection_source::container_runtime},
-       2,
-       step_condition::always},
-      {{selection_source::parent}, 1, step_condition::always},
-      {{selection_source::factory}, 1, step_condition::has_factory}},
-     4,
-     selection_status::not_found,
-     selection_status::ok,
+    {selection_mode::construct, true, construct_steps, 4,
+     selection_status::not_found, selection_status::ok,
      selection_status::ambiguous},
 };
 

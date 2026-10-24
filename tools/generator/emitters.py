@@ -327,13 +327,6 @@ def selection_rules(spec):
                     *(condition.value for condition in StepCondition),
                 ],
                 selection_rules=[selection_fields(rule) for rule in spec.selection_rules],
-                max_selection_steps=max(
-                    (len(r.steps) for r in spec.selection_rules), default=1
-                ),
-                max_step_sources=max(
-                    (len(step.sources) for r in spec.selection_rules for step in r.steps),
-                    default=1,
-                ),
             ),
             spec_ids=("selection_rules",),
         )

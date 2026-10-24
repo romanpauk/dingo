@@ -85,12 +85,10 @@ inline constexpr type_id type_id_v = detail::type_id_of<Type>::value;
 struct any_family_tag {};
 inline constexpr type_id any_family = type_id_v<any_family_tag>;
 
-inline constexpr std::size_t type_tree_capacity = 16;
-inline constexpr std::size_t max_semantics_operations = 32;
-
 // A wrapper semantics: the identity of its tag, its property bits, the
 // route forms it has, by bit, and for each form that leads to another kind, by
-// bit of `targeted`, that kind. A leaf is of the leaf kind, which is no
+// bit of `targeted`, that kind: `targets` has the kinds of exactly those forms,
+// in the order of their bits. A leaf is of the leaf kind, which is no
 // wrapper. Kinds compare by their identity, never by address, which a compiler
 // may not compare in a constant expression.
 struct semantics_descriptor {
@@ -99,7 +97,7 @@ struct semantics_descriptor {
   std::uint16_t properties = 0;
   std::uint32_t forms = 0;
   std::uint32_t targeted = 0;
-  const semantics_descriptor *targets[max_semantics_operations] = {};
+  const semantics_descriptor *const *targets = nullptr;
 };
 
 inline constexpr semantics_descriptor leaf_semantics{};
@@ -120,7 +118,7 @@ constexpr bool same_semantics(const semantics_descriptor *left,
 struct type_tree_node {
   // The kind of a wrapper, or the leaf kind.
   const semantics_descriptor *kind = &leaf_semantics;
-  std::uint8_t arity = 0;
+  std::uint32_t arity = 0;
   std::uint32_t extent = 0;
   type_id family = nullptr;
   // The type of a leaf; a wrapper is identified by its kind and family.
@@ -143,9 +141,6 @@ template <std::size_t Nodes> struct basic_type_tree {
   std::size_t size = 0;
 };
 
-// The type tree of the room that tests and the types of a program use.
-using type_tree = basic_type_tree<type_tree_capacity>;
-
 // The nodes of a type tree that are somewhere else, with their number. A type
 // tree is one, and the nodes of the type tree of a binding or of a request are
 // an array of exactly as many, so what they are kept in has no room to spare.
@@ -162,7 +157,7 @@ struct type_tree_view {
 };
 
 // A type tree of the nodes of a view, which a derivation can change.
-template <std::size_t Nodes = type_tree_capacity>
+template <std::size_t Nodes>
 constexpr basic_type_tree<Nodes> copy_of(type_tree_view tree) {
   basic_type_tree<Nodes> result;
   result.size = tree.size;
@@ -198,7 +193,7 @@ constexpr std::size_t argument_index(type_tree_view value, std::size_t index,
   return position;
 }
 
-template <std::size_t Nodes = type_tree_capacity>
+template <std::size_t Nodes>
 constexpr basic_type_tree<Nodes> subtree(type_tree_view value,
                                          std::size_t index) {
   basic_type_tree<Nodes> result;
@@ -257,7 +252,7 @@ constexpr bool operator!=(type_tree_view left, type_tree_view right) {
 }
 
 // A wrapper of `kind` of `family` applied to `argument`.
-template <std::size_t Nodes = type_tree_capacity>
+template <std::size_t Nodes>
 constexpr basic_type_tree<Nodes>
 wrap(const semantics_descriptor *kind, type_id family, bool copyable,
      type_tree_view argument, std::uint32_t extent = 0) {

@@ -24,12 +24,12 @@ namespace dingo::next_test {
 
 struct conversion_case {
   const char *name;
-  const dingo::type_tree *stored;
+  dingo::type_tree_view stored;
   const dingo::scope_info *scope;
-  const dingo::type_tree *const *interfaces;
+  const dingo::type_tree_view *interfaces;
   std::size_t interface_count;
   dingo::request_kind kind;
-  const dingo::type_tree *request;
+  dingo::type_tree_view request;
   bool registered;
   bool found;
   bool served;
@@ -67,7 +67,7 @@ TEST(conversion_conformance, computes_what_the_reference_computes) {
   for (std::size_t index = 0; index < conversion_case_count; ++index) {
     const conversion_case &expected = conversion_cases[index];
     dingo::binding_descriptor binding;
-    binding.stored = *expected.stored;
+    binding.stored = expected.stored;
     std::vector<dingo::type_id> leaves(binding.stored.size);
     dingo::leaf_buffer named{leaves.data(), leaves.size()};
     dingo::named_leaves_into(binding.stored, named);
@@ -75,10 +75,10 @@ TEST(conversion_conformance, computes_what_the_reference_computes) {
     binding.scope = *expected.scope;
     std::vector<dingo::declared_interface> interfaces;
     for (std::size_t i = 0; i < expected.interface_count; ++i) {
-      interfaces.push_back({*expected.interfaces[i], false});
+      interfaces.push_back({expected.interfaces[i], false});
     }
     binding.interfaces = {interfaces.data(), interfaces.size()};
-    dingo::request_descriptor request{expected.kind, *expected.request, {}};
+    dingo::request_descriptor request{expected.kind, expected.request, {}};
 
     EXPECT_LE(dingo::scratch_nodes(binding), case_nodes);
     EXPECT_TRUE((dingo::derive_sizes<case_room, case_nodes>(binding).fits));

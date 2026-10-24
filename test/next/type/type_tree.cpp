@@ -28,48 +28,49 @@ template <typename Kind> constexpr const semantics_descriptor *kind() {
   return &semantics_v<Kind>;
 }
 
-static_assert(type_tree_v<leaf>.size == 1);
-static_assert(!is_wrapper(type_tree_v<leaf>.nodes[0].kind));
-static_assert(type_tree_v<leaf>.nodes[0].type == type_id_v<leaf>);
-static_assert(type_tree_v<const leaf>.nodes[0].type == type_id_v<leaf>);
-static_assert(type_tree_v<leaf>.nodes[0].copyable);
-static_assert(!type_tree_v<move_only>.nodes[0].copyable);
+static_assert(type_tree_view_v<leaf>.size == 1);
+static_assert(!is_wrapper(type_tree_view_v<leaf>.nodes[0].kind));
+static_assert(type_tree_view_v<leaf>.nodes[0].type == type_id_v<leaf>);
+static_assert(type_tree_view_v<const leaf>.nodes[0].type == type_id_v<leaf>);
+static_assert(type_tree_view_v<leaf>.nodes[0].copyable);
+static_assert(!type_tree_view_v<move_only>.nodes[0].copyable);
 
 using shared = std::shared_ptr<std::optional<leaf>>;
-static_assert(type_tree_v<shared>.size == 3);
-static_assert(same_semantics(type_tree_v<shared>.nodes[0].kind,
+static_assert(type_tree_view_v<shared>.size == 3);
+static_assert(same_semantics(type_tree_view_v<shared>.nodes[0].kind,
                              kind<dingo::semantics::shared_owner>()));
-static_assert(type_tree_v<shared>.nodes[0].family ==
+static_assert(type_tree_view_v<shared>.nodes[0].family ==
               type_id_v<dingo::standard_family>);
-static_assert(type_tree_v<shared>.nodes[0].copyable);
-static_assert(same_semantics(type_tree_v<shared>.nodes[1].kind,
+static_assert(type_tree_view_v<shared>.nodes[0].copyable);
+static_assert(same_semantics(type_tree_view_v<shared>.nodes[1].kind,
                              kind<dingo::semantics::optional_value>()));
-static_assert(type_tree_v<shared>.nodes[2].type == type_id_v<leaf>);
-static_assert(subtree(type_tree_v<shared>, 1) ==
-              type_tree_v<std::optional<leaf>>);
+static_assert(type_tree_view_v<shared>.nodes[2].type == type_id_v<leaf>);
+static_assert(subtree<2>(type_tree_view_v<shared>, 1) ==
+              type_tree_view_v<std::optional<leaf>>);
 
-static_assert(same_semantics(type_tree_v<leaf *>.nodes[0].kind,
+static_assert(same_semantics(type_tree_view_v<leaf *>.nodes[0].kind,
                              kind<dingo::semantics::pointer>()));
-static_assert(type_tree_v<leaf *>.nodes[0].family == nullptr);
-static_assert(type_tree_v<leaf[2]>.nodes[0].extent == 2);
-static_assert(!type_tree_v<leaf[2]>.nodes[0].copyable);
-static_assert(same_semantics(type_tree_v<std::unique_ptr<leaf[]>>.nodes[1].kind,
-                             kind<dingo::semantics::dynamic_array>()));
+static_assert(type_tree_view_v<leaf *>.nodes[0].family == nullptr);
+static_assert(type_tree_view_v<leaf[2]>.nodes[0].extent == 2);
+static_assert(!type_tree_view_v<leaf[2]>.nodes[0].copyable);
+static_assert(
+    same_semantics(type_tree_view_v<std::unique_ptr<leaf[]>>.nodes[1].kind,
+                   kind<dingo::semantics::dynamic_array>()));
 
 using alternative = std::variant<leaf, std::unique_ptr<leaf>>;
-static_assert(type_tree_v<alternative>.nodes[0].arity == 2);
-static_assert(type_tree_v<alternative>.size == 4);
-static_assert(argument_index(type_tree_v<alternative>, 0, 1) == 2);
-static_assert(subtree(type_tree_v<alternative>, 2) ==
-              type_tree_v<std::unique_ptr<leaf>>);
+static_assert(type_tree_view_v<alternative>.nodes[0].arity == 2);
+static_assert(type_tree_view_v<alternative>.size == 4);
+static_assert(argument_index(type_tree_view_v<alternative>, 0, 1) == 2);
+static_assert(subtree<2>(type_tree_view_v<alternative>, 2) ==
+              type_tree_view_v<std::unique_ptr<leaf>>);
 
 // A created wrapper of any family serves a wrapper of every family.
-constexpr type_tree created = wrap(kind<dingo::semantics::optional_value>(),
-                                   any_family, true, type_tree_v<leaf>);
-static_assert(type_trees_match(created, type_tree_v<std::optional<leaf>>));
-static_assert(!(created == type_tree_v<std::optional<leaf>>));
-static_assert(!type_trees_match(type_tree_v<std::unique_ptr<leaf>>,
-                                type_tree_v<std::shared_ptr<leaf>>));
+constexpr auto created = wrap<2>(kind<dingo::semantics::optional_value>(),
+                                 any_family, true, type_tree_view_v<leaf>);
+static_assert(type_trees_match(created, type_tree_view_v<std::optional<leaf>>));
+static_assert(!(created == type_tree_view_v<std::optional<leaf>>));
+static_assert(!type_trees_match(type_tree_view_v<std::unique_ptr<leaf>>,
+                                type_tree_view_v<std::shared_ptr<leaf>>));
 
 template <int Id> struct numbered_leaf {};
 
@@ -89,7 +90,7 @@ TEST(type_tree, has_as_many_nodes_as_the_type) {
 }
 
 TEST(type_tree, describes_the_standard_wrappers) {
-  EXPECT_EQ(type_tree_v<std::unique_ptr<leaf>>.size, 2u);
+  EXPECT_EQ(type_tree_view_v<std::unique_ptr<leaf>>.size, 2u);
 }
 
 } // namespace

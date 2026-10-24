@@ -30,13 +30,10 @@ enum class step_condition : std::uint8_t {
 
 enum class selection_status : std::uint8_t { ok, ambiguous, not_found };
 
-inline constexpr std::size_t max_selection_steps = {{ max_selection_steps }};
-inline constexpr std::size_t max_step_sources = {{ max_step_sources }};
-
 // The union of the sources of a step, taken when the request meets its
 // condition `when`.
 struct selection_step {
-  selection_source sources[max_step_sources];
+  const selection_source *sources;
   std::size_t source_count;
   step_condition when;
 };
@@ -47,19 +44,32 @@ struct selection_step {
 struct selection_rule {
   selection_mode mode;
   bool first_non_empty;
-  selection_step steps[max_selection_steps];
+  const selection_step *steps;
   std::size_t step_count;
   selection_status empty;
   selection_status one;
   selection_status many;
 };
 
+// The sources of each step of each rule, and the steps of each rule, in arrays
+// of exactly as many.
+{% for rule in selection_rules %}
+{% for step in rule.steps %}
+inline constexpr selection_source {{ rule.id }}_sources_{{ loop.index0 }}[] = { {% for source in step.sources %}selection_source::{{ source }}{{ ", " if not loop.last }}{% endfor %} };
+{% endfor %}
+
+inline constexpr selection_step {{ rule.id }}_steps[] = {
+{% for step in rule.steps %}
+    { {{ rule.id }}_sources_{{ loop.index0 }}, {{ step.sources | length }}, step_condition::{{ step.when }} },
+{% endfor %}
+};
+{% endfor %}
+
 inline constexpr selection_rule selection_rules[] = {
 {% for rule in selection_rules %}
     // spec: selection_rules.{{ rule.id }}
     {selection_mode::{{ rule.mode }}, {{ rule.first_non_empty | lower }},
-     { {% for step in rule.steps %}{ { {% for source in step.sources %}selection_source::{{ source }}{{ ", " if not loop.last }}{% endfor %} }, {{ step.sources | length }}, step_condition::{{ step.when }} }{{ ", " if not loop.last }}{% endfor %} },
-     {{ rule.steps | length }}, selection_status::{{ rule.empty }}, selection_status::{{ rule.one }}, selection_status::{{ rule.many }}},
+     {{ rule.id }}_steps, {{ rule.steps | length }}, selection_status::{{ rule.empty }}, selection_status::{{ rule.one }}, selection_status::{{ rule.many }}},
 {% endfor %}
 };
 

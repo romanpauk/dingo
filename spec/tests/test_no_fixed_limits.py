@@ -52,28 +52,6 @@ LIMITS = {
         "sized by the request",
     ("include/dingo/conversion/route.h", "route_step chain[max_created_wrappers] = {};"):
         "sized by the request",
-    ("include/dingo/conversion/route.h", "std::uint8_t argument = 0;"):
-        "the alternative or interface a rule reached, as wide as a count",
-    ("include/dingo/lookup/declarations.h", "static constexpr std::size_t capacity = 32;"):
-        "the declarations of the lookups of a container are counted",
-    ("include/dingo/lookup/declarations.h", "lookup_descriptor items[capacity] = {};"):
-        "the declarations of the lookups of a container are counted",
-    ("include/dingo/selection/selection_rules.gen.h", "inline constexpr std::size_t max_selection_steps = 5;"):
-        "generated from the spec, which has the counts",
-    ("include/dingo/selection/selection_rules.gen.h", "inline constexpr std::size_t max_step_sources = 2;"):
-        "generated from the spec, which has the counts",
-    ("include/dingo/selection/selection_rules.gen.h", "selection_source sources[max_step_sources];"):
-        "generated from the spec, which has the counts",
-    ("include/dingo/selection/selection_rules.gen.h", "selection_step steps[max_selection_steps];"):
-        "generated from the spec, which has the counts",
-    ("include/dingo/type/type_tree.h", "inline constexpr std::size_t type_tree_capacity = 16;"):
-        "the type tree of tests and of type_tree_v; no type of the library is limited by it",
-    ("include/dingo/type/type_tree.h", "inline constexpr std::size_t max_semantics_operations = 32;"):
-        "a wrapper semantics keeps a target for each operation it has",
-    ("include/dingo/type/type_tree.h", "const semantics_descriptor *targets[max_semantics_operations] = {};"):
-        "a wrapper semantics keeps a target for each operation it has",
-    ("include/dingo/type/type_tree.h", "std::uint8_t arity = 0;"):
-        "the arguments of a wrapper, as wide as a count",
 }
 
 

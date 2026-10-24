@@ -35,7 +35,7 @@ using dingo::request_kind;
 using dingo::request_traits;
 using dingo::resolved_t;
 using dingo::type_id_v;
-using dingo::type_tree_v;
+using dingo::type_tree_view_v;
 
 struct tag;
 struct service {};
@@ -138,17 +138,17 @@ static_assert(std::is_same_v<resolved_t<service &>, service &>);
 
 // Whether a request's wrappers are copied: a sharing handle is, a sole-owner
 // handle is not, and an optional is as its element is.
-static_assert(type_tree_v<std::shared_ptr<service>>.nodes[0].copyable);
-static_assert(!type_tree_v<std::unique_ptr<service>>.nodes[0].copyable);
-static_assert(type_tree_v<std::optional<service>>.nodes[0].copyable);
+static_assert(type_tree_view_v<std::shared_ptr<service>>.nodes[0].copyable);
+static_assert(!type_tree_view_v<std::unique_ptr<service>>.nodes[0].copyable);
+static_assert(type_tree_view_v<std::optional<service>>.nodes[0].copyable);
 static_assert(
-    !type_tree_v<std::optional<std::unique_ptr<service>>>.nodes[0].copyable);
-static_assert(type_tree_v<user_shared<service>>.nodes[0].copyable);
-static_assert(!type_tree_v<user_unique<service>>.nodes[0].copyable);
+    !type_tree_view_v<std::optional<std::unique_ptr<service>>>.nodes[0].copyable);
+static_assert(type_tree_view_v<user_shared<service>>.nodes[0].copyable);
+static_assert(!type_tree_view_v<user_unique<service>>.nodes[0].copyable);
 static_assert(
-    type_tree_v<std::optional<user_shared<service>>>.nodes[0].copyable);
+    type_tree_view_v<std::optional<user_shared<service>>>.nodes[0].copyable);
 static_assert(
-    !type_tree_v<std::optional<user_unique<service>>>.nodes[0].copyable);
+    !type_tree_view_v<std::optional<user_unique<service>>>.nodes[0].copyable);
 
 // A wrapper rebinds to an interface of its element through its traits.
 static_assert(std::is_same_v<dingo::replace_leaf_t<user_shared<impl>, iface>,

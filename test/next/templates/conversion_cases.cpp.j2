@@ -23,16 +23,16 @@
 namespace dingo::next_test {
 
 using dingo::operation;
-using dingo::type_tree_v;
+using dingo::type_tree_view_v;
 
 struct conversion_case {
   const char *name;
-  const dingo::type_tree *stored;
+  dingo::type_tree_view stored;
   const dingo::scope_info *scope;
-  const dingo::type_tree *const *interfaces;
+  const dingo::type_tree_view *interfaces;
   std::size_t interface_count;
   dingo::request_kind kind;
-  const dingo::type_tree *request;
+  dingo::type_tree_view request;
   bool registered;
   bool found;
   bool served;
@@ -46,14 +46,14 @@ static const dingo::route_step case_rules[] = {
 {% endfor %}{% endfor %}    {operation::borrow, &dingo::leaf_semantics}};
 
 // The declared interfaces of the cases one after the other.
-static const dingo::type_tree *const case_interfaces[] = {
-{% for case in cases %}{% for interface in case.interfaces %}    &type_tree_v<{{ interface }}>,
-{% endfor %}{% endfor %}    nullptr};
+static const dingo::type_tree_view case_interfaces[] = {
+{% for case in cases %}{% for interface in case.interfaces %}    type_tree_view_v<{{ interface }}>,
+{% endfor %}{% endfor %}    type_tree_view_v<leaf>};
 
 {% set position = namespace(next=0, interface=0) %}
 extern const conversion_case conversion_cases[] = {
 {% for case in cases %}
-    {"{{ case.scope }} {{ case.interfaces | join(",") }} {{ spell(case.stored) }} {{ case.kind }} {{ spell(case.request) }}", &type_tree_v<{{ spell(case.stored) }}>, &::dingo::scope_traits<::dingo::{{ case.scope }}>::descriptor, case_interfaces + {{ position.interface }}, {{ case.interfaces | length }}, dingo::request_kind::{{ case.kind }}, &type_tree_v<{{ spell(case.request) }}>, {{ case.registered | lower }}, {{ case.found | lower }}, {{ case.served | lower }}, case_rules + {{ position.next }}, {{ case.rules | length }}},
+    {"{{ case.scope }} {{ case.interfaces | join(",") }} {{ spell(case.stored) }} {{ case.kind }} {{ spell(case.request) }}", type_tree_view_v<{{ spell(case.stored) }}>, &::dingo::scope_traits<::dingo::{{ case.scope }}>::descriptor, case_interfaces + {{ position.interface }}, {{ case.interfaces | length }}, dingo::request_kind::{{ case.kind }}, type_tree_view_v<{{ spell(case.request) }}>, {{ case.registered | lower }}, {{ case.found | lower }}, {{ case.served | lower }}, case_rules + {{ position.next }}, {{ case.rules | length }}},
 {% set position.next = position.next + case.rules | length %}{% set position.interface = position.interface + case.interfaces | length %}{% endfor %}
 };
 

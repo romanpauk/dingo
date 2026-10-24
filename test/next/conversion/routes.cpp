@@ -283,10 +283,11 @@ TEST(next_engine, a_request_adds_qualifiers_only_below_const_levels) {
 
   // A level may gain const below levels that are all const, as A** converts
   // to const A *const * but not to const A **.
-  static_assert(dingo::qualifies(dingo::type_tree_v<A **>,
-                                 dingo::type_tree_v<const A *const *>, false));
-  static_assert(!dingo::qualifies(dingo::type_tree_v<A **>,
-                                  dingo::type_tree_v<const A **>, false));
+  static_assert(dingo::qualifies(dingo::type_tree_view_v<A **>,
+                                 dingo::type_tree_view_v<const A *const *>,
+                                 false));
+  static_assert(!dingo::qualifies(dingo::type_tree_view_v<A **>,
+                                  dingo::type_tree_view_v<const A **>, false));
   using double_pointer = binding_t<external, A **>;
   static_assert(serves<double_pointer, const A *const *>());
   static_assert(!serves<double_pointer, const A **>());
@@ -358,7 +359,7 @@ TEST(next_engine, interfaces_do_not_rebind_the_stored_type_tree) {
   using one = binding_t<shared, std::shared_ptr<A>, I>;
   static_assert(std::is_same_v<one::stored_type, std::shared_ptr<A>>);
   static_assert(one::descriptor.stored ==
-                dingo::type_tree_v<std::shared_ptr<A>>);
+                dingo::type_tree_view_v<std::shared_ptr<A>>);
   static_assert(serves<one, I &>());
   static_assert(serves<one, std::shared_ptr<I>>());
   static_assert(serves<one, std::shared_ptr<I> &>());

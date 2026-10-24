@@ -22,7 +22,7 @@ namespace next_type_identity {
 
 using dingo::type_id;
 using dingo::type_id_v;
-using dingo::type_tree_v;
+using dingo::type_tree_view_v;
 
 using bare_spelling = std::unique_ptr<service>;
 
@@ -39,7 +39,7 @@ static_assert(
     same(type_id_v<bare_spelling>,
          type_id_v<std::unique_ptr<service, std::default_delete<service>>>));
 static_assert(!same(type_id_v<bare_spelling>, type_id_v<service>));
-static_assert(same(type_tree_v<bare_spelling>.nodes[1].type,
+static_assert(same(type_tree_view_v<bare_spelling>.nodes[1].type,
                    type_id_v<service>));
 
 TEST(next_type_identity, the_identity_of_a_type_is_one_across_units) {
