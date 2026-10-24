@@ -10,10 +10,10 @@
 // whether its wrappers are copied; and the annotated and keyed values a
 // constructor parameter takes.
 
-#include <dingo/backend/selection.h>
-#include <dingo/conversion/request.h>
 #include <dingo/key.h>
 #include <dingo/lookup/key.h>
+#include <dingo/selection/request.h>
+#include <dingo/selection/selection.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/type/wrapper_traits.h>

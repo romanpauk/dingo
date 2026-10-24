@@ -12,13 +12,11 @@
 // walks it. A request finds its binding and selects its reachable type with the
 // same engine functions as the static backend.
 
-#include <dingo/backend/diagnose.h>
 #include <dingo/backend/local.h>
 #include <dingo/backend/memo.h>
 #include <dingo/backend/slot.h>
 #include <dingo/conversion/binding_conflicts.h>
 #include <dingo/conversion/convert.h>
-#include <dingo/conversion/request.h>
 #include <dingo/conversion/route.h>
 #include <dingo/diagnostics/diagnostics.gen.h>
 #include <dingo/diagnostics/exceptions.h>
@@ -29,6 +27,8 @@
 #include <dingo/memory/allocation.h>
 #include <dingo/memory/lifetime_slot.h>
 #include <dingo/memory/retained.h>
+#include <dingo/selection/diagnose.h>
+#include <dingo/selection/request.h>
 #include <dingo/type/collection_traits.h>
 #include <dingo/type/type_tree.h>
 

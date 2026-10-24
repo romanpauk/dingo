@@ -251,7 +251,7 @@ add_executable(dingo_next_test
     next/containers/transactions.cpp
     next/containers/unique.cpp
     next/containers/variants.cpp
-    next/backend/index.cpp
+    next/lookup/index.cpp
     next/backend/local.cpp
     next/backend/memo.cpp
     next/backend/object_sizes.cpp
@@ -271,7 +271,7 @@ add_executable(dingo_next_test
     next/memory/retained.cpp
     next/memory/transaction_log.cpp
     next/diagnostics/type_name.cpp
-    next/conversion/request_types.cpp
+    next/selection/request_types.cpp
     next/type/type_tree.cpp
     "${DINGO_NEXT_GENERATED_DIR}/conversion_cases.cpp"
 )

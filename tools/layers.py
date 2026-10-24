@@ -8,10 +8,10 @@ so the dependencies form a graph without cycles. The public headers, every
 header that no component holds, form the top component and may include any
 other.
 
-A header that has not moved into the directory of its component yet is listed in
-MOVING with the component it belongs to; the entry goes away when the header
-moves. An include that is a known violation of the structure, which a planned
-change removes, is listed in KNOWN.
+A public header in the directory of a component that includes registration.h
+belongs to the top component, and IN_COMPONENT_DIRECTORIES lists it. An include
+that is a known violation of the structure, which a planned change removes, is
+listed in KNOWN.
 """
 
 import argparse
@@ -65,27 +65,15 @@ COMPONENTS = {
     ),
 }
 
-# The headers that are not in the directory of their component yet.
-MOVING = {
-    "conversion/route": "conversion",
-    "conversion/convert": "conversion",
-    "conversion/selection_rules.gen": "selection",
-    "conversion/request": "selection",
-    "backend/selection": "selection",
-    "backend/diagnose": "selection",
-    "backend/slot": "backend",
-    "backend/memo": "backend",
-    "backend/local": "backend",
-    "backend/static_backend": "backend",
-    "backend/runtime_backend": "backend",
-    # Public headers that are in the directory of a component and include
-    # registration.h, so they belong to the top component.
-    "storage/external": PUBLIC,
-    "storage/shared": PUBLIC,
-    "storage/shared_cyclical": PUBLIC,
-    "storage/unique": PUBLIC,
-    "factory/constructor": PUBLIC,
-    "lookup/lookup": PUBLIC,
+# The public headers that are in the directory of a component and include
+# registration.h, so they belong to the top component.
+IN_COMPONENT_DIRECTORIES = {
+    "storage/external",
+    "storage/shared",
+    "storage/shared_cyclical",
+    "storage/unique",
+    "factory/constructor",
+    "lookup/lookup",
 }
 
 # Includes that violate the structure and that a planned change removes.
@@ -95,8 +83,8 @@ INCLUDE = re.compile(r"^\s*#\s*include\s*<dingo/([^>]+)\.(?:h|hpp)>")
 
 
 def component_of(stem):
-    if stem in MOVING:
-        return MOVING[stem]
+    if stem in IN_COMPONENT_DIRECTORIES:
+        return PUBLIC
     parts = Path(stem).parts
     if len(parts) > 1 and parts[0] in COMPONENTS:
         return parts[0]

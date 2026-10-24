@@ -1452,7 +1452,7 @@ Following the route engine of M3.2, the selection engine is a generic
 interpreter of generated selection rule tables rather than generated code.
 
 The selection rules are generated into `selection_rules.gen.h`, and
-`backend/selection.h` interprets them over the sources of a container: its
+`selection/selection.h` interprets them over the sources of a container: its
 static bindings, its runtime bindings, its parent, and auto-construction. A step
 whose sources all know what they name when the request is compiled is decided
 then, and reported at compile time when nothing at runtime can change it; any

@@ -148,13 +148,13 @@ the reachable type it selected.
 
 ### Selection
 
-[backend/selection.h](../../include/dingo/backend/selection.h) interprets the
-selection rules of the spec over the sources of a container: the local bindings
-of the registration whose object is being constructed, the static and runtime
-bindings of the container, its parent, auto-construction of an unregistered
-type, and the factory of a request to construct an object. A step whose sources
-all know what they name when the request is compiled is decided then, and any
-other step when the request is resolved.
+[selection/selection.h](../../include/dingo/selection/selection.h) interprets
+the selection rules of the spec over the sources of a container: the local
+bindings of the registration whose object is being constructed, the static and
+runtime bindings of the container, its parent, auto-construction of an
+unregistered type, and the factory of a request to construct an object. A step
+whose sources all know what they name when the request is compiled is decided
+then, and any other step when the request is resolved.
 
 The local bindings of a registration are in
 [backend/local.h](../../include/dingo/backend/local.h): the static bindings it
@@ -196,7 +196,7 @@ For the core path in source order, start here:
 - [include/dingo/container.h](../../include/dingo/container.h)
 - [include/dingo/static_container.h](../../include/dingo/static_container.h)
 - [include/dingo/registration.h](../../include/dingo/registration.h)
-- [include/dingo/backend/selection.h](../../include/dingo/backend/selection.h)
+- [include/dingo/selection/selection.h](../../include/dingo/selection/selection.h)
 - [include/dingo/backend/static_backend.h](../../include/dingo/backend/static_backend.h)
 - [include/dingo/backend/runtime_backend.h](../../include/dingo/backend/runtime_backend.h)
 - [include/dingo/backend/slot.h](../../include/dingo/backend/slot.h)

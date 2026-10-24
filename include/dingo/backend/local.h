@@ -14,11 +14,11 @@
 // container sources are the host's own bindings, and whose parent is the
 // host's parent, so the local bindings shadow the host's.
 
-#include <dingo/backend/selection.h>
 #include <dingo/base/mechanics.h>
 #include <dingo/lookup/declarations.h>
 #include <dingo/memory/lifetime_slot.h>
 #include <dingo/memory/retained.h>
+#include <dingo/selection/selection.h>
 
 #include <cstddef>
 #include <memory>

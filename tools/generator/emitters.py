@@ -311,13 +311,13 @@ def storage_forms(spec):
 
 
 def selection_rules(spec):
-    """include/dingo/conversion/selection_rules.gen.h from the selection
+    """include/dingo/selection/selection_rules.gen.h from the selection
     rules."""
     from spec.schema import SelectionMode, SelectionSource, StepCondition
 
     return [
         GeneratedFile(
-            path="include/dingo/conversion/selection_rules.gen.h",
+            path="include/dingo/selection/selection_rules.gen.h",
             content=render(
                 "selection_rules.gen.h.j2",
                 selection_sources=[source.value for source in SelectionSource],

@@ -58,7 +58,7 @@ The main owners are:
 - [include/dingo/registration.h](../../include/dingo/registration.h)
 - [include/dingo/conversion/route.h](../../include/dingo/conversion/route.h)
 - [include/dingo/conversion/convert.h](../../include/dingo/conversion/convert.h)
-- [include/dingo/backend/selection.h](../../include/dingo/backend/selection.h)
+- [include/dingo/selection/selection.h](../../include/dingo/selection/selection.h)
 - [include/dingo/backend/static_backend.h](../../include/dingo/backend/static_backend.h)
 - [include/dingo/backend/runtime_backend.h](../../include/dingo/backend/runtime_backend.h)
 - [include/dingo/backend/slot.h](../../include/dingo/backend/slot.h)

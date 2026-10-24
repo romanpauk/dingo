@@ -116,8 +116,8 @@ and the engine does not read the marker.
 ## Request Type
 
 `core::request_traits<Request, Key>` in
-[conversion/request.h](../../include/dingo/conversion/request.h) is the
-descriptor of a request: its kind, value, lvalue reference, or rvalue reference;
+[selection/request.h](../../include/dingo/selection/request.h) is the descriptor
+of a request: its kind, value, lvalue reference, or rvalue reference;
 `value_type`, the type it asks for without references; `made_type`, the type a
 binding makes the object of a constructed request as; and `descriptor`, its
 kind, type tree, and key, which the engine reads.
@@ -145,4 +145,4 @@ The conversion rules is what allows those three parts to compose.
 - [include/dingo/type/wrapper_traits.h](../../include/dingo/type/wrapper_traits.h)
 - [include/dingo/type/type_tree.h](../../include/dingo/type/type_tree.h)
 - [include/dingo/conversion/route.h](../../include/dingo/conversion/route.h)
-- [include/dingo/conversion/request.h](../../include/dingo/conversion/request.h)
+- [include/dingo/selection/request.h](../../include/dingo/selection/request.h)

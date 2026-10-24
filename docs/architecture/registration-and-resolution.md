@@ -86,12 +86,12 @@ declares can be served from its stored type.
 ## Resolution
 
 The public `resolve<T>()` and `resolve<T>(key)` are members of `core::selection`
-in [backend/selection.h](../../include/dingo/backend/selection.h). A key is a
-`key_type` object, a `key_value`, or a value of the key type. At that boundary
+in [selection/selection.h](../../include/dingo/selection/selection.h). A key is
+a `key_type` object, a `key_value`, or a value of the key type. At that boundary
 Dingo describes the request with
 `core::request_traits<Request, Key>::descriptor` of
-[conversion/request.h](../../include/dingo/conversion/request.h): its kind,
-value, lvalue reference, or rvalue reference; its type tree, whose leaf is the
+[selection/request.h](../../include/dingo/selection/request.h): its kind, value,
+lvalue reference, or rvalue reference; its type tree, whose leaf is the
 interface it names, annotated when the request is; and its key.
 
 The sequence is:
@@ -228,7 +228,7 @@ These files are useful while reading this flow:
 - [include/dingo/container.h](../../include/dingo/container.h)
 - [include/dingo/registration.h](../../include/dingo/registration.h)
 - [include/dingo/registration_proxy.h](../../include/dingo/registration_proxy.h)
-- [include/dingo/backend/selection.h](../../include/dingo/backend/selection.h)
+- [include/dingo/selection/selection.h](../../include/dingo/selection/selection.h)
 - [include/dingo/backend/runtime_backend.h](../../include/dingo/backend/runtime_backend.h)
 - [include/dingo/backend/static_backend.h](../../include/dingo/backend/static_backend.h)
 - [include/dingo/backend/memo.h](../../include/dingo/backend/memo.h)

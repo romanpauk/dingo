@@ -9,7 +9,6 @@
 
 // dingo/static_container.h of the next implementation.
 
-#include <dingo/backend/selection.h>
 #include <dingo/backend/static_backend.h>
 #include <dingo/collection.h>
 #include <dingo/container_operations.h>
@@ -21,6 +20,7 @@
 #include <dingo/key.h>                    // IWYU pragma: export
 #include <dingo/lookup/lookup.h>
 #include <dingo/registration.h>
+#include <dingo/selection/selection.h>
 
 #include <type_traits>
 #include <utility>

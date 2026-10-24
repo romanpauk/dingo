@@ -202,7 +202,7 @@ came from `test/support/containers.h`, because `dingo_next_test` does not have
   `detail::make_type_not_found_exception`, old header `dingo/base/type_name.h`)
   **replaced**: `test/next/containers/keyed_diagnostics.cpp`
   `next_diagnostics.names_the_key_and_the_path_of_a_missing_dependency`. It goes
-  through the public API to `raise_not_found` in `backend/diagnose.h` and the
+  through the public API to `raise_not_found` in `selection/diagnose.h` and the
   generated `raise_type_not_found_keyed_required_by` (spec
   `diagnostics.type_not_found_keyed_required_by`), and checks the whole message.
 
@@ -382,7 +382,7 @@ signature.
 
 ## Group B: lookup
 
-The cases of `test/lookup/`. The new tests are in `test/next/backend/index.cpp`
+The cases of `test/lookup/`. The new tests are in `test/next/lookup/index.cpp`
 (`next_index`) and `test/next/containers/lookups.cpp` (`next_lookups`). They are
 not mutation-checked. The covered rows were read and assert the same property.
 
@@ -390,7 +390,7 @@ not mutation-checked. The covered rows were read and assert the same property.
 
 - (file-scope `static_assert`s): which keys count as static
   (`is_static_lookup_key_v`) and what `make_lookup_key` returns for each
-  selector. **replaced**: `test/next/backend/index.cpp` file-scope
+  selector. **replaced**: `test/next/lookup/index.cpp` file-scope
   `static_assert`s on `key_has_value`, `key_of_t`, `request_key_of`; tests
   `lookup/key.h`.
 - `index_test.lookup_backend_inserts_key_value_rows`: a `one`/ordered key-value
@@ -1024,7 +1024,7 @@ are obsolete.
 
 - `type_traits_test.annotated_copies_non_default_constructible_copy_only_values`:
   `annotated<T, Tag>` copies a T that is copyable but neither movable nor
-  default-constructible. **replaced**: `test/next/conversion/request_types.cpp`
+  default-constructible. **replaced**: `test/next/selection/request_types.cpp`
   `next_request_types.an_annotated_value_copies_a_copy_only_value` (annotated
   and keyed, from an lvalue and an rvalue); tests `type/annotated.h` and
   `lookup/key.h` `keyed`.
@@ -1036,7 +1036,7 @@ are obsolete.
 - (file-scope static_asserts)
   `is_interface_storage_rebindable_v<test_shared/test_unique<Class>, IClass>`:
   user wrappers rebind to an interface of their element. **replaced**:
-  static_asserts in `test/next/conversion/request_types.cpp` on
+  static_asserts in `test/next/selection/request_types.cpp` on
   `core::replace_leaf_t<user_shared<impl>, iface>`,
   `dingo::rebind_type_t<user_unique<impl>, iface>`, `leaf_type_t`; tests
   `type/wrapper_traits.h`, `api/type/rebind_type.h`.
@@ -1054,8 +1054,8 @@ are obsolete.
   static_asserts on `core::request_traits` (kind, value_type, made_type),
   `core::leaf_of_t`, `core::resolved_t`, `core::annotated_request`,
   `annotated_traits`, and the annotated request descriptor leaf
-  (`type_id_v<annotated<service, tag>>`); tests `conversion/request.h`,
-  `backend/selection.h`, `type/annotated.h`. The `removes_rvalue_references`
+  (`type_id_v<annotated<service, tag>>`); tests `selection/request.h`,
+  `selection/selection.h`, `type/annotated.h`. The `removes_rvalue_references`
   mode has no counterpart (obsolete)
 - (file-scope static_asserts) annotated constructibility (shared_ptr yes,
   unique_ptr from const& no): annotated values copy copyable values and refuse
@@ -1248,7 +1248,7 @@ are not observed through the public API of the baseline and are recorded only:
   annotations, and which requests may escape. **replaced**:
   `test/next/conversion/routes.cpp`
   `next_engine.a_request_names_the_leaf_through_its_wrappers`; tests
-  `conversion/request.h` (`request_traits::descriptor`, `kind`, `made_type`) and
+  `selection/request.h` (`request_traits::descriptor`, `kind`, `made_type`) and
   `type/wrapper_traits.h` (`leaf_of_t`). `request_may_escape_v` is replaced by
   `request_kind`: an lvalue reference refers to a kept object. The retention of
   rvalue requests is in `next_unique.retains_the_object_of_an_rvalue_reference`.

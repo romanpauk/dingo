@@ -24,16 +24,16 @@
 // Its container sources resolve with container_resolver(), and it keeps the
 // objects requests construct in retained().
 
-#include <dingo/backend/diagnose.h>
 #include <dingo/base/mechanics.h>
-#include <dingo/conversion/request.h>
-#include <dingo/conversion/selection_rules.gen.h>
 #include <dingo/diagnostics/diagnostic_message.h>
 #include <dingo/factory/construct.h>
 #include <dingo/lookup/annotated_key.h>
 #include <dingo/lookup/key.h>
 #include <dingo/lookup/key_kinds.gen.h>
 #include <dingo/memory/retained.h>
+#include <dingo/selection/diagnose.h>
+#include <dingo/selection/request.h>
+#include <dingo/selection/selection_rules.gen.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/auto_constructible.h>
 #include <dingo/type/collection_traits.h>

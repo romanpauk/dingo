@@ -10,7 +10,6 @@
 // dingo/container.h of the next implementation.
 
 #include <dingo/backend/runtime_backend.h>
-#include <dingo/backend/selection.h>
 #include <dingo/backend/static_backend.h>
 #include <dingo/base/mechanics.h>
 #include <dingo/collection.h>
@@ -25,6 +24,7 @@
 #include <dingo/memory/allocation.h>
 #include <dingo/registration.h>
 #include <dingo/registration_proxy.h>
+#include <dingo/selection/selection.h>
 
 #include <memory>
 #include <type_traits>
