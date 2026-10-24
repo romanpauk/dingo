@@ -1,12 +1,17 @@
-"""Verifies that the headers form a layered hierarchy.
+"""Verifies that the headers form the component structure of the library.
 
-The modules of the library are the directories under include/dingo that LAYERS
-lists, from the lowest layer to the highest. The public headers, every other
-header under include/dingo, form the topmost layer: they hold the public include
-paths, and each may include the others. A header may include headers of the
-layers below its own and headers of its own module, and modules that share a
-layer are independent of each other, so no lower module includes the public
-headers.
+The library is a set of components, each a directory of include/dingo that holds
+the generated declarations, the extension points, and the functions of one
+subject, see docs/architecture/overview.md. A component may include only
+headers of itself and of the components it depends on, which COMPONENTS lists,
+so the dependencies form a graph without cycles. The public headers, every
+header that no component holds, form the top component and may include any
+other.
+
+A header that has not moved into the directory of its component yet is listed in
+MOVING with the component it belongs to; the entry goes away when the header
+moves. An include that is a known violation of the structure, which a planned
+change removes, is listed in KNOWN.
 """
 
 import argparse
@@ -14,33 +19,134 @@ from pathlib import Path
 import re
 import sys
 
-# The modules of the library, from the lowest layer to the highest. See
-# docs/architecture/overview.md, Header Layers. PUBLIC is the module of the
-# headers that no other entry lists.
 PUBLIC = "public"
-LAYERS = [
-    ("base",),
-    ("primitives",),
-    ("conversion",),
-    ("backend",),
-    (PUBLIC,),
-]
 
-INCLUDE = re.compile(r"^\s*#\s*include\s*<dingo/([^>]+)>")
+# The components, with the components each may depend on.
+COMPONENTS = {
+    "base": (),
+    "diagnostics": ("base",),
+    "memory": ("base",),
+    "constructor": ("base",),
+    "type": ("base", "diagnostics", "constructor"),
+    "lookup": ("base", "diagnostics", "type"),
+    "storage": ("base", "type"),
+    "factory": ("base", "diagnostics", "type", "constructor"),
+    "conversion": (
+        "base",
+        "diagnostics",
+        "memory",
+        "type",
+        "lookup",
+        "storage",
+        "factory",
+    ),
+    "selection": (
+        "base",
+        "diagnostics",
+        "memory",
+        "constructor",
+        "type",
+        "lookup",
+        "storage",
+        "factory",
+        "conversion",
+    ),
+    "backend": (
+        "base",
+        "diagnostics",
+        "memory",
+        "constructor",
+        "type",
+        "lookup",
+        "storage",
+        "factory",
+        "conversion",
+        "selection",
+    ),
+}
+
+# The headers that are not in the directory of their component yet.
+MOVING = {
+    "primitives/message": "diagnostics",
+    "primitives/diagnostic_message": "diagnostics",
+    "primitives/exceptions": "diagnostics",
+    "primitives/compile_diagnostics.gen": "diagnostics",
+    "primitives/diagnostics.gen": "diagnostics",
+    "primitives/type_name": "diagnostics",
+    "primitives/type_path": "diagnostics",
+    "primitives/allocation": "memory",
+    "primitives/retained": "memory",
+    "primitives/slot": "memory",
+    "primitives/constructor": "constructor",
+    "primitives/constructor_probe": "constructor",
+    "primitives/constructor_arity": "constructor",
+    "primitives/constructor_arity_msvc": "constructor",
+    "primitives/constructor_signature": "constructor",
+    "primitives/constructor_signature_msvc": "constructor",
+    "primitives/constructor_detection": "constructor",
+    "primitives/type_tree": "type",
+    "conversion/operations.gen": "type",
+    "conversion/wrapper_semantics.gen": "type",
+    "conversion/wrapper_traits": "type",
+    "conversion/collection": "type",
+    "conversion/annotated": "type",
+    "conversion/type_conversion": "type",
+    "conversion/auto_constructible": "type",
+    "conversion/key": "lookup",
+    "conversion/key_kinds.gen": "lookup",
+    "conversion/lookup": "lookup",
+    "backend/index": "lookup",
+    "conversion/storage_forms.gen": "storage",
+    "conversion/scopes.gen": "storage",
+    "conversion/construct": "factory",
+    "conversion/route": "conversion",
+    "conversion/convert": "conversion",
+    "conversion/selection_rules.gen": "selection",
+    "conversion/request": "selection",
+    "backend/selection": "selection",
+    "backend/diagnose": "selection",
+    "backend/slot": "backend",
+    "backend/memo": "backend",
+    "backend/local": "backend",
+    "backend/static_backend": "backend",
+    "backend/runtime_backend": "backend",
+    # Public headers that are in the directory of a component and include
+    # registration.h, so they belong to the top component.
+    "storage/external": PUBLIC,
+    "storage/shared": PUBLIC,
+    "storage/shared_cyclical": PUBLIC,
+    "storage/unique": PUBLIC,
+    "factory/constructor": PUBLIC,
+    "lookup/lookup": PUBLIC,
+    "lookup/indexes": PUBLIC,
+}
+
+# Includes that violate the structure and that a planned change removes.
+KNOWN = {
+    # The conflicts of two bindings move out of the lookup declarations.
+    ("conversion/lookup", "conversion/route"),
+    # The key side of the annotated interfaces moves to lookup.
+    ("conversion/annotated", "conversion/key"),
+}
+
+INCLUDE = re.compile(r"^\s*#\s*include\s*<dingo/([^>]+)\.(?:h|hpp)>")
 
 
-def module_of(path):
-    parts = Path(path).parts
-    if len(parts) > 1 and any(parts[0] in modules for modules in LAYERS):
+def component_of(stem):
+    if stem in MOVING:
+        return MOVING[stem]
+    parts = Path(stem).parts
+    if len(parts) > 1 and parts[0] in COMPONENTS:
         return parts[0]
     return PUBLIC
 
 
-def layer_of(module):
-    for index, modules in enumerate(LAYERS):
-        if module in modules:
-            return index
-    return None
+def allowed(source, target):
+    return (
+        source == target
+        or source == PUBLIC
+        or target in COMPONENTS.get(source, ())
+    )
 
 
 def check(include_directory):
@@ -49,32 +155,19 @@ def check(include_directory):
     for header in sorted(root.rglob("*")):
         if header.suffix not in (".h", ".hpp"):
             continue
-        source = header.relative_to(root)
-        source_module = module_of(source)
-        source_layer = layer_of(source_module)
-        if source_layer is None:
-            violations.append(f"{source}: module '{source_module}' has no layer")
-            continue
+        stem = header.relative_to(root).with_suffix("").as_posix()
+        source = component_of(stem)
         for number, line in enumerate(header.read_text().splitlines(), 1):
             match = INCLUDE.match(line)
             if not match:
                 continue
             target = match.group(1)
-            target_module = module_of(target)
-            target_layer = layer_of(target_module)
-            if target_layer is None:
-                violations.append(
-                    f"{source}:{number}: includes {target} of module "
-                    f"'{target_module}' that has no layer"
-                )
-            elif target_layer > source_layer or (
-                target_layer == source_layer and target_module != source_module
-            ):
-                violations.append(
-                    f"{source}:{number}: {source_module} (layer {source_layer}) "
-                    f"must not include {target} ({target_module}, "
-                    f"layer {target_layer})"
-                )
+            if allowed(source, component_of(target)) or (stem, target) in KNOWN:
+                continue
+            violations.append(
+                f"{stem}.h:{number}: {source} must not include {target}.h "
+                f"({component_of(target)})"
+            )
     return violations
 
 
