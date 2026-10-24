@@ -148,7 +148,7 @@ The kinds of the library, `::dingo::semantics::sole_owner`,
 `::dingo::semantics::variant_value`, `::dingo::semantics::fixed_array`,
 `::dingo::semantics::dynamic_array`, `::dingo::semantics::pointer`, and
 `::dingo::semantics::reference`, are declared so in
-[conversion/wrapper_semantics.gen.h](../../include/dingo/conversion/wrapper_semantics.gen.h).
+[type/wrapper_semantics.gen.h](../../include/dingo/type/wrapper_semantics.gen.h).
 A wrapper of a kind behaves as its properties and forms say, not as its C++ type
 does. A sharing handle without the retain form:
 
@@ -420,9 +420,9 @@ declarations that take a backend.
 
 ## Good Source Companions
 
-- [include/dingo/conversion/wrapper_traits.h](../../include/dingo/conversion/wrapper_traits.h)
-- [include/dingo/conversion/wrapper_semantics.gen.h](../../include/dingo/conversion/wrapper_semantics.gen.h)
-- [include/dingo/conversion/type_conversion.h](../../include/dingo/conversion/type_conversion.h)
+- [include/dingo/type/wrapper_traits.h](../../include/dingo/type/wrapper_traits.h)
+- [include/dingo/type/wrapper_semantics.gen.h](../../include/dingo/type/wrapper_semantics.gen.h)
+- [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
 - [include/dingo/conversion/scopes.gen.h](../../include/dingo/conversion/scopes.gen.h)
 - [include/dingo/backend/slot.h](../../include/dingo/backend/slot.h)
 - [include/dingo/backend/index.h](../../include/dingo/backend/index.h)

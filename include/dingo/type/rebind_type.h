@@ -11,7 +11,7 @@
 // the type with its leaf rebound, through its wrappers, and the marker of a
 // request that names its wrapper exactly.
 
-#include <dingo/conversion/wrapper_traits.h>
+#include <dingo/type/wrapper_traits.h>
 
 namespace dingo {
 

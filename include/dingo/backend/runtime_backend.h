@@ -16,7 +16,6 @@
 #include <dingo/backend/local.h>
 #include <dingo/backend/memo.h>
 #include <dingo/backend/slot.h>
-#include <dingo/conversion/collection.h>
 #include <dingo/conversion/convert.h>
 #include <dingo/conversion/key_kinds.gen.h>
 #include <dingo/conversion/lookup.h>
@@ -29,7 +28,8 @@
 #include <dingo/memory/allocation.h>
 #include <dingo/memory/lifetime_slot.h>
 #include <dingo/memory/retained.h>
-#include <dingo/primitives/type_tree.h>
+#include <dingo/type/collection_traits.h>
+#include <dingo/type/type_tree.h>
 
 #include <cstddef>
 #include <cstdint>

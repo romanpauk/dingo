@@ -14,10 +14,10 @@
 
 #include <dingo/container.h>
 #include <dingo/conversion/convert.h>
-#include <dingo/conversion/type_conversion.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
+#include <dingo/type/type_conversion_traits.h>
 
 #include <gtest/gtest.h>
 

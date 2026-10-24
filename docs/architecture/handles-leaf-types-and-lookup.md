@@ -9,10 +9,9 @@ matched.
 ### Type Tree
 
 A type tree is a leaf wrapped in wrappers. `core::type_tree_v<T>`, of
-[conversion/wrapper_traits.h](../../include/dingo/conversion/wrapper_traits.h),
-describes the type tree of `T` as a `constexpr` value: an array of nodes in
-preorder, defined in
-[primitives/type_tree.h](../../include/dingo/primitives/type_tree.h), so a
+[type/wrapper_traits.h](../../include/dingo/type/wrapper_traits.h), describes
+the type tree of `T` as a `constexpr` value: an array of nodes in preorder,
+defined in [type/type_tree.h](../../include/dingo/type/type_tree.h), so a
 wrapper is followed by the type trees of its arguments. A node of a wrapper
 holds the descriptor of its wrapper semantics, the family of its wrapper, and
 its cv-qualifiers; a node of a leaf holds the identity of the leaf type, the
@@ -22,7 +21,7 @@ address of a per-type tag.
 
 A wrapper is of a wrapper semantics, a tag type whose `wrapper_semantics`
 declare its properties and forms. The kinds of the library are declared so in
-[conversion/wrapper_semantics.gen.h](../../include/dingo/conversion/wrapper_semantics.gen.h),
+[type/wrapper_semantics.gen.h](../../include/dingo/type/wrapper_semantics.gen.h),
 and the engine knows a kind only by its properties and forms:
 
 - `T*` is a wrapper of `::dingo::semantics::pointer`, `T&` of
@@ -143,7 +142,7 @@ The conversion rules is what allows those three parts to compose.
 
 - [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h)
 - [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
-- [include/dingo/conversion/wrapper_traits.h](../../include/dingo/conversion/wrapper_traits.h)
-- [include/dingo/primitives/type_tree.h](../../include/dingo/primitives/type_tree.h)
+- [include/dingo/type/wrapper_traits.h](../../include/dingo/type/wrapper_traits.h)
+- [include/dingo/type/type_tree.h](../../include/dingo/type/type_tree.h)
 - [include/dingo/conversion/route.h](../../include/dingo/conversion/route.h)
 - [include/dingo/conversion/request.h](../../include/dingo/conversion/request.h)

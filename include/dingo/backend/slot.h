@@ -13,12 +13,12 @@
 #include <dingo/base/mechanics.h>
 #include <dingo/conversion/construct.h>
 #include <dingo/conversion/scopes.gen.h>
-#include <dingo/conversion/wrapper_traits.h>
 #include <dingo/diagnostics/compile_diagnostics.gen.h>
 #include <dingo/diagnostics/diagnostics.gen.h>
 #include <dingo/diagnostics/type_name.h>
 #include <dingo/diagnostics/type_path.h>
 #include <dingo/memory/lifetime_slot.h>
+#include <dingo/type/wrapper_traits.h>
 
 #include <cstdint>
 #include <new>

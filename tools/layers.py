@@ -67,14 +67,6 @@ COMPONENTS = {
 
 # The headers that are not in the directory of their component yet.
 MOVING = {
-    "primitives/type_tree": "type",
-    "conversion/operations.gen": "type",
-    "conversion/wrapper_semantics.gen": "type",
-    "conversion/wrapper_traits": "type",
-    "conversion/collection": "type",
-    "conversion/annotated": "type",
-    "conversion/type_conversion": "type",
-    "conversion/auto_constructible": "type",
     "conversion/key": "lookup",
     "conversion/key_kinds.gen": "lookup",
     "conversion/lookup": "lookup",
@@ -109,7 +101,7 @@ KNOWN = {
     # The conflicts of two bindings move out of the lookup declarations.
     ("conversion/lookup", "conversion/route"),
     # The key side of the annotated interfaces moves to lookup.
-    ("conversion/annotated", "conversion/key"),
+    ("type/annotated", "conversion/key"),
 }
 
 INCLUDE = re.compile(r"^\s*#\s*include\s*<dingo/([^>]+)\.(?:h|hpp)>")

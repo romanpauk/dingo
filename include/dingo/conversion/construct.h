@@ -16,8 +16,8 @@
 
 #include <dingo/base/mechanics.h>
 #include <dingo/constructor/constructor.h>
-#include <dingo/conversion/wrapper_traits.h>
 #include <dingo/diagnostics/compile_diagnostics.gen.h>
+#include <dingo/type/wrapper_traits.h>
 
 #include <functional>
 #include <new>

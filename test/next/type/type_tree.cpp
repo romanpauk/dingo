@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 //
 
-#include <dingo/conversion/wrapper_traits.h>
+#include <dingo/type/wrapper_traits.h>
 
 #include <gtest/gtest.h>
 

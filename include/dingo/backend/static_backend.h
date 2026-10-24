@@ -16,8 +16,6 @@
 #include <dingo/backend/slot.h>
 #include <dingo/base/config.h>
 #include <dingo/base/mechanics.h>
-#include <dingo/conversion/annotated.h>
-#include <dingo/conversion/collection.h>
 #include <dingo/conversion/convert.h>
 #include <dingo/conversion/key_kinds.gen.h>
 #include <dingo/conversion/lookup.h>
@@ -26,6 +24,8 @@
 #include <dingo/conversion/scopes.gen.h>
 #include <dingo/diagnostics/diagnostic_message.h>
 #include <dingo/memory/retained.h>
+#include <dingo/type/annotated.h>
+#include <dingo/type/collection_traits.h>
 
 #include <cstddef>
 #include <tuple>

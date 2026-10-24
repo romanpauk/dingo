@@ -20,8 +20,8 @@
 #include <dingo/conversion/key_kinds.gen.h>
 #include <dingo/conversion/scopes.gen.h>
 #include <dingo/conversion/storage_forms.gen.h>
-#include <dingo/conversion/wrapper_traits.h>
-#include <dingo/primitives/type_tree.h>
+#include <dingo/type/type_tree.h>
+#include <dingo/type/wrapper_traits.h>
 
 #include <cstddef>
 #include <cstdint>

@@ -198,7 +198,7 @@ parent.
 If no level names a binding, a request of a value or a const lvalue reference of
 an unregistered type that `is_auto_constructible` declares, a complete aggregate
 by default, and whose constructor is detected, constructs it. That rule is in
-[conversion/auto_constructible.h](../../include/dingo/conversion/auto_constructible.h).
+[type/auto_constructible.h](../../include/dingo/type/auto_constructible.h).
 
 The detection lives in
 [constructor/constructor_detection.h](../../include/dingo/constructor/constructor_detection.h)

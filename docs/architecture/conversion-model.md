@@ -27,12 +27,12 @@ The full conversion behavior comes from a few sources of data:
 
 The important source files are:
 
-- [include/dingo/conversion/operations.gen.h](../../include/dingo/conversion/operations.gen.h)
-- [include/dingo/conversion/wrapper_semantics.gen.h](../../include/dingo/conversion/wrapper_semantics.gen.h)
+- [include/dingo/type/operations.gen.h](../../include/dingo/type/operations.gen.h)
+- [include/dingo/type/wrapper_semantics.gen.h](../../include/dingo/type/wrapper_semantics.gen.h)
 - [include/dingo/conversion/scopes.gen.h](../../include/dingo/conversion/scopes.gen.h)
 - [include/dingo/conversion/route.h](../../include/dingo/conversion/route.h)
 - [include/dingo/conversion/convert.h](../../include/dingo/conversion/convert.h)
-- [include/dingo/conversion/type_conversion.h](../../include/dingo/conversion/type_conversion.h)
+- [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
 
 ## Reachable Types And Operations
 

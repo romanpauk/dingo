@@ -62,4 +62,4 @@ The main owners are:
 - [include/dingo/backend/static_backend.h](../../include/dingo/backend/static_backend.h)
 - [include/dingo/backend/runtime_backend.h](../../include/dingo/backend/runtime_backend.h)
 - [include/dingo/backend/slot.h](../../include/dingo/backend/slot.h)
-- [include/dingo/conversion/wrapper_traits.h](../../include/dingo/conversion/wrapper_traits.h)
+- [include/dingo/type/wrapper_traits.h](../../include/dingo/type/wrapper_traits.h)

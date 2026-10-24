@@ -16,7 +16,7 @@
 #include <dingo/conversion/key.h>
 #include <dingo/conversion/route.h>
 #include <dingo/diagnostics/compile_diagnostics.gen.h>
-#include <dingo/primitives/type_tree.h>
+#include <dingo/type/type_tree.h>
 
 #include <cstddef>
 

@@ -1237,10 +1237,10 @@ the thunk signature. Add the layering rule to `layers-check`.
 Done when no primitive header refers to a scope, type tree kind, rule, or
 diagnostic.
 
-`primitives/type_tree.h` describes the type tree of a C++ type as a constexpr
-preorder array of nodes, comparable in constant expressions, without knowing the
-wrapper semantics of the spec. `conversion/wrapper_traits.h`, a wrapper between
-the declarations and the engine, classifies C++ types into wrapper semantics:
+`type/type_tree.h` describes the type tree of a C++ type as a constexpr preorder
+array of nodes, comparable in constant expressions, without knowing the wrapper
+semantics of the spec. `type/wrapper_traits.h`, a wrapper between the
+declarations and the engine, classifies C++ types into wrapper semantics:
 pointers, references, and arrays as language wrappers, and the standard wrappers
 through the same `wrapper_traits` a user wrapper specializes.
 `memory/lifetime_slot.h` holds the lazy and external lifetime slots; the lazy
@@ -1268,8 +1268,8 @@ Status: in progress.
 Generate the declarations enums, the public tag types, the descriptor structs,
 and `descriptor_v`.
 
-`conversion/wrapper_semantics.gen.h`, `operations.gen.h`, `storage_forms.gen.h`,
-and `scopes.gen.h` hold the wrapper semantics with their traits, the value and
+`type/wrapper_semantics.gen.h`, `operations.gen.h`, `storage_forms.gen.h`, and
+`scopes.gen.h` hold the wrapper semantics with their traits, the value and
 request categories, the storage forms, the scope descriptors with their exposure
 tables, and the route rules as constexpr data, generated from the spec.
 `type_tree_v<T>` is the descriptor of a type. Remaining: the public tag types.

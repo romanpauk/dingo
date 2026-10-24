@@ -21,17 +21,17 @@
 // container completes the reachable type in the same way.
 
 #include <dingo/base/mechanics.h>
-#include <dingo/conversion/annotated.h>
 #include <dingo/conversion/construct.h>
 #include <dingo/conversion/route.h>
 #include <dingo/conversion/scopes.gen.h>
-#include <dingo/conversion/type_conversion.h>
-#include <dingo/conversion/wrapper_traits.h>
 #include <dingo/diagnostics/compile_diagnostics.gen.h>
 #include <dingo/diagnostics/diagnostics.gen.h>
 #include <dingo/diagnostics/type_name.h>
 #include <dingo/memory/retained.h>
-#include <dingo/primitives/type_tree.h>
+#include <dingo/type/annotated.h>
+#include <dingo/type/type_conversion_traits.h>
+#include <dingo/type/type_tree.h>
+#include <dingo/type/wrapper_traits.h>
 
 #include <cstddef>
 #include <cstdint>

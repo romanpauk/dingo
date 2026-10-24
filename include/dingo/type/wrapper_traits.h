@@ -24,11 +24,11 @@
 
 #include <dingo/base/mechanics.h>
 #include <dingo/constructor/constructor.h>
-#include <dingo/conversion/collection.h>
-#include <dingo/conversion/operations.gen.h>
-#include <dingo/conversion/wrapper_semantics.gen.h>
 #include <dingo/diagnostics/compile_diagnostics.gen.h>
-#include <dingo/primitives/type_tree.h>
+#include <dingo/type/collection_traits.h>
+#include <dingo/type/operations.gen.h>
+#include <dingo/type/type_tree.h>
+#include <dingo/type/wrapper_semantics.gen.h>
 
 #include <cstddef>
 #include <cstdint>

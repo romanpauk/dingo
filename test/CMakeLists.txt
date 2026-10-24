@@ -272,7 +272,7 @@ add_executable(dingo_next_test
     next/memory/transaction_log.cpp
     next/diagnostics/type_name.cpp
     next/conversion/request_types.cpp
-    next/conversion/type_tree.cpp
+    next/type/type_tree.cpp
     "${DINGO_NEXT_GENERATED_DIR}/conversion_cases.cpp"
 )
 target_include_directories(dingo_next_test PRIVATE

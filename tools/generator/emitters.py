@@ -268,7 +268,7 @@ def selection_fields(rule):
 
 
 def operations(spec):
-    """include/dingo/conversion/operations.gen.h from the wrapper semantics and the
+    """include/dingo/type/operations.gen.h from the wrapper semantics and the
     operations."""
     from spec.schema import Access, ValueCategory
 
@@ -284,7 +284,7 @@ def operations(spec):
     )
     return [
         GeneratedFile(
-            path="include/dingo/conversion/operations.gen.h",
+            path="include/dingo/type/operations.gen.h",
             content=content,
             spec_ids=("wrapper_semantics", "operations", "routes"),
         )
@@ -358,7 +358,7 @@ def key_kinds(spec):
 
 
 def wrapper_semantics(spec):
-    """include/dingo/conversion/wrapper_semantics.gen.h from the wrapper semantics
+    """include/dingo/type/wrapper_semantics.gen.h from the wrapper semantics
     and cpp.semantics_tags: the tag of each wrapper semantics of the library and
     its wrapper_semantics, the declaration the semantics of a user make too."""
     spellings = {p.semantics: p.spelling for p in spec.cpp.semantics_tags}
@@ -380,7 +380,7 @@ def wrapper_semantics(spec):
     ]
     return [
         GeneratedFile(
-            path="include/dingo/conversion/wrapper_semantics.gen.h",
+            path="include/dingo/type/wrapper_semantics.gen.h",
             content=render(
                 "wrapper_semantics.gen.h.j2",
                 namespace=namespaces.pop(),

@@ -11,13 +11,12 @@
 // constructor parameter takes.
 
 #include <dingo/backend/selection.h>
-#include <dingo/conversion/annotated.h>
 #include <dingo/conversion/key.h>
 #include <dingo/conversion/request.h>
-#include <dingo/conversion/wrapper_traits.h>
 #include <dingo/key.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/rebind_type.h>
+#include <dingo/type/wrapper_traits.h>
 
 #include <gtest/gtest.h>
 

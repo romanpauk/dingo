@@ -14,7 +14,7 @@
 #include <dingo/conversion/key_kinds.gen.h>
 #include <dingo/diagnostics/compile_diagnostics.gen.h>
 #include <dingo/diagnostics/type_name.h>
-#include <dingo/primitives/type_tree.h>
+#include <dingo/type/type_tree.h>
 
 #include <string>
 #include <type_traits>

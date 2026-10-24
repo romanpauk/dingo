@@ -938,7 +938,7 @@ are obsolete.
   `type_identity_fixture.cpp` + `type_identity_shared.h`
   `next_type_identity.the_identity_of_a_type_is_one_across_units` (also
   static_asserts on equality during constant evaluation); tests
-  `primitives/type_tree.h` `type_id_v`, `base/mechanics.h`
+  `type/type_tree.h` `type_id_v`, `base/mechanics.h`
   `type_tag`/`named_type_ids`. Passes with the default variant and with
   `-DDINGO_VARIANT_NAMED_TYPE_ID=1`.
 - `type_identity_test.descriptors_of_different_types_compare_unequal`:
@@ -1026,7 +1026,7 @@ are obsolete.
   `annotated<T, Tag>` copies a T that is copyable but neither movable nor
   default-constructible. **replaced**: `test/next/conversion/request_types.cpp`
   `next_request_types.an_annotated_value_copies_a_copy_only_value` (annotated
-  and keyed, from an lvalue and an rvalue); tests `conversion/annotated.h` and
+  and keyed, from an lvalue and an rvalue); tests `type/annotated.h` and
   `conversion/key.h` `keyed`.
 - (file-scope static_asserts) `detail::recursion_guard` not copyable or movable:
   the old RAII recursion guard cannot be copied. **obsolete**: next guards
@@ -1039,7 +1039,7 @@ are obsolete.
   static_asserts in `test/next/conversion/request_types.cpp` on
   `core::replace_leaf_t<user_shared<impl>, iface>`,
   `dingo::rebind_type_t<user_unique<impl>, iface>`, `leaf_type_t`; tests
-  `conversion/wrapper_traits.h`, `api/type/rebind_type.h`.
+  `type/wrapper_traits.h`, `api/type/rebind_type.h`.
 - (file-scope static_asserts) `dingo::is_copy_constructible_v` of wrappers and
   std containers: shared and optional copy; unique, vector<unique>, map\<int,
   unique_ptr> do not. **replaced**: static_asserts on
@@ -1055,8 +1055,8 @@ are obsolete.
   `core::leaf_of_t`, `core::resolved_t`, `core::annotated_request`,
   `annotated_traits`, and the annotated request descriptor leaf
   (`type_id_v<annotated<service, tag>>`); tests `conversion/request.h`,
-  `backend/selection.h`, `conversion/annotated.h`. The
-  `removes_rvalue_references` mode has no counterpart (obsolete)
+  `backend/selection.h`, `type/annotated.h`. The `removes_rvalue_references`
+  mode has no counterpart (obsolete)
 - (file-scope static_asserts) annotated constructibility (shared_ptr yes,
   unique_ptr from const& no): annotated values copy copyable values and refuse
   to copy move-only ones. **replaced**: static_asserts in `request_types.cpp`
@@ -1098,7 +1098,7 @@ are not observed through the public API of the baseline and are recorded only:
   variants, addresses, arrays, and volatile bindings. **replaced**:
   `test/next/conversion/routes.cpp`:
   `next_engine.a_conversion_needs_the_access_it_declares` (tests
-  `conversion/type_conversion.h` `converts`),
+  `type/type_conversion_traits.h` `converts`),
   `next_engine.a_consumed_object_is_moved_wrapped_or_adopted` (`int*` makes a
   `shared_ptr` only when consumed),
   `next_engine.a_qualified_object_is_served_with_its_qualifiers` (volatile
@@ -1116,7 +1116,7 @@ are not observed through the public API of the baseline and are recorded only:
   borrowed conversion by converting constructor uses the const source and leaves
   it intact. **replaced**: `test/next/conversion/routes.cpp`
   `next_engine.a_borrowed_conversion_leaves_its_source`
-  (`conversion/type_conversion.h` `convert_to`);
+  (`type/type_conversion_traits.h` `convert_to`);
   `test/next/containers/stored_type_trees.cpp`
   `next_stored_type_trees.a_borrowed_user_handle_converts_from_a_const_source`
   (the `keep_step` of `conversion/convert.h` converts `std::as_const`)
@@ -1124,7 +1124,7 @@ are not observed through the public API of the baseline and are recorded only:
   conversion whose target is its source type is used, not the identity.
   **replaced**: `test/next/conversion/routes.cpp`
   `next_engine.a_declared_conversion_is_used_for_its_target`; tests
-  `conversion/type_conversion.h`.
+  `type/type_conversion_traits.h`.
 - `type_registration_test.borrowed_optional_conversion_uses_const_contained_value`:
   converting an optional of an owner to an optional of a copy borrows the
   contained value as const. **replaced**: the const-source property:
@@ -1146,7 +1146,7 @@ are not observed through the public API of the baseline and are recorded only:
   variant target. **replaced**: `test/next/conversion/routes.cpp`
   `next_engine.a_declared_conversion_is_used_for_its_target` (a conversion that
   returns an object the target is constructed from); tests
-  `conversion/type_conversion.h`.
+  `type/type_conversion_traits.h`.
 - `type_registration_test.borrowed_storage_publishes_fresh_move_only_conversion_results`:
   external `move_source*` with interfaces serves a move-only interface by value
   through the declared conversion. **ported**:
@@ -1249,10 +1249,9 @@ are not observed through the public API of the baseline and are recorded only:
   `test/next/conversion/routes.cpp`
   `next_engine.a_request_names_the_leaf_through_its_wrappers`; tests
   `conversion/request.h` (`request_traits::descriptor`, `kind`, `made_type`) and
-  `conversion/wrapper_traits.h` (`leaf_of_t`). `request_may_escape_v` is
-  replaced by `request_kind`: an lvalue reference refers to a kept object. The
-  retention of rvalue requests is in
-  `next_unique.retains_the_object_of_an_rvalue_reference`.
+  `type/wrapper_traits.h` (`leaf_of_t`). `request_may_escape_v` is replaced by
+  `request_kind`: an lvalue reference refers to a kept object. The retention of
+  rvalue requests is in `next_unique.retains_the_object_of_an_rvalue_reference`.
 
 ### test/registration/type_registration.cpp
 
@@ -1488,7 +1487,7 @@ ported retention tests declare their dependencies, as the old ones did.
   a `type_conversion_traits` whose `convert` returns another type constructs the
   target explicitly from it. **replaced**:
   `next_execute.a_declared_conversion_constructs_its_target_explicitly`. Tests
-  `conversion/type_conversion.h` (`declares_conversion`, `converts`,
+  `type/type_conversion_traits.h` (`declares_conversion`, `converts`,
   `convert_to`)
 - `resolution_operation_test.shared_fixed_array_storage_reset_destroys_elements_in_reverse_order`:
   a shared `T[3]` destroys its elements in reverse order. **ported**:
