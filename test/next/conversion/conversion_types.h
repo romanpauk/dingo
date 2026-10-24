@@ -7,7 +7,7 @@
 
 #pragma once
 
-// The types of the generated engine cases: leaves with the properties the
+// The types of the generated conversion cases: leaves with the properties the
 // route rules depend on, an implementation of two interfaces, and a user
 // wrapper family of each wrapper wrapper semantics.
 

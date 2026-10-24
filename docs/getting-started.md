@@ -55,7 +55,7 @@ selected storage and scope allow it.
 from policies such as:
 
 - [scope](core-concepts.md#scopes): how long the stored instance lives
-- [storage](core-concepts.md#storage-forms): what form of the instance is stored
+- [storage](core-concepts.md#storage-kinds): what form of the instance is stored
 - [interfaces](core-concepts.md#interfaces-and-service-locator-style-resolution):
   which types can be used to resolve it
 - [factory](core-concepts.md#factories): how the instance is created
@@ -89,7 +89,7 @@ container.register_type<scope<shared>, storage<std::unique_ptr<B>>>();
 container.register_type<scope<unique>, storage<C>>();
 
 // Constructor arguments are resolved recursively, including ownership
-// conversions from the registered storage forms.
+// conversions from the registered storage kinds.
 C c = container.resolve<C>();
 
 struct D {

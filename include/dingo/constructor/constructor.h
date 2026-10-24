@@ -18,7 +18,7 @@
 // and a scalar is value-initialized.
 //
 // The detection, with its backends and its signature mode, is in
-// constructor_detection.h; this header holds what the engine uses.
+// constructor_detection.h; this header holds what the factories use.
 
 #include <dingo/base/config.h>
 #include <dingo/base/mechanics.h>

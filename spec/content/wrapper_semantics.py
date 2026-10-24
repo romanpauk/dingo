@@ -14,7 +14,7 @@ from spec.schema import SemanticsOperation, WrapperSemantics, Property, Operatio
 
 
 def form(rule_id, op, description, target=None):
-    return SemanticsOperation(id=rule_id, form=op, description=description, target=target)
+    return SemanticsOperation(id=rule_id, operation=op, description=description, target=target)
 
 wrapper_semantics: tuple[WrapperSemantics, ...] = (
     WrapperSemantics(
@@ -28,7 +28,7 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
             Property.CONSTRUCTIBLE,
             Property.MAPPED,
         ),
-        forms=(
+        operations=(
             form("select_alternative", Operation.BORROW, "Borrows the held alternative."),
             form(
                 "take_alternative",
@@ -48,7 +48,7 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
             Property.CONSTRUCTIBLE,
             Property.IMMOVABLE,
         ),
-        forms=(
+        operations=(
             form(
                 "decay_array",
                 Operation.DECAY,
@@ -72,7 +72,7 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
         ),
         parameters=1,
         traits=(Property.UNSIZED, Property.IN_PLACE, Property.IMMOVABLE),
-        forms=(
+        operations=(
             form(
                 "decay_unbounded_array",
                 Operation.DECAY,
@@ -94,7 +94,7 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
             Property.CONSTRUCTIBLE,
             Property.MAPPED,
         ),
-        forms=(
+        operations=(
             form("borrow_optional", Operation.BORROW, "Borrows the element of an optional."),
             form(
                 "take_optional",
@@ -119,7 +119,7 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
             Property.CONSTRUCTIBLE,
             Property.MAPPED,
         ),
-        forms=(
+        operations=(
             form(
                 "borrow_owned",
                 Operation.BORROW,
@@ -156,7 +156,7 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
             Property.CONSTRUCTIBLE,
             Property.COPYABLE,
         ),
-        forms=(
+        operations=(
             form("deref_pointer", Operation.BORROW, "Borrows the element a pointer points to."),
             form(
                 "address_of",
@@ -187,7 +187,7 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
         description="A non-owning, non-null alias of one element of a type tree.",
         parameters=1,
         traits=(Property.BORROWABLE,),
-        forms=(
+        operations=(
             form(
                 "deref_reference",
                 Operation.BORROW,
@@ -208,7 +208,7 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
             Property.COPYABLE,
             Property.MAPPED,
         ),
-        forms=(
+        operations=(
             form(
                 "borrow_shared",
                 Operation.BORROW,

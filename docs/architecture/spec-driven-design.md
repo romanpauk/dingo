@@ -1103,10 +1103,10 @@ Status: done.
 Specify the conversion rules, the C++ section, and the four scopes as
 descriptors.
 
-The spec records 8 wrapper semantics, 10 storage forms as patterns over wrapper
+The spec records 8 wrapper semantics, 10 storage kinds as patterns over wrapper
 semantics, and the four scopes with their slot, materialized category,
 stability, source access, recursion guard, source retention, and the request
-categories they publish per storage form. `shared_cyclical` publishes the leaf
+categories they publish per storage kind. `shared_cyclical` publishes the leaf
 and a sharing handle whatever the stored form, which its descriptor records as
 its own exposure rule. The C++ section names only the scope tags. The
 [Scope Check](../development.md#scope-check) compares the descriptors with the
@@ -1268,9 +1268,9 @@ Status: in progress.
 Generate the declarations enums, the public tag types, the descriptor structs,
 and `descriptor_v`.
 
-`type/wrapper_semantics.gen.h`, `operations.gen.h`, `storage_forms.gen.h`, and
+`type/wrapper_semantics.gen.h`, `operations.gen.h`, `storage_kinds.gen.h`, and
 `scopes.gen.h` hold the wrapper semantics with their traits, the value and
-request categories, the storage forms, the scope descriptors with their exposure
+request categories, the storage kinds, the scope descriptors with their exposure
 tables, and the route rules as constexpr data, generated from the spec.
 `type_tree_v<T>` is the descriptor of a type. Remaining: the public tag types.
 Since M10.3, `operations.gen.h` holds the conversion rules, the value
@@ -1911,7 +1911,7 @@ arrays, the pointer, and the reference, are generated from the spec as such
 declarations, and `std::` and language types map onto them through
 `wrapper_traits` as a user type does. The engine knows no kind by name: a node
 of a type tree holds the identity of its kind, its properties, and its forms,
-and the rules of a derivation are the forms of its kinds. A storage form is a
+and the rules of a derivation are the forms of its kinds. A storage kind is a
 classification of the properties of the outer wrappers, which a scope exposes
 categories for. A derivation prefers, of two routes of as many rules, the one
 whose forms come first in the order of the conversion rules; it orders forms,

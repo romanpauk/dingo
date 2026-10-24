@@ -42,7 +42,7 @@ from spec.schema import (
     WrapperSemantics,
     Property,
     LookupFilter,
-    PatternForm,
+    PatternKind,
     Predicate,
     PublicApiEntry,
     RequestCategory,
@@ -58,7 +58,7 @@ from spec.schema import (
     Slot,
     SourceAccess,
     Spec,
-    StorageForm,
+    StorageKind,
     Status,
     StepCondition,
     ValueCategory,
@@ -69,11 +69,11 @@ from spec.schema import (
 
 
 def variable(name):
-    return TypeTreePattern(form=PatternForm.VARIABLE, name=name)
+    return TypeTreePattern(kind=PatternKind.VARIABLE, name=name)
 
 
 def wrapper(name, *args):
-    return TypeTreePattern(form=PatternForm.SEMANTICS, name=name, args=args)
+    return TypeTreePattern(kind=PatternKind.SEMANTICS, name=name, args=args)
 
 
 def sample_spec() -> Spec:
@@ -90,9 +90,9 @@ def sample_spec() -> Spec:
             WrapperSemantics(id="alt", description="An alternative.", parameters=1, variadic=True),
             WrapperSemantics(id="array", description="A sized array.", parameters=1, has_extent=True),
         ),
-        storage_forms=(
-            StorageForm(id="plain", description="The leaf."),
-            StorageForm(
+        storage_kinds=(
+            StorageKind(id="plain", description="The leaf."),
+            StorageKind(
                 id="unique_handle",
                 description="An owning handle.",
                 outer=PropertyClass(has=(Property.OWNING,)),
@@ -108,10 +108,10 @@ def sample_spec() -> Spec:
                 source_access=SourceAccess.BORROW,
                 exposures=(
                     Exposure(
-                        form="plain",
+                        storage_kind="plain",
                         categories=(RequestCategory.VALUE, RequestCategory.LVALUE),
                     ),
-                    Exposure(form="unique_handle", categories=(RequestCategory.LVALUE,)),
+                    Exposure(storage_kind="unique_handle", categories=(RequestCategory.LVALUE,)),
                 ),
             ),
             Scope(
@@ -122,7 +122,7 @@ def sample_spec() -> Spec:
                 stable=True,
                 source_access=SourceAccess.BORROW,
                 extends="shared",
-                exposures=(Exposure(form="plain", categories=(RequestCategory.LVALUE,)),),
+                exposures=(Exposure(storage_kind="plain", categories=(RequestCategory.LVALUE,)),),
                 phases=("publish", "complete"),
                 needs=("instance",),
             ),
@@ -132,7 +132,7 @@ def sample_spec() -> Spec:
                 id="address_of",
                 description="Takes the address of a stable lvalue.",
                 from_type_tree=TypeTreePattern(
-                    form=PatternForm.VARIABLE, name="X", category=ValueCategory.LVALUE
+                    kind=PatternKind.VARIABLE, name="X", category=ValueCategory.LVALUE
                 ),
                 to_type_tree=wrapper("ptr", variable("X")),
                 access=Access.BORROW,
@@ -143,7 +143,7 @@ def sample_spec() -> Spec:
                 description="Dereferences a pointer.",
                 from_type_tree=wrapper("ptr", variable("X")),
                 to_type_tree=TypeTreePattern(
-                    form=PatternForm.ROUTE, args=(variable("X"),)
+                    kind=PatternKind.ROUTE, args=(variable("X"),)
                 ),
                 access=Access.INHERIT,
             ),
@@ -151,9 +151,9 @@ def sample_spec() -> Spec:
                 id="wrapper_borrow",
                 description="Borrows from a wrapper.",
                 from_type_tree=TypeTreePattern(
-                    form=PatternForm.WRAPPER, name="W", args=(variable("X"),)
+                    kind=PatternKind.WRAPPER, name="W", args=(variable("X"),)
                 ),
-                to_type_tree=TypeTreePattern(form=PatternForm.ROUTE, args=(variable("X"),)),
+                to_type_tree=TypeTreePattern(kind=PatternKind.ROUTE, args=(variable("X"),)),
                 access=Access.INHERIT,
                 where=(Requirement(predicate=Predicate.BORROWABLE, subject="W"),),
             ),

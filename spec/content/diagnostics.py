@@ -365,12 +365,12 @@ diagnostics: tuple[Diagnostic, ...] = (
         reported=COMPILE,
     ),
     Diagnostic(
-        id="scope_form_not_stored",
+        id="scope_kind_not_stored",
         condition="The scope of a binding does not store the form of its stored type.",
         exception=None,
         message="the scope of the binding does not store {stored}",
         placeholders=("stored",),
-        fallback_carrier="scope_form_not_stored_carrier",
+        fallback_carrier="scope_kind_not_stored_carrier",
         reported=COMPILE,
     ),
     Diagnostic(

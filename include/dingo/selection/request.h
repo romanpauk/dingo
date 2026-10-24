@@ -47,10 +47,10 @@ constexpr type_tree request_type_tree() {
 // The descriptor of a request of the type `Request` by the key `Key`, which
 // may carry the annotation of the interface it names.
 template <typename Request, typename Key = no_key> struct request_traits {
-  static constexpr request_form kind =
-      std::is_lvalue_reference_v<Request>   ? request_form::lvalue_reference
-      : std::is_rvalue_reference_v<Request> ? request_form::rvalue_reference
-                                            : request_form::value;
+  static constexpr request_kind kind =
+      std::is_lvalue_reference_v<Request>   ? request_kind::lvalue_reference
+      : std::is_rvalue_reference_v<Request> ? request_kind::rvalue_reference
+                                            : request_kind::value;
   // The type the request asks for, which a reachable type of its type tree
   // provides, with the qualifiers of the objects it holds or refers to.
   using value_type = std::remove_cv_t<std::remove_reference_t<Request>>;

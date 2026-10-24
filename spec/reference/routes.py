@@ -1,6 +1,6 @@
 """The reference implementation of registration and route derivation.
 
-It interprets the storage forms, scope descriptors, wrapper semantics, and route
+It interprets the storage kinds, scope descriptors, wrapper semantics, and route
 rules of the spec over abstract type_trees, and computes, for a binding and a
 request, whether the binding can be registered, whether the request finds the
 binding and is served, and what serving it observably does: how many leaves
@@ -25,7 +25,7 @@ from spec.schema import (
     ExposureRule,
     PropertyClass,
     Property,
-    PatternForm,
+    PatternKind,
     Predicate,
     RequestCategory,
     Operation,
@@ -100,7 +100,7 @@ def wrapper(kind: str, *args: TypeTree, extent: int | None = None, family: str |
     return TypeTree(wrapper=kind, args=args, extent=extent, family=family)
 
 
-class RequestForm:
+class RequestKind:
     LVALUE_REFERENCE = "lvalue_reference"
     RVALUE_REFERENCE = "rvalue_reference"
     VALUE = "value"
@@ -187,9 +187,9 @@ def has_trait(model: "Model", type_tree: TypeTree, trait: Property) -> bool:
     return type_tree.wrapper is not None and trait in model.semantics_by_id[type_tree.wrapper].traits
 
 
-def has_form(model: "Model", type_tree: TypeTree, form: Operation) -> bool:
+def has_operation(model: "Model", type_tree: TypeTree, form: Operation) -> bool:
     return type_tree.wrapper is not None and any(
-        op.form is form for op in model.semantics_by_id[type_tree.wrapper].forms
+        op.operation is form for op in model.semantics_by_id[type_tree.wrapper].operations
     )
 
 
@@ -244,7 +244,7 @@ def leaves_held_by_value(model: "Model", type_tree: TypeTree) -> int:
 def addressable(model: "Model", type_tree: TypeTree) -> bool:
     """Whether a type tree is an object that can be referred to and pointed to:
     anything but an address, a wrapper of a kind of the address form."""
-    return not has_form(model, type_tree, Operation.ADDRESS)
+    return not has_operation(model, type_tree, Operation.ADDRESS)
 
 
 def innermost_leaf(type_tree: TypeTree) -> Leaf:
@@ -277,12 +277,12 @@ def type_trees_match(derived: TypeTree, requested: TypeTree) -> bool:
 
 def match(model: "Model", pattern, type_tree: TypeTree, bindings: dict) -> list[dict]:
     """Every way the pattern matches the type tree, as variable bindings."""
-    if pattern.form is PatternForm.VARIABLE:
+    if pattern.kind is PatternKind.VARIABLE:
         bound = bindings.get(pattern.name)
         if bound is not None and bound != type_tree:
             return []
         return [{**bindings, pattern.name: type_tree}]
-    if pattern.form is not PatternForm.SEMANTICS or type_tree.wrapper != pattern.name:
+    if pattern.kind is not PatternKind.SEMANTICS or type_tree.wrapper != pattern.name:
         return []
     if model.semantics_by_id[pattern.name].variadic:
         # The variadic wrapper pattern of one argument matches any argument,
@@ -301,7 +301,7 @@ def match(model: "Model", pattern, type_tree: TypeTree, bindings: dict) -> list[
 
 
 def instantiate(model: "Model", pattern, bindings: dict, family: str | None) -> TypeTree:
-    if pattern.form is PatternForm.VARIABLE:
+    if pattern.kind is PatternKind.VARIABLE:
         return bindings[pattern.name]
     args = tuple(instantiate(model, arg, bindings, None) for arg in pattern.args)
     kind = pattern.name
@@ -331,11 +331,11 @@ def property_class_holds(model: Model, property_class, type_tree: TypeTree) -> b
     )
 
 
-def storage_form(model: Model, type_tree: TypeTree) -> str:
-    """The most specific storage form the type tree is of, by the properties of
+def storage_kind(model: Model, type_tree: TypeTree) -> str:
+    """The most specific storage kind the type tree is of, by the properties of
     the kinds of its outer wrappers."""
     best, depth = "plain", 0
-    for form in model.spec.storage_forms:
+    for form in model.spec.storage_kinds:
         if form.outer is None or not property_class_holds(model, form.outer, type_tree):
             continue
         if form.inner is None:
@@ -352,7 +352,7 @@ def pattern_size(pattern) -> int:
 
 def exposed_categories(model: Model, scope_id: str, form: str) -> tuple:
     for exposure in model.scopes[scope_id].exposures:
-        if exposure.form == form:
+        if exposure.storage_kind == form:
             return exposure.categories
     return ()
 
@@ -363,12 +363,12 @@ def interface_probes(model: Model, interfaces: tuple[Leaf, ...]) -> list[Request
     probes = []
     for interface in interfaces:
         base = leaf(interface)
-        probes.append(Request(RequestForm.LVALUE_REFERENCE, base))
+        probes.append(Request(RequestKind.LVALUE_REFERENCE, base))
         for kind in model.semantics_by_id.values():
             handle = TypeTree(wrapper=kind.id, args=(base,))
             if property_class_holds(model, INTERFACE_HANDLE, handle):
                 family = ANY if is_mapped(model.semantics_by_id, kind.id) else None
-                probes.append(Request(RequestForm.VALUE, replace(handle, family=family)))
+                probes.append(Request(RequestKind.VALUE, replace(handle, family=family)))
     return probes
 
 
@@ -385,7 +385,7 @@ def register(
     if factory is not None and factory not in {kind.id for kind in model.spec.factory_kinds}:
         raise ValueError(f"unknown factory kind {factory!r}")
     scope = model.scopes[scope_id]
-    form = storage_form(model, stored)
+    form = storage_kind(model, stored)
     if not exposed_categories(model, scope_id, form):
         return False, f"{scope_id} does not store the {form} form"
     if not scope.nested_wrappers and stored.wrapper is not None:
@@ -411,12 +411,12 @@ def creates(model: Model, rule) -> bool:
     """Whether a route creates a wrapper of its kind, from an element or from a
     wrapper of the kind it leads from: wrapping, adopting, or taking an address.
     A creating form applies at the request, which names the kind it creates."""
-    if rule.form is None:
+    if rule.operation is None:
         return False
-    template = next(t for t in model.spec.operations if t.form is rule.form)
-    to_semantics = template.to_type_tree.form is PatternForm.SEMANTICS and template.to_type_tree.name == "K"
+    template = next(t for t in model.spec.operations if t.operation is rule.operation)
+    to_semantics = template.to_type_tree.kind is PatternKind.SEMANTICS and template.to_type_tree.name == "K"
     from_semantics = (
-        template.from_type_tree.form is PatternForm.SEMANTICS and template.from_type_tree.name == "K"
+        template.from_type_tree.kind is PatternKind.SEMANTICS and template.from_type_tree.name == "K"
     )
     return to_semantics and not from_semantics
 
@@ -430,7 +430,7 @@ def derive(
 ) -> list[Derivation]:
     """The reachable types a binding derives by the routes that do not create a wrapper."""
     scope = model.scopes[scope_id]
-    form = storage_form(model, stored)
+    form = storage_kind(model, stored)
     exposed = set(exposed_categories(model, scope_id, form))
     start = Derivation(stored, scope.materializes, consumed=scope.materializes is RVALUE)
     primaries = {(stored, scope.materializes): start}
@@ -473,7 +473,7 @@ def derive(
 def variadic_route(model: Model, rule_id: str) -> bool:
     """Whether a route reaches into a wrapper of a variadic kind."""
     source = model.route(rule_id).from_type_tree
-    return source.form is PatternForm.SEMANTICS and model.semantics_by_id[source.name].variadic
+    return source.kind is PatternKind.SEMANTICS and model.semantics_by_id[source.name].variadic
 
 
 def completion_class(model: Model, reachable_type: Derivation) -> str:
@@ -483,7 +483,7 @@ def completion_class(model: Model, reachable_type: Derivation) -> str:
     last = model.route(reachable_type.rules[-1])
     if last.id == "copy":
         return "copy"
-    return "decay" if last.form is Operation.DECAY else "other"
+    return "decay" if last.operation is Operation.DECAY else "other"
 
 
 def add_sibling(model: Model, primary: Derivation, derived: Derivation) -> None:
@@ -531,7 +531,7 @@ def walked(model: Model, reachable_type: Derivation) -> Derivation | None:
 
 def derived_type_trees(model: "Model", rule, bindings: dict, source: TypeTree, interfaces: tuple[Leaf, ...]):
     keeps_family = (
-        rule.from_type_tree.form is PatternForm.SEMANTICS and rule.to_type_tree.form is PatternForm.SEMANTICS
+        rule.from_type_tree.kind is PatternKind.SEMANTICS and rule.to_type_tree.kind is PatternKind.SEMANTICS
     )
     type_tree = instantiate(model, rule.to_type_tree, bindings, source.family if keeps_family else None)
     if rule.via is None:
@@ -579,7 +579,7 @@ def requirements_hold(model: Model, scope, rule, bindings: dict) -> bool:
 def accepts(model: "Model", request: Request, reachable_type: Derivation, exposed: set) -> bool:
     if not type_trees_match(reachable_type.type_tree, request.type_tree):
         return False
-    if request.kind == RequestForm.LVALUE_REFERENCE:
+    if request.kind == RequestKind.LVALUE_REFERENCE:
         return (
             reachable_type.category is LVALUE
             and RequestCategory.LVALUE in exposed
@@ -589,7 +589,7 @@ def accepts(model: "Model", request: Request, reachable_type: Derivation, expose
         return False
     if reachable_type.category is RVALUE:
         return RequestCategory.RVALUE in exposed
-    return request.kind == RequestForm.VALUE and reachable_type.category is PRVALUE
+    return request.kind == RequestKind.VALUE and reachable_type.category is PRVALUE
 
 
 def named_leaves(model: "Model", type_tree: TypeTree) -> tuple[Leaf, ...]:
@@ -681,7 +681,7 @@ def created(model: "Model", scope, reachable_types, goal: TypeTree, exposed: set
 
 
 def serve(model: "Model", scope_id, stored, request, interfaces) -> Derivation | None:
-    exposed = set(exposed_categories(model, scope_id, storage_form(model, stored)))
+    exposed = set(exposed_categories(model, scope_id, storage_kind(model, stored)))
     bound = derivation_bound(stored)
     reachable_types = derive(model, scope_id, stored, interfaces, bound)
     scope = model.scopes[scope_id]
@@ -695,7 +695,7 @@ def serve(model: "Model", scope_id, stored, request, interfaces) -> Derivation |
     order = {}
     first = {}
     for index, rule in enumerate(model.rules):
-        key = rule.form if rule.form is not None else rule.id
+        key = rule.operation if rule.operation is not None else rule.id
         order[rule.id] = first.setdefault(key, index)
     return min(
         candidates,
@@ -746,7 +746,7 @@ def resolve(
     constructions = (built, built if per_request else 0)
 
     location = leaf_location(model, reachable_type)
-    if request.kind == RequestForm.VALUE and request.type_tree.wrapper is None:
+    if request.kind == RequestKind.VALUE and request.type_tree.wrapper is None:
         identity = (None, None)
     elif location == "new":
         identity = ("new", "new")

@@ -1,14 +1,14 @@
-"""Content of the storage forms section.
+"""Content of the storage kinds section.
 
-A storage form classifies a stored type tree by the properties of the kinds of its
+A storage kind classifies a stored type tree by the properties of the kinds of its
 outer wrappers, so a wrapper semantics of the user is of a form as a kind of the
 library is. The scopes publish request lists per form, see
 spec/content/scopes.py. The forms are those of the current implementation's
-storage_form, described in include/dingo/storage/storage_scope_policy.h, plus
+storage_kind, described in include/dingo/storage/storage_scope_policy.h, plus
 the reference form that only external storage holds.
 """
 
-from spec.schema import PropertyClass, Property, StorageForm
+from spec.schema import PropertyClass, Property, StorageKind
 
 OWNING = Property.OWNING
 SHARING = Property.SHARING
@@ -21,59 +21,59 @@ UNIQUE = PropertyClass(has=(OWNING,), lacks=(SHARING, IN_PLACE, UNSIZED))
 SHARED = PropertyClass(has=(SHARING,))
 ARRAY = PropertyClass(has=(UNSIZED,))
 
-storage_forms: tuple[StorageForm, ...] = (
-    StorageForm(
+storage_kinds: tuple[StorageKind, ...] = (
+    StorageKind(
         id="alternative",
         description="An alternative of several type trees.",
         outer=PropertyClass(variadic=True),
     ),
-    StorageForm(
+    StorageKind(
         id="bounded_array",
         description="An inline array of a fixed number of elements.",
         outer=PropertyClass(extent=True),
     ),
-    StorageForm(
+    StorageKind(
         id="optional",
         description="An optional element.",
         outer=PropertyClass(has=(IN_PLACE, NULLABLE)),
     ),
-    StorageForm(
+    StorageKind(
         id="plain",
         description="The leaf value itself, or a type tree no other form matches.",
     ),
-    StorageForm(
+    StorageKind(
         id="pointer",
         description="A non-owning address of an element.",
         outer=PropertyClass(has=(NULLABLE,), lacks=(OWNING,)),
     ),
-    StorageForm(
+    StorageKind(
         id="reference",
         description="An alias of an element owned elsewhere.",
         outer=PropertyClass(has=(BORROWABLE,), lacks=(OWNING, NULLABLE)),
     ),
-    StorageForm(
+    StorageKind(
         id="shared_array_handle",
         description="A sharing handle of an array of runtime size.",
         outer=SHARED,
         inner=ARRAY,
     ),
-    StorageForm(
+    StorageKind(
         id="shared_handle",
         description="A sharing handle of one element.",
         outer=SHARED,
     ),
-    StorageForm(
+    StorageKind(
         id="unbounded_array",
         description="An array of runtime size, held by the storage itself.",
         outer=ARRAY,
     ),
-    StorageForm(
+    StorageKind(
         id="unique_array_handle",
         description="A sole-owner handle of an array of runtime size.",
         outer=UNIQUE,
         inner=ARRAY,
     ),
-    StorageForm(
+    StorageKind(
         id="unique_handle",
         description="A sole-owner handle of one element.",
         outer=UNIQUE,

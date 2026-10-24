@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 //
 
-// The requests a binding serves, as the route engine decides them from the
+// The requests a binding serves, as the routes decide them from the
 // descriptors of the binding and of the request when the request is
 // compiled: the routes its stored type tree derives, the qualifiers a request
 // may add, the leaf a request names, the objects a binding keeps, and the
@@ -342,14 +342,14 @@ TEST(next_engine, a_request_names_the_leaf_through_its_wrappers) {
   // A reference request refers to an object the binding keeps; a value, an
   // rvalue reference, and a pointer request do not.
   static_assert(request_traits<A &>::kind ==
-                core::request_form::lvalue_reference);
+                core::request_kind::lvalue_reference);
   static_assert(request_traits<const A &>::kind ==
-                core::request_form::lvalue_reference);
+                core::request_kind::lvalue_reference);
   static_assert(request_traits<A &&>::kind ==
-                core::request_form::rvalue_reference);
-  static_assert(request_traits<A>::kind == core::request_form::value);
-  static_assert(request_traits<A *>::kind == core::request_form::value);
-  static_assert(request_traits<const A *>::kind == core::request_form::value);
+                core::request_kind::rvalue_reference);
+  static_assert(request_traits<A>::kind == core::request_kind::value);
+  static_assert(request_traits<A *>::kind == core::request_kind::value);
+  static_assert(request_traits<const A *>::kind == core::request_kind::value);
   static_assert(std::is_same_v<request_traits<const A *>::made_type, A *>);
   SUCCEED();
 }

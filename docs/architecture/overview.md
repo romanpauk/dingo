@@ -48,10 +48,10 @@ headers, type trees and routes are `type`, `conversion`, and the declarations of
     the indexes of key values. These are the public `lookup/` headers and
     `key.h`. Depends on `base`, `diagnostics`, and `type`. Spec: `key_kinds`,
     `lookup_declarations`, `index_structures`, `lookup_filters`.
-07. `storage/`: the scopes and the storage forms: the scope descriptors and tags
-    and the request categories each exposes for a storage form. These are the
+07. `storage/`: the scopes and the storage kinds: the scope descriptors and tags
+    and the request categories each exposes for a storage kind. These are the
     public `storage/` headers. Depends on `base` and `type`. Spec:
-    `storage_forms`, `scopes`.
+    `storage_kinds`, `scopes`.
 08. `factory/`: the factories of a stored type tree, which construct the leaf
     and make its wrappers. These are the public `factory/` headers. Depends on
     `base`, `diagnostics`, `type`, and `constructor`. Spec: `factory_kinds`.
@@ -160,7 +160,7 @@ callable factory returns the stored object.
 
 A route is a sequence of operations from the stored type tree to the requested
 type tree, as described in the [Conversion Model](conversion-model.md). The
-engine derives the routes of a binding at compile time. `walk` in
+conversion component derives the routes of a binding at compile time. `walk` in
 [conversion/convert.h](../../include/dingo/conversion/convert.h) applies the
 rules of one reachable type to the stored object, one C++ operation per form,
 through the wrapper traits of each wrapper. The binding walks a reachable type

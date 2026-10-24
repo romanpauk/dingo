@@ -38,7 +38,7 @@ from spec.schema import (
     SelectionMode,
     SelectionSource,
     TypeTreePattern,
-    PatternForm,
+    PatternKind,
     Spec,
     StepCondition,
     VariantKind,
@@ -71,7 +71,7 @@ def validate(spec: Spec) -> list[str]:
     errors: list[str] = []
     check_ids(spec, errors)
     check_wrapper_semantics(spec, errors)
-    check_storage_forms(spec, errors)
+    check_storage_kinds(spec, errors)
     check_scopes(spec, errors)
     check_rules(spec, errors)
     check_lookups(spec, errors)
@@ -127,32 +127,32 @@ def property_class_holds(property_class, kind) -> bool:
     )
 
 
-def check_storage_forms(spec: Spec, errors: list[str]) -> None:
+def check_storage_kinds(spec: Spec, errors: list[str]) -> None:
     check_unique(
         errors,
-        "storage_forms",
+        "storage_kinds",
         "classes",
-        ((form.outer, form.inner) for form in spec.storage_forms),
+        ((form.outer, form.inner) for form in spec.storage_kinds),
     )
-    if sum(form.outer is None for form in spec.storage_forms) != 1:
-        errors.append("storage_forms: one form, the plain one, has no class")
+    if sum(form.outer is None for form in spec.storage_kinds) != 1:
+        errors.append("storage_kinds: one form, the plain one, has no class")
     # A wrapper of a kind, and of a kind over one, is of one form at each depth.
     for outer in spec.wrapper_semantics:
         single = [
             form.id
-            for form in spec.storage_forms
+            for form in spec.storage_kinds
             if form.outer is not None
             and form.inner is None
             and property_class_holds(form.outer, outer)
         ]
         if len(single) > 1:
             errors.append(
-                f"wrapper_semantics.{outer.id}: is of the storage forms {', '.join(single)}"
+                f"wrapper_semantics.{outer.id}: is of the storage kinds {', '.join(single)}"
             )
         for inner in spec.wrapper_semantics:
             double = [
                 form.id
-                for form in spec.storage_forms
+                for form in spec.storage_kinds
                 if form.inner is not None
                 and property_class_holds(form.outer, outer)
                 and property_class_holds(form.inner, inner)
@@ -166,7 +166,7 @@ def check_storage_forms(spec: Spec, errors: list[str]) -> None:
 
 def check_scopes(spec: Spec, errors: list[str]) -> None:
     scope_ids = ids(spec.scopes)
-    form_ids = ids(spec.storage_forms)
+    kind_ids = ids(spec.storage_kinds)
     parents = {scope.id: scope.extends for scope in spec.scopes}
     for scope in spec.scopes:
         where = f"scopes.{scope.id}"
@@ -181,16 +181,16 @@ def check_scopes(spec: Spec, errors: list[str]) -> None:
             seen.add(parent)
             parent = parents[parent]
         if not scope.exposures:
-            errors.append(f"{where}: exposes no storage form")
+            errors.append(f"{where}: exposes no storage kind")
         check_unique(
-            errors, where, "exposed forms", (e.form for e in scope.exposures)
+            errors, where, "exposed forms", (e.storage_kind for e in scope.exposures)
         )
         for exposure in scope.exposures:
-            require_ref(errors, where, "storage form", exposure.form, form_ids)
+            require_ref(errors, where, "storage kind", exposure.storage_kind, kind_ids)
             if not exposure.categories:
-                errors.append(f"{where}: form {exposure.form!r} exposes no category")
+                errors.append(f"{where}: form {exposure.storage_kind!r} exposes no category")
             check_unique(
-                errors, where, f"categories of {exposure.form}", exposure.categories
+                errors, where, f"categories of {exposure.storage_kind}", exposure.categories
             )
         for what, values in (("phases", scope.phases), ("needs", scope.needs)):
             check_unique(errors, where, what, values)
@@ -210,7 +210,7 @@ def check_wrapper_semantics(spec: Spec, errors: list[str]) -> None:
 
 
 def pattern_variables(pattern: TypeTreePattern) -> Iterator[str]:
-    if pattern.form in (PatternForm.VARIABLE, PatternForm.WRAPPER) and pattern.name:
+    if pattern.kind in (PatternKind.VARIABLE, PatternKind.WRAPPER) and pattern.name:
         yield pattern.name
     for arg in pattern.args:
         yield from pattern_variables(arg)
@@ -219,8 +219,8 @@ def pattern_variables(pattern: TypeTreePattern) -> Iterator[str]:
 def check_pattern(
     pattern: TypeTreePattern, where: str, semantics_by_id: dict[str, object], errors: list[str]
 ) -> None:
-    form = pattern.form
-    if form is PatternForm.SEMANTICS:
+    form = pattern.kind
+    if form is PatternKind.SEMANTICS:
         wrapper = semantics_by_id.get(pattern.name)
         if wrapper is None:
             errors.append(f"{where}: wrapper semantics {pattern.name!r} does not exist")
@@ -230,17 +230,17 @@ def check_pattern(
             )
         elif not wrapper.variadic and len(pattern.args) != wrapper.parameters:
             errors.append(f"{where}: {pattern.name} takes {wrapper.parameters} arguments")
-    elif form is PatternForm.VARIABLE:
+    elif form is PatternKind.VARIABLE:
         if not (pattern.name and PATTERN_VARIABLE.match(pattern.name)):
             errors.append(f"{where}: pattern variable {pattern.name!r} is malformed")
         if pattern.args:
             errors.append(f"{where}: pattern variable {pattern.name!r} has arguments")
-    elif form is PatternForm.WRAPPER:
+    elif form is PatternKind.WRAPPER:
         if not (pattern.name and PATTERN_VARIABLE.match(pattern.name)):
             errors.append(f"{where}: wrapper variable {pattern.name!r} is malformed")
         if len(pattern.args) != 1:
             errors.append(f"{where}: wrapper {pattern.name!r} takes one argument")
-    elif form is PatternForm.ROUTE:
+    elif form is PatternKind.ROUTE:
         if pattern.name is not None:
             errors.append(f"{where}: route pattern has a name")
         if len(pattern.args) != 1:
@@ -364,33 +364,33 @@ def names_target(pattern) -> bool:
 
 
 def check_semantics_operations(spec: Spec, errors: list[str]) -> None:
-    templates = {template.form: template for template in spec.operations}
+    templates = {template.operation: template for template in spec.operations}
     for form in Operation:
         if form not in templates:
             errors.append(f"operations: no template of the form {form.value}")
     kinds = ids(spec.wrapper_semantics)
     for kind in spec.wrapper_semantics:
         check_unique(
-            errors, f"wrapper_semantics.{kind.id}", "forms", (f.form for f in kind.forms)
+            errors, f"wrapper_semantics.{kind.id}", "forms", (f.operation for f in kind.operations)
         )
-        for op in kind.forms:
+        for op in kind.operations:
             where = f"wrapper_semantics.{kind.id}.{op.id}"
-            template = templates.get(op.form)
+            template = templates.get(op.operation)
             if template is None:
                 continue
             targets = names_target(template.from_type_tree) or names_target(
                 template.to_type_tree
             )
             if targets and op.target is None:
-                errors.append(f"{where}: the form {op.form.value} needs a target kind")
+                errors.append(f"{where}: the form {op.operation.value} needs a target kind")
             if not targets and op.target is not None:
-                errors.append(f"{where}: the form {op.form.value} takes no target kind")
+                errors.append(f"{where}: the form {op.operation.value} takes no target kind")
             if op.target is not None:
                 require_ref(errors, where, "target kind", op.target, kinds)
             for trait in template.kind_traits:
                 if trait not in kind.traits:
                     errors.append(
-                        f"{where}: the form {op.form.value} needs a kind "
+                        f"{where}: the form {op.operation.value} needs a kind "
                         f"that is {trait.value}"
                     )
 
@@ -399,14 +399,14 @@ def check_operations(spec: Spec, errors: list[str]) -> None:
     check_semantics_operations(spec, errors)
     signatures: dict = {}
     for route in spec.rules:
-        if route.form is None:
+        if route.operation is None:
             continue
         signature = operation_signature(route)
-        first = signatures.setdefault(route.form, (route.id, signature))
+        first = signatures.setdefault(route.operation, (route.id, signature))
         if first[1] != signature:
             errors.append(
                 f"routes.{route.id}: differs from routes.{first[0]} of the form "
-                f"{route.form.value} in more than its wrapper semantics"
+                f"{route.operation.value} in more than its wrapper semantics"
             )
 
 

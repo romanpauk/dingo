@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-// The storage forms of the spec as constexpr data: the form of a stored type
+// The storage kinds of the spec as constexpr data: the kind of a stored type
 // by the properties of its outer wrappers, and the request categories a scope
 // exposes for each.
 
@@ -21,14 +21,14 @@ constexpr bool exposes(std::uint8_t categories, request_category category) {
   return (categories & static_cast<std::uint8_t>(category)) != 0;
 }
 
-// spec: storage_forms
-enum class storage_form : std::uint8_t {
-{% for form in storage_forms %}
-  {{ form.id }},
+// spec: storage_kinds
+enum class storage_kind : std::uint8_t {
+{% for kind in storage_kinds %}
+  {{ kind.id }},
 {% endfor %}
 };
 
-inline constexpr std::size_t storage_form_count = {{ storage_forms | length }};
+inline constexpr std::size_t storage_kind_count = {{ storage_kinds | length }};
 
 // A class of wrappers: the property bits a wrapper has, and those it lacks.
 struct property_class {
@@ -37,17 +37,17 @@ struct property_class {
   std::uint16_t lacks;
 };
 
-// A storage form: the class of the outer wrapper of a stored type tree, and of the
-// wrapper of its element; a form of no outer class is the plain one.
-struct storage_form_info {
-  storage_form form;
+// A storage kind: the class of the outer wrapper of a stored type tree, and of the
+// wrapper of its element; a kind of no outer class is the plain one.
+struct storage_kind_info {
+  storage_kind kind;
   property_class outer;
   property_class inner;
 };
 
-inline constexpr storage_form_info storage_forms[] = {
-{% for form in storage_forms %}
-    {storage_form::{{ form.id }}, {% if form.outer %}{true, {{ form.outer.has }}, {{ form.outer.lacks }}}{% else %}{false, 0, 0}{% endif %}, {% if form.inner %}{true, {{ form.inner.has }}, {{ form.inner.lacks }}}{% else %}{false, 0, 0}{% endif %}},
+inline constexpr storage_kind_info storage_kinds[] = {
+{% for kind in storage_kinds %}
+    {storage_kind::{{ kind.id }}, {% if kind.outer %}{true, {{ kind.outer.has }}, {{ kind.outer.lacks }}}{% else %}{false, 0, 0}{% endif %}, {% if kind.inner %}{true, {{ kind.inner.has }}, {{ kind.inner.lacks }}}{% else %}{false, 0, 0}{% endif %}},
 {% endfor %}
 };
 

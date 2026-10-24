@@ -8,7 +8,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import conform  # noqa: E402
-from spec.reference.routes import RequestForm, TypeTree, wrapper, leaf  # noqa: E402
+from spec.reference.routes import RequestKind, TypeTree, wrapper, leaf  # noqa: E402
 
 LEAF = leaf(conform.LEAVES["leaf"])
 
@@ -16,25 +16,25 @@ LEAF = leaf(conform.LEAVES["leaf"])
 @pytest.mark.parametrize(
     "spelling, kind, type_tree",
     [
-        ("leaf", RequestForm.VALUE, LEAF),
-        ("const leaf&", RequestForm.LVALUE_REFERENCE, LEAF),
-        ("leaf&&", RequestForm.RVALUE_REFERENCE, LEAF),
-        ("const leaf*", RequestForm.VALUE, wrapper("ptr", LEAF)),
-        ("leaf* const&", RequestForm.LVALUE_REFERENCE, wrapper("ptr", LEAF)),
-        ("leaf**", RequestForm.VALUE, wrapper("ptr", wrapper("ptr", LEAF))),
-        ("leaf(&)[2]", RequestForm.LVALUE_REFERENCE, wrapper("array", LEAF, extent=2)),
-        ("const leaf(*)[2]", RequestForm.VALUE, wrapper("ptr", wrapper("array", LEAF, extent=2))),
-        ("std::shared_ptr<leaf[]>&", RequestForm.LVALUE_REFERENCE,
+        ("leaf", RequestKind.VALUE, LEAF),
+        ("const leaf&", RequestKind.LVALUE_REFERENCE, LEAF),
+        ("leaf&&", RequestKind.RVALUE_REFERENCE, LEAF),
+        ("const leaf*", RequestKind.VALUE, wrapper("ptr", LEAF)),
+        ("leaf* const&", RequestKind.LVALUE_REFERENCE, wrapper("ptr", LEAF)),
+        ("leaf**", RequestKind.VALUE, wrapper("ptr", wrapper("ptr", LEAF))),
+        ("leaf(&)[2]", RequestKind.LVALUE_REFERENCE, wrapper("array", LEAF, extent=2)),
+        ("const leaf(*)[2]", RequestKind.VALUE, wrapper("ptr", wrapper("array", LEAF, extent=2))),
+        ("std::shared_ptr<leaf[]>&", RequestKind.LVALUE_REFERENCE,
          wrapper("share", wrapper("array_unbounded", LEAF))),
-        ("std::variant<leaf, other_leaf>", RequestForm.VALUE,
+        ("std::variant<leaf, other_leaf>", RequestKind.VALUE,
          wrapper("alt", LEAF, leaf(conform.LEAVES["other_leaf"]))),
-        ("std::unique_ptr<std::optional<leaf>>*", RequestForm.VALUE,
+        ("std::unique_ptr<std::optional<leaf>>*", RequestKind.VALUE,
          wrapper("ptr", wrapper("own", wrapper("opt", LEAF)))),
-        ("user_shared<leaf>&", RequestForm.LVALUE_REFERENCE,
+        ("user_shared<leaf>&", RequestKind.LVALUE_REFERENCE,
          wrapper("user_share", LEAF, family="user")),
-        ("std::shared_ptr<user_optional<leaf>>", RequestForm.VALUE,
+        ("std::shared_ptr<user_optional<leaf>>", RequestKind.VALUE,
          wrapper("share", wrapper("user_opt", LEAF, family="user"))),
-        ("const iface*", RequestForm.VALUE, wrapper("ptr", leaf(conform.LEAVES["iface"]))),
+        ("const iface*", RequestKind.VALUE, wrapper("ptr", leaf(conform.LEAVES["iface"]))),
     ],
 )
 def test_parse_request(spelling, kind, type_tree):

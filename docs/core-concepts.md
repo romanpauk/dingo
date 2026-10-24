@@ -78,7 +78,7 @@ representation that Dingo keeps and converts during resolution.
 - `shared`: cache and reuse the same instance
 - `shared_cyclical`: cache instances while permitting cyclic graphs
 
-### Storage Forms
+### Storage Kinds
 
 The stored type can be a value, raw pointer, `std::unique_ptr`,
 `std::shared_ptr`, `std::optional`, raw arrays, or another supported form. Dingo

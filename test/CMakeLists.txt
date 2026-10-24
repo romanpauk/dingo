@@ -200,7 +200,7 @@ set_tests_properties(dingo_differential_compare_test PROPERTIES
         "PYTHONDONTWRITEBYTECODE=1;DINGO_DIFFERENTIAL_TEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/differential-test")
 
 # The tests of the next implementation of the spec-driven design, the library.
-# The engine cases are generated from the reference implementation of the spec.
+# The conversion cases are generated from the reference implementation of the spec.
 set(DINGO_NEXT_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/next")
 file(GLOB_RECURSE DINGO_NEXT_SPEC_SOURCES CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/spec/*.py")
@@ -215,7 +215,7 @@ add_custom_command(
         "${CMAKE_CURRENT_SOURCE_DIR}/next/templates/conversion_cases.cpp.j2"
         ${DINGO_NEXT_SPEC_SOURCES}
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-    COMMENT "Generating the engine cases of the next implementation"
+    COMMENT "Generating the conversion cases of the next implementation"
     VERBATIM)
 
 add_executable(dingo_next_test

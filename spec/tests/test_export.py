@@ -84,7 +84,7 @@ def test_enums_export_as_values_and_tuples_as_lists():
     assert route["from_type_tree"] == {
         "args": [],
         "category": "lvalue",
-        "form": "variable",
+        "kind": "variable",
         "name": "X",
     }
     assert route["access"] == "borrow"

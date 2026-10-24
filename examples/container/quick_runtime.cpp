@@ -33,7 +33,7 @@ int main() {
   container.register_type<scope<unique>, storage<C>>();
 
   // Constructor arguments are resolved recursively, including ownership
-  // conversions from the registered storage forms.
+  // conversions from the registered storage kinds.
   C c = container.resolve<C>();
 
   struct D {

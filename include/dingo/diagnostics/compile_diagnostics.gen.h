@@ -74,7 +74,7 @@ struct registration_key_value_missing_carrier {};
 template <typename... Subjects> struct registration_key_values_carrier {};
 template <typename... Subjects> struct registration_without_scope_carrier {};
 template <typename... Subjects> struct registration_without_storage_carrier {};
-template <typename... Subjects> struct scope_form_not_stored_carrier {};
+template <typename... Subjects> struct scope_kind_not_stored_carrier {};
 template <typename... Subjects> struct scope_nested_wrappers_carrier {};
 template <typename... Subjects> struct scope_undeclared_carrier {};
 template <typename... Subjects> struct semantics_undeclared_carrier {};
@@ -125,7 +125,7 @@ enum class diag : std::uint8_t {
   registration_key_values,
   registration_without_scope,
   registration_without_storage,
-  scope_form_not_stored,
+  scope_kind_not_stored,
   scope_nested_wrappers,
   scope_undeclared,
   semantics_undeclared,
@@ -432,10 +432,10 @@ template <> struct diag_text<diag::registration_without_storage> {
       "a registration needs a storage<>"};
 };
 
-// spec: diagnostics.scope_form_not_stored
-template <> struct diag_text<diag::scope_form_not_stored> {
+// spec: diagnostics.scope_kind_not_stored
+template <> struct diag_text<diag::scope_kind_not_stored> {
   template <typename... Subjects>
-  using carrier = ::dingo::scope_form_not_stored_carrier<Subjects...>;
+  using carrier = ::dingo::scope_kind_not_stored_carrier<Subjects...>;
   static constexpr std::string_view pieces[] = {
       "the scope of the binding does not store ", ""};
 };
@@ -908,12 +908,12 @@ struct diag_report<diag::registration_without_storage, Subjects...> {
   }
 };
 
-// spec: diagnostics.scope_form_not_stored
+// spec: diagnostics.scope_kind_not_stored
 template <typename... Subjects>
-struct diag_report<diag::scope_form_not_stored, Subjects...> {
+struct diag_report<diag::scope_kind_not_stored, Subjects...> {
   static constexpr void fail() {
     static_assert(
-        dependent_false<::dingo::scope_form_not_stored_carrier<Subjects...>>,
+        dependent_false<::dingo::scope_kind_not_stored_carrier<Subjects...>>,
         "the scope of the binding does not store {stored}");
   }
 };

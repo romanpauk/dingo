@@ -284,7 +284,7 @@ constexpr bool leads_to_semantics(operation form) {
          info(form).to_position == type_position::target;
 }
 
-template <operation... Forms> constexpr bool distinct_forms() {
+template <operation... Forms> constexpr bool distinct_operations() {
   constexpr operation forms[] = {Forms..., operation{}};
   for (std::size_t left = 0; left < sizeof...(Forms); ++left) {
     for (std::size_t right = left + 1; right < sizeof...(Forms); ++right) {
@@ -325,8 +325,8 @@ struct semantics_operations_of<Kind,
   static_assert(
       require<((leads_to_semantics(Forms) || std::is_void_v<Targets>) && ...),
               diag::operation_takes_no_target, Kind>());
-  static_assert(
-      require<distinct_forms<Forms...>(), diag::operation_repeated, Kind>());
+  static_assert(require<distinct_operations<Forms...>(),
+                        diag::operation_repeated, Kind>());
   static_assert(require<(((::dingo::wrapper_semantics<Kind>::properties &
                            info(Forms).semantics_properties) ==
                           info(Forms).semantics_properties) &&

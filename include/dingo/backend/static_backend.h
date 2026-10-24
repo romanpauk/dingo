@@ -8,8 +8,8 @@
 #pragma once
 
 // The static backend: the bindings are known when the container type is
-// formed, the engine selects the binding and the reachable type of a request at
-// compile time, and the reachable type is walked and completed directly.
+// formed, the selection picks the binding and the reachable type of a request
+// at compile time, and the reachable type is walked and completed directly.
 
 #include <dingo/backend/local.h>
 #include <dingo/backend/slot.h>

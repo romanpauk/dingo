@@ -52,7 +52,7 @@ __all__ = [
     "Property",
     "LookupDeclaration",
     "LookupFilter",
-    "PatternForm",
+    "PatternKind",
     "Predicate",
     "PublicApiEntry",
     "RecursionGuard",
@@ -75,7 +75,7 @@ __all__ = [
     "Spec",
     "Status",
     "StepCondition",
-    "StorageForm",
+    "StorageKind",
     "TransactionEffect",
     "TransactionRule",
     "ValueCategory",
@@ -96,7 +96,7 @@ class Entity:
 
 
 class Property(Enum):
-    """Properties of a wrapper semantics that the rules and the storage forms
+    """Properties of a wrapper semantics that the rules and the storage kinds
     refer to."""
 
     OWNING = "owning"
@@ -136,8 +136,8 @@ class WrapperSemantics(Entity):
     variadic: bool = False
     has_extent: bool = False
     traits: tuple[Property, ...] = ()
-    # The forms of the kind, from which its routes are made.
-    forms: tuple["SemanticsOperation", ...] = ()
+    # The operations of the semantics, from which its rules are made.
+    operations: tuple["SemanticsOperation", ...] = ()
 
 
 # Scopes
@@ -186,7 +186,7 @@ class PropertyClass:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class StorageForm(Entity):
+class StorageKind(Entity):
     """A class of stored type_trees that storage exposure distinguishes.
 
     `outer` classifies the outer wrapper of a stored type_tree and `inner`, when
@@ -219,21 +219,21 @@ class RecursionGuard(Enum):
 class ExposureRule(Enum):
     """How a scope restricts the routes of its exposed categories.
 
-    FORM applies every route of the exposed categories. HANDLE_COPIES applies
+    KIND applies every rule of the exposed categories. HANDLE_COPIES applies
     them too, except that a copy is made only of a type tree whose outer wrapper is
     sharing: the object of such a scope may be published before it is
     complete, so it is never copied, while a sharing handle to it is.
     """
 
-    FORM = "form"
+    KIND = "kind"
     HANDLE_COPIES = "handle_copies"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Exposure:
-    """The request categories a scope publishes for one storage form."""
+    """The request categories a scope publishes for one storage kind."""
 
-    form: str  # storage form id
+    storage_kind: str  # storage kind id
     categories: tuple[RequestCategory, ...]
 
 
@@ -241,7 +241,7 @@ class Exposure:
 class Scope(Entity):
     """A storage descriptor: slot, materialized category, stability, access.
 
-    `exposures` lists every storage form the scope can store; a form that is
+    `exposures` lists every storage kind the scope can store; a form that is
     not listed cannot be registered in the scope. Without `nested_wrappers`, the
     type_tree under the outer wrapper of a stored form must be a leaf.
     """
@@ -253,7 +253,7 @@ class Scope(Entity):
     source_access: SourceAccess
     guard: RecursionGuard = RecursionGuard.NONE
     retains_unresolved_source: bool = False
-    exposure_rule: ExposureRule = ExposureRule.FORM
+    exposure_rule: ExposureRule = ExposureRule.KIND
     exposures: tuple[Exposure, ...] = ()
     nested_wrappers: bool = True
     extends: str | None = None  # scope id
@@ -272,7 +272,7 @@ class Access(Enum):
     CONSUME = "consume"
 
 
-class PatternForm(Enum):
+class PatternKind(Enum):
     """The form of a node of a type tree pattern.
 
     VARIABLE binds any type tree (`name` is the variable). SEMANTICS applies the
@@ -289,7 +289,7 @@ class PatternForm(Enum):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TypeTreePattern:
-    form: PatternForm
+    kind: PatternKind
     name: str | None = None
     args: tuple["TypeTreePattern", ...] = ()
     category: ValueCategory | None = None
@@ -371,7 +371,7 @@ class OperationTemplate(Entity):
     `K` and the kind it leads to `T`. `kind_traits` are the traits every kind
     of the form has, which the form relies on."""
 
-    form: Operation
+    operation: Operation
     from_type_tree: "TypeTreePattern"
     to_type_tree: "TypeTreePattern"
     access: "Access"
@@ -387,7 +387,7 @@ class SemanticsOperation(Entity):
     """A form a wrapper semantics has: the route `id` of it, and the kind it leads
     to, for a form whose template names `T`."""
 
-    form: Operation
+    operation: Operation
     description: str
     target: str | None = None  # wrapper semantics id
 
@@ -412,7 +412,7 @@ class Rule(Entity):
     via: Via | None = None
     cache: TypeTreePattern | None = None
     # The form a route of a wrapper semantics is of; None for a rule of a leaf.
-    form: Operation | None = None
+    operation: Operation | None = None
 
 
 # Requests and keys
@@ -922,7 +922,7 @@ class CppSection:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Spec:
     wrapper_semantics: tuple[WrapperSemantics, ...] = ()
-    storage_forms: tuple[StorageForm, ...] = ()
+    storage_kinds: tuple[StorageKind, ...] = ()
     scopes: tuple[Scope, ...] = ()
     operations: tuple[OperationTemplate, ...] = ()
     rules: tuple[Rule, ...] = ()

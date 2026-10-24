@@ -10,7 +10,7 @@
 // The runtime backend: a binding is registered at runtime with the reachable
 // types it serves, derived at compile time, and a thunk per reachable type that
 // walks it. A request finds its binding and selects its reachable type with the
-// same engine functions as the static backend.
+// same route functions as the static backend.
 
 #include <dingo/backend/local.h>
 #include <dingo/backend/memo.h>

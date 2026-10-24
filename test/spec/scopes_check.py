@@ -4,11 +4,11 @@
 spec/content/scopes.py records the storage scope policies of the baseline, the
 library of the commit in test/differential/baseline-commit. This script generates a program that prints, for every scope of
 the spec, the properties of `dingo::storage_scope_policy` and the request
-categories it exposes for every storage form, compiles and runs it, and
+categories it exposes for every storage kind, compiles and runs it, and
 compares the output with the spec. Every difference must be declared by a
 behavior change of the spec whose `cases` match `scopes:<scope>/<property>`,
 and every behavior change with a `scopes:` pattern must match a difference.
-The reference form is held only by external storage and has no storage_form
+The reference form is held only by external storage and has no storage_kind
 of its own in the implementation, so it is not compared.
 """
 
@@ -33,7 +33,7 @@ from spec.schema import (  # noqa: E402
     ValueCategory,
 )
 
-# The storage_form enumerators of the baseline. The spec names
+# The storage_kind enumerators of the baseline. The spec names
 # the form of a storage-held array of runtime size unbounded_array.
 CPP_FORMS = {
     "alternative": "alternative",
@@ -88,11 +88,11 @@ def program(loaded):
         "  std::printf(\"%s guard %s\\n\", scope, guard_name(policy::guard));",
         "  std::printf(\"%s retains %d\\n\", scope,",
         "              policy::retains_unresolved_source ? 1 : 0);",
-        "  struct form { const char *name; dingo::storage_form value; };",
+        "  struct form { const char *name; dingo::storage_kind value; };",
         "  const form forms[] = {",
     ]
     lines += [
-        f"    {{\"{form}\", dingo::storage_form::{cpp}}},"
+        f"    {{\"{form}\", dingo::storage_kind::{cpp}}},"
         for form, cpp in sorted(CPP_FORMS.items())
     ]
     lines += [
@@ -149,10 +149,10 @@ def consistency(loaded):
             )
         if set(GUARDS.values()) and scope.guard not in GUARDS.values():
             errors.append(f"{scope.id}: unknown guard {scope.guard}")
-    forms = {form.id for form in loaded.storage_forms} - {"reference"}
+    forms = {form.id for form in loaded.storage_kinds} - {"reference"}
     if forms != set(CPP_FORMS):
         errors.append(
-            f"storage forms {sorted(forms)} differ from the implementation's "
+            f"storage kinds {sorted(forms)} differ from the implementation's "
             f"{sorted(CPP_FORMS)}"
         )
     return errors

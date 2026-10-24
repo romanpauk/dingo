@@ -102,10 +102,10 @@ ORDER = (
 
 def semantics_rules(kinds, form):
     """The routes of `form` of `kinds`, in their order."""
-    template = next(t for t in operations if t.form is form)
+    template = next(t for t in operations if t.operation is form)
     for kind in kinds:
-        for op in kind.forms:
-            if op.form is not form:
+        for op in kind.operations:
+            if op.operation is not form:
                 continue
             names = {KIND: kind.id}
             if op.target is not None:
@@ -120,7 +120,7 @@ def semantics_rules(kinds, form):
                 requires=template.requires,
                 via=template.via,
                 cache=substitute(template.cache, names),
-                form=form,
+                operation=form,
             )
 
 

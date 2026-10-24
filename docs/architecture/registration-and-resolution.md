@@ -2,8 +2,8 @@
 
 This page follows the registration and resolution path through Dingo. Runtime
 registration and compile-time registration reduce to the same binding type, and
-the static and the runtime backend serve a request by the same engine and
-selection rules.
+the static and the runtime backend serve a request by the same conversion
+functions and selection rules.
 
 ## Runtime Registration
 

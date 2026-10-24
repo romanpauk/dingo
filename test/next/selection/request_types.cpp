@@ -31,7 +31,7 @@ using dingo::core::is_annotated;
 using dingo::core::is_keyed;
 using dingo::core::keyed;
 using dingo::core::leaf_of_t;
-using dingo::core::request_form;
+using dingo::core::request_kind;
 using dingo::core::request_traits;
 using dingo::core::resolved_t;
 using dingo::core::type_id_v;
@@ -78,10 +78,10 @@ template <typename Type> struct wrapper_traits<user_unique<Type>> {
 namespace {
 
 // The kind of a request and the type it asks for.
-static_assert(request_traits<int>::kind == request_form::value);
-static_assert(request_traits<int &>::kind == request_form::lvalue_reference);
-static_assert(request_traits<int &&>::kind == request_form::rvalue_reference);
-static_assert(request_traits<int *>::kind == request_form::value);
+static_assert(request_traits<int>::kind == request_kind::value);
+static_assert(request_traits<int &>::kind == request_kind::lvalue_reference);
+static_assert(request_traits<int &&>::kind == request_kind::rvalue_reference);
+static_assert(request_traits<int *>::kind == request_kind::value);
 static_assert(std::is_same_v<request_traits<int>::value_type, int>);
 static_assert(std::is_same_v<request_traits<int &>::value_type, int>);
 static_assert(std::is_same_v<request_traits<const int &>::value_type, int>);

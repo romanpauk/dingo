@@ -151,10 +151,10 @@ template <typename Type, typename Backend> constexpr bool detects_as_default() {
          detection::arity == detected_constructor<Type>::arity;
 }
 
-// The detection that the engine uses is the type tree detection of the backend
-// that variant_points.constructor_detection_msvc selects, and both backends
-// agree on it. The matrix family constructor_detection crosses the backends and
-// modes with the constructor type trees.
+// The detection that the factories use is the type tree detection of the
+// backend that variant_points.constructor_detection_msvc selects, and both
+// backends agree on it. The matrix family constructor_detection crosses the
+// backends and modes with the constructor type trees.
 TEST(next_constructor, the_engine_detects_by_the_selected_backend) {
   using dingo::core::msvc_constructor_detection;
   using dingo::core::portable_constructor_detection;

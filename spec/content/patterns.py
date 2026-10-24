@@ -2,7 +2,7 @@
 modules: a variable binds any type tree, a wrapper applies a semantics to its arguments.
 """
 
-from spec.schema import PatternForm, TypeTreePattern, ValueCategory
+from spec.schema import PatternKind, TypeTreePattern, ValueCategory
 
 LVALUE = ValueCategory.LVALUE
 RVALUE = ValueCategory.RVALUE
@@ -14,11 +14,11 @@ TARGET = "T"
 
 
 def variable(name, category=None):
-    return TypeTreePattern(form=PatternForm.VARIABLE, name=name, category=category)
+    return TypeTreePattern(kind=PatternKind.VARIABLE, name=name, category=category)
 
 
 def wrapper(name, *args, category=None):
-    return TypeTreePattern(form=PatternForm.SEMANTICS, name=name, args=args, category=category)
+    return TypeTreePattern(kind=PatternKind.SEMANTICS, name=name, args=args, category=category)
 
 
 def leaf_variable(category):
@@ -29,10 +29,10 @@ def substitute(pattern, names):
     """The pattern with the wrapper names of `names` replaced."""
     if pattern is None:
         return None
-    if pattern.form is not PatternForm.SEMANTICS:
+    if pattern.kind is not PatternKind.SEMANTICS:
         return pattern
     return TypeTreePattern(
-        form=pattern.form,
+        kind=pattern.kind,
         name=names.get(pattern.name, pattern.name),
         args=tuple(substitute(arg, names) for arg in pattern.args),
         category=pattern.category,

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Generates the engine cases of the next implementation from the reference.
+"""Generates the conversion cases of the next implementation from the reference.
 
 For every scope, leaf kind, declared interfaces, stored type_tree of up to two
 wrappers in the standard and a user wrapper family, and request, the reference
 implementation in spec/reference/routes.py computes whether the binding
 registers, whether the request finds it, whether it is served, and by which
 rules. test/next/templates/conversion_cases.cpp.j2 lays the cases out as C++, and
-test/next/conversion/conversion_conformance.cpp requires the C++ engine to compute the
+test/next/conversion/conversion_conformance.cpp requires the C++ routes to compute the
 same. The generated source is written into the build tree; it is not
 committed.
 
@@ -30,7 +30,7 @@ from spec.reference.routes import (  # noqa: E402
     Leaf,
     Model,
     Request,
-    RequestForm,
+    RequestKind,
     TypeTree,
     resolve,
 )
@@ -54,7 +54,7 @@ BINDING_LEAVES = (
 FAMILIES = ("std", "user")
 WRAPPERS = ("own", "share", "opt")
 SCOPES = ("external", "shared", "shared_cyclical", "unique")
-KINDS = (RequestForm.VALUE, RequestForm.LVALUE_REFERENCE, RequestForm.RVALUE_REFERENCE)
+KINDS = (RequestKind.VALUE, RequestKind.LVALUE_REFERENCE, RequestKind.RVALUE_REFERENCE)
 
 
 def leaf(value):
@@ -117,18 +117,18 @@ def valid_request(type_tree, kind):
     if type_tree.wrapper == "ref":
         return False
     abstract = type_tree.wrapper is None and not type_tree.leaf.constructible
-    return not (abstract and kind != RequestForm.LVALUE_REFERENCE)
+    return not (abstract and kind != RequestKind.LVALUE_REFERENCE)
 
 
 def steps_of(model):
     """The operation and the C++ tag of the kind of each route id."""
     tags = {p.semantics: p.spelling for p in model.spec.cpp.semantics_tags}
     kinds = {
-        form.id: kind.id for kind in model.spec.wrapper_semantics for form in kind.forms
+        form.id: kind.id for kind in model.spec.wrapper_semantics for form in kind.operations
     }
     return {
         route.id: {
-            "form": route.form.value if route.form is not None else route.id,
+            "form": route.operation.value if route.operation is not None else route.id,
             "kind": tags[kinds[route.id]] if route.id in kinds else None,
         }
         for route in model.rules

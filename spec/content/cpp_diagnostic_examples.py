@@ -585,7 +585,7 @@ int main() {
         "config",
     ),
     example(
-        "scope_form_not_stored",
+        "scope_kind_not_stored",
         SHARED,
         CONFIG
         + """

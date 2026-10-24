@@ -16,7 +16,7 @@ The full conversion behavior comes from a few sources of data:
 
 - the scope descriptor, held by `scope_traits`, says which value category the
   slot materializes its object as, whether its objects keep their addresses, and
-  which request categories it exposes for each storage form
+  which request categories it exposes for each storage kind
 - the operations say which reachable type each rule derives from which, with
   which access and requirements
 - the `wrapper_semantics` of each wrapper semantics say which operations its
@@ -102,11 +102,11 @@ request fails with `type_not_convertible_exception`, the diagnostic
 
 ## Storage Exposure
 
-A storage form classifies the outer wrappers of a stored type tree: plain,
+A storage kind classifies the outer wrappers of a stored type tree: plain,
 reference, pointer, a unique or a shared handle, a unique or a shared array
 handle, an optional, an alternative, a bounded or an unbounded array. The scope
 descriptor lists the request categories, value, lvalue reference, rvalue
-reference, and pointer, it exposes for each storage form; a route whose request
+reference, and pointer, it exposes for each storage kind; a route whose request
 category the scope does not expose for the stored form is not served. A
 registration whose scope does not store its form, or its nested wrappers, is
 rejected when it is compiled.

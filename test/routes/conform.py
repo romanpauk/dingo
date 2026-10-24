@@ -50,7 +50,7 @@ from spec.reference.routes import (  # noqa: E402
     Leaf,
     Model,
     Request,
-    RequestForm,
+    RequestKind,
     TypeTree,
     resolve,
 )
@@ -148,9 +148,9 @@ def parse_declarator(type_tree, rest):
         if rest.startswith("const"):
             rest = rest[len("const") :]
         elif rest.startswith("&&"):
-            kind, rest = RequestForm.RVALUE_REFERENCE, rest[2:]
+            kind, rest = RequestKind.RVALUE_REFERENCE, rest[2:]
         elif rest.startswith("&"):
-            kind, rest = RequestForm.LVALUE_REFERENCE, rest[1:]
+            kind, rest = RequestKind.LVALUE_REFERENCE, rest[1:]
         elif rest.startswith("*"):
             type_tree, rest = TypeTree(wrapper="ptr", args=(type_tree,)), rest[1:]
         elif rest.startswith("[]"):
@@ -172,7 +172,7 @@ def parse_declarator(type_tree, rest):
 
 def parse_type_tree(text):
     kind, type_tree = parse_type(text)
-    if kind == RequestForm.LVALUE_REFERENCE:
+    if kind == RequestKind.LVALUE_REFERENCE:
         return TypeTree(wrapper="ref", args=(type_tree,))
     if kind is not None:
         raise ValueError(f"{text!r} is not a storable type tree")
@@ -181,7 +181,7 @@ def parse_type_tree(text):
 
 def parse_request(text):
     kind, type_tree = parse_type(text)
-    return Request(kind or RequestForm.VALUE, type_tree)
+    return Request(kind or RequestKind.VALUE, type_tree)
 
 
 # Comparison

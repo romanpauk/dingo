@@ -16,13 +16,13 @@ cpp_capabilities: tuple[Capability, ...] = (
     ),
     Capability(
         id="consteval",
-        description="Forces engine functions to evaluate at compile time, in place of ordinary constexpr functions.",
+        description="Forces the route functions to evaluate at compile time, in place of ordinary constexpr functions.",
         feature_macro="__cpp_consteval",
         minimum=201811,
     ),
     Capability(
         id="constexpr_dynamic_alloc",
-        description="Allows transient constexpr allocation in the engine, in place of two-pass fixed-array sizing.",
+        description="Allows transient constexpr allocation in the route functions, in place of two-pass fixed-array sizing.",
         feature_macro="__cpp_constexpr_dynamic_alloc",
         minimum=201907,
     ),

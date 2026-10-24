@@ -22,7 +22,7 @@ address of a per-type tag.
 A wrapper is of a wrapper semantics, a tag type whose `wrapper_semantics`
 declare its properties and forms. The kinds of the library are declared so in
 [type/wrapper_semantics.gen.h](../../include/dingo/type/wrapper_semantics.gen.h),
-and the engine knows a kind only by its properties and forms:
+and the conversion rules know a semantics only by its properties and operations:
 
 - `T*` is a wrapper of `::dingo::semantics::pointer`, `T&` of
   `::dingo::semantics::reference`, `T[N]` of `::dingo::semantics::fixed_array`,
@@ -111,7 +111,7 @@ backends only accelerate the comparison of key values; see
 marker whose `type` is `T`. It remains part of the public API. The route
 selection matches every request by its whole type tree, so a request of a
 specific wrapper spelling is served only by a route that reaches that type tree,
-and the engine does not read the marker.
+and the conversion rules do not read the marker.
 
 ## Request Type
 
@@ -120,7 +120,7 @@ and the engine does not read the marker.
 of a request: its kind, value, lvalue reference, or rvalue reference;
 `value_type`, the type it asks for without references; `made_type`, the type a
 binding makes the object of a constructed request as; and `descriptor`, its
-kind, type tree, and key, which the engine reads.
+kind, type tree, and key, which the conversion rules read.
 
 This keeps request normalization at the public boundary. Runtime, static, local,
 and parent sources then pass one descriptor through the selection.

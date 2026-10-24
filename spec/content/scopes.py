@@ -37,10 +37,10 @@ STORED_FORMS = (
 )
 
 
-def exposures(categories_by_form):
+def exposures(categories_by_kind):
     return tuple(
-        Exposure(form=form, categories=categories)
-        for form, categories in sorted(categories_by_form.items())
+        Exposure(storage_kind=form, categories=categories)
+        for form, categories in sorted(categories_by_kind.items())
     )
 
 

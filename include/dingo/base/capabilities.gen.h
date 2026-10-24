@@ -21,7 +21,7 @@
 #endif
 
 // spec: cpp.capabilities.consteval
-// Forces engine functions to evaluate at compile time, in place of ordinary
+// Forces the route functions to evaluate at compile time, in place of ordinary
 // constexpr functions.
 #if defined(__cpp_consteval) && __cpp_consteval >= 201811L
 #define DINGO_HAS_CONSTEVAL 1
@@ -30,8 +30,8 @@
 #endif
 
 // spec: cpp.capabilities.constexpr_dynamic_alloc
-// Allows transient constexpr allocation in the engine, in place of two-pass
-// fixed-array sizing.
+// Allows transient constexpr allocation in the route functions, in place of
+// two-pass fixed-array sizing.
 #if defined(__cpp_constexpr_dynamic_alloc) &&                                  \
     __cpp_constexpr_dynamic_alloc >= 201907L
 #define DINGO_HAS_CONSTEXPR_DYNAMIC_ALLOC 1

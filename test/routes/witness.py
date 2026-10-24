@@ -127,7 +127,7 @@ def witnessed_routes(model):
     kinds = {kind.id for kind in model.spec.wrapper_semantics}
     kinds |= {user.kind.id for user in kind_probes}
     owners = {
-        form.id: kind.id for kind in model.semantics_by_id.values() for form in kind.forms
+        form.id: kind.id for kind in model.semantics_by_id.values() for form in kind.operations
     }
     return [
         route.id

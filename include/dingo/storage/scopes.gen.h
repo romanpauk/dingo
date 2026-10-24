@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <dingo/storage/storage_forms.gen.h>
+#include <dingo/storage/storage_kinds.gen.h>
 #include <dingo/type/operations.gen.h>
 
 #include <cstddef>
@@ -34,7 +34,7 @@ enum class recursion_guard : std::uint8_t {
 };
 
 enum class exposure_rule : std::uint8_t {
-  form,
+  kind,
   handle_copies,
 };
 
@@ -51,8 +51,8 @@ struct scope_info {
   exposure_rule rule;
   bool nested_wrappers;
   bool needs_instance;
-  // The request categories exposed per storage form, indexed by storage_form.
-  std::uint8_t exposures[storage_form_count];
+  // The request categories exposed per storage kind, indexed by storage_kind.
+  std::uint8_t exposures[storage_kind_count];
 };
 
 } // namespace dingo::core
@@ -99,7 +99,7 @@ template <> struct scope_traits<::dingo::external> {
       false,
       core::recursion_guard::none,
       false,
-      core::exposure_rule::form,
+      core::exposure_rule::kind,
       true,
       true,
       {11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11}};
@@ -113,7 +113,7 @@ template <> struct scope_traits<::dingo::shared> {
       false,
       core::recursion_guard::while_unresolved,
       true,
-      core::exposure_rule::form,
+      core::exposure_rule::kind,
       true,
       false,
       {11, 11, 11, 11, 11, 0, 11, 11, 11, 11, 11}};
@@ -141,7 +141,7 @@ template <> struct scope_traits<::dingo::unique> {
       true,
       core::recursion_guard::always,
       false,
-      core::exposure_rule::form,
+      core::exposure_rule::kind,
       true,
       false,
       {4, 12, 4, 4, 12, 0, 4, 4, 12, 4, 4}};

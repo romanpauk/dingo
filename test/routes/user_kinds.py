@@ -61,20 +61,20 @@ def like(kind_id, library_id, targets=None, without=(), traits=None, lacks=()):
         id=kind_id,
         description=f"A kind of the user like {library_id}.",
         traits=tuple(t for t in (traits or kind.traits) if t not in lacks),
-        forms=tuple(
+        operations=tuple(
             replace(
                 form,
                 id=f"{form.id}_of_{kind_id}",
                 target=targets.get(form.target, form.target),
             )
-            for form in kind.forms
-            if form.form not in without
+            for form in kind.operations
+            if form.operation not in without
         ),
     )
 
 
 def kinded(kind, template, arguments="", extent=None, instance="", mutates=None):
-    creates = any(f.form in (Operation.WRAP, Operation.ADOPT) for f in kind.forms)
+    creates = any(f.operation in (Operation.WRAP, Operation.ADOPT) for f in kind.operations)
     return UserKind(
         kind=kind,
         tag=f"{kind.id}_kind",
@@ -105,10 +105,10 @@ ARRAY = replace(
         Property.CONSTRUCTIBLE,
         Property.MAPPED,
     ),
-    forms=tuple(
+    operations=tuple(
         replace(form, id=f"{form.id}_of_kind_array")
-        for form in LIBRARY["array"].forms
-        if form.form is not Operation.RELEASE
+        for form in LIBRARY["array"].operations
+        if form.operation is not Operation.RELEASE
     ),
 )
 
@@ -213,10 +213,10 @@ def cpp_declarations():
         if kind.has_extent:
             properties.append("dingo::property::extent")
         forms = [
-            f"dingo::op<dingo::operation::{form.form.value}"
+            f"dingo::op<dingo::operation::{form.operation.value}"
             + (f", {tag_of(form.target)}" if form.target else "")
             + ">"
-            for form in kind.forms
+            for form in kind.operations
         ]
         lines += [
             "",

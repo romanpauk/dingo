@@ -32,7 +32,7 @@ LEAF = (Requirement(predicate=Predicate.LEAF, subject="L"),)
 def upcast(form, category, access=Access.INHERIT):
     return OperationTemplate(
         id=form.value,
-        form=form,
+        operation=form,
         from_type_tree=wrapper(KIND, leaf_variable(None), category=category),
         to_type_tree=wrapper(KIND, leaf_variable(None), category=category),
         access=access,
@@ -44,14 +44,14 @@ def upcast(form, category, access=Access.INHERIT):
 operations: tuple[OperationTemplate, ...] = (
     OperationTemplate(
         id="borrow",
-        form=Operation.BORROW,
+        operation=Operation.BORROW,
         from_type_tree=wrapper(KIND, variable("X"), category=LVALUE),
         to_type_tree=variable("X", LVALUE),
         access=Access.INHERIT,
     ),
     OperationTemplate(
         id="take",
-        form=Operation.TAKE,
+        operation=Operation.TAKE,
         from_type_tree=wrapper(KIND, variable("X"), category=RVALUE),
         to_type_tree=variable("X", RVALUE),
         access=Access.CONSUME,
@@ -59,7 +59,7 @@ operations: tuple[OperationTemplate, ...] = (
     ),
     OperationTemplate(
         id="wrap",
-        form=Operation.WRAP,
+        operation=Operation.WRAP,
         from_type_tree=variable("X", RVALUE),
         to_type_tree=wrapper(KIND, variable("X"), category=RVALUE),
         access=Access.CONSUME,
@@ -67,7 +67,7 @@ operations: tuple[OperationTemplate, ...] = (
     ),
     OperationTemplate(
         id="adopt",
-        form=Operation.ADOPT,
+        operation=Operation.ADOPT,
         from_type_tree=wrapper(TARGET, variable("X"), category=RVALUE),
         to_type_tree=wrapper(KIND, variable("X"), category=RVALUE),
         access=Access.CONSUME,
@@ -75,7 +75,7 @@ operations: tuple[OperationTemplate, ...] = (
     ),
     OperationTemplate(
         id="share",
-        form=Operation.SHARE,
+        operation=Operation.SHARE,
         from_type_tree=wrapper(KIND, variable("X"), category=RVALUE),
         to_type_tree=wrapper(TARGET, variable("X"), category=RVALUE),
         access=Access.CONSUME,
@@ -83,7 +83,7 @@ operations: tuple[OperationTemplate, ...] = (
     ),
     OperationTemplate(
         id="address",
-        form=Operation.ADDRESS,
+        operation=Operation.ADDRESS,
         from_type_tree=variable("X", LVALUE),
         to_type_tree=wrapper(KIND, variable("X"), category=PRVALUE),
         access=Access.BORROW,
@@ -92,7 +92,7 @@ operations: tuple[OperationTemplate, ...] = (
     ),
     OperationTemplate(
         id="decay",
-        form=Operation.DECAY,
+        operation=Operation.DECAY,
         from_type_tree=wrapper(KIND, variable("X"), category=LVALUE),
         to_type_tree=wrapper(TARGET, variable("X"), category=PRVALUE),
         access=Access.BORROW,
@@ -100,7 +100,7 @@ operations: tuple[OperationTemplate, ...] = (
     ),
     OperationTemplate(
         id="release",
-        form=Operation.RELEASE,
+        operation=Operation.RELEASE,
         from_type_tree=wrapper(KIND, variable("X"), category=RVALUE),
         to_type_tree=wrapper(TARGET, variable("X"), category=PRVALUE),
         access=Access.CONSUME,
@@ -111,7 +111,7 @@ operations: tuple[OperationTemplate, ...] = (
     ),
     OperationTemplate(
         id="release_whole",
-        form=Operation.RELEASE_WHOLE,
+        operation=Operation.RELEASE_WHOLE,
         from_type_tree=variable("A", RVALUE),
         to_type_tree=wrapper(KIND, variable("A"), category=PRVALUE),
         access=Access.CONSUME,
@@ -122,7 +122,7 @@ operations: tuple[OperationTemplate, ...] = (
     upcast(Operation.UPCAST_CONSUMED, RVALUE),
     OperationTemplate(
         id="retain",
-        form=Operation.RETAIN,
+        operation=Operation.RETAIN,
         from_type_tree=wrapper(KIND, leaf_variable(None), category=LVALUE),
         to_type_tree=wrapper(KIND, leaf_variable(None), category=LVALUE),
         access=Access.BORROW,

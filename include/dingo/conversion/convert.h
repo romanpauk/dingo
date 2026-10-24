@@ -160,8 +160,8 @@ using first_interface_t =
 template <typename Binding> constexpr bool registers() {
   using stored = typename Binding::stored_type;
   constexpr registration_status status = Binding::status;
-  static_assert(require<status != registration_status::form_not_stored,
-                        diag::scope_form_not_stored, stored>());
+  static_assert(require<status != registration_status::kind_not_stored,
+                        diag::scope_kind_not_stored, stored>());
   static_assert(require<status != registration_status::nested_wrappers,
                         diag::scope_nested_wrappers, stored>());
   static_assert(require<status != registration_status::no_default_factory,
@@ -406,7 +406,7 @@ template <typename Binding, typename Step, typename Context, typename Value>
 decltype(auto) upcast_step(Context &context, Value &&value) {
   using interface = interface_t<Step, Binding>;
   // A leaf, or the element of an address, converts to a base of it.
-  constexpr bool to_address = has_form(Step::to, operation::address);
+  constexpr bool to_address = has_operation(Step::to, operation::address);
   if constexpr (!is_wrapper(Step::to) || to_address) {
     using leaf = std::remove_pointer_t<remove_cvref_t<Value>>;
     static_assert(require<std::is_convertible_v<leaf *, interface *>,
@@ -813,7 +813,7 @@ private:
   using inner = created_wrappers<element, Inner...>;
   static constexpr bool wraps = Outer == operation::wrap;
   static constexpr bool semantics_match =
-      has_form(wrapper_semantics_v<Target>, Outer);
+      has_operation(wrapper_semantics_v<Target>, Outer);
 
 public:
   using boundary =

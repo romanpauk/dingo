@@ -17,7 +17,7 @@ from spec.schema import (
     ContractDimension,
     CppApiBinding,
     Diagnostic,
-    PatternForm,
+    PatternKind,
     Requirement,
     Predicate,
     TypeTreePattern,
@@ -155,17 +155,17 @@ def test_route_pattern_forms_are_well_formed():
     spec = replace_first(
         sample_spec(),
         "rules",
-        from_type_tree=TypeTreePattern(form=PatternForm.VARIABLE, name="lower"),
+        from_type_tree=TypeTreePattern(kind=PatternKind.VARIABLE, name="lower"),
     )
     assert_one_error(spec, "pattern variable 'lower' is malformed")
     spec = replace_first(
         sample_spec(),
         "rules",
-        from_type_tree=TypeTreePattern(form=PatternForm.WRAPPER, name="W"),
+        from_type_tree=TypeTreePattern(kind=PatternKind.WRAPPER, name="W"),
     )
     assert_one_error(spec, "wrapper 'W' takes one argument")
     spec = replace_first(
-        sample_spec(), "rules", to_type_tree=TypeTreePattern(form=PatternForm.ROUTE)
+        sample_spec(), "rules", to_type_tree=TypeTreePattern(kind=PatternKind.ROUTE)
     )
     assert_one_error(spec, "route pattern takes one argument")
 

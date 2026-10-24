@@ -38,7 +38,7 @@ the library, over its components, described in
 [Components](overview.md#components).
 
 Both registration modes reduce to one binding type, and both backends serve a
-request through the same engine:
+request through the same conversion functions:
 
 ```text
 register_type<...>() / bind<...> -> registration -> binding_type -> derived reachable types
@@ -48,7 +48,7 @@ resolve<T>() -> request -> selection -> backend -> reachable type -> walk -> T
 A binding type derives the reachable types it serves when it is compiled. The
 static backend selects the binding and the reachable type of a request when the
 request is compiled, and the runtime backend when it is resolved, by the same
-engine functions.
+functions.
 
 The main owners are:
 

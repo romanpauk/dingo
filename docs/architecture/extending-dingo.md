@@ -260,7 +260,7 @@ Specialize `dingo::scope_traits` for a tag type to make it a scope. A
 specialization holds its `dingo::scope_descriptor`, the fields of the Scope
 schema of the spec: the slot kind, the materialized value category, stability,
 whether a request consumes the object, the recursion guard, and the request
-categories it exposes for each storage form. A user scope may copy the
+categories it exposes for each storage kind. A user scope may copy the
 descriptor of a built-in scope:
 
 ```c++

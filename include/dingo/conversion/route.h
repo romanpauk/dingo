@@ -7,19 +7,19 @@
 
 #pragma once
 
-// The route engine of the next implementation: registration, lookup, and
+// The routes of the next implementation: registration, lookup, and
 // derivation as constexpr functions over type trees and the operations. A route
-// is a rule of a leaf or a form of a wrapper semantics, and the engine knows a
-// kind only by its descriptor, its properties and forms, so a kind of the user
-// is derived as one of the library is. It interprets the rules the same way as
-// spec/reference/routes.py, which is its oracle. Static containers evaluate it
-// at compile time and runtime containers at registration, so both serve a
-// request by the same derivation.
+// is a rule of a leaf or a form of a wrapper semantics, and the functions know
+// a kind only by its descriptor, its properties and forms, so a kind of the
+// user is derived as one of the library is. It interprets the rules the same
+// way as spec/reference/routes.py, which is its oracle. Static containers
+// evaluate it at compile time and runtime containers at registration, so both
+// serve a request by the same derivation.
 
 #include <dingo/lookup/key.h>
 #include <dingo/lookup/key_kinds.gen.h>
 #include <dingo/storage/scopes.gen.h>
-#include <dingo/storage/storage_forms.gen.h>
+#include <dingo/storage/storage_kinds.gen.h>
 #include <dingo/type/type_tree.h>
 #include <dingo/type/wrapper_traits.h>
 
@@ -45,12 +45,12 @@ constexpr bool has_properties(const semantics_descriptor *kind,
   return kind->wrapper && (kind->properties & properties) == properties;
 }
 
-constexpr std::uint32_t form_bit(operation form) {
+constexpr std::uint32_t operation_bit(operation form) {
   return std::uint32_t(1) << static_cast<unsigned>(form);
 }
 
-constexpr bool has_form(const semantics_descriptor *kind, operation form) {
-  return (kind->forms & form_bit(form)) != 0;
+constexpr bool has_operation(const semantics_descriptor *kind, operation form) {
+  return (kind->forms & operation_bit(form)) != 0;
 }
 
 // Whether a kind holds a number of elements: an extent, or one known at
@@ -74,7 +74,7 @@ constexpr const semantics_descriptor *semantics_at(const route_step &step,
   case type_position::wrapper:
     return step.kind;
   case type_position::target:
-    if ((step.kind->targeted & form_bit(step.form)) != 0) {
+    if ((step.kind->targeted & operation_bit(step.form)) != 0) {
       return step.kind->targets[static_cast<std::size_t>(step.form)];
     }
     return &leaf_semantics;
@@ -152,7 +152,7 @@ struct leaf_set {
 
 inline constexpr std::size_t max_key_aliases = 4;
 
-// A binding as the engine sees it: the stored type tree, the scope, and the
+// A binding as the routes see it: the stored type tree, the scope, and the
 // leaf type trees of the declared interfaces.
 struct binding_descriptor {
   type_tree stored;
@@ -175,14 +175,14 @@ struct binding_descriptor {
   std::uint32_t converted = 0;
 };
 
-enum class request_form : std::uint8_t {
+enum class request_kind : std::uint8_t {
   lvalue_reference,
   rvalue_reference,
   value
 };
 
 struct request_descriptor {
-  request_form kind = request_form::value;
+  request_kind kind = request_kind::value;
   type_tree value;
   key_descriptor key;
 };
@@ -224,7 +224,7 @@ struct reachable_types {
   bool overflow = false;
 };
 
-// Storage forms
+// Storage kinds
 
 // Whether the wrapper at `index` is of a wrapper class, by the properties of
 // its kind.
@@ -242,22 +242,22 @@ constexpr bool of_class(const type_tree &value, std::size_t index,
   return of_class(semantics_of(value, index), of);
 }
 
-// The most specific storage form of a stored type tree, by the classes of its
+// The most specific storage kind of a stored type tree, by the classes of its
 // outer wrappers.
-constexpr storage_form storage_form_of(const type_tree &stored) {
-  storage_form best = storage_form::plain;
+constexpr storage_kind storage_kind_of(const type_tree &stored) {
+  storage_kind best = storage_kind::plain;
   int depth = 0;
-  for (const storage_form_info &form : storage_forms) {
-    if (!form.outer.any || !of_class(stored, 0, form.outer)) {
+  for (const storage_kind_info &entry : storage_kinds) {
+    if (!entry.outer.any || !of_class(stored, 0, entry.outer)) {
       continue;
     }
-    if (!form.inner.any) {
+    if (!entry.inner.any) {
       if (depth < 1) {
-        best = form.form;
+        best = entry.kind;
         depth = 1;
       }
-    } else if (stored.nodes[0].arity == 1 && of_class(stored, 1, form.inner)) {
-      best = form.form;
+    } else if (stored.nodes[0].arity == 1 && of_class(stored, 1, entry.inner)) {
+      best = entry.kind;
       depth = 2;
     }
   }
@@ -266,7 +266,7 @@ constexpr storage_form storage_form_of(const type_tree &stored) {
 
 constexpr std::uint8_t exposed_categories(const binding_descriptor &binding) {
   return binding.scope
-      .exposures[static_cast<std::size_t>(storage_form_of(binding.stored))];
+      .exposures[static_cast<std::size_t>(storage_kind_of(binding.stored))];
 }
 
 // Type tree properties
@@ -311,7 +311,7 @@ constexpr std::uint32_t leaves_held_by_value(const type_tree &value,
 // Whether a type tree is an object that can be referred to and pointed to:
 // anything but an address, a wrapper of a kind of the address form.
 constexpr bool addressable(const type_tree &value) {
-  return !has_form(semantics_of(value), operation::address);
+  return !has_operation(semantics_of(value), operation::address);
 }
 
 constexpr bool holds_in_array(const type_tree &value) {
@@ -638,7 +638,7 @@ constexpr void derive_from(const binding_descriptor &binding,
       apply(binding, found, from, route_step{rule.form, &leaf_semantics},
             from.value, 0, limit);
     } else if (rule.from_position == type_position::wrapper &&
-               has_form(kind, rule.form)) {
+               has_operation(kind, rule.form)) {
       apply_to_arguments(binding, found, from, route_step{rule.form, kind},
                          limit);
     }
@@ -705,7 +705,7 @@ constexpr bool qualifies(const type_tree &derived, const type_tree &requested,
       above_const = above_const && (r.qualifiers & const_qualified) != 0;
     }
     // An address, a wrapper of a kind of the address form, refers to a level.
-    if (has_form(kind, operation::address)) {
+    if (has_operation(kind, operation::address)) {
       ++index;
       level = true;
       continue;
@@ -727,10 +727,10 @@ constexpr bool accepts(const request_descriptor &request,
                        const reachable_type &candidate, std::uint8_t exposed) {
   if (!type_trees_match(candidate.value, request.value) ||
       !qualifies(candidate.value, request.value,
-                 request.kind != request_form::value)) {
+                 request.kind != request_kind::value)) {
     return false;
   }
-  if (request.kind == request_form::lvalue_reference) {
+  if (request.kind == request_kind::lvalue_reference) {
     return candidate.category == value_category::lvalue &&
            exposes(exposed, request_category::lvalue) &&
            addressable(candidate.value);
@@ -741,7 +741,7 @@ constexpr bool accepts(const request_descriptor &request,
   if (candidate.category == value_category::rvalue) {
     return exposes(exposed, request_category::rvalue);
   }
-  return request.kind == request_form::value &&
+  return request.kind == request_kind::value &&
          candidate.category == value_category::prvalue;
 }
 
@@ -846,7 +846,7 @@ constexpr route_choice select_route(const binding_descriptor &binding,
   }
   const semantics_descriptor *outer = semantics_of(request.value);
   for (const operation_info &rule : operations) {
-    if (!creates(rule) || !has_form(outer, rule.form)) {
+    if (!creates(rule) || !has_operation(outer, rule.form)) {
       continue;
     }
     const route_step step{rule.form, outer};
@@ -861,7 +861,7 @@ constexpr route_choice select_route(const binding_descriptor &binding,
     const semantics_descriptor *inner =
         detail::created_inner(step, request.value);
     for (const operation_info &inner_rule : operations) {
-      if (!creates(inner_rule) || !has_form(inner, inner_rule.form)) {
+      if (!creates(inner_rule) || !has_operation(inner, inner_rule.form)) {
         continue;
       }
       const route_step inner_step{inner_rule.form, inner};
@@ -947,7 +947,7 @@ constexpr bool share_domain(const binding_descriptor &left,
 
 enum class registration_status : std::uint8_t {
   registered,
-  form_not_stored,
+  kind_not_stored,
   nested_wrappers,
   no_default_factory,
   interface_in_array,
@@ -970,7 +970,7 @@ constexpr bool serves_an_interface(const binding_descriptor &binding,
       type_tree interface = binding.interfaces[index];
       interface.nodes[0].qualifiers |= qualifiers;
       if (select_route(binding, found,
-                       {request_form::lvalue_reference, interface, binding.key},
+                       {request_kind::lvalue_reference, interface, binding.key},
                        exposed)
               .reachable_type != no_reachable_type) {
         return true;
@@ -981,7 +981,7 @@ constexpr bool serves_an_interface(const binding_descriptor &binding,
           continue;
         }
         const request_descriptor probe{
-            request_form::value,
+            request_kind::value,
             wrap(of, is_mapped(of) ? any_family : nullptr,
                  created_copyable(of, interface), interface),
             binding.key};
@@ -999,7 +999,7 @@ constexpr registration_status
 register_status(const binding_descriptor &binding) {
   const scope_info &scope = binding.scope;
   if (exposed_categories(binding) == 0) {
-    return registration_status::form_not_stored;
+    return registration_status::kind_not_stored;
   }
   if (!scope.nested_wrappers && is_wrapper(binding.stored.nodes[0].kind)) {
     std::size_t arguments = binding.stored.nodes[0].arity;

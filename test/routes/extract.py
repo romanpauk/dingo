@@ -316,7 +316,7 @@ def kind_bases(user):
     to, or those of the kind it mutates, which it may no longer reach."""
     targets = [
         other
-        for form in mutated(user).kind.forms
+        for form in mutated(user).kind.operations
         if form.target is not None
         for other in kind_probes
         if other.kind.id == form.target

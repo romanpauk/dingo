@@ -110,9 +110,9 @@ def type_position(pattern, where):
     Patterns are a variable or one wrapper applied to a variable; anything else
     needs the generator to grow.
     """
-    if pattern.form.value == "variable":
+    if pattern.kind.value == "variable":
         return "element"
-    if pattern.form.value != "semantics" or len(pattern.args) != 1:
+    if pattern.kind.value != "semantics" or len(pattern.args) != 1:
         raise GeneratorError(f"{where}: pattern is not a wrapper of one argument")
     if pattern.name == "K":
         return "wrapper"
@@ -154,11 +154,11 @@ def property_class_fields(property_class):
     return {"has": has, "lacks": lacks}
 
 
-def storage_form_fields(form):
+def storage_kind_fields(kind):
     return {
-        "id": form.id,
-        "outer": property_class_fields(form.outer),
-        "inner": property_class_fields(form.inner),
+        "id": kind.id,
+        "outer": property_class_fields(kind.outer),
+        "inner": property_class_fields(kind.inner),
     }
 
 
@@ -176,8 +176,8 @@ REQUEST_CATEGORY_BITS = {"value": 1, "lvalue": 2, "rvalue": 4, "pointer": 8}
 REQUIREMENT_BITS = {"copyable": 1, "array": 2, "addressable": 4, "leaf": 8, "stable": 16, "borrowable": 32}
 
 
-def scope_fields(scope, form_ids):
-    exposed = {exposure.form: exposure for exposure in scope.exposures}
+def scope_fields(scope, kind_ids):
+    exposed = {exposure.storage_kind: exposure for exposure in scope.exposures}
     return {
         "id": scope.id,
         "slot": scope.slot.value,
@@ -193,12 +193,12 @@ def scope_fields(scope, form_ids):
             sum(REQUEST_CATEGORY_BITS[c.value] for c in exposed[form].categories)
             if form in exposed
             else 0
-            for form in form_ids
+            for form in kind_ids
         ],
     }
 
 
-def form_fields(name, rule, of_semantics, where):
+def operation_fields(name, rule, of_semantics, where):
     """The fields of a operation, or of a rule of a leaf, from its template
     or its route."""
     for pattern in (rule.from_type_tree, rule.to_type_tree):
@@ -226,23 +226,23 @@ def form_fields(name, rule, of_semantics, where):
 def operation_entries(spec):
     """The operations and the rules of a leaf in the order of the rules,
     the order of their first routes."""
-    templates = {template.form: template for template in spec.operations}
+    templates = {template.operation: template for template in spec.operations}
     entries, seen = [], set()
     for route in spec.rules:
-        key = route.form if route.form is not None else route.id
+        key = route.operation if route.operation is not None else route.id
         if key in seen:
             continue
         seen.add(key)
-        if route.form is None:
-            entries.append(form_fields(route.id, route, False, f"routes.{route.id}"))
+        if route.operation is None:
+            entries.append(operation_fields(route.id, route, False, f"routes.{route.id}"))
         else:
-            template = templates[route.form]
+            template = templates[route.operation]
             entries.append(
-                form_fields(route.form.value, template, True, f"operations.{template.id}")
+                operation_fields(route.operation.value, template, True, f"operations.{template.id}")
             )
     for form, template in templates.items():
         if form not in seen:
-            entries.append(form_fields(form.value, template, True, f"operations.{template.id}"))
+            entries.append(operation_fields(form.value, template, True, f"operations.{template.id}"))
     return entries
 
 
@@ -291,21 +291,21 @@ def operations(spec):
     ]
 
 
-def storage_forms(spec):
-    """include/dingo/storage/storage_forms.gen.h from the storage forms."""
-    forms = sorted(spec.storage_forms, key=lambda f: f.id)
+def storage_kinds(spec):
+    """include/dingo/storage/storage_kinds.gen.h from the storage kinds."""
+    kinds = sorted(spec.storage_kinds, key=lambda kind: kind.id)
     return [
         GeneratedFile(
-            path="include/dingo/storage/storage_forms.gen.h",
+            path="include/dingo/storage/storage_kinds.gen.h",
             content=render(
-                "storage_forms.gen.h.j2",
+                "storage_kinds.gen.h.j2",
                 request_categories=[
                     {"name": name, "bit": bit}
                     for name, bit in REQUEST_CATEGORY_BITS.items()
                 ],
-                storage_forms=[storage_form_fields(form) for form in forms],
+                storage_kinds=[storage_kind_fields(kind) for kind in kinds],
             ),
-            spec_ids=("storage_forms",),
+            spec_ids=("storage_kinds",),
         )
     ]
 
@@ -372,8 +372,8 @@ def wrapper_semantics(spec):
             "name": names[semantics.id],
             "properties": property_names(semantics),
             "operations": [
-                {"operation": operation.form.value, "target": names.get(operation.target)}
-                for operation in semantics.forms
+                {"operation": operation.operation.value, "target": names.get(operation.target)}
+                for operation in semantics.operations
             ],
         }
         for semantics in spec.wrapper_semantics
@@ -397,9 +397,9 @@ def scopes(spec):
     built-in scope with its scope_traits, which hold its descriptor."""
     from spec.schema import ExposureRule, RecursionGuard, Slot
 
-    forms = sorted(spec.storage_forms, key=lambda form: form.id)
-    form_ids = [form.id for form in forms]
-    scope_data = {scope.id: scope_fields(scope, form_ids) for scope in spec.scopes}
+    kinds = sorted(spec.storage_kinds, key=lambda kind: kind.id)
+    kind_ids = [kind.id for kind in kinds]
+    scope_data = {scope.id: scope_fields(scope, kind_ids) for scope in spec.scopes}
     tags = []
     namespaces = set()
     for scope_tag in sorted(spec.cpp.scope_tags, key=lambda p: p.scope):
@@ -548,7 +548,7 @@ EMITTERS = (
     capabilities,
     variants,
     operations,
-    storage_forms,
+    storage_kinds,
     scopes,
     selection_rules,
     key_kinds,
