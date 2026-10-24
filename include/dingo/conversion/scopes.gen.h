@@ -49,7 +49,7 @@ struct scope_info {
   recursion_guard guard;
   bool retains_unresolved_source;
   exposure_rule rule;
-  bool nested_layers;
+  bool nested_wrappers;
   bool needs_instance;
   // The request categories exposed per storage form, indexed by storage_form.
   std::uint8_t exposures[storage_form_count];

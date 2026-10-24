@@ -13,7 +13,7 @@
 // asks for T of the interface annotated by Tag.
 
 #include <dingo/conversion/key.h>
-#include <dingo/conversion/layer_traits.h>
+#include <dingo/conversion/wrapper_traits.h>
 #include <dingo/primitives/shape.h>
 
 #include <type_traits>

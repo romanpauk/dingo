@@ -79,7 +79,7 @@ TEST(engine, computes_what_the_reference_computes) {
           binding, terms, request, core::exposed_categories(binding));
       served = choice.term != core::no_term;
       if (served) {
-        // The rules of the term, then the layers the request creates.
+        // The rules of the term, then the wrappers the request creates.
         rules = rules_of(terms.items[choice.term].rules,
                          terms.items[choice.term].rule_count) +
                 rules_of(choice.created, choice.created_count);

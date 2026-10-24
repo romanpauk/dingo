@@ -36,7 +36,7 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         id="borrowing_is_compositional",
         description=(
             "A borrowing scope reaches every object its stored shape holds, through "
-            "any combination of layers, and copies every copyable one."
+            "any combination of wrappers, and copies every copyable one."
         ),
         cases=tuple(
             f"routes:*/*/{scope}/{stored}/*#served"
@@ -193,7 +193,7 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         decision=DECISION,
     ),
     BehaviorChange(
-        id="interface_bindings_compose_with_layers",
+        id="interface_bindings_compose_with_wrappers",
         description=(
             "A binding can declare interfaces of a leaf it holds in an optional or "
             "an alternative, which it reaches by borrowing."
@@ -257,7 +257,7 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         decision=DECISION,
     ),
     BehaviorChange(
-        id="user_wrappers_are_layers",
+        id="user_wrappers_behave_like_standard_ones",
         description=(
             "A user wrapper behaves as the wrapper semantics its traits declare, in every "
             "scope, as the standard wrappers do."
@@ -273,7 +273,7 @@ behavior_changes: tuple[BehaviorChange, ...] = (
     BehaviorChange(
         id="wrapper_extension_point",
         description=(
-            "A wrapper is made a layer of the shape algebra by one public trait, "
+            "A wrapper gets its semantics from one public trait, "
             "dingo::wrapper_traits, which the standard wrappers specialize too."
         ),
         cases=("api:wrapper_traits",),
@@ -306,7 +306,7 @@ behavior_changes: tuple[BehaviorChange, ...] = (
             "wrapper behaves as a unique, shared, or optional handle at most."
         ),
         now=(
-            "dingo::wrapper_semantics declares the layer_property bits and the "
+            "dingo::wrapper_semantics declares the property bits and the "
             "forms of a kind, each a dingo::operation with the kind it leads "
             "to; the library's ::dingo::semantics::sole_owner, ::dingo::semantics::shared_owner, ::dingo::semantics::optional_value, "
             "::dingo::semantics::variant_value, ::dingo::semantics::fixed_array, ::dingo::semantics::dynamic_array, ::dingo::semantics::pointer, "
@@ -469,7 +469,7 @@ behavior_changes: tuple[BehaviorChange, ...] = (
     BehaviorChange(
         id="stored_objects_are_constructed_in_place",
         description=(
-            "A binding constructs the object it stores in place, every layer "
+            "A binding constructs the object it stores in place, every wrapper "
             "around its leaf, so storing it moves nothing."
         ),
         cases=("matrix:dingo_matrix_test_lifetime_counts/*_shared_value_optional_*",),
@@ -609,7 +609,7 @@ behavior_changes: tuple[BehaviorChange, ...] = (
     BehaviorChange(
         id="empty_elements_are_refused",
         description=(
-            "A request through the element of a nullable layer that holds it "
+            "A request through the element of a nullable wrapper that holds it "
             "in place, whose object holds none, is a null address when the "
             "request is of an address, and is refused otherwise."
         ),

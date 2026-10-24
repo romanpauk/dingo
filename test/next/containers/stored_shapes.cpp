@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 //
 
-// The requests a binding serves of the shapes it stores: pointers to layers,
+// The requests a binding serves of the shapes it stores: pointers to wrappers,
 // const and volatile objects, smart pointers to const objects, alternatives,
 // arrays of arrays, and the conversions of its leaf and of its handles to
 // the declared interfaces. Ported from the registration traits tests of the

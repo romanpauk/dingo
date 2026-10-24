@@ -7,7 +7,7 @@ spec with one or more entities of every section and mutate it.
 from spec.content.operations import operations as ROUTE_FORMS
 from spec.schema import (
     CppSemanticsTag,
-    LayerClass,
+    PropertyClass,
     SelectionSourceTime,
     SourceTime,
     TransactionEffect,
@@ -40,7 +40,7 @@ from spec.schema import (
     KeyKind,
     LookupDeclaration,
     WrapperSemantics,
-    LayerTrait,
+    Property,
     LookupFilter,
     PatternForm,
     Predicate,
@@ -85,7 +85,7 @@ def sample_spec() -> Spec:
                 id="own",
                 description="An owning wrapper.",
                 parameters=1,
-                traits=(LayerTrait.OWNING, LayerTrait.NULLABLE),
+                traits=(Property.OWNING, Property.NULLABLE),
             ),
             WrapperSemantics(id="alt", description="An alternative.", parameters=1, variadic=True),
             WrapperSemantics(id="array", description="A sized array.", parameters=1, has_extent=True),
@@ -95,7 +95,7 @@ def sample_spec() -> Spec:
             StorageForm(
                 id="unique_handle",
                 description="An owning handle.",
-                outer=LayerClass(has=(LayerTrait.OWNING,)),
+                outer=PropertyClass(has=(Property.OWNING,)),
             ),
         ),
         scopes=(

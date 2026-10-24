@@ -7,7 +7,7 @@
 
 #pragma once
 
-// The wrappers of the kind probes: a standard type in a wrapper of a layer
+// The wrappers of the kind probes: a standard type in a wrapper of a wrapper
 // kind of the user, `Kind`, whose wrapper_semantics user_kinds.py declares.
 // Each provides every operation its kind may have a form of, so a route the
 // declaration of the kind does not allow is not served because of the

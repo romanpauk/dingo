@@ -56,7 +56,7 @@ template <typename Boundary, typename Resolver> struct boundary_maker {
 template <typename Resolver> class runtime_entry {
 public:
   // Walks a term to its boundary and returns the address of the borrowed
-  // object, or null for the element of a layer that holds none when the
+  // object, or null for the element of a wrapper that holds none when the
   // request takes its address, `null_allowed`.
   using thunk = void *(*)(runtime_entry &, Resolver &, bool);
 
@@ -224,7 +224,7 @@ private:
   static constexpr bool borrows =
       plan_v<Binding, Term>.kind != completion::construct ||
       has_properties(semantics_of(Binding::published.items[Term].value),
-                     layer_property::immovable);
+                     property::immovable);
 
   template <std::size_t Term>
   static void *borrow_term(entry &binding, Resolver &resolver,
@@ -954,24 +954,24 @@ private:
     throw std::logic_error("the selected term does not complete the request");
   }
 
-  // Calls `visit` with the created layers of the plan made of `Made`: none,
-  // or the layers the creating forms make, a wrapped element or an adopted
-  // pointer, outermost first, which the layers of `Made` must have; or
+  // Calls `visit` with the created wrappers of the plan made of `Made`: none,
+  // or the wrappers the creating forms make, a wrapped element or an adopted
+  // pointer, outermost first, which the wrappers of `Made` must have; or
   // returns visit.unsupported().
   template <typename Made, typename Visit>
-  static decltype(auto) visit_layers(const request_plan &plan, Visit &visit) {
+  static decltype(auto) visit_wrappers(const request_plan &plan, Visit &visit) {
     const operation *forms = plan.creating;
     switch (plan.created) {
     case 0:
-      return visit.template apply<created_layers<Made>>();
+      return visit.template apply<created_wrappers<Made>>();
     case 1:
-      return visit_layer<Made>(forms[0], visit);
+      return visit_wrapper<Made>(forms[0], visit);
     case 2:
       switch (forms[1]) {
       case operation::wrap:
-        return visit_layer<Made, operation::wrap>(forms[0], visit);
+        return visit_wrapper<Made, operation::wrap>(forms[0], visit);
       case operation::adopt:
-        return visit_layer<Made, operation::adopt>(forms[0], visit);
+        return visit_wrapper<Made, operation::adopt>(forms[0], visit);
       default:
         break;
       }
@@ -982,30 +982,30 @@ private:
     return visit.unsupported();
   }
 
-  // Calls `visit` with the created layers of `Outer...` over the layer the
+  // Calls `visit` with the created wrappers of `Outer...` over the wrapper the
   // creating form `form` makes.
   template <typename Made, operation... Outer, typename Visit>
-  static decltype(auto) visit_layer(operation form, Visit &visit) {
+  static decltype(auto) visit_wrapper(operation form, Visit &visit) {
     switch (form) {
     case operation::wrap:
       return visit
-          .template apply<created_layers<Made, Outer..., operation::wrap>>();
+          .template apply<created_wrappers<Made, Outer..., operation::wrap>>();
     case operation::adopt:
       return visit
-          .template apply<created_layers<Made, Outer..., operation::adopt>>();
+          .template apply<created_wrappers<Made, Outer..., operation::adopt>>();
     default:
       return visit.unsupported();
     }
   }
 
-  // Whether the binding makes the boundary object of the layers of a plan.
+  // Whether the binding makes the boundary object of the wrappers of a plan.
   struct makes_boundary {
     entry &binding;
     std::size_t term;
 
-    template <typename Layers> bool apply() const {
-      if constexpr (Layers::valid) {
-        return binding.template makes<typename Layers::boundary>(term);
+    template <typename Wrappers> bool apply() const {
+      if constexpr (Wrappers::valid) {
+        return binding.template makes<typename Wrappers::boundary>(term);
       } else {
         return false;
       }
@@ -1019,8 +1019,8 @@ private:
     entry &binding;
     std::size_t term;
 
-    template <typename Layers> Request apply() const {
-      return construct_with<Request, Layers>(resolver, binding, term);
+    template <typename Wrappers> Request apply() const {
+      return construct_with<Request, Wrappers>(resolver, binding, term);
     }
 
     [[noreturn]] static Request unsupported() {
@@ -1040,46 +1040,47 @@ private:
     constructs_request<Request> constructs{resolver, binding, term};
     if constexpr (!std::is_same_v<value_type, made_type>) {
       makes_boundary qualified{binding, term};
-      if (visit_layers<value_type>(plan, qualified)) {
-        return visit_layers<value_type>(plan, constructs);
+      if (visit_wrappers<value_type>(plan, qualified)) {
+        return visit_wrappers<value_type>(plan, constructs);
       }
     }
-    return visit_layers<made_type>(plan, constructs);
+    return visit_wrappers<made_type>(plan, constructs);
   }
 
-  // Makes the request by the created layers `Layers` from the boundary object
-  // of the term; the layers a request cannot be made of are not instantiated.
-  template <typename Request, typename Layers>
+  // Makes the request by the created wrappers `Wrappers` from the boundary
+  // object of the term; the wrappers a request cannot be made of are not
+  // instantiated.
+  template <typename Request, typename Wrappers>
   static Request construct_with(Resolver &resolver, entry &binding,
                                 std::size_t term) {
-    if constexpr (Layers::valid) {
-      using made = decltype(Layers::make(
-          std::declval<typename Layers::boundary (&)()>()));
+    if constexpr (Wrappers::valid) {
+      using made = decltype(Wrappers::make(
+          std::declval<typename Wrappers::boundary (&)()>()));
       using value_type = typename request_traits<Request>::value_type;
       // An rvalue reference refers to a kept object of its qualified type,
-      // made from the object the layers make, or the object itself, which is
+      // made from the object the wrappers make, or the object itself, which is
       // constructed in place; any other request converts.
       if constexpr (std::is_rvalue_reference_v<Request>
                         ? std::is_same_v<std::remove_cv_t<made>,
                                          std::remove_cv_t<value_type>> ||
                               std::is_constructible_v<value_type, made>
                         : detail::casts_to_v<made, Request>) {
-        return make_with<Request, Layers>(resolver, binding, term);
+        return make_with<Request, Wrappers>(resolver, binding, term);
       }
     }
     throw std::logic_error("the selected term does not complete the request");
   }
 
-  template <typename Request, typename Layers>
+  template <typename Request, typename Wrappers>
   static Request make_with(Resolver &resolver, entry &binding,
                            std::size_t term) {
     using value_type = typename request_traits<Request>::value_type;
-    using boundary = typename Layers::boundary;
+    using boundary = typename Wrappers::boundary;
     if (!binding.template makes<boundary>(term)) {
       throw std::logic_error("the selected term does not complete the request");
     }
     auto make = [&] {
-      return Layers::make(
+      return Wrappers::make(
           [&] { return binding.template make<boundary>(term, resolver); });
     };
     if constexpr (std::is_rvalue_reference_v<Request>) {

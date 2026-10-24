@@ -6,7 +6,7 @@
 //
 
 // The unique scope of the next implementation: every request constructs a new
-// object and consumes it, moving it out of a layer, wrapping it, adopting it,
+// object and consumes it, moving it out of a wrapper, wrapping it, adopting it,
 // or sharing it.
 
 #include <dingo/container.h>

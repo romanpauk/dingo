@@ -72,10 +72,10 @@ def kind_example(diagnostic, traits, subject="handle_kind"):
 
 
 HANDLE_PROPERTIES = (
-    "dingo::layer_property::owning | dingo::layer_property::sharing |\n"
-    "      dingo::layer_property::nullable | dingo::layer_property::borrowable |\n"
-    "      dingo::layer_property::constructible | dingo::layer_property::copyable |\n"
-    "      dingo::layer_property::wrapper"
+    "dingo::property::owning | dingo::property::sharing |\n"
+    "      dingo::property::nullable | dingo::property::borrowable |\n"
+    "      dingo::property::constructible | dingo::property::copyable |\n"
+    "      dingo::property::mapped"
 )
 
 
@@ -597,7 +597,7 @@ int main() {
         "config&",
     ),
     example(
-        "scope_nested_layers",
+        "scope_nested_wrappers",
         ("dingo/container.h", "dingo/storage/shared_cyclical.h"),
         CONFIG
         + """

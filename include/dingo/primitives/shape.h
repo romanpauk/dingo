@@ -7,13 +7,13 @@
 
 #pragma once
 
-// Shapes of C++ types as constexpr values. A shape is a leaf wrapped in layers;
-// it is stored in preorder, so a layer is followed by the shapes of its
-// arguments. A layer is of a wrapper semantics, which the shapes know by its
-// descriptor: its identity, properties, and forms. Every layer of a wrapper
-// carries the identity of the wrapper's family, so two wrappers of the same
-// kind stay apart, while a family of any_family stands for a layer a route
-// creates.
+// Shapes of C++ types as constexpr values. A shape is a leaf wrapped in
+// wrappers; it is stored in preorder, so a wrapper is followed by the shapes of
+// its arguments. A wrapper is of a wrapper semantics, which the shapes know by
+// its descriptor: its identity, properties, and forms. Every wrapper of a
+// wrapper carries the identity of the wrapper's family, so two wrappers of the
+// same kind stay apart, while a family of any_family stands for a wrapper a
+// route creates.
 
 #include <dingo/base/mechanics.h>
 
@@ -80,7 +80,7 @@ template <typename Type> struct type_id_of<Type, true> {
 template <typename Type>
 inline constexpr type_id type_id_v = detail::type_id_of<Type>::value;
 
-// The family of a layer that a route creates, which a wrapper of any family
+// The family of a wrapper that a route creates, which a wrapper of any family
 // providing the wrapper semantics serves.
 struct any_family_tag {};
 inline constexpr type_id any_family = type_id_v<any_family_tag>;
@@ -88,14 +88,14 @@ inline constexpr type_id any_family = type_id_v<any_family_tag>;
 inline constexpr std::size_t shape_capacity = 16;
 inline constexpr std::size_t max_semantics_operations = 32;
 
-// A wrapper semantics: the identity of its tag, its layer_property bits, the
+// A wrapper semantics: the identity of its tag, its property bits, the
 // route forms it has, by bit, and for each form that leads to another kind, by
-// bit of `targeted`, that kind. A leaf is of the leaf kind, which is no layer.
-// Kinds compare by their identity, never by address, which a compiler may not
-// compare in a constant expression.
+// bit of `targeted`, that kind. A leaf is of the leaf kind, which is no
+// wrapper. Kinds compare by their identity, never by address, which a compiler
+// may not compare in a constant expression.
 struct semantics_descriptor {
   type_id id = nullptr;
-  bool layer = false;
+  bool wrapper = false;
   std::uint16_t properties = 0;
   std::uint32_t forms = 0;
   std::uint32_t targeted = 0;
@@ -104,26 +104,26 @@ struct semantics_descriptor {
 
 inline constexpr semantics_descriptor leaf_semantics{};
 
-constexpr bool is_layer(const semantics_descriptor *kind) {
-  return kind->layer;
+constexpr bool is_wrapper(const semantics_descriptor *kind) {
+  return kind->wrapper;
 }
 
-// Whether two layers are of one kind, or are both leaves.
+// Whether two wrappers are of one kind, or are both leaves.
 constexpr bool same_semantics(const semantics_descriptor *left,
                               const semantics_descriptor *right) {
-  if (!left->layer || !right->layer) {
-    return left->layer == right->layer;
+  if (!left->wrapper || !right->wrapper) {
+    return left->wrapper == right->wrapper;
   }
   return left->id == right->id;
 }
 
 struct shape_node {
-  // The kind of a layer, or the leaf kind.
+  // The kind of a wrapper, or the leaf kind.
   const semantics_descriptor *kind = &leaf_semantics;
   std::uint8_t arity = 0;
   std::uint32_t extent = 0;
   type_id family = nullptr;
-  // The type of a leaf; a layer is identified by its kind and family.
+  // The type of a leaf; a wrapper is identified by its kind and family.
   type_id type = nullptr;
   bool copyable = false;
   // Whether a leaf can be constructed by a factory: it is not abstract.
@@ -150,7 +150,7 @@ constexpr std::size_t subtree_size(const shape &value, std::size_t index) {
   return end - index;
 }
 
-// The subtree of argument `argument` of the layer at `index`.
+// The subtree of argument `argument` of the wrapper at `index`.
 constexpr std::size_t argument_index(const shape &value, std::size_t index,
                                      std::size_t argument) {
   std::size_t position = index + 1;
@@ -182,7 +182,7 @@ constexpr bool shapes_match(const shape &derived, const shape &requested) {
         d.extent != r.extent) {
       return false;
     }
-    if (!is_layer(d.kind)) {
+    if (!is_wrapper(d.kind)) {
       if (d.type != r.type) {
         return false;
       }
@@ -215,7 +215,7 @@ constexpr bool operator!=(const shape &left, const shape &right) {
   return !(left == right);
 }
 
-// A layer of `kind` of `family` applied to `argument`.
+// A wrapper of `kind` of `family` applied to `argument`.
 constexpr shape wrap(const semantics_descriptor *kind, type_id family,
                      bool copyable, const shape &argument,
                      std::uint32_t extent = 0) {
@@ -233,9 +233,9 @@ constexpr shape wrap(const semantics_descriptor *kind, type_id family,
 constexpr shape replace_leaf(const shape &value, const shape &leaf) {
   shape result;
   std::size_t index = 0;
-  while (is_layer(value.nodes[index].kind)) {
+  while (is_wrapper(value.nodes[index].kind)) {
     result.nodes[index] = value.nodes[index];
-    // The rest of a variadic layer is not on the chain and is kept.
+    // The rest of a variadic wrapper is not on the chain and is kept.
     if (value.nodes[index].arity != 1) {
       return value;
     }

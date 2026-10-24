@@ -122,10 +122,10 @@ def test_wrapper_semantics_parameters():
 
 
 def test_wrapper_semantics_unique():
-    from spec.schema import LayerTrait
+    from spec.schema import Property
 
     spec = replace_first(
-        sample_spec(), "wrapper_semantics", traits=(LayerTrait.OWNING, LayerTrait.OWNING)
+        sample_spec(), "wrapper_semantics", traits=(Property.OWNING, Property.OWNING)
     )
     assert_one_error(spec, "traits has duplicates")
 

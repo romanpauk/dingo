@@ -75,7 +75,7 @@ template <typename... Subjects> struct registration_key_values_carrier {};
 template <typename... Subjects> struct registration_without_scope_carrier {};
 template <typename... Subjects> struct registration_without_storage_carrier {};
 template <typename... Subjects> struct scope_form_not_stored_carrier {};
-template <typename... Subjects> struct scope_nested_layers_carrier {};
+template <typename... Subjects> struct scope_nested_wrappers_carrier {};
 template <typename... Subjects> struct scope_undeclared_carrier {};
 template <typename... Subjects> struct semantics_undeclared_carrier {};
 template <typename... Subjects> struct static_instances_carrier {};
@@ -126,7 +126,7 @@ enum class diag : std::uint8_t {
   registration_without_scope,
   registration_without_storage,
   scope_form_not_stored,
-  scope_nested_layers,
+  scope_nested_wrappers,
   scope_undeclared,
   semantics_undeclared,
   static_instances,
@@ -377,8 +377,7 @@ template <> struct diag_text<diag::property_unknown> {
   template <typename... Subjects>
   using carrier = ::dingo::property_unknown_carrier<Subjects...>;
   static constexpr std::string_view pieces[] = {
-      "the wrapper semantics ",
-      " declares a property bit that is no layer_property"};
+      "the wrapper semantics ", " declares a property bit that is no property"};
 };
 
 // spec: diagnostics.registration_dependencies_twice
@@ -441,12 +440,12 @@ template <> struct diag_text<diag::scope_form_not_stored> {
       "the scope of the binding does not store ", ""};
 };
 
-// spec: diagnostics.scope_nested_layers
-template <> struct diag_text<diag::scope_nested_layers> {
+// spec: diagnostics.scope_nested_wrappers
+template <> struct diag_text<diag::scope_nested_wrappers> {
   template <typename... Subjects>
-  using carrier = ::dingo::scope_nested_layers_carrier<Subjects...>;
+  using carrier = ::dingo::scope_nested_wrappers_carrier<Subjects...>;
   static constexpr std::string_view pieces[] = {
-      "the scope of the binding does not store the nested layers of ", ""};
+      "the scope of the binding does not store the nested wrappers of ", ""};
 };
 
 // spec: diagnostics.scope_undeclared
@@ -552,7 +551,7 @@ struct diag_report<diag::alternatives_repeated, Subjects...> {
   static constexpr void fail() {
     static_assert(
         dependent_false<::dingo::alternatives_repeated_carrier<Subjects...>>,
-        "{layer} names an alternative twice");
+        "{wrapper} names an alternative twice");
   }
 };
 
@@ -838,7 +837,7 @@ struct diag_report<diag::property_unknown, Subjects...> {
     static_assert(
         dependent_false<::dingo::property_unknown_carrier<Subjects...>>,
         "the wrapper semantics {kind} declares a property bit that is no "
-        "layer_property");
+        "property");
   }
 };
 
@@ -919,13 +918,13 @@ struct diag_report<diag::scope_form_not_stored, Subjects...> {
   }
 };
 
-// spec: diagnostics.scope_nested_layers
+// spec: diagnostics.scope_nested_wrappers
 template <typename... Subjects>
-struct diag_report<diag::scope_nested_layers, Subjects...> {
+struct diag_report<diag::scope_nested_wrappers, Subjects...> {
   static constexpr void fail() {
     static_assert(
-        dependent_false<::dingo::scope_nested_layers_carrier<Subjects...>>,
-        "the scope of the binding does not store the nested layers of "
+        dependent_false<::dingo::scope_nested_wrappers_carrier<Subjects...>>,
+        "the scope of the binding does not store the nested wrappers of "
         "{stored}");
   }
 };

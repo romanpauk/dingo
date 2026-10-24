@@ -11,8 +11,8 @@
 
 #include <dingo/conversion/annotated.h>
 #include <dingo/conversion/key.h>
-#include <dingo/conversion/layer_traits.h>
 #include <dingo/conversion/route.h>
+#include <dingo/conversion/wrapper_traits.h>
 
 #include <type_traits>
 

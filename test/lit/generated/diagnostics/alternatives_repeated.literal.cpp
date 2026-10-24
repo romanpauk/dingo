@@ -12,7 +12,7 @@
 // literal where the compiler formats none.
 // REQUIRES: literal-static-assert
 // RUN: not %dingo_cxx_literal -fsyntax-only %s 2>&1 | %filecheck %s
-// CHECK: {layer} names an alternative twice
+// CHECK: {wrapper} names an alternative twice
 
 #include <dingo/container.h>
 #include <dingo/storage/shared.h>

@@ -293,11 +293,11 @@ private:
     if constexpr (std::is_reference_v<Type> || std::is_pointer_v<Type>) {
       return false;
     } else {
-      using traits = layer_traits<std::remove_cv_t<Type>>;
-      if constexpr (has_layer_properties_v<Type, layer_property::wrapper> &&
-                    !has_layer_properties_v<Type, layer_property::variadic>) {
+      using traits = wrapper_traits<std::remove_cv_t<Type>>;
+      if constexpr (has_properties_v<Type, property::mapped> &&
+                    !has_properties_v<Type, property::variadic>) {
         using element = type_list_at_t<0, typename traits::arguments>;
-        return !is_layer_v<element> && std::is_copy_constructible_v<element>;
+        return !is_wrapper_v<element> && std::is_copy_constructible_v<element>;
       } else {
         return false;
       }
@@ -318,7 +318,7 @@ private:
 
   template <typename Type, typename Element>
   static Type wrap_element(Element &&element) {
-    return layer_traits<std::remove_cv_t<Type>>::make(
+    return wrapper_traits<std::remove_cv_t<Type>>::make(
         std::forward<Element>(element));
   }
 

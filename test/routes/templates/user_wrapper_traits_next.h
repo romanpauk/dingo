@@ -7,9 +7,9 @@
 
 #pragma once
 
-// The wrapper traits that make the user wrappers of the route probes layers of
-// the next implementation. Each wrapper is of a kind of the user, declared as
-// the library declares its own, with the properties and forms of the kind it
+// The wrapper traits that make the user wrappers of the route probes wrappers
+// of the next implementation. Each wrapper is of a kind of the user, declared
+// as the library declares its own, with the properties and forms of the kind it
 // stands in for: user_kinds_next.h, which test/routes/extract.py generates
 // from user_kinds.py.
 

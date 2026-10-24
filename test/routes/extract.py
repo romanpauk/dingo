@@ -124,7 +124,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from user_kinds import cpp_declarations, kind_probes  # noqa: E402
-from spec.schema import LayerTrait  # noqa: E402
+from spec.schema import Property  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # The universe.
@@ -303,7 +303,7 @@ def kind_spelling(user, element):
 def holds_interface(user):
     """Whether a wrapper of the kind holds an interface, which only a handle
     does: an abstract element is not held in place."""
-    return LayerTrait.IN_PLACE not in user.kind.traits
+    return Property.IN_PLACE not in user.kind.traits
 
 
 def mutated(user):

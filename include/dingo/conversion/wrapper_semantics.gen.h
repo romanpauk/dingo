@@ -49,7 +49,7 @@ struct shared_owner {};
 namespace dingo {
 
 using operation = core::operation;
-using layer_property = core::layer_property;
+using property = core::property;
 
 // An operation of a wrapper semantics, and the semantics it leads to for an
 // operation that leads to another semantics, such as the sharing semantics a
@@ -61,51 +61,46 @@ template <operation Operation, typename Target = void> struct op {};
 //   static constexpr std::uint16_t properties = ...;
 //   using operations = type_list<op<...>, ...>;
 //
-// the layer_property bits of the semantics and the operations it has. A wrapper
+// the property bits of the semantics and the operations it has. A wrapper
 // has the semantics its wrapper_traits name.
 template <typename Semantics> struct wrapper_semantics;
 
 template <> struct wrapper_semantics<::dingo::semantics::variant_value> {
   static constexpr std::uint16_t properties =
-      layer_property::owning | layer_property::in_place |
-      layer_property::constructible | layer_property::wrapper |
-      layer_property::variadic;
+      property::owning | property::in_place | property::constructible |
+      property::mapped | property::variadic;
   using operations =
       core::type_list<op<operation::borrow>, op<operation::take>>;
 };
 
 template <> struct wrapper_semantics<::dingo::semantics::fixed_array> {
   static constexpr std::uint16_t properties =
-      layer_property::owning | layer_property::in_place |
-      layer_property::constructible | layer_property::immovable |
-      layer_property::extent;
+      property::owning | property::in_place | property::constructible |
+      property::immovable | property::extent;
   using operations =
       core::type_list<op<operation::decay, ::dingo::semantics::pointer>,
                       op<operation::release, ::dingo::semantics::pointer>>;
 };
 
 template <> struct wrapper_semantics<::dingo::semantics::dynamic_array> {
-  static constexpr std::uint16_t properties = layer_property::in_place |
-                                              layer_property::unsized |
-                                              layer_property::immovable;
+  static constexpr std::uint16_t properties =
+      property::in_place | property::unsized | property::immovable;
   using operations =
       core::type_list<op<operation::decay, ::dingo::semantics::pointer>>;
 };
 
 template <> struct wrapper_semantics<::dingo::semantics::optional_value> {
   static constexpr std::uint16_t properties =
-      layer_property::owning | layer_property::nullable |
-      layer_property::borrowable | layer_property::in_place |
-      layer_property::constructible | layer_property::wrapper;
+      property::owning | property::nullable | property::borrowable |
+      property::in_place | property::constructible | property::mapped;
   using operations = core::type_list<op<operation::borrow>, op<operation::take>,
                                      op<operation::wrap>>;
 };
 
 template <> struct wrapper_semantics<::dingo::semantics::sole_owner> {
   static constexpr std::uint16_t properties =
-      layer_property::owning | layer_property::nullable |
-      layer_property::borrowable | layer_property::constructible |
-      layer_property::wrapper;
+      property::owning | property::nullable | property::borrowable |
+      property::constructible | property::mapped;
   using operations =
       core::type_list<op<operation::borrow>,
                       op<operation::share, ::dingo::semantics::shared_owner>,
@@ -115,8 +110,8 @@ template <> struct wrapper_semantics<::dingo::semantics::sole_owner> {
 
 template <> struct wrapper_semantics<::dingo::semantics::pointer> {
   static constexpr std::uint16_t properties =
-      layer_property::nullable | layer_property::borrowable |
-      layer_property::constructible | layer_property::copyable;
+      property::nullable | property::borrowable | property::constructible |
+      property::copyable;
   using operations =
       core::type_list<op<operation::borrow>, op<operation::address>,
                       op<operation::release_whole>,
@@ -125,16 +120,15 @@ template <> struct wrapper_semantics<::dingo::semantics::pointer> {
 };
 
 template <> struct wrapper_semantics<::dingo::semantics::reference> {
-  static constexpr std::uint16_t properties = layer_property::borrowable;
+  static constexpr std::uint16_t properties = property::borrowable;
   using operations = core::type_list<op<operation::borrow>>;
 };
 
 template <> struct wrapper_semantics<::dingo::semantics::shared_owner> {
   static constexpr std::uint16_t properties =
-      layer_property::owning | layer_property::sharing |
-      layer_property::nullable | layer_property::borrowable |
-      layer_property::constructible | layer_property::copyable |
-      layer_property::wrapper;
+      property::owning | property::sharing | property::nullable |
+      property::borrowable | property::constructible | property::copyable |
+      property::mapped;
   using operations =
       core::type_list<op<operation::borrow>,
                       op<operation::adopt, ::dingo::semantics::pointer>,

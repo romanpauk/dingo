@@ -10,7 +10,7 @@ a standard one or a user's, maps to a wrapper semantics through the wrapper-trai
 extension point of the C++ library.
 """
 
-from spec.schema import SemanticsOperation, WrapperSemantics, LayerTrait, Operation
+from spec.schema import SemanticsOperation, WrapperSemantics, Property, Operation
 
 
 def form(rule_id, op, description, target=None):
@@ -23,10 +23,10 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
         parameters=1,
         variadic=True,
         traits=(
-            LayerTrait.OWNING,
-            LayerTrait.IN_PLACE,
-            LayerTrait.CONSTRUCTIBLE,
-            LayerTrait.WRAPPER,
+            Property.OWNING,
+            Property.IN_PLACE,
+            Property.CONSTRUCTIBLE,
+            Property.MAPPED,
         ),
         forms=(
             form("select_alternative", Operation.BORROW, "Borrows the held alternative."),
@@ -43,10 +43,10 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
         parameters=1,
         has_extent=True,
         traits=(
-            LayerTrait.OWNING,
-            LayerTrait.IN_PLACE,
-            LayerTrait.CONSTRUCTIBLE,
-            LayerTrait.IMMOVABLE,
+            Property.OWNING,
+            Property.IN_PLACE,
+            Property.CONSTRUCTIBLE,
+            Property.IMMOVABLE,
         ),
         forms=(
             form(
@@ -71,7 +71,7 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
             "an owning or sharing handle can hold it."
         ),
         parameters=1,
-        traits=(LayerTrait.UNSIZED, LayerTrait.IN_PLACE, LayerTrait.IMMOVABLE),
+        traits=(Property.UNSIZED, Property.IN_PLACE, Property.IMMOVABLE),
         forms=(
             form(
                 "decay_unbounded_array",
@@ -87,12 +87,12 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
         description="A value that may hold one element of a shape or nothing.",
         parameters=1,
         traits=(
-            LayerTrait.OWNING,
-            LayerTrait.NULLABLE,
-            LayerTrait.BORROWABLE,
-            LayerTrait.IN_PLACE,
-            LayerTrait.CONSTRUCTIBLE,
-            LayerTrait.WRAPPER,
+            Property.OWNING,
+            Property.NULLABLE,
+            Property.BORROWABLE,
+            Property.IN_PLACE,
+            Property.CONSTRUCTIBLE,
+            Property.MAPPED,
         ),
         forms=(
             form("borrow_optional", Operation.BORROW, "Borrows the element of an optional."),
@@ -113,11 +113,11 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
         description="A handle that is the only owner of one element of a shape.",
         parameters=1,
         traits=(
-            LayerTrait.OWNING,
-            LayerTrait.NULLABLE,
-            LayerTrait.BORROWABLE,
-            LayerTrait.CONSTRUCTIBLE,
-            LayerTrait.WRAPPER,
+            Property.OWNING,
+            Property.NULLABLE,
+            Property.BORROWABLE,
+            Property.CONSTRUCTIBLE,
+            Property.MAPPED,
         ),
         forms=(
             form(
@@ -151,10 +151,10 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
         description="A non-owning address of one element of a shape.",
         parameters=1,
         traits=(
-            LayerTrait.NULLABLE,
-            LayerTrait.BORROWABLE,
-            LayerTrait.CONSTRUCTIBLE,
-            LayerTrait.COPYABLE,
+            Property.NULLABLE,
+            Property.BORROWABLE,
+            Property.CONSTRUCTIBLE,
+            Property.COPYABLE,
         ),
         forms=(
             form("deref_pointer", Operation.BORROW, "Borrows the element a pointer points to."),
@@ -186,7 +186,7 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
         id="ref",
         description="A non-owning, non-null alias of one element of a shape.",
         parameters=1,
-        traits=(LayerTrait.BORROWABLE,),
+        traits=(Property.BORROWABLE,),
         forms=(
             form(
                 "deref_reference",
@@ -200,13 +200,13 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
         description="A handle that shares the ownership of one element of a shape.",
         parameters=1,
         traits=(
-            LayerTrait.OWNING,
-            LayerTrait.SHARING,
-            LayerTrait.NULLABLE,
-            LayerTrait.BORROWABLE,
-            LayerTrait.CONSTRUCTIBLE,
-            LayerTrait.COPYABLE,
-            LayerTrait.WRAPPER,
+            Property.OWNING,
+            Property.SHARING,
+            Property.NULLABLE,
+            Property.BORROWABLE,
+            Property.CONSTRUCTIBLE,
+            Property.COPYABLE,
+            Property.MAPPED,
         ),
         forms=(
             form(

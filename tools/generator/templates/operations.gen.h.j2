@@ -11,12 +11,12 @@ namespace dingo::core {
 
 // The properties of a wrapper semantics, as bits of the properties a
 // dingo::wrapper_semantics declares. spec: wrapper_semantics
-struct layer_property {
-{% for property in layer_properties %}
+struct property {
+{% for property in properties %}
   static constexpr std::uint16_t {{ property.name }} = {{ property.bit }};
 {% endfor %}
   // Every property bit.
-  static constexpr std::uint16_t all = {{ layer_properties | sum(attribute="bit") }};
+  static constexpr std::uint16_t all = {{ properties | sum(attribute="bit") }};
 };
 
 enum class value_category : std::uint8_t {
@@ -51,19 +51,19 @@ enum class requirement : std::uint8_t {
 {% endfor %}
 };
 
-// Where a pattern of a form is: the element, a variable; the layer of the
-// kind that has the form; or the layer of the kind the form leads to.
-enum class form_layer : std::uint8_t { element, semantics, target };
+// Where a pattern of a form is: the element, a variable; the wrapper of the
+// kind that has the form; or the wrapper of the kind the form leads to.
+enum class type_position : std::uint8_t { element, wrapper, target };
 
-// A operation derives the term (to_layer(X), to_category) from the term
-// (from_layer(X), from_category). A rule of a leaf is a form of no kind,
+// A operation derives the term (to_position(X), to_category) from the term
+// (from_position(X), from_category). A rule of a leaf is a form of no kind,
 // between elements.
 struct operation_info {
   operation form;
   bool of_semantics;
-  form_layer from_layer;
+  type_position from_position;
   value_category from_category;
-  form_layer to_layer;
+  type_position to_position;
   value_category to_category;
   access rule_access;
   // A request category bit the scope must expose for the stored form, or 0.
@@ -76,13 +76,13 @@ struct operation_info {
   // Whether the derived object is kept by the binding, so it can be referred
   // to: the conversion cache.
   bool cached;
-  // The layer_property bits every kind of the form has.
+  // The property bits every kind of the form has.
   std::uint16_t semantics_properties;
 };
 
 inline constexpr operation_info operations[] = {
 {% for form in operations %}
-    {operation::{{ form.id }}, {{ form.of_semantics | lower }}, form_layer::{{ form.from_layer }}, value_category::{{ form.from_category }}, form_layer::{{ form.to_layer }}, value_category::{{ form.to_category }}, access::{{ form.access }}, {{ form.exposure }}, {{ form.requires }}, {{ form.upcast | lower }}, {{ form.converts | lower }}, {{ form.cached | lower }}, {{ form.semantics_properties }}},
+    {operation::{{ form.id }}, {{ form.of_semantics | lower }}, type_position::{{ form.from_position }}, value_category::{{ form.from_category }}, type_position::{{ form.to_position }}, value_category::{{ form.to_category }}, access::{{ form.access }}, {{ form.exposure }}, {{ form.requires }}, {{ form.upcast | lower }}, {{ form.converts | lower }}, {{ form.cached | lower }}, {{ form.semantics_properties }}},
 {% endfor %}
 };
 

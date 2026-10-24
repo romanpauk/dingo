@@ -102,28 +102,28 @@ def variants(spec):
     ]
 
 
-def form_layer(pattern, where):
+def type_position(pattern, where):
     """Where a pattern of an operation is: "element" for a variable,
-    "semantics" for the wrapper semantics that has the operation, "target" for
-    the wrapper semantics it leads to.
+    "wrapper" for the wrapper of the semantics that has the operation, "target"
+    for the wrapper of the semantics it leads to.
 
-    Patterns are a variable or one layer applied to a variable; anything else
+    Patterns are a variable or one wrapper applied to a variable; anything else
     needs the generator to grow.
     """
     if pattern.form.value == "variable":
         return "element"
     if pattern.form.value != "layer" or len(pattern.args) != 1:
-        raise GeneratorError(f"{where}: pattern is not a layer of one argument")
+        raise GeneratorError(f"{where}: pattern is not a wrapper of one argument")
     if pattern.name == "K":
-        return "semantics"
+        return "wrapper"
     if pattern.name == "T":
         return "target"
     raise GeneratorError(f"{where}: pattern names the wrapper semantics {pattern.name}")
 
 
-# The property bits of a wrapper semantics, in the order of LayerTrait, then whether
+# The property bits of a wrapper semantics, in the order of Property, then whether
 # it is variadic and has an extent.
-LAYER_PROPERTIES = (
+PROPERTIES = (
     "owning",
     "sharing",
     "nullable",
@@ -133,43 +133,43 @@ LAYER_PROPERTIES = (
     "constructible",
     "copyable",
     "immovable",
-    "wrapper",
+    "mapped",
     "variadic",
     "extent",
 )
-LAYER_PROPERTY_BITS = {name: 1 << index for index, name in enumerate(LAYER_PROPERTIES)}
+PROPERTY_BITS = {name: 1 << index for index, name in enumerate(PROPERTIES)}
 
 
-def layer_class_fields(layer_class):
-    """A layer class as the property bits a layer has, and those it lacks."""
-    if layer_class is None:
+def property_class_fields(property_class):
+    """A property class as the property bits a wrapper has, and those it lacks."""
+    if property_class is None:
         return None
-    has = sum(LAYER_PROPERTY_BITS[t.value] for t in layer_class.has)
-    lacks = sum(LAYER_PROPERTY_BITS[t.value] for t in layer_class.lacks)
-    for name, value in (("variadic", layer_class.variadic), ("extent", layer_class.extent)):
+    has = sum(PROPERTY_BITS[t.value] for t in property_class.has)
+    lacks = sum(PROPERTY_BITS[t.value] for t in property_class.lacks)
+    for name, value in (("variadic", property_class.variadic), ("extent", property_class.extent)):
         if value is True:
-            has |= LAYER_PROPERTY_BITS[name]
+            has |= PROPERTY_BITS[name]
         elif value is False:
-            lacks |= LAYER_PROPERTY_BITS[name]
+            lacks |= PROPERTY_BITS[name]
     return {"has": has, "lacks": lacks}
 
 
 def storage_form_fields(form):
     return {
         "id": form.id,
-        "outer": layer_class_fields(form.outer),
-        "inner": layer_class_fields(form.inner),
+        "outer": property_class_fields(form.outer),
+        "inner": property_class_fields(form.inner),
     }
 
 
-def layer_property_names(kind):
+def property_names(kind):
     """The property names of a wrapper semantics, in the order of their bits."""
     names = {trait.value for trait in kind.traits}
     if kind.variadic:
         names.add("variadic")
     if kind.has_extent:
         names.add("extent")
-    return [name for name in LAYER_PROPERTIES if name in names]
+    return [name for name in PROPERTIES if name in names]
 
 
 REQUEST_CATEGORY_BITS = {"value": 1, "lvalue": 2, "rvalue": 4, "pointer": 8}
@@ -187,7 +187,7 @@ def scope_fields(scope, form_ids):
         "guard": scope.guard.value,
         "retains": scope.retains_unresolved_source,
         "exposure_rule": scope.exposure_rule.value,
-        "nested_layers": scope.nested_layers,
+        "nested_wrappers": scope.nested_wrappers,
         "needs_instance": "instance" in scope.needs,
         "exposures": [
             sum(REQUEST_CATEGORY_BITS[c.value] for c in exposed[form].categories)
@@ -207,9 +207,9 @@ def form_fields(name, rule, of_semantics, where):
     return {
         "id": name,
         "of_semantics": of_semantics,
-        "from_layer": form_layer(rule.from_shape, where),
+        "from_position": type_position(rule.from_shape, where),
         "from_category": rule.from_shape.category.value,
-        "to_layer": form_layer(rule.to_shape, where),
+        "to_position": type_position(rule.to_shape, where),
         "to_category": rule.to_shape.category.value,
         "access": rule.access.value,
         "exposure": REQUEST_CATEGORY_BITS[rule.exposure.value] if rule.exposure else 0,
@@ -218,7 +218,7 @@ def form_fields(name, rule, of_semantics, where):
         "converts": rule.via is not None and rule.via.value == "convert",
         "cached": rule.cache is not None,
         "semantics_properties": sum(
-            LAYER_PROPERTY_BITS[t.value] for t in getattr(rule, "kind_traits", ())
+            PROPERTY_BITS[t.value] for t in getattr(rule, "kind_traits", ())
         ),
     }
 
@@ -274,8 +274,8 @@ def operations(spec):
 
     content = render(
         "operations.gen.h.j2",
-        layer_properties=[
-            {"name": name, "bit": bit} for name, bit in LAYER_PROPERTY_BITS.items()
+        properties=[
+            {"name": name, "bit": bit} for name, bit in PROPERTY_BITS.items()
         ],
         value_categories=[c.value for c in ValueCategory],
         accesses=[a.value for a in Access],
@@ -370,7 +370,7 @@ def wrapper_semantics(spec):
         {
             "id": semantics.id,
             "name": names[semantics.id],
-            "properties": layer_property_names(semantics),
+            "properties": property_names(semantics),
             "operations": [
                 {"operation": operation.form.value, "target": names.get(operation.target)}
                 for operation in semantics.forms

@@ -116,14 +116,14 @@ def check_unique(errors: list[str], where: str, what: str, values: Iterable) -> 
         errors.append(f"{where}: {what} has duplicates")
 
 
-def layer_class_holds(layer_class, kind) -> bool:
+def property_class_holds(property_class, kind) -> bool:
     """Whether a wrapper semantics is of a layer class."""
     traits = set(kind.traits)
     return (
-        all(trait in traits for trait in layer_class.has)
-        and not any(trait in traits for trait in layer_class.lacks)
-        and layer_class.variadic in (None, kind.variadic)
-        and layer_class.extent in (None, kind.has_extent)
+        all(trait in traits for trait in property_class.has)
+        and not any(trait in traits for trait in property_class.lacks)
+        and property_class.variadic in (None, kind.variadic)
+        and property_class.extent in (None, kind.has_extent)
     )
 
 
@@ -143,7 +143,7 @@ def check_storage_forms(spec: Spec, errors: list[str]) -> None:
             for form in spec.storage_forms
             if form.outer is not None
             and form.inner is None
-            and layer_class_holds(form.outer, outer)
+            and property_class_holds(form.outer, outer)
         ]
         if len(single) > 1:
             errors.append(
@@ -154,8 +154,8 @@ def check_storage_forms(spec: Spec, errors: list[str]) -> None:
                 form.id
                 for form in spec.storage_forms
                 if form.inner is not None
-                and layer_class_holds(form.outer, outer)
-                and layer_class_holds(form.inner, inner)
+                and property_class_holds(form.outer, outer)
+                and property_class_holds(form.inner, inner)
             ]
             if len(double) > 1:
                 errors.append(

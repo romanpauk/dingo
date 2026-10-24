@@ -11,7 +11,7 @@
 // route rules depend on, an implementation of two interfaces, and a user
 // wrapper family of each wrapper wrapper semantics.
 
-#include <dingo/conversion/layer_traits.h>
+#include <dingo/conversion/wrapper_traits.h>
 
 namespace dingo::next_test {
 

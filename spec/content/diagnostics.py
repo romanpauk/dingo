@@ -254,10 +254,10 @@ diagnostics: tuple[Diagnostic, ...] = (
     ),
     Diagnostic(
         id="alternatives_repeated",
-        condition="A variadic layer of a stored shape names an alternative twice.",
+        condition="A variadic wrapper of a stored shape names an alternative twice.",
         exception=None,
-        message="{layer} names an alternative twice",
-        placeholders=("layer",),
+        message="{wrapper} names an alternative twice",
+        placeholders=("wrapper",),
         fallback_carrier="alternatives_repeated_carrier",
         reported=COMPILE,
     ),
@@ -374,12 +374,12 @@ diagnostics: tuple[Diagnostic, ...] = (
         reported=COMPILE,
     ),
     Diagnostic(
-        id="scope_nested_layers",
-        condition="The scope of a binding does not store nested layers, which its stored type has.",
+        id="scope_nested_wrappers",
+        condition="The scope of a binding does not store nested wrappers, which its stored type has.",
         exception=None,
-        message="the scope of the binding does not store the nested layers of {stored}",
+        message="the scope of the binding does not store the nested wrappers of {stored}",
         placeholders=("stored",),
-        fallback_carrier="scope_nested_layers_carrier",
+        fallback_carrier="scope_nested_wrappers_carrier",
         reported=COMPILE,
     ),
     Diagnostic(
@@ -530,9 +530,9 @@ diagnostics: tuple[Diagnostic, ...] = (
     ),
     Diagnostic(
         id="property_unknown",
-        condition="A wrapper semantics declares a property bit that is no layer property.",
+        condition="A wrapper semantics declares a property bit that is no wrapper property.",
         exception=None,
-        message="the wrapper semantics {kind} declares a property bit that is no layer_property",
+        message="the wrapper semantics {kind} declares a property bit that is no property",
         placeholders=("kind",),
         fallback_carrier="property_unknown_carrier",
         reported=COMPILE,
@@ -550,7 +550,7 @@ diagnostics: tuple[Diagnostic, ...] = (
         id="alternative_not_held",
         condition=(
             "A request is served by a route through an alternative of a "
-            "variadic layer, whose object holds another alternative."
+            "variadic wrapper, whose object holds another alternative."
         ),
         exception="type_not_convertible_exception",
         message="{type} holds another alternative than the one the request is routed through",
@@ -562,7 +562,7 @@ diagnostics: tuple[Diagnostic, ...] = (
         id="element_not_held",
         condition=(
             "A request other than of an address is served by a route through "
-            "the element of a nullable layer that holds it in place, whose "
+            "the element of a nullable wrapper that holds it in place, whose "
             "object holds no element."
         ),
         exception="type_not_convertible_exception",

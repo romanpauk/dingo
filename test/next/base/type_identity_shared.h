@@ -24,7 +24,7 @@ struct service {
 };
 
 // The identity of std::unique_ptr<service>, constant-evaluated in the unit
-// that spells it, and the identity of service, which the type is a layer of.
+// that spells it, and the identity of service, which the type is a wrapper of.
 dingo::core::type_id bare_spelling_id();
 dingo::core::type_id defaulted_spelling_id();
 dingo::core::type_id defaulted_spelling_leaf_id();

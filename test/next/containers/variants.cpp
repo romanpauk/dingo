@@ -129,8 +129,8 @@ struct immovable {
   immovable(const immovable &) = delete;
 };
 
-// Alternatives that are layers of different kinds: an optional and a variant,
-// which both reach a copy_only, each from a layer of its own type.
+// Alternatives that are wrappers of different kinds: an optional and a variant,
+// which both reach a copy_only, each from a wrapper of its own type.
 using layered =
     std::variant<std::optional<copy_only>, std::variant<copy_only, immovable>>;
 

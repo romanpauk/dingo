@@ -7,7 +7,7 @@
 
 #pragma once
 
-// The wrappers are layers by dingo::wrapper_traits in the next
+// The wrappers are wrappers by dingo::wrapper_traits in the next
 // implementation, and by dingo::type_traits and the per-scope
 // dingo::storage_traits in the current one; the behavior change
 // wrapper_extension_point of the spec declares the difference.
@@ -434,7 +434,7 @@ struct storage_traits<external, test_optional<T>, U> {
 
 #endif
 
-// A test wrapper made by the traits that declare it a layer.
+// A test wrapper made by the traits that declare it a wrapper.
 template <typename Wrapper, typename... Args>
 Wrapper make_test_wrapper(Args &&...args) {
 #if !defined(DINGO_MATRIX_BASELINE)

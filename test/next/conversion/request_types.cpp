@@ -7,14 +7,14 @@
 
 // What a request type names: the kind of the request, the type it asks for,
 // the interface an annotation or a key decorates, the leaf it holds, and
-// whether its layers are copied; and the annotated and keyed values a
+// whether its wrappers are copied; and the annotated and keyed values a
 // constructor parameter takes.
 
 #include <dingo/backend/selection.h>
 #include <dingo/conversion/annotated.h>
 #include <dingo/conversion/key.h>
-#include <dingo/conversion/layer_traits.h>
 #include <dingo/conversion/request.h>
+#include <dingo/conversion/wrapper_traits.h>
 #include <dingo/key.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/rebind_type.h>
@@ -91,7 +91,7 @@ static_assert(std::is_same_v<request_traits<int *>::value_type, int *>);
 static_assert(std::is_same_v<request_traits<const int *>::made_type, int *>);
 static_assert(std::is_same_v<request_traits<int (&)[3]>::value_type, int[3]>);
 
-// The leaf a request holds, through its layers.
+// The leaf a request holds, through its wrappers.
 static_assert(std::is_same_v<leaf_of_t<int>, int>);
 static_assert(std::is_same_v<leaf_of_t<int &>, int>);
 static_assert(std::is_same_v<leaf_of_t<int *>, int>);
@@ -104,7 +104,7 @@ static_assert(std::is_same_v<leaf_of_t<std::shared_ptr<std::optional<service>>>,
 static_assert(std::is_same_v<leaf_of_t<user_shared<service>>, service>);
 
 // An annotated request asks for the type it annotates, of the interface the
-// annotation names; the annotation is not a layer.
+// annotation names; the annotation is not a wrapper.
 using annotated_request = annotated<service &, tag>;
 static_assert(is_annotated<annotated_request>::value);
 static_assert(!is_annotated<service &>::value);
@@ -138,7 +138,7 @@ static_assert(std::is_same_v<keyed_request::key, dingo::core::tag_key<tag>>);
 static_assert(std::is_same_v<dingo::dependency<service &>, service &>);
 static_assert(std::is_same_v<resolved_t<service &>, service &>);
 
-// Whether a request's layers are copied: a sharing handle is, a sole-owner
+// Whether a request's wrappers are copied: a sharing handle is, a sole-owner
 // handle is not, and an optional is as its element is.
 static_assert(shape_v<std::shared_ptr<service>>.nodes[0].copyable);
 static_assert(!shape_v<std::unique_ptr<service>>.nodes[0].copyable);

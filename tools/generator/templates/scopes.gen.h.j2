@@ -41,7 +41,7 @@ struct scope_info {
   recursion_guard guard;
   bool retains_unresolved_source;
   exposure_rule rule;
-  bool nested_layers;
+  bool nested_wrappers;
   bool needs_instance;
   // The request categories exposed per storage form, indexed by storage_form.
   std::uint8_t exposures[storage_form_count];
@@ -78,7 +78,7 @@ template <typename Tag> struct scope_traits;
 {% for tag in tags %}
 
 template <> struct scope_traits<::{{ namespace }}::{{ tag.name }}> {
-  static constexpr scope_descriptor descriptor = {core::slot::{{ tag.fields.slot }}, core::value_category::{{ tag.fields.materializes }}, {{ tag.fields.stable | lower }}, {{ tag.fields.consumes | lower }}, core::recursion_guard::{{ tag.fields.guard }}, {{ tag.fields.retains | lower }}, core::exposure_rule::{{ tag.fields.exposure_rule }}, {{ tag.fields.nested_layers | lower }}, {{ tag.fields.needs_instance | lower }}, { {{ tag.fields.exposures | join(", ") }} }};
+  static constexpr scope_descriptor descriptor = {core::slot::{{ tag.fields.slot }}, core::value_category::{{ tag.fields.materializes }}, {{ tag.fields.stable | lower }}, {{ tag.fields.consumes | lower }}, core::recursion_guard::{{ tag.fields.guard }}, {{ tag.fields.retains | lower }}, core::exposure_rule::{{ tag.fields.exposure_rule }}, {{ tag.fields.nested_wrappers | lower }}, {{ tag.fields.needs_instance | lower }}, { {{ tag.fields.exposures | join(", ") }} }};
 };
 {% endfor %}
 

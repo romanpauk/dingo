@@ -20,7 +20,7 @@ namespace dingo::core {
 
 // The properties of a wrapper semantics, as bits of the properties a
 // dingo::wrapper_semantics declares. spec: wrapper_semantics
-struct layer_property {
+struct property {
   static constexpr std::uint16_t owning = 1;
   static constexpr std::uint16_t sharing = 2;
   static constexpr std::uint16_t nullable = 4;
@@ -30,7 +30,7 @@ struct layer_property {
   static constexpr std::uint16_t constructible = 64;
   static constexpr std::uint16_t copyable = 128;
   static constexpr std::uint16_t immovable = 256;
-  static constexpr std::uint16_t wrapper = 512;
+  static constexpr std::uint16_t mapped = 512;
   static constexpr std::uint16_t variadic = 1024;
   static constexpr std::uint16_t extent = 2048;
   // Every property bit.
@@ -85,19 +85,19 @@ enum class requirement : std::uint8_t {
   borrowable = 32,
 };
 
-// Where a pattern of a form is: the element, a variable; the layer of the
-// kind that has the form; or the layer of the kind the form leads to.
-enum class form_layer : std::uint8_t { element, semantics, target };
+// Where a pattern of a form is: the element, a variable; the wrapper of the
+// kind that has the form; or the wrapper of the kind the form leads to.
+enum class type_position : std::uint8_t { element, wrapper, target };
 
-// A operation derives the term (to_layer(X), to_category) from the term
-// (from_layer(X), from_category). A rule of a leaf is a form of no kind,
+// A operation derives the term (to_position(X), to_category) from the term
+// (from_position(X), from_category). A rule of a leaf is a form of no kind,
 // between elements.
 struct operation_info {
   operation form;
   bool of_semantics;
-  form_layer from_layer;
+  type_position from_position;
   value_category from_category;
-  form_layer to_layer;
+  type_position to_position;
   value_category to_category;
   access rule_access;
   // A request category bit the scope must expose for the stored form, or 0.
@@ -110,58 +110,58 @@ struct operation_info {
   // Whether the derived object is kept by the binding, so it can be referred
   // to: the conversion cache.
   bool cached;
-  // The layer_property bits every kind of the form has.
+  // The property bits every kind of the form has.
   std::uint16_t semantics_properties;
 };
 
 inline constexpr operation_info operations[] = {
-    {operation::borrow, true, form_layer::semantics, value_category::lvalue,
-     form_layer::element, value_category::lvalue, access::inherit, 0, 0, false,
-     false, false, 0},
-    {operation::copy, false, form_layer::element, value_category::lvalue,
-     form_layer::element, value_category::prvalue, access::borrow, 1, 1, false,
-     false, false, 0},
-    {operation::address, true, form_layer::element, value_category::lvalue,
-     form_layer::semantics, value_category::prvalue, access::borrow, 8, 4,
+    {operation::borrow, true, type_position::wrapper, value_category::lvalue,
+     type_position::element, value_category::lvalue, access::inherit, 0, 0,
      false, false, false, 0},
-    {operation::decay, true, form_layer::semantics, value_category::lvalue,
-     form_layer::target, value_category::prvalue, access::borrow, 8, 0, false,
-     false, false, 0},
-    {operation::take, true, form_layer::semantics, value_category::rvalue,
-     form_layer::element, value_category::rvalue, access::consume, 4, 0, false,
-     false, false, 0},
-    {operation::wrap, true, form_layer::element, value_category::rvalue,
-     form_layer::semantics, value_category::rvalue, access::consume, 4, 0,
+    {operation::copy, false, type_position::element, value_category::lvalue,
+     type_position::element, value_category::prvalue, access::borrow, 1, 1,
      false, false, false, 0},
-    {operation::share, true, form_layer::semantics, value_category::rvalue,
-     form_layer::target, value_category::rvalue, access::consume, 4, 0, false,
-     false, false, 0},
-    {operation::adopt, true, form_layer::target, value_category::rvalue,
-     form_layer::semantics, value_category::rvalue, access::consume, 4, 0,
+    {operation::address, true, type_position::element, value_category::lvalue,
+     type_position::wrapper, value_category::prvalue, access::borrow, 8, 4,
      false, false, false, 0},
-    {operation::release, true, form_layer::semantics, value_category::rvalue,
-     form_layer::target, value_category::prvalue, access::consume, 8, 0, false,
-     false, false, 256},
-    {operation::release_whole, true, form_layer::element,
-     value_category::rvalue, form_layer::semantics, value_category::prvalue,
+    {operation::decay, true, type_position::wrapper, value_category::lvalue,
+     type_position::target, value_category::prvalue, access::borrow, 8, 0,
+     false, false, false, 0},
+    {operation::take, true, type_position::wrapper, value_category::rvalue,
+     type_position::element, value_category::rvalue, access::consume, 4, 0,
+     false, false, false, 0},
+    {operation::wrap, true, type_position::element, value_category::rvalue,
+     type_position::wrapper, value_category::rvalue, access::consume, 4, 0,
+     false, false, false, 0},
+    {operation::share, true, type_position::wrapper, value_category::rvalue,
+     type_position::target, value_category::rvalue, access::consume, 4, 0,
+     false, false, false, 0},
+    {operation::adopt, true, type_position::target, value_category::rvalue,
+     type_position::wrapper, value_category::rvalue, access::consume, 4, 0,
+     false, false, false, 0},
+    {operation::release, true, type_position::wrapper, value_category::rvalue,
+     type_position::target, value_category::prvalue, access::consume, 8, 0,
+     false, false, false, 256},
+    {operation::release_whole, true, type_position::element,
+     value_category::rvalue, type_position::wrapper, value_category::prvalue,
      access::consume, 8, 2, false, false, false, 0},
-    {operation::upcast_reference, false, form_layer::element,
-     value_category::lvalue, form_layer::element, value_category::lvalue,
+    {operation::upcast_reference, false, type_position::element,
+     value_category::lvalue, type_position::element, value_category::lvalue,
      access::inherit, 0, 8, true, false, false, 0},
-    {operation::upcast_copied, true, form_layer::semantics,
-     value_category::prvalue, form_layer::semantics, value_category::prvalue,
+    {operation::upcast_copied, true, type_position::wrapper,
+     value_category::prvalue, type_position::wrapper, value_category::prvalue,
      access::inherit, 0, 8, true, false, false, 0},
-    {operation::upcast_consumed, true, form_layer::semantics,
-     value_category::rvalue, form_layer::semantics, value_category::rvalue,
+    {operation::upcast_consumed, true, type_position::wrapper,
+     value_category::rvalue, type_position::wrapper, value_category::rvalue,
      access::inherit, 0, 8, true, false, false, 0},
-    {operation::convert_borrowed, false, form_layer::element,
-     value_category::lvalue, form_layer::element, value_category::prvalue,
+    {operation::convert_borrowed, false, type_position::element,
+     value_category::lvalue, type_position::element, value_category::prvalue,
      access::borrow, 1, 8, false, true, false, 0},
-    {operation::convert_consumed, false, form_layer::element,
-     value_category::rvalue, form_layer::element, value_category::prvalue,
+    {operation::convert_consumed, false, type_position::element,
+     value_category::rvalue, type_position::element, value_category::prvalue,
      access::consume, 0, 8, false, true, false, 0},
-    {operation::retain, true, form_layer::semantics, value_category::lvalue,
-     form_layer::semantics, value_category::lvalue, access::borrow, 0, 8, true,
+    {operation::retain, true, type_position::wrapper, value_category::lvalue,
+     type_position::wrapper, value_category::lvalue, access::borrow, 0, 8, true,
      false, true, 128},
 };
 

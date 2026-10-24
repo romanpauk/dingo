@@ -1037,7 +1037,7 @@ obsolete.
   static_asserts in `test/next/conversion/request_types.cpp` on
   `core::replace_leaf_t<user_shared<impl>, iface>`,
   `dingo::rebind_type_t<user_unique<impl>, iface>`, `leaf_type_t`; tests
-  `conversion/layer_traits.h`, `api/type/rebind_type.h`.
+  `conversion/wrapper_traits.h`, `api/type/rebind_type.h`.
 - (file-scope static_asserts) `dingo::is_copy_constructible_v` of wrappers and
   std containers: shared and optional copy; unique, vector<unique>, map\<int,
   unique_ptr> do not. **replaced**: static_asserts on
@@ -1246,9 +1246,9 @@ are not observed through the public API of the baseline and are recorded only:
   `test/next/conversion/routes.cpp`
   `next_engine.a_request_names_the_leaf_through_its_layers`; tests
   `conversion/request.h` (`request_traits::descriptor`, `kind`, `made_type`) and
-  `conversion/layer_traits.h` (`leaf_of_t`). `request_may_escape_v` is replaced
-  by `request_kind`: an lvalue reference refers to a kept object. The retention
-  of rvalue requests is in
+  `conversion/wrapper_traits.h` (`leaf_of_t`). `request_may_escape_v` is
+  replaced by `request_kind`: an lvalue reference refers to a kept object. The
+  retention of rvalue requests is in
   `next_unique.retains_the_object_of_an_rvalue_reference`.
 
 ### test/registration/type_registration.cpp

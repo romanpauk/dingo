@@ -8,34 +8,34 @@ storage_form, described in include/dingo/storage/storage_scope_policy.h, plus
 the reference form that only external storage holds.
 """
 
-from spec.schema import LayerClass, LayerTrait, StorageForm
+from spec.schema import PropertyClass, Property, StorageForm
 
-OWNING = LayerTrait.OWNING
-SHARING = LayerTrait.SHARING
-NULLABLE = LayerTrait.NULLABLE
-BORROWABLE = LayerTrait.BORROWABLE
-IN_PLACE = LayerTrait.IN_PLACE
-UNSIZED = LayerTrait.UNSIZED
+OWNING = Property.OWNING
+SHARING = Property.SHARING
+NULLABLE = Property.NULLABLE
+BORROWABLE = Property.BORROWABLE
+IN_PLACE = Property.IN_PLACE
+UNSIZED = Property.UNSIZED
 
-UNIQUE = LayerClass(has=(OWNING,), lacks=(SHARING, IN_PLACE, UNSIZED))
-SHARED = LayerClass(has=(SHARING,))
-ARRAY = LayerClass(has=(UNSIZED,))
+UNIQUE = PropertyClass(has=(OWNING,), lacks=(SHARING, IN_PLACE, UNSIZED))
+SHARED = PropertyClass(has=(SHARING,))
+ARRAY = PropertyClass(has=(UNSIZED,))
 
 storage_forms: tuple[StorageForm, ...] = (
     StorageForm(
         id="alternative",
         description="An alternative of several shapes.",
-        outer=LayerClass(variadic=True),
+        outer=PropertyClass(variadic=True),
     ),
     StorageForm(
         id="bounded_array",
         description="An inline array of a fixed number of elements.",
-        outer=LayerClass(extent=True),
+        outer=PropertyClass(extent=True),
     ),
     StorageForm(
         id="optional",
         description="An optional element.",
-        outer=LayerClass(has=(IN_PLACE, NULLABLE)),
+        outer=PropertyClass(has=(IN_PLACE, NULLABLE)),
     ),
     StorageForm(
         id="plain",
@@ -44,12 +44,12 @@ storage_forms: tuple[StorageForm, ...] = (
     StorageForm(
         id="pointer",
         description="A non-owning address of an element.",
-        outer=LayerClass(has=(NULLABLE,), lacks=(OWNING,)),
+        outer=PropertyClass(has=(NULLABLE,), lacks=(OWNING,)),
     ),
     StorageForm(
         id="reference",
         description="An alias of an element owned elsewhere.",
-        outer=LayerClass(has=(BORROWABLE,), lacks=(OWNING, NULLABLE)),
+        outer=PropertyClass(has=(BORROWABLE,), lacks=(OWNING, NULLABLE)),
     ),
     StorageForm(
         id="shared_array_handle",

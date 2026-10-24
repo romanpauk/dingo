@@ -12,8 +12,8 @@
 #include <dingo/base/config.h>
 #include <dingo/base/mechanics.h>
 #include <dingo/conversion/construct.h>
-#include <dingo/conversion/layer_traits.h>
 #include <dingo/conversion/scopes.gen.h>
+#include <dingo/conversion/wrapper_traits.h>
 #include <dingo/primitives/compile_diagnostics.gen.h>
 #include <dingo/primitives/diagnostics.gen.h>
 #include <dingo/primitives/slot.h>
@@ -128,11 +128,11 @@ public:
 
 private:
   // Releases what the object owns beyond itself: the element a pointer made
-  // by its layer traits points to.
+  // by its wrapper traits points to.
   DINGO_ALWAYS_INLINE void dispose() noexcept {
     if constexpr (has_dispose_v<stored_type>) {
       if (slot_.constructed()) {
-        layer_traits<stored_type>::dispose(slot_.object());
+        wrapper_traits<stored_type>::dispose(slot_.object());
       }
     }
   }
@@ -268,18 +268,18 @@ public:
   }
 
 private:
-  using traits = layer_traits<stored_type>;
+  using traits = wrapper_traits<stored_type>;
   static constexpr bool handle =
-      has_layer_properties_v<stored_type, layer_property::sharing>;
+      has_properties_v<stored_type, property::sharing>;
   static constexpr bool published_while_constructed =
-      !has_layer_properties_v<stored_type, layer_property::variadic>;
+      !has_properties_v<stored_type, property::variadic>;
 
   template <typename Type, bool Handle> struct published_leaf {
     using type = Type;
   };
 
   template <typename Type> struct published_leaf<Type, true> {
-    using type = type_list_at_t<0, typename layer_traits<Type>::arguments>;
+    using type = type_list_at_t<0, typename wrapper_traits<Type>::arguments>;
   };
 
   static_assert(require<detail::reaches_interfaces_statically<

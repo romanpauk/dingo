@@ -156,7 +156,7 @@ template <typename... Types> constexpr bool distinct_types() {
   return true;
 }
 
-// The first variadic layer of a stored shape that names an alternative
+// The first variadic wrapper of a stored shape that names an alternative
 // twice, or void.
 template <typename Type, typename = void> struct repeated_alternatives {
   using type = void;
@@ -186,13 +186,14 @@ template <typename... Types> struct first_repeated_in<type_list<Types...>> {
 template <typename Type>
 struct repeated_alternatives<
     Type, std::enable_if_t<
-              is_layer_v<std::remove_cv_t<std::remove_reference_t<Type>>>>> {
-  using layer = std::remove_cv_t<std::remove_reference_t<Type>>;
-  using arguments = first_repeated_in<typename layer_traits<layer>::arguments>;
-  using type = std::conditional_t<
-      has_layer_properties_v<layer, layer_property::variadic> &&
-          !arguments::distinct,
-      layer, typename arguments::type>;
+              is_wrapper_v<std::remove_cv_t<std::remove_reference_t<Type>>>>> {
+  using wrapper = std::remove_cv_t<std::remove_reference_t<Type>>;
+  using arguments =
+      first_repeated_in<typename wrapper_traits<wrapper>::arguments>;
+  using type =
+      std::conditional_t<has_properties_v<wrapper, property::variadic> &&
+                             !arguments::distinct,
+                         wrapper, typename arguments::type>;
 };
 
 // Whether the arguments of a registration take a key value of the runtime key
@@ -333,11 +334,11 @@ template <typename... Parts> struct registration {
                     detail::has_scope_traits<typename scope_part::type>::value,
                 core::diag::scope_undeclared, typename scope_part::type>());
 
-  using repeated_layer =
+  using repeated_wrapper =
       typename detail::repeated_alternatives<typename storage_part::type>::type;
   static_assert(
-      core::require<std::is_void_v<repeated_layer>,
-                    core::diag::alternatives_repeated, repeated_layer>());
+      core::require<std::is_void_v<repeated_wrapper>,
+                    core::diag::alternatives_repeated, repeated_wrapper>());
 
   using factory_part =
       typename detail::find_part<::dingo::factory, detail::missing_part,

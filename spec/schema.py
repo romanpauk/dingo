@@ -47,9 +47,9 @@ __all__ = [
     "IndexStructure",
     "KeyKind",
     "SemanticsOperation",
-    "LayerClass",
+    "PropertyClass",
     "WrapperSemantics",
-    "LayerTrait",
+    "Property",
     "LookupDeclaration",
     "LookupFilter",
     "PatternForm",
@@ -95,8 +95,9 @@ class Entity:
 # Shape algebra
 
 
-class LayerTrait(Enum):
-    """Properties of a wrapper semantics that route rules and wrappers refer to."""
+class Property(Enum):
+    """Properties of a wrapper semantics that the rules and the storage forms
+    refer to."""
 
     OWNING = "owning"
     SHARING = "sharing"
@@ -107,17 +108,19 @@ class LayerTrait(Enum):
     IN_PLACE = "in_place"
     # Holds elements whose number is known only at runtime.
     UNSIZED = "unsized"
-    # A default factory makes a layer from the arguments of its element.
+    # A default factory makes a wrapper from the arguments of its element.
     CONSTRUCTIBLE = "constructible"
-    # A layer is copied as a handle, whatever its element; a layer that holds
-    # its element in place is copied with its elements unless it is immovable.
+    # A wrapper of the semantics is copied as a handle, whatever its element;
+    # one that holds its element in place is copied with its elements unless it
+    # is immovable.
     COPYABLE = "copyable"
-    # A layer is not a value a request takes, only an object it refers to, as
-    # an array of the language is.
+    # A wrapper of the semantics is not a value a request takes, only an object
+    # it refers to, as an array of the language is.
     IMMOVABLE = "immovable"
-    # A layer is a wrapper of a family, rather than a type of the language: a
-    # layer the routes create may be a wrapper of any family of its kind.
-    WRAPPER = "wrapper"
+    # The semantics is mapped from a class template through an extension point
+    # and has a family, rather than being a type of the language: a wrapper the
+    # rules create may be of any family of its semantics.
+    MAPPED = "mapped"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -132,7 +135,7 @@ class WrapperSemantics(Entity):
     parameters: int = 0
     variadic: bool = False
     has_extent: bool = False
-    traits: tuple[LayerTrait, ...] = ()
+    traits: tuple[Property, ...] = ()
     # The forms of the kind, from which its routes are made.
     forms: tuple["SemanticsOperation", ...] = ()
 
@@ -171,13 +174,13 @@ class SourceAccess(Enum):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class LayerClass:
+class PropertyClass:
     """A class of layers by the properties of their kinds: the traits a kind
     has and lacks, and whether it is variadic or has an extent, None for
     either."""
 
-    has: tuple["LayerTrait", ...] = ()
-    lacks: tuple["LayerTrait", ...] = ()
+    has: tuple["Property", ...] = ()
+    lacks: tuple["Property", ...] = ()
     variadic: bool | None = None
     extent: bool | None = None
 
@@ -192,8 +195,8 @@ class StorageForm(Entity):
     """
 
     description: str
-    outer: LayerClass | None = None
-    inner: LayerClass | None = None
+    outer: PropertyClass | None = None
+    inner: PropertyClass | None = None
 
 
 class RequestCategory(Enum):
@@ -239,7 +242,7 @@ class Scope(Entity):
     """A storage descriptor: slot, materialized category, stability, access.
 
     `exposures` lists every storage form the scope can store; a form that is
-    not listed cannot be registered in the scope. Without `nested_layers`, the
+    not listed cannot be registered in the scope. Without `nested_wrappers`, the
     shape under the outer layer of a stored form must be a leaf.
     """
 
@@ -252,7 +255,7 @@ class Scope(Entity):
     retains_unresolved_source: bool = False
     exposure_rule: ExposureRule = ExposureRule.FORM
     exposures: tuple[Exposure, ...] = ()
-    nested_layers: bool = True
+    nested_wrappers: bool = True
     extends: str | None = None  # scope id
     phases: tuple[str, ...] = ()
     needs: tuple[str, ...] = ()
@@ -376,7 +379,7 @@ class OperationTemplate(Entity):
     requires: tuple["Requirement", ...] = ()
     via: "Via | None" = None
     cache: "ShapePattern | None" = None
-    kind_traits: tuple["LayerTrait", ...] = ()
+    kind_traits: tuple["Property", ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

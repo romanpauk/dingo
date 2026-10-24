@@ -671,7 +671,7 @@ private:
       if constexpr (route::choice.created_count != 0 &&
                     plan.kind == completion::address) {
         // The request takes the address of the object the binding refers to,
-        // null for the element of a layer that holds none.
+        // null for the element of a wrapper that holds none.
         return address_from<binding, selected,
                             binding::published.items[selected].rule_count>(
             holder.slot.context(), source, true);
@@ -680,12 +680,12 @@ private:
                          binding::published.items[selected].rule_count>(
             holder.slot.context(), source);
       } else {
-        using layers = planned_layers_t<made_type, route>;
-        static_assert(layers::valid &&
-                          std::is_same_v<typename layers::boundary,
+        using wrappers = planned_wrappers_t<made_type, route>;
+        static_assert(wrappers::valid &&
+                          std::is_same_v<typename wrappers::boundary,
                                          boundary_t<binding, selected>>,
                       "the requested wrapper cannot be created by the route");
-        return layers::make([&]() DINGO_INLINE_LAMBDA -> decltype(auto) {
+        return wrappers::make([&]() DINGO_INLINE_LAMBDA -> decltype(auto) {
           return walk_to_boundary<binding, selected>(holder.slot.context(),
                                                      source);
         });

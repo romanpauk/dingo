@@ -97,7 +97,7 @@ scopes: tuple[Scope, ...] = (
                 "shared_handle": BORROWED,
             }
         ),
-        nested_layers=False,
+        nested_wrappers=False,
         phases=("publish", "complete"),
     ),
     Scope(

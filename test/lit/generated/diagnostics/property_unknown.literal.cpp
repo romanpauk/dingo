@@ -12,7 +12,7 @@
 // literal where the compiler formats none.
 // REQUIRES: literal-static-assert
 // RUN: not %dingo_cxx_literal -fsyntax-only %s 2>&1 | %filecheck %s
-// CHECK: the wrapper semantics {kind} declares a property bit that is no layer_property
+// CHECK: the wrapper semantics {kind} declares a property bit that is no property
 
 #include <dingo/container.h>
 #include <dingo/storage/shared.h>
@@ -40,10 +40,10 @@ template <typename T> struct dingo::wrapper_traits<handle<T>> {
 };
 
 template <> struct dingo::wrapper_semantics<handle_kind> {
-  static constexpr std::uint16_t properties = dingo::layer_property::owning | dingo::layer_property::sharing |
-      dingo::layer_property::nullable | dingo::layer_property::borrowable |
-      dingo::layer_property::constructible | dingo::layer_property::copyable |
-      dingo::layer_property::wrapper |
+  static constexpr std::uint16_t properties = dingo::property::owning | dingo::property::sharing |
+      dingo::property::nullable | dingo::property::borrowable |
+      dingo::property::constructible | dingo::property::copyable |
+      dingo::property::mapped |
       std::uint16_t(1) << 15;
   using operations = dingo::type_list<dingo::op<dingo::operation::borrow>>;
 };

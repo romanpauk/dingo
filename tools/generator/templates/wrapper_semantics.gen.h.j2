@@ -22,7 +22,7 @@ struct {{ semantics.name }} {};
 namespace dingo {
 
 using operation = core::operation;
-using layer_property = core::layer_property;
+using property = core::property;
 
 // An operation of a wrapper semantics, and the semantics it leads to for an
 // operation that leads to another semantics, such as the sharing semantics a
@@ -34,13 +34,13 @@ template <operation Operation, typename Target = void> struct op {};
 //   static constexpr std::uint16_t properties = ...;
 //   using operations = type_list<op<...>, ...>;
 //
-// the layer_property bits of the semantics and the operations it has. A wrapper
+// the property bits of the semantics and the operations it has. A wrapper
 // has the semantics its wrapper_traits name.
 template <typename Semantics> struct wrapper_semantics;
 {% for semantics in semantics_list %}
 
 template <> struct wrapper_semantics<::{{ namespace }}::{{ semantics.name }}> {
-  static constexpr std::uint16_t properties = {% for property in semantics.properties %}layer_property::{{ property }}{{ " | " if not loop.last }}{% endfor %}{% if not semantics.properties %}0{% endif %};
+  static constexpr std::uint16_t properties = {% for property in semantics.properties %}property::{{ property }}{{ " | " if not loop.last }}{% endfor %}{% if not semantics.properties %}0{% endif %};
   using operations = core::type_list<{% for operation in semantics.operations %}op<operation::{{ operation.operation }}{% if operation.target %}, ::{{ namespace }}::{{ operation.target }}{% endif %}>{{ ", " if not loop.last }}{% endfor %}>;
 };
 {% endfor %}

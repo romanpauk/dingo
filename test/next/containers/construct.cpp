@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 //
 
-// The construction of an unregistered object: inside the layers of its
+// The construction of an unregistered object: inside the wrappers of its
 // shape, by a named constructor of a leaf that converts to the stored one,
 // and with a dependency constructed by the constructor its type declares.
 

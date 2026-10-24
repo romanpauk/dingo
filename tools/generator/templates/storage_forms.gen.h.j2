@@ -30,19 +30,19 @@ enum class storage_form : std::uint8_t {
 
 inline constexpr std::size_t storage_form_count = {{ storage_forms | length }};
 
-// A class of layers: the property bits a layer has, and those it lacks.
-struct layer_class {
+// A class of wrappers: the property bits a wrapper has, and those it lacks.
+struct property_class {
   bool any;
   std::uint16_t has;
   std::uint16_t lacks;
 };
 
-// A storage form: the class of the outer layer of a stored shape, and of the
-// layer of its element; a form of no outer class is the plain one.
+// A storage form: the class of the outer wrapper of a stored shape, and of the
+// wrapper of its element; a form of no outer class is the plain one.
 struct storage_form_info {
   storage_form form;
-  layer_class outer;
-  layer_class inner;
+  property_class outer;
+  property_class inner;
 };
 
 inline constexpr storage_form_info storage_forms[] = {

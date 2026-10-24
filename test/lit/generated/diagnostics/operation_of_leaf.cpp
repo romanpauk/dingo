@@ -40,10 +40,10 @@ template <typename T> struct dingo::wrapper_traits<handle<T>> {
 };
 
 template <> struct dingo::wrapper_semantics<handle_kind> {
-  static constexpr std::uint16_t properties = dingo::layer_property::owning | dingo::layer_property::sharing |
-      dingo::layer_property::nullable | dingo::layer_property::borrowable |
-      dingo::layer_property::constructible | dingo::layer_property::copyable |
-      dingo::layer_property::wrapper;
+  static constexpr std::uint16_t properties = dingo::property::owning | dingo::property::sharing |
+      dingo::property::nullable | dingo::property::borrowable |
+      dingo::property::constructible | dingo::property::copyable |
+      dingo::property::mapped;
   using operations = dingo::type_list<dingo::op<dingo::operation::copy>>;
 };
 

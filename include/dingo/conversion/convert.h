@@ -10,12 +10,12 @@
 // A binding of the next implementation and the execution of its routes. A
 // binding type derives the terms it serves at compile time, and walk applies
 // the rules of one term to the stored object, one C++ operation per form: the
-// operation of the layer_traits of the object, or of the language for an
+// operation of the wrapper_traits of the object, or of the language for an
 // address.
 //
 // The binding applies the rules of a term up to its boundary, and the request
 // completes it: a last copy, address-of, or decay of a borrowed object depends
-// only on the requested type, and a layer a rule creates from a leaf or a
+// only on the requested type, and a wrapper a rule creates from a leaf or a
 // pointer may be of any family, whose wrapper type only the request names. A
 // runtime container erases the binding at the boundary, and a static
 // container completes the term in the same way.
@@ -23,10 +23,10 @@
 #include <dingo/base/mechanics.h>
 #include <dingo/conversion/annotated.h>
 #include <dingo/conversion/construct.h>
-#include <dingo/conversion/layer_traits.h>
 #include <dingo/conversion/route.h>
 #include <dingo/conversion/scopes.gen.h>
 #include <dingo/conversion/type_conversion.h>
+#include <dingo/conversion/wrapper_traits.h>
 #include <dingo/primitives/compile_diagnostics.gen.h>
 #include <dingo/primitives/diagnostics.gen.h>
 #include <dingo/primitives/retained.h>
@@ -161,8 +161,8 @@ template <typename Binding> constexpr bool registers() {
   constexpr registration_status status = Binding::status;
   static_assert(require<status != registration_status::form_not_stored,
                         diag::scope_form_not_stored, stored>());
-  static_assert(require<status != registration_status::nested_layers,
-                        diag::scope_nested_layers, stored>());
+  static_assert(require<status != registration_status::nested_wrappers,
+                        diag::scope_nested_wrappers, stored>());
   static_assert(require<status != registration_status::no_default_factory,
                         diag::no_default_factory, stored>());
   static_assert(require<status != registration_status::interface_in_array,
@@ -187,7 +187,7 @@ enum class completion : std::uint8_t { refer, copy, address, construct };
 struct completion_plan {
   completion kind = completion::construct;
   std::size_t binding_steps = 0;
-  // Whether the route reaches into a variadic layer, whose held alternative
+  // Whether the route reaches into a variadic wrapper, whose held alternative
   // a request checks each time, so the address it borrows is not kept.
   bool rechecked = false;
 };
@@ -197,8 +197,8 @@ constexpr completion_plan plan_completion(const term &route) {
   plan.binding_steps = route.rule_count;
   for (std::size_t step = 0; step < route.rule_count; ++step) {
     plan.rechecked =
-        plan.rechecked || has_properties(from_semantics(route.rules[step]),
-                                         layer_property::variadic);
+        plan.rechecked ||
+        has_properties(from_semantics(route.rules[step]), property::variadic);
   }
   if (route.category == value_category::lvalue) {
     plan.kind = completion::refer;
@@ -223,11 +223,11 @@ constexpr completion_plan plan_completion(const term &route) {
 
 // How a request completes the route it takes: by the completion of the term,
 // or by taking the address of the object the binding refers to, or by making
-// the layers it creates, innermost first, of the object the binding
+// the wrappers it creates, innermost first, of the object the binding
 // constructs.
 struct request_plan {
   completion kind = completion::construct;
-  operation creating[max_created_layers] = {};
+  operation creating[max_created_wrappers] = {};
   std::size_t created = 0;
 };
 
@@ -303,7 +303,7 @@ inline constexpr bool has_share_v<
 // The context of a walk to the address of the object a term borrows: the
 // walk yields the address of the object its last rule reaches, along the
 // route it takes by the alternatives the objects hold, which is null, when
-// `null_allowed`, for the element of a layer that holds none.
+// `null_allowed`, for the element of a wrapper that holds none.
 template <typename Context> struct address_walk {
   Context &context;
   bool null_allowed;
@@ -329,7 +329,7 @@ struct step {
   static constexpr operation form = current.form;
   // The kind the step derives, or the leaf kind for an element.
   static constexpr const semantics_descriptor *to = to_semantics(current);
-  // The argument of the source layer the rule reaches, or for an upcast, the
+  // The argument of the source wrapper the rule reaches, or for an upcast, the
   // index of the interface it converts to.
   static constexpr std::size_t argument =
       Binding::published.items[Term].arguments[Step];
@@ -368,23 +368,23 @@ using copy_cv_t = std::conditional_t<
                        const Type>,
     std::conditional_t<std::is_volatile_v<From>, volatile Type, Type>>;
 
-// The interface of the step in place of the element of a layer, or of the
+// The interface of the step in place of the element of a wrapper, or of the
 // object an address points to, with its qualifiers: a const object serves its
 // interfaces as const ones.
 template <typename Step, typename Binding, typename Element>
 using qualified_interface_t = copy_cv_t<Element, interface_t<Step, Binding>>;
 
-template <typename Layer>
-using layer_element_t =
-    type_list_at_t<0, typename layer_traits<Layer>::arguments>;
+template <typename Wrapper>
+using wrapper_element_t =
+    type_list_at_t<0, typename wrapper_traits<Wrapper>::arguments>;
 
 // A borrowed handle converts to the handle of the interface, which the binding
 // keeps in the context, so the request can refer to it.
 template <typename Binding, typename Step, typename Context, typename Value>
 decltype(auto) keep_step(Context &context, Value &value) {
-  using layer = remove_cvref_t<Value>;
-  using target = typename layer_traits<layer>::template rebind<
-      qualified_interface_t<Step, Binding, layer_element_t<layer>>>;
+  using wrapper = remove_cvref_t<Value>;
+  using target = typename wrapper_traits<wrapper>::template rebind<
+      qualified_interface_t<Step, Binding, wrapper_element_t<wrapper>>>;
   if constexpr (converts<target, remove_cvref_t<Value>, const Value &>()) {
     return Step::reach(
         context,
@@ -403,13 +403,13 @@ decltype(auto) upcast_step(Context &context, Value &&value) {
   using interface = interface_t<Step, Binding>;
   // A leaf, or the element of an address, converts to a base of it.
   constexpr bool to_address = has_form(Step::to, operation::address);
-  if constexpr (!is_layer(Step::to) || to_address) {
+  if constexpr (!is_wrapper(Step::to) || to_address) {
     using leaf = std::remove_pointer_t<remove_cvref_t<Value>>;
     static_assert(require<std::is_convertible_v<leaf *, interface *>,
                           diag::interface_not_derived,
                           typename Binding::stored_type, interface>());
   }
-  if constexpr (!is_layer(Step::to)) {
+  if constexpr (!is_wrapper(Step::to)) {
     using target =
         qualified_interface_t<Step, Binding, std::remove_reference_t<Value>>;
     return Step::reach(context, static_cast<target &>(value));
@@ -419,9 +419,9 @@ decltype(auto) upcast_step(Context &context, Value &&value) {
                               std::remove_pointer_t<remove_cvref_t<Value>>>;
     return Step::yield(context, [&] { return static_cast<target *>(value); });
   } else {
-    using layer = remove_cvref_t<Value>;
-    using target = typename layer_traits<layer>::template rebind<
-        qualified_interface_t<Step, Binding, layer_element_t<layer>>>;
+    using wrapper = remove_cvref_t<Value>;
+    using target = typename wrapper_traits<wrapper>::template rebind<
+        qualified_interface_t<Step, Binding, wrapper_element_t<wrapper>>>;
     if constexpr (converts<target, remove_cvref_t<Value>, Value &&>()) {
       return Step::yield(context, [&] {
         return convert_to<target>(std::forward<Value>(value));
@@ -448,11 +448,11 @@ decltype(auto) convert_step(Context &context, Value &&value) {
   }
 }
 
-// The element of a layer: the argument a step reaches of a layer of a
+// The element of a wrapper: the argument a step reaches of a wrapper of a
 // variadic kind, which the object must hold, and the one element of another.
 template <typename Step, typename Traits, typename Value>
 decltype(auto) element_of(Value &&value) {
-  if constexpr (has_properties(Step::current.kind, layer_property::variadic)) {
+  if constexpr (has_properties(Step::current.kind, property::variadic)) {
     if (Traits::index(std::as_const(value)) != Step::argument) {
       raise_alternative_not_held(
           type_name_of<std::remove_cv_t<std::remove_reference_t<Value>>>());
@@ -463,11 +463,11 @@ decltype(auto) element_of(Value &&value) {
   }
 }
 
-// Whether the object a step starts from is a layer of the kind of the step: a
+// Whether the object a step starts from is a wrapper of the kind of the step: a
 // reference is not, as C++ refers to the object it aliases.
 template <typename Step, typename Value>
-inline constexpr bool is_step_layer_v =
-    is_layer_v<Value> &&
+inline constexpr bool is_step_wrapper_v =
+    is_wrapper_v<Value> &&
     same_semantics(wrapper_semantics_v<Value>, Step::current.kind);
 
 template <typename Traits, typename Value, typename = void>
@@ -479,23 +479,23 @@ inline constexpr bool
                         std::void_t<decltype(bool(Traits::has_element(
                             std::declval<const Value &>())))>> = true;
 
-// Whether a step into the element of a layer checks that the object holds
-// one: a nullable layer that holds its element in place has no element to
+// Whether a step into the element of a wrapper checks that the object holds
+// one: a nullable wrapper that holds its element in place has no element to
 // refer to when it holds none.
 template <typename Step, typename Traits, typename Value>
 inline constexpr bool checks_element_v =
-    has_properties(Step::current.kind, layer_property::nullable) &&
-    has_properties(Step::current.kind, layer_property::in_place) &&
+    has_properties(Step::current.kind, property::nullable) &&
+    has_properties(Step::current.kind, property::in_place) &&
     has_element_check_v<Traits, Value>;
 
-// A consumed object moves out of a layer, a handle shares its element, or an
+// A consumed object moves out of a wrapper, a handle shares its element, or an
 // array hands out its first element or its address.
 template <typename Step, typename Context, typename Value>
 decltype(auto) consume_step(Context &context, Value &&value) {
   using value_type = remove_cvref_t<Value>;
-  using traits = layer_traits<value_type>;
+  using traits = wrapper_traits<value_type>;
   if constexpr (Step::form == operation::take) {
-    if constexpr (is_step_layer_v<Step, value_type>) {
+    if constexpr (is_step_wrapper_v<Step, value_type>) {
       if constexpr (checks_element_v<Step, traits, value_type>) {
         if (!traits::has_element(std::as_const(value))) {
           raise_element_not_held(type_name_of<value_type>());
@@ -523,9 +523,9 @@ decltype(auto) consume_step(Context &context, Value &&value) {
   }
 }
 
-// A borrowed layer reaches the element it holds, which a nullable layer that
-// holds it in place must hold; the last step of a walk to an address yields a
-// null address for none, when the walk allows it.
+// A borrowed wrapper reaches the element it holds, which a nullable wrapper
+// that holds it in place must hold; the last step of a walk to an address
+// yields a null address for none, when the walk allows it.
 template <typename Step, typename Traits, typename Context, typename Value>
 decltype(auto) borrow_element(Context &context, Value &value) {
   using value_type = remove_cvref_t<Value>;
@@ -543,14 +543,14 @@ decltype(auto) borrow_element(Context &context, Value &value) {
   return Step::reach(context, element_of<Step, Traits>(value));
 }
 
-// A borrowed object reaches the object a layer holds, or is copied, or its
+// A borrowed object reaches the object a wrapper holds, or is copied, or its
 // address is taken, or it decays.
 template <typename Step, typename Context, typename Value>
 decltype(auto) borrow_step(Context &context, Value &value) {
   using value_type = remove_cvref_t<Value>;
-  using traits = layer_traits<value_type>;
+  using traits = wrapper_traits<value_type>;
   if constexpr (Step::form == operation::borrow) {
-    if constexpr (is_step_layer_v<Step, value_type>) {
+    if constexpr (is_step_wrapper_v<Step, value_type>) {
       return borrow_element<Step, traits>(context, value);
     } else {
       return Step::reach(context, value);
@@ -599,7 +599,7 @@ template <typename Binding, std::size_t Term, std::size_t Steps,
           std::size_t Step, typename Context, typename Value>
 decltype(auto) take_step(Context &context, Value &&value);
 
-// Continues the walk of term `Term` at its step `Step`, into a variadic layer
+// Continues the walk of term `Term` at its step `Step`, into a variadic wrapper
 // whose object holds the alternative `held`, along the sibling that takes it
 // from there, as many steps short of its end as the walk of `Term` is; or
 // along `Term`, which reports that the object holds another alternative.
@@ -607,7 +607,7 @@ template <typename Binding, std::size_t Term, std::size_t Steps,
           std::size_t Step, std::size_t Alternative, typename Context,
           typename Value>
 decltype(auto) branch(std::size_t held, Context &context, Value &&value) {
-  using arguments = typename layer_traits<remove_cvref_t<Value>>::arguments;
+  using arguments = typename wrapper_traits<remove_cvref_t<Value>>::arguments;
   if constexpr (Alternative == arguments::size) {
     return take_step<Binding, Term, Steps, Step>(context,
                                                  std::forward<Value>(value));
@@ -632,7 +632,7 @@ template <typename Binding, std::size_t Term, std::size_t Steps,
           std::size_t Step, typename Context, typename Value>
 decltype(auto) walk_step(Context &context, Value &&value) {
   if constexpr (branches_v<Binding, Term, Step>) {
-    using traits = layer_traits<remove_cvref_t<Value>>;
+    using traits = wrapper_traits<remove_cvref_t<Value>>;
     const std::size_t held = traits::index(std::as_const(value));
     if (held != step<Binding, Term, Steps, Step>::argument) {
       return branch<Binding, Term, Steps, Step, 0>(held, context,
@@ -683,7 +683,7 @@ DINGO_ALWAYS_INLINE decltype(auto) walk_from(Context &context,
 
 namespace detail {
 // Whether the last of the first `Steps` rules of term `Term` borrows the
-// element of a nullable layer that holds it in place, which may hold none.
+// element of a nullable wrapper that holds it in place, which may hold none.
 template <typename Binding, std::size_t Term, std::size_t Steps>
 constexpr bool reaches_held_element() {
   if constexpr (Steps == 0) {
@@ -691,18 +691,18 @@ constexpr bool reaches_held_element() {
   } else {
     const route_step &last = Binding::published.items[Term].rules[Steps - 1];
     return last.form == operation::borrow &&
-           has_properties(last.kind, layer_property::nullable) &&
-           has_properties(last.kind, layer_property::in_place);
+           has_properties(last.kind, property::nullable) &&
+           has_properties(last.kind, property::in_place);
   }
 }
 } // namespace detail
 
 // The address of the object the first `Steps` rules of term `Term` reach from
 // the stored object `source()` yields, which they borrow. When the last rule
-// reaches the element of a layer that holds none, the address is null if
+// reaches the element of a wrapper that holds none, the address is null if
 // `null_allowed`, and the request is refused otherwise. The last rule is the
 // one of the route the walk takes: a sibling the object holds the alternative
-// of may reach its object from a layer of another type.
+// of may reach its object from a wrapper of another type.
 template <typename Binding, std::size_t Term, std::size_t Steps,
           typename Context, typename Source>
 DINGO_ALWAYS_INLINE auto address_from(Context &context, Source &&source,
@@ -753,8 +753,8 @@ template <typename Type, typename = void> struct first_element {
 
 template <typename Type>
 struct first_element<Type,
-                     std::void_t<typename layer_traits<Type>::arguments>> {
-  using type = type_list_at_t<0, typename layer_traits<Type>::arguments>;
+                     std::void_t<typename wrapper_traits<Type>::arguments>> {
+  using type = type_list_at_t<0, typename wrapper_traits<Type>::arguments>;
 };
 
 template <typename Traits, typename Element, typename = void>
@@ -767,7 +767,7 @@ inline constexpr bool has_adopt_v<
 } // namespace detail
 
 namespace detail {
-// Converts to the object `make()` returns, so a layer constructs it in place.
+// Converts to the object `make()` returns, so a wrapper constructs it in place.
 template <typename Type, typename Make> class converts_to {
 public:
   explicit converts_to(Make &make) : make_(make) {}
@@ -782,8 +782,8 @@ private:
 // How the request makes `Target` from the boundary object, which `make()`
 // returns, by the creating forms `Outer, Inner...`, outermost first:
 // `boundary` is the type of the boundary object, and `valid` tells whether the
-// forms make `Target`. Every layer constructs its element in place.
-template <typename Target, operation... Forms> struct created_layers {
+// forms make `Target`. Every wrapper constructs its element in place.
+template <typename Target, operation... Forms> struct created_wrappers {
   using boundary = Target;
   static constexpr bool valid =
       !std::is_void_v<Target> && !std::is_array_v<Target>;
@@ -792,11 +792,11 @@ template <typename Target, operation... Forms> struct created_layers {
 };
 
 template <typename Target, operation Outer, operation... Inner>
-struct created_layers<Target, Outer, Inner...> {
+struct created_wrappers<Target, Outer, Inner...> {
 private:
-  using traits = layer_traits<Target>;
+  using traits = wrapper_traits<Target>;
   using element = typename detail::first_element<Target>::type;
-  using inner = created_layers<element, Inner...>;
+  using inner = created_wrappers<element, Inner...>;
   static constexpr bool wraps = Outer == operation::wrap;
   static constexpr bool semantics_match =
       has_form(wrapper_semantics_v<Target>, Outer);
@@ -828,15 +828,15 @@ public:
 
 namespace detail {
 template <typename Target, typename Plan, std::size_t... Indices>
-created_layers<Target,
-               Plan::value.creating[sizeof...(Indices) - 1 - Indices]...>
-    plan_layers(std::index_sequence<Indices...>);
+created_wrappers<Target,
+                 Plan::value.creating[sizeof...(Indices) - 1 - Indices]...>
+    plan_wrappers(std::index_sequence<Indices...>);
 } // namespace detail
 
 // The creating forms of the request_plan `Plan::value` applied to make
 // `Target`.
 template <typename Target, typename Plan>
-using planned_layers_t = decltype(detail::plan_layers<Target, Plan>(
+using planned_wrappers_t = decltype(detail::plan_wrappers<Target, Plan>(
     std::make_index_sequence<Plan::value.created>()));
 
 } // namespace dingo::core

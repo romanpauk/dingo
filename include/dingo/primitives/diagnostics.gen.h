@@ -23,7 +23,7 @@
 namespace dingo::core {
 
 // spec: diagnostics.alternative_not_held
-// A request is served by a route through an alternative of a variadic layer,
+// A request is served by a route through an alternative of a variadic wrapper,
 // whose object holds another alternative.
 [[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
 raise_alternative_not_held(std::string_view type) {
@@ -35,7 +35,7 @@ raise_alternative_not_held(std::string_view type) {
 
 // spec: diagnostics.element_not_held
 // A request other than of an address is served by a route through the element
-// of a nullable layer that holds it in place, whose object holds no element.
+// of a nullable wrapper that holds it in place, whose object holds no element.
 [[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
 raise_element_not_held(std::string_view type) {
   throw ::dingo::type_not_convertible_exception(

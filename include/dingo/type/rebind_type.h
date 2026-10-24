@@ -8,10 +8,10 @@
 #pragma once
 
 // dingo/type/rebind_type.h of the next implementation: the leaf of a type and
-// the type with its leaf rebound, through its layers, and the marker of a
+// the type with its leaf rebound, through its wrappers, and the marker of a
 // request that names its wrapper exactly.
 
-#include <dingo/conversion/layer_traits.h>
+#include <dingo/conversion/wrapper_traits.h>
 
 namespace dingo {
 

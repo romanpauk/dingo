@@ -21,10 +21,10 @@
 #include <dingo/type/annotated.h>
 #include <dingo/type/type_conversion_traits.h>
 
-#include <dingo/conversion/layer_traits.h>
 #include <dingo/conversion/request.h>
 #include <dingo/conversion/route.h>
 #include <dingo/conversion/type_conversion.h>
+#include <dingo/conversion/wrapper_traits.h>
 #include <dingo/registration.h>
 
 #include <gtest/gtest.h>

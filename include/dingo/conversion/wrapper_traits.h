@@ -9,16 +9,16 @@
 
 // The wrapper semantics a C++ type is: the projection of the shape algebra of
 // the spec onto C++ types. Raw pointers, references, and arrays are language
-// layers, of the pointer, reference, and array kinds of the library. Wrappers
-// are classified by layer_traits, which the standard wrappers specialize here
+// wrappers, of the pointer, reference, and array kinds of the library. Wrappers
+// are classified by wrapper_traits, which the standard wrappers specialize here
 // and user wrappers through the public extension point; no wrapper gets other
 // treatment. A wrapper semantics is a tag whose wrapper_semantics declare its
 // properties and forms, and the library's kinds are declared as a user's are.
 //
 // A specialization names the wrapper semantics, the wrapper family, and the
-// argument types, and provides `rebind`, the same layer of other argument
-// types, `element`, which reaches the element of a layer object, and `make`,
-// which makes a layer object from the arguments of its element. A handle that
+// argument types, and provides `rebind`, the same wrapper of other argument
+// types, `element`, which reaches the element of a wrapper object, and `make`,
+// which makes a wrapper object from the arguments of its element. A handle that
 // owns its element also adopts an element it is given the address of, and a
 // sole-owner handle hands its element to the sharing handle of its family.
 
@@ -40,7 +40,7 @@
 
 namespace dingo {
 
-// The public extension point that makes a wrapper type a layer of the shape
+// The public extension point that makes a wrapper type a wrapper of the shape
 // algebra. A specialization declares
 //
 //   kind       the wrapper semantics of the wrapper, a tag whose
@@ -204,6 +204,55 @@ template <typename... Types> struct wrapper_traits<std::variant<Types...>> {
   }
 };
 
+// The wrappers of the language are wrappers like the ones of the library: the
+// extension point is the same.
+template <typename Type> struct wrapper_traits<Type *> {
+  using semantics = ::dingo::semantics::pointer;
+  using arguments = type_list<Type>;
+  template <typename Element> using rebind = Element *;
+
+  static Type &element(Type *value) { return *value; }
+
+  template <typename... Args> static Type *make(Args &&...args) {
+    return new Type(std::forward<Args>(args)...);
+  }
+
+  // A slot that keeps a pointer owns the element it points to, which its
+  // factory made.
+  static void dispose(Type *value) noexcept { delete value; }
+};
+
+template <typename Type> struct wrapper_traits<Type &> {
+  using semantics = ::dingo::semantics::reference;
+  using arguments = type_list<Type>;
+  template <typename Element> using rebind = Element &;
+
+  static Type &element(Type &value) { return value; }
+};
+
+// An array decays to the address of its first element.
+template <typename Type, std::size_t Extent>
+struct wrapper_traits<Type[Extent]> {
+  using semantics = ::dingo::semantics::fixed_array;
+  static constexpr std::size_t extent = Extent;
+  using arguments = type_list<Type>;
+  template <typename Element> using rebind = Element[Extent];
+
+  template <typename Array> static auto first(Array &value) {
+    return &value[0];
+  }
+};
+
+template <typename Type> struct wrapper_traits<Type[]> {
+  using semantics = ::dingo::semantics::dynamic_array;
+  using arguments = type_list<Type>;
+  template <typename Element> using rebind = Element[];
+
+  template <typename Array> static auto first(Array &value) {
+    return &value[0];
+  }
+};
+
 } // namespace dingo
 
 namespace dingo::core {
@@ -231,8 +280,8 @@ struct declares_semantics<
 
 // Whether a form leads to another kind, which a kind of it names.
 constexpr bool leads_to_semantics(operation form) {
-  return info(form).from_layer == form_layer::target ||
-         info(form).to_layer == form_layer::target;
+  return info(form).from_position == type_position::target ||
+         info(form).to_position == type_position::target;
 }
 
 template <operation... Forms> constexpr bool distinct_forms() {
@@ -296,73 +345,16 @@ template <typename Kind> constexpr semantics_descriptor make_semantics() {
   semantics_descriptor kind;
   if constexpr (declares_semantics<Kind>::value) {
     using traits = ::dingo::wrapper_semantics<Kind>;
-    static_assert(require<(traits::properties & ~layer_property::all) == 0,
+    static_assert(require<(traits::properties & ~property::all) == 0,
                           diag::property_unknown, Kind>());
     kind.id = type_id_v<Kind>;
-    kind.layer = true;
+    kind.wrapper = true;
     kind.properties = traits::properties;
     semantics_operations_of<Kind, typename traits::operations>::add(kind);
   }
   return kind;
 }
 } // namespace detail
-
-// A type that is not a layer is a leaf, of no kind.
-template <typename Type, typename = void> struct layer_traits {
-  using semantics = void;
-};
-
-// A wrapper is the layer its wrapper_traits declare.
-template <typename Type>
-struct layer_traits<
-    Type, std::void_t<typename ::dingo::wrapper_traits<Type>::semantics>>
-    : ::dingo::wrapper_traits<Type> {};
-
-template <typename Type> struct layer_traits<Type *> {
-  using semantics = ::dingo::semantics::pointer;
-  using arguments = type_list<Type>;
-  template <typename Element> using rebind = Element *;
-
-  static Type &element(Type *value) { return *value; }
-
-  template <typename... Args> static Type *make(Args &&...args) {
-    return new Type(std::forward<Args>(args)...);
-  }
-
-  // A slot that keeps a pointer owns the element it points to, which its
-  // factory made.
-  static void dispose(Type *value) noexcept { delete value; }
-};
-
-template <typename Type> struct layer_traits<Type &> {
-  using semantics = ::dingo::semantics::reference;
-  using arguments = type_list<Type>;
-  template <typename Element> using rebind = Element &;
-
-  static Type &element(Type &value) { return value; }
-};
-
-// An array decays to the address of its first element.
-template <typename Type, std::size_t Extent> struct layer_traits<Type[Extent]> {
-  using semantics = ::dingo::semantics::fixed_array;
-  static constexpr std::size_t extent = Extent;
-  using arguments = type_list<Type>;
-  template <typename Element> using rebind = Element[Extent];
-
-  template <typename Array> static auto first(Array &value) {
-    return &value[0];
-  }
-};
-
-template <typename Type> struct layer_traits<Type[]> {
-  using semantics = ::dingo::semantics::dynamic_array;
-  using arguments = type_list<Type>;
-  template <typename Element> using rebind = Element[];
-
-  template <typename Array> static auto first(Array &value) {
-    return &value[0];
-  }
-};
 
 namespace detail {
 template <typename Kind> struct semantics_of_type {
@@ -374,23 +366,35 @@ template <> struct semantics_of_type<void> {
 };
 } // namespace detail
 
+namespace detail {
+template <typename Type, typename = void> struct wrapper_semantics_of {
+  using type = void;
+};
+
+template <typename Type>
+struct wrapper_semantics_of<
+    Type, std::void_t<typename ::dingo::wrapper_traits<Type>::semantics>> {
+  using type = typename ::dingo::wrapper_traits<Type>::semantics;
+};
+} // namespace detail
+
 // The wrapper semantics of a type, or void for a leaf.
 template <typename Type>
 using wrapper_semantics_t =
-    typename layer_traits<std::remove_cv_t<Type>>::semantics;
+    typename detail::wrapper_semantics_of<std::remove_cv_t<Type>>::type;
 
-// Whether a type is a layer rather than a leaf.
+// Whether a type is a wrapper rather than a leaf.
 template <typename Type>
-inline constexpr bool is_layer_v = !std::is_void_v<wrapper_semantics_t<Type>>;
+inline constexpr bool is_wrapper_v = !std::is_void_v<wrapper_semantics_t<Type>>;
 
-// Whether the layer traits of `Type` release what an object of it owns beyond
+// Whether the wrapper traits of `Type` release what an object of it owns beyond
 // itself when the slot that keeps it destroys it.
 template <typename Type, typename = void>
 inline constexpr bool has_dispose_v = false;
 
 template <typename Type>
 inline constexpr bool
-    has_dispose_v<Type, std::void_t<decltype(layer_traits<Type>::dispose(
+    has_dispose_v<Type, std::void_t<decltype(wrapper_traits<Type>::dispose(
                             std::declval<Type &>()))>> = true;
 
 // The descriptor of the wrapper semantics of a type, or the leaf kind.
@@ -402,30 +406,30 @@ inline constexpr const semantics_descriptor *wrapper_semantics_v =
 inline constexpr const semantics_descriptor *address_semantics_v =
     wrapper_semantics_v<char *>;
 
-// Whether a type is a layer of a kind of all of the layer_property bits
+// Whether a type is a wrapper of a kind of all of the property bits
 // `Properties`.
 template <typename Type, std::uint16_t Properties>
-inline constexpr bool has_layer_properties_v =
-    is_layer_v<Type> &&
+inline constexpr bool has_properties_v =
+    is_wrapper_v<Type> &&
     (detail::semantics_of_type<wrapper_semantics_t<Type>>::value->properties &
      Properties) == Properties;
 
 namespace detail {
-template <typename Traits, typename = void> struct layer_family {
+template <typename Traits, typename = void> struct wrapper_family {
   static constexpr type_id value = nullptr;
 };
 
 template <typename Traits>
-struct layer_family<Traits, std::void_t<typename Traits::family>> {
+struct wrapper_family<Traits, std::void_t<typename Traits::family>> {
   static constexpr type_id value = type_id_v<typename Traits::family>;
 };
 
-template <typename Traits, typename = void> struct layer_extent {
+template <typename Traits, typename = void> struct wrapper_extent {
   static constexpr std::uint32_t value = 0;
 };
 
 template <typename Traits>
-struct layer_extent<Traits, std::void_t<decltype(Traits::extent)>> {
+struct wrapper_extent<Traits, std::void_t<decltype(Traits::extent)>> {
   static constexpr std::uint32_t value = Traits::extent;
 };
 
@@ -447,16 +451,16 @@ struct argument_shapes<type_list<Arguments...>> {
   }
 };
 
-// Whether the layer `value` is copied: a layer of a kind copied as a handle,
-// or one that holds its elements in place and is not immovable, when every
-// element is copied.
-constexpr bool copies_layer(const shape &value) {
+// Whether the wrapper `value` is copied: a wrapper of a kind copied as a
+// handle, or one that holds its elements in place and is not immovable, when
+// every element is copied.
+constexpr bool copies_wrapper(const shape &value) {
   const std::uint16_t properties = value.nodes[0].kind->properties;
-  if ((properties & layer_property::copyable) != 0) {
+  if ((properties & property::copyable) != 0) {
     return true;
   }
-  if ((properties & layer_property::in_place) == 0 ||
-      (properties & layer_property::immovable) != 0) {
+  if ((properties & property::in_place) == 0 ||
+      (properties & property::immovable) != 0) {
     return false;
   }
   std::size_t index = 1;
@@ -471,24 +475,24 @@ constexpr bool copies_layer(const shape &value) {
 
 template <typename Type> constexpr shape make_shape() {
   using value_type = std::remove_cv_t<Type>;
-  using traits = layer_traits<value_type>;
+  using traits = wrapper_traits<value_type>;
   shape result;
   shape_node &node = result.nodes[0];
   node.kind = wrapper_semantics_v<value_type>;
-  // Only a leaf has an identity of its own; a layer is its kind and family.
-  if constexpr (!is_layer_v<value_type>) {
+  // Only a leaf has an identity of its own; a wrapper is its kind and family.
+  if constexpr (!is_wrapper_v<value_type>) {
     node.type = type_id_v<value_type>;
   }
-  // A leaf is copyable as its type is; a layer as its kind declares. A leaf
+  // A leaf is copyable as its type is; a wrapper as its kind declares. A leaf
   // that is incomplete where it is requested is neither copied nor
   // constructed there, as only a reference or a pointer to it is requested.
-  if constexpr (!is_layer_v<value_type> &&
+  if constexpr (!is_wrapper_v<value_type> &&
                 !core::detail::is_complete<value_type>::value &&
                 !std::is_void_v<value_type>) {
     node.copyable = false;
     node.constructible = false;
   } else {
-    if constexpr (!is_layer_v<value_type>) {
+    if constexpr (!is_wrapper_v<value_type>) {
       node.copyable = is_copied_v<value_type>;
     }
     node.constructible = !std::is_abstract_v<value_type>;
@@ -497,15 +501,15 @@ template <typename Type> constexpr shape make_shape() {
       (std::is_const_v<Type> ? const_qualified : 0) |
       (std::is_volatile_v<Type> ? volatile_qualified : 0));
   result.size = 1;
-  if constexpr (is_layer_v<value_type>) {
-    node.family = layer_family<traits>::value;
-    node.extent = layer_extent<traits>::value;
+  if constexpr (is_wrapper_v<value_type>) {
+    node.family = wrapper_family<traits>::value;
+    node.extent = wrapper_extent<traits>::value;
     node.arity = static_cast<std::uint8_t>(traits::arguments::size);
     argument_shapes<typename traits::arguments>::append(result);
-    node.copyable = copies_layer(result);
+    node.copyable = copies_wrapper(result);
     // The elements of an array have the qualifiers of the array.
-    if constexpr (has_layer_properties_v<value_type, layer_property::extent> ||
-                  has_layer_properties_v<value_type, layer_property::unsized>) {
+    if constexpr (has_properties_v<value_type, property::extent> ||
+                  has_properties_v<value_type, property::unsized>) {
       result.nodes[1].qualifiers |= node.qualifiers;
     }
   }
@@ -531,8 +535,8 @@ struct canonical_rebind<Traits, type_list<Arguments...>> {
 };
 
 template <typename Type>
-struct canonical<Type, std::enable_if_t<is_layer_v<Type>>> {
-  using traits = layer_traits<std::remove_cv_t<Type>>;
+struct canonical<Type, std::enable_if_t<is_wrapper_v<Type>>> {
+  using traits = wrapper_traits<std::remove_cv_t<Type>>;
   using type =
       typename canonical_rebind<traits, typename traits::arguments>::type;
 };
@@ -543,15 +547,14 @@ template <typename Type, typename = void> struct leaf_of {
   using type = Type;
 };
 
-// The leaf a layer holds, through its first argument; a layer of a variadic
+// The leaf a wrapper holds, through its first argument; a wrapper of a variadic
 // kind holds several, and is its own leaf.
 template <typename Type>
-struct leaf_of<
-    Type,
-    std::enable_if_t<is_layer_v<Type> &&
-                     !has_layer_properties_v<Type, layer_property::variadic>>> {
+struct leaf_of<Type,
+               std::enable_if_t<is_wrapper_v<Type> &&
+                                !has_properties_v<Type, property::variadic>>> {
   using type = typename leaf_of<std::remove_cv_t<
-      type_list_at_t<0, typename layer_traits<Type>::arguments>>>::type;
+      type_list_at_t<0, typename wrapper_traits<Type>::arguments>>>::type;
 };
 } // namespace detail
 
@@ -568,22 +571,22 @@ template <typename Type, typename Leaf, typename = void> struct replace_leaf {
 template <typename Type, typename Leaf>
 struct replace_leaf<
     Type, Leaf,
-    std::enable_if_t<is_layer_v<Type> &&
-                     !has_layer_properties_v<Type, layer_property::variadic>>> {
+    std::enable_if_t<is_wrapper_v<Type> &&
+                     !has_properties_v<Type, property::variadic>>> {
   using type =
-      typename layer_traits<Type>::template rebind<typename replace_leaf<
-          type_list_at_t<0, typename layer_traits<Type>::arguments>,
+      typename wrapper_traits<Type>::template rebind<typename replace_leaf<
+          type_list_at_t<0, typename wrapper_traits<Type>::arguments>,
           Leaf>::type>;
 };
 } // namespace detail
 
-// The type with its leaf, through the first argument of every layer, replaced
+// The type with its leaf, through the first argument of every wrapper, replaced
 // by `Leaf`.
 template <typename Type, typename Leaf>
 using replace_leaf_t = typename detail::replace_leaf<Type, Leaf>::type;
 
 // The type a shape describes: the type with cv-qualification removed at every
-// layer. Two types of the same shape have the same canonical type.
+// wrapper. Two types of the same shape have the same canonical type.
 template <typename Type>
 using canonical_t = typename detail::canonical<Type>::type;
 

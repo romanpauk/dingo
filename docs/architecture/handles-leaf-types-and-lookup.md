@@ -8,7 +8,7 @@ or a stored type from the underlying type that is actually being matched.
 ### Shape
 
 A shape is a leaf wrapped in layers. `core::shape_v<T>`, of
-[conversion/layer_traits.h](../../include/dingo/conversion/layer_traits.h),
+[conversion/wrapper_traits.h](../../include/dingo/conversion/wrapper_traits.h),
 describes the shape of `T` as a `constexpr` value: an array of nodes in
 preorder, defined in
 [primitives/shape.h](../../include/dingo/primitives/shape.h), so a layer is
@@ -33,8 +33,8 @@ and the engine knows a kind only by its properties and forms:
   `::dingo::semantics::variant_value`, by their `wrapper_traits`
 - a custom wrapper is a layer of the kind its `wrapper_traits` name
 
-The language layers are classified by `core::layer_traits`, and every wrapper by
-its `wrapper_traits`; no wrapper gets other treatment. A type that is not a
+The language layers are classified by `core::wrapper_traits`, and every wrapper
+by its `wrapper_traits`; no wrapper gets other treatment. A type that is not a
 layer is a leaf.
 
 ### Handle
@@ -142,7 +142,7 @@ The shape algebra is what allows those three parts to compose.
 
 - [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h)
 - [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
-- [include/dingo/conversion/layer_traits.h](../../include/dingo/conversion/layer_traits.h)
+- [include/dingo/conversion/wrapper_traits.h](../../include/dingo/conversion/wrapper_traits.h)
 - [include/dingo/primitives/shape.h](../../include/dingo/primitives/shape.h)
 - [include/dingo/conversion/route.h](../../include/dingo/conversion/route.h)
 - [include/dingo/conversion/request.h](../../include/dingo/conversion/request.h)

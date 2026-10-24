@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 //
 
-#include <dingo/conversion/layer_traits.h>
+#include <dingo/conversion/wrapper_traits.h>
 
 #include <gtest/gtest.h>
 
@@ -28,7 +28,7 @@ template <typename Kind> constexpr const semantics_descriptor *kind() {
 }
 
 static_assert(shape_v<leaf>.size == 1);
-static_assert(!is_layer(shape_v<leaf>.nodes[0].kind));
+static_assert(!is_wrapper(shape_v<leaf>.nodes[0].kind));
 static_assert(shape_v<leaf>.nodes[0].type == type_id_v<leaf>);
 static_assert(shape_v<const leaf>.nodes[0].type == type_id_v<leaf>);
 static_assert(shape_v<leaf>.nodes[0].copyable);
@@ -61,7 +61,7 @@ static_assert(argument_index(shape_v<alternative>, 0, 1) == 2);
 static_assert(subtree(shape_v<alternative>, 2) ==
               shape_v<std::unique_ptr<leaf>>);
 
-// A created layer of any family serves a wrapper of every family.
+// A created wrapper of any family serves a wrapper of every family.
 constexpr shape created = wrap(kind<dingo::semantics::optional_value>(),
                                any_family, true, shape_v<leaf>);
 static_assert(shapes_match(created, shape_v<std::optional<leaf>>));

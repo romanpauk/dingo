@@ -10,4 +10,4 @@
 // dingo/type/type_traits.h of the next implementation: the wrapper_traits
 // extension point.
 
-#include <dingo/conversion/layer_traits.h> // IWYU pragma: export
+#include <dingo/conversion/wrapper_traits.h> // IWYU pragma: export

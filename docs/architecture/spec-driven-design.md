@@ -1237,10 +1237,10 @@ diagnostic.
 
 `primitives/shape.h` describes the shape of a C++ type as a constexpr preorder
 array of nodes, comparable in constant expressions, without knowing the layer
-kinds of the spec. `conversion/layer_traits.h`, a layer between the vocabulary
+kinds of the spec. `conversion/wrapper_traits.h`, a layer between the vocabulary
 and the engine, classifies C++ types into wrapper semantics: pointers,
 references, and arrays as language layers, and the standard wrappers through the
-same `layer_traits` a user wrapper specializes. `primitives/slot.h` holds the
+same `wrapper_traits` a user wrapper specializes. `primitives/slot.h` holds the
 lazy and external lifetime slots; the lazy slot reports a recursion while its
 object is being constructed and is empty again after a failed construction.
 `primitives/constructor.h` detects the constructor of a type and calls it with
@@ -1284,7 +1284,7 @@ to end through the descriptors, the engine, and both backends, before the
 remaining primitives grow around them.
 
 `conversion/convert.h` walks the rules of a term on C++ objects, one operation
-per rule as the rule table describes it, through `layer_traits`. The static
+per rule as the rule table describes it, through `wrapper_traits`. The static
 backend selects the binding and the term at compile time and walks it directly.
 The runtime backend publishes the terms of a binding at registration with a
 thunk per term, and a request selects with the same engine functions. A last

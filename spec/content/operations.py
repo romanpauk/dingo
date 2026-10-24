@@ -17,7 +17,7 @@ from spec.content.patterns import (
 )
 from spec.schema import (
     Access,
-    LayerTrait,
+    Property,
     Predicate,
     RequestCategory,
     Requirement,
@@ -107,7 +107,7 @@ operations: tuple[OperationTemplate, ...] = (
         exposure=RequestCategory.POINTER,
         # Only an array the scope allocated for the request, which is never
         # a value, hands out its elements: one that moves dies with them.
-        kind_traits=(LayerTrait.IMMOVABLE,),
+        kind_traits=(Property.IMMOVABLE,),
     ),
     OperationTemplate(
         id="release_whole",
@@ -130,6 +130,6 @@ operations: tuple[OperationTemplate, ...] = (
         via=Via.UPCAST,
         cache=layer(KIND, leaf_variable(None)),
         # The kept handle is a copy of the borrowed one.
-        kind_traits=(LayerTrait.COPYABLE,),
+        kind_traits=(Property.COPYABLE,),
     ),
 )

@@ -18,9 +18,9 @@
 
 #include <dingo/conversion/key.h>
 #include <dingo/conversion/key_kinds.gen.h>
-#include <dingo/conversion/layer_traits.h>
 #include <dingo/conversion/scopes.gen.h>
 #include <dingo/conversion/storage_forms.gen.h>
+#include <dingo/conversion/wrapper_traits.h>
 #include <dingo/primitives/shape.h>
 
 #include <cstddef>
@@ -38,11 +38,11 @@ constexpr const semantics_descriptor *semantics_of(const shape &value,
   return value.nodes[index].kind;
 }
 
-// Whether a kind is of all of the layer_property bits `properties`; the leaf
+// Whether a kind is of all of the property bits `properties`; the leaf
 // kind is of none.
 constexpr bool has_properties(const semantics_descriptor *kind,
                               std::uint16_t properties) {
-  return kind->layer && (kind->properties & properties) == properties;
+  return kind->wrapper && (kind->properties & properties) == properties;
 }
 
 constexpr std::uint32_t form_bit(operation form) {
@@ -56,8 +56,8 @@ constexpr bool has_form(const semantics_descriptor *kind, operation form) {
 // Whether a kind holds a number of elements: an extent, or one known at
 // runtime.
 constexpr bool holds_elements(const semantics_descriptor *kind) {
-  return has_properties(kind, layer_property::extent) ||
-         has_properties(kind, layer_property::unsized);
+  return has_properties(kind, property::extent) ||
+         has_properties(kind, property::unsized);
 }
 
 // A step of a route: a rule of a leaf, of the leaf kind, or a form of a kind.
@@ -69,11 +69,11 @@ struct route_step {
 // The kind a step derives from and the one it derives, or the leaf kind for
 // an element.
 constexpr const semantics_descriptor *semantics_at(const route_step &step,
-                                                   form_layer layer) {
-  switch (layer) {
-  case form_layer::semantics:
+                                                   type_position wrapper) {
+  switch (wrapper) {
+  case type_position::wrapper:
     return step.kind;
-  case form_layer::target:
+  case type_position::target:
     if ((step.kind->targeted & form_bit(step.form)) != 0) {
       return step.kind->targets[static_cast<std::size_t>(step.form)];
     }
@@ -84,11 +84,11 @@ constexpr const semantics_descriptor *semantics_at(const route_step &step,
 }
 
 constexpr const semantics_descriptor *from_semantics(const route_step &step) {
-  return semantics_at(step, info(step.form).from_layer);
+  return semantics_at(step, info(step.form).from_position);
 }
 
 constexpr const semantics_descriptor *to_semantics(const route_step &step) {
-  return semantics_at(step, info(step.form).to_layer);
+  return semantics_at(step, info(step.form).to_position);
 }
 
 // A set of wrapper semantics, each with the kinds its forms lead to.
@@ -97,7 +97,7 @@ struct semantics_set {
   std::size_t size = 0;
 
   constexpr void add(const semantics_descriptor *kind) {
-    if (!kind->layer) {
+    if (!kind->wrapper) {
       return;
     }
     for (std::size_t index = 0; index < size; ++index) {
@@ -206,7 +206,7 @@ struct term {
   shape value;
   value_category category = value_category::lvalue;
   route_step rules[max_rules_per_route] = {};
-  // For each rule, the argument of the source layer it reached, or for an
+  // For each rule, the argument of the source wrapper it reached, or for an
   // upcast, the index of the interface it converted to.
   std::uint8_t arguments[max_rules_per_route] = {};
   std::size_t rule_count = 0;
@@ -216,14 +216,14 @@ struct term {
   bool consumed = false;
   // Whether the term is a sibling of the term `primary`, the term of its value
   // and category derived first: it takes the route of the primary up to the
-  // step `branch`, there another alternative of a variadic layer, and reaches
+  // step `branch`, there another alternative of a variadic wrapper, and reaches
   // the value on its own. A sibling is neither derived from nor selected; a
   // walk of the primary continues along it from the object of the step when
   // the object holds its alternative.
   bool sibling = false;
   std::uint8_t primary = 0;
   std::uint8_t branch = 0;
-  // The layer the last rule started from: its kind, qualifiers, and extent,
+  // The wrapper the last rule started from: its kind, qualifiers, and extent,
   // which a request that copies or decays the term borrows.
   const semantics_descriptor *source_semantics = &leaf_semantics;
   std::uint8_t source_qualifiers = 0;
@@ -239,11 +239,11 @@ struct terms {
 
 // Storage forms
 
-// Whether the layer at `index` is of a layer class, by the properties of its
-// kind.
+// Whether the wrapper at `index` is of a wrapper class, by the properties of
+// its kind.
 constexpr bool of_class(const semantics_descriptor *kind,
-                        const layer_class &of) {
-  if (!kind->layer) {
+                        const property_class &of) {
+  if (!kind->wrapper) {
     return false;
   }
   return (kind->properties & of.has) == of.has &&
@@ -251,12 +251,12 @@ constexpr bool of_class(const semantics_descriptor *kind,
 }
 
 constexpr bool of_class(const shape &value, std::size_t index,
-                        const layer_class &of) {
+                        const property_class &of) {
   return of_class(semantics_of(value, index), of);
 }
 
 // The most specific storage form of a stored shape, by the classes of its
-// outer layers.
+// outer wrappers.
 constexpr storage_form storage_form_of(const shape &stored) {
   storage_form best = storage_form::plain;
   int depth = 0;
@@ -286,43 +286,43 @@ constexpr std::uint8_t exposed_categories(const binding_descriptor &binding) {
 
 constexpr bool constructible(const shape &value, std::size_t index = 0) {
   const semantics_descriptor *kind = semantics_of(value, index);
-  if (!kind->layer) {
+  if (!kind->wrapper) {
     return value.nodes[index].constructible;
   }
-  return has_properties(kind, layer_property::constructible) &&
+  return has_properties(kind, property::constructible) &&
          constructible(value, index + 1);
 }
 
 constexpr std::uint32_t constructed_leaves(const shape &value,
                                            std::size_t index = 0) {
   const semantics_descriptor *kind = semantics_of(value, index);
-  if (!kind->layer) {
+  if (!kind->wrapper) {
     return 1;
   }
-  if (has_properties(kind, layer_property::extent)) {
+  if (has_properties(kind, property::extent)) {
     return value.nodes[index].extent * constructed_leaves(value, index + 1);
   }
   return constructed_leaves(value, index + 1);
 }
 
-// The leaves a copy of the shape copies: those its layers hold in place.
+// The leaves a copy of the shape copies: those its wrappers hold in place.
 constexpr std::uint32_t leaves_held_by_value(const shape &value,
                                              std::size_t index = 0) {
   const semantics_descriptor *kind = semantics_of(value, index);
-  if (!kind->layer) {
+  if (!kind->wrapper) {
     return 1;
   }
-  if (!has_properties(kind, layer_property::in_place)) {
+  if (!has_properties(kind, property::in_place)) {
     return 0;
   }
-  if (has_properties(kind, layer_property::extent)) {
+  if (has_properties(kind, property::extent)) {
     return value.nodes[index].extent * leaves_held_by_value(value, index + 1);
   }
   return leaves_held_by_value(value, index + 1);
 }
 
 // Whether a shape is an object that can be referred to and pointed to:
-// anything but an address, a layer of a kind of the address form.
+// anything but an address, a wrapper of a kind of the address form.
 constexpr bool addressable(const shape &value) {
   return !has_form(semantics_of(value), operation::address);
 }
@@ -339,7 +339,7 @@ constexpr bool holds_in_array(const shape &value) {
 // The leaf at the end of the first-argument chain.
 constexpr type_id innermost_leaf(const shape &value) {
   std::size_t index = 0;
-  while (is_layer(semantics_of(value, index))) {
+  while (is_wrapper(semantics_of(value, index))) {
     ++index;
   }
   return value.nodes[index].type;
@@ -349,9 +349,9 @@ namespace detail {
 constexpr void add_named_leaves(const shape &value, std::size_t index,
                                 leaf_set &leaves) {
   const semantics_descriptor *kind = semantics_of(value, index);
-  if (!is_layer(kind)) {
+  if (!is_wrapper(kind)) {
     leaves.add(value.nodes[index].type);
-  } else if (!has_properties(kind, layer_property::variadic)) {
+  } else if (!has_properties(kind, property::variadic)) {
     add_named_leaves(value, index + 1, leaves);
   } else {
     for (std::size_t argument = 0; argument < value.nodes[index].arity;
@@ -363,32 +363,32 @@ constexpr void add_named_leaves(const shape &value, std::size_t index,
 } // namespace detail
 
 // The leaves a stored shape names its binding by without declared interfaces:
-// the leaf its layers hold, and through a layer of a variadic kind, the leaf of
-// each of its alternatives, whichever the object holds.
-// spec: lookup_filters.binding_filter
+// the leaf its wrappers hold, and through a wrapper of a variadic kind, the
+// leaf of each of its alternatives, whichever the object holds. spec:
+// lookup_filters.binding_filter
 constexpr leaf_set named_leaves(const shape &value) {
   leaf_set leaves;
   detail::add_named_leaves(value, 0, leaves);
   return leaves;
 }
 
-// Whether a layer that a route creates can be copied: a layer copied as a
+// Whether a wrapper that a route creates can be copied: a wrapper copied as a
 // handle, or one that holds its element in place and is not immovable, when
 // the element can be copied.
 constexpr bool created_copyable(const semantics_descriptor *kind,
                                 const shape &argument) {
-  if (has_properties(kind, layer_property::copyable)) {
+  if (has_properties(kind, property::copyable)) {
     return true;
   }
-  if (has_properties(kind, layer_property::in_place) &&
-      !has_properties(kind, layer_property::immovable)) {
+  if (has_properties(kind, property::in_place) &&
+      !has_properties(kind, property::immovable)) {
     return argument.nodes[0].copyable;
   }
   return false;
 }
 
-constexpr bool is_wrapper(const semantics_descriptor *kind) {
-  return has_properties(kind, layer_property::wrapper);
+constexpr bool is_mapped(const semantics_descriptor *kind) {
+  return has_properties(kind, property::mapped);
 }
 
 constexpr bool requirements_hold(const binding_descriptor &binding,
@@ -403,18 +403,18 @@ constexpr bool requirements_hold(const binding_descriptor &binding,
   // An array of the language: of an extent, and immovable.
   if (requires_(requirement::array) &&
       !has_properties(semantics_of(bound),
-                      layer_property::extent | layer_property::immovable)) {
+                      property::extent | property::immovable)) {
     return false;
   }
   if (requires_(requirement::addressable) && !addressable(bound)) {
     return false;
   }
-  if (requires_(requirement::leaf) && is_layer(semantics_of(bound))) {
+  if (requires_(requirement::leaf) && is_wrapper(semantics_of(bound))) {
     return false;
   }
   if (rule.form == operation::copy &&
       binding.scope.rule == exposure_rule::handle_copies &&
-      !has_properties(semantics_of(bound), layer_property::sharing)) {
+      !has_properties(semantics_of(bound), property::sharing)) {
     return false;
   }
   return true;
@@ -445,7 +445,7 @@ constexpr int completion_class(const term &route) {
 }
 
 // Whether two terms a request completes by copying or decaying borrow alike:
-// the layers their last rules start from are of one kind, qualifiers, and
+// the wrappers their last rules start from are of one kind, qualifiers, and
 // extent, so a walk to them yields one type.
 constexpr bool borrow_alike(const term &left, const term &right) {
   return same_semantics(left.source_semantics, right.source_semantics) &&
@@ -454,7 +454,7 @@ constexpr bool borrow_alike(const term &left, const term &right) {
 }
 
 // Keeps `derived` as a sibling of the term `primary` when their routes part at
-// a step into a variadic layer, by its alternatives, and they are completed
+// a step into a variadic wrapper, by its alternatives, and they are completed
 // alike; one per step and alternative.
 constexpr void add_sibling(terms &found, std::size_t primary, term derived) {
   const term &first = found.items[primary];
@@ -469,8 +469,7 @@ constexpr void add_sibling(terms &found, std::size_t primary, term derived) {
     if (same && first.arguments[position] == derived.arguments[position]) {
       continue;
     }
-    if (!same ||
-        !has_properties(from_semantics(taken), layer_property::variadic) ||
+    if (!same || !has_properties(from_semantics(taken), property::variadic) ||
         completion_class(first) != completion_class(derived) ||
         (completion_class(first) != 3 && !borrow_alike(first, derived))) {
       return;
@@ -541,15 +540,15 @@ constexpr bool step_value(const term &from, const route_step &step,
   const semantics_descriptor *to = to_semantics(step);
   const semantics_descriptor *of = from_semantics(step);
   value = bound;
-  // The element of a layer that holds it in place, an optional or an
-  // alternative, has the qualifiers of the layer.
-  if (!is_layer(to) && has_properties(of, layer_property::in_place)) {
+  // The element of a wrapper that holds it in place, an optional or an
+  // alternative, has the qualifiers of the wrapper.
+  if (!is_wrapper(to) && has_properties(of, property::in_place)) {
     value.nodes[0].qualifiers |= source.nodes[0].qualifiers;
   }
-  if (is_layer(to)) {
+  if (is_wrapper(to)) {
     type_id family = nullptr;
-    if (is_wrapper(to)) {
-      bool keeps = is_layer(of) && source.nodes[0].family != nullptr;
+    if (is_mapped(to)) {
+      bool keeps = is_wrapper(of) && source.nodes[0].family != nullptr;
       family = keeps ? source.nodes[0].family : any_family;
     }
     value = wrap(to, family, created_copyable(to, bound), bound);
@@ -559,7 +558,7 @@ constexpr bool step_value(const term &from, const route_step &step,
 
 // Applies `step` to `from` with the pattern variable bound to `bound`, the
 // argument at `argument` of the source shape when the step starts from a
-// layer.
+// wrapper.
 constexpr void apply(const binding_descriptor &binding, terms &found,
                      const term &from, const route_step &step,
                      const shape &bound, std::size_t argument,
@@ -585,7 +584,7 @@ constexpr void apply(const binding_descriptor &binding, terms &found,
       shape interface = binding.interfaces[index];
       interface.nodes[0].qualifiers =
           rule.converts ? std::uint8_t(0) : bound.nodes[0].qualifiers;
-      shape value = !is_layer(to)
+      shape value = !is_wrapper(to)
                         ? interface
                         : wrap(to, source.nodes[0].family,
                                source.nodes[0].copyable, interface,
@@ -600,13 +599,13 @@ constexpr void apply(const binding_descriptor &binding, terms &found,
   }
 }
 
-// Applies `step`, which starts from the layer `from` is, to each argument of
-// it: only a layer of a variadic kind matches any of its arguments.
+// Applies `step`, which starts from the wrapper `from` is, to each argument of
+// it: only a wrapper of a variadic kind matches any of its arguments.
 constexpr void apply_to_arguments(const binding_descriptor &binding,
                                   terms &found, const term &from,
                                   const route_step &step, std::size_t limit) {
   std::size_t arguments =
-      has_properties(semantics_of(from.value), layer_property::variadic)
+      has_properties(semantics_of(from.value), property::variadic)
           ? from.value.nodes[0].arity
           : 1;
   for (std::size_t argument = 0; argument < arguments; ++argument) {
@@ -616,18 +615,18 @@ constexpr void apply_to_arguments(const binding_descriptor &binding,
 }
 } // namespace detail
 
-// Whether a form creates a layer of its kind, from an element or from a layer
-// of the kind it leads from: wrapping, adopting, or taking an address. A
-// creating form applies at the request, which names the kind it creates.
+// Whether a form creates a wrapper of its kind, from an element or from a
+// wrapper of the kind it leads from: wrapping, adopting, or taking an address.
+// A creating form applies at the request, which names the kind it creates.
 constexpr bool creates(const operation_info &rule) {
-  return rule.of_semantics && rule.to_layer == form_layer::semantics &&
-         rule.from_layer != form_layer::semantics;
+  return rule.of_semantics && rule.to_position == type_position::wrapper &&
+         rule.from_position != type_position::wrapper;
 }
 
 namespace detail {
-// Applies every form that does not create a layer to the term at `next` of
+// Applies every form that does not create a wrapper to the term at `next` of
 // `found`, in the order of the algebra: a rule of a leaf to the term, and a
-// form of the kind of its layer.
+// form of the kind of its wrapper.
 constexpr void derive_from(const binding_descriptor &binding, terms &found,
                            std::size_t next, std::uint8_t exposed,
                            std::size_t limit) {
@@ -644,7 +643,7 @@ constexpr void derive_from(const binding_descriptor &binding, terms &found,
     if (!rule.of_semantics) {
       apply(binding, found, from, route_step{rule.form, &leaf_semantics},
             from.value, 0, limit);
-    } else if (rule.from_layer == form_layer::semantics &&
+    } else if (rule.from_position == type_position::wrapper &&
                has_form(kind, rule.form)) {
       apply_to_arguments(binding, found, from, route_step{rule.form, kind},
                          limit);
@@ -653,13 +652,13 @@ constexpr void derive_from(const binding_descriptor &binding, terms &found,
 }
 } // namespace detail
 
-// Routes derive shapes at most one layer larger than the stored shape, so a
+// Routes derive shapes at most one wrapper larger than the stored shape, so a
 // binding can publish every term it serves before any request is known.
 constexpr std::size_t derivation_bound(const binding_descriptor &binding) {
   return binding.stored.size + 1;
 }
 
-// The terms a binding derives by the forms that do not create a layer.
+// The terms a binding derives by the forms that do not create a wrapper.
 constexpr terms derive(const binding_descriptor &binding) {
   const scope_info &scope = binding.scope;
   terms found;
@@ -709,13 +708,13 @@ constexpr bool qualifies(const shape &derived, const shape &requested,
       }
       above_const = above_const && (r.qualifiers & const_qualified) != 0;
     }
-    // An address, a layer of a kind of the address form, refers to a level.
+    // An address, a wrapper of a kind of the address form, refers to a level.
     if (has_form(kind, operation::address)) {
       ++index;
       level = true;
       continue;
     }
-    if (is_layer(kind)) {
+    if (is_wrapper(kind)) {
       const std::size_t end = index + subtree_size(derived, index);
       for (std::size_t inner = index + 1; inner < end; ++inner) {
         if (derived.nodes[inner].qualifiers !=
@@ -740,8 +739,7 @@ constexpr bool accepts(const request_descriptor &request, const term &candidate,
            exposes(exposed, request_category::lvalue) &&
            addressable(candidate.value);
   }
-  if (has_properties(semantics_of(candidate.value),
-                     layer_property::immovable)) {
+  if (has_properties(semantics_of(candidate.value), property::immovable)) {
     return false;
   }
   if (candidate.category == value_category::rvalue) {
@@ -770,14 +768,14 @@ constexpr bool preferred(const term &left, const term &right) {
 }
 
 inline constexpr std::size_t no_term = static_cast<std::size_t>(-1);
-inline constexpr std::size_t max_created_layers = 2;
+inline constexpr std::size_t max_created_wrappers = 2;
 
 // The route a request takes: a term of the binding, or no_term, and the
-// layers the request creates of its object, innermost first, each by a
-// creating form of the kind of a layer of the request.
+// wrappers the request creates of its object, innermost first, each by a
+// creating form of the kind of a wrapper of the request.
 struct route_choice {
   std::size_t term = no_term;
-  route_step created[max_created_layers] = {};
+  route_step created[max_created_wrappers] = {};
   std::size_t created_count = 0;
 };
 
@@ -794,9 +792,9 @@ constexpr bool create(const binding_descriptor &binding, const term &from,
     return false;
   }
   shape bound = from.value;
-  if (rule.from_layer == form_layer::target) {
-    // A layer of the kind the form leads from, whose element is the one of
-    // the created layer.
+  if (rule.from_position == type_position::target) {
+    // A wrapper of the kind the form leads from, whose element is the one of
+    // the created wrapper.
     if (!same_semantics(from_semantics(step), semantics_of(from.value)) ||
         from.value.nodes[0].arity != 1) {
       return false;
@@ -814,11 +812,11 @@ constexpr bool create(const binding_descriptor &binding, const term &from,
   return true;
 }
 
-// The kind of the layer a creating form of `step` makes its layer of: the
+// The kind of the wrapper a creating form of `step` makes its wrapper of: the
 // kind it leads from, or that of the element of the request at `request`.
 constexpr const semantics_descriptor *created_inner(const route_step &step,
                                                     const shape &request) {
-  if (info(step.form).from_layer == form_layer::target) {
+  if (info(step.form).from_position == type_position::target) {
     return from_semantics(step);
   }
   return request.size > 1 ? semantics_of(request, 1) : &leaf_semantics;
@@ -827,7 +825,7 @@ constexpr const semantics_descriptor *created_inner(const route_step &step,
 
 // The route that serves the request, of the terms `found` of `binding`: a
 // term the request accepts, or one the request makes by creating up to
-// max_created_layers layers, the preferred one; or none.
+// max_created_wrappers wrappers, the preferred one; or none.
 constexpr route_choice select_route(const binding_descriptor &binding,
                                     const terms &found,
                                     const request_descriptor &request,
@@ -859,7 +857,7 @@ constexpr route_choice select_route(const binding_descriptor &binding,
         consider(made, route_choice{index, {step}, 1});
       }
     }
-    // The layer the outer one is made of is created too.
+    // The wrapper the outer one is made of is created too.
     const semantics_descriptor *inner =
         detail::created_inner(step, request.value);
     for (const operation_info &inner_rule : operations) {
@@ -950,14 +948,14 @@ constexpr bool share_domain(const binding_descriptor &left,
 enum class registration_status : std::uint8_t {
   registered,
   form_not_stored,
-  nested_layers,
+  nested_wrappers,
   no_default_factory,
   interface_in_array,
   no_interface_served
 };
 
 // Whether a binding serves one of its interfaces: by reference, or by value
-// of a handle of any kind, a nullable layer that refers to its element. The
+// of a handle of any kind, a nullable wrapper that refers to its element. The
 // handles of its kinds and the address of the language stand for them all: a
 // handle that adopts its element adopts an address the binding serves. A const
 // leaf serves its interfaces as const ones.
@@ -965,8 +963,7 @@ constexpr bool serves_an_interface(const binding_descriptor &binding,
                                    const terms &found, std::uint8_t exposed) {
   semantics_set kinds = semantics_in(binding.stored);
   kinds.add(address_semantics_v);
-  constexpr layer_class handle{true, layer_property::nullable,
-                               layer_property::in_place};
+  constexpr property_class handle{true, property::nullable, property::in_place};
   for (std::size_t index = 0; index < binding.interface_count; ++index) {
     for (const std::uint8_t qualifiers : {std::uint8_t(0), const_qualified}) {
       shape interface = binding.interfaces[index];
@@ -984,7 +981,7 @@ constexpr bool serves_an_interface(const binding_descriptor &binding,
         }
         const request_descriptor probe{
             request_kind::value,
-            wrap(of, is_wrapper(of) ? any_family : nullptr,
+            wrap(of, is_mapped(of) ? any_family : nullptr,
                  created_copyable(of, interface), interface),
             binding.key};
         if (select_route(binding, found, probe, exposed).term != no_term) {
@@ -1002,13 +999,13 @@ register_status(const binding_descriptor &binding) {
   if (exposed_categories(binding) == 0) {
     return registration_status::form_not_stored;
   }
-  if (!scope.nested_layers && is_layer(binding.stored.nodes[0].kind)) {
+  if (!scope.nested_wrappers && is_wrapper(binding.stored.nodes[0].kind)) {
     std::size_t arguments = binding.stored.nodes[0].arity;
     for (std::size_t argument = 0; argument < arguments; ++argument) {
-      if (is_layer(
+      if (is_wrapper(
               binding.stored.nodes[argument_index(binding.stored, 0, argument)]
                   .kind)) {
-        return registration_status::nested_layers;
+        return registration_status::nested_wrappers;
       }
     }
   }

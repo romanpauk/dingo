@@ -22,7 +22,7 @@ from dataclasses import dataclass, replace
 
 from spec.content.cpp_semantics_tags import cpp_semantics_tags
 from spec.content.wrapper_semantics import wrapper_semantics
-from spec.schema import LayerTrait, Operation
+from spec.schema import Property, Operation
 
 LIBRARY = {kind.id: kind for kind in wrapper_semantics}
 LIBRARY_TAGS = {p.semantics: p.spelling for p in cpp_semantics_tags}
@@ -100,10 +100,10 @@ ARRAY = replace(
     id="kind_array",
     description="An array of the user, which moves and copies.",
     traits=(
-        LayerTrait.OWNING,
-        LayerTrait.IN_PLACE,
-        LayerTrait.CONSTRUCTIBLE,
-        LayerTrait.WRAPPER,
+        Property.OWNING,
+        Property.IN_PLACE,
+        Property.CONSTRUCTIBLE,
+        Property.MAPPED,
     ),
     forms=tuple(
         replace(form, id=f"{form.id}_of_kind_array")
@@ -158,7 +158,7 @@ user_kinds = (
             "kind_shared_uncopyable",
             "share",
             without=(Operation.RETAIN,),
-            lacks=(LayerTrait.COPYABLE,),
+            lacks=(Property.COPYABLE,),
         ),
         "kinded_shared",
         instance=SHARED,
@@ -180,7 +180,7 @@ kind_probes = tuple(user for user in user_kinds if user.template is not None)
 by_wrapper = {user.wrapper: user for user in user_kinds}
 
 # The bits of the C++ layer properties, in the order of the spec.
-PROPERTY_NAMES = {trait: trait.value for trait in LayerTrait}
+PROPERTY_NAMES = {trait: trait.value for trait in Property}
 
 
 def tag_of(kind_id):
@@ -207,11 +207,11 @@ def cpp_declarations():
     lines += [f"struct {user.tag} {{}};" for user in user_kinds]
     for user in user_kinds:
         kind = user.kind
-        properties = [f"dingo::layer_property::{PROPERTY_NAMES[t]}" for t in kind.traits]
+        properties = [f"dingo::property::{PROPERTY_NAMES[t]}" for t in kind.traits]
         if kind.variadic:
-            properties.append("dingo::layer_property::variadic")
+            properties.append("dingo::property::variadic")
         if kind.has_extent:
-            properties.append("dingo::layer_property::extent")
+            properties.append("dingo::property::extent")
         forms = [
             f"dingo::op<dingo::operation::{form.form.value}"
             + (f", {tag_of(form.target)}" if form.target else "")

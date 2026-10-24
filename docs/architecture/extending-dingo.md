@@ -131,7 +131,7 @@ generated matrix uses.
 
 Specialize `dingo::wrapper_semantics` for a tag type to declare a wrapper
 semantics, when no kind of the library describes a wrapper. A specialization
-declares the `layer_property` bits of the kind and its forms, each a
+declares the `property` bits of the kind and its forms, each a
 `op<operation, Target>`, where `Target` is the kind a form that leads to another
 kind leads to:
 
@@ -161,10 +161,10 @@ struct pinned_kind {};
 
 template <> struct dingo::wrapper_semantics<pinned_kind> {
   static constexpr std::uint16_t properties =
-      dingo::layer_property::owning | dingo::layer_property::sharing |
-      dingo::layer_property::nullable | dingo::layer_property::borrowable |
-      dingo::layer_property::constructible | dingo::layer_property::copyable |
-      dingo::layer_property::wrapper;
+      dingo::property::owning | dingo::property::sharing |
+      dingo::property::nullable | dingo::property::borrowable |
+      dingo::property::constructible | dingo::property::copyable |
+      dingo::property::mapped;
   using operations = dingo::type_list<
       dingo::op<dingo::operation::borrow>,
       dingo::op<dingo::operation::adopt, dingo::semantics::pointer>,
@@ -420,7 +420,7 @@ declarations that take a backend.
 
 ## Good Source Companions
 
-- [include/dingo/conversion/layer_traits.h](../../include/dingo/conversion/layer_traits.h)
+- [include/dingo/conversion/wrapper_traits.h](../../include/dingo/conversion/wrapper_traits.h)
 - [include/dingo/conversion/wrapper_semantics.gen.h](../../include/dingo/conversion/wrapper_semantics.gen.h)
 - [include/dingo/conversion/type_conversion.h](../../include/dingo/conversion/type_conversion.h)
 - [include/dingo/conversion/scopes.gen.h](../../include/dingo/conversion/scopes.gen.h)

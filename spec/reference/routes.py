@@ -23,8 +23,8 @@ from spec.content.rules import rules_of
 from spec.schema import (
     Access,
     ExposureRule,
-    LayerClass,
-    LayerTrait,
+    PropertyClass,
+    Property,
     PatternForm,
     Predicate,
     RequestCategory,
@@ -54,11 +54,11 @@ ALTERNATIVE_NOT_HELD = "the object holds another alternative than the route take
 KINDS = {kind.id: kind for kind in wrapper_semantics}
 # The class of the handles a binding of an interface may serve it by: a
 # nullable layer that refers to its element rather than holding it.
-INTERFACE_HANDLE = LayerClass(has=(LayerTrait.NULLABLE,), lacks=(LayerTrait.IN_PLACE,))
+INTERFACE_HANDLE = PropertyClass(has=(Property.NULLABLE,), lacks=(Property.IN_PLACE,))
 
 
-def is_wrapper(kinds: dict, kind: str) -> bool:
-    return LayerTrait.WRAPPER in kinds[kind].traits
+def is_mapped(kinds: dict, kind: str) -> bool:
+    return Property.MAPPED in kinds[kind].traits
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,7 +95,7 @@ def leaf(value: Leaf) -> Shape:
 
 
 def layer(kind: str, *args: Shape, extent: int | None = None, family: str | None = None) -> Shape:
-    if family is None and is_wrapper(KINDS, kind):
+    if family is None and is_mapped(KINDS, kind):
         family = "std"
     return Shape(layer=kind, args=args, extent=extent, family=family)
 
@@ -183,7 +183,7 @@ class Model:
 # Shape properties
 
 
-def has_trait(model: "Model", shape: Shape, trait: LayerTrait) -> bool:
+def has_trait(model: "Model", shape: Shape, trait: Property) -> bool:
     return shape.layer is not None and trait in model.layers[shape.layer].traits
 
 
@@ -199,15 +199,15 @@ def has_extent(model: "Model", shape: Shape) -> bool:
 
 def is_array(model: "Model", shape: Shape) -> bool:
     """Whether the outer layer holds a number of elements."""
-    return has_extent(model, shape) or has_trait(model, shape, LayerTrait.UNSIZED)
+    return has_extent(model, shape) or has_trait(model, shape, Property.UNSIZED)
 
 
 def copyable(model: "Model", shape: Shape) -> bool:
     if shape.layer is None:
         return shape.leaf.copyable
-    if has_trait(model, shape, LayerTrait.COPYABLE):
+    if has_trait(model, shape, Property.COPYABLE):
         return True
-    if has_trait(model, shape, LayerTrait.IN_PLACE) and not has_trait(model, shape, LayerTrait.IMMOVABLE):
+    if has_trait(model, shape, Property.IN_PLACE) and not has_trait(model, shape, Property.IMMOVABLE):
         return all(copyable(model, arg) for arg in shape.args)
     return False
 
@@ -216,7 +216,7 @@ def constructible(model: "Model", shape: Shape) -> bool:
     """Whether the default factory can construct the shape."""
     if shape.layer is None:
         return shape.leaf.constructible
-    if not has_trait(model, shape, LayerTrait.CONSTRUCTIBLE):
+    if not has_trait(model, shape, Property.CONSTRUCTIBLE):
         return False
     return constructible(model, shape.args[0])
 
@@ -234,7 +234,7 @@ def leaves_held_by_value(model: "Model", shape: Shape) -> int:
     """The leaves a copy of the shape copies: those a layer holds in place."""
     if shape.layer is None:
         return 1
-    if not has_trait(model, shape, LayerTrait.IN_PLACE):
+    if not has_trait(model, shape, Property.IN_PLACE):
         return 0
     if has_extent(model, shape):
         return shape.extent * leaves_held_by_value(model, shape.args[0])
@@ -305,7 +305,7 @@ def instantiate(model: "Model", pattern, bindings: dict, family: str | None) -> 
         return bindings[pattern.name]
     args = tuple(instantiate(model, arg, bindings, None) for arg in pattern.args)
     kind = pattern.name
-    return Shape(layer=kind, args=args, family=(family or ANY) if is_wrapper(model.layers, kind) else None)
+    return Shape(layer=kind, args=args, family=(family or ANY) if is_mapped(model.layers, kind) else None)
 
 
 def upcast_leaf(shape: Shape, base: Leaf) -> Shape:
@@ -317,17 +317,17 @@ def upcast_leaf(shape: Shape, base: Leaf) -> Shape:
 # Registration
 
 
-def layer_class_holds(model: Model, layer_class, shape: Shape) -> bool:
+def property_class_holds(model: Model, property_class, shape: Shape) -> bool:
     """Whether the outer layer of a shape is of a layer class."""
     if shape.layer is None:
         return False
     kind = model.layers[shape.layer]
     traits = set(kind.traits)
     return (
-        all(trait in traits for trait in layer_class.has)
-        and not any(trait in traits for trait in layer_class.lacks)
-        and layer_class.variadic in (None, kind.variadic)
-        and layer_class.extent in (None, kind.has_extent)
+        all(trait in traits for trait in property_class.has)
+        and not any(trait in traits for trait in property_class.lacks)
+        and property_class.variadic in (None, kind.variadic)
+        and property_class.extent in (None, kind.has_extent)
     )
 
 
@@ -336,12 +336,12 @@ def storage_form(model: Model, shape: Shape) -> str:
     the kinds of its outer layers."""
     best, depth = "plain", 0
     for form in model.spec.storage_forms:
-        if form.outer is None or not layer_class_holds(model, form.outer, shape):
+        if form.outer is None or not property_class_holds(model, form.outer, shape):
             continue
         if form.inner is None:
             if depth < 1:
                 best, depth = form.id, 1
-        elif len(shape.args) == 1 and layer_class_holds(model, form.inner, shape.args[0]):
+        elif len(shape.args) == 1 and property_class_holds(model, form.inner, shape.args[0]):
             best, depth = form.id, 2
     return best
 
@@ -366,8 +366,8 @@ def interface_probes(model: Model, interfaces: tuple[Leaf, ...]) -> list[Request
         probes.append(Request(RequestKind.LVALUE_REFERENCE, base))
         for kind in model.layers.values():
             handle = Shape(layer=kind.id, args=(base,))
-            if layer_class_holds(model, INTERFACE_HANDLE, handle):
-                family = ANY if is_wrapper(model.layers, kind.id) else None
+            if property_class_holds(model, INTERFACE_HANDLE, handle):
+                family = ANY if is_mapped(model.layers, kind.id) else None
                 probes.append(Request(RequestKind.VALUE, replace(handle, family=family)))
     return probes
 
@@ -388,7 +388,7 @@ def register(
     form = storage_form(model, stored)
     if not exposed_categories(model, scope_id, form):
         return False, f"{scope_id} does not store the {form} form"
-    if not scope.nested_layers and stored.layer is not None:
+    if not scope.nested_wrappers and stored.layer is not None:
         if any(arg.layer is not None for arg in stored.args):
             return False, f"{scope_id} does not store nested layers"
     if "instance" not in scope.needs and factory is None and not constructible(model, stored):
@@ -559,7 +559,7 @@ def requirements_hold(model: Model, scope, rule, bindings: dict) -> bool:
         if requirement.predicate is Predicate.COPYABLE and not copyable(model, subject):
             return False
         if requirement.predicate is Predicate.ARRAY and not (
-            has_extent(model, subject) and has_trait(model, subject, LayerTrait.IMMOVABLE)
+            has_extent(model, subject) and has_trait(model, subject, Property.IMMOVABLE)
         ):
             return False
         if requirement.predicate is Predicate.ADDRESSABLE and not addressable(model, subject):
@@ -571,7 +571,7 @@ def requirements_hold(model: Model, scope, rule, bindings: dict) -> bool:
         and scope.exposure_rule is ExposureRule.HANDLE_COPIES
         and (rule.id, "handle_copies") not in model.relaxed
     ):
-        if not has_trait(model, bindings["X"], LayerTrait.SHARING):
+        if not has_trait(model, bindings["X"], Property.SHARING):
             return False
     return True
 
@@ -585,7 +585,7 @@ def accepts(model: "Model", request: Request, term: Derivation, exposed: set) ->
             and RequestCategory.LVALUE in exposed
             and addressable(model, term.shape)
         )
-    if has_trait(model, term.shape, LayerTrait.IMMOVABLE):
+    if has_trait(model, term.shape, Property.IMMOVABLE):
         return False
     if term.category is RVALUE:
         return RequestCategory.RVALUE in exposed

@@ -8,7 +8,7 @@
 // The requests a binding serves from the object it stores: every reference and
 // pointer of the object refers to the one stored object, a value request
 // copies it once, a move-only or immovable object is referred to and never
-// copied, and an object behind layers is reached through them. spec: routes
+// copied, and an object behind wrappers is reached through them. spec: routes
 
 #include <dingo/container.h>
 #include <dingo/factory/callable.h>
