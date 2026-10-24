@@ -982,42 +982,34 @@ private:
   // returns visit.unsupported().
   template <typename Made, typename Visit>
   static decltype(auto) visit_wrappers(const request_plan &plan, Visit &visit) {
-    const operation *forms = plan.creating;
-    switch (plan.created) {
-    case 0:
-      return visit.template apply<created_wrappers<Made>>();
-    case 1:
-      return visit_wrapper<Made>(forms[0], visit);
-    case 2:
-      switch (forms[1]) {
+    return visit_forms<Made>(plan, plan.created, visit);
+  }
+
+  // Fixes the forms of the plan that remain, `remaining` of them, outermost
+  // first after the ones `Fixed` already are, and calls `visit` with the
+  // wrappers they make. A form makes a wrapper of one `Made` has, so the forms
+  // are no more than its wrappers; and an adopted pointer is the innermost.
+  template <typename Made, operation... Fixed, typename Visit>
+  static decltype(auto) visit_forms(const request_plan &plan,
+                                    std::size_t remaining, Visit &visit) {
+    if (remaining == 0) {
+      return visit.template apply<created_wrappers<Made, Fixed...>>();
+    }
+    if constexpr (sizeof...(Fixed) < detail::wrapper_depth_v<Made>) {
+      switch (plan.creating(remaining - 1)) {
       case operation::wrap:
-        return visit_wrapper<Made, operation::wrap>(forms[0], visit);
+        return visit_forms<Made, Fixed..., operation::wrap>(plan, remaining - 1,
+                                                            visit);
       case operation::adopt:
-        return visit_wrapper<Made, operation::adopt>(forms[0], visit);
+        if (remaining == 1) {
+          return visit_forms<Made, Fixed..., operation::adopt>(plan, 0, visit);
+        }
+        break;
       default:
         break;
       }
-      break;
-    default:
-      break;
     }
     return visit.unsupported();
-  }
-
-  // Calls `visit` with the created wrappers of `Outer...` over the wrapper the
-  // creating form `form` makes.
-  template <typename Made, operation... Outer, typename Visit>
-  static decltype(auto) visit_wrapper(operation form, Visit &visit) {
-    switch (form) {
-    case operation::wrap:
-      return visit
-          .template apply<created_wrappers<Made, Outer..., operation::wrap>>();
-    case operation::adopt:
-      return visit
-          .template apply<created_wrappers<Made, Outer..., operation::adopt>>();
-    default:
-      return visit.unsupported();
-    }
   }
 
   // Whether the binding makes the boundary object of the wrappers of a plan.

@@ -230,9 +230,22 @@ constexpr completion_plan plan_completion(const reachable_type &route) {
 // binding constructs.
 struct request_plan {
   completion kind = completion::construct;
-  operation creating[max_created_wrappers] = {};
-  std::size_t created = 0;
+  std::uint8_t created = 0;
+  // The forms of the wrappers it creates, four bits each, innermost first.
+  std::uint64_t forms = 0;
+
+  constexpr operation creating(std::size_t index) const {
+    return static_cast<operation>((forms >> (4 * index)) & 15);
+  }
+
+  constexpr void create(operation form) {
+    forms |= static_cast<std::uint64_t>(form) << (4 * created++);
+  }
 };
+
+static_assert(operation_count <= 16 && max_created_wrappers * 4 <= 64,
+              "the forms of the wrappers a request creates are four bits each "
+              "in a word");
 
 constexpr request_plan plan_request(const completion_plan &reachable_type,
                                     const route_choice &choice) {
@@ -249,7 +262,7 @@ constexpr request_plan plan_request(const completion_plan &reachable_type,
   }
   plan.kind = completion::construct;
   for (std::size_t index = 0; index < choice.created_count; ++index) {
-    plan.creating[plan.created++] = choice.created[index].form;
+    plan.create(choice.created[index].form);
   }
   return plan;
 }
@@ -774,6 +787,15 @@ struct first_element<Type,
   using type = type_list_at_t<0, typename wrapper_traits<Type>::arguments>;
 };
 
+// The number of wrappers `Type` is made of, by the first argument of each.
+template <typename Type, typename = void>
+inline constexpr std::size_t wrapper_depth_v = 0;
+
+template <typename Type>
+inline constexpr std::size_t wrapper_depth_v<
+    Type, std::void_t<typename wrapper_traits<Type>::arguments>> =
+    1 + wrapper_depth_v<typename first_element<Type>::type>;
+
 template <typename Traits, typename Element, typename = void>
 inline constexpr bool has_adopt_v = false;
 
@@ -846,7 +868,7 @@ public:
 namespace detail {
 template <typename Target, typename Plan, std::size_t... Indices>
 created_wrappers<Target,
-                 Plan::value.creating[sizeof...(Indices) - 1 - Indices]...>
+                 Plan::value.creating(sizeof...(Indices) - 1 - Indices)...>
     plan_wrappers(std::index_sequence<Indices...>);
 } // namespace detail
 

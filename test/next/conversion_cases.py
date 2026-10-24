@@ -2,7 +2,8 @@
 """Generates the conversion cases of the next implementation from the reference.
 
 For every scope, leaf kind, declared interfaces, stored type_tree of up to two
-wrappers in the standard and a user wrapper family, and request, the reference
+wrappers in the standard and a user wrapper family, and request, and for a bare
+leaf, requests of three wrappers, the reference
 implementation in spec/reference/routes.py computes whether the binding
 registers, whether the request finds it, whether it is served, and by which
 rules. test/next/templates/conversion_cases.cpp.j2 lays the cases out as C++, and
@@ -103,6 +104,29 @@ def request_type_trees(stored, interfaces):
     return sorted(type_trees | {wrapper("ptr", s) for s in type_trees if s.wrapper != "ref"}, key=repr)
 
 
+def deep_request_type_trees(stored, interfaces):
+    """Requests that wrap the leaf of a binding of a bare leaf three times,
+    which a request had to create more than two wrappers for."""
+    if stored.wrapper is not None:
+        return []
+    targets = [stored, *[leaf(interface) for interface in interfaces]]
+    type_trees = []
+    for target in targets:
+        for first in WRAPPERS:
+            for second in WRAPPERS:
+                for third in WRAPPERS:
+                    if "opt" in (first, second, third) and not target.leaf.constructible:
+                        continue
+                    type_trees.append(
+                        wrapper(
+                            first,
+                            wrapper(second, wrapper(third, target, family="std"), family="std"),
+                            family="std",
+                        )
+                    )
+    return type_trees
+
+
 def as_data(type_tree):
     return {
         "wrapper": type_tree.wrapper,
@@ -140,7 +164,10 @@ def cases(model):
     for scope in SCOPES:
         for value, interfaces in BINDING_LEAVES:
             for stored in stored_type_trees(value):
-                for request_type_tree in request_type_trees(stored, interfaces):
+                for request_type_tree in [
+                    *request_type_trees(stored, interfaces),
+                    *deep_request_type_trees(stored, interfaces),
+                ]:
                     for kind in KINDS:
                         if not valid_request(request_type_tree, kind):
                             continue

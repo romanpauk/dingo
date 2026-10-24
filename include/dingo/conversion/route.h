@@ -867,7 +867,8 @@ constexpr bool accepts(const request_descriptor &request,
          candidate.category == value_category::prvalue;
 }
 
-inline constexpr std::size_t max_created_wrappers = 2;
+// A request creates at most as many wrappers as its type tree has nodes.
+inline constexpr std::size_t max_created_wrappers = type_tree_capacity;
 
 // A route a request takes to serve itself: the reachable type of the binding
 // it starts from, `base`, and the wrappers the request creates of it, which
@@ -957,20 +958,72 @@ constexpr bool create(const binding_descriptor &binding,
   return true;
 }
 
-// The kind of the wrapper a creating form of `step` makes its wrapper of: the
-// kind it leads from, or that of the element of the request at `request`.
-constexpr const semantics_descriptor *created_inner(const route_step &step,
-                                                    type_tree_view request) {
+// What a request creates next: the wrapper it makes the one above of, `outer`,
+// and the node of the request that holds its element.
+struct creation_goal {
+  const semantics_descriptor *outer = &leaf_semantics;
+  std::size_t element = 0;
+};
+
+// The goal under the creating form `step` of the wrapper of `goal`: the wrapper
+// it leads from over the element of the goal, or the element of the goal.
+constexpr creation_goal goal_under(const route_step &step,
+                                   type_tree_view request,
+                                   const creation_goal &goal) {
   if (info(step.form).from_position == type_position::target) {
-    return from_semantics(step);
+    return {from_semantics(step), goal.element};
   }
-  return request.size > 1 ? semantics_of(request, 1) : &leaf_semantics;
+  if (goal.element < request.size) {
+    return {semantics_of(request, goal.element), goal.element + 1};
+  }
+  return {};
+}
+
+// Offers `consider` the routes that make the request of the binding by the
+// creating forms of `chain`, outermost first, applied to each reachable type
+// of the binding; then the same for each chain that creates one wrapper more,
+// as many as the request holds.
+template <typename Consider>
+constexpr void create_by_chain(const binding_descriptor &binding,
+                               const reachable_types &found,
+                               type_tree_view request, std::uint8_t exposed,
+                               route_step *chain, std::size_t length,
+                               const creation_goal &goal, Consider &consider) {
+  if (length > 0) {
+    for (std::size_t index = 0; index < found.size; ++index) {
+      if (found.items[index].sibling) {
+        continue;
+      }
+      route_candidate made;
+      made.reachable = found.items[index];
+      made.base = index;
+      bool created = true;
+      for (std::size_t position = length; created && position > 0; --position) {
+        route_candidate from = made;
+        created = create(binding, from, chain[position - 1], exposed, made);
+      }
+      if (created) {
+        consider(made);
+      }
+    }
+  }
+  if (length == max_created_wrappers) {
+    return;
+  }
+  for (const operation_info &rule : operations) {
+    if (!creates(rule) || !has_operation(goal.outer, rule.form)) {
+      continue;
+    }
+    chain[length] = route_step{rule.form, goal.outer};
+    create_by_chain(binding, found, request, exposed, chain, length + 1,
+                    goal_under(chain[length], request, goal), consider);
+  }
 }
 } // namespace detail
 
 // The route that serves the request, of the reachable types `found` of
 // `binding`: a reachable type the request accepts, or one the request makes by
-// creating up to max_created_wrappers wrappers, the preferred one; or none.
+// creating wrappers, the preferred one; or none.
 constexpr route_choice select_route(const binding_descriptor &binding,
                                     const reachable_types &found,
                                     const request_descriptor &request,
@@ -989,49 +1042,18 @@ constexpr route_choice select_route(const binding_descriptor &binding,
       best_route = candidate;
     }
   };
-  auto from_found = [&](std::size_t index) {
-    route_candidate candidate;
-    candidate.reachable = found.items[index];
-    candidate.base = index;
-    return candidate;
-  };
   for (std::size_t index = 0; index < found.size; ++index) {
     if (!found.items[index].sibling) {
-      consider(from_found(index));
+      route_candidate candidate;
+      candidate.reachable = found.items[index];
+      candidate.base = index;
+      consider(candidate);
     }
   }
-  const semantics_descriptor *outer = semantics_of(request.value);
-  for (const operation_info &rule : operations) {
-    if (!creates(rule) || !has_operation(outer, rule.form)) {
-      continue;
-    }
-    const route_step step{rule.form, outer};
-    route_candidate made;
-    for (std::size_t index = 0; index < found.size; ++index) {
-      if (!found.items[index].sibling &&
-          detail::create(binding, from_found(index), step, exposed, made)) {
-        consider(made);
-      }
-    }
-    // The wrapper the outer one is made of is created too.
-    const semantics_descriptor *inner =
-        detail::created_inner(step, request.value);
-    for (const operation_info &inner_rule : operations) {
-      if (!creates(inner_rule) || !has_operation(inner, inner_rule.form)) {
-        continue;
-      }
-      const route_step inner_step{inner_rule.form, inner};
-      route_candidate middle;
-      for (std::size_t index = 0; index < found.size; ++index) {
-        if (!found.items[index].sibling &&
-            detail::create(binding, from_found(index), inner_step, exposed,
-                           middle) &&
-            detail::create(binding, middle, step, exposed, made)) {
-          consider(made);
-        }
-      }
-    }
-  }
+  route_step chain[max_created_wrappers] = {};
+  detail::create_by_chain(binding, found, request.value, exposed, chain, 0,
+                          detail::creation_goal{semantics_of(request.value), 1},
+                          consider);
   return best;
 }
 
