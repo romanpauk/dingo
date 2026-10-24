@@ -2,10 +2,10 @@
 
 Dingo resolves requests in two stages:
 
-1. derive the terms a binding serves from its stored shape, and select the term
-   that serves the requested shape
-2. walk the selected term over the stored object, and complete it to the
-   requested type
+1. derive the reachable types a binding serves from its stored type tree, and
+   select the reachable type that serves the requested type tree
+2. walk the selected reachable type over the stored object, and complete it to
+   the requested type
 
 Both stages are the same for every container. The first runs when the binding
 type and the request are compiled, and the second when the request is resolved.
@@ -17,10 +17,10 @@ The full conversion behavior comes from a few sources of data:
 - the scope descriptor, held by `scope_traits`, says which value category the
   slot materializes its object as, whether its objects keep their addresses, and
   which request categories it exposes for each storage form
-- the operations, the rules of the shape algebra, say which term each rule
-  derives from which, with which access and requirements
-- the `wrapper_semantics` of each wrapper semantics say which forms its layers
-  have
+- the operations say which reachable type each rule derives from which, with
+  which access and requirements
+- the `wrapper_semantics` of each wrapper semantics say which operations its
+  wrappers have
 - `type_conversion_traits` declares a conversion of a wrapper to the wrapper of
   an interface, or of a leaf to an interface, that is not a converting
   constructor
@@ -34,20 +34,21 @@ The important source files are:
 - [include/dingo/conversion/convert.h](../../include/dingo/conversion/convert.h)
 - [include/dingo/conversion/type_conversion.h](../../include/dingo/conversion/type_conversion.h)
 
-## Terms And Route Forms
+## Reachable Types And Operations
 
-A term is a shape with a value category, lvalue, rvalue, or prvalue, and the
-route that reaches it. A binding starts from its stored shape in the category
-its scope materializes: an lvalue for the borrowing scopes, `shared`,
-`external`, and `shared_cyclical`, and an rvalue for `unique`, which constructs
-an object for every request. Each rule derives a term from a term:
+A reachable type is a type tree with a value category, lvalue, rvalue, or
+prvalue, and the route that reaches it. A binding starts from its stored type
+tree in the category its scope materializes: an lvalue for the borrowing scopes,
+`shared`, `external`, and `shared_cyclical`, and an rvalue for `unique`, which
+constructs an object for every request. Each rule derives a reachable type from
+a reachable type:
 
-- `borrow`: the element of a layer, borrowed
+- `borrow`: the element of a wrapper, borrowed
 - `copy`: a copy of a borrowed leaf, which needs a copyable leaf
 - `address`: the address of a borrowed object that can be pointed to
 - `decay`: the address of the first element of a borrowed array
-- `take`: the element of a consumed layer
-- `wrap`: a layer made around a consumed element, such as an optional
+- `take`: the element of a consumed wrapper
+- `wrap`: a wrapper made around a consumed element, such as an optional
 - `share`: the sharing handle of its family that takes the element of a consumed
   sole-owner handle
 - `adopt`: an owning handle that takes the ownership of a consumed address
@@ -62,78 +63,78 @@ an object for every request. Each rule derives a term from a term:
   the binding keeps so a request can refer to it
 
 `copy`, `upcast_reference`, and the two conversions are rules of a leaf. The
-others are forms of a wrapper semantics, and a layer has the forms its kind
-declares: a `std::unique_ptr` borrows, shares, adopts, and upcasts a consumed
-handle, and a `std::shared_ptr` borrows, adopts, upcasts, and retains. A form
-that leads to another kind names it, such as the sharing kind a sole-owner
-handle shares its element with, and a route converts a wrapper only to another
-wrapper of its family.
+others are operations of a wrapper semantics, and a wrapper has the operations
+its semantics declares: a `std::unique_ptr` borrows, shares, adopts, and upcasts
+a consumed handle, and a `std::shared_ptr` borrows, adopts, upcasts, and
+retains. An operation that leads to another semantics names it, such as the
+sharing semantics a sole-owner handle shares its element with, and a route
+converts a wrapper only to another wrapper of its family.
 
-Each rule borrows its source, consumes it, or inherits the access of the term it
-starts from. A borrowing scope exposes nothing consumed, so a request of a
-`shared` binding never moves the stored object, while a `unique` binding hands
-its object over.
+Each rule borrows its source, consumes it, or inherits the access of the
+reachable type it starts from. A borrowing scope exposes nothing consumed, so a
+request of a `shared` binding never moves the stored object, while a `unique`
+binding hands its object over.
 
 ## Derivation
 
 `derive` in [conversion/route.h](../../include/dingo/conversion/route.h) applies
-every form that does not create a layer to the terms of a binding, in the order
-of the algebra, and keeps the terms it finds. A route derives shapes at most one
-layer larger than the stored shape, so a binding can publish every term it
-serves before any request is known. A static binding derives its terms when the
-container type is compiled, and a runtime binding when its registration is
-compiled.
+every form that does not create a wrapper to the reachable types of a binding,
+in the order of the conversion rules, and keeps the reachable types it finds. A
+route derives type trees at most one wrapper larger than the stored type tree,
+so a binding can publish every reachable type it serves before any request is
+known. A static binding derives its reachable types when the container type is
+compiled, and a runtime binding when its registration is compiled.
 
-A form that creates a layer, `wrap`, `adopt`, or `address`, applies at the
+A form that creates a wrapper, `wrap`, `adopt`, or `address`, applies at the
 request instead: a binding cannot know every kind requested of it, so a request
-of a layer whose kind wraps or adopts resolves its element and makes the layer
-of it. A request takes a term of the binding, or makes one by up to two layers
-of its own kinds. Of several routes, it prefers the one with fewer rules, then
-one without a copy, then the one whose forms come first in the order of the
-algebra.
+of a wrapper whose kind wraps or adopts resolves its element and makes the
+wrapper of it. A request takes a reachable type of the binding, or makes one by
+up to two wrappers of its own kinds. Of several routes, it prefers the one with
+fewer rules, then one without a copy, then the one whose forms come first in the
+order of the conversion rules.
 
 A request through a variant is served by the alternative its object holds. A
-derivation keeps, beside a term, its siblings: routes to the same term through
-the other alternatives. A walk that reaches an object holding another
-alternative continues along the sibling that takes it, and a request fails with
-`type_not_convertible_exception`, the diagnostic `alternative_not_held`, only
-when no sibling takes the alternative held.
+derivation keeps, beside a reachable type, its siblings: routes to the same
+reachable type through the other alternatives. A walk that reaches an object
+holding another alternative continues along the sibling that takes it, and a
+request fails with `type_not_convertible_exception`, the diagnostic
+`alternative_not_held`, only when no sibling takes the alternative held.
 
 ## Storage Exposure
 
-A storage form classifies the outer layers of a stored shape: plain, reference,
-pointer, a unique or a shared handle, a unique or a shared array handle, an
-optional, an alternative, a bounded or an unbounded array. The scope descriptor
-lists the request categories, value, lvalue reference, rvalue reference, and
-pointer, it exposes for each storage form; a route whose request category the
-scope does not expose for the stored form is not served. A registration whose
-scope does not store its form, or its nested layers, is rejected when it is
-compiled.
+A storage form classifies the outer wrappers of a stored type tree: plain,
+reference, pointer, a unique or a shared handle, a unique or a shared array
+handle, an optional, an alternative, a bounded or an unbounded array. The scope
+descriptor lists the request categories, value, lvalue reference, rvalue
+reference, and pointer, it exposes for each storage form; a route whose request
+category the scope does not expose for the stored form is not served. A
+registration whose scope does not store its form, or its nested wrappers, is
+rejected when it is compiled.
 
 Storage stability is a separate property of the scope. A stable scope, `shared`
 or `external`, keeps the addresses of the objects it borrows, so a runtime
-container keeps the address a term borrows once the slot is settled.
+container keeps the address a reachable type borrows once the slot is settled.
 `shared_cyclical` is not stable, as a failed publication resets its slots.
 
 ## Execution
 
 `walk` in [conversion/convert.h](../../include/dingo/conversion/convert.h)
-applies the rules of one term to the stored object, one C++ operation per form:
-the operation of the layer traits of the object, or of the language for an
-address. The binding applies the rules of a term up to its boundary, and the
-request completes it:
+applies the rules of one reachable type to the stored object, one C++ operation
+per form: the operation of the wrapper traits of the object, or of the language
+for an address. The binding applies the rules of a reachable type up to its
+boundary, and the request completes it:
 
 - a last copy, address-of, or decay of a borrowed object depends only on the
   requested type, so the binding returns the borrowed object and the request
   copies it, takes its address, or decays it
-- a layer that a rule creates from a leaf or a pointer may be of any family, so
-  the binding makes the boundary object and the request wraps or adopts it into
-  the layer it names
+- a wrapper that a rule creates from a leaf or a pointer may be of any family,
+  so the binding makes the boundary object and the request wraps or adopts it
+  into the wrapper it names
 
-The static backend walks and completes the term directly. A runtime binding
-registers a thunk per term that walks it to its boundary, and the request checks
-the type of the boundary object before it completes it, so neither backend moves
-an object the other does not.
+The static backend walks and completes the reachable type directly. A runtime
+binding registers a thunk per reachable type that walks it to its boundary, and
+the request checks the type of the boundary object before it completes it, so
+neither backend moves an object the other does not.
 
 A request of an rvalue reference to an object a binding constructs for it refers
 to an object the container keeps, constructed in place, until the container is

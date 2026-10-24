@@ -12,9 +12,9 @@ Read these pages in order for the full picture:
   owners.
 - [Registration And Resolution](registration-and-resolution.md): runtime and
   compile-time registration, selection, and the path of `resolve<T>()`.
-- [Handles, Leaf Types, And Lookup](handles-leaf-types-and-lookup.md): shapes,
-  layers and leaves, `leaf_type_t`, `rebind_type_t`, and how a request finds its
-  bindings.
+- [Handles, Leaf Types, And Lookup](handles-leaf-types-and-lookup.md): type
+  trees, wrappers and leaves, `leaf_type_t`, `rebind_type_t`, and how a request
+  finds its bindings.
 - [Extending Dingo](extending-dingo.md): which trait to specialize for a new
   wrapper, wrapper semantics, scope, conversion, or lookup index.
 - [Conversion Model](conversion-model.md): how Dingo derives the value,
@@ -34,21 +34,21 @@ include/dingo/static_container.h   -> static-only container
 ```
 
 These and the other public include paths under `include/dingo/` are the API of
-the library, over its modules, in the layers described in
+the library, over its modules, in the header layers described in
 [Header Layers](overview.md#header-layers).
 
 Both registration modes reduce to one binding type, and both backends serve a
 request through the same engine:
 
 ```text
-register_type<...>() / bind<...> -> registration -> binding_type -> derived terms
-resolve<T>() -> request -> selection -> backend -> term -> walk -> T
+register_type<...>() / bind<...> -> registration -> binding_type -> derived reachable types
+resolve<T>() -> request -> selection -> backend -> reachable type -> walk -> T
 ```
 
-A binding type derives the terms it serves when it is compiled. The static
-backend selects the binding and the term of a request when the request is
-compiled, and the runtime backend when it is resolved, by the same engine
-functions.
+A binding type derives the reachable types it serves when it is compiled. The
+static backend selects the binding and the reachable type of a request when the
+request is compiled, and the runtime backend when it is resolved, by the same
+engine functions.
 
 The main owners are:
 

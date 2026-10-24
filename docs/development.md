@@ -38,7 +38,7 @@ Run a quality target with `cmake --build build -t <target>`.
   and `docker`.
 - `markdown-format-check`: verifies the same Markdown files.
 - `format-check`: runs `sources-format-check` and `markdown-format-check`.
-- `layers-check`: verifies that headers include only headers of lower layers or
+- `layers-check`: verifies that headers include only headers of lower modules or
   of their own directory, as described in
   [Header Layers](architecture/overview.md#header-layers).
 - `includes-compile`: compiles one generated translation unit per standalone
@@ -98,13 +98,14 @@ The route tools compare what the library does with the route rules of the spec,
 `spec/reference/routes.py`.
 
 - [`test/routes/extract.py`](../test/routes/extract.py) compiles and runs every
-  combination of container, leaf kind, declared interfaces, scope, stored shape,
-  and request against the library and records the outcome, the constructions,
-  copies, and moves, and the identity of the result. Stored shapes use the
-  standard wrappers and user wrappers defined through the wrapper-traits
-  extension point. The table is written to `build/routes/observed-next/` and not
-  committed; extracting it takes about eight minutes with 32 jobs. The C++ of
-  the probes is in the templates under `test/routes/templates/`.
+  combination of container, leaf kind, declared interfaces, scope, stored type
+  tree, and request against the library and records the outcome, the
+  constructions, copies, and moves, and the identity of the result. Stored type
+  trees use the standard wrappers and user wrappers defined through the
+  wrapper-traits extension point. The table is written to
+  `build/routes/observed-next/` and not committed; extracting it takes about
+  eight minutes with 32 jobs. The C++ of the probes is in the templates under
+  `test/routes/templates/`.
 - [`test/routes/conform.py`](../test/routes/conform.py) compares every case with
   the reference implementation. `conform.py --exact --observed <table>` requires
   the table of the library to match it with no behavior change applied. With
@@ -129,11 +130,11 @@ The route tools compare what the library does with the route rules of the spec,
   extractor generates their C++ declarations, over the wrappers of
   `templates/kinded_wrappers_next.h`.
 - [`test/routes/witness.py`](../test/routes/witness.py) runs the witnesses of
-  the algebra against the library: of the cases of the extractor, the smallest
-  that takes each route, that a scope refuses for each reason, that a mutation
-  refuses where the kind it differs from serves, and that each condition of a
-  route refuses, which the reference implementation finds by relaxing the
-  condition. It compiles one program per container and compares as
+  the conversion rules against the library: of the cases of the extractor, the
+  smallest that takes each route, that a scope refuses for each reason, that a
+  mutation refuses where the kind it differs from serves, and that each
+  condition of a route refuses, which the reference implementation finds by
+  relaxing the condition. It compiles one program per container and compares as
   `conform.py --exact` does, in about half a minute, and fails on a route or a
   condition without a witness unless it declares why none can have one. The
   ctest entry `dingo_routes_witness_test` runs it; `--list` prints the
@@ -233,7 +234,7 @@ output.
 `dingo_matrix_test` is generated from the axis model in
 [`test/matrix/README.md`](../test/matrix/README.md). The model combines
 features, registration modes, scopes, stored types, exposed types, resolved
-types, and container shapes, then filters invalid combinations before emitting
+types, and container forms, then filters invalid combinations before emitting
 GoogleTest sources.
 
 The hand-written C++ portion is organized by role: `common/` provides matrix

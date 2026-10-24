@@ -5,20 +5,20 @@ matches the problem actually being solved.
 
 Dingo's container and resolution pipeline do not hard-code a closed list of
 supported wrapper forms, wrapper semantics, scopes, or lookup indexes. The
-standard smart pointers, `std::optional`, and `std::variant` are layers through
-the same `wrapper_traits` a user wrapper specializes, the wrapper semantics of
-the library are declared by the same `wrapper_semantics` a user kind is, the
-built-in scopes are specializations of `scope_traits`, and the lookup backends
-of the library name their indexes as a user backend does. Adding another
-wrapper, kind, scope, or index follows the same path as Dingo's built-in
+standard smart pointers, `std::optional`, and `std::variant` are wrappers
+through the same `wrapper_traits` a user wrapper specializes, the wrapper
+semantics of the library are declared by the same `wrapper_semantics` a user
+kind is, the built-in scopes are specializations of `scope_traits`, and the
+lookup backends of the library name their indexes as a user backend does. Adding
+another wrapper, kind, scope, or index follows the same path as Dingo's built-in
 support.
 
 ## Wrappers
 
 Specialize `dingo::wrapper_traits` in
 [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h) to
-make a wrapper or handle type a layer of the shape algebra. A specialization
-declares:
+make a wrapper or handle type a wrapper of the conversion rules. A
+specialization declares:
 
 - `kind`: the wrapper semantics of the wrapper, such as
   `::dingo::semantics::sole_owner`, `::dingo::semantics::shared_owner`,
@@ -127,7 +127,7 @@ void example() {
 a sharing, a sole-owner, and an optional test wrapper this way, which the
 generated matrix uses.
 
-## Layer Kinds
+## Wrapper Semantics
 
 Specialize `dingo::wrapper_semantics` for a tag type to declare a wrapper
 semantics, when no kind of the library describes a wrapper. A specialization
@@ -141,7 +141,7 @@ kind leads to:
 - the forms of a kind: `borrow`, `address`, `decay`, `take`, `wrap`, `share`,
   `adopt`, `release`, `release_whole`, `upcast_copied`, `upcast_consumed`, and
   `retain`; their meanings are listed in the
-  [Conversion Model](conversion-model.md#terms-and-route-forms)
+  [Conversion Model](conversion-model.md#reachable-types-and-operations)
 
 The kinds of the library, `::dingo::semantics::sole_owner`,
 `::dingo::semantics::shared_owner`, `::dingo::semantics::optional_value`,

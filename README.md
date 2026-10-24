@@ -148,7 +148,7 @@ When working from a checkout, the top-level CMake project also supports
   backends, annotations, custom wrappers and scopes, runtime and compile-time
   registration modes, template depth, nesting, moving containers, RTTI,
   allocation, and runtime notes.
-- [Architecture](docs/architecture/README.md): registration flow, lookup shape,
+- [Architecture](docs/architecture/README.md): registration flow, lookup forms,
   extension traits, and conversion rules.
 - [Examples](docs/examples.md): a guided index of runnable examples in
   [`examples/`](examples).

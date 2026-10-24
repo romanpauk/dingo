@@ -14,9 +14,9 @@ the relevant feature and start there.
   runtime registration with shared and unique storage plus `resolve()` and
   `construct()`
 - [examples/registration/non_intrusive.cpp](../examples/registration/non_intrusive.cpp):
-  registration shape and policy deduction without touching user types
+  registration form and policy deduction without touching user types
 - [examples/registration/compile_time_registration.cpp](../examples/registration/compile_time_registration.cpp):
-  compile-time bindings for the same storage and resolution shape as the runtime
+  compile-time bindings for the same storage and resolution form as the runtime
   example
 
 ## Factories
@@ -59,13 +59,13 @@ the relevant feature and start there.
 - [examples/index/multibindings.cpp](../examples/index/multibindings.cpp):
   resolve multiple implementations through a single interface
 - [examples/registration/collection.cpp](../examples/registration/collection.cpp):
-  aggregate a custom collection shape with a custom insertion step
+  aggregate a custom collection with a custom insertion step
 - [examples/registration/annotated.cpp](../examples/registration/annotated.cpp):
   disambiguate same-type dependencies with annotation tags
 - [examples/index/message_processing.cpp](../examples/index/message_processing.cpp):
   dispatch messages to keyed handlers
 
-## Construction Helpers
+## Construction Functions
 
 - [examples/container/construct.cpp](../examples/container/construct.cpp): build
   an unmanaged object from registered dependencies

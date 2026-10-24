@@ -52,6 +52,7 @@ ALLOWED_PHRASES = (
     # The layers of the headers, checked by tools/layers.py and layers-check.
     "header layer",
     "header layers",
+    "header-layers",
     "layers-check",
     "layers_check",
     "layers.py",
@@ -66,7 +67,9 @@ BANNED_DIRECTORIES = ("core", "api", "vocabulary", "projection", "engine")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # Scanned recursively, as files or directories; each must exist.
 SCANNED = (
+    "README.md",
     "benchmark",
+    "docs",
     "examples",
     "include/dingo",
     "spec",
@@ -83,6 +86,9 @@ SCANNED = (
     "test/support",
     "tools/generator",
 )
+# Not scanned: the file records the names of the tests of the suite that the
+# library replaced, which are what they were.
+EXCLUDED = ("docs/architecture/test-migration.md",)
 SUFFIXES = frozenset({".py", ".h", ".hpp", ".cpp", ".j2", ".md", ".txt", ".cmake", ".t"})
 SELF = Path(__file__).resolve()
 
@@ -182,16 +188,20 @@ def violations_of_file(path, relative=None):
 
 
 def scanned_files(root, scanned):
+    excluded = {root / entry for entry in EXCLUDED}
     for entry in scanned:
         base = root / entry
         if base.is_file():
-            yield base
+            files = [base]
         elif base.is_dir():
-            yield from (
+            files = (
                 path
                 for path in sorted(base.rglob("*"))
                 if path.is_file() and "__pycache__" not in path.parts
             )
+        else:
+            continue
+        yield from (path for path in files if path not in excluded)
 
 
 def violations(root=REPO_ROOT, scanned=SCANNED):

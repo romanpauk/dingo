@@ -447,9 +447,9 @@ See:
 - [test/matrix/README.md](../test/matrix/README.md)
 - [include/dingo/type/annotated.h](../include/dingo/type/annotated.h)
 
-## Custom Wrappers, Layer Kinds, And Scopes
+## Custom Wrappers, Wrapper Semantics, And Scopes
 
-A wrapper of the user becomes a layer of the shape algebra through
+A wrapper of the user becomes a wrapper of the conversion rules through
 `dingo::wrapper_traits`, which names its wrapper semantics, its family, and its
 element types, and tells how to rebind it, reach its element, and make it. The
 standard wrappers specialize it the same way, so a user wrapper serves the same
@@ -501,8 +501,8 @@ Dingo has two registration modes with different tradeoffs.
 - `container<bindings<...>>` may also accept runtime registrations, which is
   useful when most of the graph is static but a small boundary remains dynamic.
 
-The modes share the same resolution API and policy vocabulary. The difference is
-where the registration list lives: runtime container state or the container
+The modes share the same resolution API and policy declarations. The difference
+is where the registration list lives: runtime container state or the container
 type.
 
 Runtime registration makes sense when:

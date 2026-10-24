@@ -3,8 +3,8 @@
 Dingo is easiest to understand when separated into four concerns:
 
 - registration: the reduction of the registration policies to a binding type
-- shapes and routes: the shape of a stored type, and the routes from it that a
-  binding serves
+- type trees and routes: the type tree of a stored type, and the routes from it
+  that a binding serves
 - selection: which binding answers a request, decided when the request is
   compiled or when it is resolved
 - execution: the slot that keeps the object of a binding, the factory that makes
@@ -14,13 +14,14 @@ Dingo is easiest to understand when separated into four concerns:
 
 The modules of the library are the directories of `include/dingo/` that the list
 below names, and the public headers are every other header under
-`include/dingo/`, the topmost layer, which holds the public include paths. A
-header may include headers of the layers below its own and of its own module;
-modules that share a layer do not include each other, and no module below the
-public headers includes them. The `layers-check` target enforces this, and the
-layer list lives in [tools/layers.py](../../tools/layers.py).
+`include/dingo/`, the topmost header layer, which holds the public include
+paths. A header may include headers of the header layers below its own and of
+its own module; modules that share a header layer do not include each other, and
+no module below the public headers includes them. The `layers-check` target
+enforces this, and the list of header layers lives in
+[tools/layers.py](../../tools/layers.py).
 
-From the lowest layer to the highest:
+From the lowest header layer to the highest:
 
 1. `base/`: the configuration macros of `config.h`, the generated language
    capabilities and compiler variants, and the mechanics: the type list,
@@ -106,9 +107,9 @@ to a `core::binding_type` of
 - the local static bindings of a `bindings<...>` part
 
 The binding type computes its descriptor and, by
-[conversion/route.h](../../include/dingo/conversion/route.h), the terms it
-serves, when it is compiled. Both registration modes produce the same binding
-type for the same policies.
+[conversion/route.h](../../include/dingo/conversion/route.h), the reachable
+types it serves, when it is compiled. Both registration modes produce the same
+binding type for the same policies.
 
 ### Slots And Factories
 
@@ -127,23 +128,23 @@ The slot keeps the factory of its binding, empty unless it holds a callable
 object, and constructs the stored object by it.
 [conversion/construct.h](../../include/dingo/conversion/construct.h) holds the
 factories: a constructor factory constructs the leaf by its detected or declared
-constructor and makes every layer around it in place, and a function or callable
-factory returns the stored object.
+constructor and makes every wrapper around it in place, and a function or
+callable factory returns the stored object.
 
 ### Routes And Walks
 
-A route is a sequence of operations from the stored shape to the requested
-shape, as described in the [Conversion Model](conversion-model.md). The engine
-derives the routes of a binding at compile time. `walk` in
+A route is a sequence of operations from the stored type tree to the requested
+type tree, as described in the [Conversion Model](conversion-model.md). The
+engine derives the routes of a binding at compile time. `walk` in
 [conversion/convert.h](../../include/dingo/conversion/convert.h) applies the
-rules of one term to the stored object, one C++ operation per form, through the
-layer traits of each layer. The binding walks a term up to its boundary, and the
-request completes it: it refers to the object, copies it, takes its address, or
-makes the layers it requests of it.
+rules of one reachable type to the stored object, one C++ operation per form,
+through the wrapper traits of each wrapper. The binding walks a reachable type
+up to its boundary, and the request completes it: it refers to the object,
+copies it, takes its address, or makes the wrappers it requests of it.
 
-The static backend walks the selected term directly. The runtime backend
-registers a thunk per term, and a request calls the thunk of the term it
-selected.
+The static backend walks the selected reachable type directly. The runtime
+backend registers a thunk per reachable type, and a request calls the thunk of
+the reachable type it selected.
 
 ### Selection
 
@@ -165,24 +166,24 @@ proxy `register_type` returns, which are created by the first such registration.
 At a high level, Dingo runs this sequence:
 
 1. `register_type<...>()` or `bind<...>` reduces the policies to a binding type,
-   which derives the terms it serves when it is compiled.
-2. A runtime registration adds the binding with a thunk per term to the runtime
-   backend; a static binding is a binding of the static backend of the container
-   type.
+   which derives the reachable types it serves when it is compiled.
+2. A runtime registration adds the binding with a thunk per reachable type to
+   the runtime backend; a static binding is a binding of the static backend of
+   the container type.
 3. `resolve<T>()` describes `T` as a request: the interface it names, its key,
-   and its shape.
+   and its type tree.
 4. The selection asks the sources of the container in the order of the selection
    rules. The first step that names a binding answers the request; two bindings
    at that step are ambiguous, and no binding at any step is not found.
-5. The backend that holds the binding selects the term that serves the request.
-   The static backend selects it when the request is compiled. The runtime
-   backend selects it at the first resolution and keeps it in the memo of the
-   request type until the next registration.
+5. The backend that holds the binding selects the reachable type that serves the
+   request. The static backend selects it when the request is compiled. The
+   runtime backend selects it at the first resolution and keeps it in the memo
+   of the request type until the next registration.
 6. The slot of the binding yields the stored object, constructing it by the
    factory when the scope needs one; the dependencies of the factory are
    resolved from the container through the same selection.
-7. The binding walks the term to its boundary, and the request completes it to
-   `T`.
+7. The binding walks the reachable type to its boundary, and the request
+   completes it to `T`.
 
 A request that starts at a container is a transaction of it: when it fails, the
 registrations into the container, the objects its slots constructed, and the

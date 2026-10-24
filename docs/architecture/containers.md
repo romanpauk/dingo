@@ -13,7 +13,7 @@ The top-level include set is intentionally small:
 - [include/dingo/static_container.h](../../include/dingo/static_container.h):
   static-only container
 
-They are the API of the library, over its core, described in
+They are the API of the library, over its modules, described in
 [Header Layers](overview.md#header-layers).
 
 ## Unified Container
@@ -53,7 +53,7 @@ arguments, in the order of the bindings.
 
 ## Static And Runtime Facades
 
-The split container facades remain available when the narrower shape is useful:
+The split container facades remain available when the narrower form is useful:
 
 - `runtime_container<Traits, Allocator, Parent>`, an alias of
   `container<Traits, Allocator, Parent>`, for explicitly runtime-only code

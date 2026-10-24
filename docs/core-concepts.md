@@ -1,6 +1,6 @@
 # Core Concepts
 
-This page covers the parts of Dingo that shape object graph behavior:
+This page covers the parts of Dingo that determine object graph behavior:
 registration modes, lifetimes, stored forms, arrays, variants, factories, and
 interface-oriented resolution.
 
@@ -209,14 +209,14 @@ See:
 ## Arrays
 
 Dingo supports raw C++ arrays, `std::unique_ptr<T[]>`, and
-`std::shared_ptr<T[]>`, including N-D array shapes.
+`std::shared_ptr<T[]>`, including N-D arrays.
 
 In practice:
 
-- register the exact array shape to store
-- resolve either the exact shape or the supported borrowed/owning array view for
+- register the exact array type to store
+- resolve either the exact type or the supported borrowed/owning array view for
   that scope
-- keep shape in mind, because nested arrays do not flatten to `T*`
+- keep the exact type in mind, because nested arrays do not flatten to `T*`
 
 The main constraints are:
 
@@ -387,8 +387,8 @@ pick a constructor automatically.
 In practice, the default path is:
 
 - try constructor deduction for registered types
-- use the highest-arity constructor shape that Dingo can prove is constructible,
-  ignoring the copy constructor
+- use the highest-arity constructor signature that Dingo can prove is
+  constructible, ignoring the copy constructor
 - resolve the detected arguments from the container, each as the type its
   parameter asks for
 
@@ -396,10 +396,10 @@ In practice, the default path is:
 
 Constructor detection has two result forms:
 
-- shape detection reports whether the selected constructor is concrete, generic,
+- arity detection reports whether the selected constructor is concrete, generic,
   or invalid, together with its arity; this is the detection the containers use
-- signature detection starts from that same selected shape and additionally
-  recovers its parameter types as a `type_list`
+- signature detection starts from that same selected constructor and
+  additionally recovers its parameter types as a `type_list`
 
 The detection result, `core::constructor_detection`, exposes `kind` and `arity`.
 A concrete signature result also exposes `arguments`; zero-argument construction
@@ -417,9 +417,9 @@ Constructor deduction is intentionally useful, not magical. The main limits are:
 
 - detection is based on compile-time constructibility checks, not on every
   overload-resolution nuance that handwritten code might express
-- the detector prefers the highest-arity constructible shape, which is not
+- the detector prefers the highest-arity constructible signature, which is not
   always the overload to commit to in public code
-- constructor templates and other generic catch-all constructor shapes are
+- constructor templates and other generic catch-all constructor signatures are
   rejected from auto-detection; those types must use `factory<constructor<...>>`
 - ambiguous or unsupported cases should be resolved explicitly with
   `factory<constructor<...>>`, `factory<function<...>>`, `callable(...)`, or

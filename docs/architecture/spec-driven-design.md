@@ -17,8 +17,9 @@ starting point the new implementation has to evolve from.
   alone.
 - Storages, lookups, and request handling are unified the same way: one
   construct per concept, with the differences expressed as data.
-- One specification is the source of truth for the library semantics: shapes,
-  scopes, routes, requests, bindings, selection, graph rules, and diagnostics.
+- One specification is the source of truth for the library semantics: type
+  trees, scopes, routes, requests, bindings, selection, graph rules, and
+  diagnostics.
 - Every spec decision lives in generated code. Hand-written code is limited to
   primitives that make no spec decisions, so it has nothing that can drift.
 - Every public operation and component has contracts on compile cost, object
@@ -34,8 +35,8 @@ starting point the new implementation has to evolve from.
   types, RTTI, collections, and conversions. The spec describes each such
   concept as an open schema whose built-in members are instances, and the
   library reaches every member through a type the user can provide, never
-  through a closed list of ids. Only the vocabulary of the algebra itself, such
-  as value categories and binding times, is closed.
+  through a closed list of ids. Only the declarations of the conversion rules
+  itself, such as value categories and binding times, is closed.
 - No behavior changes unintentionally. The new implementation is tested
   differentially against a pinned baseline of the current library, and every
   intended change is declared and justified.
@@ -94,8 +95,8 @@ Implemented twice:
   [graph.h](https://github.com/romanpauk/dingo/blob/ced676073a362cf0aa58fe511b61be6ce832a3ce/include/dingo/static/graph.h),
   and `recursion_guard` keyed by binding address at runtime.
 
-Shared helpers that would remove some of this duplication exist but are unused:
-`construct_binding_collection` and `count_binding_collection` in
+Shared functions that would remove some of this duplication exist but are
+unused: `construct_binding_collection` and `count_binding_collection` in
 [binding_collection.h](https://github.com/romanpauk/dingo/blob/ced676073a362cf0aa58fe511b61be6ce832a3ce/include/dingo/binding/binding_collection.h),
 `make_runtime_selection`, and the `prefer_primary` resolution policy.
 
@@ -132,7 +133,7 @@ Identity and behavior expectations live in C++ policies, not in the model.
 
 ## One Semantics, Three Binding Times
 
-Every part of the library belongs to one of three layers.
+Every part of the library belongs to one of three wrappers.
 
 Facts are computed per binding from its types: interfaces, key, scope, the
 routes it can serve, and its declared dependencies. They are template code run
@@ -222,8 +223,8 @@ package that exports JSON. The test matrix already uses Python, and the format
 should stay data until the rules stabilize. A dedicated rule language can come
 later if the data form proves insufficient.
 
-The content is language-agnostic: shapes are abstract constructors, and a C++
-projection maps them to C++ spellings.
+The content is language-agnostic: type trees are abstract constructors, and the
+C++ section maps them to C++ spellings.
 
 ### Public API
 
@@ -246,13 +247,13 @@ must keep. The C++ section lists it explicitly:
 Everything not listed is internal. A change to the public API is a behavior
 change and is declared like one.
 
-### Shape Algebra
+### Conversion Rules
 
-A shape is a leaf wrapped in layers. Wrapper semantics are abstract classes of
-handles defined by their traits, owning, sharing, nullable, and borrowable, such
-as a sole-owner handle, a sharing handle, an optional value, an alternative, a
-pointer, a reference, and an array. Leaf extraction and rebinding are defined
-generically on the algebra.
+A type tree is a leaf wrapped in wrappers. Wrapper semantics are abstract
+classes of handles defined by their traits, owning, sharing, nullable, and
+borrowable, such as a sole-owner handle, a sharing handle, an optional value, an
+alternative, a pointer, a reference, and an array. Leaf extraction and rebinding
+are defined generically on the conversion rules.
 
 The spec does not name concrete wrapper types. Users extend the library with
 their own sole-owner, sharing, and optional handles through the wrapper-traits
@@ -290,7 +291,7 @@ in the [Conversion Model](conversion-model.md).
 
 ### Requests And Keys
 
-Request forms are the product of shape, carrier, and decoration. Keyed,
+Request forms are the product of type tree, carrier, and decoration. Keyed,
 annotated, selected, collection, and `exact_lookup` requests are decorations.
 The spec defines normalization to a lookup key and the four key kinds: none,
 typed, fixed, and runtime. A key value has its own binding time, independent of
@@ -480,7 +481,7 @@ The library detects language capabilities, not standard versions. It replaces
   the engine can operate on in `consteval` code before splicing the result back
   into a type.
 
-All conditional compilation lives in one mechanics header at layer 0. Every
+All conditional compilation lives in one mechanics header at wrapper 0. Every
 header above it, generated or hand-written, calls tier-agnostic primitives:
 
 ```c++
@@ -548,12 +549,12 @@ These principles are written into the spec, ordered by expected payoff.
 
 ### Precompute The Closed Semantics
 
-Route derivation for the built-in shapes is a finite, per-layer table: layer
-kind, scope, and request wrapper semantics to operation, access, and stability.
-The generator evaluates the route rules offline and emits `constexpr` data.
-Nested shapes are handled by a `constexpr` walk over a short array of wrapper
-semantics instead of template recursion. Custom wrappers enter the table through
-their declared traits. Custom `type_conversion_traits` remain a lazily
+Route derivation for the built-in type trees is a finite, per-wrapper table:
+wrapper kind, scope, and request wrapper semantics to operation, access, and
+stability. The generator evaluates the route rules offline and emits `constexpr`
+data. Nested type trees are handled by a `constexpr` walk over a short array of
+wrapper semantics instead of template recursion. Custom wrappers enter the table
+through their declared traits. Custom `type_conversion_traits` remain a lazily
 instantiated template escape hatch per source and target pair. Because the table
 is data, the runtime backend matches against it directly instead of
 instantiating route templates.
@@ -581,14 +582,14 @@ constexpr selection selection_v = engine::select(table, descriptor_v<T>);
 
 ### Keep Template Parameters Narrow
 
-Each construct is parameterized by exactly the inputs it declares. Shape-level
-computations take the shape with the leaf abstracted, as `lookup_type_t` already
-does with `runtime_type`, so all `shared_ptr<X>` bindings share one shape
-instantiation. Unlike the current
+Each construct is parameterized by exactly the inputs it declares. Type
+tree-level computations take the type tree with the leaf abstracted, as
+`lookup_type_t` already does with `runtime_type`, so all `shared_ptr<X>`
+bindings share one type tree instantiation. Unlike the current
 `storage<Tag, Registered, Stored, Factory, Conversions>`, route planning does
 not depend on the factory.
 
-### Check Eagerly On Descriptors, Instantiate Kernels Lazily
+### Check Eagerly On Descriptors, Instantiate Converters Lazily
 
 Cycles, duplicates, missing declared dependencies, and ambiguity are checked
 when the container type is formed, using descriptors only. Factory calls,
@@ -603,7 +604,7 @@ descriptor.
 - `std::conditional_t` where both branches are instantiated
 - SFINAE overload sets over all bindings
 - `<memory>`, `<variant>`, and `<optional>` in core headers; wrapper support
-  moves to opt-in headers listed by the shape projection
+  moves to opt-in headers listed by the type tree declarations
 
 ## Contract Enforcement
 
@@ -619,7 +620,7 @@ produce:
 ```yaml
 cost:
   descriptor:     { inputs: [type],                    per: distinct type }
-  route_data:     { inputs: [scope, shape],            per: distinct shape }
+  route_data:     { inputs: [scope, type tree],            per: distinct type tree }
   binding_facts:  { inputs: [binding],                 per: binding }
   selection:      { inputs: [request, table],          per: request type }
   converter:         { inputs: [binding, route],          per: used route, lazy }
@@ -627,13 +628,13 @@ cost:
 ```
 
 The generator emits scaling probes per tier: synthetic programs with N bindings,
-chain depth D, K distinct shapes, and R request types. They compile with Clang
-`-ftime-trace`, through the same
+chain depth D, K distinct type trees, and R request types. They compile with
+Clang `-ftime-trace`, through the same
 [time-trace](../development.md#compile-time-profiling) workflow used for manual
 investigations. A checker counts instantiations of each `dingo::` entity and
 asserts the contract:
 
-- `route_data` instantiations equal the number of distinct shapes, not the
+- `route_data` instantiations equal the number of distinct type trees, not the
   number of bindings
 - registering without resolving produces no `converter` instantiations
 - instantiation counts grow linearly in N and D
@@ -682,10 +683,10 @@ other code. See [Testing And Conformance](#testing-and-conformance).
 
 ### Generated
 
-- the spec vocabulary: scope, shape kind, key kind, route operation, and
+- the spec declarations: scope, type tree kind, key kind, route operation, and
   diagnostic enums, the descriptor structs, and the public tag types such as
   `scope<shared>` with their mapping to descriptors
-- the per-layer route and scope tables as `constexpr` data
+- the per-wrapper route and scope tables as `constexpr` data
 - the engine: selection and graph rules as straight-line `constexpr` code
 - the one storage construct and the one lookup filter, each consuming
   descriptors, and the selection of index structures per key kind
@@ -706,7 +707,7 @@ other code. See [Testing And Conformance](#testing-and-conformance).
 - conversion primitives: address-of, dereference, wrapper get and borrow through
   user traits, copy, and move
 - the index structures: the dense array, ordered, and unordered backends
-- the arena, the allocators, and the shape of the type-erasure thunks
+- the arena, the allocators, and the signature of the type-erasure thunks
 - the primary templates of the user extension points, `type_traits` and
   `type_conversion_traits`, because they are a C++ contract users specialize
 - a thin public facade, `container`, `resolve<T>`, and `register_type`, which
@@ -714,7 +715,7 @@ other code. See [Testing And Conformance](#testing-and-conformance).
   everything else
 
 The primitives sit in a header layer below the generated code and must not
-include it, so they cannot know scope names, shape kinds, rule order, or
+include it, so they cannot know scope names, type tree kinds, rule order, or
 diagnostic text. `layers-check` enforces this.
 
 ### Rules For Generated Code
@@ -743,8 +744,8 @@ are written to the build directory at build time, as the matrix is today.
 
 - Every generated file starts with a marker line naming the generator and the
   spec entries it comes from, and saying that the file must not be edited.
-- Generated headers use the `.gen.h` suffix and live in the layer directory they
-  belong to, so `layers-check` applies to them unchanged.
+- Generated headers use the `.gen.h` suffix and live in the wrapper directory
+  they belong to, so `layers-check` applies to them unchanged.
 - A committed manifest, `spec/generated.manifest`, lists every generated path
   with a content hash.
 
@@ -798,7 +799,7 @@ implementation.
 Everything else can be replaced completely: headers, names, directory layout,
 and header layers. No internal header is kept for compatibility. Current code
 that is already decision-free, such as constructor detection, may be moved into
-the primitive layer instead of being rewritten, but it is moved, not shared
+the primitive wrapper instead of being rewritten, but it is moved, not shared
 between the two implementations.
 
 ### Development Strategy
@@ -830,7 +831,7 @@ is no ODR conflict.
 
 Only cases written against the public API take part. Existing tests that use
 internal names, such as the constructor-detection matrix family, are ported to
-the primitive layer or replaced by spec conformance cases.
+the primitive wrapper or replaced by spec conformance cases.
 
 A comparator diffs the records. Every difference must match an entry in the
 spec's behavior changes, and every entry must match an observed difference, so
@@ -918,7 +919,7 @@ records the decision when it is made.
 - Movability of static containers. Decision: open.
 - Spec location and format. Decision: a typed Python package under `spec/`
   exporting JSON, see M1.1.
-- Generated file naming. Decision: the `.gen.h` suffix in the layer directory,
+- Generated file naming. Decision: the `.gen.h` suffix in the wrapper directory,
   see M1.2.
 - Generated tests in the repository. Proposal: generate them at build time and
   do not commit them. Decision: open.
@@ -1095,11 +1096,12 @@ observe it or marked as not observable with the reason.
 on each implementation; [M7](#m7-contract-enforcement) describes the current
 results.
 
-#### M1.5: Shapes And Scopes
+#### M1.5: Type Trees And Scopes
 
 Status: done.
 
-Specify the shape algebra, the C++ section, and the four scopes as descriptors.
+Specify the conversion rules, the C++ section, and the four scopes as
+descriptors.
 
 The spec records 8 wrapper semantics, 10 storage forms as patterns over wrapper
 semantics, and the four scopes with their slot, materialized category,
@@ -1110,10 +1112,10 @@ its own exposure rule. The C++ section names only the scope tags. The
 [Scope Check](../development.md#scope-check) compares the descriptors with the
 current scope policies.
 
-The current implementation classifies stored shapes with dedicated cases for the
-standard sole-owner, sharing, and optional handles instead of the wrapper-traits
-extension point user wrappers go through. The new implementation classifies
-every wrapper through the extension point.
+The current implementation classifies stored type trees with dedicated cases for
+the standard sole-owner, sharing, and optional handles instead of the
+wrapper-traits extension point user wrappers go through. The new implementation
+classifies every wrapper through the extension point.
 
 #### M1.6: Route Rules
 
@@ -1121,12 +1123,12 @@ Status: in progress.
 
 Specify the route rules with access, stability, cache, and retention.
 
-The spec records 25 route rules over terms of a shape and a value category:
-borrowing through layers, copying, taking addresses, the consuming rules that
-take, wrap, and transfer ownership, and the upcasts that reach declared
-interfaces, including a kept sharing handle of an interface. Layers carry an
-opaque wrapper family: a converted handle keeps its family, and a layer a rule
-creates may be of any family. They are described in
+The spec records 25 route rules over reachable types of a type tree and a value
+category: borrowing through wrappers, copying, taking addresses, the consuming
+rules that take, wrap, and transfer ownership, and the upcasts that reach
+declared interfaces, including a kept sharing handle of an interface. Wrappers
+carry an opaque wrapper family: a converted handle keeps its family, and a
+wrapper a rule creates may be of any family. They are described in
 [Route Conformance](../development.md#route-conformance). Remaining: custom
 conversion traits, and the conversion cache beyond the kept interface handle.
 
@@ -1138,15 +1140,16 @@ Implement route derivation in Python, producing the expected outcome, identity,
 and lifetime counts of a request, with spec-level property tests for the rules.
 
 `spec/reference/routes.py` computes registration, lookup, service,
-constructions, copies, identity, and stability for a scope, a stored shape, the
-declared interfaces, and a request, and is checked by property tests over every
-stored shape of up to two layers. The route conformance check compares it with
-46,956 cases extracted from the baseline in the runtime, static, and mixed
-containers, covering standard and user wrappers and bindings with one and two
-interfaces. Every difference is declared by one of 15 behavior changes:
+constructions, copies, identity, and stability for a scope, a stored type tree,
+the declared interfaces, and a request, and is checked by property tests over
+every stored type tree of up to two wrappers. The route conformance check
+compares it with 46,956 cases extracted from the baseline in the runtime,
+static, and mixed containers, covering standard and user wrappers and bindings
+with one and two interfaces. Every difference is declared by one of 15 behavior
+changes:
 
 - borrowing is compositional: every reachable object is borrowed and every
-  copyable one copied, through any combination of layers
+  copyable one copied, through any combination of wrappers
 - borrowing never moves: no container serves an rvalue reference from a
   borrowing scope, which the mixed container did
 - consuming is compositional: the element of a consumed optional can be taken,
@@ -1157,14 +1160,14 @@ interfaces. Every difference is declared by one of 15 behavior changes:
   makes
 - eager registration checks: static and mixed containers reject a binding their
   scope cannot store when it is declared
-- shared_cyclical stores flat shapes: a nested sharing handle aborted on an
+- shared_cyclical stores flat type trees: a nested sharing handle aborted on an
   lvalue reference request
 - shared_cyclical stores no pointers: the stored pointer was null
 - shared_cyclical exposes no arrays: the policy exposed them, but no array
   binding compiled
-- user wrappers are layers: shared_cyclical rejected user sharing handles,
+- user wrappers are wrappers: shared_cyclical rejected user sharing handles,
   because only the standard handles have storage cells
-- interface bindings compose with layers: interfaces of a leaf held in an
+- interface bindings compose with wrappers: interfaces of a leaf held in an
   optional or an alternative are reached by borrowing
 - interface bindings serve an interface: a binding none of whose interfaces any
   request can reach is rejected instead of accepted and never found
@@ -1223,56 +1226,57 @@ with the primitives that need them in M2.3. The new implementation has its own
 header layers in `tools/layers.py`, and neither implementation includes the
 other.
 
-#### M2.3: Primitive Layer
+#### M2.3: Primitive Wrapper
 
 Status: in progress.
 
 Add the decision-free primitives: lifetime slots, factory invocation and
 constructor detection, conversion primitives, index structures, the arena, and
-the thunk shape. Add the layer rule to `layers-check`.
+the thunk signature. Add the layering rule to `layers-check`.
 
-Done when no primitive header refers to a scope, shape kind, rule, or
+Done when no primitive header refers to a scope, type tree kind, rule, or
 diagnostic.
 
-`primitives/type_tree.h` describes the shape of a C++ type as a constexpr
+`primitives/type_tree.h` describes the type tree of a C++ type as a constexpr
 preorder array of nodes, comparable in constant expressions, without knowing the
-layer kinds of the spec. `conversion/wrapper_traits.h`, a layer between the
-vocabulary and the engine, classifies C++ types into wrapper semantics:
-pointers, references, and arrays as language layers, and the standard wrappers
+wrapper semantics of the spec. `conversion/wrapper_traits.h`, a wrapper between
+the declarations and the engine, classifies C++ types into wrapper semantics:
+pointers, references, and arrays as language wrappers, and the standard wrappers
 through the same `wrapper_traits` a user wrapper specializes.
 `primitives/slot.h` holds the lazy and external lifetime slots; the lazy slot
 reports a recursion while its object is being constructed and is empty again
 after a failed construction. `primitives/constructor.h` detects the constructor
 of a type and calls it with arguments that resolve their parameter types, the
 `detected_constructor` factory kind of the spec, or by the constructor a type
-declares with `DINGO_CONSTRUCTOR`. Its detection is the shape mode of
+declares with `DINGO_CONSTRUCTOR`. Its detection is the arity mode of
 `primitives/constructor_detection.h`, which has a portable and an msvc backend,
 selected by the compiler variant `constructor_detection_msvc`, and a signature
 mode that recovers the argument types of the detected constructor.
 `conversion/construct.h` holds the other factory kinds: a declared constructor,
 which list-initializes the leaf from its declared argument types inside the
-layers of the stored shape, and a function or callable object, whose result is
-the stored object. A slot keeps the factory of its binding, empty unless it
-holds a callable object, and a declared factory lifts the check that the stored
-leaf is constructible. The containers construct an object no binding stores with
-`construct`. Remaining: conversion primitives, index structures, the arena, and
-the thunk shape.
+wrappers of the stored type tree, and a function or callable object, whose
+result is the stored object. A slot keeps the factory of its binding, empty
+unless it holds a callable object, and a declared factory lifts the check that
+the stored leaf is constructible. The containers construct an object no binding
+stores with `construct`. Remaining: conversion primitives, index structures, the
+arena, and the thunk signature.
 
-#### M2.4: Vocabulary And Descriptors
+#### M2.4: Declarations And Descriptors
 
 Status: in progress.
 
-Generate the vocabulary enums, the public tag types, the descriptor structs, and
-`descriptor_v`.
+Generate the declarations enums, the public tag types, the descriptor structs,
+and `descriptor_v`.
 
 `conversion/wrapper_semantics.gen.h`, `operations.gen.h`, `storage_forms.gen.h`,
 and `scopes.gen.h` hold the wrapper semantics with their traits, the value and
 request categories, the storage forms, the scope descriptors with their exposure
 tables, and the route rules as constexpr data, generated from the spec.
-`shape_v<T>` is the descriptor of a type. Remaining: the public tag types. Since
-M10.3, `operations.gen.h` holds the shape algebra, the value categories, the
-layer properties, and the operations, apart from the tables of the other
-sections, and `wrapper_semantics.gen.h` declares the kinds of the library.
+`type_tree_v<T>` is the descriptor of a type. Remaining: the public tag types.
+Since M10.3, `operations.gen.h` holds the conversion rules, the value
+categories, the wrapper properties, and the operations, apart from the tables of
+the other sections, and `wrapper_semantics.gen.h` declares the kinds of the
+library.
 
 #### M2.5: Walking Skeleton
 
@@ -1282,36 +1286,37 @@ Make `container<>` and `static_container` serve shared and external bindings end
 to end through the descriptors, the engine, and both backends, before the
 remaining primitives grow around them.
 
-`conversion/convert.h` walks the rules of a term on C++ objects, one operation
-per rule as the rule table describes it, through `wrapper_traits`. The static
-backend selects the binding and the term at compile time and walks it directly.
-The runtime backend publishes the terms of a binding at registration with a
-thunk per term, and a request selects with the same engine functions. A last
-copy, address-of, or decay of a borrowed object depends only on the requested
-type, so the runtime thunk returns the borrowed object and the request completes
-it, and a shared value is copied once in both backends. The API layer holds
-`dingo/container.h`, `dingo/static_container.h`, and the scope headers, with the
-registration vocabulary and the public exceptions, and the scope tags are
-generated from the spec. `dingo_next_test` exercises it through the public
-include paths. A shared binding constructs its object by the detected
-constructor, resolving each argument from the container through the backend that
-serves the request, and constructs the element of every layer in place.
+`conversion/convert.h` walks the rules of a reachable type on C++ objects, one
+operation per rule as the rule table describes it, through `wrapper_traits`. The
+static backend selects the binding and the reachable type at compile time and
+walks it directly. The runtime backend publishes the reachable types of a
+binding at registration with a thunk per reachable type, and a request selects
+with the same engine functions. A last copy, address-of, or decay of a borrowed
+object depends only on the requested type, so the runtime thunk returns the
+borrowed object and the request completes it, and a shared value is copied once
+in both backends. The public headers hold `dingo/container.h`,
+`dingo/static_container.h`, and the scope headers, with the registration
+declarations and the public exceptions, and the scope tags are generated from
+the spec. `dingo_next_test` exercises it through the public include paths. A
+shared binding constructs its object by the detected constructor, resolving each
+argument from the container through the backend that serves the request, and
+constructs the element of every wrapper in place.
 
 A unique binding constructs its object for every request, and the walk applies
-the consuming rules to it: it moves an element out of a layer, shares the
+the consuming rules to it: it moves an element out of a wrapper, shares the
 element of a sole-owner handle, and converts a consumed handle to the handle of
-an interface. The plan of a term divides it at its boundary. The binding walks
-the rules up to a last copy, address-of, or decay, or up to the first rule that
-creates a wrapper of any family, and the request applies the rest: it wraps into
-its optional or adopts into its handle. The binding upcasts the pointer it hands
-over when the request upcasts the handle it creates. A runtime container erases
-the binding at the boundary and receives the boundary object by value through a
-function of its type, which the request checks, so neither container moves an
-object the reference does not. A request of an rvalue reference to an object it
-constructs refers to an object the container keeps until it is destroyed, as the
-current implementation does. A shared binding keeps the handle of an interface
-converted from its stored handle in the conversion cache of its slot, so a
-request can refer to it.
+an interface. The plan of a reachable type divides it at its boundary. The
+binding walks the rules up to a last copy, address-of, or decay, or up to the
+first rule that creates a wrapper of any family, and the request applies the
+rest: it wraps into its optional or adopts into its handle. The binding upcasts
+the pointer it hands over when the request upcasts the handle it creates. A
+runtime container erases the binding at the boundary and receives the boundary
+object by value through a function of its type, which the request checks, so
+neither container moves an object the reference does not. A request of an rvalue
+reference to an object it constructs refers to an object the container keeps
+until it is destroyed, as the current implementation does. A shared binding
+keeps the handle of an interface converted from its stored handle in the
+conversion cache of its slot, so a request can refer to it.
 
 A shared_cyclical binding publishes its object before it constructs it: a plain
 leaf in its slot, and a sharing handle, a standard or a user one, as a handle
@@ -1347,7 +1352,7 @@ compile-time messages of the static container, which are fixed literals.
 
 Status: done.
 
-Generate the per-layer route table as `constexpr` data.
+Generate the per-wrapper route table as `constexpr` data.
 
 The route rules are part of `operations.gen.h`. A rule is a wrapper semantics
 and value category it starts from and a wrapper semantics and value category it
@@ -1361,14 +1366,15 @@ Status: done.
 
 Implement one descriptor-based request matcher, used by both backends.
 
-`conversion/route.h` registers a binding, finds and derives the terms it serves,
-and selects the term that serves a request, as constexpr functions over shapes.
-It is cross-tested against the reference implementation:
-`test/next/conversion_cases.py` generates 35,616 cases into the build tree, over
-every scope, a copyable, a move-only, and an implementation leaf with one and
-two interfaces, stored shapes of up to two layers in the standard and a user
-wrapper family, and every request kind, and `dingo_next_test` requires the
-engine to compute the same registration, lookup, service, and rules.
+`conversion/route.h` registers a binding, finds and derives the reachable types
+it serves, and selects the reachable type that serves a request, as constexpr
+functions over type trees. It is cross-tested against the reference
+implementation: `test/next/conversion_cases.py` generates 35,616 cases into the
+build tree, over every scope, a copyable, a move-only, and an implementation
+leaf with one and two interfaces, stored type trees of up to two wrappers in the
+standard and a user wrapper family, and every request kind, and
+`dingo_next_test` requires the engine to compute the same registration, lookup,
+service, and rules.
 
 #### M3.3: Storage Construct
 
@@ -1535,19 +1541,19 @@ reference implementation models the bound, and the selection extractor checks it
 with the bounded setting.
 
 A runtime backend memoizes every request type, by a process-wide id: the
-candidates of its domain, in the order of registration, each with the term that
-serves the request, valid until the next registration. A request by a key value
-indexes its candidates by the index structure of its domain when the key type
-has what it needs, a dense array of integral or enumeration keys, an ordered
-index of keys with `<`, an unordered one of hashable keys, and otherwise the
-first of them it has or a linear scan; a unit test compares every index with a
-linear scan. When the only source of a step that can name a binding is a runtime
-backend, the step is answered in one visit of its memo.
+candidates of its domain, in the order of registration, each with the reachable
+type that serves the request, valid until the next registration. A request by a
+key value indexes its candidates by the index structure of its domain when the
+key type has what it needs, a dense array of integral or enumeration keys, an
+ordered index of keys with `<`, an unordered one of hashable keys, and otherwise
+the first of them it has or a linear scan; a unit test compares every index with
+a linear scan. When the only source of a step that can name a binding is a
+runtime backend, the step is answered in one visit of its memo.
 
-A candidate of a stable binding, shared or external, keeps the address its term
-borrows once its slot is settled, so a resolution after the first makes no
-indirect call, and a failed construction keeps none; shared_cyclical is not
-stable, as a failed publication resets its slots. A lazy slot checks for the
+A candidate of a stable binding, shared or external, keeps the address its
+reachable type borrows once its slot is settled, so a resolution after the first
+makes no indirect call, and a failed construction keeps none; shared_cyclical is
+not stable, as a failed publication resets its slots. A lazy slot checks for the
 constructed object first, so a static resolution compares once.
 
 With the [resolution benchmarks](../development.md#resolution-benchmarks), on
@@ -1751,7 +1757,7 @@ only declared behavior changes, and the contract probes on every CI job.
 The generated matrix builds against the next implementation with
 `-DDINGO_IMPLEMENTATION=next`. Its sources include public headers only; the name
 of a type in a message comes from `test/matrix/common/type_name.h`, and the test
-wrappers of `test/support/custom_wrappers.h` are layers by
+wrappers of `test/support/custom_wrappers.h` are wrappers by
 `dingo::wrapper_traits` in the next implementation, as the behavior change
 `wrapper_extension_point` declares, and made by `make_test_wrapper`. A
 registration that declares only its stored type as its interface names the
@@ -1887,11 +1893,11 @@ of the user against a linear scan. Keyed lookups are faster for it, 3.6 ns for
 64 ordered keys and 1.0 ns for a dense array, still behind the 2.1 ns and 0.7 ns
 of the baseline.
 
-#### M10.3: Layer Kinds And Routes
+#### M10.3: Wrapper Semantics And Routes
 
 Status: done.
 
-The shape algebra is the only built-in: its rule forms, each executed by one
+The conversion rules is the only built-in: its rule forms, each executed by one
 operation of a wrapper's traits (reaching the element, taking it, wrapping it,
 adopting an owned pointer, sharing an owned handle, taking an address, decaying
 or releasing an array, and upcasting or keeping an interface handle); the rules
@@ -1904,36 +1910,36 @@ of a family. The kinds of the library, unique, shared, optional, variant, the
 arrays, the pointer, and the reference, are generated from the spec as such
 declarations, and `std::` and language types map onto them through
 `wrapper_traits` as a user type does. The engine knows no kind by name: a node
-of a shape holds the identity of its kind, its properties, and its forms, and
-the rules of a derivation are the forms of its kinds. A storage form is a
-classification of the properties of the outer layers, which a scope exposes
+of a type tree holds the identity of its kind, its properties, and its forms,
+and the rules of a derivation are the forms of its kinds. A storage form is a
+classification of the properties of the outer wrappers, which a scope exposes
 categories for. A derivation prefers, of two routes of as many rules, the one
-whose forms come first in the order of the algebra; it orders forms, not kinds,
-so of routes that differ only in their kinds the one derived first is preferred.
-Neither the route table nor the selection table observes the difference from the
-former order, which also ordered the kinds.
+whose forms come first in the order of the conversion rules; it orders forms,
+not kinds, so of routes that differ only in their kinds the one derived first is
+preferred. Neither the route table nor the selection table observes the
+difference from the former order, which also ordered the kinds.
 
-A form that creates a layer, wrapping or adopting, applies at the request: a
-binding cannot know every kind requested of it, so a request of a layer whose
-kind wraps or adopts resolves its element and makes the layer of it. A form that
-reaches into a layer or converts it applies at the binding.
+A form that creates a wrapper, wrapping or adopting, applies at the request: a
+binding cannot know every kind requested of it, so a request of a wrapper whose
+kind wraps or adopts resolves its element and makes the wrapper of it. A form
+that reaches into a wrapper or converts it applies at the binding.
 
-A request through a variadic layer is served by the alternative its object
-holds. A derivation keeps, beside the term of a value and category derived
-first, its siblings: routes to the same term that part from it at a step into a
-variadic layer, one per alternative, and are completed alike. A sibling is
-neither derived from nor selected; a walk of the term that reaches an object
-holding another alternative continues from that object along the sibling that
-takes it, so nothing is made twice, and a request fails with the diagnostic
-`alternative_not_held` only when no sibling takes the alternative held. The
-traits of a variadic kind tell which alternative an object holds. A runtime
-container walks such a route on every request, keeping no address borrowed
-through a variant. A binding without declared interfaces is named by the leaf of
-every alternative of a variadic layer of its stored shape, whichever its object
-holds, so a request of an alternative that is not held finds the binding and
-fails with `alternative_not_held` rather than not finding it. The reference
-implementation takes an object of a variadic layer to hold its first
-alternative, as the default factory makes it.
+A request through a variadic wrapper is served by the alternative its object
+holds. A derivation keeps, beside the reachable type of a value and category
+derived first, its siblings: routes to the same reachable type that part from it
+at a step into a variadic wrapper, one per alternative, and are completed alike.
+A sibling is neither derived from nor selected; a walk of the reachable type
+that reaches an object holding another alternative continues from that object
+along the sibling that takes it, so nothing is made twice, and a request fails
+with the diagnostic `alternative_not_held` only when no sibling takes the
+alternative held. The traits of a variadic kind tell which alternative an object
+holds. A runtime container walks such a route on every request, keeping no
+address borrowed through a variant. A binding without declared interfaces is
+named by the leaf of every alternative of a variadic wrapper of its stored type
+tree, whichever its object holds, so a request of an alternative that is not
+held finds the binding and fails with `alternative_not_held` rather than not
+finding it. The reference implementation takes an object of a variadic wrapper
+to hold its first alternative, as the default factory makes it.
 
 A form may rely on properties of the kinds that have it, which its template
 states and the spec and `wrapper_semantics` check: only an immovable array,
@@ -1949,18 +1955,19 @@ not share, an optional that does not wrap, or a sharing handle that is not
 copied. `test/routes/user_kinds.py` declares each once; the reference
 implementation derives its routes, and the C++ declaration is generated from it,
 over wrappers that provide every operation, so a route a kind does not allow is
-refused because of its declaration. A layer is copied as its kind declares, not
-as its C++ type is.
+refused because of its declaration. A wrapper is copied as its kind declares,
+not as its C++ type is.
 
 The steps are done. The public API records `dingo::wrapper_semantics`, and the
 user wrappers of the route probes are of kinds of the user in the next
 implementation, declared with the properties and forms of the kinds they stand
 in for, which the reference implementation derives the routes of as it does
 those of the library; the route table does not change. A binding derives its
-terms by the forms that do not create a layer, so it needs no kind but those of
-its stored shape and the ones their forms lead to. A request takes a term, or
-makes one by up to two layers of its own kinds, each by a creating form, from a
-term of the binding: the route of `[adopt_pointer_owned, upcast_owned]` became
+reachable types by the forms that do not create a wrapper, so it needs no kind
+but those of its stored type tree and the ones their forms lead to. A request
+takes a reachable type, or makes one by up to two wrappers of its own kinds,
+each by a creating form, from a reachable type of the binding: the route of
+`[adopt_pointer_owned, upcast_owned]` became
 `[upcast_consumed_pointer, adopt_pointer_owned]`, which no observation tells
 apart. Registration asks whether a binding serves an interface by reference or
 by value of a handle of any kind; the handles of the kinds of the binding and
@@ -1973,7 +1980,7 @@ Steps, each checked against the route table, which must not change:
    rules of a leaf, from which the reference implementation derives the table
 2. the engine takes kinds as identities and the rules from their forms; the
    kinds of the library, and the mapping of the `std::` and language types, are
-   generated through the public extension point, and the closed list of layer
+   generated through the public extension point, and the closed list of wrapper
    kinds and the global route table are gone
 3. the creating forms apply at the request
 4. the public API records the extension point, and the route extraction adds a
@@ -2066,8 +2073,8 @@ its bindings are known, which the selection rule asks at a declared step.
   source tree without git history.
 
 - 2026-10-19: Public API entries name operations and extension points
-  language-agnostically. Their include paths, names, and macros are C++
-  projection data, so the semantic sections contain no C++ text.
+  language-agnostically. Their include paths, names, and macros are C++ section
+  data, so the semantic sections contain no C++ text.
 
 - 2026-10-19: Development builds regenerate before compiling, controlled by
   `DINGO_GENERATE_ON_BUILD`. CI turns it off so that `check` verifies the
@@ -2082,13 +2089,14 @@ its bindings are known, which the selection rule asks at a declared step.
 
 - 2026-10-19: The scope descriptors and route rules of the spec describe the
   target semantics, not the baseline. Defects of the baseline found by the route
-  extraction, a reference to a destroyed object and two shared_cyclical shapes
-  that abort or publish a null pointer, are fixed in the new implementation and
-  declared as behavior changes. A borrowing scope never serves an rvalue
-  reference, and the minimal move count of any container is the contract.
+  extraction, a reference to a destroyed object and two shared_cyclical type
+  trees that abort or publish a null pointer, are fixed in the new
+  implementation and declared as behavior changes. A borrowing scope never
+  serves an rvalue reference, and the minimal move count of any container is the
+  contract.
 
 - 2026-10-19: Interfaces and user wrappers follow the same rules as the leaf and
-  the standard wrappers. A user wrapper is a layer of the kind its traits
+  the standard wrappers. A user wrapper is a wrapper of the kind its traits
   declare, in every scope. A binding with interfaces is found only by them and
   reaches them by conversion, with one interface as with several. A binding
   whose interfaces no request can reach is rejected.
@@ -2100,11 +2108,12 @@ its bindings are known, which the selection rule asks at a declared step.
   rule tables instead of code generated per rule. It makes no spec decision of
   its own, it is cross-tested against the reference implementation, which
   interprets the same rules independently, and it is far less code. A route
-  derives shapes at most one layer larger than the stored shape, and ties are
-  broken by the order of the rules in the spec, so a runtime binding publishes
-  the same terms before a request as a static one selects from.
+  derives type trees at most one wrapper larger than the stored type tree, and
+  ties are broken by the order of the rules in the spec, so a runtime binding
+  publishes the same reachable types before a request as a static one selects
+  from.
 
-- 2026-10-20: A wrapper becomes a layer through one public trait,
+- 2026-10-20: A wrapper becomes a wrapper through one public trait,
   `dingo::wrapper_traits`, with the wrapper semantics, the family, the element
   types, `rebind`, `element`, and `make`. The standard wrappers use it as a user
   wrapper does, and the storage traits and the interface rebinding trait leave
@@ -2112,13 +2121,13 @@ its bindings are known, which the selection rule asks at a declared step.
   declares with an `api:` pattern to be missing from the current implementation.
 
 - 2026-10-20: The unique scope constructs an object per request, and the plan of
-  a term divides it at its boundary between the binding and the request, the
-  same in both backends: a layer a rule creates from a leaf or a pointer is of
-  any family, so only the request names its wrapper type. An owning handle's
-  wrapper traits add `adopt`, and a sole-owner handle's `share`. A request of an
-  rvalue reference to an object it constructs refers to an object the container
-  keeps, and a binding keeps a converted interface handle in the conversion
-  cache of its slot.
+  a reachable type divides it at its boundary between the binding and the
+  request, the same in both backends: a wrapper a rule creates from a leaf or a
+  pointer is of any family, so only the request names its wrapper type. An
+  owning handle's wrapper traits add `adopt`, and a sole-owner handle's `share`.
+  A request of an rvalue reference to an object it constructs refers to an
+  object the container keeps, and a binding keeps a converted interface handle
+  in the conversion cache of its slot.
 
 - 2026-10-20: A static container takes the instance of every external binding as
   a constructor argument, in the order of the bindings.

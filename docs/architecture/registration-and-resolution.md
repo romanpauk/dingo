@@ -73,12 +73,12 @@ registrations at the same time.
 
 Registration may expose a type through one or more interfaces. The stored type
 is the type the registration names: a binding with one interface stores the same
-shape as one with several, and reaches each interface by the upcast forms of the
-routes. A binding without declared interfaces is named by the leaf of its stored
-shape, and through a variant by the leaf of each alternative.
+type tree as one with several, and reaches each interface by the upcast forms of
+the routes. A binding without declared interfaces is named by the leaf of its
+stored type tree, and through a variant by the leaf of each alternative.
 
 A registration is rejected when it is compiled when its scope does not store the
-form or the nested layers of its stored type, when its scope constructs the
+form or the nested wrappers of its stored type, when its scope constructs the
 object and the stored type has no default factory and the registration declares
 none, when it stores an array and declares interfaces, or when no interface it
 declares can be served from its stored type.
@@ -91,7 +91,7 @@ in [backend/selection.h](../../include/dingo/backend/selection.h). A key is a
 Dingo describes the request with
 `core::request_traits<Request, Key>::descriptor` of
 [conversion/request.h](../../include/dingo/conversion/request.h): its kind,
-value, lvalue reference, or rvalue reference; its shape, whose leaf is the
+value, lvalue reference, or rvalue reference; its type tree, whose leaf is the
 interface it names, annotated when the request is; and its key.
 
 The sequence is:
@@ -101,14 +101,15 @@ The sequence is:
 2. A source counts the bindings the request names: the bindings that serve its
    interface with a key of the same domain and value.
 3. The first step that names a binding answers the request.
-4. The source that holds the binding selects the term that serves the request,
-   the route from its stored shape to the requested shape, and walks it.
+4. The source that holds the binding selects the reachable type that serves the
+   request, the route from its stored type tree to the requested type tree, and
+   walks it.
 
 A static source decides all of it when the request is compiled. A runtime source
 keeps the memo of the request type: the candidates of its domain in the order of
-registration, each with the term that serves the request, valid until the next
-registration. A request by a key value searches the memo by the index of its
-domain.
+registration, each with the reachable type that serves the request, valid until
+the next registration. A request by a key value searches the memo by the index
+of its domain.
 
 ### Selection
 
@@ -161,14 +162,15 @@ keeps:
 - the objects the cached rules of its routes derive, such as a sharing handle of
   an interface converted from the stored handle, so a request can refer to them
 
-A runtime binding is an entry of the runtime backend with the terms of its
-binding type and a thunk per term. A request calls the thunk of its term, which
-walks the term to its boundary over the object of the slot, and completes it.
-Once the slot of a stable binding, shared or external, is settled, the memo
-keeps the address the term borrows, so a later resolution makes no call.
+A runtime binding is an entry of the runtime backend with the reachable types of
+its binding type and a thunk per reachable type. A request calls the thunk of
+its reachable type, which walks the reachable type to its boundary over the
+object of the slot, and completes it. Once the slot of a stable binding, shared
+or external, is settled, the memo keeps the address the reachable type borrows,
+so a later resolution makes no call.
 
 The static path uses the same binding type and routes, but it walks the selected
-term directly.
+reachable type directly.
 
 ## Registration Child Bindings
 

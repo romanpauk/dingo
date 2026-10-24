@@ -289,7 +289,7 @@ This file includes old internal headers
 `dingo/factory/detail/constructor_detection_msvc.hpp`). In next, constructor
 detection lives in `include/dingo/primitives/constructor.h` and
 `constructor_detection.h`, with the backends portable and msvc, selected by the
-compiler variant `constructor_detection_msvc`, and the modes shape and
+compiler variant `constructor_detection_msvc`, and the modes arity and
 signature.
 
 - (file-scope `static_assert`s, not a TEST): scalar arity 0, cv-qualified scalar
@@ -328,8 +328,8 @@ signature.
 - `constructor_detection_test.public_detection_defaults_to_shape`: the public
   `constructor_detection<T>` is the `constructor_arity` detection mode.
   **replaced**: `test/next/primitives/constructor.cpp`
-  `next_constructor.the_signature_mode_recovers_the_argument_types` (the shape
-  mode reports no argument types) and
+  `next_constructor.the_signature_mode_recovers_the_argument_types` (the type
+  tree mode reports no argument types) and
   `next_constructor.the_engine_detects_by_the_selected_backend`; tests
   `primitives/constructor_detection.h`.
 - `constructor_detection_test.auto_construction_uses_public_selection`: an
@@ -364,7 +364,8 @@ signature.
   `construct<optional<variant>, constructor<A>>`, doubly nested optional and
   `variant*` build the named alternative. **ported**:
   `test/next/containers/construct.cpp`
-  `next_construct.constructs_a_named_alternative_inside_layers` (body unchanged)
+  `next_construct.constructs_a_named_alternative_inside_wrappers` (body
+  unchanged)
 - `constructor_detection_test.ordinary_wrapper_construction_remains_in_place`:
   `optional<immovable>` is constructed in place (old
   `detail::construction_dispatch`) **ported**:
@@ -1041,7 +1042,7 @@ obsolete.
 - (file-scope static_asserts) `dingo::is_copy_constructible_v` of wrappers and
   std containers: shared and optional copy; unique, vector<unique>, map\<int,
   unique_ptr> do not. **replaced**: static_asserts on
-  `shape_v<...>.nodes[0].copyable` for shared_ptr, unique_ptr, optional,
+  `type_tree_v<...>.nodes[0].copyable` for shared_ptr, unique_ptr, optional,
   optional\<unique_ptr>, user shared/unique wrappers, and optional of each. The
   vector and map cases are not carried over: next treats a std container as a
   leaf and asks `std::is_copy_constructible_v`, which is true for them, while a
@@ -1085,8 +1086,8 @@ are not observed through the public API of the baseline and are recorded only:
 - `type_registration_test.runtime_local_bindings_declare_the_registration_container`:
   a registration with `bindings<...>` resolves its dependencies from its local
   static bindings (and the proxy and container types it gets) **ported**:
-  `test/next/containers/stored_shapes.cpp`
-  `next_stored_shapes.local_static_bindings_resolve_the_dependencies_of_their_registration`.
+  `test/next/containers/stored_type_trees.cpp`
+  `next_stored_type_trees.local_static_bindings_resolve_the_dependencies_of_their_registration`.
   The type-level part is replaced by `test/next/conversion/registration.cpp`
   `next_engine.local_bindings_are_binding_types_of_the_registration`, which
   tests `dingo/registration.h` (`binding::locals`)
@@ -1103,21 +1104,21 @@ are not observed through the public API of the baseline and are recorded only:
   binding and volatile variant),
   `next_engine.an_array_of_arrays_serves_its_rows_and_itself`; these test
   `conversion/route.h` and `request.h`. Also
-  `test/next/containers/stored_shapes.cpp`
-  `next_stored_shapes.volatile_storage_keeps_the_volatile_qualifier`. Not
+  `test/next/containers/stored_type_trees.cpp`
+  `next_stored_type_trees.volatile_storage_keeps_the_volatile_qualifier`. Not
   carried over: the user types described through the old `dingo::type_traits`
   (replaced by `wrapper_extension_point`), `void*` from a variant lvalue and the
-  address conversion (next has no `void*` request shape), and `array_base(*)[2]`
-  from `array_derived*` (an array is never upcast; the nearest refusal is the
-  `interface_in_array` status)
+  address conversion (next has no `void*` request type tree), and
+  `array_base(*)[2]` from `array_derived*` (an array is never upcast; the
+  nearest refusal is the `interface_in_array` status)
 - `type_registration_test.inferred_borrowed_conversion_uses_const_source`: a
   borrowed conversion by converting constructor uses the const source and leaves
   it intact. **replaced**: `test/next/conversion/routes.cpp`
   `next_engine.a_borrowed_conversion_leaves_its_source`
   (`conversion/type_conversion.h` `convert_to`);
-  `test/next/containers/stored_shapes.cpp`
-  `next_stored_shapes.a_borrowed_user_handle_converts_from_a_const_source` (the
-  `keep_step` of `conversion/convert.h` converts `std::as_const`)
+  `test/next/containers/stored_type_trees.cpp`
+  `next_stored_type_trees.a_borrowed_user_handle_converts_from_a_const_source`
+  (the `keep_step` of `conversion/convert.h` converts `std::as_const`)
 - `type_registration_test.same_type_custom_conversion_is_preserved`: a declared
   conversion whose target is its source type is used, not the identity.
   **replaced**: `test/next/conversion/routes.cpp`
@@ -1127,17 +1128,17 @@ are not observed through the public API of the baseline and are recorded only:
   converting an optional of an owner to an optional of a copy borrows the
   contained value as const. **replaced**: the const-source property:
   `next_engine.a_borrowed_conversion_leaves_its_source` and
-  `next_stored_shapes.a_borrowed_user_handle_converts_from_a_const_source`. The
-  conversion of the element of an optional is changed:
+  `next_stored_type_trees.a_borrowed_user_handle_converts_from_a_const_source`.
+  The conversion of the element of an optional is changed:
   `optional_elements_are_not_converted`, tested by
-  `next_stored_shapes.a_pointer_to_an_optional_serves_no_optional_of_its_interface`.
+  `next_stored_type_trees.a_pointer_to_an_optional_serves_no_optional_of_its_interface`.
 - `type_registration_test.inferred_mutable_lvalue_conversion_consumes_source`: a
   consuming conversion takes the source's resource. **replaced**:
   `test/next/conversion/routes.cpp`
   `next_engine.a_borrowed_conversion_leaves_its_source` (consumed half:
   `convert_to` of an rvalue moves the source out);
-  `test/next/containers/stored_shapes.cpp`
-  `next_stored_shapes.a_consumed_user_handle_converts_by_its_traits`. Next
+  `test/next/containers/stored_type_trees.cpp`
+  `next_stored_type_trees.a_consumed_user_handle_converts_by_its_traits`. Next
   passes a consumed source as an rvalue, not as a mutable lvalue.
 - `type_registration_test.borrowed_custom_conversion_executes_non_owning_result`:
   a declared borrowing conversion that returns an alternative type builds the
@@ -1148,103 +1149,104 @@ are not observed through the public API of the baseline and are recorded only:
 - `type_registration_test.borrowed_storage_publishes_fresh_move_only_conversion_results`:
   external `move_source*` with interfaces serves a move-only interface by value
   through the declared conversion. **ported**:
-  `test/next/containers/stored_shapes.cpp`
-  `next_stored_shapes.a_borrowed_leaf_converts_to_a_new_interface_value`.
+  `test/next/containers/stored_type_trees.cpp`
+  `next_stored_type_trees.a_borrowed_leaf_converts_to_a_new_interface_value`.
 - `type_registration_test.borrowed_storage_publishes_copyable_custom_value_conversion`:
   a declared conversion to a copyable interface is selected over a copy.
-  **ported**: `test/next/containers/stored_shapes.cpp`
-  `next_stored_shapes.a_borrowed_leaf_converts_to_a_new_interface_value`
+  **ported**: `test/next/containers/stored_type_trees.cpp`
+  `next_stored_type_trees.a_borrowed_leaf_converts_to_a_new_interface_value`
   (`copy_target` gets 47 from the conversion, not 23 from a copy)
 - `type_registration_test.consumed_binding_executes_custom_type_conversion`: a
   unique user handle converts to the handle of its interface by its conversion
-  traits. **ported**: `test/next/containers/stored_shapes.cpp`
-  `next_stored_shapes.a_consumed_user_handle_converts_by_its_traits`.
+  traits. **ported**: `test/next/containers/stored_type_trees.cpp`
+  `next_stored_type_trees.a_consumed_user_handle_converts_by_its_traits`.
 - `type_registration_test.binding_model_rewrites_single_interface_storage_leaf`:
   with one interface the stored `shared_ptr<A>` is rebound to `shared_ptr<I>`.
   **changed**: `interfaces_do_not_rebind_storage`;
   `test/next/conversion/routes.cpp`
-  `next_engine.interfaces_do_not_rebind_the_stored_shape`.
+  `next_engine.interfaces_do_not_rebind_the_stored_type_tree`.
 - `type_registration_test.binding_model_preserves_storage_for_multi_interface_registration`:
   with several interfaces the storage is kept and the binding serves each
   interface. **replaced**: `test/next/conversion/routes.cpp`
-  `next_engine.interfaces_do_not_rebind_the_stored_shape` (part `two`: one
+  `next_engine.interfaces_do_not_rebind_the_stored_type_tree` (part `two`: one
   descriptor serves `I` and `J`, not `A`); tests `conversion/route.h` and
   `dingo/registration.h`.
 - `type_registration_test.recursive_leaf_and_rebind_traits`: leaf and rebind
   traits, request lookup types, qualification matching of requests, and the
-  values, references, and pointers each stored shape publishes. **replaced**:
-  `test/next/conversion/routes.cpp`:
+  values, references, and pointers each stored type tree publishes.
+  **replaced**: `test/next/conversion/routes.cpp`:
   `next_engine.a_pointer_serves_the_object_it_points_to_and_its_copy`,
   `next_engine.a_move_only_object_is_never_copied`,
   `next_engine.a_consumed_object_is_moved_wrapped_or_adopted`,
   `next_engine.a_borrowing_scope_does_not_move_its_object`,
-  `next_engine.a_layer_of_the_requested_type_is_not_wrapped_again`,
+  `next_engine.a_wrapper_of_the_requested_type_is_not_wrapped_again`,
   `next_engine.a_request_adds_qualifiers_only_below_const_levels`
   (`core::qualifies`, the replacement for `is_resolution_request_v` and
   `matches_qualification_conversion`),
-  `next_engine.a_request_names_the_leaf_through_its_layers` (`request_traits`,
+  `next_engine.a_request_names_the_leaf_through_its_wrappers` (`request_traits`,
   `leaf_of_t`), and `next_engine.a_conversion_needs_the_access_it_declares`
   (unique_ptr deleter). The incompatible-deleter interface binding is changed
   under `interface_bindings_serve_an_interface`, tested by
   `next_engine.a_handle_that_converts_to_no_interface_is_rejected`. The
   `rebind_leaf_t`/`rebind_type_t` asserts are changed under
   `interfaces_do_not_rebind_storage`. The `const A*` interface part is
-  `next_stored_shapes.a_handle_of_a_const_object_serves_only_const_interfaces`;
+  `next_stored_type_trees.a_handle_of_a_const_object_serves_only_const_interfaces`;
   the `optional<I>` part is changed under `optional_elements_are_not_converted`
-  (`next_stored_shapes.a_pointer_to_an_optional_serves_no_optional_of_its_interface`).
+  (`next_stored_type_trees.a_pointer_to_an_optional_serves_no_optional_of_its_interface`).
   The parts using `fresh_value_storage`, a test-only storage of the old binding
   model, are obsolete.
 - `type_registration_test.nested_raw_pointer_storage_resolves_exact_request_shapes`:
   pointer storage (`optional<T>*`, `const array*`, `shared_ptr*`, move-only,
-  null, shared, unique) serves the exact request shapes, and an
+  null, shared, unique) serves the exact request type trees, and an
   `optional<impl>*` serves `optional<interface>`. **ported**:
-  `test/next/containers/stored_shapes.cpp`:
-  `next_stored_shapes.a_pointer_to_a_layer_serves_the_layer_and_a_copy`,
+  `test/next/containers/stored_type_trees.cpp`:
+  `next_stored_type_trees.a_pointer_to_a_wrapper_serves_the_wrapper_and_a_copy`,
   `.a_pointer_to_a_move_only_object_serves_no_copy`,
   `.a_null_external_pointer_is_served_as_null`,
-  `.a_shared_pointer_to_a_const_layer_is_one_object`,
-  `.a_unique_pointer_to_a_layer_is_adopted_by_handles`,
+  `.a_shared_pointer_to_a_const_wrapper_is_one_object`,
+  `.a_unique_pointer_to_a_wrapper_is_adopted_by_handles`,
   `.a_pointer_to_an_optional_serves_its_interfaces`. The `optional<interface>`
   part is changed: `optional_elements_are_not_converted`, tested by
-  `next_stored_shapes.a_pointer_to_an_optional_serves_no_optional_of_its_interface`.
+  `next_stored_type_trees.a_pointer_to_an_optional_serves_no_optional_of_its_interface`.
 - `type_registration_test.const_reference_storage_preserves_const_access`:
   `const T&`, `const optional&`, a const user optional, and nested
   optional/variant storage serve only const access, and an empty optional serves
-  a null pointer. **ported**: `test/next/containers/stored_shapes.cpp`
-  `next_stored_shapes.const_storage_serves_only_const_access` and
-  `.const_nested_layers_serve_only_const_access`; with `interfaces<int>`,
-  `next_stored_shapes.a_handle_of_a_const_object_serves_only_const_interfaces`;
+  a null pointer. **ported**: `test/next/containers/stored_type_trees.cpp`
+  `next_stored_type_trees.const_storage_serves_only_const_access` and
+  `.const_nested_wrappers_serve_only_const_access`; with `interfaces<int>`,
+  `next_stored_type_trees.a_handle_of_a_const_object_serves_only_const_interfaces`;
   `test/next/conversion/routes.cpp`
   `next_engine.a_qualified_object_is_served_with_its_qualifiers`. The empty
-  optional: `next_stored_shapes.the_element_of_an_empty_optional_is_null` (its
-  element is a null address; a reference or a value of it is refused with
+  optional: `next_stored_type_trees.the_element_of_an_empty_optional_is_null`
+  (its element is a null address; a reference or a value of it is refused with
   element_not_held, behavior change `empty_elements_are_refused`)
 - `type_registration_test.const_external_smart_pointer_storage_preserves_const_access`:
   a const `shared_ptr`/`unique_ptr` to a const object serves only const borrows,
   also through an interface. **ported**:
-  `test/next/containers/stored_shapes.cpp`
-  `next_stored_shapes.a_handle_of_a_const_object_serves_only_const_access`;
+  `test/next/containers/stored_type_trees.cpp`
+  `next_stored_type_trees.a_handle_of_a_const_object_serves_only_const_access`;
   through an interface,
-  `next_stored_shapes.a_handle_of_a_const_object_serves_only_const_interfaces`.
+  `next_stored_type_trees.a_handle_of_a_const_object_serves_only_const_interfaces`.
 - `type_registration_test.const_alternative_storage_only_publishes_const_borrows`:
   a const variant serves only const borrows of its alternative. **ported**:
-  `test/next/containers/stored_shapes.cpp`
-  `next_stored_shapes.a_const_alternative_serves_only_const_access`; with
+  `test/next/containers/stored_type_trees.cpp`
+  `next_stored_type_trees.a_const_alternative_serves_only_const_access`; with
   `interfaces<int>`,
-  `next_stored_shapes.a_handle_of_a_const_object_serves_only_const_interfaces`;
+  `next_stored_type_trees.a_handle_of_a_const_object_serves_only_const_interfaces`;
   `test/next/conversion/routes.cpp`
   `next_engine.a_qualified_object_is_served_with_its_qualifiers`.
 - `type_registration_test.multidimensional_array_storage_preserves_exact_and_row_shapes`:
   `int[2][3]` serves `int(&)[2][3]`, row and whole pointers with added cv
-  qualifiers, and no value. **ported**: `test/next/containers/stored_shapes.cpp`
-  `next_stored_shapes.an_array_of_arrays_serves_its_rows_and_itself`;
+  qualifiers, and no value. **ported**:
+  `test/next/containers/stored_type_trees.cpp`
+  `next_stored_type_trees.an_array_of_arrays_serves_its_rows_and_itself`;
   `test/next/conversion/routes.cpp`
   `next_engine.an_array_of_arrays_serves_its_rows_and_itself`.
 - `type_registration_test.normalized_type_trait`: the normalized (lookup) type
   of a request through cv, references, pointers, handles, arrays, and
   annotations, and which requests may escape. **replaced**:
   `test/next/conversion/routes.cpp`
-  `next_engine.a_request_names_the_leaf_through_its_layers`; tests
+  `next_engine.a_request_names_the_leaf_through_its_wrappers`; tests
   `conversion/request.h` (`request_traits::descriptor`, `kind`, `made_type`) and
   `conversion/wrapper_traits.h` (`leaf_of_t`). `request_may_escape_v` is
   replaced by `request_kind`: an lvalue reference refers to a kept object. The
@@ -1281,7 +1283,7 @@ are not observed through the public API of the baseline and are recorded only:
   `test/next/conversion/registration.cpp`
   `next_engine.a_registration_without_interfaces_is_named_by_its_stored_leaf`.
   The conversions part is obsolete: next derives the served requests from the
-  stored shape and the scope descriptor (`conversion/route.h`), as the
+  stored type tree and the scope descriptor (`conversion/route.h`), as the
   `test/next/conversion/routes.cpp` cases check.
 - `type_registration_test.registration_dependencies_default_from_factory_traits`:
   a registration's dependencies default to the declared constructor, the
@@ -1321,7 +1323,7 @@ are not observed through the public API of the baseline and are recorded only:
   **changed**: `interfaces_do_not_rebind_storage` (and
   `wrapper_extension_point`, which removes `is_interface_storage_rebindable_v`
   from the public API); `test/next/conversion/routes.cpp`
-  `next_engine.interfaces_do_not_rebind_the_stored_shape` (the nested
+  `next_engine.interfaces_do_not_rebind_the_stored_type_tree` (the nested
   `shared_ptr<unique_ptr<A>>` keeps its type) and
   `next_engine.a_binding_keeps_objects_only_for_its_cached_routes`
   (`no_kept_objects` is empty and trivially destructible, which replaces the
@@ -1348,14 +1350,14 @@ ported retention tests declare their dependencies, as the old ones did.
   one derivation (`conversion/route.h` `derive`/`select_route`) and nothing to
   merge. Which requests each binding serves is checked against the reference by
   `engine.computes_what_the_reference_computes` (every scope x leaf/interfaces x
-  stored shape of up to two layers x request: found, served, rules) and by the
-  route table (`conform.py --exact` over `routes:*/...`)
+  stored type tree of up to two wrappers x request: found, served, rules) and by
+  the route table (`conform.py --exact` over `routes:*/...`)
 - `object_routes_test.bindings_accept_the_same_erased_requests`: type-erased
   request matching gives the same answer for merged and separate routes, over
   220 request variants per binding. **obsolete**: Same reason as above: next has
   no separate route lists to compare. The type-erased side is the runtime
-  backend's memo of the derived terms (`backend/memo.h`). Its found/served
-  decisions equal the reference's in
+  backend's memo of the derived reachable types (`backend/memo.h`). Its
+  found/served decisions equal the reference's in
   `engine.computes_what_the_reference_computes`.
 - `object_routes_test.a_pointer_route_serves_the_reference_of_its_object`: a
   shared leaf serves `&`, `const &`, `*`, `const *`, value and const value, but
@@ -1795,7 +1797,7 @@ none can be kept. The file does not compile against next.
   `next_static_graph.a_cycle_through_a_binding_that_is_not_shared_cyclical_is_found`
   (path 1->0->1, starting at the shared binding); tests
   `backend/static_backend.h`. Rejecting the container with that exact binding
-  shape: lit `test/lit/static-container-rejects-a-declared-cycle.cpp`.
+  type tree: lit `test/lit/static-container-rejects-a-declared-cycle.cpp`.
 - `static_graph_test.partial_analysis_detects_static_cycles_even_with_runtime_dependencies`:
   a dependency with no static binding (one that runtime registrations could
   answer) does not hide a static cycle. **replaced**:
@@ -2157,7 +2159,7 @@ follows the default declaration, which is the new behavior of both.
   with `interfaces<float>` is rejected. **covered**: `gen:interface_in_array`:
   an array storage with a declared interface. Next rejects the old program with
   interface_in_array.
-- `registration-array-requires-matching-shape.cpp`: `storage<int[2]>` with
+- `registration-array-requires-matching-type tree.cpp`: `storage<int[2]>` with
   `interfaces<int[3]>` is rejected. **covered**: `gen:interface_in_array`. Next
   rejects the old program with interface_in_array.
 - `registration-function-interface-is-rejected.cpp`: `interfaces<int()>` is
@@ -2369,15 +2371,15 @@ which a differential build of the baseline defines, as M9.2 describes:
   regression and parent-container scenarios on the containers each applies to.
   **kept** with next as implementation.
 - `constructor_detection` family: crosses the detection backends (portable,
-  msvc) and modes (shape, signature) with constructor shapes, and argument
+  msvc) and modes (arity, signature) with constructor type_trees, and argument
   storages with conversion categories. **kept**, against the detection of the
   next implementation (`primitives/constructor_detection.h`, the backends
   `portable_constructor_detection` and `msvc_constructor_detection`, the modes
   `constructor_arity` and `constructor_signature`): the same axes, the selected
-  shapes spelled by `dingo::dependency<T, key_type<S>>`, and each storage and
-  conversion category checked by the request `core::constructor_argument` makes
-  through `core::invoke_constructor`. It names the core detection, which the
-  baseline lacks, so the differential tests exclude it.
+  type trees spelled by `dingo::dependency<T, key_type<S>>`, and each storage
+  and conversion category checked by the request `core::constructor_argument`
+  makes through `core::invoke_constructor`. It names the core detection, which
+  the baseline lacks, so the differential tests exclude it.
 - `dependency_composition_resolve`, `dependency_composition_invoke` (four
   executables each): resolves and invokes recursive dependency type compositions
   across registration modes and scopes. **kept** with next as implementation.
@@ -2448,7 +2450,7 @@ which a differential build of the baseline defines, as M9.2 describes:
 ### Tools that probe the current implementation
 
 - `test/routes/extract.py`: records, for every domain, leaf kind, scope, stored
-  shape, and request, what the library does. **changed**: the next
+  type tree, and request, what the library does. **changed**: the next
   implementation by default; `--implementation baseline` with the
   `--include-dir` of the baseline extracts the table of the baseline.
 - `test/routes/conform.py`: compares a route table with the reference
@@ -2460,8 +2462,9 @@ which a differential build of the baseline defines, as M9.2 describes:
   by a `messages:` case. **changed**: compares against the table of the
   baseline.
 - `test/routes/summarize.py`, `test/routes/witness.py`: summarize the
-  differences between the domains of a table; run the witnesses of the algebra
-  against the next implementation. **kept** with next as implementation.
+  differences between the domains of a table; run the witnesses of the
+  conversion rules against the next implementation. **kept** with next as
+  implementation.
 - `test/selection/extract.py`, `test/selection/conform.py`: record how the
   library selects bindings by key, and compare it with
   `spec/reference/selection.py`. **changed**: the next implementation by
