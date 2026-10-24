@@ -17,6 +17,11 @@ reported.
     normal_form.py --thunks        the thunks a binding has for each reachable
                                    type, and one for each type tree node and
                                    each interface or none, for typical bindings
+    normal_form.py --matcher       route_for, which walks only the routes of the
+                                   form from the request and keeps none, beside
+                                   resolve, which derives the closure of all the
+                                   reachable types; with --user-kinds as above,
+                                   and with requests that create three wrappers
 
 It reads and prints, and changes nothing.
 """
@@ -39,6 +44,7 @@ from spec.reference.routes import (  # noqa: E402
     derive,
     leaf,
     resolve,
+    route_for,
     wrapper,
 )
 
@@ -153,6 +159,70 @@ def classify(model, stored_trees, request_trees, label):
               f"request {request.wrapper or request.leaf.name}<...>")
 
 
+def compare(model, stored_trees, request_trees, label):
+    """route_for against resolve, over the requests that find a binding."""
+    compared = served = 0
+    different = []
+    closure = {}
+    visited = {}
+    for scope in cases.SCOPES:
+        for value, interfaces in cases.BINDING_LEAVES:
+            for stored in stored_trees(value):
+                binding = (scope, stored, interfaces)
+                for request in request_trees(stored, interfaces):
+                    for kind in cases.KINDS:
+                        if not cases.valid_request(request, kind):
+                            continue
+                        outcome = resolve(model, scope, stored, Request(kind, request), interfaces)
+                        if not outcome.registered or not outcome.found:
+                            continue
+                        rules, reason, routes = route_for(model, scope, stored, Request(kind, request), interfaces)
+                        visited[binding] = routes
+                        compared += 1
+                        served += outcome.served
+                        expected = (outcome.rules if outcome.served else None, "" if outcome.served else outcome.reason)
+                        if (rules, reason) != expected:
+                            different.append((scope, stored, request, kind, expected, (rules, reason)))
+                if binding in visited:
+                    closure[binding] = len(derive(model, scope, stored, interfaces, derivation_bound(stored)))
+    print(f"== {label}: {compared} requests that find a binding, {served} served")
+    print(f"   {len(different)} differ between route_for and resolve")
+    if closure:
+        walked = sum(visited[b] for b in closure)
+        derived = sum(closure.values())
+        print(f"   routes walked by route_for, {walked}, against reachable types derived, {derived},"
+              f" over {len(closure)} bindings")
+    for scope, stored, request, kind, expected, found in different[:10]:
+        print(f"   differ: {scope}, stored {stored.wrapper or stored.leaf.name}<...>, "
+              f"request {request.wrapper or request.leaf.name}<...> {kind}")
+        print(f"      resolve   {expected}")
+        print(f"      route_for {found}")
+
+
+def deep(singles):
+    """Stored type trees of at most one wrapper, and requests of three wrappers,
+    which a request could not create while it was limited to two."""
+
+    def stored_trees(value):
+        base = leaf(value)
+        yield base
+        for semantics, family in singles:
+            yield wrapper(semantics, base, family=family)
+
+    def request_trees(stored, interfaces):
+        value = list(cases.chain(stored))[-1]
+        trees = []
+        for target in [value, *[leaf(interface) for interface in interfaces]]:
+            for first, second, third in __import__("itertools").product(singles + [("ptr", None)], repeat=3):
+                trees.append(
+                    wrapper(first[0], wrapper(second[0], wrapper(third[0], target, family=third[1]), family=second[1]),
+                            family=first[1])
+                )
+        return trees
+
+    return stored_trees, request_trees
+
+
 def split(kinds):
     singles, variadics, arrays = [], [], []
     for kind in kinds:
@@ -196,6 +266,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--user-kinds", action="store_true")
     parser.add_argument("--thunks", action="store_true")
+    parser.add_argument("--matcher", action="store_true")
     arguments = parser.parse_args()
     loaded = spec.load_spec()
     singles = [(semantics, family) for semantics in cases.WRAPPERS for family in cases.FAMILIES]
@@ -203,7 +274,13 @@ def main():
         thunks(Model(loaded))
         return 0
     stored_trees, request_trees = universe(singles)
-    classify(Model(loaded), stored_trees, request_trees, "the wrappers of the library")
+    if arguments.matcher:
+        compare(Model(loaded), stored_trees, request_trees, "the wrappers of the library")
+        compare(Model(loaded), *deep([(w, "std") for w in cases.WRAPPERS]), "requests that create three wrappers")
+        if not arguments.user_kinds:
+            return 0
+    else:
+        classify(Model(loaded), stored_trees, request_trees, "the wrappers of the library")
     if arguments.user_kinds:
         from user_kinds import user_kinds
 
@@ -213,8 +290,11 @@ def main():
         print("variadic:", ", ".join(name for name, _ in variadics),
               "  arrays:", ", ".join(name for name, _ in arrays))
         stored_trees, request_trees = universe(singles + users, variadics, arrays)
-        classify(Model(loaded, kinds=kinds), stored_trees, request_trees,
-                 "the wrappers of the library and of the user, with the mutations")
+        label = "the wrappers of the library and of the user, with the mutations"
+        if arguments.matcher:
+            compare(Model(loaded, kinds=kinds), stored_trees, request_trees, label)
+        else:
+            classify(Model(loaded, kinds=kinds), stored_trees, request_trees, label)
     return 0
 
 

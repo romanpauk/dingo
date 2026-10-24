@@ -626,15 +626,12 @@ def derivation_bound(stored: TypeTree) -> int:
     return stored.size() + 1
 
 
-# The wrappers a request creates at most, each by a creating form of its kind.
-MAX_CREATED_WRAPPERS = 2
-
-
-def created(model: "Model", scope, reachable_types, goal: TypeTree, exposed: set, bound: int, depth: int):
+def created(model: "Model", scope, reachable_types, goal: TypeTree, exposed: set, bound: int):
     """The reachable types a request of the type tree `goal` creates from the reachable types of a
     binding, by the creating forms of the kind of its outer wrapper, and of the
-    wrappers it creates under it."""
-    if goal.wrapper is None or depth == 0 or not goal.args:
+    wrappers it creates under it, as many as the request has: each is made from
+    the argument of the wrapper above it, so the recursion ends at the leaf."""
+    if goal.wrapper is None or not goal.args:
         return []
     results = []
     for rule in model.rules:
@@ -645,7 +642,7 @@ def created(model: "Model", scope, reachable_types, goal: TypeTree, exposed: set
         # The element the form creates the wrapper of, as the request names it,
         # which a binding reachable type or a wrapper the request creates under it is.
         inner_goal = instantiate(model, rule.from_type_tree, {"X": goal.args[0], "A": goal.args[0]}, None)
-        sources = [*reachable_types, *created(model, scope, reachable_types, inner_goal, exposed, bound, depth - 1)]
+        sources = [*reachable_types, *created(model, scope, reachable_types, inner_goal, exposed, bound)]
         for reachable_type in sources:
             if rule.from_type_tree.category not in (None, reachable_type.category):
                 continue
@@ -685,7 +682,7 @@ def serve(model: "Model", scope_id, stored, request, interfaces) -> Derivation |
     bound = derivation_bound(stored)
     reachable_types = derive(model, scope_id, stored, interfaces, bound)
     scope = model.scopes[scope_id]
-    made = created(model, scope, reachable_types, request.type_tree, exposed, bound, MAX_CREATED_WRAPPERS)
+    made = created(model, scope, reachable_types, request.type_tree, exposed, bound)
     candidates = [reachable_type for reachable_type in (*reachable_types, *made) if accepts(model, request, reachable_type, exposed)]
     if not candidates:
         return None
@@ -701,6 +698,127 @@ def serve(model: "Model", scope_id, stored, request, interfaces) -> Derivation |
         candidates,
         key=lambda t: (len(t.rules), t.copied is not None, [order[r] for r in t.rules]),
     )
+
+
+# A route from the request
+#
+# The routes a binding serves are found above by deriving the closure of all its
+# reachable types and choosing among them. A route has a form that makes the
+# closure unnecessary: peel the outer wrappers of the stored type tree, share a
+# handle, apply the rule of a leaf and the upcast in either order, share a
+# handle, and create the wrappers the request names. `route_for` walks only the
+# routes of that form, from the stored type tree, and keeps none of them.
+
+PEEL = {Operation.BORROW, Operation.TAKE, Operation.DECAY, Operation.RELEASE}
+UPCAST = {Operation.UPCAST_COPIED, Operation.UPCAST_CONSUMED, Operation.RETAIN}
+# What may follow a stage of a route of the form, by the stage of the next rule:
+# P peel, S share, C the rule of a leaf, U upcast.
+FORM = {
+    "start": {"P": "start", "S": "shared", "C": "leaf", "U": "upcast"},
+    "shared": {"C": "leaf", "U": "upcast"},
+    "leaf": {"U": "both", "S": "end"},
+    "upcast": {"C": "both", "S": "end"},
+    "both": {"S": "end"},
+    "end": {},
+}
+
+
+def stage_of(rule) -> str:
+    """The stage of a rule that creates no wrapper."""
+    if rule.operation is None:
+        return "C"
+    if rule.operation in PEEL:
+        return "P"
+    if rule.operation in UPCAST:
+        return "U"
+    if rule.operation is Operation.SHARE:
+        return "S"
+    raise ValueError(f"{rule.id} is not a rule of the form of a route")
+
+
+def routes_from(model: Model, scope_id: str, stored: TypeTree, interfaces: tuple[Leaf, ...], bound: int):
+    """Every route of the form from the stored type tree, with the reachable
+    type each reaches, a route that visits a reachable type once. A reachable
+    type may be reached by more than one route."""
+    scope = model.scopes[scope_id]
+    exposed = set(exposed_categories(model, scope_id, storage_kind(model, stored)))
+    start = Derivation(stored, scope.materializes, consumed=scope.materializes is RVALUE)
+    routes = [start]
+
+    def extend(source: Derivation, position: str, seen: frozenset):
+        for rule in model.rules:
+            if creates(model, rule):
+                continue
+            following = FORM[position].get(stage_of(rule))
+            if following is None:
+                continue
+            if rule.from_type_tree.category not in (None, source.category):
+                continue
+            if exposure_refuses(model, rule, exposed):
+                continue
+            for bindings in match(model, rule.from_type_tree, source.type_tree, {}):
+                if not requirements_hold(model, scope, rule, bindings):
+                    continue
+                for type_tree in derived_type_trees(model, rule, bindings, source.type_tree, interfaces):
+                    category = rule.to_type_tree.category or source.category
+                    if type_tree.size() > bound or (type_tree, category) in seen:
+                        continue
+                    derived = Derivation(
+                        type_tree,
+                        category,
+                        rules=(*source.rules, rule.id),
+                        arguments=(*source.arguments, bindings.get(ARGUMENT, 0)),
+                        copied=bindings.get("X") if rule.id == "copy" else source.copied,
+                        consumed=source.consumed or rule.access is Access.CONSUME,
+                    )
+                    routes.append(derived)
+                    extend(derived, following, seen | {(type_tree, category)})
+
+    extend(start, "start", frozenset({(stored, scope.materializes)}))
+    return routes
+
+
+def route_for(model: Model, scope_id: str, stored: TypeTree, request: Request, interfaces: tuple[Leaf, ...] = ()):
+    """The route that serves the request, as (rules, reason, routes visited):
+    `rules` is None when no route serves it, and `reason` is
+    ALTERNATIVE_NOT_HELD when the route found takes an alternative that the
+    object does not hold. The route is chosen as `serve` chooses it, and the
+    alternative as `walked` does, but from the routes of the form."""
+    if not finds(model, stored, request, interfaces):
+        return None, "", 0
+    exposed = set(exposed_categories(model, scope_id, storage_kind(model, stored)))
+    bound = derivation_bound(stored)
+    routes = routes_from(model, scope_id, stored, interfaces, bound)
+    made = created(model, model.scopes[scope_id], routes, request.type_tree, exposed, bound)
+    candidates = [route for route in (*routes, *made) if accepts(model, request, route, exposed)]
+    if not candidates:
+        return None, "", len(routes)
+    order = {}
+    first = {}
+    for index, rule in enumerate(model.rules):
+        key = rule.operation if rule.operation is not None else rule.id
+        order[rule.id] = first.setdefault(key, index)
+    best = min(candidates, key=lambda t: (len(t.rules), t.copied is not None, [order[r] for r in t.rules]))
+    for position, (rule_id, argument) in enumerate(zip(best.rules, best.arguments)):
+        if argument == HELD_ALTERNATIVE or not variadic_route(model, rule_id):
+            continue
+        sibling = next(
+            (
+                other
+                for other in (*routes, *made)
+                if other.type_tree == best.type_tree
+                and other.category == best.category
+                and other.rules == best.rules
+                and other.arguments[:position] == best.arguments[:position]
+                and other.arguments[position] == HELD_ALTERNATIVE
+                and completion_class(model, other) == completion_class(model, best)
+            ),
+            None,
+        )
+        if sibling is None or not holds_alternatives(model, sibling):
+            return None, ALTERNATIVE_NOT_HELD, len(routes)
+        return sibling.rules, "", len(routes)
+    return best.rules, "", len(routes)
 
 
 def holds_alternatives(model: Model, reachable_type: Derivation) -> bool:

@@ -14,6 +14,7 @@ from spec.reference.routes import (
     wrapper,
     leaf,
     resolve,
+    route_for,
 )
 
 COPYABLE = Leaf("leaf")
@@ -74,6 +75,21 @@ ALL_CASES = list(cases())
 def outcomes(model, scope):
     for stored, request in ALL_CASES:
         yield stored, request, resolve(model, scope, stored, request)
+
+
+@pytest.mark.parametrize("scope", SCOPES)
+def test_the_route_from_the_request_is_the_route_derived(model, scope):
+    """route_for walks the routes of the form from the stored type tree and keeps
+    none; it serves every request by the route that the closure of the reachable
+    types serves it by, and refuses by the same reason."""
+    for stored, request, outcome in outcomes(model, scope):
+        if not outcome.registered or not outcome.found:
+            continue
+        rules, reason, _ = route_for(model, scope, stored, request)
+        assert (rules, reason) == (
+            outcome.rules if outcome.served else None,
+            "" if outcome.served else outcome.reason,
+        ), (stored, request)
 
 
 def test_the_universe_is_large(model):

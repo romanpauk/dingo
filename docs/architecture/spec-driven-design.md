@@ -2082,13 +2082,17 @@ Steps, each checked against the route tables, which must not change:
    types, the number of evaluations of the derivation is two, and the claims of
    the bounds are tests
 
-A larger change stays open and does not block these steps. The proposal in
-[route-normal-form.md](route-normal-form.md) finds a route from the request by
-matching the type trees, so no set of reachable types exists to size and a
-runtime binding publishes a thunk per wrapper in place of a thunk per reachable
-type. It rests on a hypothesis about the form of every route that a read-only
-script over the reference implementation checks first. If it holds, the counted
-type trees and routes of steps 3 and 4 are all that remains of the sizing.
+The sets themselves may not be needed. The proposal in
+[route-normal-form.md](route-normal-form.md) finds a route from the request, and
+the reference implementation now does: `route_for` walks the routes of the form
+peel, share, the rule of a leaf and the upcast, share, keeps none, and agrees
+with the closure on every request of the universes checked, the wrappers of the
+library and of the user with their mutations. A request creates as many wrappers
+as its type tree names, since the limit of two is lifted in the reference and no
+request in the universe needs a third. If the C++ follows, a static binding
+keeps no set and a runtime binding lists its possible routes without type trees,
+and the counted derivation of steps 3 and 4 is not needed; the counted type
+trees, interfaces, and key aliases of step 5 still are.
 
 ## Decision Log
 

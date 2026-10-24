@@ -232,19 +232,46 @@ follows the number of thunks, is most of the rest. The form moves work and does
 not remove it: the first request of a type matches the type trees, and the
 request site instantiates up to `d + 1` splits for a request of depth `d`.
 
-## What Remains To Check
+## The Matcher Agrees
 
-The classification is necessary and not sufficient. A matcher has to
+`route_for` in [spec/reference/routes.py](../../spec/reference/routes.py) finds the
+route of a request without the closure of the reachable types. It walks the
+routes of the form from the stored type tree, peel, a share, the rule of a leaf
+and the upcast in either order, a share, keeps none of them, creates the
+wrappers the request names, and chooses as `serve` does, with the alternative of
+`walked`. `test/routes/normal_form.py --matcher` runs it beside `resolve`:
 
-1. align the request with the stored type tree, so that every build wrapper sits
-   on a core that is a subtree of the stored type tree, with the leaf replaced by
-   an interface at most
-2. choose among the routes that tie as the reference does: fewer rules, then no
-   copy, then the order of the operations, with `share` before the upcast
+- the wrappers of the library: 26,754 requests that find a binding, 2,635 of
+  them served, and no difference
+- the wrappers of the user with their mutations, a variant, and an array:
+  345,570 requests that find a binding, 11,914 served, and no difference
+- requests that create three wrappers: 12,288, none served, and no difference.
+  The limit of two wrappers is lifted in the reference, and no request in the
+  universe needs a third, so lifting it changes no route.
 
-The next step is a matcher in the reference implementation, run beside
-`resolve` over the 2,635 routes of the library and the 11,914 with the wrappers
-of the user, and compared route by route. The proposal is worth more than the
-derivation it replaces only if the matcher agrees, and even then it is a
-simplification of the model, not a saving of memory. The exact sizes of M10.5
-come first.
+`spec/tests/test_reference_routes.py` compares the two over its own universe.
+The preference of `serve` needed no change: in every case of these universes the
+first route of the closure to reach a reachable type is the route the matcher
+chooses for it. That is checked, not proved, and a wrapper semantics with an
+odd order of operations could break it.
+
+### What It Does Not Show
+
+The matcher keeps no closure, but it does not do less work: it walks 2,595
+routes where the closure has 2,487 reachable types, because it enumerates the
+whole form. Only 23% of the routes it walks are relevant to the request, a
+reachable type that is a subtree of the request or a pointer to one; a search
+pruned to them walks about a quarter. It has not been written.
+
+The C++ is unchanged. The sets are still derived, stored, and sized by
+constants, and a runtime binding still instantiates a walk for each reachable
+type.
+
+## What Remains
+
+1. a search pruned to the subtrees of the request, in the reference, with the
+   same zero differences
+2. the static path of the C++ with a route constant in place of
+   `published.items[RT]`, which removes the stored sets of static bindings
+3. the runtime path, which lists the routes a binding can take from the form and
+   instantiates a walk for each, without type trees
