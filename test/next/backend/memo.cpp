@@ -21,9 +21,9 @@
 
 namespace {
 
-using dingo::core::candidate;
-using dingo::core::request_memo;
-using dingo::core::runtime_key;
+using dingo::candidate;
+using dingo::request_memo;
+using dingo::runtime_key;
 
 struct entry {};
 
@@ -48,7 +48,7 @@ template <typename Value> Value key_of(int value) {
 // A backend whose index is a linear scan.
 struct linear {
   template <typename Value, typename Candidate>
-  using index = dingo::core::linear_index<Value, Candidate>;
+  using index = dingo::linear_index<Value, Candidate>;
 };
 
 // Backends of the user whose indexes keep the candidates of each key value in

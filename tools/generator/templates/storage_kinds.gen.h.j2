@@ -7,7 +7,7 @@
 // by the properties of its outer wrappers, and the request categories a scope
 // exposes for each.
 
-namespace dingo::core {
+namespace dingo {
 
 // The request categories a scope exposes, as bits.
 enum class request_category : std::uint8_t {
@@ -51,4 +51,4 @@ inline constexpr storage_kind_info storage_kinds[] = {
 {% endfor %}
 };
 
-} // namespace dingo::core
+} // namespace dingo

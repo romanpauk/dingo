@@ -20,10 +20,10 @@
 
 namespace {
 
-using dingo::core::allocate_aligned;
-using dingo::core::allocate_object;
-using dingo::core::byte_allocator_t;
-using dingo::core::deallocate_aligned;
+using dingo::allocate_aligned;
+using dingo::allocate_object;
+using dingo::byte_allocator_t;
+using dingo::deallocate_aligned;
 
 struct allocation_stats {
   std::size_t allocations = 0;

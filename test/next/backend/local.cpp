@@ -17,13 +17,12 @@
 namespace {
 
 using host = dingo::container<>;
-using locals = dingo::core::local_bindings<host, dingo::core::type_list<>>;
+using locals = dingo::local_bindings<host, dingo::type_list<>>;
 
 TEST(next_local_bindings, creates_the_runtime_bindings_on_demand_once) {
   locals bindings;
   EXPECT_EQ(bindings.runtime(), nullptr);
-  const auto &table =
-      dingo::core::lookup_table_v<dingo::dynamic_container_traits>;
+  const auto &table = dingo::lookup_table_v<dingo::dynamic_container_traits>;
   auto &created = bindings.runtime_or_create(table);
   EXPECT_EQ(bindings.runtime(), &created);
   EXPECT_EQ(&bindings.runtime_or_create(table), &created);

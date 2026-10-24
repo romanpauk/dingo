@@ -18,7 +18,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace dingo::core {
+namespace dingo {
 
 // What an argument of construct_collection is: the function that adds an
 // element of `Collection`, or a key, which a key_type object, a key_value, or
@@ -82,4 +82,4 @@ template <typename Type> struct is_collection_factory : std::false_type {};
 template <typename Append>
 struct is_collection_factory<collection_factory<Append>> : std::true_type {};
 
-} // namespace dingo::core
+} // namespace dingo

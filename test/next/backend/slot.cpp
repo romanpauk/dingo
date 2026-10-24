@@ -40,33 +40,31 @@ struct iface {
 struct impl : iface {};
 struct leaf {};
 
-using handle_binding =
-    dingo::core::binding_type<dingo::shared, std::shared_ptr<impl>,
-                              dingo::core::type_list<iface>>;
+using handle_binding = dingo::binding_type<dingo::shared, std::shared_ptr<impl>,
+                                           dingo::type_list<iface>>;
 using leaf_binding =
-    dingo::core::binding_type<dingo::shared, leaf, dingo::core::type_list<>>;
+    dingo::binding_type<dingo::shared, leaf, dingo::type_list<>>;
 
 // A resolver of a slot that is only asked for its transaction.
 struct test_resolver {
-  dingo::core::transaction_log log;
-  dingo::core::transaction_log &transactions() { return log; }
+  dingo::transaction_log log;
+  dingo::transaction_log &transactions() { return log; }
 };
 
 // The handle of the interface the binding keeps in the context of its slot,
 // made by `make` when it keeps none; `made` counts the handles made.
-std::shared_ptr<iface> &
-kept_handle(dingo::core::binding_slot<handle_binding> &slot,
-            std::shared_ptr<impl> &object, int &made) {
+std::shared_ptr<iface> &kept_handle(dingo::binding_slot<handle_binding> &slot,
+                                    std::shared_ptr<impl> &object, int &made) {
   using target = std::shared_ptr<iface>;
-  return slot.context().get_or_emplace<target>(
-      dingo::core::type_address_v<target>, [&] {
-        ++made;
-        return target(object);
-      });
+  return slot.context().get_or_emplace<target>(dingo::type_address_v<target>,
+                                               [&] {
+                                                 ++made;
+                                                 return target(object);
+                                               });
 }
 
 TEST(next_slot, keeps_a_derived_object_until_its_object_is_reset) {
-  dingo::core::binding_slot<handle_binding> slot;
+  dingo::binding_slot<handle_binding> slot;
   test_resolver resolver;
   int made = 0;
 
@@ -106,14 +104,14 @@ TEST(next_slot, keeps_a_derived_object_until_its_object_is_reset) {
 
 TEST(next_slot,
      a_binding_without_cached_rules_keeps_nothing_beside_its_object) {
-  using leaf_slot = dingo::core::binding_slot<leaf_binding>;
-  static_assert(std::is_empty_v<dingo::core::no_kept_objects>);
-  static_assert(std::is_trivially_destructible_v<dingo::core::no_kept_objects>);
-  static_assert(std::is_empty_v<dingo::core::binding_context<leaf_binding>>);
-  static_assert(sizeof(leaf_slot) == sizeof(dingo::core::lazy_slot<leaf>));
+  using leaf_slot = dingo::binding_slot<leaf_binding>;
+  static_assert(std::is_empty_v<dingo::no_kept_objects>);
+  static_assert(std::is_trivially_destructible_v<dingo::no_kept_objects>);
+  static_assert(std::is_empty_v<dingo::binding_context<leaf_binding>>);
+  static_assert(sizeof(leaf_slot) == sizeof(dingo::lazy_slot<leaf>));
   // A binding with a cached rule keeps the list of its derived objects.
-  static_assert(sizeof(dingo::core::binding_context<handle_binding>) ==
-                sizeof(dingo::core::kept_objects));
+  static_assert(sizeof(dingo::binding_context<handle_binding>) ==
+                sizeof(dingo::kept_objects));
 
   leaf_slot slot;
   slot.clear_context();
@@ -192,9 +190,8 @@ struct unstable_object {
 };
 
 TEST(next_slot, a_settled_stable_object_is_borrowed_once_per_request_type) {
-  using slot =
-      counting_slot<dingo::core::binding_type<stable_scope, stable_object,
-                                              dingo::core::type_list<>>>;
+  using slot = counting_slot<
+      dingo::binding_type<stable_scope, stable_object, dingo::type_list<>>>;
   slot::reached = 0;
   dingo::container<> container;
   container.register_type<scope<stable_scope>, storage<stable_object>>();
@@ -222,9 +219,8 @@ TEST(next_slot, an_unstable_scope_is_reached_by_every_request) {
       !dingo::scope_traits<dingo::shared_cyclical>::descriptor.stable);
   static_assert(!dingo::scope_traits<unstable_scope>::descriptor.stable);
 
-  using slot =
-      counting_slot<dingo::core::binding_type<unstable_scope, unstable_object,
-                                              dingo::core::type_list<>>>;
+  using slot = counting_slot<
+      dingo::binding_type<unstable_scope, unstable_object, dingo::type_list<>>>;
   slot::reached = 0;
   dingo::container<> container;
   container.register_type<scope<unstable_scope>, storage<unstable_object>>();

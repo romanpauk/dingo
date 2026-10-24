@@ -34,15 +34,14 @@ public:
   // argument, or by its collection traits.
   template <typename... Parts, typename... Append>
   void register_type_collection(Append &&...append) {
-    static_assert(core::require<sizeof...(Append) <= 1,
-                                core::diag::collection_arguments>());
+    static_assert(
+        require<sizeof...(Append) <= 1, diag::collection_arguments>());
     if constexpr (sizeof...(Append) == 0) {
       self().template register_type<Parts...>(
-          core::collection_factory<core::collection_append>(
-              core::collection_append()));
+          collection_factory<collection_append>(collection_append()));
     } else {
       self().template register_type<Parts...>(
-          core::collection_factory<std::decay_t<Append>...>(
+          collection_factory<std::decay_t<Append>...>(
               std::forward<Append>(append)...));
     }
   }
@@ -57,8 +56,7 @@ public:
       return self().template construct_by_rule<Type>();
     } else {
       return self().transactions().run([&]() -> Type {
-        return typename core::factory_of<Factory>::type().template make<Type>(
-            self());
+        return typename factory_of<Factory>::type().template make<Type>(self());
       });
     }
   }
@@ -72,8 +70,8 @@ public:
   // and an append function, either of which may be given.
   template <typename Collection, typename... Arguments>
   Collection construct_collection(Arguments &&...arguments) {
-    return core::collect_by<Collection>(self(),
-                                        std::forward<Arguments>(arguments)...);
+    return collect_by<Collection>(self(),
+                                  std::forward<Arguments>(arguments)...);
   }
 
   // Calls `callable` with its arguments resolved from the container;
@@ -83,7 +81,7 @@ public:
   decltype(auto) invoke(Callable &&callable) {
     using arguments = typename ::dingo::detail::callable_arguments<
         Signature, std::decay_t<Callable>>::type;
-    const auto frame = core::type_frame::of<std::decay_t<Callable>>();
+    const auto frame = type_frame::of<std::decay_t<Callable>>();
     return self().transactions().run([&]() -> decltype(auto) {
       return invoke_with(std::forward<Callable>(callable), arguments());
     });
@@ -94,7 +92,7 @@ private:
   // its object as an rvalue applies.
   template <typename Callable, typename... Args>
   decltype(auto) invoke_with(Callable &&callable,
-                             core::type_list<Args...> /*arguments*/) {
+                             type_list<Args...> /*arguments*/) {
     return std::invoke(std::forward<Callable>(callable),
                        self().template argument<Args>()...);
   }

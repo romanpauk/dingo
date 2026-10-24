@@ -30,7 +30,7 @@ template <typename Type> struct storage {
 };
 
 template <typename... Interfaces> struct interfaces {
-  using type = core::type_list<Interfaces...>;
+  using type = type_list<Interfaces...>;
 };
 
 // The factory a registration declares: a constructor, a function, or a
@@ -48,7 +48,7 @@ template <typename... Types> struct dependencies {};
 
 } // namespace dingo
 
-namespace dingo::core {
+namespace dingo {
 
 namespace detail {
 template <template <typename...> typename Part, typename Type>
@@ -324,21 +324,19 @@ template <typename... Parts> struct registration {
   using interfaces_part =
       typename detail::find_part<::dingo::interfaces, ::dingo::interfaces<>,
                                  Parts...>::type;
-  static_assert(core::require<!std::is_same_v<scope_part, detail::missing_part>,
-                              core::diag::registration_without_scope>());
+  static_assert(require<!std::is_same_v<scope_part, detail::missing_part>,
+                        diag::registration_without_scope>());
+  static_assert(require<!std::is_same_v<storage_part, detail::missing_part>,
+                        diag::registration_without_storage>());
   static_assert(
-      core::require<!std::is_same_v<storage_part, detail::missing_part>,
-                    core::diag::registration_without_storage>());
-  static_assert(core::require<
-                std::is_same_v<scope_part, detail::missing_part> ||
-                    detail::has_scope_traits<typename scope_part::type>::value,
-                core::diag::scope_undeclared, typename scope_part::type>());
+      require<std::is_same_v<scope_part, detail::missing_part> ||
+                  detail::has_scope_traits<typename scope_part::type>::value,
+              diag::scope_undeclared, typename scope_part::type>());
 
   using repeated_wrapper =
       typename detail::repeated_alternatives<typename storage_part::type>::type;
-  static_assert(
-      core::require<std::is_void_v<repeated_wrapper>,
-                    core::diag::alternatives_repeated, repeated_wrapper>());
+  static_assert(require<std::is_void_v<repeated_wrapper>,
+                        diag::alternatives_repeated, repeated_wrapper>());
 
   using factory_part =
       typename detail::find_part<::dingo::factory, detail::missing_part,
@@ -348,11 +346,10 @@ template <typename... Parts> struct registration {
                                  Parts...>::type;
   static constexpr bool declares_dependencies =
       !std::is_same_v<dependencies_part, detail::missing_part>;
-  static_assert(
-      core::require<!declares_dependencies ||
-                        std::is_same_v<factory_part, detail::missing_part>,
-                    core::diag::registration_dependencies_twice,
-                    typename storage_part::type>());
+  static_assert(require<!declares_dependencies ||
+                            std::is_same_v<factory_part, detail::missing_part>,
+                        diag::registration_dependencies_twice,
+                        typename storage_part::type>());
   // The factory a factory<> part declares, or the constructor of the types a
   // dependencies<> part declares, or the detected constructor.
   using declared_factory = typename std::conditional_t<
@@ -373,15 +370,14 @@ template <typename... Parts> struct registration {
   template <typename... Args> struct with_arguments {
     using factory =
         typename detail::find_callable_factory<declared_factory, Args...>::type;
-    static_assert(core::require<!declares_dependencies ||
-                                    std::is_same_v<factory, declared_factory>,
-                                core::diag::registration_dependencies_twice,
-                                typename storage_part::type>());
+    static_assert(require<!declares_dependencies ||
+                              std::is_same_v<factory, declared_factory>,
+                          diag::registration_dependencies_twice,
+                          typename storage_part::type>());
     using runtime = typename detail::find_runtime_key<void, Args...>::type;
     static_assert(
-        core::require<
-            std::is_void_v<runtime> || std::is_same_v<key_part, no_key>,
-            core::diag::registration_key_twice, typename storage_part::type>());
+        require<std::is_void_v<runtime> || std::is_same_v<key_part, no_key>,
+                diag::registration_key_twice, typename storage_part::type>());
     using key = std::conditional_t<std::is_void_v<runtime>, key_part, runtime>;
     using aliases =
         typename detail::find_key_aliases<key, type_list<>, Args...>::type;
@@ -400,4 +396,4 @@ template <typename... Parts> struct registration {
   using binding = binding_for<>;
 };
 
-} // namespace dingo::core
+} // namespace dingo

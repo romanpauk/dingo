@@ -26,14 +26,14 @@ template <typename Type> struct box {};
 
 template <typename Type> std::string written() {
   char letters[256] = {};
-  const std::size_t size = dingo::core::write_type_name<Type>(nullptr, 0);
-  dingo::core::write_type_name<Type>(letters, 0);
+  const std::size_t size = dingo::write_type_name<Type>(nullptr, 0);
+  dingo::write_type_name<Type>(letters, 0);
   return std::string(letters, size);
 }
 
 template <typename... Types> void expect_same_spelling() {
   const std::pair<std::string, std::string> spellings[] = {
-      {written<Types>(), dingo::core::type_name_of<Types>()}...};
+      {written<Types>(), dingo::type_name_of<Types>()}...};
   for (const auto &[compiled, resolved] : spellings) {
     EXPECT_EQ(compiled, resolved);
   }
@@ -51,11 +51,10 @@ struct text {
 };
 
 TEST(next_diagnostic_message, puts_the_subjects_in_the_placeholders) {
-  constexpr dingo::core::formatted_message<text, plain, box<int> &> message;
+  constexpr dingo::formatted_message<text, plain, box<int> &> message;
   static_assert(message.size() == message.view().size());
-  EXPECT_EQ(message.view(), "from " + dingo::core::type_name_of<plain>() +
-                                " to " +
-                                dingo::core::type_name_of<box<int> &>() + ".");
+  EXPECT_EQ(message.view(), "from " + dingo::type_name_of<plain>() + " to " +
+                                dingo::type_name_of<box<int> &>() + ".");
 }
 
 } // namespace

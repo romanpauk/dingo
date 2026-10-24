@@ -42,19 +42,18 @@ using dingo::external;
 using dingo::shared;
 using dingo::shared_cyclical;
 using dingo::unique;
-namespace core = dingo::core;
 
 // The binding a registration of `Scope`, `Stored`, and `Interfaces` declares.
 template <typename Scope, typename Stored, typename... Interfaces>
 struct binding_of {
   using type =
-      typename core::registration<dingo::scope<Scope>, dingo::storage<Stored>,
-                                  dingo::interfaces<Interfaces...>>::binding;
+      typename dingo::registration<dingo::scope<Scope>, dingo::storage<Stored>,
+                                   dingo::interfaces<Interfaces...>>::binding;
 };
 
 template <typename Scope, typename Stored> struct binding_of<Scope, Stored> {
-  using type = typename core::registration<dingo::scope<Scope>,
-                                           dingo::storage<Stored>>::binding;
+  using type = typename dingo::registration<dingo::scope<Scope>,
+                                            dingo::storage<Stored>>::binding;
 };
 
 template <typename Scope, typename Stored, typename... Interfaces>
@@ -62,13 +61,13 @@ using binding_t = typename binding_of<Scope, Stored, Interfaces...>::type;
 
 // Whether the binding is registered, names the request, and serves it.
 template <typename Binding, typename Request> constexpr bool serves() {
-  constexpr core::request_descriptor request =
-      core::request_traits<Request>::descriptor;
-  return Binding::status == core::registration_status::registered &&
-         core::finds(Binding::descriptor, request) &&
-         core::select_route(Binding::descriptor, Binding::published, request,
-                            Binding::exposed)
-                 .reachable_type != core::no_reachable_type;
+  constexpr dingo::request_descriptor request =
+      dingo::request_traits<Request>::descriptor;
+  return Binding::status == dingo::registration_status::registered &&
+         dingo::finds(Binding::descriptor, request) &&
+         dingo::select_route(Binding::descriptor, Binding::published, request,
+                             Binding::exposed)
+                 .reachable_type != dingo::no_reachable_type;
 }
 
 struct I {
@@ -193,7 +192,7 @@ TEST(next_engine, a_handle_that_converts_to_no_interface_is_rejected) {
   using incompatible =
       binding_t<unique, std::unique_ptr<A, incompatible_deleter>, I>;
   static_assert(incompatible::status ==
-                core::registration_status::no_interface_served);
+                dingo::registration_status::no_interface_served);
   SUCCEED();
 }
 
@@ -284,10 +283,10 @@ TEST(next_engine, a_request_adds_qualifiers_only_below_const_levels) {
 
   // A level may gain const below levels that are all const, as A** converts
   // to const A *const * but not to const A **.
-  static_assert(core::qualifies(core::type_tree_v<A **>,
-                                core::type_tree_v<const A *const *>, false));
-  static_assert(!core::qualifies(core::type_tree_v<A **>,
-                                 core::type_tree_v<const A **>, false));
+  static_assert(dingo::qualifies(dingo::type_tree_v<A **>,
+                                 dingo::type_tree_v<const A *const *>, false));
+  static_assert(!dingo::qualifies(dingo::type_tree_v<A **>,
+                                  dingo::type_tree_v<const A **>, false));
   using double_pointer = binding_t<external, A **>;
   static_assert(serves<double_pointer, const A *const *>());
   static_assert(!serves<double_pointer, const A **>());
@@ -305,9 +304,9 @@ struct annotation_tag {};
 
 // spec: request descriptor
 TEST(next_engine, a_request_names_the_leaf_through_its_wrappers) {
-  using core::innermost_leaf;
-  using core::request_traits;
-  using core::type_id_v;
+  using dingo::innermost_leaf;
+  using dingo::request_traits;
+  using dingo::type_id_v;
   static_assert(
       innermost_leaf(request_traits<const std::shared_ptr<std::unique_ptr<A>>
                                         &>::descriptor.value) == type_id_v<A>);
@@ -330,26 +329,26 @@ TEST(next_engine, a_request_names_the_leaf_through_its_wrappers) {
           request_traits<std::optional<const A *>>::descriptor.value) ==
       type_id_v<A>);
   // A request annotated by a tag names the annotated interface.
-  using annotated_key = core::annotated_key<annotation_tag, core::no_key>;
+  using annotated_key = dingo::annotated_key<annotation_tag, dingo::no_key>;
   static_assert(
       innermost_leaf(request_traits<I &, annotated_key>::descriptor.value) ==
       type_id_v<dingo::annotated<I, annotation_tag>>);
   static_assert(
       std::is_same_v<
-          core::leaf_of_t<const std::shared_ptr<std::unique_ptr<A>> &>, A>);
-  static_assert(std::is_same_v<core::leaf_of_t<std::optional<const A *>>, A>);
+          dingo::leaf_of_t<const std::shared_ptr<std::unique_ptr<A>> &>, A>);
+  static_assert(std::is_same_v<dingo::leaf_of_t<std::optional<const A *>>, A>);
 
   // A reference request refers to an object the binding keeps; a value, an
   // rvalue reference, and a pointer request do not.
   static_assert(request_traits<A &>::kind ==
-                core::request_kind::lvalue_reference);
+                dingo::request_kind::lvalue_reference);
   static_assert(request_traits<const A &>::kind ==
-                core::request_kind::lvalue_reference);
+                dingo::request_kind::lvalue_reference);
   static_assert(request_traits<A &&>::kind ==
-                core::request_kind::rvalue_reference);
-  static_assert(request_traits<A>::kind == core::request_kind::value);
-  static_assert(request_traits<A *>::kind == core::request_kind::value);
-  static_assert(request_traits<const A *>::kind == core::request_kind::value);
+                dingo::request_kind::rvalue_reference);
+  static_assert(request_traits<A>::kind == dingo::request_kind::value);
+  static_assert(request_traits<A *>::kind == dingo::request_kind::value);
+  static_assert(request_traits<const A *>::kind == dingo::request_kind::value);
   static_assert(std::is_same_v<request_traits<const A *>::made_type, A *>);
   SUCCEED();
 }
@@ -359,7 +358,7 @@ TEST(next_engine, interfaces_do_not_rebind_the_stored_type_tree) {
   using one = binding_t<shared, std::shared_ptr<A>, I>;
   static_assert(std::is_same_v<one::stored_type, std::shared_ptr<A>>);
   static_assert(one::descriptor.stored ==
-                core::type_tree_v<std::shared_ptr<A>>);
+                dingo::type_tree_v<std::shared_ptr<A>>);
   static_assert(serves<one, I &>());
   static_assert(serves<one, std::shared_ptr<I>>());
   static_assert(serves<one, std::shared_ptr<I> &>());
@@ -367,9 +366,9 @@ TEST(next_engine, interfaces_do_not_rebind_the_stored_type_tree) {
   using two = binding_t<shared, std::shared_ptr<A>, I, J>;
   static_assert(two::descriptor.stored == one::descriptor.stored);
   static_assert(two::descriptor.interface_count == 2);
-  static_assert(core::serves_interface(two::descriptor, core::type_id_v<I>));
-  static_assert(core::serves_interface(two::descriptor, core::type_id_v<J>));
-  static_assert(!core::serves_interface(two::descriptor, core::type_id_v<A>));
+  static_assert(dingo::serves_interface(two::descriptor, dingo::type_id_v<I>));
+  static_assert(dingo::serves_interface(two::descriptor, dingo::type_id_v<J>));
+  static_assert(!dingo::serves_interface(two::descriptor, dingo::type_id_v<A>));
   static_assert(serves<two, I &>());
   static_assert(serves<two, J &>());
   static_assert(serves<two, std::shared_ptr<J>>());
@@ -392,9 +391,9 @@ TEST(next_engine, interfaces_do_not_rebind_the_stored_type_tree) {
 TEST(next_engine, a_binding_keeps_objects_only_for_its_cached_routes) {
   using plain = binding_t<shared, A>;
   static_assert(!plain::keeps);
-  static_assert(std::is_same_v<plain::context_type, core::no_kept_objects>);
-  static_assert(std::is_empty_v<core::no_kept_objects>);
-  static_assert(std::is_trivially_destructible_v<core::no_kept_objects>);
+  static_assert(std::is_same_v<plain::context_type, dingo::no_kept_objects>);
+  static_assert(std::is_empty_v<dingo::no_kept_objects>);
+  static_assert(std::is_trivially_destructible_v<dingo::no_kept_objects>);
   // A sharing handle converted to the handle of an interface is kept, so a
   // reference to it can be served.
   using converted = binding_t<shared, std::shared_ptr<A>, I>;
@@ -473,15 +472,15 @@ namespace {
 
 // spec: public_api.conversion_traits
 TEST(next_engine, a_conversion_needs_the_access_it_declares) {
-  using core::converts;
+  using dingo::converts;
   static_assert(
-      core::declares_conversion<borrowed_target, borrowed_source>::value);
+      dingo::declares_conversion<borrowed_target, borrowed_source>::value);
   static_assert(
       converts<borrowed_target, borrowed_source, const borrowed_source &>());
   static_assert(
       converts<borrowed_target, borrowed_source, borrowed_source &&>());
   static_assert(
-      core::declares_conversion<consumed_target, consumed_source>::value);
+      dingo::declares_conversion<consumed_target, consumed_source>::value);
   static_assert(
       converts<consumed_target, consumed_source, consumed_source &&>());
   static_assert(
@@ -492,7 +491,7 @@ TEST(next_engine, a_conversion_needs_the_access_it_declares) {
   // Without a declaration, the converting constructor decides: a borrowed
   // source is const, a consumed one an rvalue.
   static_assert(
-      !core::declares_conversion<copying_target, owning_source>::value);
+      !dingo::declares_conversion<copying_target, owning_source>::value);
   static_assert(
       converts<copying_target, owning_source, const owning_source &>());
   static_assert(
@@ -513,13 +512,13 @@ TEST(next_engine, a_conversion_needs_the_access_it_declares) {
 TEST(next_engine, a_borrowed_conversion_leaves_its_source) {
   owning_source source(17);
   copying_target borrowed =
-      core::convert_to<copying_target>(std::as_const(source));
+      dingo::convert_to<copying_target>(std::as_const(source));
   EXPECT_TRUE(borrowed.used_const_source);
   EXPECT_EQ(borrowed.value, 17);
   EXPECT_NE(source.value, nullptr);
 
   consuming_target consumed =
-      core::convert_to<consuming_target>(std::move(source));
+      dingo::convert_to<consuming_target>(std::move(source));
   ASSERT_NE(consumed.value, nullptr);
   EXPECT_EQ(*consumed.value, 17);
   EXPECT_EQ(source.value, nullptr);
@@ -528,12 +527,13 @@ TEST(next_engine, a_borrowed_conversion_leaves_its_source) {
 TEST(next_engine, a_declared_conversion_is_used_for_its_target) {
   // Also when the target is the source type.
   customized_value value{17};
-  EXPECT_EQ(core::convert_to<customized_value>(std::as_const(value)).value, 18);
+  EXPECT_EQ(dingo::convert_to<customized_value>(std::as_const(value)).value,
+            18);
 
   // A conversion may return an object the target is constructed from.
   long target = 17;
   long *pointer = &target;
-  observed converted = core::convert_to<observed>(pointer);
+  observed converted = dingo::convert_to<observed>(pointer);
   ASSERT_TRUE(std::holds_alternative<observer>(converted));
   EXPECT_EQ(std::get<observer>(converted).pointer, &target);
 }

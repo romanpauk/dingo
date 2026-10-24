@@ -76,8 +76,6 @@ namespace dingo {
 // specialize it below, as a user wrapper does.
 template <typename Wrapper, typename = void> struct wrapper_traits {};
 
-template <typename... Types> using type_list = core::type_list<Types...>;
-
 // The family of the standard wrappers.
 struct standard_family {};
 
@@ -255,7 +253,7 @@ template <typename Type> struct wrapper_traits<Type[]> {
 
 } // namespace dingo
 
-namespace dingo::core {
+namespace dingo {
 
 namespace detail {
 template <typename Kind> constexpr semantics_descriptor make_semantics();
@@ -488,7 +486,7 @@ template <typename Type> constexpr type_tree make_type_tree() {
   // that is incomplete where it is requested is neither copied nor
   // constructed there, as only a reference or a pointer to it is requested.
   if constexpr (!is_wrapper_v<value_type> &&
-                !core::detail::is_complete<value_type>::value &&
+                !detail::is_complete<value_type>::value &&
                 !std::is_void_v<value_type>) {
     node.copyable = false;
     node.constructible = false;
@@ -591,4 +589,4 @@ using replace_leaf_t = typename detail::replace_leaf<Type, Leaf>::type;
 template <typename Type>
 using canonical_t = typename detail::canonical<Type>::type;
 
-} // namespace dingo::core
+} // namespace dingo

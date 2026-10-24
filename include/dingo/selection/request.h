@@ -17,7 +17,7 @@
 
 #include <type_traits>
 
-namespace dingo::core {
+namespace dingo {
 
 namespace detail {
 template <typename Key, typename = void> struct annotation_of {
@@ -39,7 +39,7 @@ constexpr type_tree request_type_tree() {
     using leaf = leaf_of_t<Type>;
     type_tree annotated = type_tree_v<leaf>;
     annotated.nodes[0].type = type_id_v<::dingo::annotated<leaf, Annotation>>;
-    return ::dingo::core::replace_leaf(type_tree_v<Type>, annotated);
+    return ::dingo::replace_leaf(type_tree_v<Type>, annotated);
   }
 }
 } // namespace detail
@@ -64,4 +64,4 @@ template <typename Request, typename Key = no_key> struct request_traits {
       Key::descriptor};
 };
 
-} // namespace dingo::core
+} // namespace dingo

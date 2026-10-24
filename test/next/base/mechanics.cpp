@@ -13,10 +13,10 @@
 
 namespace {
 
-using dingo::core::pack_at_portable_t;
-using dingo::core::pack_at_t;
-using dingo::core::type_list;
-using dingo::core::type_list_at_t;
+using dingo::pack_at_portable_t;
+using dingo::pack_at_t;
+using dingo::type_list;
+using dingo::type_list_at_t;
 
 template <template <std::size_t, typename...> typename PackAt>
 constexpr bool selects_every_element() {
@@ -29,10 +29,10 @@ constexpr bool selects_every_element() {
 static_assert(selects_every_element<pack_at_portable_t>());
 static_assert(selects_every_element<pack_at_t>());
 #if DINGO_HAS_TYPE_PACK_ELEMENT
-static_assert(selects_every_element<dingo::core::pack_at_builtin_t>());
+static_assert(selects_every_element<dingo::pack_at_builtin_t>());
 #endif
 #if DINGO_HAS_PACK_INDEXING
-static_assert(selects_every_element<dingo::core::pack_at_indexing_t>());
+static_assert(selects_every_element<dingo::pack_at_indexing_t>());
 #endif
 
 static_assert(type_list<int, char>::size == 2);

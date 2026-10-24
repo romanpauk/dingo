@@ -15,7 +15,7 @@
 #include <string>
 #include <string_view>
 
-namespace dingo::core {
+namespace dingo {
 
 struct message_field {
   std::string_view name;
@@ -45,4 +45,4 @@ inline std::string format_message(std::string_view pattern,
   return text;
 }
 
-} // namespace dingo::core
+} // namespace dingo

@@ -84,11 +84,10 @@ template <typename Container, typename Traits, typename Allocator,
           typename Parent>
 struct runtime_state {
   runtime_state(const Allocator &allocator, Parent *parent_container)
-      : backend(core::lookup_table_v<Traits>, allocator),
-        parent(parent_container) {}
+      : backend(lookup_table_v<Traits>, allocator), parent(parent_container) {}
 
-  core::retained_objects retained;
-  core::runtime_backend<Container, Allocator> backend;
+  retained_objects retained;
+  runtime_backend<Container, Allocator> backend;
   parent_link<Parent> parent;
   void *owner = nullptr;
 };
@@ -103,9 +102,9 @@ struct mixed_state {
       : static_source(std::forward<Instances>(instances)...),
         runtime(Lookups::value), parent(parent_container) {}
 
-  core::retained_objects retained;
+  retained_objects retained;
   StaticSource static_source;
-  core::runtime_backend<Container, Allocator> runtime;
+  runtime_backend<Container, Allocator> runtime;
   parent_link<Parent> parent;
   void *owner = nullptr;
 };
@@ -115,12 +114,11 @@ struct mixed_state {
 // traits declare, when it takes one for any.
 template <typename Traits>
 using declarations_of =
-    typename core::lookup_list<typename Traits::lookup_definition_type>::type;
+    typename lookup_list<typename Traits::lookup_definition_type>::type;
 
 template <typename Traits, typename Binding, typename... Args>
-constexpr bool key_values_complete() {
-  return core::detail::key_values_complete<declarations_of<Traits>, Binding,
-                                           Args...>();
+constexpr bool container_key_values_complete() {
+  return key_values_complete<declarations_of<Traits>, Binding, Args...>();
 }
 
 template <typename Traits, typename Allocator, typename Parent>
@@ -137,10 +135,11 @@ template <typename Second, typename Third, typename... Binds>
 struct mixed_container_parameters {
   using container = ::dingo::container<bindings<Binds...>, Second, Third>;
   using parameters = mixed_parameters<Second, Third>;
-  using lookups = core::lookup_table_of<typename core::lookup_list<
+  using lookups = lookup_table_of<typename lookup_list<
       typename parameters::traits::lookup_definition_type>::type>;
-  using static_source = core::static_backend<
-      lookups, typename core::bind_registration<Binds>::type::binding...>;
+  using static_source =
+      static_backend<lookups,
+                     typename bind_registration<Binds>::type::binding...>;
   using parent = typename parameters::parent;
   using allocator =
       typename traits_allocator<typename parameters::traits>::type;
@@ -164,7 +163,7 @@ struct mixed_container_parameters {
 // assigned to.
 template <typename Traits, typename Allocator, typename Parent>
 class container
-    : public core::selection<container<Traits, Allocator, Parent>>,
+    : public selection<container<Traits, Allocator, Parent>>,
       public detail::container_operations<container<Traits, Allocator, Parent>>,
       public detail::container_member_types<Traits>,
       public detail::runtime_parameters<Traits, Allocator, Parent>::state {
@@ -205,24 +204,25 @@ public:
   template <typename... Parts, typename... Args>
   auto register_type(Args &&...args) {
     using binding =
-        typename core::registration<Parts...>::template binding_for<Args...>;
-    static_assert(detail::key_values_complete<Traits, binding, Args...>());
+        typename registration<Parts...>::template binding_for<Args...>;
+    static_assert(
+        detail::container_key_values_complete<Traits, binding, Args...>());
     auto &locals = this->state()->backend.template add<binding>(
         std::forward<Args>(args)...);
-    return core::registration_proxy<std::remove_reference_t<decltype(locals)>,
-                                    detail::declarations_of<Traits>>(
-        locals, core::lookup_table_v<Traits>);
+    return registration_proxy<std::remove_reference_t<decltype(locals)>,
+                              detail::declarations_of<Traits>>(
+        locals, lookup_table_v<Traits>);
   }
 
   // The sources of the selection of the container, which resolves the
   // dependencies of their bindings, and keeps the objects requests construct.
   auto &container_resolver() { return *this; }
-  core::retained_objects &retained() { return this->state()->retained; }
-  core::runtime_backend<container, allocator_type> &runtime_source() {
+  retained_objects &retained() { return this->state()->retained; }
+  runtime_backend<container, allocator_type> &runtime_source() {
     return this->state()->backend;
   }
   parent_type *parent() { return this->state()->parent.get(); }
-  core::transaction_log &transactions() {
+  transaction_log &transactions() {
     return this->state()->backend.transactions();
   }
 };
@@ -236,7 +236,7 @@ public:
 // with them it keeps them in place, and does not move.
 template <typename... Binds, typename Second, typename Third>
 class container<bindings<Binds...>, Second, Third>
-    : public core::selection<container<bindings<Binds...>, Second, Third>>,
+    : public selection<container<bindings<Binds...>, Second, Third>>,
       public detail::container_operations<
           container<bindings<Binds...>, Second, Third>>,
       public detail::container_member_types<
@@ -279,8 +279,8 @@ public:
   template <typename... Parts, typename... Args>
   auto register_type(Args &&...args) {
     using binding =
-        typename core::registration<Parts...>::template binding_for<Args...>;
-    static_assert(detail::key_values_complete<
+        typename registration<Parts...>::template binding_for<Args...>;
+    static_assert(detail::container_key_values_complete<
                   typename detail::mixed_parameters<Second, Third>::traits,
                   binding, Args...>());
     auto &locals = this->state()->runtime.template add_unless<binding>(
@@ -288,7 +288,7 @@ public:
           return static_source_type::template holds_key_of<binding>(key_value);
         },
         std::forward<Args>(args)...);
-    return core::registration_proxy<
+    return registration_proxy<
         std::remove_reference_t<decltype(locals)>,
         detail::declarations_of<
             typename detail::mixed_parameters<Second, Third>::traits>>(
@@ -298,13 +298,13 @@ public:
   // The sources of the selection of the container, which resolves the
   // dependencies of their bindings, and keeps the objects requests construct.
   auto &container_resolver() { return *this; }
-  core::retained_objects &retained() { return this->state()->retained; }
+  retained_objects &retained() { return this->state()->retained; }
   static_source_type &static_source() { return this->state()->static_source; }
-  core::runtime_backend<container, allocator_type> &runtime_source() {
+  runtime_backend<container, allocator_type> &runtime_source() {
     return this->state()->runtime;
   }
   parent_type *parent() { return this->state()->parent.get(); }
-  core::transaction_log &transactions() {
+  transaction_log &transactions() {
     return this->state()->runtime.transactions();
   }
 };

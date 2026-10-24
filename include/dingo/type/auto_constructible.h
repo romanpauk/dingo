@@ -23,7 +23,7 @@ struct default_auto_constructible : std::false_type {};
 
 template <typename Type>
 struct default_auto_constructible<
-    Type, std::enable_if_t<core::detail::is_complete<Type>::value>>
+    Type, std::enable_if_t<detail::is_complete<Type>::value>>
     : std::bool_constant<std::is_aggregate_v<Type>> {};
 } // namespace detail
 
@@ -35,7 +35,7 @@ struct is_auto_constructible : detail::default_auto_constructible<Type> {};
 
 } // namespace dingo
 
-namespace dingo::core {
+namespace dingo {
 
 // Whether a request of `Request` may construct its type: a value or a const
 // lvalue reference of an auto-constructible leaf whose constructor is
@@ -72,4 +72,4 @@ constexpr bool auto_constructs_by() {
   }
 }
 
-} // namespace dingo::core
+} // namespace dingo

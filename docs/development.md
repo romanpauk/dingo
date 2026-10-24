@@ -336,8 +336,8 @@ records. Every difference must be declared by a behavior change of the spec,
 [`spec/content/behavior_changes.py`](../spec/content/behavior_changes.py), with
 a `matrix:<executable>/<Suite>.<Name>` case pattern, and every such change must
 match a difference. The constructor-detection matrix family tests the detection
-of the core implementation by its core names, which the baseline does not have,
-and does not take part.
+of the library by its own names, which the baseline does not have, and does not
+take part.
 
 ```bash
 python3 test/differential/run.py --build-root build/differential --profile portable

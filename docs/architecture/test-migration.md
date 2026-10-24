@@ -1037,7 +1037,7 @@ are obsolete.
   `is_interface_storage_rebindable_v<test_shared/test_unique<Class>, IClass>`:
   user wrappers rebind to an interface of their element. **replaced**:
   static_asserts in `test/next/selection/request_types.cpp` on
-  `core::replace_leaf_t<user_shared<impl>, iface>`,
+  `dingo::replace_leaf_t<user_shared<impl>, iface>`,
   `dingo::rebind_type_t<user_unique<impl>, iface>`, `leaf_type_t`; tests
   `type/wrapper_traits.h`, `api/type/rebind_type.h`.
 - (file-scope static_asserts) `dingo::is_copy_constructible_v` of wrappers and
@@ -1051,8 +1051,8 @@ are obsolete.
   public behavior differs.
 - (file-scope static_asserts) `request_type<...>` lookup/interface/value/exact
   types, rvalue flags: how a request type breaks down. **replaced**:
-  static_asserts on `core::request_traits` (kind, value_type, made_type),
-  `core::leaf_of_t`, `core::resolved_t`, `core::annotated_request`,
+  static_asserts on `dingo::request_traits` (kind, value_type, made_type),
+  `dingo::leaf_of_t`, `dingo::resolved_t`, `dingo::annotated_request`,
   `annotated_traits`, and the annotated request descriptor leaf
   (`type_id_v<annotated<service, tag>>`); tests `selection/request.h`,
   `selection/selection.h`, `type/annotated.h`. The `removes_rvalue_references`
@@ -1065,7 +1065,7 @@ are obsolete.
 - (file-scope static_asserts) `dependency<S&, key_type<tag>>` request_type: a
   keyed parameter breaks down into its interface and key. **replaced**:
   static_asserts: `dingo::dependency<service &, key_type<tag>>` is
-  `core::keyed<service &, tag_key<tag>>`, `resolved_t` is `service &`, and
+  `dingo::keyed<service &, tag_key<tag>>`, `resolved_t` is `service &`, and
   `dependency<service &>` is `service &`.
 
 ## Group D: registration traits
@@ -1182,7 +1182,7 @@ are not observed through the public API of the baseline and are recorded only:
   `next_engine.a_borrowing_scope_does_not_move_its_object`,
   `next_engine.a_wrapper_of_the_requested_type_is_not_wrapped_again`,
   `next_engine.a_request_adds_qualifiers_only_below_const_levels`
-  (`core::qualifies`, the replacement for `is_resolution_request_v` and
+  (`dingo::qualifies`, the replacement for `is_resolution_request_v` and
   `matches_qualification_conversion`),
   `next_engine.a_request_names_the_leaf_through_its_wrappers` (`request_traits`,
   `leaf_of_t`), and `next_engine.a_conversion_needs_the_access_it_declares`
@@ -2376,8 +2376,8 @@ which a differential build of the baseline defines, as M9.2 describes:
   `portable_constructor_detection` and `msvc_constructor_detection`, the modes
   `constructor_arity` and `constructor_signature`): the same axes, the selected
   type trees spelled by `dingo::dependency<T, key_type<S>>`, and each storage
-  and conversion category checked by the request `core::constructor_argument`
-  makes through `core::invoke_constructor`. It names the core detection, which
+  and conversion category checked by the request `dingo::constructor_argument`
+  makes through `dingo::invoke_constructor`. It names the core detection, which
   the baseline lacks, so the differential tests exclude it.
 - `dependency_composition_resolve`, `dependency_composition_invoke` (four
   executables each): resolves and invokes recursive dependency type compositions

@@ -18,7 +18,7 @@
 #include <string_view>
 #include <type_traits>
 
-namespace dingo::core {
+namespace dingo {
 
 namespace detail {
 // Writes `text` at `out` from `at`, or counts it when `out` is null, and
@@ -122,4 +122,4 @@ public:
   constexpr std::string_view view() const { return {text.letters, length}; }
 };
 
-} // namespace dingo::core
+} // namespace dingo

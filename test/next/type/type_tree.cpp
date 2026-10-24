@@ -15,7 +15,7 @@
 
 namespace {
 
-using namespace dingo::core;
+using namespace dingo;
 
 struct leaf {};
 struct move_only {

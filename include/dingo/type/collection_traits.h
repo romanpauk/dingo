@@ -99,7 +99,7 @@ struct collection_traits
 
 } // namespace dingo
 
-namespace dingo::core {
+namespace dingo {
 
 // Adds an element to a collection by its collection traits.
 template <typename Collection, typename = void>
@@ -162,4 +162,4 @@ struct collection_append {
   }
 };
 
-} // namespace dingo::core
+} // namespace dingo

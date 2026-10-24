@@ -39,7 +39,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace dingo::core {
+namespace dingo {
 
 // The type trees of the declared interfaces of a binding of the stored leaf
 // `Leaf`, and the ones the leaf declares a user conversion to.
@@ -853,4 +853,4 @@ template <typename Target, typename Plan>
 using planned_wrappers_t = decltype(detail::plan_wrappers<Target, Plan>(
     std::make_index_sequence<Plan::value.created>()));
 
-} // namespace dingo::core
+} // namespace dingo

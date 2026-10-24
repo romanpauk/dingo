@@ -38,13 +38,13 @@ struct probe {};
 
 namespace {
 
-using dingo::core::constructor_detection;
-using dingo::core::constructor_kind;
-using dingo::core::declared_constructor;
-using dingo::core::detected_constructor;
-using dingo::core::invoke_constructor;
-using dingo::core::type_list;
-using dingo::core::type_name_of;
+using dingo::constructor_detection;
+using dingo::constructor_kind;
+using dingo::declared_constructor;
+using dingo::detected_constructor;
+using dingo::invoke_constructor;
+using dingo::type_list;
+using dingo::type_name_of;
 
 struct two_values {
   two_values(int init_integer, float init_real)
@@ -84,9 +84,9 @@ TEST(next_constructor, detects_the_constructor_of_the_largest_arity) {
   static_assert(detected_constructor<two_or_three_values>::arity == 3);
   // The search starts at its limit, so a limit below the largest arity finds
   // the largest constructor within it.
-  static_assert(dingo::core::detail::find_arity<two_or_three_values, 2>() == 2);
-  static_assert(dingo::core::detail::find_arity<two_values, 1>() ==
-                dingo::core::detail::invalid_arity);
+  static_assert(dingo::detail::find_arity<two_or_three_values, 2>() == 2);
+  static_assert(dingo::detail::find_arity<two_values, 1>() ==
+                dingo::detail::invalid_arity);
   static_assert(detected_constructor<defaulted>::arity == 0);
   // An aggregate with a base takes the base as its first initializer.
   static_assert(detected_constructor<derived_aggregate>::arity == 1);
@@ -146,7 +146,7 @@ TEST(next_constructor,
 
 template <typename Type, typename Backend> constexpr bool detects_as_default() {
   using detection =
-      constructor_detection<Type, dingo::core::constructor_arity, Backend>;
+      constructor_detection<Type, dingo::constructor_arity, Backend>;
   return detection::kind == detected_constructor<Type>::kind &&
          detection::arity == detected_constructor<Type>::arity;
 }
@@ -156,14 +156,13 @@ template <typename Type, typename Backend> constexpr bool detects_as_default() {
 // backends agree on it. The matrix family constructor_detection crosses the
 // backends and modes with the constructor type trees.
 TEST(next_constructor, the_engine_detects_by_the_selected_backend) {
-  using dingo::core::msvc_constructor_detection;
-  using dingo::core::portable_constructor_detection;
-  static_assert(
-      std::is_same_v<
-          dingo::core::default_constructor_detection,
-          std::conditional_t<dingo::core::msvc_constructor_detection_variant,
-                             msvc_constructor_detection,
-                             portable_constructor_detection>>);
+  using dingo::msvc_constructor_detection;
+  using dingo::portable_constructor_detection;
+  static_assert(std::is_same_v<
+                dingo::default_constructor_detection,
+                std::conditional_t<dingo::msvc_constructor_detection_variant,
+                                   msvc_constructor_detection,
+                                   portable_constructor_detection>>);
   static_assert(detects_as_default<two_values, msvc_constructor_detection>());
   static_assert(detects_as_default<generic, msvc_constructor_detection>());
   static_assert(
@@ -180,8 +179,8 @@ TEST(next_constructor, the_engine_detects_by_the_selected_backend) {
 // The signature mode recovers the argument types of the detected constructor;
 // the type tree mode reports them only for a constructor without arguments.
 TEST(next_constructor, the_signature_mode_recovers_the_argument_types) {
-  using dingo::core::constructor_arity;
-  using dingo::core::constructor_signature;
+  using dingo::constructor_arity;
+  using dingo::constructor_signature;
   static_assert(
       std::is_same_v<
           constructor_detection<two_values, constructor_signature>::arguments,
@@ -202,10 +201,9 @@ TEST(next_constructor, the_signature_mode_recovers_the_argument_types) {
 // An argument whose category no probe recorded is not recovered, so neither is
 // the signature.
 TEST(next_constructor, an_unrecorded_argument_category_is_not_recovered) {
-  static_assert(
-      std::is_void_v<typename dingo::core::detail::signature_arguments<
-          unrecorded::two_values, unrecorded::probe,
-          std::make_index_sequence<2>>::type>);
+  static_assert(std::is_void_v<typename dingo::detail::signature_arguments<
+                    unrecorded::two_values, unrecorded::probe,
+                    std::make_index_sequence<2>>::type>);
 }
 #endif
 

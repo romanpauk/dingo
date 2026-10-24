@@ -10,9 +10,9 @@ functions and selection rules.
 The public API starts at `container::register_type<...>()` in
 [container.h](../../include/dingo/container.h).
 
-`core::registration<Parts...>::binding_for<Args...>` in
+`dingo::registration<Parts...>::binding_for<Args...>` in
 [registration.h](../../include/dingo/registration.h) reduces the policies and
-the arguments of the registration to a `core::binding_type`:
+the arguments of the registration to a `dingo::binding_type`:
 
 - scope, which a registration must name, and whose tag must have `scope_traits`
 - storage, which a registration must name
@@ -52,8 +52,8 @@ using app_bindings = dingo::bindings<
 dingo::container<app_bindings> container;
 ```
 
-Each `bind<...>` entry is reduced by the same `core::registration` as a runtime
-registration, and the bindings form a `core::static_backend` of
+Each `bind<...>` entry is reduced by the same `dingo::registration` as a runtime
+registration, and the bindings form a `dingo::static_backend` of
 [backend/static_backend.h](../../include/dingo/backend/static_backend.h) with
 the lookup declarations of the traits. When the container type is formed, the
 static backend rejects a second binding of a key of an interface, unless the
@@ -85,11 +85,12 @@ declares can be served from its stored type.
 
 ## Resolution
 
-The public `resolve<T>()` and `resolve<T>(key)` are members of `core::selection`
-in [selection/selection.h](../../include/dingo/selection/selection.h). A key is
-a `key_type` object, a `key_value`, or a value of the key type. At that boundary
+The public `resolve<T>()` and `resolve<T>(key)` are members of
+`dingo::selection` in
+[selection/selection.h](../../include/dingo/selection/selection.h). A key is a
+`key_type` object, a `key_value`, or a value of the key type. At that boundary
 Dingo describes the request with
-`core::request_traits<Request, Key>::descriptor` of
+`dingo::request_traits<Request, Key>::descriptor` of
 [selection/request.h](../../include/dingo/selection/request.h): its kind, value,
 lvalue reference, or rvalue reference; its type tree, whose leaf is the
 interface it names, annotated when the request is; and its key.
@@ -113,7 +114,7 @@ of its domain.
 
 ### Selection
 
-The selection rules are data of the spec, interpreted by `core::selection`.
+The selection rules are data of the spec, interpreted by `dingo::selection`.
 
 - A singular request asks the local bindings of the registration whose object is
   being constructed, then the static and runtime bindings of the container,

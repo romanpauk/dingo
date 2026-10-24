@@ -67,7 +67,7 @@ class static_container;
 // arguments, in the order of the bindings.
 template <typename... Binds, typename Second>
 class DINGO_EMPTY_BASES static_container<bindings<Binds...>, Second>
-    : public core::selection<static_container<bindings<Binds...>, Second>>,
+    : public selection<static_container<bindings<Binds...>, Second>>,
       public detail::container_operations<
           static_container<bindings<Binds...>, Second>>,
       public detail::container_member_types<detail::static_traits_t<Second>>,
@@ -76,10 +76,10 @@ class DINGO_EMPTY_BASES static_container<bindings<Binds...>, Second>
   using traits = detail::static_traits_t<Second>;
 
 public:
-  using static_source_type = core::static_backend<
-      core::lookup_table_of<typename core::lookup_list<
-          typename traits::lookup_definition_type>::type>,
-      typename core::bind_registration<Binds>::type::binding...>;
+  using static_source_type =
+      static_backend<lookup_table_of<typename lookup_list<
+                         typename traits::lookup_definition_type>::type>,
+                     typename bind_registration<Binds>::type::binding...>;
   static constexpr bool has_static_source = true;
   static constexpr bool has_runtime_source = false;
   static constexpr bool has_local_static_source = false;
@@ -119,7 +119,7 @@ public:
   // The sources of the selection of the container, which resolves the
   // dependencies of their bindings, and keeps the objects requests construct.
   auto &container_resolver() { return *this; }
-  core::retained_objects &retained() { return retained_; }
+  retained_objects &retained() { return retained_; }
   static_source_type &static_source() { return backend_; }
   auto &transactions() { return backend_.transactions(); }
 
@@ -132,7 +132,7 @@ public:
   }
 
 private:
-  core::retained_objects retained_;
+  retained_objects retained_;
   static_source_type backend_;
 };
 

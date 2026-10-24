@@ -11,8 +11,8 @@
 struct service {};
 struct other {};
 
-static_assert(dingo::core::named_type_ids);
-static_assert(dingo::core::type_id_v<service> != dingo::core::type_id_v<other>);
+static_assert(dingo::named_type_ids);
+static_assert(dingo::type_id_v<service> != dingo::type_id_v<other>);
 
 int main() {
   using bindings = dingo::bindings<

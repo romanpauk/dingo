@@ -94,7 +94,7 @@ struct annotated_traits<annotated<Type, Tag> *> {
 
 } // namespace dingo
 
-namespace dingo::core {
+namespace dingo {
 
 template <typename Type> struct is_annotated : std::false_type {};
 
@@ -127,4 +127,4 @@ template <typename Interface>
 inline constexpr type_tree interface_type_tree_v =
     interface_type_tree<Interface>();
 
-} // namespace dingo::core
+} // namespace dingo

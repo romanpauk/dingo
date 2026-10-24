@@ -87,7 +87,7 @@ template <typename... Subjects> struct type_recursion_carrier {};
 
 } // namespace dingo
 
-namespace dingo::core {
+namespace dingo {
 
 // The diagnostics reported when the program is compiled.
 enum class diag : std::uint8_t {
@@ -1047,4 +1047,4 @@ constexpr bool require() {
   return true;
 }
 
-} // namespace dingo::core
+} // namespace dingo

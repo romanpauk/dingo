@@ -26,12 +26,12 @@
 #include <type_traits>
 #include <utility>
 
-namespace dingo::core {
+namespace dingo {
 
 // Reports a request of an object while it is being constructed: the path of
 // the types being constructed, ending with the repeated one.
 template <typename Type>
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE void raise_recursion() {
+[[noreturn]] DINGO_COLD DINGO_NOINLINE void raise_recursion() {
   std::string path;
   if (type_frame::active()) {
     type_frame::append_path(path);
@@ -384,7 +384,7 @@ template <typename Binding>
 inline constexpr bool custom_slot_v =
     !std::is_same_v<slot_of_t<Binding>, binding_slot<Binding>>;
 
-} // namespace dingo::core
+} // namespace dingo
 
 namespace dingo {
 
@@ -397,18 +397,17 @@ namespace dingo {
 //
 // get() yields the object a request walks from; settled() tells whether that
 // object lives as long as the container, so its address may be kept.
-template <typename Binding>
-class scope_slot : public core::binding_context<Binding> {
+template <typename Binding> class scope_slot : public binding_context<Binding> {
 public:
   using stored_type = typename Binding::stored_type;
-  using core::binding_context<Binding>::binding_context;
+  using binding_context<Binding>::binding_context;
 
 protected:
   // Constructs the stored object at `where` by the factory of the binding,
   // which resolves its dependencies from `resolver`.
   template <typename Resolver> void construct(void *where, Resolver &resolver) {
-    const auto frame = core::type_frame::of<core::leaf_of_t<stored_type>>();
-    core::construct_stored<stored_type>(where, this->factory(), resolver);
+    const auto frame = type_frame::of<leaf_of_t<stored_type>>();
+    construct_stored<stored_type>(where, this->factory(), resolver);
   }
 };
 

@@ -23,7 +23,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace dingo::core::detail {
+namespace dingo::detail {
 
 template <typename Type, typename = void, typename... Args>
 struct msvc_list_initialization_impl : std::false_type {};
@@ -139,4 +139,4 @@ template <typename Type, std::size_t Arity>
 struct constructor_search<Type, msvc_constructor_detection, Arity>
     : msvc_search_of<Type, Arity>::type {};
 
-} // namespace dingo::core::detail
+} // namespace dingo::detail

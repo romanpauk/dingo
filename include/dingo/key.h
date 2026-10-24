@@ -17,7 +17,7 @@
 namespace dingo {
 
 template <typename Type, typename Key> struct dependency_type {
-  using type = core::keyed<Type, core::key_of_t<Key>>;
+  using type = keyed<Type, key_of_t<Key>>;
 };
 
 template <typename Type> struct dependency_type<Type, key_type<none_t>> {

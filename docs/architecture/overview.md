@@ -99,12 +99,12 @@ The public entry points are:
 `static_container<bindings<...>, Traits>`, and
 `static_container<bindings<...>, Parent>` hold compile-time bindings only.
 
-Every container derives from `core::selection`, which resolves requests by the
+Every container derives from `dingo::selection`, which resolves requests by the
 selection rules over its sources, and from `container_operations`, which
 provides `construct`, `construct_collection`, `invoke`, and
 `register_type_collection` on top of the selection. A container declares its
-sources: its static bindings, a `core::static_backend`; its runtime bindings, a
-`core::runtime_backend`; and its parent.
+sources: its static bindings, a `dingo::static_backend`; its runtime bindings, a
+`dingo::runtime_backend`; and its parent.
 
 A runtime container keeps its state apart from itself, in one allocation made by
 its allocator: the runtime backend with its bindings, the objects it keeps for
@@ -118,7 +118,7 @@ container keeps its static backend in place. See
 
 [registration.h](../../include/dingo/registration.h) reduces a
 `register_type<...>()` declaration, and a `bind<...>` entry of `bindings<...>`,
-to a `core::binding_type` of
+to a `dingo::binding_type` of
 [conversion/convert.h](../../include/dingo/conversion/convert.h):
 
 - the scope tag, whose `scope_traits` hold the scope descriptor

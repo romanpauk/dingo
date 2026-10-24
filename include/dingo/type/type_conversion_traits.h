@@ -29,7 +29,7 @@ struct type_conversion_traits {};
 
 } // namespace dingo
 
-namespace dingo::core {
+namespace dingo {
 
 namespace detail {
 template <typename Target, typename Source, typename From, typename = void>
@@ -92,4 +92,4 @@ template <typename Target, typename Source> Target convert_to(Source &&source) {
   }
 }
 
-} // namespace dingo::core
+} // namespace dingo

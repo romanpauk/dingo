@@ -22,7 +22,7 @@ namespace {
 
 using dingo::scope;
 using dingo::storage;
-using dingo::core::type_name_of;
+using dingo::type_name_of;
 
 template <typename Exception, typename Resolve>
 std::string message_of(Resolve &&resolve) {

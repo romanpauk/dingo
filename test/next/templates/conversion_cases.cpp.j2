@@ -22,27 +22,27 @@
 
 namespace dingo::next_test {
 
-using core::operation;
-using core::type_tree_v;
+using dingo::operation;
+using dingo::type_tree_v;
 
 struct conversion_case {
   const char *name;
-  const core::type_tree *stored;
-  const core::scope_info *scope;
-  const core::type_tree *interfaces[core::max_interfaces];
+  const dingo::type_tree *stored;
+  const dingo::scope_info *scope;
+  const dingo::type_tree *interfaces[dingo::max_interfaces];
   std::size_t interface_count;
-  core::request_kind kind;
-  const core::type_tree *request;
+  dingo::request_kind kind;
+  const dingo::type_tree *request;
   bool registered;
   bool found;
   bool served;
-  core::route_step rules[core::max_rules_per_route];
+  dingo::route_step rules[dingo::max_rules_per_route];
   std::size_t rule_count;
 };
 
 extern const conversion_case conversion_cases[] = {
 {% for case in cases %}
-    {"{{ case.scope }} {{ case.interfaces | join(",") }} {{ spell(case.stored) }} {{ case.kind }} {{ spell(case.request) }}", &type_tree_v<{{ spell(case.stored) }}>, &::dingo::scope_traits<::dingo::{{ case.scope }}>::descriptor, { {% for interface in case.interfaces %}&type_tree_v<{{ interface }}>{{ ", " if not loop.last }}{% endfor %} }, {{ case.interfaces | length }}, core::request_kind::{{ case.kind }}, &type_tree_v<{{ spell(case.request) }}>, {{ case.registered | lower }}, {{ case.found | lower }}, {{ case.served | lower }}, { {% for rule in case.rules %}{operation::{{ rule.form }}, {% if rule.kind %}&core::semantics_v<::{{ rule.kind }}>{% else %}&core::leaf_semantics{% endif %}}{{ ", " if not loop.last }}{% endfor %} }, {{ case.rules | length }}},
+    {"{{ case.scope }} {{ case.interfaces | join(",") }} {{ spell(case.stored) }} {{ case.kind }} {{ spell(case.request) }}", &type_tree_v<{{ spell(case.stored) }}>, &::dingo::scope_traits<::dingo::{{ case.scope }}>::descriptor, { {% for interface in case.interfaces %}&type_tree_v<{{ interface }}>{{ ", " if not loop.last }}{% endfor %} }, {{ case.interfaces | length }}, dingo::request_kind::{{ case.kind }}, &type_tree_v<{{ spell(case.request) }}>, {{ case.registered | lower }}, {{ case.found | lower }}, {{ case.served | lower }}, { {% for rule in case.rules %}{operation::{{ rule.form }}, {% if rule.kind %}&dingo::semantics_v<::{{ rule.kind }}>{% else %}&dingo::leaf_semantics{% endif %}}{{ ", " if not loop.last }}{% endfor %} }, {{ case.rules | length }}},
 {% endfor %}
 };
 

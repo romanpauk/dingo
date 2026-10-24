@@ -14,7 +14,7 @@
 // The selection rules of the spec as constexpr data: which sources answer a
 // request of each mode, and the status of the number of bindings they name.
 
-namespace dingo::core {
+namespace dingo {
 
 // spec: selection_rules
 enum class selection_source : std::uint8_t {
@@ -128,4 +128,4 @@ constexpr const selection_rule &rule_of(selection_mode mode) {
   return selection_rules[0];
 }
 
-} // namespace dingo::core
+} // namespace dingo

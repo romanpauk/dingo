@@ -26,7 +26,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace dingo::core {
+namespace dingo {
 
 namespace detail {
 template <typename Type, typename = void>
@@ -219,4 +219,4 @@ using dense_index_t = std::conditional_t<
     (std::is_integral_v<Value> || std::is_enum_v<Value>) && Bound != unbounded,
     dense_index<Bound, Value, Candidate>, hashed_index_t<Value, Candidate>>;
 
-} // namespace dingo::core
+} // namespace dingo

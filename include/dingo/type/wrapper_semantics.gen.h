@@ -48,9 +48,6 @@ struct shared_owner {};
 
 namespace dingo {
 
-using operation = core::operation;
-using property = core::property;
-
 // An operation of a wrapper semantics, and the semantics it leads to for an
 // operation that leads to another semantics, such as the sharing semantics a
 // sole owner shares its element with.
@@ -69,8 +66,7 @@ template <> struct wrapper_semantics<::dingo::semantics::variant_value> {
   static constexpr std::uint16_t properties =
       property::owning | property::in_place | property::constructible |
       property::mapped | property::variadic;
-  using operations =
-      core::type_list<op<operation::borrow>, op<operation::take>>;
+  using operations = type_list<op<operation::borrow>, op<operation::take>>;
 };
 
 template <> struct wrapper_semantics<::dingo::semantics::fixed_array> {
@@ -78,23 +74,23 @@ template <> struct wrapper_semantics<::dingo::semantics::fixed_array> {
       property::owning | property::in_place | property::constructible |
       property::immovable | property::extent;
   using operations =
-      core::type_list<op<operation::decay, ::dingo::semantics::pointer>,
-                      op<operation::release, ::dingo::semantics::pointer>>;
+      type_list<op<operation::decay, ::dingo::semantics::pointer>,
+                op<operation::release, ::dingo::semantics::pointer>>;
 };
 
 template <> struct wrapper_semantics<::dingo::semantics::dynamic_array> {
   static constexpr std::uint16_t properties =
       property::in_place | property::unsized | property::immovable;
   using operations =
-      core::type_list<op<operation::decay, ::dingo::semantics::pointer>>;
+      type_list<op<operation::decay, ::dingo::semantics::pointer>>;
 };
 
 template <> struct wrapper_semantics<::dingo::semantics::optional_value> {
   static constexpr std::uint16_t properties =
       property::owning | property::nullable | property::borrowable |
       property::in_place | property::constructible | property::mapped;
-  using operations = core::type_list<op<operation::borrow>, op<operation::take>,
-                                     op<operation::wrap>>;
+  using operations = type_list<op<operation::borrow>, op<operation::take>,
+                               op<operation::wrap>>;
 };
 
 template <> struct wrapper_semantics<::dingo::semantics::sole_owner> {
@@ -102,10 +98,10 @@ template <> struct wrapper_semantics<::dingo::semantics::sole_owner> {
       property::owning | property::nullable | property::borrowable |
       property::constructible | property::mapped;
   using operations =
-      core::type_list<op<operation::borrow>,
-                      op<operation::share, ::dingo::semantics::shared_owner>,
-                      op<operation::adopt, ::dingo::semantics::pointer>,
-                      op<operation::upcast_consumed>>;
+      type_list<op<operation::borrow>,
+                op<operation::share, ::dingo::semantics::shared_owner>,
+                op<operation::adopt, ::dingo::semantics::pointer>,
+                op<operation::upcast_consumed>>;
 };
 
 template <> struct wrapper_semantics<::dingo::semantics::pointer> {
@@ -113,15 +109,14 @@ template <> struct wrapper_semantics<::dingo::semantics::pointer> {
       property::nullable | property::borrowable | property::constructible |
       property::copyable;
   using operations =
-      core::type_list<op<operation::borrow>, op<operation::address>,
-                      op<operation::release_whole>,
-                      op<operation::upcast_copied>,
-                      op<operation::upcast_consumed>>;
+      type_list<op<operation::borrow>, op<operation::address>,
+                op<operation::release_whole>, op<operation::upcast_copied>,
+                op<operation::upcast_consumed>>;
 };
 
 template <> struct wrapper_semantics<::dingo::semantics::reference> {
   static constexpr std::uint16_t properties = property::borrowable;
-  using operations = core::type_list<op<operation::borrow>>;
+  using operations = type_list<op<operation::borrow>>;
 };
 
 template <> struct wrapper_semantics<::dingo::semantics::shared_owner> {
@@ -130,15 +125,15 @@ template <> struct wrapper_semantics<::dingo::semantics::shared_owner> {
       property::borrowable | property::constructible | property::copyable |
       property::mapped;
   using operations =
-      core::type_list<op<operation::borrow>,
-                      op<operation::adopt, ::dingo::semantics::pointer>,
-                      op<operation::upcast_consumed>,
-                      op<operation::upcast_copied>, op<operation::retain>>;
+      type_list<op<operation::borrow>,
+                op<operation::adopt, ::dingo::semantics::pointer>,
+                op<operation::upcast_consumed>, op<operation::upcast_copied>,
+                op<operation::retain>>;
 };
 
 } // namespace dingo
 
-namespace dingo::core {
+namespace dingo {
 
 // The wrapper semantics of the library, in the order of the spec.
 using library_semantics = type_list<
@@ -147,4 +142,4 @@ using library_semantics = type_list<
     ::dingo::semantics::sole_owner, ::dingo::semantics::pointer,
     ::dingo::semantics::reference, ::dingo::semantics::shared_owner>;
 
-} // namespace dingo::core
+} // namespace dingo

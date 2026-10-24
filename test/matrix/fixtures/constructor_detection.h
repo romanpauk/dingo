@@ -134,7 +134,7 @@ template <typename T, typename Sequence> struct constructor_repeated_arguments;
 
 template <typename T, std::size_t... Is>
 struct constructor_repeated_arguments<T, std::index_sequence<Is...>> {
-  using type = core::type_list<constructor_repeated_type<T, Is>...>;
+  using type = dingo::type_list<constructor_repeated_type<T, Is>...>;
 };
 
 using constructor_repeated_int_arguments =
@@ -144,15 +144,15 @@ using constructor_repeated_int_arguments =
 struct constructor_detection_portable_backend {
   template <typename T, typename DetectionMode>
   using detection =
-      core::constructor_detection<T, DetectionMode,
-                                  core::portable_constructor_detection>;
+      dingo::constructor_detection<T, DetectionMode,
+                                   dingo::portable_constructor_detection>;
 };
 
 struct constructor_detection_msvc_backend {
   template <typename T, typename DetectionMode>
   using detection =
-      core::constructor_detection<T, DetectionMode,
-                                  core::msvc_constructor_detection>;
+      dingo::constructor_detection<T, DetectionMode,
+                                   dingo::msvc_constructor_detection>;
 };
 
 } // namespace dingo::matrix

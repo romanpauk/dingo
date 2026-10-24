@@ -20,12 +20,12 @@
 // that throws its exception with its message, out of line and in a cold
 // section.
 
-namespace dingo::core {
+namespace dingo {
 
 // spec: diagnostics.alternative_not_held
 // A request is served by a route through an alternative of a variadic wrapper,
 // whose object holds another alternative.
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+[[noreturn]] DINGO_COLD DINGO_NOINLINE inline void
 raise_alternative_not_held(std::string_view type) {
   throw ::dingo::type_not_convertible_exception(
       format_message("{type} holds another alternative than the one the "
@@ -36,7 +36,7 @@ raise_alternative_not_held(std::string_view type) {
 // spec: diagnostics.element_not_held
 // A request other than of an address is served by a route through the element
 // of a nullable wrapper that holds it in place, whose object holds no element.
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+[[noreturn]] DINGO_COLD DINGO_NOINLINE inline void
 raise_element_not_held(std::string_view type) {
   throw ::dingo::type_not_convertible_exception(
       format_message("{type} holds no element", {{"type", type}}));
@@ -45,7 +45,7 @@ raise_element_not_held(std::string_view type) {
 // spec: diagnostics.lookup_already_registered
 // A binding is registered with a key that a binding of a common interface
 // already holds, in a domain declared with cardinality one.
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+[[noreturn]] DINGO_COLD DINGO_NOINLINE inline void
 raise_lookup_already_registered(std::string_view interface,
                                 std::string_view stored, std::string_view key) {
   throw ::dingo::lookup_already_registered_exception(format_message(
@@ -56,7 +56,7 @@ raise_lookup_already_registered(std::string_view interface,
 
 // spec: diagnostics.type_ambiguous
 // More than one binding is named by the request.
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+[[noreturn]] DINGO_COLD DINGO_NOINLINE inline void
 raise_type_ambiguous(std::string_view request) {
   throw ::dingo::type_ambiguous_exception(format_message(
       "type resolution is ambiguous: {request}", {{"request", request}}));
@@ -65,7 +65,7 @@ raise_type_ambiguous(std::string_view request) {
 // spec: diagnostics.type_ambiguous_required_by
 // More than one binding is named by the request of a dependency of an object
 // being constructed, whose type is `type`.
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+[[noreturn]] DINGO_COLD DINGO_NOINLINE inline void
 raise_type_ambiguous_required_by(std::string_view request,
                                  std::string_view type) {
   throw ::dingo::type_ambiguous_exception(format_message(
@@ -76,7 +76,7 @@ raise_type_ambiguous_required_by(std::string_view request,
 // spec: diagnostics.type_index_out_of_range
 // A binding is registered with a key value outside the bound of the dense
 // array that indexes its domain.
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+[[noreturn]] DINGO_COLD DINGO_NOINLINE inline void
 raise_type_index_out_of_range(std::string_view key) {
   throw ::dingo::type_index_out_of_range_exception(format_message(
       "type index out of range: key type {key}", {{"key", key}}));
@@ -84,7 +84,7 @@ raise_type_index_out_of_range(std::string_view key) {
 
 // spec: diagnostics.type_not_convertible
 // The binding the request names serves no reachable type it accepts.
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+[[noreturn]] DINGO_COLD DINGO_NOINLINE inline void
 raise_type_not_convertible(std::string_view request, std::string_view stored) {
   throw ::dingo::type_not_convertible_exception(
       format_message("type is not convertible to {request} from {stored}",
@@ -94,7 +94,7 @@ raise_type_not_convertible(std::string_view request, std::string_view stored) {
 // spec: diagnostics.type_not_convertible_required_by
 // The binding the request of a dependency of an object being constructed names
 // serves no reachable type it accepts.
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+[[noreturn]] DINGO_COLD DINGO_NOINLINE inline void
 raise_type_not_convertible_required_by(std::string_view request,
                                        std::string_view stored,
                                        std::string_view type) {
@@ -105,7 +105,7 @@ raise_type_not_convertible_required_by(std::string_view request,
 
 // spec: diagnostics.type_not_found
 // No binding is named by the request.
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+[[noreturn]] DINGO_COLD DINGO_NOINLINE inline void
 raise_type_not_found(std::string_view request) {
   throw ::dingo::type_not_found_exception(
       format_message("type not found: {request}", {{"request", request}}));
@@ -113,7 +113,7 @@ raise_type_not_found(std::string_view request) {
 
 // spec: diagnostics.type_not_found_keyed
 // No binding is named by a request with a key, whose type is `key`.
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+[[noreturn]] DINGO_COLD DINGO_NOINLINE inline void
 raise_type_not_found_keyed(std::string_view request, std::string_view key) {
   throw ::dingo::type_not_found_exception(
       format_message("type not found: {request} (index type: {key})",
@@ -123,7 +123,7 @@ raise_type_not_found_keyed(std::string_view request, std::string_view key) {
 // spec: diagnostics.type_not_found_keyed_required_by
 // No binding is named by a request with a key of a dependency of an object
 // being constructed.
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+[[noreturn]] DINGO_COLD DINGO_NOINLINE inline void
 raise_type_not_found_keyed_required_by(std::string_view request,
                                        std::string_view key,
                                        std::string_view path) {
@@ -138,7 +138,7 @@ raise_type_not_found_keyed_required_by(std::string_view request,
 // requested when the container is compiled: a container that decides then that
 // no binding is named by it rejects it then, with the binding that declares it
 // as the path.
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+[[noreturn]] DINGO_COLD DINGO_NOINLINE inline void
 raise_type_not_found_required_by(std::string_view request,
                                  std::string_view path) {
   throw ::dingo::type_not_found_exception(
@@ -150,10 +150,10 @@ raise_type_not_found_required_by(std::string_view request,
 // An object is requested while it is being constructed, by a scope that guards
 // the recursion, or the dependencies static bindings declare form a cycle the
 // graph rule does not allow, whose path ends with the binding it starts with.
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+[[noreturn]] DINGO_COLD DINGO_NOINLINE inline void
 raise_type_recursion(std::string_view path) {
   throw ::dingo::type_recursion_exception(format_message(
       "recursive dependency detected: {path}", {{"path", path}}));
 }
 
-} // namespace dingo::core
+} // namespace dingo

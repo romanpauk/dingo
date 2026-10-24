@@ -9,7 +9,7 @@
 // The scopes of the spec as constexpr data: the descriptor of a scope, and the
 // public tags and the scope_traits of the built-in scopes.
 
-namespace dingo::core {
+namespace dingo {
 
 // spec: scopes
 enum class slot : std::uint8_t {
@@ -47,7 +47,7 @@ struct scope_info {
   std::uint8_t exposures[storage_kind_count];
 };
 
-} // namespace dingo::core
+} // namespace dingo
 
 // The public tags of the built-in scopes, and the scope_traits that make a
 // tag type a scope.
@@ -60,7 +60,7 @@ struct {{ tag.name }} {};
 {% endfor %}
 
 // The descriptor of a scope: the fields of the spec's Scope schema.
-using scope_descriptor = core::scope_info;
+using scope_descriptor = scope_info;
 
 // Makes `Tag` a scope. A specialization holds its descriptor,
 //
@@ -78,17 +78,17 @@ template <typename Tag> struct scope_traits;
 {% for tag in tags %}
 
 template <> struct scope_traits<::{{ namespace }}::{{ tag.name }}> {
-  static constexpr scope_descriptor descriptor = {core::slot::{{ tag.fields.slot }}, core::value_category::{{ tag.fields.materializes }}, {{ tag.fields.stable | lower }}, {{ tag.fields.consumes | lower }}, core::recursion_guard::{{ tag.fields.guard }}, {{ tag.fields.retains | lower }}, core::exposure_rule::{{ tag.fields.exposure_rule }}, {{ tag.fields.nested_wrappers | lower }}, {{ tag.fields.needs_instance | lower }}, { {{ tag.fields.exposures | join(", ") }} }};
+  static constexpr scope_descriptor descriptor = {slot::{{ tag.fields.slot }}, value_category::{{ tag.fields.materializes }}, {{ tag.fields.stable | lower }}, {{ tag.fields.consumes | lower }}, recursion_guard::{{ tag.fields.guard }}, {{ tag.fields.retains | lower }}, exposure_rule::{{ tag.fields.exposure_rule }}, {{ tag.fields.nested_wrappers | lower }}, {{ tag.fields.needs_instance | lower }}, { {{ tag.fields.exposures | join(", ") }} }};
 };
 {% endfor %}
 
 } // namespace {{ namespace }}
 
-namespace dingo::core {
+namespace dingo {
 
 // The descriptor of the scope `Tag`.
 template <typename Tag>
 inline constexpr const scope_info &scope_of_v =
     ::{{ namespace }}::scope_traits<Tag>::descriptor;
 
-} // namespace dingo::core
+} // namespace dingo

@@ -21,9 +21,6 @@ struct {{ semantics.name }} {};
 
 namespace dingo {
 
-using operation = core::operation;
-using property = core::property;
-
 // An operation of a wrapper semantics, and the semantics it leads to for an
 // operation that leads to another semantics, such as the sharing semantics a
 // sole owner shares its element with.
@@ -41,15 +38,15 @@ template <typename Semantics> struct wrapper_semantics;
 
 template <> struct wrapper_semantics<::{{ namespace }}::{{ semantics.name }}> {
   static constexpr std::uint16_t properties = {% for property in semantics.properties %}property::{{ property }}{{ " | " if not loop.last }}{% endfor %}{% if not semantics.properties %}0{% endif %};
-  using operations = core::type_list<{% for operation in semantics.operations %}op<operation::{{ operation.operation }}{% if operation.target %}, ::{{ namespace }}::{{ operation.target }}{% endif %}>{{ ", " if not loop.last }}{% endfor %}>;
+  using operations = type_list<{% for operation in semantics.operations %}op<operation::{{ operation.operation }}{% if operation.target %}, ::{{ namespace }}::{{ operation.target }}{% endif %}>{{ ", " if not loop.last }}{% endfor %}>;
 };
 {% endfor %}
 
 } // namespace dingo
 
-namespace dingo::core {
+namespace dingo {
 
 // The wrapper semantics of the library, in the order of the spec.
 using library_semantics = type_list<{% for semantics in semantics_list %}::{{ namespace }}::{{ semantics.name }}{{ ", " if not loop.last }}{% endfor %}>;
 
-} // namespace dingo::core
+} // namespace dingo

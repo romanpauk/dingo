@@ -68,7 +68,7 @@ struct constructor_argument_const_pointer {
 template <bool ByReference, typename Request>
 std::string constructor_argument_request() {
   return (ByReference ? "resolve " : "argument ") +
-         core::type_name_of<Request>();
+         dingo::type_name_of<Request>();
 }
 
 // Reports the request of the injected argument by throwing it.
@@ -95,7 +95,7 @@ void assert_constructor_argument_conversion() {
   using target = constructor_argument_consumer<Dependency, Category>;
   constructor_argument_resolver resolver;
   try {
-    (void)core::invoke_constructor<target>(resolver, [](auto &&...args) {
+    (void)dingo::invoke_constructor<target>(resolver, [](auto &&...args) {
       return target{std::forward<decltype(args)>(args)...};
     });
     FAIL() << "constructor argument conversion did not run";
@@ -118,13 +118,13 @@ Request constructor_detection_argument(Resolver &resolver) {
 
 template <typename T, typename Resolver, typename... Args>
 T construct_from_signature(Resolver &resolver,
-                           core::type_list<Args...> /*arguments*/) {
+                           dingo::type_list<Args...> /*arguments*/) {
   return T{constructor_detection_argument<Args>(resolver)...};
 }
 
 template <typename T, typename Resolver, std::size_t... Is>
 T construct_from_shape(Resolver &resolver, std::index_sequence<Is...>) {
-  return T{((void)Is, core::constructor_argument<T, Resolver>(resolver))...};
+  return T{((void)Is, dingo::constructor_argument<T, Resolver>(resolver))...};
 }
 
 // Constructs `T` by its detection: by the recovered argument types in the
@@ -132,7 +132,7 @@ T construct_from_shape(Resolver &resolver, std::index_sequence<Is...>) {
 template <typename Detection, typename DetectionMode, typename T,
           typename Resolver>
 T construct_detected(Resolver &resolver) {
-  if constexpr (std::is_same_v<DetectionMode, core::constructor_signature>) {
+  if constexpr (std::is_same_v<DetectionMode, dingo::constructor_signature>) {
     return construct_from_signature<T>(resolver,
                                        typename Detection::arguments{});
   } else {
@@ -187,9 +187,9 @@ using constructor_annotated_shared_pointer =
 // argument as the annotated type.
 template <typename Dependency>
 using constructor_annotation_argument_t =
-    typename core::detail::category_result<constructor_dependency<Dependency>,
-                                           1, 0,
-                                           core::detail::value_probe>::type;
+    typename dingo::detail::category_result<constructor_dependency<Dependency>,
+                                            1, 0,
+                                            dingo::detail::value_probe>::type;
 
 static_assert(std::is_same_v<
               constructor_annotation_argument_t<constructor_annotated_pointer>,
@@ -218,7 +218,7 @@ struct constructor_detection_construction_check<constructor_two_values> {
 template <>
 struct constructor_detection_construction_check<constructor_copy_only_value> {
   template <typename Detection, typename DetectionMode> static void run() {
-    if constexpr (std::is_same_v<DetectionMode, core::constructor_signature>) {
+    if constexpr (std::is_same_v<DetectionMode, dingo::constructor_signature>) {
       constructor_copy_only_resolver resolver;
       (void)construct_detected<Detection, DetectionMode,
                                constructor_copy_only_value>(resolver);
@@ -227,7 +227,7 @@ struct constructor_detection_construction_check<constructor_copy_only_value> {
 };
 
 template <typename Backend, typename DetectionMode, typename T,
-          core::constructor_kind ExpectedKind, std::size_t ExpectedArity,
+          dingo::constructor_kind ExpectedKind, std::size_t ExpectedArity,
           typename ExpectedArguments>
 void assert_constructor_detection() {
   using detection = typename Backend::template detection<T, DetectionMode>;
@@ -239,8 +239,8 @@ void assert_constructor_detection() {
   if constexpr (std::is_same_v<Backend, constructor_detection_msvc_backend> &&
                 std::is_same_v<T, constructor_same_arity_overload>) {
     static_assert(
-        !core::detail::msvc_probe<T, core::detail::opaque_argument,
-                                  core::detail::invalid_arity>::value);
+        !dingo::detail::msvc_probe<T, dingo::detail::opaque_argument,
+                                   dingo::detail::invalid_arity>::value);
   }
 
   constructor_detection_construction_check<T>::template run<detection,

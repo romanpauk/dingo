@@ -20,7 +20,7 @@ namespace {
 
 using dingo::scope;
 using dingo::storage;
-using dingo::core::type_name_of;
+using dingo::type_name_of;
 
 struct missing {
   missing() {}

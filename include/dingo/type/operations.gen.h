@@ -16,7 +16,7 @@
 // The wrapper semantics themselves are declarations, see
 // wrapper_semantics.gen.h.
 
-namespace dingo::core {
+namespace dingo {
 
 // The properties of a wrapper semantics, as bits of the properties a
 // dingo::wrapper_semantics declares. spec: wrapper_semantics
@@ -169,4 +169,4 @@ constexpr const operation_info &info(operation form) {
   return operations[static_cast<std::size_t>(form)];
 }
 
-} // namespace dingo::core
+} // namespace dingo

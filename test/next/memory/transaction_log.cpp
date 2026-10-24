@@ -19,9 +19,9 @@
 
 namespace {
 
-using dingo::core::basic_transaction_log;
-using dingo::core::no_transaction_log;
-using dingo::core::transaction_log;
+using dingo::basic_transaction_log;
+using dingo::no_transaction_log;
+using dingo::transaction_log;
 
 struct failure {};
 

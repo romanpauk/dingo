@@ -14,7 +14,7 @@
 #include <dingo/lookup/key.h>
 #include <dingo/type/annotated.h>
 
-namespace dingo::core {
+namespace dingo {
 
 // The key of a request annotated by `Tag`: the key `Key` of the request,
 // with the annotation that names the interface.
@@ -54,4 +54,4 @@ struct argument_request<::dingo::annotated<Type, Tag>> {
 };
 } // namespace detail
 
-} // namespace dingo::core
+} // namespace dingo

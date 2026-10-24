@@ -23,16 +23,16 @@ namespace dingo::next_test {
 
 struct conversion_case {
   const char *name;
-  const core::type_tree *stored;
-  const core::scope_info *scope;
-  const core::type_tree *interfaces[core::max_interfaces];
+  const dingo::type_tree *stored;
+  const dingo::scope_info *scope;
+  const dingo::type_tree *interfaces[dingo::max_interfaces];
   std::size_t interface_count;
-  core::request_kind kind;
-  const core::type_tree *request;
+  dingo::request_kind kind;
+  const dingo::type_tree *request;
   bool registered;
   bool found;
   bool served;
-  core::route_step rules[core::max_rules_per_route];
+  dingo::route_step rules[dingo::max_rules_per_route];
   std::size_t rule_count;
 };
 
@@ -42,7 +42,7 @@ extern const std::size_t conversion_case_count;
 namespace {
 
 // The steps of a route as the forms and the addresses of the kinds.
-std::string rules_of(const core::route_step *rules, std::size_t count) {
+std::string rules_of(const dingo::route_step *rules, std::size_t count) {
   std::string text;
   for (std::size_t index = 0; index < count; ++index) {
     text +=
@@ -57,27 +57,28 @@ TEST(conversion_conformance, computes_what_the_reference_computes) {
   std::size_t failures = 0;
   for (std::size_t index = 0; index < conversion_case_count; ++index) {
     const conversion_case &expected = conversion_cases[index];
-    core::binding_descriptor binding;
+    dingo::binding_descriptor binding;
     binding.stored = *expected.stored;
-    binding.leaves = core::named_leaves(binding.stored);
+    binding.leaves = dingo::named_leaves(binding.stored);
     binding.scope = *expected.scope;
     for (std::size_t i = 0; i < expected.interface_count; ++i) {
       binding.interfaces[i] = *expected.interfaces[i];
     }
     binding.interface_count = expected.interface_count;
-    core::request_descriptor request{expected.kind, *expected.request, {}};
+    dingo::request_descriptor request{expected.kind, *expected.request, {}};
 
-    bool registered =
-        core::register_status(binding) == core::registration_status::registered;
-    bool found = registered && core::finds(binding, request);
+    bool registered = dingo::register_status(binding) ==
+                      dingo::registration_status::registered;
+    bool found = registered && dingo::finds(binding, request);
     bool served = false;
     std::string rules;
     if (found) {
-      core::reachable_types reachable_types = core::derive(binding);
+      dingo::reachable_types reachable_types = dingo::derive(binding);
       ASSERT_FALSE(reachable_types.overflow) << expected.name;
-      const core::route_choice choice = core::select_route(
-          binding, reachable_types, request, core::exposed_categories(binding));
-      served = choice.reachable_type != core::no_reachable_type;
+      const dingo::route_choice choice =
+          dingo::select_route(binding, reachable_types, request,
+                              dingo::exposed_categories(binding));
+      served = choice.reachable_type != dingo::no_reachable_type;
       if (served) {
         // The rules of the reachable type, then the wrappers the request
         // creates.

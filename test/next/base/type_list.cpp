@@ -18,9 +18,9 @@
 
 namespace {
 
-using dingo::core::type_list;
-using dingo::core::type_list_at_t;
-using dingo::core::type_list_index_of;
+using dingo::type_list;
+using dingo::type_list_at_t;
+using dingo::type_list_index_of;
 
 struct a {};
 struct b {};

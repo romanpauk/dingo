@@ -42,8 +42,8 @@ struct iface {
 struct impl : iface {};
 
 template <typename Scope, typename Stored, typename... Interfaces>
-using slot_of = dingo::core::slot_of_t<dingo::core::binding_type<
-    Scope, Stored, dingo::core::type_list<Interfaces...>>>;
+using slot_of = dingo::slot_of_t<
+    dingo::binding_type<Scope, Stored, dingo::type_list<Interfaces...>>>;
 
 TEST(next_object_sizes, a_runtime_container_is_a_few_words) {
   if constexpr (sizeof(void *) == 8) {
@@ -53,15 +53,15 @@ TEST(next_object_sizes, a_runtime_container_is_a_few_words) {
   }
   // A container is moved between its requests, and holds its effects in the
   // frame of its outermost request.
-  static_assert(sizeof(dingo::core::transaction_log) == sizeof(void *));
-  static_assert(std::is_empty_v<dingo::core::no_transaction_log>);
+  static_assert(sizeof(dingo::transaction_log) == sizeof(void *));
+  static_assert(std::is_empty_v<dingo::no_transaction_log>);
 }
 
 TEST(next_object_sizes, a_slot_keeps_its_object_and_what_its_scope_needs) {
   // A lazily constructed object and its state.
   static_assert(sizeof(slot_of<dingo::shared, leaf>) ==
-                sizeof(dingo::core::lazy_slot<leaf>));
-  static_assert(sizeof(dingo::core::lazy_slot<leaf>) <= 2 * sizeof(leaf));
+                sizeof(dingo::lazy_slot<leaf>));
+  static_assert(sizeof(dingo::lazy_slot<leaf>) <= 2 * sizeof(leaf));
   // An external object is referred to.
   static_assert(sizeof(slot_of<dingo::external, leaf &>) == sizeof(void *));
   static_assert(sizeof(slot_of<dingo::external, leaf *>) == sizeof(void *));
@@ -79,9 +79,9 @@ TEST(next_object_sizes, a_slot_keeps_its_object_and_what_its_scope_needs) {
 }
 
 TEST(next_object_sizes, kept_objects_are_a_list_of_one_pointer) {
-  static_assert(sizeof(dingo::core::retained_objects) == sizeof(void *));
-  static_assert(sizeof(dingo::core::kept_objects) == sizeof(void *));
-  static_assert(std::is_empty_v<dingo::core::no_kept_objects>);
+  static_assert(sizeof(dingo::retained_objects) == sizeof(void *));
+  static_assert(sizeof(dingo::kept_objects) == sizeof(void *));
+  static_assert(std::is_empty_v<dingo::no_kept_objects>);
 }
 
 } // namespace

@@ -20,9 +20,9 @@
 
 namespace {
 
-using dingo::core::kept_objects;
-using dingo::core::retained_objects;
-using dingo::core::transaction_log;
+using dingo::kept_objects;
+using dingo::retained_objects;
+using dingo::transaction_log;
 
 struct failure {};
 

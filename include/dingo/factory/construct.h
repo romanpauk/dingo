@@ -24,7 +24,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace dingo::core {
+namespace dingo {
 
 // How a factory makes the leaf of a stored type tree: by its detected
 // constructor, or by list-initializing it from the declared argument types,
@@ -377,4 +377,4 @@ void construct_stored(void *where, Factory &factory, Resolver &resolver) {
   }
 }
 
-} // namespace dingo::core
+} // namespace dingo

@@ -17,7 +17,7 @@
 // The scopes of the spec as constexpr data: the descriptor of a scope, and the
 // public tags and the scope_traits of the built-in scopes.
 
-namespace dingo::core {
+namespace dingo {
 
 // spec: scopes
 enum class slot : std::uint8_t {
@@ -55,7 +55,7 @@ struct scope_info {
   std::uint8_t exposures[storage_kind_count];
 };
 
-} // namespace dingo::core
+} // namespace dingo
 
 // The public tags of the built-in scopes, and the scope_traits that make a
 // tag type a scope.
@@ -75,7 +75,7 @@ struct shared_cyclical {};
 struct unique {};
 
 // The descriptor of a scope: the fields of the spec's Scope schema.
-using scope_descriptor = core::scope_info;
+using scope_descriptor = scope_info;
 
 // Makes `Tag` a scope. A specialization holds its descriptor,
 //
@@ -93,13 +93,13 @@ template <typename Tag> struct scope_traits;
 
 template <> struct scope_traits<::dingo::external> {
   static constexpr scope_descriptor descriptor = {
-      core::slot::external_ref,
-      core::value_category::lvalue,
+      slot::external_ref,
+      value_category::lvalue,
       true,
       false,
-      core::recursion_guard::none,
+      recursion_guard::none,
       false,
-      core::exposure_rule::kind,
+      exposure_rule::kind,
       true,
       true,
       {11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11}};
@@ -107,13 +107,13 @@ template <> struct scope_traits<::dingo::external> {
 
 template <> struct scope_traits<::dingo::shared> {
   static constexpr scope_descriptor descriptor = {
-      core::slot::lazy,
-      core::value_category::lvalue,
+      slot::lazy,
+      value_category::lvalue,
       true,
       false,
-      core::recursion_guard::while_unresolved,
+      recursion_guard::while_unresolved,
       true,
-      core::exposure_rule::kind,
+      exposure_rule::kind,
       true,
       false,
       {11, 11, 11, 11, 11, 0, 11, 11, 11, 11, 11}};
@@ -121,13 +121,13 @@ template <> struct scope_traits<::dingo::shared> {
 
 template <> struct scope_traits<::dingo::shared_cyclical> {
   static constexpr scope_descriptor descriptor = {
-      core::slot::two_phase,
-      core::value_category::lvalue,
+      slot::two_phase,
+      value_category::lvalue,
       false,
       false,
-      core::recursion_guard::none,
+      recursion_guard::none,
       false,
-      core::exposure_rule::handle_copies,
+      exposure_rule::handle_copies,
       false,
       false,
       {10, 0, 0, 10, 0, 0, 0, 11, 0, 0, 0}};
@@ -135,13 +135,13 @@ template <> struct scope_traits<::dingo::shared_cyclical> {
 
 template <> struct scope_traits<::dingo::unique> {
   static constexpr scope_descriptor descriptor = {
-      core::slot::none,
-      core::value_category::rvalue,
+      slot::none,
+      value_category::rvalue,
       false,
       true,
-      core::recursion_guard::always,
+      recursion_guard::always,
       false,
-      core::exposure_rule::kind,
+      exposure_rule::kind,
       true,
       false,
       {4, 12, 4, 4, 12, 0, 4, 4, 12, 4, 4}};
@@ -149,11 +149,11 @@ template <> struct scope_traits<::dingo::unique> {
 
 } // namespace dingo
 
-namespace dingo::core {
+namespace dingo {
 
 // The descriptor of the scope `Tag`.
 template <typename Tag>
 inline constexpr const scope_info &scope_of_v =
     ::dingo::scope_traits<Tag>::descriptor;
 
-} // namespace dingo::core
+} // namespace dingo

@@ -37,7 +37,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace dingo::core {
+namespace dingo {
 
 namespace detail {
 template <typename Type, std::size_t> using element = Type;
@@ -97,4 +97,4 @@ public:
                                                         kind, arity>::type;
 };
 
-} // namespace dingo::core
+} // namespace dingo

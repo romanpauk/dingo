@@ -38,18 +38,17 @@ struct impl : iface {};
 
 template <typename Scope, typename Stored, typename... Interfaces>
 using binding =
-    dingo::core::binding_type<Scope, Stored,
-                              dingo::core::type_list<Interfaces...>>;
+    dingo::binding_type<Scope, Stored, dingo::type_list<Interfaces...>>;
 
 template <typename Binding>
 inline constexpr bool keeps_objects_v =
     Binding::keeps &&
-    std::is_same_v<typename Binding::context_type, dingo::core::kept_objects>;
+    std::is_same_v<typename Binding::context_type, dingo::kept_objects>;
 
 template <typename Binding>
 inline constexpr bool keeps_nothing_v =
-    !Binding::keeps && std::is_same_v<typename Binding::context_type,
-                                      dingo::core::no_kept_objects>;
+    !Binding::keeps &&
+    std::is_same_v<typename Binding::context_type, dingo::no_kept_objects>;
 
 TEST(next_execute, a_binding_keeps_objects_only_for_a_retaining_route) {
   // A borrowed sharing handle converted to the handle of an interface is
@@ -74,7 +73,7 @@ TEST(next_execute, a_binding_keeps_objects_only_for_a_retaining_route) {
                 binding<dingo::shared, std::optional<std::shared_ptr<leaf>>>>);
   static_assert(
       keeps_nothing_v<binding<dingo::unique, std::shared_ptr<impl>, iface>>);
-  static_assert(std::is_empty_v<dingo::core::no_kept_objects>);
+  static_assert(std::is_empty_v<dingo::no_kept_objects>);
 }
 
 struct conversion_source {};
@@ -98,8 +97,8 @@ struct dingo::type_conversion_traits<conversion_target, conversion_source> {
 namespace {
 
 TEST(next_execute, a_declared_conversion_constructs_its_target_explicitly) {
-  using dingo::core::converts;
-  using dingo::core::declares_conversion;
+  using dingo::converts;
+  using dingo::declares_conversion;
   static_assert(
       declares_conversion<conversion_target, conversion_source>::value);
   static_assert(converts<conversion_target, conversion_source,
@@ -111,7 +110,7 @@ TEST(next_execute, a_declared_conversion_constructs_its_target_explicitly) {
 
   const conversion_source source;
   const conversion_target converted =
-      dingo::core::convert_to<conversion_target>(source);
+      dingo::convert_to<conversion_target>(source);
   EXPECT_EQ(converted.value, 53);
 }
 

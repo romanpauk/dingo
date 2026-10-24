@@ -27,15 +27,15 @@
 namespace {
 
 using dingo::annotated;
-using dingo::core::is_annotated;
-using dingo::core::is_keyed;
-using dingo::core::keyed;
-using dingo::core::leaf_of_t;
-using dingo::core::request_kind;
-using dingo::core::request_traits;
-using dingo::core::resolved_t;
-using dingo::core::type_id_v;
-using dingo::core::type_tree_v;
+using dingo::is_annotated;
+using dingo::is_keyed;
+using dingo::keyed;
+using dingo::leaf_of_t;
+using dingo::request_kind;
+using dingo::request_traits;
+using dingo::resolved_t;
+using dingo::type_id_v;
+using dingo::type_tree_v;
 
 struct tag;
 struct service {};
@@ -108,11 +108,10 @@ using annotated_request = annotated<service &, tag>;
 static_assert(is_annotated<annotated_request>::value);
 static_assert(!is_annotated<service &>::value);
 static_assert(std::is_same_v<resolved_t<annotated_request>, service &>);
+static_assert(std::is_same_v<dingo::annotated_request<annotated_request>::type,
+                             service &>);
 static_assert(
-    std::is_same_v<dingo::core::annotated_request<annotated_request>::type,
-                   service &>);
-static_assert(std::is_same_v<
-              dingo::core::annotated_request<annotated_request>::tag, tag>);
+    std::is_same_v<dingo::annotated_request<annotated_request>::tag, tag>);
 static_assert(std::is_same_v<dingo::annotated_traits<annotated_request>::type,
                              service &>);
 static_assert(
@@ -120,8 +119,8 @@ static_assert(
                    service *>);
 static_assert(std::is_same_v<leaf_of_t<annotated_request>, annotated_request>);
 static_assert(
-    request_traits<service &, dingo::core::annotated_key<
-                                  tag, dingo::core::no_key>>::descriptor.value
+    request_traits<service &,
+                   dingo::annotated_key<tag, dingo::no_key>>::descriptor.value
         .nodes[0]
         .type == type_id_v<annotated<service, tag>>);
 static_assert(request_traits<service &>::descriptor.value.nodes[0].type ==
@@ -133,7 +132,7 @@ using keyed_request = dingo::dependency<service &, dingo::key_type<tag>>;
 static_assert(is_keyed<keyed_request>::value);
 static_assert(std::is_same_v<resolved_t<keyed_request>, service &>);
 static_assert(std::is_same_v<keyed_request::type, service &>);
-static_assert(std::is_same_v<keyed_request::key, dingo::core::tag_key<tag>>);
+static_assert(std::is_same_v<keyed_request::key, dingo::tag_key<tag>>);
 static_assert(std::is_same_v<dingo::dependency<service &>, service &>);
 static_assert(std::is_same_v<resolved_t<service &>, service &>);
 
@@ -152,9 +151,8 @@ static_assert(
     !type_tree_v<std::optional<user_unique<service>>>.nodes[0].copyable);
 
 // A wrapper rebinds to an interface of its element through its traits.
-static_assert(
-    std::is_same_v<dingo::core::replace_leaf_t<user_shared<impl>, iface>,
-                   user_shared<iface>>);
+static_assert(std::is_same_v<dingo::replace_leaf_t<user_shared<impl>, iface>,
+                             user_shared<iface>>);
 static_assert(std::is_same_v<dingo::rebind_type_t<user_unique<impl>, iface>,
                              user_unique<iface>>);
 static_assert(std::is_same_v<dingo::leaf_type_t<user_unique<impl>>, impl>);
@@ -169,8 +167,7 @@ static_assert(!std::is_constructible_v<move_only_annotated,
                                        const std::unique_ptr<service> &>);
 static_assert(
     std::is_constructible_v<move_only_annotated, std::unique_ptr<service> &&>);
-using move_only_keyed =
-    keyed<std::unique_ptr<service>, dingo::core::tag_key<tag>>;
+using move_only_keyed = keyed<std::unique_ptr<service>, dingo::tag_key<tag>>;
 static_assert(!std::is_constructible_v<move_only_keyed,
                                        const std::unique_ptr<service> &>);
 
@@ -207,7 +204,7 @@ TEST(next_request_types, an_annotated_value_copies_a_copy_only_value) {
   annotated<copy_only, tag> request(value);
   EXPECT_EQ(static_cast<copy_only>(request).value, 17);
   EXPECT_EQ(static_cast<copy_only>(std::move(request)).value, 17);
-  keyed<copy_only, dingo::core::tag_key<tag>> keyed_value(value);
+  keyed<copy_only, dingo::tag_key<tag>> keyed_value(value);
   EXPECT_EQ(static_cast<copy_only>(keyed_value).value, 17);
   EXPECT_EQ(static_cast<copy_only>(std::move(keyed_value)).value, 17);
 }

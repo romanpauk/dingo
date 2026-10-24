@@ -25,7 +25,7 @@
 
 #include <cstddef>
 
-namespace dingo::core {
+namespace dingo {
 
 // A candidate of a request with the key value it is found by.
 template <typename Value, typename Candidate> struct index_item {
@@ -33,4 +33,4 @@ template <typename Value, typename Candidate> struct index_item {
   Candidate candidate;
 };
 
-} // namespace dingo::core
+} // namespace dingo

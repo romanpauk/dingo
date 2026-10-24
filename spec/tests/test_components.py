@@ -42,3 +42,12 @@ def test_the_overview_names_the_dependencies_of_a_component():
     entry = re.search(r"`conversion/`: .*?Spec: `rules`", text, re.S).group(0)
     named = set(re.findall(r"`([a-z]+)`", entry.split("Depends on")[1]))
     assert set(checker().COMPONENTS["conversion"]) == named & set(checker().COMPONENTS)
+
+
+def test_no_header_declares_a_namespace_below_dingo_named_core():
+    found = [
+        str(path.relative_to(REPO_ROOT))
+        for path in INCLUDE.rglob("*.h")
+        if re.search(r"namespace dingo::core\b|\bcore::", path.read_text())
+    ]
+    assert not found, found

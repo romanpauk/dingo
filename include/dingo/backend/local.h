@@ -24,7 +24,7 @@
 #include <memory>
 #include <utility>
 
-namespace dingo::core {
+namespace dingo {
 
 template <typename LookupTable, typename... Bindings> class static_backend;
 template <typename Resolver, typename Allocator = std::allocator<char>>
@@ -151,4 +151,4 @@ private:
   local_runtime_source_type *runtime_;
 };
 
-} // namespace dingo::core
+} // namespace dingo

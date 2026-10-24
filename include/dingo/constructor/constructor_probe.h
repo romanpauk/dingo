@@ -28,7 +28,7 @@
 #include <cstdint>
 #include <type_traits>
 
-namespace dingo::core {
+namespace dingo {
 
 enum class constructor_kind : std::uint8_t { concrete, generic, invalid };
 
@@ -139,4 +139,4 @@ template <typename Type> struct signature_result {
 };
 } // namespace detail
 
-} // namespace dingo::core
+} // namespace dingo

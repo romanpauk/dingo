@@ -102,15 +102,13 @@ public:
   State *state() const { return state_.get(); }
 
 private:
-  using bytes_type = core::byte_allocator_t<Allocator>;
-  using pointer =
-      std::unique_ptr<State, core::allocated_deleter<State, bytes_type>>;
+  using bytes_type = byte_allocator_t<Allocator>;
+  using pointer = std::unique_ptr<State, allocated_deleter<State, bytes_type>>;
 
   template <typename... Args>
   static pointer make(const Allocator &allocator, Args &&...args) {
     bytes_type bytes(allocator);
-    return core::allocate_object<State, State>(bytes,
-                                               std::forward<Args>(args)...);
+    return allocate_object<State, State>(bytes, std::forward<Args>(args)...);
   }
 
   void adopt() noexcept {

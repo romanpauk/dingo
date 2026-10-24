@@ -12,16 +12,16 @@
 // that throws its exception with its message, out of line and in a cold
 // section.
 
-namespace dingo::core {
+namespace dingo {
 {% for diagnostic in diagnostics if diagnostic.runtime %}
 
 // spec: diagnostics.{{ diagnostic.id }}
 {% for line in diagnostic.condition_lines %}
 // {{ line }}
 {% endfor %}
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void raise_{{ diagnostic.id }}({% for name in diagnostic.placeholders %}std::string_view {{ name }}{{ ", " if not loop.last }}{% endfor %}) {
+[[noreturn]] DINGO_COLD DINGO_NOINLINE inline void raise_{{ diagnostic.id }}({% for name in diagnostic.placeholders %}std::string_view {{ name }}{{ ", " if not loop.last }}{% endfor %}) {
   throw ::dingo::{{ diagnostic.exception }}(format_message({{ diagnostic.message }}, { {% for name in diagnostic.placeholders %}{"{{ name }}", {{ name }}}{{ ", " if not loop.last }}{% endfor %} }));
 }
 {% endfor %}
 
-} // namespace dingo::core
+} // namespace dingo

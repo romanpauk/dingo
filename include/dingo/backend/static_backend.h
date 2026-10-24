@@ -34,7 +34,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace dingo::core {
+namespace dingo {
 
 namespace detail {
 // The route a request of `Request` by `Key` takes of `Binding`, decided when
@@ -714,4 +714,4 @@ private:
       holders_;
 };
 
-} // namespace dingo::core
+} // namespace dingo

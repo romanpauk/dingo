@@ -21,11 +21,11 @@ namespace dingo {
 
 namespace detail {
 template <typename Signature, typename Callable> struct callable_arguments {
-  using type = core::callable_arguments_t<std::decay_t<Signature>>;
+  using type = callable_arguments_t<std::decay_t<Signature>>;
 };
 
 template <typename Callable> struct callable_arguments<void, Callable> {
-  using type = core::callable_arguments_t<Callable>;
+  using type = callable_arguments_t<Callable>;
 };
 } // namespace detail
 
@@ -34,7 +34,7 @@ template <typename Callable> struct callable_arguments<void, Callable> {
 template <typename Signature = void, typename Callable>
 auto callable(Callable &&function) {
   using callable_type = std::decay_t<Callable>;
-  return core::callable_factory<
+  return callable_factory<
       typename detail::callable_arguments<Signature, callable_type>::type,
       callable_type>(std::forward<Callable>(function));
 }

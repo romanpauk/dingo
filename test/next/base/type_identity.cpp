@@ -20,9 +20,9 @@
 
 namespace next_type_identity {
 
-using dingo::core::type_id;
-using dingo::core::type_id_v;
-using dingo::core::type_tree_v;
+using dingo::type_id;
+using dingo::type_id_v;
+using dingo::type_tree_v;
 
 using bare_spelling = std::unique_ptr<service>;
 

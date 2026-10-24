@@ -18,7 +18,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace dingo::core {
+namespace dingo {
 
 // Destroys an object, element by element for an array, in reverse order of
 // construction as the language does, which std::destroy_at handles only since
@@ -266,14 +266,14 @@ private:
 
   // Undoes the effects recorded since `begin`, the last first. An undo may
   // record an effect, which may grow the log, so each is read before it runs.
-  DINGO_CORE_COLD DINGO_NOINLINE void undo_since(std::size_t begin) noexcept {
+  DINGO_COLD DINGO_NOINLINE void undo_since(std::size_t begin) noexcept {
     while (journal_->count != begin) {
       const transaction_entry entry = journal_->entries[--journal_->count];
       entry.undo(entry.target, entry.context);
     }
   }
 
-  DINGO_CORE_COLD DINGO_NOINLINE static void grow(journal &frame) {
+  DINGO_COLD DINGO_NOINLINE static void grow(journal &frame) {
     auto *grown = new transaction_entry[frame.capacity * 2];
     for (std::size_t index = 0; index < frame.count; ++index) {
       grown[index] = frame.entries[index];
@@ -312,4 +312,4 @@ struct no_transaction_log {
   bool active() const { return false; }
 };
 
-} // namespace dingo::core
+} // namespace dingo

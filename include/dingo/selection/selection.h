@@ -42,7 +42,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace dingo::core {
+namespace dingo {
 
 inline constexpr std::size_t unknown_count = static_cast<std::size_t>(-1);
 
@@ -1035,4 +1035,4 @@ private:
   }
 };
 
-} // namespace dingo::core
+} // namespace dingo

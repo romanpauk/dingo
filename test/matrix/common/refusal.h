@@ -31,7 +31,7 @@ struct static_count<Container, Request,
                     std::enable_if_t<Container::has_static_source>>
     : std::integral_constant<
           std::size_t, Container::static_source_type::template fixed_count<
-                           Request, ::dingo::core::no_key>()> {};
+                           Request, ::dingo::no_key>()> {};
 #endif
 } // namespace detail
 

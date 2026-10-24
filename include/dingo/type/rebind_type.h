@@ -16,13 +16,13 @@
 namespace dingo {
 
 template <typename Type> struct leaf_type {
-  using type = core::leaf_of_t<Type>;
+  using type = leaf_of_t<Type>;
 };
 
 template <typename Type> using leaf_type_t = typename leaf_type<Type>::type;
 
 template <typename Type, typename Leaf> struct rebind_type {
-  using type = core::replace_leaf_t<Type, Leaf>;
+  using type = replace_leaf_t<Type, Leaf>;
 };
 
 template <typename Type, typename Leaf>

@@ -8,7 +8,7 @@ matched.
 
 ### Type Tree
 
-A type tree is a leaf wrapped in wrappers. `core::type_tree_v<T>`, of
+A type tree is a leaf wrapped in wrappers. `dingo::type_tree_v<T>`, of
 [type/wrapper_traits.h](../../include/dingo/type/wrapper_traits.h), describes
 the type tree of `T` as a `constexpr` value: an array of nodes in preorder,
 defined in [type/type_tree.h](../../include/dingo/type/type_tree.h), so a
@@ -33,7 +33,7 @@ and the conversion rules know a semantics only by its properties and operations:
   `::dingo::semantics::variant_value`, by their `wrapper_traits`
 - a custom wrapper is a wrapper of the kind its `wrapper_traits` name
 
-The language wrappers are classified by `core::wrapper_traits`, and every
+The language wrappers are classified by `dingo::wrapper_traits`, and every
 wrapper by its `wrapper_traits`; no wrapper gets other treatment. A type that is
 not a wrapper is a leaf.
 
@@ -59,7 +59,7 @@ a variadic kind, such as a variant, holds several leaves and is its own leaf.
 
 The public operation is `leaf_type_t<T>` in
 [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h),
-which is `core::leaf_of_t<T>`.
+which is `dingo::leaf_of_t<T>`.
 
 Examples:
 
@@ -115,7 +115,7 @@ and the conversion rules do not read the marker.
 
 ## Request Type
 
-`core::request_traits<Request, Key>` in
+`dingo::request_traits<Request, Key>` in
 [selection/request.h](../../include/dingo/selection/request.h) is the descriptor
 of a request: its kind, value, lvalue reference, or rvalue reference;
 `value_type`, the type it asks for without references; `made_type`, the type a

@@ -18,7 +18,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace dingo::core::detail {
+namespace dingo::detail {
 
 template <typename Type, typename... Args>
 using list_initialization_t = decltype(Type{std::declval<Args>()...});
@@ -69,4 +69,4 @@ struct constructor_search<Type, portable_constructor_detection, Arity> {
   static constexpr bool generic = is_generic<Type, found>();
 };
 
-} // namespace dingo::core::detail
+} // namespace dingo::detail

@@ -617,7 +617,7 @@ def test_constructor_detection_consumes_every_dependency_composition() -> None:
     for name, type_name in compositions.items():
         assert shapes[name].target_type == f"constructor_dependency<{type_name}>"
         assert shapes[name].signature_arguments == (
-            f"dingo::core::type_list<{type_name}>"
+            f"dingo::type_list<{type_name}>"
         )
 
 
@@ -1767,7 +1767,7 @@ def test_constructor_detection_modes_select_expected_argument_metadata() -> None
     }
     assert two_values == {
         "shape": "void",
-        "signature": "dingo::core::type_list<int, float>",
+        "signature": "dingo::type_list<int, float>",
     }
 
 

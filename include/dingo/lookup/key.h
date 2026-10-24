@@ -37,11 +37,10 @@ struct constructs_from_value<Type, Value, std::void_t<decltype(Type{Value})>>
 // key_type<Tag> is a tag key, key_type<Key, Value> a fixed key of the value
 // Key{Value}, and key_type<none_t> no key.
 template <typename Type, auto... Values> struct key_type {
-  static_assert(core::require<sizeof...(Values) <= 1,
-                              core::diag::key_type_values, Type>());
+  static_assert(require<sizeof...(Values) <= 1, diag::key_type_values, Type>());
   static_assert(
-      core::require<(detail::constructs_from_value<Type, Values>::value && ...),
-                    core::diag::key_value_not_of_key_type, Type>());
+      require<(detail::constructs_from_value<Type, Values>::value && ...),
+              diag::key_value_not_of_key_type, Type>());
   using type = Type;
 };
 
@@ -64,7 +63,7 @@ template <typename Type> key_value(Type &&) -> key_value<std::decay_t<Type>>;
 
 } // namespace dingo
 
-namespace dingo::core {
+namespace dingo {
 
 // The domain of a key: its kind and the type of its tag or value. The value
 // of a key is compared by the backend, which holds it.
@@ -336,4 +335,4 @@ template <typename Type> struct is_keyed : std::false_type {};
 template <typename Type, typename Key>
 struct is_keyed<keyed<Type, Key>> : std::true_type {};
 
-} // namespace dingo::core
+} // namespace dingo

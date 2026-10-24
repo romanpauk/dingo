@@ -26,7 +26,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace dingo::core {
+namespace dingo {
 
 inline constexpr std::size_t max_interfaces = 8;
 inline constexpr std::size_t max_rules_per_route = 8;
@@ -1029,4 +1029,4 @@ register_status(const binding_descriptor &binding) {
   return registration_status::registered;
 }
 
-} // namespace dingo::core
+} // namespace dingo

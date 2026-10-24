@@ -17,7 +17,7 @@
 #include <memory>
 #include <utility>
 
-namespace dingo::core {
+namespace dingo {
 
 template <typename Locals, typename Declarations> class registration_proxy;
 
@@ -71,4 +71,4 @@ private:
   local_registry<Locals, Declarations> registry_;
 };
 
-} // namespace dingo::core
+} // namespace dingo

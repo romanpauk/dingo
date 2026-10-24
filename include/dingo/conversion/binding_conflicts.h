@@ -17,7 +17,7 @@
 
 #include <cstddef>
 
-namespace dingo::core {
+namespace dingo {
 
 // Whether a binding of the key of `added` conflicts with `existing`: they
 // share an interface whose domain holds one binding. The values of their keys
@@ -94,4 +94,4 @@ constexpr std::size_t key_bound(const lookup_table &table,
   return bound;
 }
 
-} // namespace dingo::core
+} // namespace dingo

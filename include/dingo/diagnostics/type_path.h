@@ -14,7 +14,7 @@
 
 #include <string>
 
-namespace dingo::core {
+namespace dingo {
 
 class type_frame {
 public:
@@ -56,4 +56,4 @@ private:
   static inline thread_local const type_frame *active_ = nullptr;
 };
 
-} // namespace dingo::core
+} // namespace dingo

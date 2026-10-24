@@ -21,7 +21,7 @@
 #include <cstdint>
 #include <type_traits>
 
-namespace dingo::core {
+namespace dingo {
 
 // The identity of a type at runtime: the address of its tag.
 template <typename Type>
@@ -250,4 +250,4 @@ constexpr type_tree replace_leaf(const type_tree &value,
   return result;
 }
 
-} // namespace dingo::core
+} // namespace dingo

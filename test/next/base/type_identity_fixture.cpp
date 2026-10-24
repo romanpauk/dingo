@@ -18,15 +18,14 @@ namespace next_type_identity {
 using defaulted_spelling =
     std::unique_ptr<service, std::default_delete<service>>;
 
-dingo::core::type_id defaulted_spelling_id() {
-  constexpr dingo::core::type_id id =
-      dingo::core::type_id_v<defaulted_spelling>;
+dingo::type_id defaulted_spelling_id() {
+  constexpr dingo::type_id id = dingo::type_id_v<defaulted_spelling>;
   return id;
 }
 
-dingo::core::type_id defaulted_spelling_leaf_id() {
-  constexpr dingo::core::type_id id =
-      dingo::core::type_tree_v<defaulted_spelling>.nodes[1].type;
+dingo::type_id defaulted_spelling_leaf_id() {
+  constexpr dingo::type_id id =
+      dingo::type_tree_v<defaulted_spelling>.nodes[1].type;
   return id;
 }
 

@@ -28,13 +28,13 @@
 #include <type_traits>
 #include <utility>
 
-namespace dingo::core::detail {
+namespace dingo::detail {
 
 struct lvalue_probe {};
 struct rvalue_probe {};
 struct value_probe {};
 
-DINGO_CORE_RECORDING_FRIENDS_BEGIN
+DINGO_RECORDING_FRIENDS_BEGIN
 
 // The key of a probe, apart from its argument: MSVC can canonicalize the name
 // of an argument across specializations, while these explicit arguments keep
@@ -65,7 +65,7 @@ struct category_definition_impl<Dependency, Key, true> {
   static constexpr bool value = true;
 };
 
-DINGO_CORE_RECORDING_FRIENDS_END
+DINGO_RECORDING_FRIENDS_END
 
 template <typename Dependency, typename Type, typename Probe, std::size_t Index>
 struct category_definition {
@@ -221,4 +221,4 @@ template <typename Type, std::size_t Arity>
 struct constructor_signature_recovery<Type, msvc_constructor_detection, Arity>
     : msvc_signature_recovery<Type, Arity, std::make_index_sequence<Arity>> {};
 
-} // namespace dingo::core::detail
+} // namespace dingo::detail

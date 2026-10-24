@@ -33,8 +33,8 @@ struct callable {
 
 namespace {
 
-using dingo::core::spelled_type_name;
-using dingo::core::type_name_of;
+using dingo::spelled_type_name;
+using dingo::type_name_of;
 using next_type_name_types::value;
 
 #ifdef _MSC_VER
@@ -60,8 +60,8 @@ void expect_parts(const std::string &name,
 }
 
 static_assert(spelled_type_name<value>() == value_name);
-static_assert(dingo::core::detail::find_text("abcdef", "cd") == 2);
-static_assert(dingo::core::detail::find_text("abcdef", "gh") == 6);
+static_assert(dingo::detail::find_text("abcdef", "cd") == 2);
+static_assert(dingo::detail::find_text("abcdef", "gh") == 6);
 
 TEST(next_type_name, spells_a_class_as_the_compiler_does) {
   EXPECT_EQ(type_name_of<value>(), value_name);

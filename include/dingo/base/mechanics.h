@@ -22,21 +22,21 @@
 
 // Places a function in a cold section, where the compiler supports it.
 #if defined(__GNUC__) || defined(__clang__)
-#define DINGO_CORE_COLD __attribute__((cold))
+#define DINGO_COLD __attribute__((cold))
 #else
-#define DINGO_CORE_COLD
+#define DINGO_COLD
 #endif
 
 // Brackets the friend declarations by which constructor signature recovery
 // records an argument type, which GCC warns declare a non-template function.
 #if defined(__GNUC__) && !defined(__clang__)
-#define DINGO_CORE_RECORDING_FRIENDS_BEGIN                                     \
+#define DINGO_RECORDING_FRIENDS_BEGIN                                          \
   _Pragma("GCC diagnostic push")                                               \
       _Pragma("GCC diagnostic ignored \"-Wnon-template-friend\"")
-#define DINGO_CORE_RECORDING_FRIENDS_END _Pragma("GCC diagnostic pop")
+#define DINGO_RECORDING_FRIENDS_END _Pragma("GCC diagnostic pop")
 #else
-#define DINGO_CORE_RECORDING_FRIENDS_BEGIN
-#define DINGO_CORE_RECORDING_FRIENDS_END
+#define DINGO_RECORDING_FRIENDS_BEGIN
+#define DINGO_RECORDING_FRIENDS_END
 #endif
 
 // spec: variant_points.constructor_detection_msvc
@@ -45,12 +45,12 @@
 // selects. MSVC instantiates the exception specifications of the competing
 // conversions too, so it recovers a signature only with the msvc backend.
 #if defined(_MSC_VER)
-#define DINGO_CORE_PORTABLE_CONSTRUCTOR_SIGNATURE 0
+#define DINGO_PORTABLE_CONSTRUCTOR_SIGNATURE 0
 #else
-#define DINGO_CORE_PORTABLE_CONSTRUCTOR_SIGNATURE 1
+#define DINGO_PORTABLE_CONSTRUCTOR_SIGNATURE 1
 #endif
 
-namespace dingo::core {
+namespace dingo {
 
 template <typename... Types> struct type_list {
   static constexpr std::size_t size = sizeof...(Types);
@@ -203,4 +203,4 @@ inline constexpr bool named_type_ids =
                                 detail::address_probe_second>::value;
 #endif
 
-} // namespace dingo::core
+} // namespace dingo

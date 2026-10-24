@@ -23,7 +23,7 @@ template <typename Type> struct constructor<Type> {};
 
 } // namespace dingo
 
-namespace dingo::core {
+namespace dingo {
 
 template <typename Type, typename... Args>
 struct factory_of<::dingo::constructor<Type(Args...)>> {
@@ -34,4 +34,4 @@ template <typename Type> struct factory_of<::dingo::constructor<Type>> {
   using type = constructor_factory<detected_leaf, Type>;
 };
 
-} // namespace dingo::core
+} // namespace dingo

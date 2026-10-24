@@ -18,10 +18,10 @@ template <auto Function> struct function {};
 
 } // namespace dingo
 
-namespace dingo::core {
+namespace dingo {
 
 template <auto Function> struct factory_of<::dingo::function<Function>> {
   using type = function_factory<Function>;
 };
 
-} // namespace dingo::core
+} // namespace dingo

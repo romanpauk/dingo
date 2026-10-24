@@ -27,7 +27,7 @@
 #include <utility>
 #include <vector>
 
-namespace dingo::core {
+namespace dingo {
 
 namespace detail {
 inline std::size_t next_request_id() {
@@ -130,4 +130,4 @@ private:
   index_type index_;
 };
 
-} // namespace dingo::core
+} // namespace dingo

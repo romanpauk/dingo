@@ -31,11 +31,11 @@
 #include <utility>
 
 // spec: variant_points.constructor_detection_msvc
-#if DINGO_CORE_PORTABLE_CONSTRUCTOR_SIGNATURE
+#if DINGO_PORTABLE_CONSTRUCTOR_SIGNATURE
 
-namespace dingo::core::detail {
+namespace dingo::detail {
 
-DINGO_CORE_RECORDING_FRIENDS_BEGIN
+DINGO_RECORDING_FRIENDS_BEGIN
 
 // Instantiated by the exception specification of a selected conversion: it
 // records `Dependency` as the result of the friend of `Argument`.
@@ -78,7 +78,7 @@ struct signature_argument {
       signature_definition<Type, signature_argument>::value);
 };
 
-DINGO_CORE_RECORDING_FRIENDS_END
+DINGO_RECORDING_FRIENDS_END
 
 template <typename Type, typename Probe, typename Sequence, typename = void>
 struct signature_arguments {
@@ -124,6 +124,6 @@ public:
       void>;
 };
 
-} // namespace dingo::core::detail
+} // namespace dingo::detail
 
 #endif

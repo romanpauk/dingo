@@ -21,10 +21,10 @@
 #include <string>
 #include <type_traits>
 
-namespace dingo::core {
+namespace dingo {
 
 template <typename Request, typename Key>
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE void raise_not_found() {
+[[noreturn]] DINGO_COLD DINGO_NOINLINE void raise_not_found() {
   const std::string request = type_name_of<Request>();
   std::string path;
   if (type_frame::active()) {
@@ -45,19 +45,19 @@ template <typename Request, typename Key>
 }
 
 template <typename Binding>
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE void raise_already_registered() {
+[[noreturn]] DINGO_COLD DINGO_NOINLINE void raise_already_registered() {
   raise_lookup_already_registered(type_name_of<first_interface_t<Binding>>(),
                                   type_name_of<typename Binding::stored_type>(),
                                   key_type_name<typename Binding::key_type>());
 }
 
 template <typename Binding>
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE void raise_out_of_range() {
+[[noreturn]] DINGO_COLD DINGO_NOINLINE void raise_out_of_range() {
   raise_type_index_out_of_range(key_type_name<typename Binding::key_type>());
 }
 
 template <typename Request>
-[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE void raise_ambiguous() {
+[[noreturn]] DINGO_COLD DINGO_NOINLINE void raise_ambiguous() {
   const std::string request = type_name_of<Request>();
   if (type_frame::active()) {
     std::string type;
@@ -67,4 +67,4 @@ template <typename Request>
   raise_type_ambiguous(request);
 }
 
-} // namespace dingo::core
+} // namespace dingo

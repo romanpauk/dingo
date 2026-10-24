@@ -5,7 +5,7 @@
 
 // The key kinds of the spec as constexpr data.
 
-namespace dingo::core {
+namespace dingo {
 
 // spec: key_kinds
 enum class key_kind : std::uint8_t {
@@ -26,4 +26,4 @@ constexpr bool has_value(key_kind kind) {
   return key_kind_values[static_cast<std::size_t>(kind)];
 }
 
-} // namespace dingo::core
+} // namespace dingo

@@ -401,15 +401,15 @@ Constructor detection has two result forms:
 - signature detection starts from that same selected constructor and
   additionally recovers its parameter types as a `type_list`
 
-The detection result, `core::constructor_detection`, exposes `kind` and `arity`.
-A concrete signature result also exposes `arguments`; zero-argument construction
-produces `type_list<>`, while an unavailable signature produces `void`. The
-containers call a detected constructor with arguments that resolve the type each
-parameter asks for when the object is constructed, so the dependencies of a
-detected constructor are known only then. Explicit constructor declarations, by
-`factory<constructor<T(Args...)>>`, `dependencies<...>`, or `DINGO_CONSTRUCTOR`,
-contain their argument list, which a static container checks when it is
-compiled.
+The detection result, `dingo::constructor_detection`, exposes `kind` and
+`arity`. A concrete signature result also exposes `arguments`; zero-argument
+construction produces `type_list<>`, while an unavailable signature produces
+`void`. The containers call a detected constructor with arguments that resolve
+the type each parameter asks for when the object is constructed, so the
+dependencies of a detected constructor are known only then. Explicit constructor
+declarations, by `factory<constructor<T(Args...)>>`, `dependencies<...>`, or
+`DINGO_CONSTRUCTOR`, contain their argument list, which a static container
+checks when it is compiled.
 
 ### Constructor-Deduction Limits
 

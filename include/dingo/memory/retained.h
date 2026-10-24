@@ -15,7 +15,7 @@
 
 #include <utility>
 
-namespace dingo::core {
+namespace dingo {
 
 class retained_objects {
 public:
@@ -122,4 +122,4 @@ public:
   }
 };
 
-} // namespace dingo::core
+} // namespace dingo

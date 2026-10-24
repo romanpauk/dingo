@@ -21,9 +21,9 @@
 
 namespace {
 
-using dingo::core::candidate;
-using dingo::core::index_item;
-using dingo::core::request_memo;
+using dingo::candidate;
+using dingo::index_item;
+using dingo::request_memo;
 
 // A key type that only compares equal and hashes, so no ordered index
 // serves it.
@@ -57,43 +57,37 @@ namespace {
 
 // The keys of bindings and requests: which of them carry a value the index
 // compares, and the key each key_type declares.
-static_assert(!dingo::core::key_has_value(dingo::core::no_key::descriptor));
+static_assert(!dingo::key_has_value(dingo::no_key::descriptor));
+static_assert(!dingo::key_has_value(dingo::tag_key<int>::descriptor));
+static_assert(dingo::key_has_value(dingo::fixed_key<int, 1>::descriptor));
+static_assert(dingo::key_has_value(dingo::runtime_key<int>::descriptor));
+static_assert(std::is_same_v<dingo::key_of_t<dingo::key_type<dingo::none_t>>,
+                             dingo::no_key>);
 static_assert(
-    !dingo::core::key_has_value(dingo::core::tag_key<int>::descriptor));
-static_assert(
-    dingo::core::key_has_value(dingo::core::fixed_key<int, 1>::descriptor));
-static_assert(
-    dingo::core::key_has_value(dingo::core::runtime_key<int>::descriptor));
-static_assert(
-    std::is_same_v<dingo::core::key_of_t<dingo::key_type<dingo::none_t>>,
-                   dingo::core::no_key>);
-static_assert(std::is_same_v<dingo::core::key_of_t<dingo::key_type<int>>,
-                             dingo::core::tag_key<int>>);
-static_assert(std::is_same_v<dingo::core::key_of_t<dingo::key_type<int, 1>>,
-                             dingo::core::fixed_key<int, 1>>);
-static_assert(
-    std::is_same_v<dingo::core::request_key_of<dingo::key_value<int>>::type,
-                   dingo::core::runtime_key<int>>);
-static_assert(std::is_same_v<dingo::core::request_key_of<std::size_t>::type,
-                             dingo::core::runtime_key<std::size_t>>);
+    std::is_same_v<dingo::key_of_t<dingo::key_type<int>>, dingo::tag_key<int>>);
+static_assert(std::is_same_v<dingo::key_of_t<dingo::key_type<int, 1>>,
+                             dingo::fixed_key<int, 1>>);
+static_assert(std::is_same_v<dingo::request_key_of<dingo::key_value<int>>::type,
+                             dingo::runtime_key<int>>);
+static_assert(std::is_same_v<dingo::request_key_of<std::size_t>::type,
+                             dingo::runtime_key<std::size_t>>);
 
 // The built-in indexes, and the one each falls back to when the key type
 // cannot serve it.
-static_assert(std::is_same_v<dingo::core::ordered_index_t<int, int>,
-                             dingo::core::sorted_index<int, int>>);
-static_assert(std::is_same_v<dingo::core::ordered_index_t<hashed_only, int>,
-                             dingo::core::hashed_index<hashed_only, int>>);
-static_assert(std::is_same_v<dingo::core::hashed_index_t<int, int>,
-                             dingo::core::hashed_index<int, int>>);
-static_assert(std::is_same_v<dingo::core::hashed_index_t<ordered_only, int>,
-                             dingo::core::sorted_index<ordered_only, int>>);
-static_assert(std::is_same_v<dingo::core::dense_index_t<4, std::size_t, int>,
-                             dingo::core::dense_index<4, std::size_t, int>>);
-static_assert(std::is_same_v<dingo::core::dense_index_t<4, std::string, int>,
-                             dingo::core::hashed_index<std::string, int>>);
-static_assert(
-    std::is_same_v<dingo::core::dense_index_t<dingo::core::unbounded, int, int>,
-                   dingo::core::hashed_index<int, int>>);
+static_assert(std::is_same_v<dingo::ordered_index_t<int, int>,
+                             dingo::sorted_index<int, int>>);
+static_assert(std::is_same_v<dingo::ordered_index_t<hashed_only, int>,
+                             dingo::hashed_index<hashed_only, int>>);
+static_assert(std::is_same_v<dingo::hashed_index_t<int, int>,
+                             dingo::hashed_index<int, int>>);
+static_assert(std::is_same_v<dingo::hashed_index_t<ordered_only, int>,
+                             dingo::sorted_index<ordered_only, int>>);
+static_assert(std::is_same_v<dingo::dense_index_t<4, std::size_t, int>,
+                             dingo::dense_index<4, std::size_t, int>>);
+static_assert(std::is_same_v<dingo::dense_index_t<4, std::string, int>,
+                             dingo::hashed_index<std::string, int>>);
+static_assert(std::is_same_v<dingo::dense_index_t<dingo::unbounded, int, int>,
+                             dingo::hashed_index<int, int>>);
 
 template <typename Index, typename Value>
 std::vector<int> visit_all(const Index &index, const Value &key) {
@@ -115,10 +109,10 @@ template <typename Index> void check_one_candidate_of_a_key() {
 }
 
 TEST(next_index, finds_the_candidate_of_a_key_value_and_no_other) {
-  check_one_candidate_of_a_key<dingo::core::linear_index<std::size_t, int>>();
-  check_one_candidate_of_a_key<dingo::core::sorted_index<std::size_t, int>>();
-  check_one_candidate_of_a_key<dingo::core::hashed_index<std::size_t, int>>();
-  check_one_candidate_of_a_key<dingo::core::dense_index<8, std::size_t, int>>();
+  check_one_candidate_of_a_key<dingo::linear_index<std::size_t, int>>();
+  check_one_candidate_of_a_key<dingo::sorted_index<std::size_t, int>>();
+  check_one_candidate_of_a_key<dingo::hashed_index<std::size_t, int>>();
+  check_one_candidate_of_a_key<dingo::dense_index<8, std::size_t, int>>();
 }
 
 template <typename Index> void check_candidates_in_registration_order() {
@@ -137,13 +131,13 @@ template <typename Index> void check_candidates_in_registration_order() {
 
 TEST(next_index, visits_the_candidates_of_a_key_in_order_until_told_to_stop) {
   check_candidates_in_registration_order<
-      dingo::core::linear_index<std::size_t, int>>();
+      dingo::linear_index<std::size_t, int>>();
   check_candidates_in_registration_order<
-      dingo::core::sorted_index<std::size_t, int>>();
+      dingo::sorted_index<std::size_t, int>>();
   check_candidates_in_registration_order<
-      dingo::core::hashed_index<std::size_t, int>>();
+      dingo::hashed_index<std::size_t, int>>();
   check_candidates_in_registration_order<
-      dingo::core::dense_index<8, std::size_t, int>>();
+      dingo::dense_index<8, std::size_t, int>>();
 }
 
 template <typename Index> void check_rebuild() {
@@ -161,10 +155,10 @@ template <typename Index> void check_rebuild() {
 }
 
 TEST(next_index, a_rebuilt_index_holds_only_the_candidates_of_its_last_build) {
-  check_rebuild<dingo::core::linear_index<std::size_t, int>>();
-  check_rebuild<dingo::core::sorted_index<std::size_t, int>>();
-  check_rebuild<dingo::core::hashed_index<std::size_t, int>>();
-  check_rebuild<dingo::core::dense_index<16, std::size_t, int>>();
+  check_rebuild<dingo::linear_index<std::size_t, int>>();
+  check_rebuild<dingo::sorted_index<std::size_t, int>>();
+  check_rebuild<dingo::hashed_index<std::size_t, int>>();
+  check_rebuild<dingo::dense_index<16, std::size_t, int>>();
 }
 
 struct entry {};
@@ -200,8 +194,8 @@ template <typename Key> void check_memo_without_a_value() {
 
 TEST(next_index, a_memo_of_a_key_without_a_value_visits_every_candidate) {
   struct tag {};
-  check_memo_without_a_value<dingo::core::no_key>();
-  check_memo_without_a_value<dingo::core::tag_key<tag>>();
+  check_memo_without_a_value<dingo::no_key>();
+  check_memo_without_a_value<dingo::tag_key<tag>>();
 }
 
 struct processor {};
@@ -209,30 +203,30 @@ struct animal {};
 
 struct linear {
   template <typename Value, typename Candidate>
-  using index = dingo::core::linear_index<Value, Candidate>;
+  using index = dingo::linear_index<Value, Candidate>;
 };
 
-using declarations = dingo::core::declaration_list<dingo::core::type_list<
+using declarations = dingo::declaration_list<dingo::type_list<
     dingo::associative<std::size_t, processor, dingo::one, dingo::unordered>,
     dingo::associative<std::size_t, animal, dingo::many, linear>,
     dingo::associative<int, processor, dingo::one, dingo::array<4>>>>;
 
 template <typename Interface, typename Key>
 using indexing_of = typename declarations::template at<declarations::position(
-    dingo::core::type_id_v<Interface>, Key::descriptor)>::indexing;
+    dingo::type_id_v<Interface>, Key::descriptor)>::indexing;
 
 TEST(next_index, a_domain_is_indexed_by_the_index_of_its_declaration) {
-  using size_key = dingo::core::runtime_key<std::size_t>;
-  using int_key = dingo::core::runtime_key<int>;
-  EXPECT_EQ(declarations::position(dingo::core::type_id_v<processor>,
-                                   size_key::descriptor),
-            0u);
-  EXPECT_EQ(declarations::position(dingo::core::type_id_v<animal>,
-                                   size_key::descriptor),
-            1u);
-  EXPECT_EQ(declarations::position(dingo::core::type_id_v<processor>,
-                                   int_key::descriptor),
-            2u);
+  using size_key = dingo::runtime_key<std::size_t>;
+  using int_key = dingo::runtime_key<int>;
+  EXPECT_EQ(
+      declarations::position(dingo::type_id_v<processor>, size_key::descriptor),
+      0u);
+  EXPECT_EQ(
+      declarations::position(dingo::type_id_v<animal>, size_key::descriptor),
+      1u);
+  EXPECT_EQ(
+      declarations::position(dingo::type_id_v<processor>, int_key::descriptor),
+      2u);
   static_assert(
       std::is_same_v<indexing_of<processor, size_key>, dingo::unordered>);
   static_assert(std::is_same_v<indexing_of<animal, size_key>, linear>);
@@ -243,15 +237,14 @@ TEST(next_index, a_domain_is_indexed_by_the_index_of_its_declaration) {
   static_assert(std::is_void_v<indexing_of<animal, int_key>>);
 }
 
-using with_base = dingo::core::declaration_list<dingo::core::type_list<
+using with_base = dingo::declaration_list<dingo::type_list<
     dingo::associative<std::size_t, processor, dingo::one, dingo::unordered>,
     dingo::base<dingo::many, linear>>>;
 
 TEST(next_index, a_default_declaration_indexes_every_other_domain) {
-  using int_key = dingo::core::runtime_key<int>;
-  EXPECT_EQ(
-      with_base::position(dingo::core::type_id_v<animal>, int_key::descriptor),
-      1u);
+  using int_key = dingo::runtime_key<int>;
+  EXPECT_EQ(with_base::position(dingo::type_id_v<animal>, int_key::descriptor),
+            1u);
   static_assert(
       std::is_same_v<typename with_base::template at<1>::indexing, linear>);
   static_assert(std::is_same_v<typename with_base::template at<0>::indexing,

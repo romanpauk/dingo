@@ -19,7 +19,7 @@
 
 #include <cstddef>
 
-namespace dingo::core {
+namespace dingo {
 
 // The bound of a domain whose key values no dense array indexes.
 inline constexpr std::size_t unbounded = static_cast<std::size_t>(-1);
@@ -228,4 +228,4 @@ struct lookup_table_of<type_list<Declarations...>> {
   static constexpr lookup_table value = make();
 };
 
-} // namespace dingo::core
+} // namespace dingo

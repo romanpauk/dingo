@@ -43,7 +43,7 @@
 #include <utility>
 #include <vector>
 
-namespace dingo::core {
+namespace dingo {
 
 template <typename Resolver> class runtime_entry;
 
@@ -923,7 +923,7 @@ private:
   }
 
   template <typename Request>
-  [[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE static void
+  [[noreturn]] DINGO_COLD DINGO_NOINLINE static void
   raise_not_convertible(const entry &binding) {
     const std::string request = type_name_of<Request>();
     std::string stored;
@@ -1130,4 +1130,4 @@ private:
   std::size_t generation_ = 0;
 };
 
-} // namespace dingo::core
+} // namespace dingo

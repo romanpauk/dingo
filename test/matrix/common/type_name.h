@@ -22,7 +22,7 @@ namespace dingo::matrix {
 
 template <typename Type> std::string type_name() {
 #if !defined(DINGO_MATRIX_BASELINE)
-  return ::dingo::core::type_name_of<Type>();
+  return ::dingo::type_name_of<Type>();
 #else
   return ::dingo::type_name<Type>();
 #endif

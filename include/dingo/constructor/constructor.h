@@ -30,7 +30,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace dingo::core {
+namespace dingo {
 
 namespace detail {
 template <typename Signature> struct declared_signature {};
@@ -138,4 +138,4 @@ decltype(auto) invoke_constructor(Resolver &resolver, Sink &&sink) {
   }
 }
 
-} // namespace dingo::core
+} // namespace dingo

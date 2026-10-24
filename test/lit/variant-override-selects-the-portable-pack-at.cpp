@@ -8,7 +8,7 @@
 
 #include <type_traits>
 
-static_assert(std::is_same_v<dingo::core::pack_at_t<1, int, char>, char>);
+static_assert(std::is_same_v<dingo::pack_at_t<1, int, char>, char>);
 static_assert(DINGO_VARIANT_PACK_AT_BUILTIN == 0);
 static_assert(DINGO_VARIANT_PACK_AT_INDEXING == 0);
 

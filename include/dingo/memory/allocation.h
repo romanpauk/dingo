@@ -16,7 +16,7 @@
 #include <memory>
 #include <new>
 
-namespace dingo::core {
+namespace dingo {
 
 template <typename Allocator>
 using byte_allocator_t = typename std::allocator_traits<
@@ -85,4 +85,4 @@ allocate_object(Bytes &bytes, Args &&...args) {
       object, allocated_deleter<Base, Bytes>{bytes, release});
 }
 
-} // namespace dingo::core
+} // namespace dingo

@@ -19,7 +19,7 @@
 #include <string_view>
 #include <type_traits>
 
-namespace dingo::core {
+namespace dingo {
 
 namespace detail {
 // The text around the type in the compiler's signature of type_name, found
@@ -86,4 +86,4 @@ template <typename Type> std::string type_name_of() {
   return name;
 }
 
-} // namespace dingo::core
+} // namespace dingo
