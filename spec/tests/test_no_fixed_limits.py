@@ -46,12 +46,6 @@ PATTERNS = (
 
 # The limits that remain: path, the line as written, and why it is still there.
 LIMITS = {
-    ("include/dingo/conversion/route.h", "inline constexpr std::size_t largest_set_room = 1024;"):
-        "the semantics are collected with a recursion that stops; a constant says when it fits",
-    ("include/dingo/conversion/route.h", "std::abort();"):
-        "the stops of the two recursions above",
-    ("include/dingo/conversion/route.h", "inline constexpr std::size_t largest_derivation_room = 1024;"):
-        "the derivation recurses on a runtime flag; a constant says when it fits",
     ("include/dingo/conversion/route.h", "inline constexpr std::size_t max_created_wrappers = 16;"):
         "the plan of a request keeps its forms in a word; keep them per request type",
     ("include/dingo/conversion/route.h", "route_step created[max_created_wrappers] = {};"):

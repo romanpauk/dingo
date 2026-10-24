@@ -25,7 +25,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 
 namespace dingo {
 
@@ -124,36 +123,33 @@ struct semantics_buffer {
   }
 };
 
-// The room the sets of this kind stop doubling at.
-inline constexpr std::size_t largest_set_room = 1024;
-
-// A set larger than the largest room is not built. The call is not a constant
-// expression, so a build at compile time stops here and names the cause.
-[[noreturn]] inline void a_set_is_larger_than_the_largest_room() {
-  std::abort();
-}
-
-// Gives `use` the wrapper semantics of a stored type tree and of the address of
-// the language, and the ones their forms lead to, built in room for `Room` of
-// them and in twice the room again while they do not fit. What `use` returns
-// does not depend on the room.
-template <std::size_t Room, typename Use>
-constexpr auto semantics_then(type_tree_view stored, Use &&use) {
-  const semantics_descriptor *storage[Room] = {};
-  semantics_buffer kinds{storage, Room};
+// Adds the wrapper semantics of a stored type tree and of the address of the
+// language, and the ones their forms lead to.
+constexpr void add_semantics_of(type_tree_view stored,
+                                semantics_buffer &kinds) {
   for (std::size_t index = 0; index < stored.size; ++index) {
     kinds.add(stored.nodes[index].kind);
   }
   kinds.add(address_semantics_v);
-  if (!kinds.full) {
-    return use(semantics_set{storage, kinds.size});
-  }
-  if constexpr (Room < largest_set_room) {
-    return semantics_then<Room * 2>(stored, static_cast<Use &&>(use));
-  } else {
-    a_set_is_larger_than_the_largest_room();
-    return use(semantics_set{storage, kinds.size});
-  }
+}
+
+// Whether those semantics fit in room for `Room` of them.
+template <std::size_t Room>
+constexpr bool semantics_fit(type_tree_view stored) {
+  const semantics_descriptor *storage[Room] = {};
+  semantics_buffer kinds{storage, Room};
+  add_semantics_of(stored, kinds);
+  return !kinds.full;
+}
+
+// Gives `use` those semantics, built in room for `Room` of them, which they
+// must fit in: semantics_fit<Room>(stored).
+template <std::size_t Room, typename Use>
+constexpr auto semantics_with(type_tree_view stored, Use &&use) {
+  const semantics_descriptor *storage[Room] = {};
+  semantics_buffer kinds{storage, Room};
+  add_semantics_of(stored, kinds);
+  return use(semantics_set{storage, kinds.size});
 }
 
 // A set of leaves, as a view of the array it is in.
@@ -890,13 +886,6 @@ constexpr std::size_t initial_room(const binding_descriptor &binding) {
   return room;
 }
 
-inline constexpr std::size_t largest_derivation_room = 1024;
-
-[[noreturn]] inline void
-derivation_has_more_reachable_types_than_the_largest_room() {
-  std::abort();
-}
-
 // The reachable type `item` as a binding keeps it, with its type tree at
 // `offset` of the nodes `nodes`.
 template <std::size_t Nodes>
@@ -926,26 +915,38 @@ constexpr reachable_type stored_from(const reachable_scratch<Nodes> &item,
   return stored;
 }
 
-// Derives the reachable types of a binding into room for `Room` of them, and
-// into twice the room again while they do not fit, and gives them to `use`, a
-// callable of a `reachable_types`. Their type trees have room for `Nodes`
-// nodes, which scratch_nodes(binding) gives. The room is only the scratch of
-// the derivation: what `use` returns does not depend on it.
-template <std::size_t Room, std::size_t Nodes, typename Use>
-constexpr auto derive_then(const binding_descriptor &binding, Use &&use) {
+// How many reachable types a derivation of a binding finds, how many nodes
+// their type trees have, and whether they fit in the room it was given.
+struct reachable_sizes {
+  std::size_t items = 0;
+  std::size_t nodes = 0;
+  bool fits = true;
+};
+
+// Derives the reachable types of a binding in room for `Room` of them, whose
+// type trees have room for `Nodes` nodes, which scratch_nodes(binding) gives.
+template <std::size_t Room, std::size_t Nodes>
+constexpr reachable_sizes derive_sizes(const binding_descriptor &binding) {
   reachable_scratch<Nodes> scratch[Room] = {};
   reachable_type_buffer<Nodes> found{scratch, Room};
   derive_into(binding, found);
-  if (found.full) {
-    if constexpr (Room < largest_derivation_room) {
-      return derive_then<Room * 2, Nodes>(binding, static_cast<Use &&>(use));
-    } else {
-      // A binding of more than that many reachable types is not derived. The
-      // call is not a constant expression, so a derivation at compile time
-      // stops here and names this function.
-      derivation_has_more_reachable_types_than_the_largest_room();
-    }
+  reachable_sizes sizes;
+  sizes.fits = !found.full;
+  sizes.items = found.size;
+  for (std::size_t index = 0; index < found.size; ++index) {
+    sizes.nodes += scratch[index].value.size;
   }
+  return sizes;
+}
+
+// Derives the reachable types of a binding in room for `Room` of them, which
+// they must fit in: derive_sizes<Room, Nodes>(binding).fits. It gives them to
+// `use`, a callable of a `reachable_types`, and returns what it returns.
+template <std::size_t Room, std::size_t Nodes, typename Use>
+constexpr auto derive_with(const binding_descriptor &binding, Use &&use) {
+  reachable_scratch<Nodes> scratch[Room] = {};
+  reachable_type_buffer<Nodes> found{scratch, Room};
+  derive_into(binding, found);
   reachable_type items[Room] = {};
   type_tree_node nodes[Room * Nodes] = {};
   std::uint32_t used = 0;
@@ -957,24 +958,6 @@ constexpr auto derive_then(const binding_descriptor &binding, Use &&use) {
 }
 
 namespace detail {
-// How many reachable types a binding has, and how many nodes their type trees
-// have.
-struct reachable_sizes {
-  std::size_t items = 0;
-  std::size_t nodes = 0;
-};
-
-struct measure_reachable_types {
-  constexpr reachable_sizes operator()(const reachable_types &found) const {
-    reachable_sizes sizes;
-    sizes.items = found.size;
-    for (std::size_t index = 0; index < found.size; ++index) {
-      sizes.nodes += found.items[index].value.size;
-    }
-    return sizes;
-  }
-};
-
 // Copies the reachable types into a table of exactly `Count` of them and
 // `Nodes` nodes.
 template <std::size_t Count, std::size_t Nodes> struct copy_reachable_types {
@@ -1398,11 +1381,11 @@ constexpr bool serves_by_handle(const binding_descriptor &binding,
 }
 } // namespace detail
 
-template <std::size_t Nodes>
+template <std::size_t Nodes, std::size_t Kinds>
 constexpr bool serves_an_interface(const binding_descriptor &binding,
                                    const reachable_types &found,
                                    std::uint8_t exposed) {
-  return semantics_then<8>(binding.stored, [&](const semantics_set &kinds) {
+  return semantics_with<Kinds>(binding.stored, [&](const semantics_set &kinds) {
     for (std::size_t index = 0; index < binding.interfaces.size; ++index) {
       for (const std::uint8_t qualifiers : {std::uint8_t(0), const_qualified}) {
         basic_type_tree<Nodes> interface =
@@ -1423,8 +1406,10 @@ constexpr bool serves_an_interface(const binding_descriptor &binding,
 }
 
 // Whether a binding registers, with the type trees of its derivation having
-// room for `Nodes` nodes, which scratch_nodes(binding) gives.
-template <std::size_t Nodes>
+// room for `Nodes` nodes, which scratch_nodes(binding) gives, and the reachable
+// types and the wrapper semantics in room for `Room` and `Kinds` of them, which
+// they fit in.
+template <std::size_t Nodes, std::size_t Room, std::size_t Kinds>
 constexpr registration_status
 register_status(const binding_descriptor &binding) {
   const scope_info &scope = binding.scope;
@@ -1451,8 +1436,8 @@ register_status(const binding_descriptor &binding) {
     }
     const std::uint8_t exposed = exposed_categories(binding);
     const bool serves =
-        derive_then<8, Nodes>(binding, [&](const reachable_types &found) {
-          return serves_an_interface<Nodes>(binding, found, exposed);
+        derive_with<Room, Nodes>(binding, [&](const reachable_types &found) {
+          return serves_an_interface<Nodes, Kinds>(binding, found, exposed);
         });
     return serves ? registration_status::registered
                   : registration_status::no_interface_served;

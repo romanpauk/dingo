@@ -95,14 +95,12 @@ struct no_kept_objects {
   void clear() noexcept {}
 };
 
-// A binding of a scope, a stored type, the interfaces it declares, the factory
-// that makes its object, detected_factory unless one is declared, its key, and
-// the static bindings it declares locally, a type_list of binding types. The
-// scope is its tag type, whose scope_traits hold its descriptor.
+// What the derivations of a binding start from: its types, its descriptor, and
+// the nodes the type trees of its derivation have room for. The scope is a tag
+// type, whose scope_traits hold its descriptor.
 template <typename Scope, typename Stored, typename Interfaces,
-          typename Factory = detected_factory, typename Key = no_key,
-          typename Locals = type_list<>, typename KeyAliases = type_list<>>
-struct binding_type {
+          typename Factory, typename Key, typename Locals, typename KeyAliases>
+struct binding_description {
   using stored_type = Stored;
   using interfaces = Interfaces;
   using factory_type = Factory;
@@ -141,15 +139,80 @@ struct binding_type {
   // The nodes the type trees of the derivation of the binding have room for,
   // which are as many as the largest of them has.
   static constexpr std::size_t tree_nodes = scratch_nodes(descriptor);
+};
+
+namespace detail {
+// The room for the reachable types of a binding, and for its wrapper
+// semantics, that they fit in: the first of the rooms from `Room` that doubles
+// for which a constant says so, so no room is larger than what is needed and
+// none is a limit.
+template <typename Described, std::size_t Room>
+inline constexpr bool derivation_fits_v =
+    derive_sizes<Room, Described::tree_nodes>(Described::descriptor).fits;
+
+template <typename Described, std::size_t Room>
+constexpr std::size_t derivation_room() {
+  if constexpr (derivation_fits_v<Described, Room>) {
+    return Room;
+  } else {
+    return derivation_room<Described, Room * 2>();
+  }
+}
+
+template <typename Described, std::size_t Room>
+inline constexpr bool semantics_fit_v =
+    semantics_fit<Room>(Described::descriptor.stored);
+
+template <typename Described, std::size_t Room>
+constexpr std::size_t semantics_room() {
+  if constexpr (semantics_fit_v<Described, Room>) {
+    return Room;
+  } else {
+    return semantics_room<Described, Room * 2>();
+  }
+}
+
+// How many reachable types a derivation finds and how many nodes their type
+// trees have, which a table of exactly that size is made for.
+struct measure_reachable_types {
+  constexpr reachable_sizes operator()(const reachable_types &found) const {
+    reachable_sizes sizes;
+    sizes.items = found.size;
+    for (std::size_t index = 0; index < found.size; ++index) {
+      sizes.nodes += found.items[index].value.size;
+    }
+    return sizes;
+  }
+};
+} // namespace detail
+
+// A binding of a scope, a stored type, the interfaces it declares, the factory
+// that makes its object, detected_factory unless one is declared, its key, and
+// the static bindings it declares locally, a type_list of binding types.
+template <typename Scope, typename Stored, typename Interfaces,
+          typename Factory = detected_factory, typename Key = no_key,
+          typename Locals = type_list<>, typename KeyAliases = type_list<>>
+struct binding_type : binding_description<Scope, Stored, Interfaces, Factory,
+                                          Key, Locals, KeyAliases> {
+  using description = binding_description<Scope, Stored, Interfaces, Factory,
+                                          Key, Locals, KeyAliases>;
+  using description::descriptor;
+  using description::tree_nodes;
+
+  // The room the reachable types and the wrapper semantics of the binding are
+  // derived in.
+  static constexpr std::size_t reachable_room =
+      detail::derivation_room<description, initial_room(descriptor)>();
+  static constexpr std::size_t semantics_kinds =
+      detail::semantics_room<description, 8>();
   static constexpr registration_status status =
-      register_status<tree_nodes>(descriptor);
-  // The reachable types of the binding, in an array of exactly as many: the
-  // derivation counts them first, with room that doubles while it is full.
-  static constexpr detail::reachable_sizes published_sizes =
-      derive_then<initial_room(descriptor), tree_nodes>(
+      register_status<tree_nodes, reachable_room, semantics_kinds>(descriptor);
+  // The reachable types of the binding, in an array of exactly as many.
+  static constexpr reachable_sizes published_sizes =
+      derive_with<reachable_room, tree_nodes>(
           descriptor, detail::measure_reachable_types{});
   static constexpr reachable_table<published_sizes.items, published_sizes.nodes>
-      published_table = derive_then<initial_room(descriptor), tree_nodes>(
+      published_table = derive_with<reachable_room, tree_nodes>(
           descriptor, detail::copy_reachable_types<published_sizes.items,
                                                    published_sizes.nodes>{});
   static constexpr reachable_types published = published_table.view();

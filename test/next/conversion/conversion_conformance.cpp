@@ -42,9 +42,13 @@ extern const std::size_t conversion_case_count;
 
 namespace {
 
-// The room of the type trees of a derivation of the cases, which is more than
-// the largest of them needs.
+// The room a derivation of a case is given for its type trees, its reachable
+// types, and its wrapper semantics. A binding type finds them from its own
+// descriptor; the cases are descriptors of the program at run time, so the test
+// gives each a room and requires that the case fits in it.
 constexpr std::size_t case_nodes = 16;
+constexpr std::size_t case_room = 64;
+constexpr std::size_t case_kinds = 16;
 
 // The steps of a route as the forms and the addresses of the kinds.
 std::string rules_of(const dingo::route_step *rules, std::size_t count) {
@@ -76,15 +80,16 @@ TEST(conversion_conformance, computes_what_the_reference_computes) {
     binding.interfaces = {interfaces.data(), interfaces.size()};
     dingo::request_descriptor request{expected.kind, *expected.request, {}};
 
-    bool registered = dingo::register_status<case_nodes>(binding) ==
-                      dingo::registration_status::registered;
+    EXPECT_LE(dingo::scratch_nodes(binding), case_nodes);
+    EXPECT_TRUE((dingo::derive_sizes<case_room, case_nodes>(binding).fits));
+    EXPECT_TRUE(dingo::semantics_fit<case_kinds>(binding.stored));
+    bool registered = dingo::register_status<case_nodes, case_room, case_kinds>(
+                          binding) == dingo::registration_status::registered;
     bool found = registered && dingo::finds(binding, request);
     bool served = false;
     std::string rules;
     if (found) {
-      // The reachable types of a binding built at run time, in room that
-      // doubles while it is full.
-      dingo::derive_then<8, case_nodes>(
+      dingo::derive_with<case_room, case_nodes>(
           binding, [&](const dingo::reachable_types &reachable_types) {
             const dingo::route_choice choice = dingo::select_route<case_nodes>(
                 binding, reachable_types, request,
