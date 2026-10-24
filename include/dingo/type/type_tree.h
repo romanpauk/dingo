@@ -19,6 +19,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <type_traits>
 
 namespace dingo {
@@ -50,6 +51,9 @@ public:
     return !(left == right);
   }
 
+  // The address the identity compares by at run time.
+  constexpr const void *address() const { return address_; }
+
 private:
   static constexpr bool same_name(const char *left, const char *right) {
     std::size_t index = 0;
@@ -66,6 +70,20 @@ private:
 // The identity of a type as a constexpr value, which compares for equality in
 // constant expressions: the address of its tag, or a named identity.
 using type_id = std::conditional_t<named_type_ids, named_type_id, const void *>;
+
+namespace detail {
+constexpr const void *address_of_type_id(const void *id) { return id; }
+constexpr const void *address_of_type_id(const named_type_id &id) {
+  return id.address();
+}
+} // namespace detail
+
+// Hashes a type identity as it compares at run time, by address.
+struct type_id_hash {
+  std::size_t operator()(const type_id &id) const noexcept {
+    return std::hash<const void *>()(detail::address_of_type_id(id));
+  }
+};
 
 namespace detail {
 template <typename Type, bool Named = named_type_ids> struct type_id_of {

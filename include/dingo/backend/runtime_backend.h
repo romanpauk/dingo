@@ -40,6 +40,7 @@
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -595,14 +596,29 @@ public:
     if (held(added->key_value())) {
       raise_already_registered<Binding>();
     }
-    for (const auto &existing : entries_) {
-      if (conflicts_by_value<Binding>(*existing, *added)) {
-        raise_already_registered<Binding>();
+    // Only a binding that serves a type id of the added one can conflict with
+    // it.
+    for_each_served(added->descriptor(), [&](type_id served) {
+      const auto found = index_.find(served);
+      if (found == index_.end()) {
+        return;
       }
-    }
+      for (const std::size_t at : found->second) {
+        if (conflicts_by_value<Binding>(*entries_[at], *added)) {
+          raise_already_registered<Binding>();
+        }
+      }
+    });
     auto &locals =
         static_cast<runtime_binding<Binding, Resolver> &>(*added).locals();
     entries_.push_back(std::move(added));
+    try {
+      index_last_entry();
+    } catch (...) {
+      unindex_last_entry();
+      entries_.pop_back();
+      throw;
+    }
     ++generation_;
     // A registration during a request is undone when the request fails.
     transactions_.record(this, &undo_add);
@@ -768,8 +784,34 @@ private:
 
   static void undo_add(void *backend, void * /*context*/) noexcept {
     auto &self = *static_cast<runtime_backend *>(backend);
+    self.unindex_last_entry();
     self.entries_.pop_back();
     ++self.generation_;
+  }
+
+  // Records the position of the last entry under each type id it serves, so a
+  // request visits the entries that serve its type id and no others.
+  void index_last_entry() {
+    const std::size_t at = entries_.size() - 1;
+    for_each_served(entries_[at]->descriptor(),
+                    [&](type_id served) { index_[served].push_back(at); });
+  }
+
+  // Removes the position of the last entry, which is last under each type id it
+  // serves, since the positions are added in order.
+  void unindex_last_entry() noexcept {
+    const std::size_t at = entries_.size() - 1;
+    for_each_served(entries_[at]->descriptor(), [&](type_id served) {
+      const auto found = index_.find(served);
+      if (found == index_.end() || found->second.empty() ||
+          found->second.back() != at) {
+        return;
+      }
+      found->second.pop_back();
+      if (found->second.empty()) {
+        index_.erase(found);
+      }
+    });
   }
 
   // The memo of a request by `Key`, which indexes its candidates by the index
@@ -828,7 +870,14 @@ private:
     constexpr request_descriptor request =
         request_traits<Request, Key>::descriptor;
     found.clear();
-    for (const auto &binding : entries_) {
+    const auto served = index_.find(innermost_leaf(request.value));
+    if (served == index_.end()) {
+      found.index();
+      found.generation = generation_;
+      return;
+    }
+    for (const std::size_t at : served->second) {
+      const auto &binding = entries_[at];
       if (!finds(binding->descriptor(), request)) {
         continue;
       }
@@ -1138,6 +1187,9 @@ private:
   transaction_log transactions_;
   bytes_type bytes_;
   std::vector<entry_pointer> entries_;
+  // The positions of the entries, in the order of registration, by each type id
+  // they serve.
+  std::unordered_map<type_id, std::vector<std::size_t>, type_id_hash> index_;
   // The memos of the request types by request_id, and the number of
   // registrations they are valid for.
   mutable std::vector<std::unique_ptr<memo_base>> memos_;

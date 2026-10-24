@@ -1041,27 +1041,31 @@ constexpr bool qualifies(type_tree_view derived, type_tree_view requested,
   }
 }
 
-template <typename Item>
-constexpr bool accepts(const request_descriptor &request, const Item &candidate,
-                       std::uint8_t exposed) {
-  if (!type_trees_match(candidate.value, request.value) ||
-      !qualifies(candidate.value, request.value,
-                 request.kind != request_kind::value)) {
+constexpr bool accepts(const request_descriptor &request, type_tree_view value,
+                       value_category category, std::uint8_t exposed) {
+  if (!type_trees_match(value, request.value) ||
+      !qualifies(value, request.value, request.kind != request_kind::value)) {
     return false;
   }
   if (request.kind == request_kind::lvalue_reference) {
-    return candidate.category == value_category::lvalue &&
-           exposes(exposed, request_category::lvalue) &&
-           addressable(candidate.value);
+    return category == value_category::lvalue &&
+           exposes(exposed, request_category::lvalue) && addressable(value);
   }
-  if (has_properties(semantics_of(candidate.value), property::immovable)) {
+  if (has_properties(semantics_of(value), property::immovable)) {
     return false;
   }
-  if (candidate.category == value_category::rvalue) {
+  if (category == value_category::rvalue) {
     return exposes(exposed, request_category::rvalue);
   }
   return request.kind == request_kind::value &&
-         candidate.category == value_category::prvalue;
+         category == value_category::prvalue;
+}
+
+template <typename Item>
+constexpr bool accepts(const request_descriptor &request, const Item &candidate,
+                       std::uint8_t exposed) {
+  return accepts(request, type_tree_view(candidate.value), candidate.category,
+                 exposed);
 }
 
 // The most steps a request creates wrappers by for each node of its type tree:
@@ -1318,7 +1322,10 @@ select_route(const binding_descriptor &binding, const reachable_types &found,
     }
   };
   for (std::size_t index = 0; index < found.size; ++index) {
-    if (!found.items[index].sibling && found.items[index].value.size <= Nodes) {
+    // A candidate is made of the reachable types the request accepts only.
+    const reachable_type &item = found.items[index];
+    if (!item.sibling && item.value.size <= Nodes &&
+        accepts(request, found.tree(item), item.category, exposed)) {
       consider(detail::candidate_from<Nodes>(found, index));
     }
   }
@@ -1328,6 +1335,22 @@ select_route(const binding_descriptor &binding, const reachable_types &found,
       search, chain, 0, detail::creation_goal{semantics_of(request.value), 1},
       0, consider);
   return best;
+}
+
+// Calls `visit` with each type id a binding serves a request by: its declared
+// interfaces, or the leaves its stored type tree names without them.
+template <typename Visit>
+constexpr void for_each_served(const binding_descriptor &binding,
+                               Visit &&visit) {
+  if (binding.interfaces.size == 0) {
+    for (std::size_t index = 0; index < binding.leaves.size; ++index) {
+      visit(binding.leaves.items[index]);
+    }
+    return;
+  }
+  for (std::size_t index = 0; index < binding.interfaces.size; ++index) {
+    visit(binding.interfaces[index].tree.nodes[0].type);
+  }
 }
 
 // Whether a binding serves the interface a request names: its declared
