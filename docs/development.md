@@ -70,10 +70,12 @@ every selection policy and source status, and one route probe for every
 supported non-array storage cell. The route ledger classifies every
 scope/form/category row as supported, unavailable with a reason, or a tracked
 gap. The route probes check value, object, and rvalue availability against that
-ledger. It also generates the committed `include/dingo/storage/scopes.gen.h`
-header, which owns the built-in `storage_scope_policy` data. Compile-time
-assertions compare the generated expectation with the library; a missing cell,
-changed exposure, or stale catalog fails the build.
+ledger and require every published route target to be reachable from both the
+static and runtime request matchers. It also generates the committed
+`include/dingo/storage/scopes.gen.h` header, which owns the built-in
+`storage_scope_policy` data. Compile-time assertions compare the generated
+expectation with the library; a missing cell, changed exposure, or stale catalog
+fails the build.
 
 The generated sources live in the build tree, so consumer builds never run
 Python. The `cells-check` target regenerates them and verifies that they are up
