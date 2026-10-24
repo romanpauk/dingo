@@ -44,6 +44,7 @@ class LedgerRow:
     outcome: str
     reason: str = ""
     gap: str = ""
+    access: str = ""
 
 
 def _category_outcome(
@@ -83,6 +84,16 @@ def _category_outcome(
         category,
         "supported" if supported else "unavailable",
         "" if supported else reason,
+        "",
+        (
+            "consume"
+            if supported and category == "value" and scope.consumes
+            else "consume"
+            if supported and category == "rvalue"
+            else "borrow"
+            if supported
+            else ""
+        ),
     )
 
 
@@ -115,6 +126,10 @@ def validate() -> None:
             raise ValueError(f"unavailable row has no reason: {row}")
         if row.outcome == "gap" and not row.gap:
             raise ValueError(f"gap row has no id: {row}")
+        if row.outcome == "supported" and row.access not in {"borrow", "consume"}:
+            raise ValueError(f"supported row has no access: {row}")
+        if row.outcome != "supported" and row.access:
+            raise ValueError(f"non-supported row has an access: {row}")
 
 
 def supported_categories(scope_name: str, form_name: str) -> set[str]:
@@ -125,6 +140,18 @@ def supported_categories(scope_name: str, form_name: str) -> set[str]:
         and row.form == form_name
         and row.outcome == "supported"
     }
+
+
+def category_access(scope_name: str, form_name: str, category: str) -> str:
+    for row in build_rows():
+        if (
+            row.scope == scope_name
+            and row.form == form_name
+            and row.category == category
+            and row.outcome == "supported"
+        ):
+            return row.access
+    raise KeyError((scope_name, form_name, category))
 
 
 def gaps() -> list[LedgerRow]:

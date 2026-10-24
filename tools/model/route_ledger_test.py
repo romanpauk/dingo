@@ -14,6 +14,7 @@ from route_ledger import (
     CATEGORIES,
     GAP_ARRAY_ROUTES,
     build_rows,
+    category_access,
     gaps,
     supported_categories,
     validate,
@@ -58,6 +59,15 @@ def test_supported_categories_match_the_scope_form_product() -> None:
     assert supported_categories("shared_cyclical", "plain") == {"object"}
     assert supported_categories("shared_cyclical", "optional") == set()
     assert supported_categories("shared", "array") == set()
+
+
+def test_access_follows_scope_and_category() -> None:
+    assert category_access("shared", "plain", "value") == "borrow"
+    assert category_access("shared", "plain", "object") == "borrow"
+    assert category_access("unique", "plain", "value") == "consume"
+    assert category_access("unique", "plain", "object") == "borrow"
+    assert category_access("unique", "plain", "rvalue") == "consume"
+    assert category_access("external", "plain", "value") == "borrow"
 
 
 if __name__ == "__main__":

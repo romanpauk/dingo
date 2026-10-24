@@ -21,7 +21,11 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from route_ledger import supported_categories, validate as validate_ledger
+from route_ledger import (
+    category_access,
+    supported_categories,
+    validate as validate_ledger,
+)
 from storage_cells import FORMS, SCOPES, validate_catalog
 
 
@@ -43,6 +47,21 @@ def build_rows() -> list[dict[str, object]]:
                     "value": "value" in categories,
                     "object": "object" in categories,
                     "rvalue": "rvalue" in categories,
+                    "value_access": (
+                        category_access(scope.name, form.name, "value")
+                        if "value" in categories
+                        else ""
+                    ),
+                    "object_access": (
+                        category_access(scope.name, form.name, "object")
+                        if "object" in categories
+                        else ""
+                    ),
+                    "rvalue_access": (
+                        category_access(scope.name, form.name, "rvalue")
+                        if "rvalue" in categories
+                        else ""
+                    ),
                 }
             )
     return rows

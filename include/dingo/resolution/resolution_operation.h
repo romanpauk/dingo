@@ -366,14 +366,15 @@ using resolution_object_t = std::remove_cv_t<
 template <typename Target, typename Source, typename Conversion>
 struct type_resolution {
 private:
-  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
-
   template <typename Storage>
   using stored_type =
       std::remove_cv_t<std::remove_reference_t<typename Storage::type>>;
 
 public:
+  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
   using source_type = Source;
+  using conversion_type = Conversion;
+  using required_access = typename Conversion::required_access;
   using cache_types = typename conversion_cache_types<Conversion>::type;
 
   template <typename Storage>

@@ -55,6 +55,13 @@ struct all_targets_match<dingo::type_list<Head, Tail...>>
               dingo::type_list<Head, Tail...>{}) &&
           all_targets_match<dingo::type_list<Tail...>>::value> {};
 
+template <typename Supplied, typename... Resolutions>
+constexpr bool all_routes_accept_access(dingo::type_list<Resolutions...>) {
+  return (dingo::detail::access_satisfies<
+              Supplied, typename Resolutions::operation::required_access>::value &&
+          ...);
+}
+
 {% for row in rows %}
 namespace {{ row.scope_name }}_{{ row.form_name }} {
 using scope = {{ row.scope_type }};
@@ -82,14 +89,20 @@ static_assert((dingo::type_list_size_v<rvalue_routes> != 0) ==
 {% if row.value %}
 static_assert(all_targets_match<value_routes>::value,
               "not every value route target is reachable from both matchers");
+static_assert(all_routes_accept_access<dingo::{{ row.value_access }}>(value_routes{}),
+              "value route requires more access than the scope supplies");
 {% endif %}
 {% if row.object %}
 static_assert(all_targets_match<object_routes>::value,
               "not every object route target is reachable from both matchers");
+static_assert(all_routes_accept_access<dingo::{{ row.object_access }}>(object_routes{}),
+              "object route requires more access than the scope supplies");
 {% endif %}
 {% if row.rvalue %}
 static_assert(all_targets_match<rvalue_routes>::value,
               "not every rvalue route target is reachable from both matchers");
+static_assert(all_routes_accept_access<dingo::{{ row.rvalue_access }}>(rvalue_routes{}),
+              "rvalue route requires more access than the scope supplies");
 {% endif %}
 
 TEST(route_cells, {{ row.scope_name }}_{{ row.form_name }}) { SUCCEED(); }

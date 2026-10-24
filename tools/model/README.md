@@ -17,8 +17,9 @@ hand-curated matrix tags.
   explicit outcome: supported, unavailable with a reason, or a tracked gap.
 - `route_cells.py` instantiates the real storage type and resolution list for
   every supported non-array storage cell. It checks value, object, and rvalue
-  route availability against the ledger, and requires every published route
-  target to be reachable from both the static and runtime request matchers.
+  route availability against the ledger, requires every published route target
+  to be reachable from both the static and runtime request matchers, and checks
+  that every route's required access is satisfied by the scope.
 - `templates/` contains logic-free Jinja templates. The Python model computes
   rows; the templates only lay them out.
 - `*_test.py` is the pytest suite for the models and their deterministic
