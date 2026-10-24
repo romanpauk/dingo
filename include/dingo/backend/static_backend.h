@@ -42,13 +42,14 @@ namespace detail {
 // category of the object the route ends in.
 template <typename Binding, typename Request, typename Key>
 struct static_route {
-  static constexpr route_choice choice =
-      select_route<request_traits<Request, Key>::descriptor.value.size>(
-          Binding::descriptor, Binding::published,
-          request_traits<Request, Key>::descriptor, Binding::exposed);
-  static constexpr request_plan value =
+  static constexpr std::size_t nodes =
+      request_traits<Request, Key>::descriptor.value.size;
+  static constexpr auto choice = select_route<nodes>(
+      Binding::descriptor, Binding::published,
+      request_traits<Request, Key>::descriptor, Binding::exposed);
+  static constexpr request_plan_of<nodes> value =
       choice.reachable_type == no_reachable_type
-          ? request_plan{}
+          ? request_plan_of<nodes>{}
           : plan_request(plan_completion(
                              Binding::published.items[choice.reachable_type]),
                          choice);
@@ -660,7 +661,7 @@ private:
                   "requested type yet");
     using made_type = typename request_traits<Request>::made_type;
     using value_type = typename request_traits<Request>::value_type;
-    constexpr const request_plan &plan = route::value;
+    constexpr const auto &plan = route::value;
     auto &holder =
         static_cast<detail::static_holder<Index, binding> &>(holders_);
     auto source = [&]() DINGO_INLINE_LAMBDA -> decltype(auto) {

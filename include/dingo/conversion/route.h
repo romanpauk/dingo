@@ -1064,9 +1064,24 @@ constexpr bool accepts(const request_descriptor &request, const Item &candidate,
          candidate.category == value_category::prvalue;
 }
 
-// A request plan keeps the form of each wrapper a request creates in four bits
-// of a word, so a request creates no more than sixteen.
-inline constexpr std::size_t max_created_wrappers = 16;
+// The most steps a request creates wrappers by for each node of its type tree:
+// the one that makes the wrapper of the node, and one for each form that makes
+// a wrapper from a wrapper of another kind, since a chain of steps uses a form
+// once for a node.
+constexpr std::size_t creation_steps_per_node() {
+  std::size_t steps = 1;
+  for (const operation_info &rule : operations) {
+    if (creates(rule) && rule.from_position == type_position::target) {
+      ++steps;
+    }
+  }
+  return steps;
+}
+
+// The most wrappers a request of `Nodes` nodes creates.
+constexpr std::size_t creation_chain(std::size_t nodes) {
+  return nodes * creation_steps_per_node();
+}
 
 // A route a request takes to serve itself: the reachable type of the binding
 // it starts from, `base`, and the wrappers the request creates of it, which
@@ -1074,7 +1089,7 @@ inline constexpr std::size_t max_created_wrappers = 16;
 template <std::size_t Nodes> struct route_candidate {
   reachable_scratch<Nodes> reachable;
   std::size_t base = no_reachable_type;
-  route_step created[max_created_wrappers] = {};
+  route_step created[creation_chain(Nodes)] = {};
   std::size_t created_count = 0;
 };
 
@@ -1117,11 +1132,15 @@ constexpr bool preferred(const reachable_type *items,
 // no_reachable_type, and the wrappers the request creates of its object,
 // innermost first, each by a creating form of the kind of a wrapper of the
 // request.
-struct route_choice {
+template <std::size_t Chain> struct route_choice {
   std::size_t reachable_type = no_reachable_type;
-  route_step created[max_created_wrappers] = {};
+  route_step created[Chain != 0 ? Chain : 1] = {};
   std::size_t created_count = 0;
 };
+
+// The route a request of `Nodes` nodes takes.
+template <std::size_t Nodes>
+using route_choice_of = route_choice<creation_chain(Nodes)>;
 
 namespace detail {
 // The reachable type the creating form `step` derives from `from`, into `made`;
@@ -1213,44 +1232,65 @@ constexpr creation_goal goal_under(const route_step &step,
   return {};
 }
 
+// What a search for the routes of a request that create wrappers is given: the
+// binding, its reachable types, the request, and the categories its scope
+// exposes.
+struct creation_search {
+  const binding_descriptor &binding;
+  const reachable_types &found;
+  type_tree_view request;
+  std::uint8_t exposed;
+};
+
 // Offers `consider` the routes that make the request of the binding by the
-// creating forms of `chain`, outermost first, applied to each reachable type
-// of the binding; then the same for each chain that creates one wrapper more,
-// as many as the request holds.
+// creating forms of `chain`, outermost first, applied to each reachable type of
+// the binding.
 template <std::size_t Nodes, typename Consider>
-constexpr void create_by_chain(const binding_descriptor &binding,
-                               const reachable_types &found,
-                               type_tree_view request, std::uint8_t exposed,
-                               route_step *chain, std::size_t length,
-                               const creation_goal &goal, Consider &consider) {
-  if (length > 0) {
-    for (std::size_t index = 0; index < found.size; ++index) {
-      // A reachable type larger than the request is neither accepted nor
-      // made into one by creating a wrapper.
-      if (found.items[index].sibling || found.items[index].value.size > Nodes) {
-        continue;
-      }
-      route_candidate<Nodes> made = candidate_from<Nodes>(found, index);
-      bool created = true;
-      for (std::size_t position = length; created && position > 0; --position) {
-        const route_candidate<Nodes> from = made;
-        created = create(binding, from, chain[position - 1], exposed, made);
-      }
-      if (created) {
-        consider(made);
-      }
+constexpr void offer_chain(const creation_search &search,
+                           const route_step *chain, std::size_t length,
+                           Consider &consider) {
+  for (std::size_t index = 0; index < search.found.size; ++index) {
+    // A reachable type larger than the request is neither accepted nor made
+    // into one by creating a wrapper.
+    if (search.found.items[index].sibling ||
+        search.found.items[index].value.size > Nodes) {
+      continue;
+    }
+    route_candidate<Nodes> made = candidate_from<Nodes>(search.found, index);
+    bool created = true;
+    for (std::size_t position = length; created && position > 0; --position) {
+      const route_candidate<Nodes> from = made;
+      created = create(search.binding, from, chain[position - 1],
+                       search.exposed, made);
+    }
+    if (created) {
+      consider(made);
     }
   }
-  if (length == max_created_wrappers) {
-    return;
+}
+
+// Offers `consider` the routes of `chain`, and of each chain that creates one
+// wrapper more, as many as the request holds. A form is used once for a node of
+// the request, which bounds the chain by creation_chain(Nodes) and ends a chain
+// of forms that lead to each other.
+template <std::size_t Nodes, typename Consider>
+constexpr void create_by_chain(const creation_search &search, route_step *chain,
+                               std::size_t length, const creation_goal &goal,
+                               std::uint32_t used, Consider &consider) {
+  if (length > 0) {
+    offer_chain<Nodes>(search, chain, length, consider);
   }
   for (const operation_info &rule : operations) {
-    if (!creates(rule) || !has_operation(goal.outer, rule.form)) {
+    if (!creates(rule) || !has_operation(goal.outer, rule.form) ||
+        (used & operation_bit(rule.form)) != 0) {
       continue;
     }
     chain[length] = route_step{rule.form, goal.outer};
-    create_by_chain<Nodes>(binding, found, request, exposed, chain, length + 1,
-                           goal_under(chain[length], request, goal), consider);
+    const creation_goal next = goal_under(chain[length], search.request, goal);
+    create_by_chain<Nodes>(
+        search, chain, length + 1, next,
+        next.element == goal.element ? used | operation_bit(rule.form) : 0,
+        consider);
   }
 }
 } // namespace detail
@@ -1260,10 +1300,10 @@ constexpr void create_by_chain(const binding_descriptor &binding,
 // creating wrappers, the preferred one; or none. The type trees it builds have
 // room for `Nodes` nodes, the nodes of the request or more.
 template <std::size_t Nodes>
-constexpr route_choice
+constexpr route_choice_of<Nodes>
 select_route(const binding_descriptor &binding, const reachable_types &found,
              const request_descriptor &request, std::uint8_t exposed) {
-  route_choice best;
+  route_choice_of<Nodes> best;
   route_candidate<Nodes> best_route;
   auto consider = [&](const route_candidate<Nodes> &candidate) {
     if (accepts(request, candidate.reachable, exposed) &&
@@ -1282,10 +1322,11 @@ select_route(const binding_descriptor &binding, const reachable_types &found,
       consider(detail::candidate_from<Nodes>(found, index));
     }
   }
-  route_step chain[max_created_wrappers] = {};
+  route_step chain[creation_chain(Nodes)] = {};
+  const detail::creation_search search{binding, found, request.value, exposed};
   detail::create_by_chain<Nodes>(
-      binding, found, request.value, exposed, chain, 0,
-      detail::creation_goal{semantics_of(request.value), 1}, consider);
+      search, chain, 0, detail::creation_goal{semantics_of(request.value), 1},
+      0, consider);
   return best;
 }
 

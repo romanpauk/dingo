@@ -308,28 +308,22 @@ constexpr completion_plan plan_completion(const reachable_type &route) {
 // reachable type, or by taking the address of the object the binding refers to,
 // or by making the wrappers it creates, innermost first, of the object the
 // binding constructs.
-struct request_plan {
+template <std::size_t Chain> struct basic_request_plan {
   completion kind = completion::construct;
-  std::uint8_t created = 0;
-  // The forms of the wrappers it creates, four bits each, innermost first.
-  std::uint64_t forms = 0;
-
-  constexpr operation creating(std::size_t index) const {
-    return static_cast<operation>((forms >> (4 * index)) & 15);
-  }
-
-  constexpr void create(operation form) {
-    forms |= static_cast<std::uint64_t>(form) << (4 * created++);
-  }
+  // The forms of the wrappers it creates, innermost first.
+  operation creating[Chain != 0 ? Chain : 1] = {};
+  std::size_t created = 0;
 };
 
-static_assert(operation_count <= 16 && max_created_wrappers * 4 <= 64,
-              "the forms of the wrappers a request creates are four bits each "
-              "in a word");
+// The plan of a request of `Nodes` nodes.
+template <std::size_t Nodes>
+using request_plan_of = basic_request_plan<creation_chain(Nodes)>;
 
-constexpr request_plan plan_request(const completion_plan &reachable_type,
-                                    const route_choice &choice) {
-  request_plan plan;
+template <std::size_t Chain>
+constexpr basic_request_plan<Chain>
+plan_request(const completion_plan &reachable_type,
+             const route_choice<Chain> &choice) {
+  basic_request_plan<Chain> plan;
   plan.kind = reachable_type.kind;
   if (choice.created_count == 0) {
     return plan;
@@ -342,7 +336,7 @@ constexpr request_plan plan_request(const completion_plan &reachable_type,
   }
   plan.kind = completion::construct;
   for (std::size_t index = 0; index < choice.created_count; ++index) {
-    plan.create(choice.created[index].form);
+    plan.creating[plan.created++] = choice.created[index].form;
   }
   return plan;
 }
@@ -948,11 +942,11 @@ public:
 namespace detail {
 template <typename Target, typename Plan, std::size_t... Indices>
 created_wrappers<Target,
-                 Plan::value.creating(sizeof...(Indices) - 1 - Indices)...>
+                 Plan::value.creating[sizeof...(Indices) - 1 - Indices]...>
     plan_wrappers(std::index_sequence<Indices...>);
 } // namespace detail
 
-// The creating forms of the request_plan `Plan::value` applied to make
+// The creating forms of the basic_request_plan `Plan::value` applied to make
 // `Target`.
 template <typename Target, typename Plan>
 using planned_wrappers_t = decltype(detail::plan_wrappers<Target, Plan>(

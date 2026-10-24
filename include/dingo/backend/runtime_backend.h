@@ -617,7 +617,7 @@ public:
   std::size_t count(const void *key_value) const {
     std::size_t found = 0;
     memo<Request, Key>().visit(
-        key_value, [&](const candidate_type &) { return ++found != 2; });
+        key_value, [&](const candidate_of<Request> &) { return ++found != 2; });
     return found;
   }
 
@@ -625,11 +625,12 @@ public:
   template <typename Request, typename Key>
   DINGO_ALWAYS_INLINE Request resolve_named(Resolver &resolver,
                                             const void *key_value) {
-    const candidate_type *named = nullptr;
-    memo<Request, Key>().visit(key_value, [&](const candidate_type &found) {
-      named = &found;
-      return false;
-    });
+    const candidate_of<Request> *named = nullptr;
+    memo<Request, Key>().visit(key_value,
+                               [&](const candidate_of<Request> &found) {
+                                 named = &found;
+                                 return false;
+                               });
     if (named == nullptr) {
       raise_not_found<Request, Key>();
     }
@@ -643,13 +644,14 @@ public:
   DINGO_ALWAYS_INLINE Request select_named(Resolver &resolver,
                                            const void *key_value,
                                            Otherwise &&otherwise) {
-    const candidate_type *named = nullptr;
+    const candidate_of<Request> *named = nullptr;
     bool many = false;
-    memo<Request, Key>().visit(key_value, [&](const candidate_type &found) {
-      many = named != nullptr;
-      named = &found;
-      return !many;
-    });
+    memo<Request, Key>().visit(key_value,
+                               [&](const candidate_of<Request> &found) {
+                                 many = named != nullptr;
+                                 named = &found;
+                                 return !many;
+                               });
     if (many) {
       raise_ambiguous<Request>();
     }
@@ -673,7 +675,7 @@ public:
                const void *key_value, Append &append) {
     using element = typename collection_traits<Collection>::resolve_type;
     std::size_t count = 0;
-    memo<element, Key>().visit(key_value, [&](const candidate_type &) {
+    memo<element, Key>().visit(key_value, [&](const candidate_of<element> &) {
       ++count;
       return true;
     });
@@ -681,14 +683,22 @@ public:
       return;
     }
     append.reserve(collection, count);
-    memo<element, Key>().visit(key_value, [&](const candidate_type &found) {
-      append(collection, resolve_from<element>(resolver, found));
-      return true;
-    });
+    memo<element, Key>().visit(
+        key_value, [&](const candidate_of<element> &found) {
+          append(collection, resolve_from<element>(resolver, found));
+          return true;
+        });
   }
 
 private:
-  using candidate_type = candidate<entry>;
+  // The plan of a request, which has as many forms as the wrappers it creates
+  // at most, and the candidates of the memo of such a request.
+  template <typename Request>
+  using plan_of =
+      request_plan_of<request_traits<Request>::descriptor.value.size>;
+
+  template <typename Request>
+  using candidate_of = candidate<entry, plan_of<Request>>;
 
   template <typename Binding, typename Visit, std::size_t... Indices>
   static void visit_leaves(Visit &visit,
@@ -774,7 +784,8 @@ private:
     using type = request_memo<
         entry, Key,
         std::conditional_t<std::is_void_v<declared>,
-                           typename Resolver::default_indexing_type, declared>>;
+                           typename Resolver::default_indexing_type, declared>,
+        request_plan_of<request.value.size>>;
   };
 
   template <typename Request, typename Key>
@@ -828,13 +839,13 @@ private:
       if (key_has_value(request.key) && key_value == nullptr) {
         continue;
       }
-      const route_choice choice = select_route<request.value.size>(
+      const auto choice = select_route<request.value.size>(
           binding->descriptor(), binding->published(), request,
           binding->exposed());
       found.add(
           {binding.get(), choice.reachable_type, key_value,
            choice.reachable_type == no_reachable_type
-               ? request_plan{}
+               ? request_plan_of<request.value.size>{}
                : plan_request(binding->plan(choice.reachable_type), choice)});
     }
     found.index();
@@ -894,8 +905,8 @@ private:
   // A reference to an object whose address is kept is returned inline, with
   // no call; any other completion stays out of line.
   template <typename Request>
-  DINGO_ALWAYS_INLINE static Request resolve_from(Resolver &resolver,
-                                                  const candidate_type &found) {
+  DINGO_ALWAYS_INLINE static Request
+  resolve_from(Resolver &resolver, const candidate_of<Request> &found) {
     if constexpr (std::is_lvalue_reference_v<Request>) {
       // Only the reachable type of a lvalue reference request keeps its
       // address.
@@ -909,7 +920,7 @@ private:
 
   template <typename Request>
   DINGO_NOINLINE static Request
-  resolve_completing(Resolver &resolver, const candidate_type &found) {
+  resolve_completing(Resolver &resolver, const candidate_of<Request> &found) {
     if (found.reachable_type == no_reachable_type) {
       raise_not_convertible<Request>(*found.binding);
     }
@@ -918,7 +929,8 @@ private:
 
   // The address the reachable type of `found` borrows, kept once its binding is
   // settled.
-  static void *borrowed(Resolver &resolver, const candidate_type &found,
+  template <typename Candidate>
+  static void *borrowed(Resolver &resolver, const Candidate &found,
                         bool null_allowed = false) {
     if (found.resolved != nullptr) {
       return found.resolved;
@@ -947,7 +959,8 @@ private:
   }
 
   template <typename Request>
-  static Request complete(Resolver &resolver, const candidate_type &found) {
+  static Request complete(Resolver &resolver,
+                          const candidate_of<Request> &found) {
     using value_type = typename request_traits<Request>::value_type;
     switch (found.plan.kind) {
     case completion::refer:
@@ -988,8 +1001,8 @@ private:
   // or the wrappers the creating forms make, a wrapped element or an adopted
   // pointer, outermost first, which the wrappers of `Made` must have; or
   // returns visit.unsupported().
-  template <typename Made, typename Visit>
-  static decltype(auto) visit_wrappers(const request_plan &plan, Visit &visit) {
+  template <typename Made, typename Plan, typename Visit>
+  static decltype(auto) visit_wrappers(const Plan &plan, Visit &visit) {
     return visit_forms<Made>(plan, plan.created, visit);
   }
 
@@ -997,14 +1010,14 @@ private:
   // first after the ones `Fixed` already are, and calls `visit` with the
   // wrappers they make. A form makes a wrapper of one `Made` has, so the forms
   // are no more than its wrappers; and an adopted pointer is the innermost.
-  template <typename Made, operation... Fixed, typename Visit>
-  static decltype(auto) visit_forms(const request_plan &plan,
-                                    std::size_t remaining, Visit &visit) {
+  template <typename Made, operation... Fixed, typename Plan, typename Visit>
+  static decltype(auto) visit_forms(const Plan &plan, std::size_t remaining,
+                                    Visit &visit) {
     if (remaining == 0) {
       return visit.template apply<created_wrappers<Made, Fixed...>>();
     }
     if constexpr (sizeof...(Fixed) < detail::wrapper_depth_v<Made>) {
-      switch (plan.creating(remaining - 1)) {
+      switch (plan.creating[remaining - 1]) {
       case operation::wrap:
         return visit_forms<Made, Fixed..., operation::wrap>(plan, remaining - 1,
                                                             visit);
@@ -1057,10 +1070,9 @@ private:
   // plan. The binding makes the boundary object of the type of its reachable
   // type, which has the qualifiers of the request when the request names them,
   // and otherwise none; the request asks for the qualified one first.
-  template <typename Request>
+  template <typename Request, typename Plan>
   static Request construct(Resolver &resolver, entry &binding,
-                           std::size_t reachable_type,
-                           const request_plan &plan) {
+                           std::size_t reachable_type, const Plan &plan) {
     using value_type = typename request_traits<Request>::value_type;
     using made_type = typename request_traits<Request>::made_type;
     constructs_request<Request> constructs{resolver, binding, reachable_type};

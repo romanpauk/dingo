@@ -23,6 +23,7 @@ namespace {
 
 using dingo::candidate;
 using dingo::request_memo;
+using plan = dingo::request_plan_of<1>;
 using dingo::runtime_key;
 
 struct entry {};
@@ -96,10 +97,10 @@ void check(const std::vector<int> &keys, int range) {
   std::vector<entry> entries(keys.size());
   std::vector<Value> values;
   values.reserve(keys.size());
-  request_memo<entry, runtime_key<Value>, indexing_t<Backend>> memo;
+  request_memo<entry, runtime_key<Value>, indexing_t<Backend>, plan> memo;
   for (std::size_t index = 0; index < keys.size(); ++index) {
     values.push_back(key_of<Value>(keys[index]));
-    memo.add(candidate<entry>{&entries[index], index, &values.back()});
+    memo.add(candidate<entry, plan>{&entries[index], index, &values.back()});
   }
   memo.index();
   for (int key = 0; key < range; ++key) {
@@ -111,7 +112,7 @@ void check(const std::vector<int> &keys, int range) {
       }
     }
     std::vector<std::size_t> found;
-    memo.visit(&value, [&](const candidate<entry> &each) {
+    memo.visit(&value, [&](const candidate<entry, plan> &each) {
       found.push_back(each.reachable_type);
       return true;
     });
@@ -150,12 +151,12 @@ TEST(next_memo, a_negative_key_is_outside_a_dense_array) {
   check<int, dingo::array<4>>(keys, 4);
   std::vector<entry> entries(1);
   const int stored = 1;
-  request_memo<entry, runtime_key<int>, indexing_t<dingo::array<4>>> memo;
-  memo.add(candidate<entry>{&entries[0], 0, &stored});
+  request_memo<entry, runtime_key<int>, indexing_t<dingo::array<4>>, plan> memo;
+  memo.add(candidate<entry, plan>{&entries[0], 0, &stored});
   memo.index();
   const int negative = -1;
   bool visited = false;
-  memo.visit(&negative, [&](const candidate<entry> &) {
+  memo.visit(&negative, [&](const candidate<entry, plan> &) {
     visited = true;
     return true;
   });

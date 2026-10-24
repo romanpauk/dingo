@@ -24,6 +24,7 @@ namespace {
 using dingo::candidate;
 using dingo::index_item;
 using dingo::request_memo;
+using plan = dingo::request_plan_of<1>;
 
 // A key type that only compares equal and hashes, so no ordered index
 // serves it.
@@ -165,19 +166,19 @@ struct entry {};
 
 template <typename Key> void check_memo_without_a_value() {
   std::vector<entry> entries(3);
-  request_memo<entry, Key, dingo::ordered> memo;
+  request_memo<entry, Key, dingo::ordered, plan> memo;
   for (std::size_t index = 0; index < entries.size(); ++index) {
-    memo.add(candidate<entry>{&entries[index], index, nullptr});
+    memo.add(candidate<entry, plan>{&entries[index], index, nullptr});
   }
   memo.index();
   std::vector<std::size_t> found;
-  memo.visit(nullptr, [&](const candidate<entry> &each) {
+  memo.visit(nullptr, [&](const candidate<entry, plan> &each) {
     found.push_back(each.reachable_type);
     return true;
   });
   EXPECT_EQ(found, (std::vector<std::size_t>{0, 1, 2}));
   std::vector<std::size_t> first;
-  memo.visit(nullptr, [&](const candidate<entry> &each) {
+  memo.visit(nullptr, [&](const candidate<entry, plan> &each) {
     first.push_back(each.reachable_type);
     return false;
   });
@@ -185,7 +186,7 @@ template <typename Key> void check_memo_without_a_value() {
   memo.clear();
   memo.index();
   bool visited = false;
-  memo.visit(nullptr, [&](const candidate<entry> &) {
+  memo.visit(nullptr, [&](const candidate<entry, plan> &) {
     visited = true;
     return true;
   });

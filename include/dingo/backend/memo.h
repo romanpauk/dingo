@@ -53,11 +53,11 @@ inline constexpr std::size_t no_generation = static_cast<std::size_t>(-1);
 // request completes the reachable type, and `resolved` the address the
 // reachable type borrows once the binding is settled, so a resolution after it
 // makes no call.
-template <typename Entry> struct candidate {
+template <typename Entry, typename Plan> struct candidate {
   Entry *binding;
   std::size_t reachable_type;
   const void *key_value;
-  request_plan plan = {};
+  Plan plan = {};
   mutable void *resolved = nullptr;
 };
 
@@ -70,13 +70,15 @@ public:
 
 // The memo of a request by a key without a value: every candidate matches.
 // `Indexing` names the index of the candidates of a request by a key value.
-template <typename Entry, typename Key, typename Indexing,
+template <typename Entry, typename Key, typename Indexing, typename Plan,
           bool = key_has_value(Key::descriptor)>
 class request_memo : public memo_base {
 public:
+  using candidate_type = candidate<Entry, Plan>;
+
   void clear() { candidates_.clear(); }
 
-  void add(const candidate<Entry> &found) { candidates_.push_back(found); }
+  void add(const candidate_type &found) { candidates_.push_back(found); }
 
   void index() {}
 
@@ -84,7 +86,7 @@ public:
   // registration until it returns false.
   template <typename Visit>
   void visit(const void * /*key_value*/, Visit &&visit) const {
-    for (const candidate<Entry> &found : candidates_) {
+    for (const candidate_type &found : candidates_) {
       if (!visit(found)) {
         return;
       }
@@ -92,18 +94,23 @@ public:
   }
 
 private:
-  std::vector<candidate<Entry>> candidates_;
+  std::vector<candidate_type> candidates_;
 };
 
 // The memo of a request by a key value of type `Key::value_type`, which
 // keeps a copy of the key value of every candidate next to it, and indexes
 // them by the index of `Indexing`.
-template <typename Entry, typename Key, typename Indexing>
-class request_memo<Entry, Key, Indexing, true> : public memo_base {
+template <typename Entry, typename Key, typename Indexing, typename Plan>
+class request_memo<Entry, Key, Indexing, Plan, true> : public memo_base {
   using value_type = typename Key::value_type;
-  using item = index_item<value_type, candidate<Entry>>;
+
+public:
+  using candidate_type = candidate<Entry, Plan>;
+
+private:
+  using item = index_item<value_type, candidate_type>;
   using index_type =
-      typename Indexing::template index<value_type, candidate<Entry>>;
+      typename Indexing::template index<value_type, candidate_type>;
 
 public:
   void clear() {
@@ -111,7 +118,7 @@ public:
     index_ = index_type();
   }
 
-  void add(const candidate<Entry> &found) {
+  void add(const candidate_type &found) {
     items_.push_back(
         {*static_cast<const value_type *>(found.key_value), found});
   }

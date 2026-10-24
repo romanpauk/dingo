@@ -46,12 +46,6 @@ PATTERNS = (
 
 # The limits that remain: path, the line as written, and why it is still there.
 LIMITS = {
-    ("include/dingo/conversion/route.h", "inline constexpr std::size_t max_created_wrappers = 16;"):
-        "the plan of a request keeps its forms in a word; keep them per request type",
-    ("include/dingo/conversion/route.h", "route_step created[max_created_wrappers] = {};"):
-        "sized by the request",
-    ("include/dingo/conversion/route.h", "route_step chain[max_created_wrappers] = {};"):
-        "sized by the request",
 }
 
 

@@ -91,7 +91,7 @@ TEST(conversion_conformance, computes_what_the_reference_computes) {
     if (found) {
       dingo::derive_with<case_room, case_nodes>(
           binding, [&](const dingo::reachable_types &reachable_types) {
-            const dingo::route_choice choice = dingo::select_route<case_nodes>(
+            const auto choice = dingo::select_route<case_nodes>(
                 binding, reachable_types, request,
                 dingo::exposed_categories(binding));
             served = choice.reachable_type != dingo::no_reachable_type;
