@@ -20,7 +20,7 @@
 #include <dingo/conversion/convert.h>
 #include <dingo/conversion/request.h>
 #include <dingo/conversion/route.h>
-#include <dingo/conversion/scopes.gen.h>
+#include <dingo/storage/scopes.gen.h>
 #include <dingo/diagnostics/diagnostic_message.h>
 #include <dingo/lookup/annotated_key.h>
 #include <dingo/lookup/declarations.h>

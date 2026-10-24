@@ -16,8 +16,8 @@
 // at compile time and runtime containers at registration, so both serve a
 // request by the same derivation.
 
-#include <dingo/conversion/scopes.gen.h>
-#include <dingo/conversion/storage_forms.gen.h>
+#include <dingo/storage/scopes.gen.h>
+#include <dingo/storage/storage_forms.gen.h>
 #include <dingo/lookup/key.h>
 #include <dingo/lookup/key_kinds.gen.h>
 #include <dingo/type/type_tree.h>

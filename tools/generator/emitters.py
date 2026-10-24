@@ -292,11 +292,11 @@ def operations(spec):
 
 
 def storage_forms(spec):
-    """include/dingo/conversion/storage_forms.gen.h from the storage forms."""
+    """include/dingo/storage/storage_forms.gen.h from the storage forms."""
     forms = sorted(spec.storage_forms, key=lambda f: f.id)
     return [
         GeneratedFile(
-            path="include/dingo/conversion/storage_forms.gen.h",
+            path="include/dingo/storage/storage_forms.gen.h",
             content=render(
                 "storage_forms.gen.h.j2",
                 request_categories=[
@@ -392,7 +392,7 @@ def wrapper_semantics(spec):
 
 
 def scopes(spec):
-    """include/dingo/conversion/scopes.gen.h from the scopes and
+    """include/dingo/storage/scopes.gen.h from the scopes and
     cpp.scope_tags: the descriptor of a scope, and the tag of each
     built-in scope with its scope_traits, which hold its descriptor."""
     from spec.schema import ExposureRule, RecursionGuard, Slot
@@ -417,7 +417,7 @@ def scopes(spec):
         raise GeneratorError("cpp.scope_tags: tags span several namespaces")
     return [
         GeneratedFile(
-            path="include/dingo/conversion/scopes.gen.h",
+            path="include/dingo/storage/scopes.gen.h",
             content=render(
                 "scopes.gen.h.j2",
                 namespace=namespaces.pop(),

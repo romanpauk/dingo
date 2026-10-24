@@ -67,8 +67,6 @@ COMPONENTS = {
 
 # The headers that are not in the directory of their component yet.
 MOVING = {
-    "conversion/storage_forms.gen": "storage",
-    "conversion/scopes.gen": "storage",
     "conversion/construct": "factory",
     "conversion/route": "conversion",
     "conversion/convert": "conversion",

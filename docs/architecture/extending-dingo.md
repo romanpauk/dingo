@@ -423,7 +423,7 @@ declarations that take a backend.
 - [include/dingo/type/wrapper_traits.h](../../include/dingo/type/wrapper_traits.h)
 - [include/dingo/type/wrapper_semantics.gen.h](../../include/dingo/type/wrapper_semantics.gen.h)
 - [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
-- [include/dingo/conversion/scopes.gen.h](../../include/dingo/conversion/scopes.gen.h)
+- [include/dingo/storage/scopes.gen.h](../../include/dingo/storage/scopes.gen.h)
 - [include/dingo/backend/slot.h](../../include/dingo/backend/slot.h)
 - [include/dingo/lookup/index.h](../../include/dingo/lookup/index.h)
 - [include/dingo/lookup/indexes.h](../../include/dingo/lookup/indexes.h)

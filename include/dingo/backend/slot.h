@@ -12,7 +12,7 @@
 #include <dingo/base/config.h>
 #include <dingo/base/mechanics.h>
 #include <dingo/conversion/construct.h>
-#include <dingo/conversion/scopes.gen.h>
+#include <dingo/storage/scopes.gen.h>
 #include <dingo/diagnostics/compile_diagnostics.gen.h>
 #include <dingo/diagnostics/diagnostics.gen.h>
 #include <dingo/diagnostics/type_name.h>

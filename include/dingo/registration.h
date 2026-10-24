@@ -13,7 +13,7 @@
 #include <dingo/base/mechanics.h>
 #include <dingo/collection.h>
 #include <dingo/conversion/convert.h>
-#include <dingo/conversion/scopes.gen.h>
+#include <dingo/storage/scopes.gen.h>
 #include <dingo/diagnostics/compile_diagnostics.gen.h>
 #include <dingo/lookup/key_kinds.gen.h>
 
