@@ -266,51 +266,12 @@ def selection_fields(rule):
     }
 
 
-def vocabulary(spec):
-    """include/dingo/conversion/vocabulary.gen.h from the semantic sections."""
-    from spec.schema import (
-        Access,
-        ExposureRule,
-        RecursionGuard,
-        SelectionMode,
-        SelectionSource,
-        Slot,
-        StepCondition,
-        ValueCategory,
-    )
+def route_forms(spec):
+    """include/dingo/conversion/route_forms.gen.h from the layer kinds and the
+    route forms."""
+    from spec.schema import Access, ValueCategory
 
-    forms = sorted(spec.storage_forms, key=lambda f: f.id)
     content = render(
-        "vocabulary.gen.h.j2",
-        layer_properties=[
-            {"name": name, "bit": bit} for name, bit in LAYER_PROPERTY_BITS.items()
-        ],
-        value_categories=[c.value for c in ValueCategory],
-        request_categories=[
-            {"name": name, "bit": bit} for name, bit in REQUEST_CATEGORY_BITS.items()
-        ],
-        accesses=[a.value for a in Access],
-        storage_forms=[storage_form_fields(form) for form in forms],
-        slots=[s.value for s in Slot],
-        guards=[g.value for g in RecursionGuard],
-        exposure_rules=[r.value for r in ExposureRule],
-        requirements=[{"name": name, "bit": bit} for name, bit in REQUIREMENT_BITS.items()],
-        route_forms=route_form_entries(spec),
-        key_kinds=[
-            {"id": kind.id, "has_value": kind.value_time is not None}
-            for kind in spec.key_kinds
-        ],
-        selection_sources=[source.value for source in SelectionSource],
-        selection_modes=[mode.value for mode in SelectionMode],
-        step_conditions=["always", *(condition.value for condition in StepCondition)],
-        selection_rules=[selection_fields(rule) for rule in spec.selection_rules],
-        max_selection_steps=max((len(r.steps) for r in spec.selection_rules), default=1),
-        max_step_sources=max(
-            (len(step.sources) for r in spec.selection_rules for step in r.steps),
-            default=1,
-        ),
-    )
-    algebra = render(
         "route_forms.gen.h.j2",
         layer_properties=[
             {"name": name, "bit": bit} for name, bit in LAYER_PROPERTY_BITS.items()
@@ -323,14 +284,75 @@ def vocabulary(spec):
     return [
         GeneratedFile(
             path="include/dingo/conversion/route_forms.gen.h",
-            content=algebra,
-            spec_ids=("layer_kinds", "route_forms", "routes"),
-        ),
-        GeneratedFile(
-            path="include/dingo/conversion/vocabulary.gen.h",
             content=content,
-            spec_ids=("key_kinds", "scopes", "selection_rules", "storage_forms"),
-        ),
+            spec_ids=("layer_kinds", "route_forms", "routes"),
+        )
+    ]
+
+
+def storage_forms(spec):
+    """include/dingo/conversion/storage_forms.gen.h from the storage forms."""
+    forms = sorted(spec.storage_forms, key=lambda f: f.id)
+    return [
+        GeneratedFile(
+            path="include/dingo/conversion/storage_forms.gen.h",
+            content=render(
+                "storage_forms.gen.h.j2",
+                request_categories=[
+                    {"name": name, "bit": bit}
+                    for name, bit in REQUEST_CATEGORY_BITS.items()
+                ],
+                storage_forms=[storage_form_fields(form) for form in forms],
+            ),
+            spec_ids=("storage_forms",),
+        )
+    ]
+
+
+def selection_rules(spec):
+    """include/dingo/conversion/selection_rules.gen.h from the selection
+    rules."""
+    from spec.schema import SelectionMode, SelectionSource, StepCondition
+
+    return [
+        GeneratedFile(
+            path="include/dingo/conversion/selection_rules.gen.h",
+            content=render(
+                "selection_rules.gen.h.j2",
+                selection_sources=[source.value for source in SelectionSource],
+                selection_modes=[mode.value for mode in SelectionMode],
+                step_conditions=[
+                    "always",
+                    *(condition.value for condition in StepCondition),
+                ],
+                selection_rules=[selection_fields(rule) for rule in spec.selection_rules],
+                max_selection_steps=max(
+                    (len(r.steps) for r in spec.selection_rules), default=1
+                ),
+                max_step_sources=max(
+                    (len(step.sources) for r in spec.selection_rules for step in r.steps),
+                    default=1,
+                ),
+            ),
+            spec_ids=("selection_rules",),
+        )
+    ]
+
+
+def key_kinds(spec):
+    """include/dingo/conversion/key_kinds.gen.h from the key kinds."""
+    return [
+        GeneratedFile(
+            path="include/dingo/conversion/key_kinds.gen.h",
+            content=render(
+                "key_kinds.gen.h.j2",
+                key_kinds=[
+                    {"id": kind.id, "has_value": kind.value_time is not None}
+                    for kind in spec.key_kinds
+                ],
+            ),
+            spec_ids=("key_kinds",),
+        )
     ]
 
 
@@ -366,13 +388,15 @@ def layer_kinds(spec):
     ]
 
 
-def scope_tags(spec):
-    """include/dingo/conversion/scope_tags.gen.h from cpp.scope_projections
-    and the scopes: the tag of each built-in scope and its scope_traits, which
-    hold its descriptor."""
+def scopes(spec):
+    """include/dingo/conversion/scopes.gen.h from the scopes and
+    cpp.scope_projections: the descriptor of a scope, and the tag of each
+    built-in scope with its scope_traits, which hold its descriptor."""
+    from spec.schema import ExposureRule, RecursionGuard, Slot
+
     forms = sorted(spec.storage_forms, key=lambda form: form.id)
     form_ids = [form.id for form in forms]
-    scopes = {scope.id: scope_fields(scope, form_ids) for scope in spec.scopes}
+    scope_data = {scope.id: scope_fields(scope, form_ids) for scope in spec.scopes}
     tags = []
     namespaces = set()
     for projection in sorted(spec.cpp.scope_projections, key=lambda p: p.scope):
@@ -384,15 +408,22 @@ def scope_tags(spec):
             )
         namespaces.add(namespace)
         tags.append(
-            {"scope": projection.scope, "name": name, "fields": scopes[projection.scope]}
+            {"scope": projection.scope, "name": name, "fields": scope_data[projection.scope]}
         )
     if len(namespaces) != 1:
         raise GeneratorError("cpp.scope_projections: tags span several namespaces")
     return [
         GeneratedFile(
-            path="include/dingo/conversion/scope_tags.gen.h",
-            content=render("scope_tags.gen.h.j2", namespace=namespaces.pop(), tags=tags),
-            spec_ids=("cpp.scope_projections",),
+            path="include/dingo/conversion/scopes.gen.h",
+            content=render(
+                "scopes.gen.h.j2",
+                namespace=namespaces.pop(),
+                tags=tags,
+                slots=[s.value for s in Slot],
+                guards=[g.value for g in RecursionGuard],
+                exposure_rules=[r.value for r in ExposureRule],
+            ),
+            spec_ids=("scopes", "cpp.scope_projections"),
         )
     ]
 
@@ -513,9 +544,12 @@ def diagnostic_tests(spec):
 EMITTERS = (
     capabilities,
     variants,
-    vocabulary,
+    route_forms,
+    storage_forms,
+    scopes,
+    selection_rules,
+    key_kinds,
     layer_kinds,
-    scope_tags,
     diagnostics,
     diagnostic_tests,
 )

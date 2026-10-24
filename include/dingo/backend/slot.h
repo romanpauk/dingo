@@ -13,8 +13,7 @@
 #include <dingo/base/mechanics.h>
 #include <dingo/conversion/construct.h>
 #include <dingo/conversion/layer_traits.h>
-#include <dingo/conversion/scope_tags.gen.h>
-#include <dingo/conversion/vocabulary.gen.h>
+#include <dingo/conversion/scopes.gen.h>
 #include <dingo/primitives/compile_diagnostics.gen.h>
 #include <dingo/primitives/diagnostics.gen.h>
 #include <dingo/primitives/slot.h>

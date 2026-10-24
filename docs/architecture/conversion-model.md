@@ -28,7 +28,7 @@ The important source files are:
 
 - [include/dingo/conversion/route_forms.gen.h](../../include/dingo/conversion/route_forms.gen.h)
 - [include/dingo/conversion/layer_kinds.gen.h](../../include/dingo/conversion/layer_kinds.gen.h)
-- [include/dingo/conversion/scope_tags.gen.h](../../include/dingo/conversion/scope_tags.gen.h)
+- [include/dingo/conversion/scopes.gen.h](../../include/dingo/conversion/scopes.gen.h)
 - [include/dingo/conversion/route.h](../../include/dingo/conversion/route.h)
 - [include/dingo/conversion/convert.h](../../include/dingo/conversion/convert.h)
 - [include/dingo/conversion/type_conversion.h](../../include/dingo/conversion/type_conversion.h)

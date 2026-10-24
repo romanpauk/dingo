@@ -487,7 +487,7 @@ See:
 
 - [include/dingo/type/type_traits.h](../include/dingo/type/type_traits.h)
 - [include/dingo/conversion/layer_kinds.gen.h](../include/dingo/conversion/layer_kinds.gen.h)
-- [include/dingo/conversion/scope_tags.gen.h](../include/dingo/conversion/scope_tags.gen.h)
+- [include/dingo/conversion/scopes.gen.h](../include/dingo/conversion/scopes.gen.h)
 - [test/next/containers/scopes.cpp](../test/next/containers/scopes.cpp)
 
 ## Runtime And Compile-Time Registration

@@ -19,7 +19,6 @@
 #include <dingo/conversion/key.h>
 #include <dingo/conversion/lookup.h>
 #include <dingo/conversion/route.h>
-#include <dingo/conversion/vocabulary.gen.h>
 
 #include <atomic>
 #include <cstddef>

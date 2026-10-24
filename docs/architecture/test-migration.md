@@ -2414,7 +2414,7 @@ which a differential build of the baseline defines, as M9.2 describes:
   implementation. **changed**: `scopes_check.py` compares against the baseline,
   with a `--cxx-command` that names its include directory, and is no lit test;
   the scopes of the next implementation are generated from
-  `spec/content/scopes.py` (`conversion/scope_tags.gen.h`).
+  `spec/content/scopes.py` (`conversion/scopes.gen.h`).
 - `test/lit/codegen-static-probes.cpp`: checks the size and the instructions of
   representative static and runtime resolutions. **kept** with next as
   implementation. The limits of Clang 18 and of the mixed probes of GCC 13 are

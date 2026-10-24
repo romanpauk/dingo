@@ -9,5 +9,5 @@
 
 // dingo/storage/external.h of the next implementation: the external scope tag.
 
-#include <dingo/conversion/scope_tags.gen.h> // IWYU pragma: export
-#include <dingo/registration.h>              // IWYU pragma: export
+#include <dingo/conversion/scopes.gen.h>
+#include <dingo/registration.h> // IWYU pragma: export

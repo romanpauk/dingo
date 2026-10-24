@@ -17,8 +17,10 @@
 // request by the same derivation.
 
 #include <dingo/conversion/key.h>
+#include <dingo/conversion/key_kinds.gen.h>
 #include <dingo/conversion/layer_traits.h>
-#include <dingo/conversion/vocabulary.gen.h>
+#include <dingo/conversion/scopes.gen.h>
+#include <dingo/conversion/storage_forms.gen.h>
 #include <dingo/primitives/shape.h>
 
 #include <cstddef>

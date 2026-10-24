@@ -1,0 +1,29 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+
+// The key kinds of the spec as constexpr data.
+
+namespace dingo::core {
+
+// spec: key_kinds
+enum class key_kind : std::uint8_t {
+{% for kind in key_kinds %}
+  {{ kind.id }},
+{% endfor %}
+};
+
+// Whether a key of the kind carries a value, which is compared, indexed by
+// key_kind.
+inline constexpr bool key_kind_values[] = {
+{% for kind in key_kinds %}
+    {{ kind.has_value | lower }},
+{% endfor %}
+};
+
+constexpr bool has_value(key_kind kind) {
+  return key_kind_values[static_cast<std::size_t>(kind)];
+}
+
+} // namespace dingo::core

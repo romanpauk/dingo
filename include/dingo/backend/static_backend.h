@@ -19,10 +19,11 @@
 #include <dingo/conversion/annotated.h>
 #include <dingo/conversion/collection.h>
 #include <dingo/conversion/convert.h>
+#include <dingo/conversion/key_kinds.gen.h>
 #include <dingo/conversion/lookup.h>
 #include <dingo/conversion/request.h>
 #include <dingo/conversion/route.h>
-#include <dingo/conversion/vocabulary.gen.h>
+#include <dingo/conversion/scopes.gen.h>
 #include <dingo/primitives/diagnostic_message.h>
 #include <dingo/primitives/retained.h>
 

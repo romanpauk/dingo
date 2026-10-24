@@ -1,0 +1,75 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+
+// The selection rules of the spec as constexpr data: which sources answer a
+// request of each mode, and the status of the number of bindings they name.
+
+namespace dingo::core {
+
+// spec: selection_rules
+enum class selection_source : std::uint8_t {
+{% for source in selection_sources %}
+  {{ source }},
+{% endfor %}
+};
+
+enum class selection_mode : std::uint8_t {
+{% for mode in selection_modes %}
+  {{ mode }},
+{% endfor %}
+};
+
+// The condition on the request under which a step is taken.
+enum class step_condition : std::uint8_t {
+{% for condition in step_conditions %}
+  {{ condition }},
+{% endfor %}
+};
+
+enum class selection_status : std::uint8_t { ok, ambiguous, not_found };
+
+inline constexpr std::size_t max_selection_steps = {{ max_selection_steps }};
+inline constexpr std::size_t max_step_sources = {{ max_step_sources }};
+
+// The union of the sources of a step, taken when the request meets its
+// condition `when`.
+struct selection_step {
+  selection_source sources[max_step_sources];
+  std::size_t source_count;
+  step_condition when;
+};
+
+// A selection rule answers a request from the first step that names a
+// binding, or from all of them if not `first_non_empty`, and its status
+// follows from the number of bindings named.
+struct selection_rule {
+  selection_mode mode;
+  bool first_non_empty;
+  selection_step steps[max_selection_steps];
+  std::size_t step_count;
+  selection_status empty;
+  selection_status one;
+  selection_status many;
+};
+
+inline constexpr selection_rule selection_rules[] = {
+{% for rule in selection_rules %}
+    // spec: selection_rules.{{ rule.id }}
+    {selection_mode::{{ rule.mode }}, {{ rule.first_non_empty | lower }},
+     { {% for step in rule.steps %}{ { {% for source in step.sources %}selection_source::{{ source }}{{ ", " if not loop.last }}{% endfor %} }, {{ step.sources | length }}, step_condition::{{ step.when }} }{{ ", " if not loop.last }}{% endfor %} },
+     {{ rule.steps | length }}, selection_status::{{ rule.empty }}, selection_status::{{ rule.one }}, selection_status::{{ rule.many }}},
+{% endfor %}
+};
+
+constexpr const selection_rule &rule_of(selection_mode mode) {
+  for (const selection_rule &rule : selection_rules) {
+    if (rule.mode == mode) {
+      return rule;
+    }
+  }
+  return selection_rules[0];
+}
+
+} // namespace dingo::core

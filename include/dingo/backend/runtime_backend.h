@@ -18,10 +18,10 @@
 #include <dingo/backend/slot.h>
 #include <dingo/conversion/collection.h>
 #include <dingo/conversion/convert.h>
+#include <dingo/conversion/key_kinds.gen.h>
 #include <dingo/conversion/lookup.h>
 #include <dingo/conversion/request.h>
 #include <dingo/conversion/route.h>
-#include <dingo/conversion/vocabulary.gen.h>
 #include <dingo/primitives/allocation.h>
 #include <dingo/primitives/diagnostics.gen.h>
 #include <dingo/primitives/exceptions.h>

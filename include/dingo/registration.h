@@ -13,7 +13,8 @@
 #include <dingo/base/mechanics.h>
 #include <dingo/collection.h>
 #include <dingo/conversion/convert.h>
-#include <dingo/conversion/scope_tags.gen.h> // IWYU pragma: export
+#include <dingo/conversion/key_kinds.gen.h>
+#include <dingo/conversion/scopes.gen.h>
 #include <dingo/primitives/compile_diagnostics.gen.h>
 
 #include <type_traits>

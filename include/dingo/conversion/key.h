@@ -11,7 +11,7 @@
 // the program is compiled, or a value supplied at runtime, and the keyed
 // request a constructor parameter declares.
 
-#include <dingo/conversion/vocabulary.gen.h>
+#include <dingo/conversion/key_kinds.gen.h>
 #include <dingo/primitives/compile_diagnostics.gen.h>
 #include <dingo/primitives/shape.h>
 #include <dingo/primitives/type_name.h>

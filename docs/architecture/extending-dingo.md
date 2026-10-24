@@ -418,7 +418,7 @@ declarations that take a backend.
 - [include/dingo/conversion/layer_traits.h](../../include/dingo/conversion/layer_traits.h)
 - [include/dingo/conversion/layer_kinds.gen.h](../../include/dingo/conversion/layer_kinds.gen.h)
 - [include/dingo/conversion/type_conversion.h](../../include/dingo/conversion/type_conversion.h)
-- [include/dingo/conversion/scope_tags.gen.h](../../include/dingo/conversion/scope_tags.gen.h)
+- [include/dingo/conversion/scopes.gen.h](../../include/dingo/conversion/scopes.gen.h)
 - [include/dingo/backend/slot.h](../../include/dingo/backend/slot.h)
 - [include/dingo/backend/index.h](../../include/dingo/backend/index.h)
 - [include/dingo/lookup/indexes.h](../../include/dingo/lookup/indexes.h)
