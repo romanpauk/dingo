@@ -29,18 +29,25 @@ struct annotation_of<Key, std::void_t<typename Key::annotation>> {
   using type = typename Key::annotation;
 };
 
-// The type tree of a request of `Type`, whose leaf has the identity of the
-// interface annotated by `Annotation`, unless it is void.
-template <typename Type, typename Annotation>
-constexpr type_tree request_type_tree() {
-  if constexpr (std::is_void_v<Annotation>) {
-    return type_tree_v<Type>;
-  } else {
+// The nodes of the type tree of a request of `Type`, whose leaf has the
+// identity of the interface annotated by `Annotation`, unless it is void, in an
+// array of exactly as many.
+template <typename Type, typename Annotation> constexpr auto request_nodes() {
+  auto result = type_tree_nodes_v<Type>;
+  if constexpr (!std::is_void_v<Annotation>) {
     using leaf = leaf_of_t<Type>;
-    type_tree annotated = type_tree_v<leaf>;
-    annotated.nodes[0].type = type_id_v<::dingo::annotated<leaf, Annotation>>;
-    return ::dingo::replace_leaf(type_tree_v<Type>, annotated);
+    std::size_t index = 0;
+    while (is_wrapper(result.items[index].kind)) {
+      // A wrapper of more than one argument keeps its leaf.
+      if (result.items[index].arity != 1) {
+        return result;
+      }
+      ++index;
+    }
+    result.items[index] = type_tree_nodes_v<leaf>.items[0];
+    result.items[index].type = type_id_v<::dingo::annotated<leaf, Annotation>>;
   }
+  return result;
 }
 } // namespace detail
 
@@ -57,10 +64,9 @@ template <typename Request, typename Key = no_key> struct request_traits {
   // The type a binding makes the object of a constructed request as, without
   // qualifiers, which converts to the request.
   using made_type = canonical_t<std::remove_reference_t<Request>>;
-  static constexpr type_tree tree =
-      detail::request_type_tree<std::remove_reference_t<Request>,
-                                typename detail::annotation_of<Key>::type>();
-  static constexpr auto nodes = exact_nodes<tree.size>(tree);
+  static constexpr auto nodes =
+      detail::request_nodes<std::remove_reference_t<Request>,
+                            typename detail::annotation_of<Key>::type>();
   static constexpr request_descriptor descriptor{kind, nodes.view(),
                                                  Key::descriptor};
 };

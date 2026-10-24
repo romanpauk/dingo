@@ -172,16 +172,6 @@ template <std::size_t Count> struct type_tree_nodes {
   constexpr type_tree_view view() const { return {items, Count}; }
 };
 
-// The nodes of `tree`, `Count` of them, which is its size.
-template <std::size_t Count>
-constexpr type_tree_nodes<Count> exact_nodes(type_tree_view tree) {
-  type_tree_nodes<Count> result;
-  for (std::size_t index = 0; index < Count; ++index) {
-    result.items[index] = tree.nodes[index];
-  }
-  return result;
-}
-
 // The number of nodes of the subtree that starts at `index`.
 constexpr std::size_t subtree_size(type_tree_view value, std::size_t index) {
   std::size_t end = index + 1;

@@ -115,26 +115,25 @@ struct interface_object<::dingo::annotated<Interface, Tag>> {
 template <typename Interface>
 using interface_object_t = typename interface_object<Interface>::type;
 
-// The type tree of a declared interface: the type tree of its objects, whose
-// leaf has the identity of the interface.
-template <typename Interface> constexpr type_tree interface_type_tree() {
-  type_tree value = type_tree_v<interface_object_t<Interface>>;
-  value.nodes[0].type = type_id_v<Interface>;
-  return value;
+// The nodes of the type tree of a declared interface, in an array of exactly as
+// many: the type tree of its objects, whose leaf has the identity of the
+// interface.
+template <typename Interface> constexpr auto make_interface_nodes() {
+  auto result = type_tree_nodes_v<interface_object_t<Interface>>;
+  result.items[0].type = type_id_v<Interface>;
+  return result;
 }
 
 template <typename Interface>
-inline constexpr type_tree interface_type_tree_v =
-    interface_type_tree<Interface>();
-
-// The nodes of the type tree of a declared interface, and a view of them.
-template <typename Interface>
-inline constexpr auto interface_nodes_v =
-    exact_nodes<interface_type_tree_v<Interface>.size>(
-        interface_type_tree_v<Interface>);
+inline constexpr auto interface_nodes_v = make_interface_nodes<Interface>();
 
 template <typename Interface>
 inline constexpr type_tree_view interface_view_v =
     interface_nodes_v<Interface>.view();
+
+// The type tree of a declared interface as a value that can be changed.
+template <typename Interface>
+inline constexpr type_tree interface_type_tree_v =
+    copy_of(interface_view_v<Interface>);
 
 } // namespace dingo

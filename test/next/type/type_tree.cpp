@@ -11,6 +11,7 @@
 
 #include <memory>
 #include <optional>
+#include <utility>
 #include <variant>
 
 namespace {
@@ -75,6 +76,23 @@ static_assert(replace_leaf(type_tree_v<std::shared_ptr<leaf>>,
                            type_tree_v<other>)
                   .nodes[1]
                   .type == type_id_v<other>);
+
+template <int Id> struct numbered_leaf {};
+
+template <int... Ids>
+std::variant<numbered_leaf<Ids>...>
+    variant_of(std::integer_sequence<int, Ids...>);
+
+// A type tree has the nodes its type has, however many that is.
+TEST(type_tree, has_as_many_nodes_as_the_type) {
+  using wide = decltype(variant_of(std::make_integer_sequence<int, 20>()));
+  constexpr dingo::type_tree_view tree = dingo::type_tree_view_v<wide>;
+  static_assert(tree.size == 21);
+  EXPECT_EQ(tree.nodes[0].arity, 20);
+  EXPECT_EQ(tree.nodes[20].type, dingo::type_id_v<numbered_leaf<19>>);
+  EXPECT_EQ(dingo::type_tree_view_v<std::shared_ptr<std::optional<int>>>.size,
+            3u);
+}
 
 TEST(type_tree, describes_the_standard_wrappers) {
   EXPECT_EQ(type_tree_v<std::unique_ptr<leaf>>.size, 2u);

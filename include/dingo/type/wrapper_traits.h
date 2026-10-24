@@ -431,23 +431,36 @@ struct wrapper_extent<Traits, std::void_t<decltype(Traits::extent)>> {
   static constexpr std::uint32_t value = Traits::extent;
 };
 
-template <typename Type> constexpr type_tree make_type_tree();
-
-template <typename List> struct argument_type_trees;
+// The number of nodes of the type tree of `Type`: its own and those of its
+// arguments.
+template <typename Type> constexpr std::size_t count_type_nodes();
 
 template <typename... Arguments>
-struct argument_type_trees<type_list<Arguments...>> {
-  static constexpr void append(type_tree &result) {
-    (append_one(result, make_type_tree<Arguments>()), ...);
-  }
+constexpr std::size_t count_argument_nodes(type_list<Arguments...> /*list*/) {
+  return (std::size_t(0) + ... + count_type_nodes<Arguments>());
+}
 
-  static constexpr void append_one(type_tree &result, type_tree_view argument) {
-    for (std::size_t index = 0; index < argument.size; ++index) {
-      result.nodes[result.size + index] = argument.nodes[index];
-    }
-    result.size += argument.size;
+template <typename Type> constexpr std::size_t count_type_nodes() {
+  using value_type = std::remove_cv_t<Type>;
+  if constexpr (is_wrapper_v<value_type>) {
+    return 1 + count_argument_nodes(
+                   typename wrapper_traits<value_type>::arguments{});
+  } else {
+    return 1;
   }
-};
+}
+
+// Writes the nodes of the type tree of `Type` at `out`, and returns how many.
+template <typename Type>
+constexpr std::size_t fill_type_nodes(type_tree_node *out);
+
+template <typename... Arguments>
+constexpr std::size_t fill_argument_nodes(type_tree_node *out,
+                                          type_list<Arguments...> /*list*/) {
+  std::size_t used = 0;
+  ((used += fill_type_nodes<Arguments>(out + used)), ...);
+  return used;
+}
 
 // Whether the wrapper `value` is copied: a wrapper of a kind copied as a
 // handle, or one that holds its elements in place and is not immovable, when
@@ -471,11 +484,11 @@ constexpr bool copies_wrapper(type_tree_view value) {
   return true;
 }
 
-template <typename Type> constexpr type_tree make_type_tree() {
+template <typename Type>
+constexpr std::size_t fill_type_nodes(type_tree_node *out) {
   using value_type = std::remove_cv_t<Type>;
   using traits = wrapper_traits<value_type>;
-  type_tree result;
-  type_tree_node &node = result.nodes[0];
+  type_tree_node &node = out[0];
   node.kind = wrapper_semantics_v<value_type>;
   // Only a leaf has an identity of its own; a wrapper is its kind and family.
   if constexpr (!is_wrapper_v<value_type>) {
@@ -498,37 +511,48 @@ template <typename Type> constexpr type_tree make_type_tree() {
   node.qualifiers = static_cast<std::uint8_t>(
       (std::is_const_v<Type> ? const_qualified : 0) |
       (std::is_volatile_v<Type> ? volatile_qualified : 0));
-  result.size = 1;
+  std::size_t size = 1;
   if constexpr (is_wrapper_v<value_type>) {
     node.family = wrapper_family<traits>::value;
     node.extent = wrapper_extent<traits>::value;
     node.arity = static_cast<std::uint8_t>(traits::arguments::size);
-    argument_type_trees<typename traits::arguments>::append(result);
-    node.copyable = copies_wrapper(result);
+    size += fill_argument_nodes(out + 1, typename traits::arguments{});
+    node.copyable = copies_wrapper(type_tree_view{out, size});
     // The elements of an array have the qualifiers of the array.
     if constexpr (has_properties_v<value_type, property::extent> ||
                   has_properties_v<value_type, property::unsized>) {
-      result.nodes[1].qualifiers |= node.qualifiers;
+      out[1].qualifiers |= node.qualifiers;
     }
   }
-  return result;
+  return size;
 }
 } // namespace detail
 
-// The type tree of a C++ type, with the cv-qualifiers of its objects.
-template <typename Type>
-inline constexpr type_tree type_tree_v = detail::make_type_tree<Type>();
+// The nodes of the type tree of a C++ type, with the cv-qualifiers of its
+// objects, in an array of exactly as many, and a view of them: what a binding
+// and a request keep.
+template <typename Type> constexpr auto make_type_tree_nodes() {
+  type_tree_nodes<detail::count_type_nodes<Type>()> result;
+  detail::fill_type_nodes<Type>(result.items);
+  return result;
+}
 
-// The nodes of the type tree of a C++ type, in an array of exactly as many, and
-// a view of them: what a binding and a request keep, in place of a type tree
-// that has room for more.
 template <typename Type>
-inline constexpr auto type_tree_nodes_v =
-    exact_nodes<type_tree_v<Type>.size>(type_tree_v<Type>);
+inline constexpr auto type_tree_nodes_v = make_type_tree_nodes<Type>();
 
 template <typename Type>
 inline constexpr type_tree_view type_tree_view_v =
     type_tree_nodes_v<Type>.view();
+
+// The type tree of a C++ type as a value that can be changed, which has room
+// for type_tree_capacity nodes.
+template <typename Type>
+inline constexpr type_tree type_tree_v = [] {
+  static_assert(
+      detail::count_type_nodes<Type>() <= type_tree_capacity,
+      "a type of more nodes than type_tree_capacity has no type_tree");
+  return copy_of(type_tree_view_v<Type>);
+}();
 
 namespace detail {
 template <typename Type, typename = void> struct canonical {
