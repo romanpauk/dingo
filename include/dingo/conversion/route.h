@@ -30,7 +30,6 @@
 namespace dingo {
 
 inline constexpr std::size_t max_interfaces = 8;
-inline constexpr std::size_t max_rules_per_route = 8;
 inline constexpr std::size_t max_semantics = 32;
 
 constexpr const semantics_descriptor *semantics_of(type_tree_view value,
@@ -187,15 +186,26 @@ struct request_descriptor {
   key_descriptor key;
 };
 
-// A derived reachable type and how it was reached.
+// The reachable type of a value and category that is none.
+inline constexpr std::size_t no_reachable_type = static_cast<std::size_t>(-1);
+
+// A derived reachable type and how it was reached: by the last rule of its
+// route from the reachable type `parent`, which the route continues. The rules
+// of a route are read along the reachable types it continues, by rule_at.
 struct reachable_type {
   type_tree value;
   value_category category = value_category::lvalue;
-  route_step rules[max_rules_per_route] = {};
-  // For each rule, the argument of the source wrapper it reached, or for an
-  // upcast, the index of the interface it converted to.
-  std::uint8_t arguments[max_rules_per_route] = {};
+  // The last rule of the route, and the argument of the source wrapper it
+  // reached, or for an upcast, the index of the interface it converted to.
+  route_step step = {};
+  std::uint8_t argument = 0;
+  // The reachable type, among the ones the route is published with, that the
+  // route continues, or no_reachable_type for the stored one.
+  std::size_t parent = no_reachable_type;
+  // The number of rules of the route.
   std::size_t rule_count = 0;
+  // Whether the route reaches into a variadic wrapper.
+  bool variadic = false;
   bool copied = false;
   // The leaves the copy rule of the route copied.
   std::uint32_t copied_leaves = 0;
@@ -207,8 +217,8 @@ struct reachable_type {
   // derived from nor selected; a walk of the primary continues along it from
   // the object of the step when the object holds its alternative.
   bool sibling = false;
-  std::uint8_t primary = 0;
-  std::uint8_t branch = 0;
+  std::size_t primary = 0;
+  std::size_t branch = 0;
   // The wrapper the last rule started from: its kind, qualifiers, and extent,
   // which a request that copies or decays the reachable type borrows.
   const semantics_descriptor *source_semantics = &leaf_semantics;
@@ -222,6 +232,34 @@ struct reachable_types {
   const reachable_type *items = nullptr;
   std::size_t size = 0;
 };
+
+namespace detail {
+// The reachable type that holds the rule of `route` at `position`: the route
+// itself for its last rule, and the ones it continues before it.
+constexpr const reachable_type &holder_of_rule(const reachable_type *items,
+                                               const reachable_type &route,
+                                               std::size_t position) {
+  const reachable_type *holder = &route;
+  for (std::size_t hops = route.rule_count - 1 - position; hops > 0; --hops) {
+    holder = &items[holder->parent];
+  }
+  return *holder;
+}
+} // namespace detail
+
+// The rule of `route` at `position`, and its argument, where `items` are the
+// reachable types the route is published with.
+constexpr const route_step &rule_at(const reachable_type *items,
+                                    const reachable_type &route,
+                                    std::size_t position) {
+  return detail::holder_of_rule(items, route, position).step;
+}
+
+constexpr std::size_t argument_at(const reachable_type *items,
+                                  const reachable_type &route,
+                                  std::size_t position) {
+  return detail::holder_of_rule(items, route, position).argument;
+}
 
 // Where a derivation writes the reachable types it finds. When there is no room
 // left it sets `full` and writes no more, so the caller derives again with
@@ -447,7 +485,7 @@ constexpr int completion_class(const reachable_type &route) {
   if (route.rule_count == 0) {
     return 0;
   }
-  const operation last = route.rules[route.rule_count - 1].form;
+  const operation last = route.step.form;
   return last == operation::copy ? 1 : last == operation::decay ? 2 : 3;
 }
 
@@ -471,11 +509,15 @@ constexpr void add_sibling(reachable_type_buffer &found, std::size_t primary,
                                  ? first.rule_count
                                  : derived.rule_count;
   for (std::size_t position = 0; position < common; ++position) {
-    const route_step &taken = first.rules[position];
-    const route_step &other = derived.rules[position];
+    const route_step &taken = rule_at(found.items, first, position);
+    const route_step &other = rule_at(found.items, derived, position);
+    const std::size_t taken_argument =
+        argument_at(found.items, first, position);
+    const std::size_t other_argument =
+        argument_at(found.items, derived, position);
     const bool same =
         taken.form == other.form && same_semantics(taken.kind, other.kind);
-    if (same && first.arguments[position] == derived.arguments[position]) {
+    if (same && taken_argument == other_argument) {
       continue;
     }
     if (!same || !has_properties(from_semantics(taken), property::variadic) ||
@@ -486,7 +528,7 @@ constexpr void add_sibling(reachable_type_buffer &found, std::size_t primary,
     for (std::size_t index = 0; index < found.size; ++index) {
       const reachable_type &item = found.items[index];
       if (item.sibling && item.primary == primary && item.branch == position &&
-          item.arguments[position] == derived.arguments[position]) {
+          argument_at(found.items, item, position) == other_argument) {
         return;
       }
     }
@@ -495,8 +537,8 @@ constexpr void add_sibling(reachable_type_buffer &found, std::size_t primary,
       return;
     }
     derived.sibling = true;
-    derived.primary = static_cast<std::uint8_t>(primary);
-    derived.branch = static_cast<std::uint8_t>(position);
+    derived.primary = primary;
+    derived.branch = position;
     found.items[found.size++] = derived;
     return;
   }
@@ -504,7 +546,7 @@ constexpr void add_sibling(reachable_type_buffer &found, std::size_t primary,
 
 // The reachable type `step` derives from `from`, of the value `value`, with the
 // pattern variable bound to `bound`.
-constexpr reachable_type extend(const reachable_type &from,
+constexpr reachable_type extend(const reachable_type &from, std::size_t parent,
                                 const route_step &step, type_tree_view value,
                                 type_tree_view bound, std::size_t argument) {
   const operation_info &rule = info(step.form);
@@ -514,8 +556,12 @@ constexpr reachable_type extend(const reachable_type &from,
   derived.source_extent = from.value.nodes[0].extent;
   derived.value = copy_of(value);
   derived.category = rule.to_category;
-  derived.arguments[derived.rule_count] = static_cast<std::uint8_t>(argument);
-  derived.rules[derived.rule_count++] = step;
+  derived.step = step;
+  derived.argument = static_cast<std::uint8_t>(argument);
+  derived.parent = parent;
+  ++derived.rule_count;
+  derived.variadic =
+      from.variadic || has_properties(from_semantics(step), property::variadic);
   if (step.form == operation::copy) {
     derived.copied = true;
     derived.copied_leaves = leaves_held_by_value(bound);
@@ -572,8 +618,9 @@ constexpr bool step_value(const reachable_type &from, const route_step &step,
 // wrapper.
 constexpr void apply(const binding_descriptor &binding,
                      reachable_type_buffer &found, const reachable_type &from,
-                     const route_step &step, type_tree_view bound,
-                     std::size_t argument, std::size_t limit) {
+                     std::size_t parent, const route_step &step,
+                     type_tree_view bound, std::size_t argument,
+                     std::size_t limit) {
   const operation_info &rule = info(step.form);
   if (!requirements_hold(binding, rule, bound)) {
     return;
@@ -600,13 +647,13 @@ constexpr void apply(const binding_descriptor &binding,
                         : wrap(to, source.nodes[0].family,
                                source.nodes[0].copyable, interface,
                                source.nodes[0].extent);
-      add(found, extend(from, step, value, bound, index));
+      add(found, extend(from, parent, step, value, bound, index));
     }
     return;
   }
   type_tree value;
   if (step_value(from, step, bound, limit, value)) {
-    add(found, extend(from, step, value, bound, argument));
+    add(found, extend(from, parent, step, value, bound, argument));
   }
 }
 
@@ -615,7 +662,8 @@ constexpr void apply(const binding_descriptor &binding,
 constexpr void apply_to_arguments(const binding_descriptor &binding,
                                   reachable_type_buffer &found,
                                   const reachable_type &from,
-                                  const route_step &step, std::size_t limit) {
+                                  std::size_t parent, const route_step &step,
+                                  std::size_t limit) {
   std::size_t arguments =
       has_properties(semantics_of(from.value), property::variadic)
           ? from.value.nodes[0].arity
@@ -623,7 +671,7 @@ constexpr void apply_to_arguments(const binding_descriptor &binding,
   for (std::size_t argument = 0; argument < arguments; ++argument) {
     type_tree bound =
         subtree(from.value, argument_index(from.value, 0, argument));
-    apply(binding, found, from, step, bound, argument, limit);
+    apply(binding, found, from, parent, step, bound, argument, limit);
   }
 }
 } // namespace detail
@@ -644,9 +692,6 @@ constexpr void derive_from(const binding_descriptor &binding,
                            reachable_type_buffer &found, std::size_t next,
                            std::uint8_t exposed, std::size_t limit) {
   reachable_type from = found.items[next];
-  if (from.rule_count == max_rules_per_route) {
-    return;
-  }
   const semantics_descriptor *kind = semantics_of(from.value);
   for (const operation_info &rule : operations) {
     if (rule.from_category != from.category ||
@@ -654,12 +699,12 @@ constexpr void derive_from(const binding_descriptor &binding,
       continue;
     }
     if (!rule.of_semantics) {
-      apply(binding, found, from, route_step{rule.form, &leaf_semantics},
+      apply(binding, found, from, next, route_step{rule.form, &leaf_semantics},
             from.value, 0, limit);
     } else if (rule.from_position == type_position::wrapper &&
                has_operation(kind, rule.form)) {
-      apply_to_arguments(binding, found, from, route_step{rule.form, kind},
-                         limit);
+      apply_to_arguments(binding, found, from, next,
+                         route_step{rule.form, kind}, limit);
     }
   }
 }
@@ -822,27 +867,50 @@ constexpr bool accepts(const request_descriptor &request,
          candidate.category == value_category::prvalue;
 }
 
+inline constexpr std::size_t max_created_wrappers = 2;
+
+// A route a request takes to serve itself: the reachable type of the binding
+// it starts from, `base`, and the wrappers the request creates of it, which
+// `reachable` is the result of.
+struct route_candidate {
+  reachable_type reachable;
+  std::size_t base = no_reachable_type;
+  route_step created[max_created_wrappers] = {};
+  std::size_t created_count = 0;
+};
+
+// The form of the rule of a candidate at `position`: one of the route of the
+// reachable type it starts from, or of a wrapper it creates.
+constexpr operation form_at(const reachable_type *items,
+                            const route_candidate &candidate,
+                            std::size_t position) {
+  const reachable_type &base = items[candidate.base];
+  return position < base.rule_count
+             ? rule_at(items, base, position).form
+             : candidate.created[position - base.rule_count].form;
+}
+
 // Whether `left` is preferred to `right`: fewer rules, then no copy, then the
 // forms that come first in the order of the rules, which orders forms and
 // not kinds; of others, the one derived first is.
-constexpr bool preferred(const reachable_type &left,
-                         const reachable_type &right) {
-  if (left.rule_count != right.rule_count) {
-    return left.rule_count < right.rule_count;
+constexpr bool preferred(const reachable_type *items,
+                         const route_candidate &left,
+                         const route_candidate &right) {
+  if (left.reachable.rule_count != right.reachable.rule_count) {
+    return left.reachable.rule_count < right.reachable.rule_count;
   }
-  if (left.copied != right.copied) {
-    return !left.copied;
+  if (left.reachable.copied != right.reachable.copied) {
+    return !left.reachable.copied;
   }
-  for (std::size_t index = 0; index < left.rule_count; ++index) {
-    if (left.rules[index].form != right.rules[index].form) {
-      return left.rules[index].form < right.rules[index].form;
+  for (std::size_t index = 0; index < left.reachable.rule_count; ++index) {
+    const operation first = form_at(items, left, index);
+    const operation second = form_at(items, right, index);
+    if (first != second) {
+      return first < second;
     }
   }
   return false;
 }
-
-inline constexpr std::size_t no_reachable_type = static_cast<std::size_t>(-1);
-inline constexpr std::size_t max_created_wrappers = 2;
 
 // The route a request takes: a reachable type of the binding, or
 // no_reachable_type, and the wrappers the request creates of its object,
@@ -858,11 +926,11 @@ namespace detail {
 // The reachable type the creating form `step` derives from `from`, into `made`;
 // false when it derives none.
 constexpr bool create(const binding_descriptor &binding,
-                      const reachable_type &from, const route_step &step,
-                      std::uint8_t exposed, reachable_type &made) {
+                      const route_candidate &candidate, const route_step &step,
+                      std::uint8_t exposed, route_candidate &made) {
+  const reachable_type &from = candidate.reachable;
   const operation_info &rule = info(step.form);
-  if (from.rule_count == max_rules_per_route ||
-      rule.from_category != from.category ||
+  if (rule.from_category != from.category ||
       (rule.exposure != 0 && (exposed & rule.exposure) == 0)) {
     return false;
   }
@@ -883,7 +951,9 @@ constexpr bool create(const binding_descriptor &binding,
   if (!step_value(from, step, bound, derivation_bound(binding), value)) {
     return false;
   }
-  made = extend(from, step, value, bound, 0);
+  made = candidate;
+  made.reachable = extend(from, from.parent, step, value, bound, 0);
+  made.created[made.created_count++] = step;
   return true;
 }
 
@@ -906,19 +976,28 @@ constexpr route_choice select_route(const binding_descriptor &binding,
                                     const request_descriptor &request,
                                     std::uint8_t exposed) {
   route_choice best;
-  reachable_type best_route;
-  auto consider = [&](const reachable_type &candidate,
-                      const route_choice &choice) {
-    if (accepts(request, candidate, exposed) &&
+  route_candidate best_route;
+  auto consider = [&](const route_candidate &candidate) {
+    if (accepts(request, candidate.reachable, exposed) &&
         (best.reachable_type == no_reachable_type ||
-         preferred(candidate, best_route))) {
-      best = choice;
+         preferred(found.items, candidate, best_route))) {
+      best.reachable_type = candidate.base;
+      best.created_count = candidate.created_count;
+      for (std::size_t index = 0; index < candidate.created_count; ++index) {
+        best.created[index] = candidate.created[index];
+      }
       best_route = candidate;
     }
   };
+  auto from_found = [&](std::size_t index) {
+    route_candidate candidate;
+    candidate.reachable = found.items[index];
+    candidate.base = index;
+    return candidate;
+  };
   for (std::size_t index = 0; index < found.size; ++index) {
     if (!found.items[index].sibling) {
-      consider(found.items[index], route_choice{index, {}, 0});
+      consider(from_found(index));
     }
   }
   const semantics_descriptor *outer = semantics_of(request.value);
@@ -927,11 +1006,11 @@ constexpr route_choice select_route(const binding_descriptor &binding,
       continue;
     }
     const route_step step{rule.form, outer};
-    reachable_type made;
+    route_candidate made;
     for (std::size_t index = 0; index < found.size; ++index) {
       if (!found.items[index].sibling &&
-          detail::create(binding, found.items[index], step, exposed, made)) {
-        consider(made, route_choice{index, {step}, 1});
+          detail::create(binding, from_found(index), step, exposed, made)) {
+        consider(made);
       }
     }
     // The wrapper the outer one is made of is created too.
@@ -942,13 +1021,13 @@ constexpr route_choice select_route(const binding_descriptor &binding,
         continue;
       }
       const route_step inner_step{inner_rule.form, inner};
-      reachable_type middle;
+      route_candidate middle;
       for (std::size_t index = 0; index < found.size; ++index) {
         if (!found.items[index].sibling &&
-            detail::create(binding, found.items[index], inner_step, exposed,
+            detail::create(binding, from_found(index), inner_step, exposed,
                            middle) &&
             detail::create(binding, middle, step, exposed, made)) {
-          consider(made, route_choice{index, {inner_step, step}, 2});
+          consider(made);
         }
       }
     }

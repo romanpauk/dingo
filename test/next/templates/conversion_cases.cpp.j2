@@ -36,14 +36,20 @@ struct conversion_case {
   bool registered;
   bool found;
   bool served;
-  dingo::route_step rules[dingo::max_rules_per_route];
+  const dingo::route_step *rules;
   std::size_t rule_count;
 };
 
+// The rules of the cases one after the other, a case pointing at its own.
+static const dingo::route_step case_rules[] = {
+{% for case in cases %}{% for rule in case.rules %}    {operation::{{ rule.form }}, {% if rule.kind %}&dingo::semantics_v<::{{ rule.kind }}>{% else %}&dingo::leaf_semantics{% endif %}},
+{% endfor %}{% endfor %}    {operation::borrow, &dingo::leaf_semantics}};
+
+{% set position = namespace(next=0) %}
 extern const conversion_case conversion_cases[] = {
 {% for case in cases %}
-    {"{{ case.scope }} {{ case.interfaces | join(",") }} {{ spell(case.stored) }} {{ case.kind }} {{ spell(case.request) }}", &type_tree_v<{{ spell(case.stored) }}>, &::dingo::scope_traits<::dingo::{{ case.scope }}>::descriptor, { {% for interface in case.interfaces %}&type_tree_v<{{ interface }}>{{ ", " if not loop.last }}{% endfor %} }, {{ case.interfaces | length }}, dingo::request_kind::{{ case.kind }}, &type_tree_v<{{ spell(case.request) }}>, {{ case.registered | lower }}, {{ case.found | lower }}, {{ case.served | lower }}, { {% for rule in case.rules %}{operation::{{ rule.form }}, {% if rule.kind %}&dingo::semantics_v<::{{ rule.kind }}>{% else %}&dingo::leaf_semantics{% endif %}}{{ ", " if not loop.last }}{% endfor %} }, {{ case.rules | length }}},
-{% endfor %}
+    {"{{ case.scope }} {{ case.interfaces | join(",") }} {{ spell(case.stored) }} {{ case.kind }} {{ spell(case.request) }}", &type_tree_v<{{ spell(case.stored) }}>, &::dingo::scope_traits<::dingo::{{ case.scope }}>::descriptor, { {% for interface in case.interfaces %}&type_tree_v<{{ interface }}>{{ ", " if not loop.last }}{% endfor %} }, {{ case.interfaces | length }}, dingo::request_kind::{{ case.kind }}, &type_tree_v<{{ spell(case.request) }}>, {{ case.registered | lower }}, {{ case.found | lower }}, {{ case.served | lower }}, case_rules + {{ position.next }}, {{ case.rules | length }}},
+{% set position.next = position.next + case.rules | length %}{% endfor %}
 };
 
 extern const std::size_t conversion_case_count = {{ cases | length }};

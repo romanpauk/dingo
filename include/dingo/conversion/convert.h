@@ -68,11 +68,10 @@ struct interface_type_trees<Leaf, type_list<Interfaces...>> {
 // Whether a reachable type derives an object by a cached rule.
 constexpr bool keeps_objects(const reachable_types &published) {
   for (std::size_t index = 0; index < published.size; ++index) {
+    // The last rule of each reachable type is a rule of each route.
     const reachable_type &route = published.items[index];
-    for (std::size_t step = 0; step < route.rule_count; ++step) {
-      if (info(route.rules[step].form).cached) {
-        return true;
-      }
+    if (route.rule_count > 0 && info(route.step.form).cached) {
+      return true;
     }
   }
   return false;
@@ -203,17 +202,13 @@ struct completion_plan {
 constexpr completion_plan plan_completion(const reachable_type &route) {
   completion_plan plan;
   plan.binding_steps = route.rule_count;
-  for (std::size_t step = 0; step < route.rule_count; ++step) {
-    plan.rechecked =
-        plan.rechecked ||
-        has_properties(from_semantics(route.rules[step]), property::variadic);
-  }
+  plan.rechecked = route.variadic;
   if (route.category == value_category::lvalue) {
     plan.kind = completion::refer;
     return plan;
   }
   if (route.rule_count > 0) {
-    switch (route.rules[route.rule_count - 1].form) {
+    switch (route.step.form) {
     case operation::copy:
       plan.kind = completion::copy;
       plan.binding_steps = route.rule_count - 1;
@@ -267,6 +262,14 @@ template <typename Binding, std::size_t ReachableType> struct published_route {
   static constexpr const reachable_type &value =
       Binding::published.items[ReachableType];
 
+  // The rule of the route at `Step`, and its argument.
+  template <std::size_t Step>
+  static constexpr const route_step &rule =
+      rule_at(Binding::published.items, value, Step);
+  template <std::size_t Step>
+  static constexpr std::size_t argument =
+      argument_at(Binding::published.items, value, Step);
+
   // The sibling that takes alternative `Alternative` at the step `Step`, or
   // no_reachable_type.
   template <std::size_t Step, std::size_t Alternative>
@@ -275,7 +278,8 @@ template <typename Binding, std::size_t ReachableType> struct published_route {
     for (std::size_t index = 0; index < published.size; ++index) {
       const reachable_type &item = published.items[index];
       if (item.sibling && item.primary == ReachableType &&
-          item.branch == Step && item.arguments[Step] == Alternative) {
+          item.branch == Step &&
+          argument_at(published.items, item, Step) == Alternative) {
         return index;
       }
     }
@@ -372,14 +376,14 @@ inline constexpr bool is_address_walk_v<address_walk<Context>> = true;
 // Step `Step` of the walk of the first `Steps` rules of reachable type
 // `Reachable type`.
 template <typename Route, std::size_t Steps, std::size_t Step> struct step {
-  static constexpr const route_step &current = Route::value.rules[Step];
+  static constexpr const route_step &current = Route::template rule<Step>;
   static constexpr const operation_info &rule = info(current.form);
   static constexpr operation form = current.form;
   // The kind the step derives, or the leaf kind for an element.
   static constexpr const semantics_descriptor *to = to_semantics(current);
   // The argument of the source wrapper the rule reaches, or for an upcast, the
   // index of the interface it converts to.
-  static constexpr std::size_t argument = Route::value.arguments[Step];
+  static constexpr std::size_t argument = Route::template argument<Step>;
   static constexpr bool last = Step + 1 == Steps;
 
   // Passes on an lvalue the step reaches; the last step returns it, or its
@@ -705,7 +709,7 @@ constexpr bool reaches_held_element() {
   if constexpr (Steps == 0) {
     return false;
   } else {
-    const route_step &last = Route::value.rules[Steps - 1];
+    const route_step &last = Route::template rule<Steps - 1>;
     return last.form == operation::borrow &&
            has_properties(last.kind, property::nullable) &&
            has_properties(last.kind, property::in_place);

@@ -32,7 +32,7 @@ struct conversion_case {
   bool registered;
   bool found;
   bool served;
-  dingo::route_step rules[dingo::max_rules_per_route];
+  const dingo::route_step *rules;
   std::size_t rule_count;
 };
 
@@ -84,11 +84,14 @@ TEST(conversion_conformance, computes_what_the_reference_computes) {
             if (served) {
               // The rules of the reachable type, then the wrappers the request
               // creates.
-              rules =
-                  rules_of(
-                      reachable_types.items[choice.reachable_type].rules,
-                      reachable_types.items[choice.reachable_type].rule_count) +
-                  rules_of(choice.created, choice.created_count);
+              const dingo::reachable_type &route =
+                  reachable_types.items[choice.reachable_type];
+              for (std::size_t position = 0; position < route.rule_count;
+                   ++position) {
+                rules += rules_of(
+                    &dingo::rule_at(reachable_types.items, route, position), 1);
+              }
+              rules += rules_of(choice.created, choice.created_count);
             }
             return 0;
           });
