@@ -12,7 +12,7 @@
 // its placeholders, spelled as type_name_of spells them. A compiler with
 // user-generated static_assert messages prints it.
 
-#include <dingo/primitives/type_name.h>
+#include <dingo/diagnostics/type_name.h>
 
 #include <cstddef>
 #include <string_view>

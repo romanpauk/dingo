@@ -67,13 +67,6 @@ COMPONENTS = {
 
 # The headers that are not in the directory of their component yet.
 MOVING = {
-    "primitives/message": "diagnostics",
-    "primitives/diagnostic_message": "diagnostics",
-    "primitives/exceptions": "diagnostics",
-    "primitives/compile_diagnostics.gen": "diagnostics",
-    "primitives/diagnostics.gen": "diagnostics",
-    "primitives/type_name": "diagnostics",
-    "primitives/type_path": "diagnostics",
     "primitives/allocation": "memory",
     "primitives/retained": "memory",
     "primitives/slot": "memory",

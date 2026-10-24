@@ -14,9 +14,9 @@
 #include <dingo/base/mechanics.h>
 #include <dingo/conversion/convert.h>
 #include <dingo/conversion/key.h>
-#include <dingo/primitives/diagnostics.gen.h>
-#include <dingo/primitives/type_name.h>
-#include <dingo/primitives/type_path.h>
+#include <dingo/diagnostics/diagnostics.gen.h>
+#include <dingo/diagnostics/type_name.h>
+#include <dingo/diagnostics/type_path.h>
 
 #include <string>
 #include <type_traits>

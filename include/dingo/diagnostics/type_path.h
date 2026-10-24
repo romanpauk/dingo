@@ -10,7 +10,7 @@
 // The path of the types whose objects are being constructed on this thread,
 // outermost first, which diagnostics report as what required a failed request.
 
-#include <dingo/primitives/type_name.h>
+#include <dingo/diagnostics/type_name.h>
 
 #include <string>
 

@@ -89,7 +89,7 @@ has the keys
 
 Every case uses a fresh container: the first resolve is a cold resolve.
 <exception> is the most specific dingo exception type caught (they are caught
-in the order of include/dingo/primitives/exceptions.h; "exception" is the
+in the order of include/dingo/diagnostics/exceptions.h; "exception" is the
 common base), else "std" or "unknown".
 
 Method: per (domain, leaf, scope, stored) one generated program contains one

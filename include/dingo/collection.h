@@ -13,7 +13,7 @@
 
 #include <dingo/conversion/collection.h>
 #include <dingo/conversion/key.h>
-#include <dingo/primitives/compile_diagnostics.gen.h>
+#include <dingo/diagnostics/compile_diagnostics.gen.h>
 
 #include <type_traits>
 #include <utility>

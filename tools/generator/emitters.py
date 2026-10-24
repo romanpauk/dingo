@@ -448,7 +448,7 @@ def message_pieces(message):
 
 
 def diagnostics(spec):
-    """include/dingo/primitives/diagnostics.gen.h and
+    """include/dingo/diagnostics/diagnostics.gen.h and
     compile_diagnostics.gen.h from the diagnostics.
 
     A diagnostic reported at runtime gets a function that throws its exception
@@ -478,14 +478,14 @@ def diagnostics(spec):
     carriers = sorted({field["carrier"] for field in fields if field["compile"]})
     return [
         GeneratedFile(
-            path="include/dingo/primitives/compile_diagnostics.gen.h",
+            path="include/dingo/diagnostics/compile_diagnostics.gen.h",
             content=render(
                 "compile_diagnostics.gen.h.j2", diagnostics=fields, carriers=carriers
             ),
             spec_ids=("diagnostics",),
         ),
         GeneratedFile(
-            path="include/dingo/primitives/diagnostics.gen.h",
+            path="include/dingo/diagnostics/diagnostics.gen.h",
             content=render("diagnostics.gen.h.j2", diagnostics=fields),
             spec_ids=("diagnostics",),
         )

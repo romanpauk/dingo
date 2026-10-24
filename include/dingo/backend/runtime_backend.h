@@ -22,13 +22,13 @@
 #include <dingo/conversion/lookup.h>
 #include <dingo/conversion/request.h>
 #include <dingo/conversion/route.h>
+#include <dingo/diagnostics/diagnostics.gen.h>
+#include <dingo/diagnostics/exceptions.h>
+#include <dingo/diagnostics/type_name.h>
+#include <dingo/diagnostics/type_path.h>
 #include <dingo/primitives/allocation.h>
-#include <dingo/primitives/diagnostics.gen.h>
-#include <dingo/primitives/exceptions.h>
 #include <dingo/primitives/retained.h>
 #include <dingo/primitives/slot.h>
-#include <dingo/primitives/type_name.h>
-#include <dingo/primitives/type_path.h>
 #include <dingo/primitives/type_tree.h>
 
 #include <cstddef>

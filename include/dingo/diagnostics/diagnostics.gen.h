@@ -10,9 +10,9 @@
 
 #include <dingo/base/config.h>
 #include <dingo/base/mechanics.h>
-#include <dingo/primitives/compile_diagnostics.gen.h> // IWYU pragma: export
-#include <dingo/primitives/exceptions.h>
-#include <dingo/primitives/message.h>
+#include <dingo/diagnostics/compile_diagnostics.gen.h> // IWYU pragma: export
+#include <dingo/diagnostics/exceptions.h>
+#include <dingo/diagnostics/message.h>
 
 #include <string_view>
 

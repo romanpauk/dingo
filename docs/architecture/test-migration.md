@@ -975,7 +975,7 @@ obsolete.
 - `type_name_test.value_type_name`: the raw name of a class is the compiler
   spelling. **replaced**: `test/next/primitives/type_name.cpp`
   `next_type_name.spells_a_class_as_the_compiler_does` (+ static_assert on
-  `spelled_type_name`); tests `primitives/type_name.h`.
+  `spelled_type_name`); tests `diagnostics/type_name.h`.
 - `type_name_test.array_type_name_keeps_closing_bracket`: an array name keeps
   `[3]`. **replaced**: `next_type_name.keeps_the_extent_of_an_array`.
 - `type_name_test.const_reference_type_name`: `const X&` spelling. **replaced**:

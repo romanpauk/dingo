@@ -27,10 +27,10 @@
 #include <dingo/conversion/scopes.gen.h>
 #include <dingo/conversion/type_conversion.h>
 #include <dingo/conversion/wrapper_traits.h>
-#include <dingo/primitives/compile_diagnostics.gen.h>
-#include <dingo/primitives/diagnostics.gen.h>
+#include <dingo/diagnostics/compile_diagnostics.gen.h>
+#include <dingo/diagnostics/diagnostics.gen.h>
+#include <dingo/diagnostics/type_name.h>
 #include <dingo/primitives/retained.h>
-#include <dingo/primitives/type_name.h>
 #include <dingo/primitives/type_tree.h>
 
 #include <cstddef>

@@ -15,7 +15,7 @@
 #include <dingo/conversion/convert.h>
 #include <dingo/conversion/key_kinds.gen.h>
 #include <dingo/conversion/scopes.gen.h>
-#include <dingo/primitives/compile_diagnostics.gen.h>
+#include <dingo/diagnostics/compile_diagnostics.gen.h>
 
 #include <type_traits>
 

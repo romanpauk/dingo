@@ -10,7 +10,7 @@
 
 #include <dingo/base/capabilities.gen.h>
 #include <dingo/base/mechanics.h>
-#include <dingo/primitives/diagnostic_message.h>
+#include <dingo/diagnostics/diagnostic_message.h>
 
 #include <cstddef>
 #include <cstdint>

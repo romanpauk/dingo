@@ -267,10 +267,10 @@ add_executable(dingo_next_test
     next/conversion/routes.cpp
     next/primitives/allocation.cpp
     next/primitives/constructor.cpp
-    next/primitives/diagnostic_message.cpp
+    next/diagnostics/diagnostic_message.cpp
     next/primitives/retained.cpp
     next/primitives/transaction_log.cpp
-    next/primitives/type_name.cpp
+    next/diagnostics/type_name.cpp
     next/conversion/request_types.cpp
     next/conversion/type_tree.cpp
     "${DINGO_NEXT_GENERATED_DIR}/conversion_cases.cpp"

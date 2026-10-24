@@ -12,7 +12,7 @@
 // Target object, and declares the access it needs, to borrow the source or
 // consume it. Without one, a wrapper converts by its converting constructor.
 
-#include <dingo/primitives/compile_diagnostics.gen.h>
+#include <dingo/diagnostics/compile_diagnostics.gen.h>
 
 #include <type_traits>
 #include <utility>

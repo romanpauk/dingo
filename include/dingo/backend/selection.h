@@ -34,7 +34,7 @@
 #include <dingo/conversion/key_kinds.gen.h>
 #include <dingo/conversion/request.h>
 #include <dingo/conversion/selection_rules.gen.h>
-#include <dingo/primitives/diagnostic_message.h>
+#include <dingo/diagnostics/diagnostic_message.h>
 #include <dingo/primitives/retained.h>
 
 #include <cstddef>

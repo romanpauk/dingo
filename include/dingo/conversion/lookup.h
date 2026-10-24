@@ -15,7 +15,7 @@
 #include <dingo/base/mechanics.h>
 #include <dingo/conversion/key.h>
 #include <dingo/conversion/route.h>
-#include <dingo/primitives/compile_diagnostics.gen.h>
+#include <dingo/diagnostics/compile_diagnostics.gen.h>
 #include <dingo/primitives/type_tree.h>
 
 #include <cstddef>

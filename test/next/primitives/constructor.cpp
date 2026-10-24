@@ -9,9 +9,9 @@
 // from the largest arity down, or the one the type declares, and its
 // invocation with an argument resolved for every parameter.
 
+#include <dingo/diagnostics/type_name.h>
 #include <dingo/primitives/constructor.h>
 #include <dingo/primitives/constructor_detection.h>
-#include <dingo/primitives/type_name.h>
 #include <dingo/registration/constructor.h>
 #include <dingo/type/annotated.h>
 

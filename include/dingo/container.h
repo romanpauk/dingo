@@ -15,14 +15,14 @@
 #include <dingo/base/mechanics.h>
 #include <dingo/collection.h>
 #include <dingo/container_operations.h>
-#include <dingo/container_traits.h>    // IWYU pragma: export
-#include <dingo/factory/callable.h>    // IWYU pragma: export
-#include <dingo/factory/constructor.h> // IWYU pragma: export
-#include <dingo/factory/function.h>    // IWYU pragma: export
-#include <dingo/key.h>                 // IWYU pragma: export
+#include <dingo/container_traits.h>       // IWYU pragma: export
+#include <dingo/diagnostics/exceptions.h> // IWYU pragma: export
+#include <dingo/factory/callable.h>       // IWYU pragma: export
+#include <dingo/factory/constructor.h>    // IWYU pragma: export
+#include <dingo/factory/function.h>       // IWYU pragma: export
+#include <dingo/key.h>                    // IWYU pragma: export
 #include <dingo/lookup/lookup.h>
 #include <dingo/primitives/allocation.h>
-#include <dingo/primitives/exceptions.h> // IWYU pragma: export
 #include <dingo/registration.h>
 #include <dingo/registration_proxy.h>
 

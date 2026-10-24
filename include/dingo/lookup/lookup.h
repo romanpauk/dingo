@@ -17,8 +17,8 @@
 #include <dingo/base/mechanics.h>
 #include <dingo/conversion/key.h>
 #include <dingo/conversion/lookup.h>
+#include <dingo/diagnostics/compile_diagnostics.gen.h>
 #include <dingo/lookup/indexes.h>
-#include <dingo/primitives/compile_diagnostics.gen.h>
 #include <dingo/registration.h>
 
 #include <cstddef>

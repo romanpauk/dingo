@@ -14,11 +14,11 @@
 #include <dingo/conversion/construct.h>
 #include <dingo/conversion/scopes.gen.h>
 #include <dingo/conversion/wrapper_traits.h>
-#include <dingo/primitives/compile_diagnostics.gen.h>
-#include <dingo/primitives/diagnostics.gen.h>
+#include <dingo/diagnostics/compile_diagnostics.gen.h>
+#include <dingo/diagnostics/diagnostics.gen.h>
+#include <dingo/diagnostics/type_name.h>
+#include <dingo/diagnostics/type_path.h>
 #include <dingo/primitives/slot.h>
-#include <dingo/primitives/type_name.h>
-#include <dingo/primitives/type_path.h>
 
 #include <cstdint>
 #include <new>
