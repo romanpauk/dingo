@@ -65,8 +65,8 @@ template <typename Binding, typename Request> constexpr bool serves() {
       dingo::request_traits<Request>::descriptor;
   return Binding::status == dingo::registration_status::registered &&
          dingo::finds(Binding::descriptor, request) &&
-         dingo::select_route(Binding::descriptor, Binding::published, request,
-                             Binding::exposed)
+         dingo::select_route<request.value.size>(
+             Binding::descriptor, Binding::published, request, Binding::exposed)
                  .reachable_type != dingo::no_reachable_type;
 }
 

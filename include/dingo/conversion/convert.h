@@ -138,14 +138,18 @@ struct binding_type {
   }
 
   static constexpr binding_descriptor descriptor = make_descriptor();
-  static constexpr registration_status status = register_status(descriptor);
+  // The nodes the type trees of the derivation of the binding have room for,
+  // which are as many as the largest of them has.
+  static constexpr std::size_t tree_nodes = scratch_nodes(descriptor);
+  static constexpr registration_status status =
+      register_status<tree_nodes>(descriptor);
   // The reachable types of the binding, in an array of exactly as many: the
   // derivation counts them first, with room that doubles while it is full.
   static constexpr detail::reachable_sizes published_sizes =
-      derive_then<initial_room(descriptor)>(descriptor,
-                                            detail::measure_reachable_types{});
+      derive_then<initial_room(descriptor), tree_nodes>(
+          descriptor, detail::measure_reachable_types{});
   static constexpr reachable_table<published_sizes.items, published_sizes.nodes>
-      published_table = derive_then<initial_room(descriptor)>(
+      published_table = derive_then<initial_room(descriptor), tree_nodes>(
           descriptor, detail::copy_reachable_types<published_sizes.items,
                                                    published_sizes.nodes>{});
   static constexpr reachable_types published = published_table.view();

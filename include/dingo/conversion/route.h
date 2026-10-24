@@ -318,7 +318,8 @@ template <typename Value> struct basic_reachable_type {
 };
 
 // A reachable type while it is derived, and as a binding keeps it.
-using reachable_scratch = basic_reachable_type<type_tree>;
+template <std::size_t Nodes>
+using reachable_scratch = basic_reachable_type<basic_type_tree<Nodes>>;
 struct reachable_type : basic_reachable_type<tree_span> {};
 
 // The reachable types of a binding, as a view of an array that has exactly as
@@ -369,8 +370,8 @@ constexpr std::size_t argument_at(const Item *items, const Item &route,
 // Where a derivation writes the reachable types it finds. When there is no room
 // left it sets `full` and writes no more, so the caller derives again with
 // more.
-struct reachable_type_buffer {
-  reachable_scratch *items = nullptr;
+template <std::size_t Nodes> struct reachable_type_buffer {
+  reachable_scratch<Nodes> *items = nullptr;
   std::size_t capacity = 0;
   std::size_t size = 0;
   bool full = false;
@@ -583,11 +584,12 @@ namespace detail {
 // no_primary.
 inline constexpr std::size_t no_primary = static_cast<std::size_t>(-1);
 
-constexpr std::size_t primary_of(const reachable_type_buffer &found,
+template <std::size_t Nodes>
+constexpr std::size_t primary_of(const reachable_type_buffer<Nodes> &found,
                                  type_tree_view value,
                                  value_category category) {
   for (std::size_t index = 0; index < found.size; ++index) {
-    const reachable_scratch &item = found.items[index];
+    const reachable_scratch<Nodes> &item = found.items[index];
     if (!item.sibling && item.category == category && item.value == value) {
       return index;
     }
@@ -596,7 +598,7 @@ constexpr std::size_t primary_of(const reachable_type_buffer &found,
 }
 
 // How a request completes a reachable type: by copying, decaying, or neither.
-constexpr int completion_class(const reachable_scratch &route) {
+template <typename Item> constexpr int completion_class(const Item &route) {
   if (route.rule_count == 0) {
     return 0;
   }
@@ -607,8 +609,8 @@ constexpr int completion_class(const reachable_scratch &route) {
 // Whether two reachable types a request completes by copying or decaying borrow
 // alike: the wrappers their last rules start from are of one kind, qualifiers,
 // and extent, so a walk to them yields one type.
-constexpr bool borrow_alike(const reachable_scratch &left,
-                            const reachable_scratch &right) {
+template <typename Item>
+constexpr bool borrow_alike(const Item &left, const Item &right) {
   return same_semantics(left.source_semantics, right.source_semantics) &&
          left.source_qualifiers == right.source_qualifiers &&
          left.source_extent == right.source_extent;
@@ -617,9 +619,11 @@ constexpr bool borrow_alike(const reachable_scratch &left,
 // Keeps `derived` as a sibling of the reachable type `primary` when their
 // routes part at a step into a variadic wrapper, by its alternatives, and they
 // are completed alike; one per step and alternative.
-constexpr void add_sibling(reachable_type_buffer &found, std::size_t primary,
-                           reachable_scratch derived) {
-  const reachable_scratch &first = found.items[primary];
+template <std::size_t Nodes>
+constexpr void add_sibling(reachable_type_buffer<Nodes> &found,
+                           std::size_t primary,
+                           reachable_scratch<Nodes> derived) {
+  const reachable_scratch<Nodes> &first = found.items[primary];
   const std::size_t common = first.rule_count < derived.rule_count
                                  ? first.rule_count
                                  : derived.rule_count;
@@ -641,7 +645,7 @@ constexpr void add_sibling(reachable_type_buffer &found, std::size_t primary,
       return;
     }
     for (std::size_t index = 0; index < found.size; ++index) {
-      const reachable_scratch &item = found.items[index];
+      const reachable_scratch<Nodes> &item = found.items[index];
       if (item.sibling && item.primary == primary && item.branch == position &&
           argument_at(found.items, item, position) == other_argument) {
         return;
@@ -661,16 +665,17 @@ constexpr void add_sibling(reachable_type_buffer &found, std::size_t primary,
 
 // The reachable type `step` derives from `from`, of the value `value`, with the
 // pattern variable bound to `bound`.
-constexpr reachable_scratch extend(const reachable_scratch &from,
-                                   std::size_t parent, const route_step &step,
-                                   type_tree_view value, type_tree_view bound,
-                                   std::size_t argument) {
+template <std::size_t Nodes>
+constexpr reachable_scratch<Nodes>
+extend(const reachable_scratch<Nodes> &from, std::size_t parent,
+       const route_step &step, type_tree_view value, type_tree_view bound,
+       std::size_t argument) {
   const operation_info &rule = info(step.form);
-  reachable_scratch derived = from;
+  reachable_scratch<Nodes> derived = from;
   derived.source_semantics = from.value.nodes[0].kind;
   derived.source_qualifiers = from.value.nodes[0].qualifiers;
   derived.source_extent = from.value.nodes[0].extent;
-  derived.value = copy_of(value);
+  derived.value = copy_of<Nodes>(value);
   derived.category = rule.to_category;
   derived.step = step;
   derived.argument = static_cast<std::uint8_t>(argument);
@@ -688,8 +693,9 @@ constexpr reachable_scratch extend(const reachable_scratch &from,
   return derived;
 }
 
-constexpr void add(reachable_type_buffer &found,
-                   const reachable_scratch &derived) {
+template <std::size_t Nodes>
+constexpr void add(reachable_type_buffer<Nodes> &found,
+                   const reachable_scratch<Nodes> &derived) {
   const std::size_t primary =
       primary_of(found, derived.value, derived.category);
   if (primary != no_primary) {
@@ -706,13 +712,14 @@ constexpr void add(reachable_type_buffer &found,
 // The value a step that is no upcast or conversion derives from `from` with
 // the pattern variable bound to `bound`, or false when it is larger than
 // `limit`.
-constexpr bool step_value(const reachable_scratch &from, const route_step &step,
-                          type_tree_view bound, std::size_t limit,
-                          type_tree &value) {
-  const type_tree &source = from.value;
+template <std::size_t Nodes>
+constexpr bool step_value(const reachable_scratch<Nodes> &from,
+                          const route_step &step, type_tree_view bound,
+                          std::size_t limit, basic_type_tree<Nodes> &value) {
+  const basic_type_tree<Nodes> &source = from.value;
   const semantics_descriptor *to = to_semantics(step);
   const semantics_descriptor *of = from_semantics(step);
-  value = copy_of(bound);
+  value = copy_of<Nodes>(bound);
   // The element of a wrapper that holds it in place, an optional or an
   // alternative, has the qualifiers of the wrapper.
   if (!is_wrapper(to) && has_properties(of, property::in_place)) {
@@ -724,7 +731,7 @@ constexpr bool step_value(const reachable_scratch &from, const route_step &step,
       bool keeps = is_wrapper(of) && source.nodes[0].family != nullptr;
       family = keeps ? source.nodes[0].family : any_family;
     }
-    value = wrap(to, family, created_copyable(to, bound), bound);
+    value = wrap<Nodes>(to, family, created_copyable(to, bound), bound);
   }
   return value.size <= limit;
 }
@@ -732,16 +739,17 @@ constexpr bool step_value(const reachable_scratch &from, const route_step &step,
 // Applies `step` to `from` with the pattern variable bound to `bound`, the
 // argument at `argument` of the source type tree when the step starts from a
 // wrapper.
+template <std::size_t Nodes>
 constexpr void apply(const binding_descriptor &binding,
-                     reachable_type_buffer &found,
-                     const reachable_scratch &from, std::size_t parent,
+                     reachable_type_buffer<Nodes> &found,
+                     const reachable_scratch<Nodes> &from, std::size_t parent,
                      const route_step &step, type_tree_view bound,
                      std::size_t argument, std::size_t limit) {
   const operation_info &rule = info(step.form);
   if (!requirements_hold(binding, rule, bound)) {
     return;
   }
-  const type_tree &source = from.value;
+  const basic_type_tree<Nodes> &source = from.value;
   const semantics_descriptor *to = to_semantics(step);
   if (rule.upcast || rule.converts) {
     // Only the stored leaf converts to the declared interfaces, and a user
@@ -755,19 +763,20 @@ constexpr void apply(const binding_descriptor &binding,
       }
       // An upcast keeps the qualifiers of the leaf; a conversion makes a new
       // object.
-      type_tree interface = copy_of(binding.interfaces[index].tree);
+      basic_type_tree<Nodes> interface =
+          copy_of<Nodes>(binding.interfaces[index].tree);
       interface.nodes[0].qualifiers =
           rule.converts ? std::uint8_t(0) : bound.nodes[0].qualifiers;
-      type_tree value = !is_wrapper(to)
-                        ? interface
-                        : wrap(to, source.nodes[0].family,
-                               source.nodes[0].copyable, interface,
-                               source.nodes[0].extent);
+      basic_type_tree<Nodes> value =
+          !is_wrapper(to) ? interface
+                          : wrap<Nodes>(to, source.nodes[0].family,
+                                        source.nodes[0].copyable, interface,
+                                        source.nodes[0].extent);
       add(found, extend(from, parent, step, value, bound, index));
     }
     return;
   }
-  type_tree value;
+  basic_type_tree<Nodes> value;
   if (step_value(from, step, bound, limit, value)) {
     add(found, extend(from, parent, step, value, bound, argument));
   }
@@ -775,9 +784,10 @@ constexpr void apply(const binding_descriptor &binding,
 
 // Applies `step`, which starts from the wrapper `from` is, to each argument of
 // it: only a wrapper of a variadic kind matches any of its arguments.
+template <std::size_t Nodes>
 constexpr void apply_to_arguments(const binding_descriptor &binding,
-                                  reachable_type_buffer &found,
-                                  const reachable_scratch &from,
+                                  reachable_type_buffer<Nodes> &found,
+                                  const reachable_scratch<Nodes> &from,
                                   std::size_t parent, const route_step &step,
                                   std::size_t limit) {
   std::size_t arguments =
@@ -785,8 +795,8 @@ constexpr void apply_to_arguments(const binding_descriptor &binding,
           ? from.value.nodes[0].arity
           : 1;
   for (std::size_t argument = 0; argument < arguments; ++argument) {
-    type_tree bound =
-        subtree(from.value, argument_index(from.value, 0, argument));
+    basic_type_tree<Nodes> bound =
+        subtree<Nodes>(from.value, argument_index(from.value, 0, argument));
     apply(binding, found, from, parent, step, bound, argument, limit);
   }
 }
@@ -804,10 +814,12 @@ namespace detail {
 // Applies every form that does not create a wrapper to the reachable type at
 // `next` of `found`, in the order of the rules: a rule of a leaf to the
 // reachable type, and a form of the kind of its wrapper.
+template <std::size_t Nodes>
 constexpr void derive_from(const binding_descriptor &binding,
-                           reachable_type_buffer &found, std::size_t next,
-                           std::uint8_t exposed, std::size_t limit) {
-  reachable_scratch from = found.items[next];
+                           reachable_type_buffer<Nodes> &found,
+                           std::size_t next, std::uint8_t exposed,
+                           std::size_t limit) {
+  reachable_scratch<Nodes> from = found.items[next];
   const semantics_descriptor *kind = semantics_of(from.value);
   for (const operation_info &rule : operations) {
     if (rule.from_category != from.category ||
@@ -833,13 +845,28 @@ constexpr std::size_t derivation_bound(const binding_descriptor &binding) {
   return binding.stored.size + 1;
 }
 
+// The nodes the largest type tree a derivation of the binding builds has: the
+// stored one or a declared interface, with the wrapper a rule applies to it,
+// and the wrapper a rule that is then refused for being larger than the bound
+// builds. A derivation sized by it never builds a type tree that does not fit.
+constexpr std::size_t scratch_nodes(const binding_descriptor &binding) {
+  std::size_t largest = binding.stored.size;
+  for (std::size_t index = 0; index < binding.interfaces.size; ++index) {
+    if (binding.interfaces[index].tree.size > largest) {
+      largest = binding.interfaces[index].tree.size;
+    }
+  }
+  return largest + 2;
+}
+
 // Derives the reachable types a binding has by the forms that do not create a
 // wrapper into `found`, which stops taking them when it is full.
+template <std::size_t Nodes>
 constexpr void derive_into(const binding_descriptor &binding,
-                           reachable_type_buffer &found) {
+                           reachable_type_buffer<Nodes> &found) {
   const scope_info &scope = binding.scope;
-  reachable_scratch start;
-  start.value = copy_of(binding.stored);
+  reachable_scratch<Nodes> start;
+  start.value = copy_of<Nodes>(binding.stored);
   start.category = scope.materializes;
   start.consumed = scope.materializes == value_category::rvalue;
   found.items[found.size++] = start;
@@ -872,7 +899,8 @@ derivation_has_more_reachable_types_than_the_largest_room() {
 
 // The reachable type `item` as a binding keeps it, with its type tree at
 // `offset` of the nodes `nodes`.
-constexpr reachable_type stored_from(const reachable_scratch &item,
+template <std::size_t Nodes>
+constexpr reachable_type stored_from(const reachable_scratch<Nodes> &item,
                                      type_tree_node *nodes,
                                      std::uint32_t offset) {
   reachable_type stored;
@@ -900,16 +928,17 @@ constexpr reachable_type stored_from(const reachable_scratch &item,
 
 // Derives the reachable types of a binding into room for `Room` of them, and
 // into twice the room again while they do not fit, and gives them to `use`, a
-// callable of a `reachable_types`. The room is only the scratch of the
-// derivation: what `use` returns does not depend on it.
-template <std::size_t Room, typename Use>
+// callable of a `reachable_types`. Their type trees have room for `Nodes`
+// nodes, which scratch_nodes(binding) gives. The room is only the scratch of
+// the derivation: what `use` returns does not depend on it.
+template <std::size_t Room, std::size_t Nodes, typename Use>
 constexpr auto derive_then(const binding_descriptor &binding, Use &&use) {
-  reachable_scratch scratch[Room] = {};
-  reachable_type_buffer found{scratch, Room};
+  reachable_scratch<Nodes> scratch[Room] = {};
+  reachable_type_buffer<Nodes> found{scratch, Room};
   derive_into(binding, found);
   if (found.full) {
     if constexpr (Room < largest_derivation_room) {
-      return derive_then<Room * 2>(binding, static_cast<Use &&>(use));
+      return derive_then<Room * 2, Nodes>(binding, static_cast<Use &&>(use));
     } else {
       // A binding of more than that many reachable types is not derived. The
       // call is not a constant expression, so a derivation at compile time
@@ -918,7 +947,7 @@ constexpr auto derive_then(const binding_descriptor &binding, Use &&use) {
     }
   }
   reachable_type items[Room] = {};
-  type_tree_node nodes[Room * type_tree_capacity] = {};
+  type_tree_node nodes[Room * Nodes] = {};
   std::uint32_t used = 0;
   for (std::size_t index = 0; index < found.size; ++index) {
     items[index] = stored_from(scratch[index], nodes, used);
@@ -1013,8 +1042,8 @@ constexpr bool qualifies(type_tree_view derived, type_tree_view requested,
   }
 }
 
-constexpr bool accepts(const request_descriptor &request,
-                       const reachable_scratch &candidate,
+template <typename Item>
+constexpr bool accepts(const request_descriptor &request, const Item &candidate,
                        std::uint8_t exposed) {
   if (!type_trees_match(candidate.value, request.value) ||
       !qualifies(candidate.value, request.value,
@@ -1036,14 +1065,15 @@ constexpr bool accepts(const request_descriptor &request,
          candidate.category == value_category::prvalue;
 }
 
-// A request creates at most as many wrappers as its type tree has nodes.
-inline constexpr std::size_t max_created_wrappers = type_tree_capacity;
+// A request plan keeps the form of each wrapper a request creates in four bits
+// of a word, so a request creates no more than sixteen.
+inline constexpr std::size_t max_created_wrappers = 16;
 
 // A route a request takes to serve itself: the reachable type of the binding
 // it starts from, `base`, and the wrappers the request creates of it, which
 // `reachable` is the result of.
-struct route_candidate {
-  reachable_scratch reachable;
+template <std::size_t Nodes> struct route_candidate {
+  reachable_scratch<Nodes> reachable;
   std::size_t base = no_reachable_type;
   route_step created[max_created_wrappers] = {};
   std::size_t created_count = 0;
@@ -1051,8 +1081,9 @@ struct route_candidate {
 
 // The form of the rule of a candidate at `position`: one of the route of the
 // reachable type it starts from, or of a wrapper it creates.
+template <std::size_t Nodes>
 constexpr operation form_at(const reachable_type *items,
-                            const route_candidate &candidate,
+                            const route_candidate<Nodes> &candidate,
                             std::size_t position) {
   const reachable_type &base = items[candidate.base];
   return position < base.rule_count
@@ -1063,9 +1094,10 @@ constexpr operation form_at(const reachable_type *items,
 // Whether `left` is preferred to `right`: fewer rules, then no copy, then the
 // forms that come first in the order of the rules, which orders forms and
 // not kinds; of others, the one derived first is.
+template <std::size_t Nodes>
 constexpr bool preferred(const reachable_type *items,
-                         const route_candidate &left,
-                         const route_candidate &right) {
+                         const route_candidate<Nodes> &left,
+                         const route_candidate<Nodes> &right) {
   if (left.reachable.rule_count != right.reachable.rule_count) {
     return left.reachable.rule_count < right.reachable.rule_count;
   }
@@ -1095,16 +1127,18 @@ struct route_choice {
 namespace detail {
 // The reachable type the creating form `step` derives from `from`, into `made`;
 // false when it derives none.
+template <std::size_t Nodes>
 constexpr bool create(const binding_descriptor &binding,
-                      const route_candidate &candidate, const route_step &step,
-                      std::uint8_t exposed, route_candidate &made) {
-  const reachable_scratch &from = candidate.reachable;
+                      const route_candidate<Nodes> &candidate,
+                      const route_step &step, std::uint8_t exposed,
+                      route_candidate<Nodes> &made) {
+  const reachable_scratch<Nodes> &from = candidate.reachable;
   const operation_info &rule = info(step.form);
   if (rule.from_category != from.category ||
       (rule.exposure != 0 && (exposed & rule.exposure) == 0)) {
     return false;
   }
-  type_tree bound = from.value;
+  basic_type_tree<Nodes> bound = from.value;
   if (rule.from_position == type_position::target) {
     // A wrapper of the kind the form leads from, whose element is the one of
     // the created wrapper.
@@ -1112,12 +1146,17 @@ constexpr bool create(const binding_descriptor &binding,
         from.value.nodes[0].arity != 1) {
       return false;
     }
-    bound = subtree(from.value, 1);
+    bound = subtree<Nodes>(from.value, 1);
   }
   if (!requirements_hold(binding, rule, bound)) {
     return false;
   }
-  type_tree value;
+  // The wrapper the form creates makes the tree one node larger than the
+  // element, and a tree larger than the request is not accepted.
+  if (bound.size + 1 > Nodes) {
+    return false;
+  }
+  basic_type_tree<Nodes> value;
   if (!step_value(from, step, bound, derivation_bound(binding), value)) {
     return false;
   }
@@ -1129,12 +1168,13 @@ constexpr bool create(const binding_descriptor &binding,
 
 // The candidate that starts from the reachable type at `index` and creates no
 // wrapper.
-constexpr route_candidate candidate_from(const reachable_types &found,
-                                         std::size_t index) {
+template <std::size_t Nodes>
+constexpr route_candidate<Nodes> candidate_from(const reachable_types &found,
+                                                std::size_t index) {
   const reachable_type &item = found.items[index];
-  route_candidate candidate;
+  route_candidate<Nodes> candidate;
   candidate.base = index;
-  candidate.reachable.value = copy_of(found.tree(item));
+  candidate.reachable.value = copy_of<Nodes>(found.tree(item));
   candidate.reachable.category = item.category;
   candidate.reachable.step = item.step;
   candidate.reachable.argument = item.argument;
@@ -1178,7 +1218,7 @@ constexpr creation_goal goal_under(const route_step &step,
 // creating forms of `chain`, outermost first, applied to each reachable type
 // of the binding; then the same for each chain that creates one wrapper more,
 // as many as the request holds.
-template <typename Consider>
+template <std::size_t Nodes, typename Consider>
 constexpr void create_by_chain(const binding_descriptor &binding,
                                const reachable_types &found,
                                type_tree_view request, std::uint8_t exposed,
@@ -1186,13 +1226,15 @@ constexpr void create_by_chain(const binding_descriptor &binding,
                                const creation_goal &goal, Consider &consider) {
   if (length > 0) {
     for (std::size_t index = 0; index < found.size; ++index) {
-      if (found.items[index].sibling) {
+      // A reachable type larger than the request is neither accepted nor
+      // made into one by creating a wrapper.
+      if (found.items[index].sibling || found.items[index].value.size > Nodes) {
         continue;
       }
-      route_candidate made = candidate_from(found, index);
+      route_candidate<Nodes> made = candidate_from<Nodes>(found, index);
       bool created = true;
       for (std::size_t position = length; created && position > 0; --position) {
-        route_candidate from = made;
+        const route_candidate<Nodes> from = made;
         created = create(binding, from, chain[position - 1], exposed, made);
       }
       if (created) {
@@ -1208,22 +1250,23 @@ constexpr void create_by_chain(const binding_descriptor &binding,
       continue;
     }
     chain[length] = route_step{rule.form, goal.outer};
-    create_by_chain(binding, found, request, exposed, chain, length + 1,
-                    goal_under(chain[length], request, goal), consider);
+    create_by_chain<Nodes>(binding, found, request, exposed, chain, length + 1,
+                           goal_under(chain[length], request, goal), consider);
   }
 }
 } // namespace detail
 
 // The route that serves the request, of the reachable types `found` of
 // `binding`: a reachable type the request accepts, or one the request makes by
-// creating wrappers, the preferred one; or none.
-constexpr route_choice select_route(const binding_descriptor &binding,
-                                    const reachable_types &found,
-                                    const request_descriptor &request,
-                                    std::uint8_t exposed) {
+// creating wrappers, the preferred one; or none. The type trees it builds have
+// room for `Nodes` nodes, the nodes of the request or more.
+template <std::size_t Nodes>
+constexpr route_choice
+select_route(const binding_descriptor &binding, const reachable_types &found,
+             const request_descriptor &request, std::uint8_t exposed) {
   route_choice best;
-  route_candidate best_route;
-  auto consider = [&](const route_candidate &candidate) {
+  route_candidate<Nodes> best_route;
+  auto consider = [&](const route_candidate<Nodes> &candidate) {
     if (accepts(request, candidate.reachable, exposed) &&
         (best.reachable_type == no_reachable_type ||
          preferred(found.items, candidate, best_route))) {
@@ -1236,14 +1279,14 @@ constexpr route_choice select_route(const binding_descriptor &binding,
     }
   };
   for (std::size_t index = 0; index < found.size; ++index) {
-    if (!found.items[index].sibling) {
-      consider(detail::candidate_from(found, index));
+    if (!found.items[index].sibling && found.items[index].value.size <= Nodes) {
+      consider(detail::candidate_from<Nodes>(found, index));
     }
   }
   route_step chain[max_created_wrappers] = {};
-  detail::create_by_chain(binding, found, request.value, exposed, chain, 0,
-                          detail::creation_goal{semantics_of(request.value), 1},
-                          consider);
+  detail::create_by_chain<Nodes>(
+      binding, found, request.value, exposed, chain, 0,
+      detail::creation_goal{semantics_of(request.value), 1}, consider);
   return best;
 }
 
@@ -1330,21 +1373,23 @@ enum class registration_status : std::uint8_t {
 namespace detail {
 // Whether the binding serves a handle of one of `kinds` to `interface`, by
 // value.
+template <std::size_t Nodes>
 constexpr bool serves_by_handle(const binding_descriptor &binding,
                                 const reachable_types &found,
                                 std::uint8_t exposed,
                                 const semantics_set &kinds,
-                                const type_tree &interface) {
+                                const basic_type_tree<Nodes> &interface) {
   constexpr property_class handle{true, property::nullable, property::in_place};
   for (std::size_t kind = 0; kind < kinds.size; ++kind) {
     const semantics_descriptor *of = kinds.items[kind];
     if (!of_class(of, handle)) {
       continue;
     }
-    const type_tree wrapped = wrap(of, is_mapped(of) ? any_family : nullptr,
-                                   created_copyable(of, interface), interface);
+    const basic_type_tree<Nodes> wrapped =
+        wrap<Nodes>(of, is_mapped(of) ? any_family : nullptr,
+                    created_copyable(of, interface), interface);
     const request_descriptor probe{request_kind::value, wrapped, binding.key};
-    if (select_route(binding, found, probe, exposed).reachable_type !=
+    if (select_route<Nodes>(binding, found, probe, exposed).reachable_type !=
         no_reachable_type) {
       return true;
     }
@@ -1353,20 +1398,22 @@ constexpr bool serves_by_handle(const binding_descriptor &binding,
 }
 } // namespace detail
 
+template <std::size_t Nodes>
 constexpr bool serves_an_interface(const binding_descriptor &binding,
                                    const reachable_types &found,
                                    std::uint8_t exposed) {
   return semantics_then<8>(binding.stored, [&](const semantics_set &kinds) {
     for (std::size_t index = 0; index < binding.interfaces.size; ++index) {
       for (const std::uint8_t qualifiers : {std::uint8_t(0), const_qualified}) {
-        type_tree interface = copy_of(binding.interfaces[index].tree);
+        basic_type_tree<Nodes> interface =
+            copy_of<Nodes>(binding.interfaces[index].tree);
         interface.nodes[0].qualifiers |= qualifiers;
         const request_descriptor reference{request_kind::lvalue_reference,
                                            interface, binding.key};
-        if (select_route(binding, found, reference, exposed).reachable_type !=
-                no_reachable_type ||
-            detail::serves_by_handle(binding, found, exposed, kinds,
-                                     interface)) {
+        if (select_route<Nodes>(binding, found, reference, exposed)
+                    .reachable_type != no_reachable_type ||
+            detail::serves_by_handle<Nodes>(binding, found, exposed, kinds,
+                                            interface)) {
           return true;
         }
       }
@@ -1375,6 +1422,9 @@ constexpr bool serves_an_interface(const binding_descriptor &binding,
   });
 }
 
+// Whether a binding registers, with the type trees of its derivation having
+// room for `Nodes` nodes, which scratch_nodes(binding) gives.
+template <std::size_t Nodes>
 constexpr registration_status
 register_status(const binding_descriptor &binding) {
   const scope_info &scope = binding.scope;
@@ -1401,8 +1451,8 @@ register_status(const binding_descriptor &binding) {
     }
     const std::uint8_t exposed = exposed_categories(binding);
     const bool serves =
-        derive_then<8>(binding, [&](const reachable_types &found) {
-          return serves_an_interface(binding, found, exposed);
+        derive_then<8, Nodes>(binding, [&](const reachable_types &found) {
+          return serves_an_interface<Nodes>(binding, found, exposed);
         });
     return serves ? registration_status::registered
                   : registration_status::no_interface_served;

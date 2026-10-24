@@ -682,6 +682,26 @@ TEST(next_stored_type_trees,
                dingo::type_not_found_exception);
 }
 
+template <int Id> struct numbered_leaf {
+  int value = Id;
+};
+
+template <int... Ids>
+std::variant<numbered_leaf<Ids>...>
+    variant_of(std::integer_sequence<int, Ids...>);
+
+// A type tree of more nodes than a derivation had room for is derived as it is.
+TEST(next_stored_type_trees, a_variant_of_twenty_alternatives_serves_the_held) {
+  using wide = decltype(variant_of(std::make_integer_sequence<int, 20>()));
+  wide value{std::in_place_type<numbered_leaf<7>>};
+  dingo::container<> container;
+  container.register_type<scope<dingo::external>, storage<wide &>>(value);
+  EXPECT_EQ(&container.resolve<numbered_leaf<7> &>(),
+            &std::get<numbered_leaf<7>>(value));
+  EXPECT_THROW(container.resolve<numbered_leaf<8> &>(),
+               dingo::type_not_convertible_exception);
+}
+
 template <int Id> struct base {
   virtual ~base() = default;
 };

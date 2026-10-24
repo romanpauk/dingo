@@ -43,8 +43,9 @@ namespace detail {
 template <typename Binding, typename Request, typename Key>
 struct static_route {
   static constexpr route_choice choice =
-      select_route(Binding::descriptor, Binding::published,
-                   request_traits<Request, Key>::descriptor, Binding::exposed);
+      select_route<request_traits<Request, Key>::descriptor.value.size>(
+          Binding::descriptor, Binding::published,
+          request_traits<Request, Key>::descriptor, Binding::exposed);
   static constexpr request_plan value =
       choice.reachable_type == no_reachable_type
           ? request_plan{}

@@ -71,12 +71,6 @@ static_assert(!(created == type_tree_v<std::optional<leaf>>));
 static_assert(!type_trees_match(type_tree_v<std::unique_ptr<leaf>>,
                                 type_tree_v<std::shared_ptr<leaf>>));
 
-struct other {};
-static_assert(replace_leaf(type_tree_v<std::shared_ptr<leaf>>,
-                           type_tree_v<other>)
-                  .nodes[1]
-                  .type == type_id_v<other>);
-
 template <int Id> struct numbered_leaf {};
 
 template <int... Ids>

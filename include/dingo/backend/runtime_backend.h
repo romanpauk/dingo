@@ -828,9 +828,9 @@ private:
       if (key_has_value(request.key) && key_value == nullptr) {
         continue;
       }
-      const route_choice choice =
-          select_route(binding->descriptor(), binding->published(), request,
-                       binding->exposed());
+      const route_choice choice = select_route<request.value.size>(
+          binding->descriptor(), binding->published(), request,
+          binding->exposed());
       found.add(
           {binding.get(), choice.reachable_type, key_value,
            choice.reachable_type == no_reachable_type
