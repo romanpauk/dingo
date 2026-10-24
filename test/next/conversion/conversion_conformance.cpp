@@ -73,20 +73,25 @@ TEST(conversion_conformance, computes_what_the_reference_computes) {
     bool served = false;
     std::string rules;
     if (found) {
-      dingo::reachable_types reachable_types = dingo::derive(binding);
-      ASSERT_FALSE(reachable_types.overflow) << expected.name;
-      const dingo::route_choice choice =
-          dingo::select_route(binding, reachable_types, request,
-                              dingo::exposed_categories(binding));
-      served = choice.reachable_type != dingo::no_reachable_type;
-      if (served) {
-        // The rules of the reachable type, then the wrappers the request
-        // creates.
-        rules =
-            rules_of(reachable_types.items[choice.reachable_type].rules,
-                     reachable_types.items[choice.reachable_type].rule_count) +
-            rules_of(choice.created, choice.created_count);
-      }
+      // The reachable types of a binding built at run time, in room that
+      // doubles while it is full.
+      dingo::derive_then<8>(
+          binding, [&](const dingo::reachable_types &reachable_types) {
+            const dingo::route_choice choice =
+                dingo::select_route(binding, reachable_types, request,
+                                    dingo::exposed_categories(binding));
+            served = choice.reachable_type != dingo::no_reachable_type;
+            if (served) {
+              // The rules of the reachable type, then the wrappers the request
+              // creates.
+              rules =
+                  rules_of(
+                      reachable_types.items[choice.reachable_type].rules,
+                      reachable_types.items[choice.reachable_type].rule_count) +
+                  rules_of(choice.created, choice.created_count);
+            }
+            return 0;
+          });
     }
     std::string expected_rules = rules_of(expected.rules, expected.rule_count);
     if (registered != expected.registered || found != expected.found ||

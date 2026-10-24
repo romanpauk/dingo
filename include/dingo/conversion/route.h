@@ -25,12 +25,12 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 
 namespace dingo {
 
 inline constexpr std::size_t max_interfaces = 8;
 inline constexpr std::size_t max_rules_per_route = 8;
-inline constexpr std::size_t max_reachable_types = 96;
 inline constexpr std::size_t max_semantics = 32;
 
 constexpr const semantics_descriptor *semantics_of(const type_tree &value,
@@ -216,12 +216,28 @@ struct reachable_type {
   std::uint32_t source_extent = 0;
 };
 
+// The reachable types of a binding, as a view of an array that has exactly as
+// many as the binding has.
 struct reachable_types {
-  reachable_type items[max_reachable_types] = {};
+  const reachable_type *items = nullptr;
   std::size_t size = 0;
-  // A derivation produced more reachable types than fit; its result is
-  // incomplete.
-  bool overflow = false;
+};
+
+// Where a derivation writes the reachable types it finds. When there is no room
+// left it sets `full` and writes no more, so the caller derives again with
+// more.
+struct reachable_type_buffer {
+  reachable_type *items = nullptr;
+  std::size_t capacity = 0;
+  std::size_t size = 0;
+  bool full = false;
+};
+
+// An array of exactly `Count` reachable types.
+template <std::size_t Count> struct reachable_type_array {
+  reachable_type items[Count] = {};
+
+  constexpr reachable_types view() const { return {items, Count}; }
 };
 
 // Storage kinds
@@ -411,8 +427,10 @@ constexpr bool requirements_hold(const binding_descriptor &binding,
 
 namespace detail {
 // The reachable type of a value and category that is no sibling, or
-// max_reachable_types.
-constexpr std::size_t primary_of(const reachable_types &found,
+// no_primary.
+inline constexpr std::size_t no_primary = static_cast<std::size_t>(-1);
+
+constexpr std::size_t primary_of(const reachable_type_buffer &found,
                                  const type_tree &value,
                                  value_category category) {
   for (std::size_t index = 0; index < found.size; ++index) {
@@ -421,7 +439,7 @@ constexpr std::size_t primary_of(const reachable_types &found,
       return index;
     }
   }
-  return max_reachable_types;
+  return no_primary;
 }
 
 // How a request completes a reachable type: by copying, decaying, or neither.
@@ -446,7 +464,7 @@ constexpr bool borrow_alike(const reachable_type &left,
 // Keeps `derived` as a sibling of the reachable type `primary` when their
 // routes part at a step into a variadic wrapper, by its alternatives, and they
 // are completed alike; one per step and alternative.
-constexpr void add_sibling(reachable_types &found, std::size_t primary,
+constexpr void add_sibling(reachable_type_buffer &found, std::size_t primary,
                            reachable_type derived) {
   const reachable_type &first = found.items[primary];
   const std::size_t common = first.rule_count < derived.rule_count
@@ -472,8 +490,8 @@ constexpr void add_sibling(reachable_types &found, std::size_t primary,
         return;
       }
     }
-    if (found.size == max_reachable_types) {
-      found.overflow = true;
+    if (found.size == found.capacity) {
+      found.full = true;
       return;
     }
     derived.sibling = true;
@@ -508,15 +526,16 @@ constexpr reachable_type extend(const reachable_type &from,
   return derived;
 }
 
-constexpr void add(reachable_types &found, const reachable_type &derived) {
+constexpr void add(reachable_type_buffer &found,
+                   const reachable_type &derived) {
   const std::size_t primary =
       primary_of(found, derived.value, derived.category);
-  if (primary != max_reachable_types) {
+  if (primary != no_primary) {
     add_sibling(found, primary, derived);
     return;
   }
-  if (found.size == max_reachable_types) {
-    found.overflow = true;
+  if (found.size == found.capacity) {
+    found.full = true;
     return;
   }
   found.items[found.size++] = derived;
@@ -551,10 +570,10 @@ constexpr bool step_value(const reachable_type &from, const route_step &step,
 // Applies `step` to `from` with the pattern variable bound to `bound`, the
 // argument at `argument` of the source type tree when the step starts from a
 // wrapper.
-constexpr void apply(const binding_descriptor &binding, reachable_types &found,
-                     const reachable_type &from, const route_step &step,
-                     const type_tree &bound, std::size_t argument,
-                     std::size_t limit) {
+constexpr void apply(const binding_descriptor &binding,
+                     reachable_type_buffer &found, const reachable_type &from,
+                     const route_step &step, const type_tree &bound,
+                     std::size_t argument, std::size_t limit) {
   const operation_info &rule = info(step.form);
   if (!requirements_hold(binding, rule, bound)) {
     return;
@@ -594,7 +613,7 @@ constexpr void apply(const binding_descriptor &binding, reachable_types &found,
 // Applies `step`, which starts from the wrapper `from` is, to each argument of
 // it: only a wrapper of a variadic kind matches any of its arguments.
 constexpr void apply_to_arguments(const binding_descriptor &binding,
-                                  reachable_types &found,
+                                  reachable_type_buffer &found,
                                   const reachable_type &from,
                                   const route_step &step, std::size_t limit) {
   std::size_t arguments =
@@ -622,7 +641,7 @@ namespace detail {
 // `next` of `found`, in the order of the rules: a rule of a leaf to the
 // reachable type, and a form of the kind of its wrapper.
 constexpr void derive_from(const binding_descriptor &binding,
-                           reachable_types &found, std::size_t next,
+                           reachable_type_buffer &found, std::size_t next,
                            std::uint8_t exposed, std::size_t limit) {
   reachable_type from = found.items[next];
   if (from.rule_count == max_rules_per_route) {
@@ -653,11 +672,11 @@ constexpr std::size_t derivation_bound(const binding_descriptor &binding) {
   return binding.stored.size + 1;
 }
 
-// The reachable types a binding derives by the forms that do not create a
-// wrapper.
-constexpr reachable_types derive(const binding_descriptor &binding) {
+// Derives the reachable types a binding has by the forms that do not create a
+// wrapper into `found`, which stops taking them when it is full.
+constexpr void derive_into(const binding_descriptor &binding,
+                           reachable_type_buffer &found) {
   const scope_info &scope = binding.scope;
-  reachable_types found;
   reachable_type start;
   start.value = binding.stored;
   start.category = scope.materializes;
@@ -670,8 +689,66 @@ constexpr reachable_types derive(const binding_descriptor &binding) {
       detail::derive_from(binding, found, next, exposed, limit);
     }
   }
-  return found;
 }
+
+// The room a derivation of the binding starts with: a few reachable types for
+// each node of the stored type tree and each interface, as a power of two.
+constexpr std::size_t initial_room(const binding_descriptor &binding) {
+  std::size_t wanted = binding.stored.size * (binding.interface_count + 1) * 2;
+  std::size_t room = 8;
+  while (room < wanted) {
+    room *= 2;
+  }
+  return room;
+}
+
+inline constexpr std::size_t largest_derivation_room = 1024;
+
+[[noreturn]] inline void
+derivation_has_more_reachable_types_than_the_largest_room() {
+  std::abort();
+}
+
+// Derives the reachable types of a binding into room for `Room` of them, and
+// into twice the room again while they do not fit, and gives them to `use`, a
+// callable of a `reachable_types`. The room is only the scratch of the
+// derivation: what `use` returns does not depend on it.
+template <std::size_t Room, typename Use>
+constexpr auto derive_then(const binding_descriptor &binding, Use &&use) {
+  reachable_type_array<Room> storage;
+  reachable_type_buffer found{storage.items, Room};
+  derive_into(binding, found);
+  if (!found.full) {
+    return use(reachable_types{storage.items, found.size});
+  }
+  if constexpr (Room < largest_derivation_room) {
+    return derive_then<Room * 2>(binding, static_cast<Use &&>(use));
+  } else {
+    // A binding of more than that many reachable types is not derived. The call
+    // is not a constant expression, so a derivation at compile time stops here
+    // and names this function.
+    derivation_has_more_reachable_types_than_the_largest_room();
+    return use(reachable_types{storage.items, found.size});
+  }
+}
+
+// The reachable types a binding has, written into an array of exactly as many.
+template <std::size_t Count>
+constexpr reachable_type_array<Count>
+derive_array(const binding_descriptor &binding) {
+  reachable_type_array<Count> array;
+  reachable_type_buffer found{array.items, Count};
+  derive_into(binding, found);
+  return array;
+}
+
+namespace detail {
+struct count_reachable_types {
+  constexpr std::size_t operator()(const reachable_types &found) const {
+    return found.size;
+  }
+};
+} // namespace detail
 
 // Service
 
@@ -1019,12 +1096,13 @@ register_status(const binding_descriptor &binding) {
     if (holds_in_array(binding.stored)) {
       return registration_status::interface_in_array;
     }
-    reachable_types found = derive(binding);
-    std::uint8_t exposed = exposed_categories(binding);
-    if (serves_an_interface(binding, found, exposed)) {
-      return registration_status::registered;
-    }
-    return registration_status::no_interface_served;
+    const std::uint8_t exposed = exposed_categories(binding);
+    const bool serves =
+        derive_then<8>(binding, [&](const reachable_types &found) {
+          return serves_an_interface(binding, found, exposed);
+        });
+    return serves ? registration_status::registered
+                  : registration_status::no_interface_served;
   }
   return registration_status::registered;
 }
