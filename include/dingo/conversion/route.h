@@ -33,7 +33,7 @@ inline constexpr std::size_t max_interfaces = 8;
 inline constexpr std::size_t max_rules_per_route = 8;
 inline constexpr std::size_t max_semantics = 32;
 
-constexpr const semantics_descriptor *semantics_of(const type_tree &value,
+constexpr const semantics_descriptor *semantics_of(type_tree_view value,
                                                    std::size_t index = 0) {
   return value.nodes[index].kind;
 }
@@ -117,7 +117,7 @@ struct semantics_set {
 };
 
 // The kinds of a stored type tree and the ones their forms lead to.
-constexpr semantics_set semantics_in(const type_tree &stored) {
+constexpr semantics_set semantics_in(type_tree_view stored) {
   semantics_set kinds;
   for (std::size_t index = 0; index < stored.size; ++index) {
     kinds.add(stored.nodes[index].kind);
@@ -155,7 +155,7 @@ inline constexpr std::size_t max_key_aliases = 4;
 // A binding as the routes see it: the stored type tree, the scope, and the
 // leaf type trees of the declared interfaces.
 struct binding_descriptor {
-  type_tree stored;
+  type_tree_view stored;
   // The leaves the stored type tree names the binding by without declared
   // interfaces, named_leaves(stored).
   leaf_set leaves = {};
@@ -166,7 +166,7 @@ struct binding_descriptor {
   std::size_t alias_count = 0;
   // The descriptor of the scope of the binding.
   scope_info scope = {};
-  type_tree interfaces[max_interfaces] = {};
+  type_tree_view interfaces[max_interfaces] = {};
   std::size_t interface_count = 0;
   // Whether the binding declares its factory, so its leaf need not be
   // constructible.
@@ -183,7 +183,7 @@ enum class request_kind : std::uint8_t {
 
 struct request_descriptor {
   request_kind kind = request_kind::value;
-  type_tree value;
+  type_tree_view value;
   key_descriptor key;
 };
 
@@ -253,14 +253,14 @@ constexpr bool of_class(const semantics_descriptor *kind,
          (kind->properties & of.lacks) == 0;
 }
 
-constexpr bool of_class(const type_tree &value, std::size_t index,
+constexpr bool of_class(type_tree_view value, std::size_t index,
                         const property_class &of) {
   return of_class(semantics_of(value, index), of);
 }
 
 // The most specific storage kind of a stored type tree, by the classes of its
 // outer wrappers.
-constexpr storage_kind storage_kind_of(const type_tree &stored) {
+constexpr storage_kind storage_kind_of(type_tree_view stored) {
   storage_kind best = storage_kind::plain;
   int depth = 0;
   for (const storage_kind_info &entry : storage_kinds) {
@@ -287,7 +287,7 @@ constexpr std::uint8_t exposed_categories(const binding_descriptor &binding) {
 
 // Type tree properties
 
-constexpr bool constructible(const type_tree &value, std::size_t index = 0) {
+constexpr bool constructible(type_tree_view value, std::size_t index = 0) {
   const semantics_descriptor *kind = semantics_of(value, index);
   if (!kind->wrapper) {
     return value.nodes[index].constructible;
@@ -296,7 +296,7 @@ constexpr bool constructible(const type_tree &value, std::size_t index = 0) {
          constructible(value, index + 1);
 }
 
-constexpr std::uint32_t constructed_leaves(const type_tree &value,
+constexpr std::uint32_t constructed_leaves(type_tree_view value,
                                            std::size_t index = 0) {
   const semantics_descriptor *kind = semantics_of(value, index);
   if (!kind->wrapper) {
@@ -309,7 +309,7 @@ constexpr std::uint32_t constructed_leaves(const type_tree &value,
 }
 
 // The leaves a copy of the type tree copies: those its wrappers hold in place.
-constexpr std::uint32_t leaves_held_by_value(const type_tree &value,
+constexpr std::uint32_t leaves_held_by_value(type_tree_view value,
                                              std::size_t index = 0) {
   const semantics_descriptor *kind = semantics_of(value, index);
   if (!kind->wrapper) {
@@ -326,11 +326,11 @@ constexpr std::uint32_t leaves_held_by_value(const type_tree &value,
 
 // Whether a type tree is an object that can be referred to and pointed to:
 // anything but an address, a wrapper of a kind of the address form.
-constexpr bool addressable(const type_tree &value) {
+constexpr bool addressable(type_tree_view value) {
   return !has_operation(semantics_of(value), operation::address);
 }
 
-constexpr bool holds_in_array(const type_tree &value) {
+constexpr bool holds_in_array(type_tree_view value) {
   for (std::size_t index = 0; index < value.size; ++index) {
     if (holds_elements(semantics_of(value, index))) {
       return true;
@@ -340,7 +340,7 @@ constexpr bool holds_in_array(const type_tree &value) {
 }
 
 // The leaf at the end of the first-argument chain.
-constexpr type_id innermost_leaf(const type_tree &value) {
+constexpr type_id innermost_leaf(type_tree_view value) {
   std::size_t index = 0;
   while (is_wrapper(semantics_of(value, index))) {
     ++index;
@@ -349,7 +349,7 @@ constexpr type_id innermost_leaf(const type_tree &value) {
 }
 
 namespace detail {
-constexpr void add_named_leaves(const type_tree &value, std::size_t index,
+constexpr void add_named_leaves(type_tree_view value, std::size_t index,
                                 leaf_set &leaves) {
   const semantics_descriptor *kind = semantics_of(value, index);
   if (!is_wrapper(kind)) {
@@ -369,7 +369,7 @@ constexpr void add_named_leaves(const type_tree &value, std::size_t index,
 // interfaces: the leaf its wrappers hold, and through a wrapper of a variadic
 // kind, the leaf of each of its alternatives, whichever the object holds. spec:
 // lookup_filters.binding_filter
-constexpr leaf_set named_leaves(const type_tree &value) {
+constexpr leaf_set named_leaves(type_tree_view value) {
   leaf_set leaves;
   detail::add_named_leaves(value, 0, leaves);
   return leaves;
@@ -379,7 +379,7 @@ constexpr leaf_set named_leaves(const type_tree &value) {
 // handle, or one that holds its element in place and is not immovable, when
 // the element can be copied.
 constexpr bool created_copyable(const semantics_descriptor *kind,
-                                const type_tree &argument) {
+                                type_tree_view argument) {
   if (has_properties(kind, property::copyable)) {
     return true;
   }
@@ -396,7 +396,7 @@ constexpr bool is_mapped(const semantics_descriptor *kind) {
 
 constexpr bool requirements_hold(const binding_descriptor &binding,
                                  const operation_info &rule,
-                                 const type_tree &bound) {
+                                 type_tree_view bound) {
   auto requires_ = [&](requirement value) {
     return (rule.requires_ & static_cast<std::uint8_t>(value)) != 0;
   };
@@ -431,7 +431,7 @@ namespace detail {
 inline constexpr std::size_t no_primary = static_cast<std::size_t>(-1);
 
 constexpr std::size_t primary_of(const reachable_type_buffer &found,
-                                 const type_tree &value,
+                                 type_tree_view value,
                                  value_category category) {
   for (std::size_t index = 0; index < found.size; ++index) {
     const reachable_type &item = found.items[index];
@@ -505,14 +505,14 @@ constexpr void add_sibling(reachable_type_buffer &found, std::size_t primary,
 // The reachable type `step` derives from `from`, of the value `value`, with the
 // pattern variable bound to `bound`.
 constexpr reachable_type extend(const reachable_type &from,
-                                const route_step &step, const type_tree &value,
-                                const type_tree &bound, std::size_t argument) {
+                                const route_step &step, type_tree_view value,
+                                type_tree_view bound, std::size_t argument) {
   const operation_info &rule = info(step.form);
   reachable_type derived = from;
   derived.source_semantics = from.value.nodes[0].kind;
   derived.source_qualifiers = from.value.nodes[0].qualifiers;
   derived.source_extent = from.value.nodes[0].extent;
-  derived.value = value;
+  derived.value = copy_of(value);
   derived.category = rule.to_category;
   derived.arguments[derived.rule_count] = static_cast<std::uint8_t>(argument);
   derived.rules[derived.rule_count++] = step;
@@ -545,12 +545,12 @@ constexpr void add(reachable_type_buffer &found,
 // the pattern variable bound to `bound`, or false when it is larger than
 // `limit`.
 constexpr bool step_value(const reachable_type &from, const route_step &step,
-                          const type_tree &bound, std::size_t limit,
+                          type_tree_view bound, std::size_t limit,
                           type_tree &value) {
   const type_tree &source = from.value;
   const semantics_descriptor *to = to_semantics(step);
   const semantics_descriptor *of = from_semantics(step);
-  value = bound;
+  value = copy_of(bound);
   // The element of a wrapper that holds it in place, an optional or an
   // alternative, has the qualifiers of the wrapper.
   if (!is_wrapper(to) && has_properties(of, property::in_place)) {
@@ -572,7 +572,7 @@ constexpr bool step_value(const reachable_type &from, const route_step &step,
 // wrapper.
 constexpr void apply(const binding_descriptor &binding,
                      reachable_type_buffer &found, const reachable_type &from,
-                     const route_step &step, const type_tree &bound,
+                     const route_step &step, type_tree_view bound,
                      std::size_t argument, std::size_t limit) {
   const operation_info &rule = info(step.form);
   if (!requirements_hold(binding, rule, bound)) {
@@ -592,7 +592,7 @@ constexpr void apply(const binding_descriptor &binding,
       }
       // An upcast keeps the qualifiers of the leaf; a conversion makes a new
       // object.
-      type_tree interface = binding.interfaces[index];
+      type_tree interface = copy_of(binding.interfaces[index]);
       interface.nodes[0].qualifiers =
           rule.converts ? std::uint8_t(0) : bound.nodes[0].qualifiers;
       type_tree value = !is_wrapper(to)
@@ -678,7 +678,7 @@ constexpr void derive_into(const binding_descriptor &binding,
                            reachable_type_buffer &found) {
   const scope_info &scope = binding.scope;
   reachable_type start;
-  start.value = binding.stored;
+  start.value = copy_of(binding.stored);
   start.category = scope.materializes;
   start.consumed = scope.materializes == value_category::rvalue;
   found.items[found.size++] = start;
@@ -759,7 +759,7 @@ struct count_reachable_types {
 // const. A request by value copies its top-level object, whose qualifiers do
 // not count. An array has the qualifiers of its elements, and the arguments of
 // a wrapper are part of its type.
-constexpr bool qualifies(const type_tree &derived, const type_tree &requested,
+constexpr bool qualifies(type_tree_view derived, type_tree_view requested,
                          bool refers) {
   std::size_t index = 0;
   bool level = refers;
@@ -890,7 +890,7 @@ constexpr bool create(const binding_descriptor &binding,
 // The kind of the wrapper a creating form of `step` makes its wrapper of: the
 // kind it leads from, or that of the element of the request at `request`.
 constexpr const semantics_descriptor *created_inner(const route_step &step,
-                                                    const type_tree &request) {
+                                                    type_tree_view request) {
   if (info(step.form).from_position == type_position::target) {
     return from_semantics(step);
   }
@@ -1044,7 +1044,7 @@ constexpr bool serves_an_interface(const binding_descriptor &binding,
   constexpr property_class handle{true, property::nullable, property::in_place};
   for (std::size_t index = 0; index < binding.interface_count; ++index) {
     for (const std::uint8_t qualifiers : {std::uint8_t(0), const_qualified}) {
-      type_tree interface = binding.interfaces[index];
+      type_tree interface = copy_of(binding.interfaces[index]);
       interface.nodes[0].qualifiers |= qualifiers;
       if (select_route(binding, found,
                        {request_kind::lvalue_reference, interface, binding.key},
@@ -1057,11 +1057,11 @@ constexpr bool serves_an_interface(const binding_descriptor &binding,
         if (!of_class(of, handle)) {
           continue;
         }
-        const request_descriptor probe{
-            request_kind::value,
+        const type_tree wrapped =
             wrap(of, is_mapped(of) ? any_family : nullptr,
-                 created_copyable(of, interface), interface),
-            binding.key};
+                 created_copyable(of, interface), interface);
+        const request_descriptor probe{request_kind::value, wrapped,
+                                       binding.key};
         if (select_route(binding, found, probe, exposed).reachable_type !=
             no_reachable_type) {
           return true;

@@ -127,4 +127,14 @@ template <typename Interface>
 inline constexpr type_tree interface_type_tree_v =
     interface_type_tree<Interface>();
 
+// The nodes of the type tree of a declared interface, and a view of them.
+template <typename Interface>
+inline constexpr auto interface_nodes_v =
+    exact_nodes<interface_type_tree_v<Interface>.size>(
+        interface_type_tree_v<Interface>);
+
+template <typename Interface>
+inline constexpr type_tree_view interface_view_v =
+    interface_nodes_v<Interface>.view();
+
 } // namespace dingo

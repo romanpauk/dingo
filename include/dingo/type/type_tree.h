@@ -141,8 +141,49 @@ struct type_tree {
   std::size_t size = 0;
 };
 
+// The nodes of a type tree that are somewhere else, with their number. A type
+// tree is one, and the nodes of the type tree of a binding or of a request are
+// an array of exactly as many, so what they are kept in has no room to spare.
+struct type_tree_view {
+  const type_tree_node *nodes = nullptr;
+  std::size_t size = 0;
+
+  constexpr type_tree_view() = default;
+  constexpr type_tree_view(const type_tree_node *first, std::size_t count)
+      : nodes(first), size(count) {}
+  constexpr type_tree_view(const type_tree &tree)
+      : nodes(tree.nodes), size(tree.size) {}
+};
+
+// A type tree of the nodes of a view, which a derivation can change.
+constexpr type_tree copy_of(type_tree_view tree) {
+  type_tree result;
+  result.size = tree.size;
+  for (std::size_t index = 0; index < tree.size; ++index) {
+    result.nodes[index] = tree.nodes[index];
+  }
+  return result;
+}
+
+// An array of exactly `Count` nodes of a type tree.
+template <std::size_t Count> struct type_tree_nodes {
+  type_tree_node items[Count] = {};
+
+  constexpr type_tree_view view() const { return {items, Count}; }
+};
+
+// The nodes of `tree`, `Count` of them, which is its size.
+template <std::size_t Count>
+constexpr type_tree_nodes<Count> exact_nodes(type_tree_view tree) {
+  type_tree_nodes<Count> result;
+  for (std::size_t index = 0; index < Count; ++index) {
+    result.items[index] = tree.nodes[index];
+  }
+  return result;
+}
+
 // The number of nodes of the subtree that starts at `index`.
-constexpr std::size_t subtree_size(const type_tree &value, std::size_t index) {
+constexpr std::size_t subtree_size(type_tree_view value, std::size_t index) {
   std::size_t end = index + 1;
   for (std::size_t pending = value.nodes[index].arity; pending > 0; --pending) {
     end += subtree_size(value, end);
@@ -151,7 +192,7 @@ constexpr std::size_t subtree_size(const type_tree &value, std::size_t index) {
 }
 
 // The subtree of argument `argument` of the wrapper at `index`.
-constexpr std::size_t argument_index(const type_tree &value, std::size_t index,
+constexpr std::size_t argument_index(type_tree_view value, std::size_t index,
                                      std::size_t argument) {
   std::size_t position = index + 1;
   for (std::size_t skipped = 0; skipped < argument; ++skipped) {
@@ -160,7 +201,7 @@ constexpr std::size_t argument_index(const type_tree &value, std::size_t index,
   return position;
 }
 
-constexpr type_tree subtree(const type_tree &value, std::size_t index) {
+constexpr type_tree subtree(type_tree_view value, std::size_t index) {
   type_tree result;
   result.size = subtree_size(value, index);
   for (std::size_t offset = 0; offset < result.size; ++offset) {
@@ -171,8 +212,8 @@ constexpr type_tree subtree(const type_tree &value, std::size_t index) {
 
 // Whether `derived` serves `requested`: the same nodes, where any_family
 // matches any family.
-constexpr bool type_trees_match(const type_tree &derived,
-                                const type_tree &requested) {
+constexpr bool type_trees_match(type_tree_view derived,
+                                type_tree_view requested) {
   if (derived.size != requested.size) {
     return false;
   }
@@ -195,7 +236,7 @@ constexpr bool type_trees_match(const type_tree &derived,
   return true;
 }
 
-constexpr bool operator==(const type_tree &left, const type_tree &right) {
+constexpr bool operator==(type_tree_view left, type_tree_view right) {
   if (left.size != right.size) {
     return false;
   }
@@ -212,13 +253,13 @@ constexpr bool operator==(const type_tree &left, const type_tree &right) {
   return true;
 }
 
-constexpr bool operator!=(const type_tree &left, const type_tree &right) {
+constexpr bool operator!=(type_tree_view left, type_tree_view right) {
   return !(left == right);
 }
 
 // A wrapper of `kind` of `family` applied to `argument`.
 constexpr type_tree wrap(const semantics_descriptor *kind, type_id family,
-                         bool copyable, const type_tree &argument,
+                         bool copyable, type_tree_view argument,
                          std::uint32_t extent = 0) {
   type_tree result;
   result.size = argument.size + 1;
@@ -231,15 +272,14 @@ constexpr type_tree wrap(const semantics_descriptor *kind, type_id family,
 }
 
 // The type tree with the leaf of its first-argument chain replaced by `leaf`.
-constexpr type_tree replace_leaf(const type_tree &value,
-                                 const type_tree &leaf) {
+constexpr type_tree replace_leaf(type_tree_view value, type_tree_view leaf) {
   type_tree result;
   std::size_t index = 0;
   while (is_wrapper(value.nodes[index].kind)) {
     result.nodes[index] = value.nodes[index];
     // The rest of a variadic wrapper is not on the chain and is kept.
     if (value.nodes[index].arity != 1) {
-      return value;
+      return copy_of(value);
     }
     ++index;
   }

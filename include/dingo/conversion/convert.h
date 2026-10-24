@@ -52,7 +52,7 @@ struct interface_type_trees<Leaf, type_list<Interfaces...>> {
 
   static constexpr binding_descriptor apply(binding_descriptor binding) {
     std::size_t index = 0;
-    ((binding.interfaces[index++] = interface_type_tree_v<Interfaces>), ...);
+    ((binding.interfaces[index++] = interface_view_v<Interfaces>), ...);
     binding.interface_count = sizeof...(Interfaces);
     index = 0;
     ((binding.converted |=
@@ -110,7 +110,7 @@ struct binding_type {
 
   static constexpr binding_descriptor make_descriptor() {
     binding_descriptor binding;
-    binding.stored = type_tree_v<Stored>;
+    binding.stored = type_tree_view_v<Stored>;
     binding.leaves = named_leaves(binding.stored);
     binding.scope = scope;
     binding.declared_factory = !std::is_same_v<Factory, detected_factory>;

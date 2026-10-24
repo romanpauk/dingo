@@ -441,8 +441,7 @@ struct argument_type_trees<type_list<Arguments...>> {
     (append_one(result, make_type_tree<Arguments>()), ...);
   }
 
-  static constexpr void append_one(type_tree &result,
-                                   const type_tree &argument) {
+  static constexpr void append_one(type_tree &result, type_tree_view argument) {
     for (std::size_t index = 0; index < argument.size; ++index) {
       result.nodes[result.size + index] = argument.nodes[index];
     }
@@ -453,7 +452,7 @@ struct argument_type_trees<type_list<Arguments...>> {
 // Whether the wrapper `value` is copied: a wrapper of a kind copied as a
 // handle, or one that holds its elements in place and is not immovable, when
 // every element is copied.
-constexpr bool copies_wrapper(const type_tree &value) {
+constexpr bool copies_wrapper(type_tree_view value) {
   const std::uint16_t properties = value.nodes[0].kind->properties;
   if ((properties & property::copyable) != 0) {
     return true;
@@ -519,6 +518,17 @@ template <typename Type> constexpr type_tree make_type_tree() {
 // The type tree of a C++ type, with the cv-qualifiers of its objects.
 template <typename Type>
 inline constexpr type_tree type_tree_v = detail::make_type_tree<Type>();
+
+// The nodes of the type tree of a C++ type, in an array of exactly as many, and
+// a view of them: what a binding and a request keep, in place of a type tree
+// that has room for more.
+template <typename Type>
+inline constexpr auto type_tree_nodes_v =
+    exact_nodes<type_tree_v<Type>.size>(type_tree_v<Type>);
+
+template <typename Type>
+inline constexpr type_tree_view type_tree_view_v =
+    type_tree_nodes_v<Type>.view();
 
 namespace detail {
 template <typename Type, typename = void> struct canonical {

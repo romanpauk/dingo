@@ -57,11 +57,12 @@ template <typename Request, typename Key = no_key> struct request_traits {
   // The type a binding makes the object of a constructed request as, without
   // qualifiers, which converts to the request.
   using made_type = canonical_t<std::remove_reference_t<Request>>;
-  static constexpr request_descriptor descriptor{
-      kind,
+  static constexpr type_tree tree =
       detail::request_type_tree<std::remove_reference_t<Request>,
-                                typename detail::annotation_of<Key>::type>(),
-      Key::descriptor};
+                                typename detail::annotation_of<Key>::type>();
+  static constexpr auto nodes = exact_nodes<tree.size>(tree);
+  static constexpr request_descriptor descriptor{kind, nodes.view(),
+                                                 Key::descriptor};
 };
 
 } // namespace dingo
