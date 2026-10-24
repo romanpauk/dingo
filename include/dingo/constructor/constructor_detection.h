@@ -26,11 +26,11 @@
 
 #include <dingo/base/config.h>
 #include <dingo/base/mechanics.h>
-#include <dingo/primitives/constructor_arity.h>
-#include <dingo/primitives/constructor_arity_msvc.h>
-#include <dingo/primitives/constructor_probe.h>
-#include <dingo/primitives/constructor_signature.h>
-#include <dingo/primitives/constructor_signature_msvc.h>
+#include <dingo/constructor/constructor_arity.h>
+#include <dingo/constructor/constructor_arity_msvc.h>
+#include <dingo/constructor/constructor_probe.h>
+#include <dingo/constructor/constructor_signature.h>
+#include <dingo/constructor/constructor_signature_msvc.h>
 
 #include <array>
 #include <cstddef>

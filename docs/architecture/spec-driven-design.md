@@ -1243,15 +1243,15 @@ wrapper semantics of the spec. `conversion/wrapper_traits.h`, a wrapper between
 the declarations and the engine, classifies C++ types into wrapper semantics:
 pointers, references, and arrays as language wrappers, and the standard wrappers
 through the same `wrapper_traits` a user wrapper specializes.
-`memory/lifetime_slot.h` holds the lazy and external lifetime slots; the lazy slot
-reports a recursion while its object is being constructed and is empty again
-after a failed construction. `primitives/constructor.h` detects the constructor
-of a type and calls it with arguments that resolve their parameter types, the
-`detected_constructor` factory kind of the spec, or by the constructor a type
-declares with `DINGO_CONSTRUCTOR`. Its detection is the arity mode of
-`primitives/constructor_detection.h`, which has a portable and an msvc backend,
-selected by the compiler variant `constructor_detection_msvc`, and a signature
-mode that recovers the argument types of the detected constructor.
+`memory/lifetime_slot.h` holds the lazy and external lifetime slots; the lazy
+slot reports a recursion while its object is being constructed and is empty
+again after a failed construction. `constructor/constructor.h` detects the
+constructor of a type and calls it with arguments that resolve their parameter
+types, the `detected_constructor` factory kind of the spec, or by the
+constructor a type declares with `DINGO_CONSTRUCTOR`. Its detection is the arity
+mode of `constructor/constructor_detection.h`, which has a portable and an msvc
+backend, selected by the compiler variant `constructor_detection_msvc`, and a
+signature mode that recovers the argument types of the detected constructor.
 `conversion/construct.h` holds the other factory kinds: a declared constructor,
 which list-initializes the leaf from its declared argument types inside the
 wrappers of the stored type tree, and a function or callable object, whose

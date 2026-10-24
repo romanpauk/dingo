@@ -378,9 +378,9 @@ Factory styles in the repo:
 The default registration path uses `constructor<T>` from
 [include/dingo/factory/constructor.h](../include/dingo/factory/constructor.h).
 That public shorthand delegates to the constructor detection of
-[include/dingo/primitives/constructor_detection.h](../include/dingo/primitives/constructor_detection.h)
+[include/dingo/constructor/constructor_detection.h](../include/dingo/constructor/constructor_detection.h)
 and
-[include/dingo/primitives/constructor.h](../include/dingo/primitives/constructor.h).
+[include/dingo/constructor/constructor.h](../include/dingo/constructor/constructor.h).
 When a type is registered without an explicit `factory<...>`, Dingo tries to
 pick a constructor automatically.
 
@@ -569,7 +569,7 @@ See:
 
 - [test/next/primitives/constructor.cpp](../test/next/primitives/constructor.cpp)
 - [test/matrix/README.md](../test/matrix/README.md)
-- [include/dingo/primitives/constructor_detection.h](../include/dingo/primitives/constructor_detection.h)
+- [include/dingo/constructor/constructor_detection.h](../include/dingo/constructor/constructor_detection.h)
 - [include/dingo/factory/constructor.h](../include/dingo/factory/constructor.h)
 - [include/dingo/factory/function.h](../include/dingo/factory/function.h)
 - [include/dingo/factory/callable.h](../include/dingo/factory/callable.h)

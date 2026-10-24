@@ -287,7 +287,7 @@ This file includes old internal headers
 (`dingo/factory/constructor_detection.h`,
 `matrix/fixtures/constructor_detection.h` →
 `dingo/factory/detail/constructor_detection_msvc.hpp`). In next, constructor
-detection lives in `include/dingo/primitives/constructor.h` and
+detection lives in `include/dingo/constructor/constructor.h` and
 `constructor_detection.h`, with the backends portable and msvc, selected by the
 compiler variant `constructor_detection_msvc`, and the modes arity and
 signature.
@@ -299,7 +299,7 @@ signature.
   `next_constructor.value_initializes_a_scalar`,
   `next_constructor.detects_the_constructor_of_the_largest_arity`,
   `next_constructor.takes_the_declared_constructor_arguments`; tests
-  `primitives/constructor.h`. The per-type
+  `constructor/constructor.h`. The per-type
   `constructor_detection_traits::max_arity` is an old internal, not public API,
   and next has no equivalent.
 - `constructor_detection_test.public_constructor_argument_metadata`:
@@ -310,20 +310,20 @@ signature.
   `(double, const char*)` and `(int)` lists) and
   `next_constructor.detects_the_constructor_of_the_largest_arity` (arity 2 / 0),
   and `next_constructor.the_signature_mode_recovers_the_argument_types` (int,
-  float); tests `primitives/constructor.h` and
-  `primitives/constructor_detection.h`.
+  float); tests `constructor/constructor.h` and
+  `constructor/constructor_detection.h`.
 - `constructor_detection_test.unresolved_signature_arguments_fall_back_to_void`:
   old `detail::constructor_signature_arguments` yields `void` for an argument
   category it cannot resolve. **replaced**:
   `test/next/primitives/constructor.cpp`
   `next_constructor.an_unrecorded_argument_category_is_not_recovered`; tests
-  `primitives/constructor_signature.h`.
+  `constructor/constructor_signature.h`.
 - `constructor_detection_test.traits_limit_only_the_public_search`: a per-type
   arity limit bounds the public search but not an explicit search with a higher
   limit. **replaced**: `test/next/primitives/constructor.cpp`
   `next_constructor.detects_the_constructor_of_the_largest_arity`
   (`find_arity<T, 2>` finds 2 where the unbounded search finds 3); tests
-  `primitives/constructor.h`. The only limit in next is
+  `constructor/constructor.h`. The only limit in next is
   `DINGO_CONSTRUCTOR_DETECTION_ARGS` (`config_constructor_detection_args`)
 - `constructor_detection_test.public_detection_defaults_to_shape`: the public
   `constructor_detection<T>` is the `constructor_arity` detection mode.
@@ -331,7 +331,7 @@ signature.
   `next_constructor.the_signature_mode_recovers_the_argument_types` (the type
   tree mode reports no argument types) and
   `next_constructor.the_engine_detects_by_the_selected_backend`; tests
-  `primitives/constructor_detection.h`.
+  `constructor/constructor_detection.h`.
 - `constructor_detection_test.auto_construction_uses_public_selection`: an
   auto-constructible dependency is made by its `DINGO_CONSTRUCTOR`-selected
   constructor. **ported**: `test/next/containers/construct.cpp`
@@ -343,7 +343,7 @@ signature.
   order (old `constructor_traits<std::array>`) **replaced**:
   `test/next/primitives/constructor.cpp`
   `next_constructor.constructs_an_array_of_move_only_handles_in_order`; tests
-  `invoke_constructor` (list-initialization) in `primitives/constructor.h`.
+  `invoke_constructor` (list-initialization) in `constructor/constructor.h`.
 - `constructor_detection_test.array_traits_construct_nested_move_only_elements_in_place`:
   the same for a nested array of unique_ptr. **replaced**:
   `test/next/primitives/constructor.cpp`
@@ -683,13 +683,13 @@ The old arena (`dingo/memory/arena_allocator.h`), object store
 (`dingo/memory/object_store.h`), container runtime, and runtime transaction
 (`dingo/runtime/*`) have no one-to-one counterpart. In the next implementation
 each binding is one allocation from the container allocator
-(`memory/allocation.h`); `memory/retained.h` keeps the objects of a
-container, which a failed transaction destroys back to its mark; and
-`basic_transaction_log` of `memory/lifetime_slot.h` is the undo log of the requests
-of a container, in which every request undoes its own effects when it fails. The
-next implementation has no commit or finish actions, no action state, no scratch
-or inline arena, and no block-size policy, which is why several rows are
-obsolete.
+(`memory/allocation.h`); `memory/retained.h` keeps the objects of a container,
+which a failed transaction destroys back to its mark; and
+`basic_transaction_log` of `memory/lifetime_slot.h` is the undo log of the
+requests of a container, in which every request undoes its own effects when it
+fails. The next implementation has no commit or finish actions, no action state,
+no scratch or inline arena, and no block-size policy, which is why several rows
+are obsolete.
 
 ### test/memory/arena_allocator.cpp
 
@@ -709,8 +709,8 @@ obsolete.
   `test/next/primitives/retained.cpp`
   `next_retained.a_failed_transaction_destroys_the_objects_kept_during_it`,
   `next_retained.objects_kept_after_an_undo_follow_the_remaining_ones`; tests
-  `memory/retained.h` (undo to the mark). Address reuse is arena-specific
-  and obsolete.
+  `memory/retained.h` (undo to the mark). Address reuse is arena-specific and
+  obsolete.
 - `arena_allocator_test.checkpoint_rewind_releases_later_overflow_blocks`:
   rewinding frees the blocks allocated after the mark. **replaced**:
   `test/next/containers/allocator.cpp`
@@ -838,7 +838,8 @@ obsolete.
   rollback actions run in reverse order (then their states are destroyed)
   **replaced**: `test/next/primitives/transaction_log.cpp`
   `next_transaction_log.a_failed_request_undoes_its_effects_in_reverse`; tests
-  `memory/lifetime_slot.h` `basic_transaction_log`. State destruction is obsolete.
+  `memory/lifetime_slot.h` `basic_transaction_log`. State destruction is
+  obsolete.
 - `runtime_transaction_test.runtime_transaction_action_state_finishes_once`: a
   finish action runs once, on commit or on rollback. **obsolete**: no finish
   actions in next. Undone-once is covered for undo entries by
@@ -1522,8 +1523,7 @@ ported retention tests declare their dependencies, as the old ones did.
   `next_slot.keeps_a_derived_object_until_its_object_is_reset`
   (`binding_slot<lazy>` context: `get_or_emplace` makes the handle once, and it
   is forgotten when a failed transaction resets the slot). Tests
-  `backend/slot.h` + `memory/retained.h` `kept_objects`. Not
-  mutation-checked.
+  `backend/slot.h` + `memory/retained.h` `kept_objects`. Not mutation-checked.
 - `cache_test.tracked_conversion_clears_slot_on_rollback`: a tracked cache entry
   is cleared by the context's rollback. **replaced**:
   `next_slot.keeps_a_derived_object_until_its_object_is_reset` (a failed
@@ -1832,9 +1832,9 @@ none can be kept. The file does not compile against next.
   destructible unique value) **replaced**:
   `next_static_bindings.keeps_the_object_of_an_rvalue_request_until_the_container_is_destroyed`
   (`payload &&` and `std::optional<payload>` from a unique binding; live
-  counts); tests `static_backend::resolve_from` and `memory/retained.h`.
-  next has no published temporary-type list: it keeps what an rvalue request
-  refers to in `retained_objects`.
+  counts); tests `static_backend::resolve_from` and `memory/retained.h`. next
+  has no published temporary-type list: it keeps what an rvalue request refers
+  to in `retained_objects`.
 - `static_execution_traits_test.static_context_frames_are_not_polymorphic`: the
   static context frame has no vtable. **replaced**:
   `next_static_graph.a_static_container_logs_only_the_slots_that_construct_an_object`
@@ -2373,7 +2373,7 @@ which a differential build of the baseline defines, as M9.2 describes:
 - `constructor_detection` family: crosses the detection backends (portable,
   msvc) and modes (arity, signature) with constructor type_trees, and argument
   storages with conversion categories. **kept**, against the detection of the
-  next implementation (`primitives/constructor_detection.h`, the backends
+  next implementation (`constructor/constructor_detection.h`, the backends
   `portable_constructor_detection` and `msvc_constructor_detection`, the modes
   `constructor_arity` and `constructor_signature`): the same axes, the selected
   type trees spelled by `dingo::dependency<T, key_type<S>>`, and each storage

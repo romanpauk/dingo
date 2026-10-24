@@ -266,7 +266,7 @@ add_executable(dingo_next_test
     next/conversion/registration.cpp
     next/conversion/routes.cpp
     next/memory/allocation.cpp
-    next/primitives/constructor.cpp
+    next/constructor/constructor.cpp
     next/diagnostics/diagnostic_message.cpp
     next/memory/retained.cpp
     next/memory/transaction_log.cpp

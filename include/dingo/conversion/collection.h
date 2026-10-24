@@ -13,7 +13,7 @@
 // collection does; they add only an element their objects are constructed
 // from.
 
-#include <dingo/primitives/constructor.h>
+#include <dingo/constructor/constructor.h>
 
 #include <cstddef>
 #include <list>

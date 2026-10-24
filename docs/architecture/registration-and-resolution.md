@@ -201,8 +201,8 @@ by default, and whose constructor is detected, constructs it. That rule is in
 [conversion/auto_constructible.h](../../include/dingo/conversion/auto_constructible.h).
 
 The detection lives in
-[primitives/constructor_detection.h](../../include/dingo/primitives/constructor_detection.h)
-and [primitives/constructor.h](../../include/dingo/primitives/constructor.h).
+[constructor/constructor_detection.h](../../include/dingo/constructor/constructor_detection.h)
+and [constructor/constructor.h](../../include/dingo/constructor/constructor.h).
 Constructor detection probes the type with arguments that convert to any
 parameter type, from the largest arity down to zero, so the constructor with the
 most parameters wins, and it ignores the copy constructor. It reports the kind
@@ -233,4 +233,4 @@ These files are useful while reading this flow:
 - [include/dingo/backend/static_backend.h](../../include/dingo/backend/static_backend.h)
 - [include/dingo/backend/memo.h](../../include/dingo/backend/memo.h)
 - [include/dingo/backend/slot.h](../../include/dingo/backend/slot.h)
-- [include/dingo/primitives/constructor_detection.h](../../include/dingo/primitives/constructor_detection.h)
+- [include/dingo/constructor/constructor_detection.h](../../include/dingo/constructor/constructor_detection.h)

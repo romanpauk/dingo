@@ -12,7 +12,7 @@
 // largest arity down, so the constructor with the most parameters wins, and the
 // copy constructor is never detected.
 
-#include <dingo/primitives/constructor_probe.h>
+#include <dingo/constructor/constructor_probe.h>
 
 #include <cstddef>
 #include <type_traits>

@@ -15,8 +15,8 @@
 #include <dingo/backend/slot.h>
 #include <dingo/container.h>
 #include <dingo/conversion/convert.h>
-#include <dingo/memory/retained.h>
 #include <dingo/memory/lifetime_slot.h>
+#include <dingo/memory/retained.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/shared_cyclical.h>

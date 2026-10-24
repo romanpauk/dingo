@@ -9,8 +9,8 @@
 
 #include "matrix/fixtures/dependency_shapes.h"
 
+#include <dingo/constructor/constructor_detection.h>
 #include <dingo/container.h>
-#include <dingo/primitives/constructor_detection.h>
 #include <dingo/type/annotated.h>
 
 #include <array>

@@ -22,9 +22,9 @@
 
 #include <dingo/base/config.h>
 #include <dingo/base/mechanics.h>
-#include <dingo/primitives/constructor_arity.h>
-#include <dingo/primitives/constructor_arity_msvc.h>
-#include <dingo/primitives/constructor_probe.h>
+#include <dingo/constructor/constructor_arity.h>
+#include <dingo/constructor/constructor_arity_msvc.h>
+#include <dingo/constructor/constructor_probe.h>
 
 #include <cstddef>
 #include <type_traits>

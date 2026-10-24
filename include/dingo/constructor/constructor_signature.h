@@ -23,8 +23,8 @@
 // conversions too and recovers a signature with the msvc backend.
 
 #include <dingo/base/mechanics.h>
-#include <dingo/primitives/constructor_arity.h>
-#include <dingo/primitives/constructor_probe.h>
+#include <dingo/constructor/constructor_arity.h>
+#include <dingo/constructor/constructor_probe.h>
 
 #include <cstddef>
 #include <type_traits>

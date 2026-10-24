@@ -11,7 +11,7 @@
 // type a request names when no binding is named: a complete aggregate by
 // default, and any type whose specialization opts in.
 
-#include <dingo/primitives/constructor.h>
+#include <dingo/constructor/constructor.h>
 
 #include <type_traits>
 

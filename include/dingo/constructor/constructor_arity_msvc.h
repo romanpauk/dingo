@@ -16,7 +16,7 @@
 // arity recurses and zero is never decremented, and takes the arity of a
 // std::array from its size. It is standard C++ and is tested on every compiler.
 
-#include <dingo/primitives/constructor_probe.h>
+#include <dingo/constructor/constructor_probe.h>
 
 #include <array>
 #include <cstddef>

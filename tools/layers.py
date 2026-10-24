@@ -67,13 +67,6 @@ COMPONENTS = {
 
 # The headers that are not in the directory of their component yet.
 MOVING = {
-    "primitives/constructor": "constructor",
-    "primitives/constructor_probe": "constructor",
-    "primitives/constructor_arity": "constructor",
-    "primitives/constructor_arity_msvc": "constructor",
-    "primitives/constructor_signature": "constructor",
-    "primitives/constructor_signature_msvc": "constructor",
-    "primitives/constructor_detection": "constructor",
     "primitives/type_tree": "type",
     "conversion/operations.gen": "type",
     "conversion/wrapper_semantics.gen": "type",

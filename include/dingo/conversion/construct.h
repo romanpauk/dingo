@@ -15,9 +15,9 @@
 // factory returns the stored object.
 
 #include <dingo/base/mechanics.h>
+#include <dingo/constructor/constructor.h>
 #include <dingo/conversion/wrapper_traits.h>
 #include <dingo/diagnostics/compile_diagnostics.gen.h>
-#include <dingo/primitives/constructor.h>
 
 #include <functional>
 #include <new>
