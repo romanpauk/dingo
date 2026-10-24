@@ -126,7 +126,7 @@ binding by the slot kind of its scope descriptor, or the slot class its
 
 The slot keeps the factory of its binding, empty unless it holds a callable
 object, and constructs the stored object by it.
-[conversion/construct.h](../../include/dingo/conversion/construct.h) holds the
+[factory/construct.h](../../include/dingo/factory/construct.h) holds the
 factories: a constructor factory constructs the leaf by its detected or declared
 constructor and makes every wrapper around it in place, and a function or
 callable factory returns the stored object.

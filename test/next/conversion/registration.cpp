@@ -19,9 +19,9 @@
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 
-#include <dingo/conversion/construct.h>
 #include <dingo/conversion/request.h>
 #include <dingo/conversion/route.h>
+#include <dingo/factory/construct.h>
 #include <dingo/registration.h>
 
 #include <gtest/gtest.h>

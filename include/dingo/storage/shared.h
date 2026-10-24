@@ -9,5 +9,5 @@
 
 // dingo/storage/shared.h of the next implementation: the shared scope tag.
 
-#include <dingo/storage/scopes.gen.h>
 #include <dingo/registration.h> // IWYU pragma: export
+#include <dingo/storage/scopes.gen.h>

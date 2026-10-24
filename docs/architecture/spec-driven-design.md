@@ -1252,7 +1252,7 @@ constructor a type declares with `DINGO_CONSTRUCTOR`. Its detection is the arity
 mode of `constructor/constructor_detection.h`, which has a portable and an msvc
 backend, selected by the compiler variant `constructor_detection_msvc`, and a
 signature mode that recovers the argument types of the detected constructor.
-`conversion/construct.h` holds the other factory kinds: a declared constructor,
+`factory/construct.h` holds the other factory kinds: a declared constructor,
 which list-initializes the leaf from its declared argument types inside the
 wrappers of the stored type tree, and a function or callable object, whose
 result is the stored object. A slot keeps the factory of its binding, empty

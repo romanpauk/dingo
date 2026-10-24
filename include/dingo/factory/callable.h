@@ -12,7 +12,7 @@
 // stored object.
 
 #include <dingo/base/mechanics.h>
-#include <dingo/conversion/construct.h>
+#include <dingo/factory/construct.h>
 
 #include <type_traits>
 #include <utility>

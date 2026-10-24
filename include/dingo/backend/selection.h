@@ -26,10 +26,10 @@
 
 #include <dingo/backend/diagnose.h>
 #include <dingo/base/mechanics.h>
-#include <dingo/conversion/construct.h>
 #include <dingo/conversion/request.h>
 #include <dingo/conversion/selection_rules.gen.h>
 #include <dingo/diagnostics/diagnostic_message.h>
+#include <dingo/factory/construct.h>
 #include <dingo/lookup/annotated_key.h>
 #include <dingo/lookup/key.h>
 #include <dingo/lookup/key_kinds.gen.h>

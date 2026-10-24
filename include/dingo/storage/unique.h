@@ -9,5 +9,5 @@
 
 // dingo/storage/unique.h of the next implementation: the unique scope tag.
 
-#include <dingo/storage/scopes.gen.h>
 #include <dingo/registration.h> // IWYU pragma: export
+#include <dingo/storage/scopes.gen.h>

@@ -378,7 +378,7 @@ signature.
   `test/next/containers/construct.cpp`
   `next_construct.a_named_leaf_converts_to_the_alternative_it_names`
   (`constructor<long(int)>`; the leaf converts into the stored variant through
-  `constructor_factory` in `conversion/construct.h`)
+  `constructor_factory` in `factory/construct.h`)
 
 ## Group B: lookup
 
@@ -1290,7 +1290,7 @@ are not observed through the public API of the baseline and are recorded only:
   annotated constructor, or the function arguments. **replaced**:
   `test/next/conversion/registration.cpp`
   `next_engine.a_factory_declares_the_arguments_of_its_leaf`; tests
-  `conversion/construct.h` `declared_arguments` (what the static graph of
+  `factory/construct.h` `declared_arguments` (what the static graph of
   `backend/static_backend.h` reads)
 - `type_registration_test.registration_dependencies_prefer_explicit_metadata`:
   `dependencies<>` overrides the dependencies of a declared factory.
@@ -1304,13 +1304,13 @@ are not observed through the public API of the baseline and are recorded only:
   `constructor<T(double, bool)>`. **replaced**:
   `test/next/conversion/registration.cpp`
   `next_engine.dependencies_declare_the_constructor_of_a_registration`; tests
-  `dingo/registration.h` `declared_factory` and `conversion/construct.h`.
+  `dingo/registration.h` `declared_factory` and `factory/construct.h`.
 - `type_registration_test.factory_traits_report_dependencies`: factory_traits
   report the dependencies, explicitness, and compile-time bindability of
   constructor, detected, function, and callable factories. **replaced**:
   `test/next/conversion/registration.cpp`
   `next_engine.a_factory_declares_the_arguments_of_its_leaf`; tests
-  `conversion/construct.h` `declared_arguments`. In next a detected, unannotated
+  `factory/construct.h` `declared_arguments`. In next a detected, unannotated
   constructor declares `void`, because its arguments are known only at
   construction, where the old code reported `type_list<>`.
   `has_explicit_dependencies` has no next equivalent. Compile-time bindability
@@ -1823,9 +1823,9 @@ none can be kept. The file does not compile against next.
   the arguments of a detected constructor decide whether a binding can be
   analysed at compile time. **replaced**:
   `next_static_graph.a_detected_constructor_declares_no_dependencies_and_a_declared_one_does`;
-  tests `conversion/construct.h` `declared_arguments` and
-  `dependency_graph::any` (spec `graph_rules.cycle`: detected-constructor
-  dependencies are known only at construction)
+  tests `factory/construct.h` `declared_arguments` and `dependency_graph::any`
+  (spec `graph_rules.cycle`: detected-constructor dependencies are known only at
+  construction)
 - `static_execution_traits_test.resolution_operations_publish_static_temporary_requirements`:
   each resolution operation names the temporaries it needs (an optional for a
   destructible unique value) **replaced**:
@@ -1927,19 +1927,19 @@ pass against next unchanged (checked).
   `next_static_graph.a_detected_constructor_declares_no_dependencies_and_a_declared_one_does`
   (`declared_arguments` of a detected constructor is void, including the
   zero-argument one: known only at construction, spec `graph_rules.cycle`);
-  tests `conversion/construct.h`.
+  tests `factory/construct.h`.
 - `static_bindings_source_test.constructor_typedef_bindings_reuse_detected_dependencies`:
   a `DINGO_CONSTRUCTOR` binding publishes its declared arguments as
   dependencies. **replaced**:
   `next_static_graph.a_detected_constructor_declares_no_dependencies_and_a_declared_one_does`
   (`type_list<config &>` and the edge); resolution in
   `next_static_bindings.resolves_the_dependencies_of_a_constructor`; tests
-  `conversion/construct.h`.
+  `factory/construct.h`.
 - `static_bindings_source_test.plain_constructor_dependencies_follow_default_detection_metadata`:
   a plain constructor's dependencies are whatever detection reports.
   **replaced**:
   `next_static_graph.a_detected_constructor_declares_no_dependencies_and_a_declared_one_does`
-  (void, no edges); tests `conversion/construct.h`, `backend/static_backend.h`.
+  (void, no edges); tests `factory/construct.h`, `backend/static_backend.h`.
 - `static_bindings_source_test.plain_constructor_resolves_default_detected_dependencies`:
   a detected constructor gets the shared config of the static container.
   **ported**: `next_static_bindings.resolves_the_dependencies_of_a_constructor`
@@ -2087,9 +2087,9 @@ follows the default declaration, which is the new behavior of both.
 - `construction-bounded-array-rejects-too-many-initializers.cpp`:
   `constructor_traits<int[2]>::construct(1,2,3)` is rejected. **obsolete**: Next
   has no way to build an array from element initializers. A stored array is
-  value-initialized in place (`construct_stored` in conversion/construct.h), and
-  no factory can return an array type. `constructor_traits` is internal to the
-  old code.
+  value-initialized in place (`construct_stored` in factory/construct.h), and no
+  factory can return an array type. `constructor_traits` is internal to the old
+  code.
 - `construction-dynamic-array-requires-size-or-initializers.cpp`: building an
   unbounded array needs an explicit size or initializers. **ported**:
   `test/lit/construction-dynamic-array-requires-size-or-initializers.cpp`:

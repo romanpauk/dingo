@@ -10,5 +10,5 @@
 // dingo/storage/shared_cyclical.h of the next implementation: the
 // shared_cyclical scope tag.
 
-#include <dingo/storage/scopes.gen.h>
 #include <dingo/registration.h> // IWYU pragma: export
+#include <dingo/storage/scopes.gen.h>

@@ -12,10 +12,10 @@
 
 #include <dingo/base/mechanics.h>
 #include <dingo/collection.h>
-#include <dingo/conversion/construct.h>
 #include <dingo/diagnostics/compile_diagnostics.gen.h>
 #include <dingo/diagnostics/type_path.h>
 #include <dingo/factory/callable.h>
+#include <dingo/factory/construct.h>
 #include <dingo/registration.h>
 
 #include <functional>

@@ -11,13 +11,13 @@
 
 #include <dingo/base/config.h>
 #include <dingo/base/mechanics.h>
-#include <dingo/conversion/construct.h>
-#include <dingo/storage/scopes.gen.h>
 #include <dingo/diagnostics/compile_diagnostics.gen.h>
 #include <dingo/diagnostics/diagnostics.gen.h>
 #include <dingo/diagnostics/type_name.h>
 #include <dingo/diagnostics/type_path.h>
+#include <dingo/factory/construct.h>
 #include <dingo/memory/lifetime_slot.h>
+#include <dingo/storage/scopes.gen.h>
 #include <dingo/type/wrapper_traits.h>
 
 #include <cstdint>

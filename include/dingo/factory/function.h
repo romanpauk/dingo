@@ -10,7 +10,7 @@
 // dingo/factory/function.h of the next implementation: the function factory,
 // which calls a function whose result is the stored object.
 
-#include <dingo/conversion/construct.h>
+#include <dingo/factory/construct.h>
 
 namespace dingo {
 
