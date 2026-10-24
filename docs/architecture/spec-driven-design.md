@@ -714,9 +714,9 @@ other code. See [Testing And Conformance](#testing-and-conformance).
   forwards to generated code; it is bound by the [contracts](#contracts) like
   everything else
 
-The primitives sit in a header layer below the generated code and must not
-include it, so they cannot know scope names, type tree kinds, rule order, or
-diagnostic text. `layers-check` enforces this.
+The primitives sit in a component below the generated code and must not include
+it, so they cannot know scope names, type tree kinds, rule order, or diagnostic
+text. `dependencies-check` enforces this.
 
 ### Rules For Generated Code
 
@@ -745,7 +745,7 @@ are written to the build directory at build time, as the matrix is today.
 - Every generated file starts with a marker line naming the generator and the
   spec entries it comes from, and saying that the file must not be edited.
 - Generated headers use the `.gen.h` suffix and live in the wrapper directory
-  they belong to, so `layers-check` applies to them unchanged.
+  they belong to, so `dependencies-check` applies to them unchanged.
 - A committed manifest, `spec/generated.manifest`, lists every generated path
   with a content hash.
 
@@ -797,9 +797,9 @@ implementation.
 ### Internals
 
 Everything else can be replaced completely: headers, names, directory layout,
-and header layers. No internal header is kept for compatibility. Current code
-that is already decision-free, such as constructor detection, may be moved into
-the primitive wrapper instead of being rewritten, but it is moved, not shared
+and components. No internal header is kept for compatibility. Current code that
+is already decision-free, such as constructor detection, may be moved into the
+primitive wrapper instead of being rewritten, but it is moved, not shared
 between the two implementations.
 
 ### Development Strategy
@@ -1223,7 +1223,7 @@ accepts is tested: by `dingo_next_test` and by a lit test that forces the
 portable implementation. `fail<>` moves to M5.3, where the diagnostics it
 reports are generated. Compiler variants use the same override macros and arrive
 with the primitives that need them in M2.3. The new implementation has its own
-header layers in `tools/layers.py`, and neither implementation includes the
+components in `tools/dependencies.py`, and neither implementation includes the
 other.
 
 #### M2.3: Primitive Wrapper
@@ -1232,7 +1232,7 @@ Status: in progress.
 
 Add the decision-free primitives: lifetime slots, factory invocation and
 constructor detection, conversion primitives, index structures, the arena, and
-the thunk signature. Add the layering rule to `layers-check`.
+the thunk signature. Add the dependency rule to `dependencies-check`.
 
 Done when no primitive header refers to a scope, type tree kind, rule, or
 diagnostic.
@@ -1833,9 +1833,9 @@ which were `include/dingo/core/api/`, are `include/dingo/`: their headers are
 the public include paths, which hold what they declare, and `include/next`, the
 generated forwarders, the `dingo_next` target, and `DINGO_IMPLEMENTATION_NEXT`
 are gone. The modules below the public headers never include them, which
-`layers-check` verifies. The matrix asserts the behavior of the baseline where a
-behavior change declares a difference under `DINGO_MATRIX_BASELINE`, which a
-differential build of the baseline defines.
+`dependencies-check` verifies. The matrix asserts the behavior of the baseline
+where a behavior change declares a difference under `DINGO_MATRIX_BASELINE`,
+which a differential build of the baseline defines.
 
 #### M9.3: Matrix Migration
 
@@ -2035,7 +2035,7 @@ its bindings are known, which the selection rule asks at a declared step.
 
 - 2026-10-19: Generate every construct that encodes a spec decision, including
   the engine and the backend glue. Hand-written code is limited to decision-free
-  primitives and a thin facade, separated by a header layer. This revises the
+  primitives and a thin facade, separated by a component. This revises the
   earlier plan to hand-write the engine.
 
 - 2026-10-19: Contracts on compile cost, object size, runtime cost, code size,

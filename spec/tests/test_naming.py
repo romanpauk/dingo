@@ -49,13 +49,6 @@ COMPOUNDS = (
 # Phrases that contain a banned word in another sense, with the place they come
 # from. They are removed before the words are matched.
 ALLOWED_PHRASES = (
-    # The layers of the headers, checked by tools/layers.py and layers-check.
-    "header layer",
-    "header layers",
-    "header-layers",
-    "layers-check",
-    "layers_check",
-    "layers.py",
     # The module of the standard library that loads a module from a path.
     "importlib.util",
 )
@@ -295,11 +288,9 @@ def test_kind_is_not_banned():
     assert banned_in("key_kind, FactoryKind, constructor_kind, kinds") == []
 
 
-def test_the_ordering_of_the_headers_is_allowed():
-    assert banned_in("the header layers, layers-check, tools/layers.py") == []
+def test_the_module_of_the_standard_library_is_allowed():
     assert banned_in("importlib.util.module_from_spec") == []
     assert banned_in("a util module") == ["util"]
-    assert banned_in("a layer of the headers") == ["layer"]
 
 
 @pytest.mark.parametrize("compound", COMPOUNDS)

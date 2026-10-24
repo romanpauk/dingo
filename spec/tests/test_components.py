@@ -1,5 +1,5 @@
 """The components of the library: the directories of include/dingo, the
-dependencies tools/layers.py enforces, and the overview that describes them."""
+dependencies tools/dependencies.py enforces, and the overview that describes them."""
 
 import importlib.util
 import re
@@ -13,7 +13,7 @@ PUBLIC_DIRECTORIES = {"registration", "rtti"}
 
 
 def checker():
-    found = importlib.util.spec_from_file_location("component_check", REPO_ROOT / "tools" / "layers.py")
+    found = importlib.util.spec_from_file_location("component_check", REPO_ROOT / "tools" / "dependencies.py")
     module = importlib.util.module_from_spec(found)
     found.loader.exec_module(module)
     return module

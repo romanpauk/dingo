@@ -17,8 +17,9 @@ holds the generated declarations, the extension points, and the functions of one
 subject, and each depends only on the components listed for it, so the
 dependencies form a graph without cycles. The public headers that no component
 holds, the containers and the registration declarations, are the top of the
-graph and may include any component. The `layers-check` target enforces this,
-and the dependencies live in [tools/layers.py](../../tools/layers.py).
+graph and may include any component. The `dependencies-check` target enforces
+this, and the dependencies live in
+[tools/dependencies.py](../../tools/dependencies.py).
 
 The four concerns above are spread over them: registration is the public
 headers, type trees and routes are `type`, `conversion`, and the declarations of

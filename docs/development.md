@@ -38,8 +38,8 @@ Run a quality target with `cmake --build build -t <target>`.
   and `docker`.
 - `markdown-format-check`: verifies the same Markdown files.
 - `format-check`: runs `sources-format-check` and `markdown-format-check`.
-- `layers-check`: verifies that every header includes only headers of its own
-  component and of the components it depends on, as described in
+- `dependencies-check`: verifies that every header includes only headers of its
+  own component and of the components it depends on, as described in
   [Components](architecture/overview.md#components).
 - `includes-compile`: compiles one generated translation unit per standalone
   public header.

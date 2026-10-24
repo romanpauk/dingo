@@ -6,14 +6,14 @@ include(${CMAKE_CURRENT_LIST_DIR}/generate.cmake)
 function(configure_quality_targets out_check_targets)
   set(check_targets)
 
-  uv_get_run_command(layers_run PROJECT_DIRECTORY "${PROJECT_SOURCE_DIR}")
-  add_custom_target(layers-check
-    COMMENT "Verifying header layering"
-    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/tools/layers.py
+  uv_get_run_command(dependencies_run PROJECT_DIRECTORY "${PROJECT_SOURCE_DIR}")
+  add_custom_target(dependencies-check
+    COMMENT "Verifying the dependencies of the components"
+    COMMAND ${dependencies_run} ${PROJECT_SOURCE_DIR}/tools/dependencies.py
       ${PROJECT_SOURCE_DIR}/include
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
   )
-  list(APPEND check_targets layers-check)
+  list(APPEND check_targets dependencies-check)
 
   configure_generate_targets(generate_check_targets)
   list(APPEND check_targets ${generate_check_targets})
