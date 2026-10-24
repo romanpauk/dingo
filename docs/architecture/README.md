@@ -20,6 +20,9 @@ Read these pages in order for the full picture:
 - [Conversion Model](conversion-model.md): how Dingo derives the value,
   reference, pointer, and wrapper routes a binding serves.
 
+[Route Normal Form](route-normal-form.md) proposes replacing the derivation of
+routes by a structural match with one indirect call per request.
+
 The target architecture, and the tracking of its implementation, is described in
 [Spec-Driven Design](spec-driven-design.md). The
 [Test Migration Ledger](test-migration.md) records where each test of the
