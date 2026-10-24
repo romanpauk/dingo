@@ -65,8 +65,9 @@ shard so unrelated scenarios are not compiled together.
 
 The storage and selection models under [`tools/model/`](../tools/model)
 enumerate the built-in cells independently of the C++ headers. The generator
-writes one translation unit for the full storage scope-by-form product and one
-for every selection policy and source status. It also generates the committed
+writes one translation unit for the full storage scope-by-form product, one for
+every selection policy and source status, and one route probe for every enabled
+non-array storage cell. It also generates the committed
 `include/dingo/storage/scopes.gen.h` header, which owns the built-in
 `storage_scope_policy` data. Compile-time assertions compare the generated
 expectation with the library; a missing cell, changed exposure, or stale catalog
