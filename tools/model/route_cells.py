@@ -22,7 +22,16 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from storage_cells import FORMS, SCOPES, exposure, validate_catalog
+from storage_cells import (
+    FORMS,
+    LVALUE,
+    POINTER,
+    RVALUE,
+    SCOPES,
+    VALUE,
+    exposure,
+    validate_catalog,
+)
 
 
 ROUTE_FORM_NAMES = (
@@ -41,7 +50,13 @@ def build_rows() -> list[dict[str, object]]:
         for form in FORMS:
             if form.name not in ROUTE_FORM_NAMES:
                 continue
-            if exposure(scope, form) == 0:
+            bits = exposure(scope, form)
+            if bits == 0:
+                continue
+            value = bool(bits & VALUE and form.has_value) or bool(bits & RVALUE)
+            object_route = bool(bits & (LVALUE | POINTER))
+            rvalue = bool(bits & RVALUE)
+            if not (value or object_route or rvalue):
                 continue
             rows.append(
                 {
@@ -51,6 +66,9 @@ def build_rows() -> list[dict[str, object]]:
                     "form_name": form.name,
                     "form_type": form.cpp_type,
                     "form_headers": form.headers,
+                    "value": value,
+                    "object": object_route,
+                    "rvalue": rvalue,
                 }
             )
     return rows

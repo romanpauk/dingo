@@ -26,10 +26,22 @@ using type = {{ row.form_type }};
 using storage = dingo::detail::storage<
     scope, type, type, dingo::constructor<type>,
     dingo::detail::conversions<scope, type, int>>;
-using routes = typename dingo::detail::binding_resolutions<int, storage>::type;
+using value_routes =
+    typename dingo::detail::binding_value_resolutions<int, storage>::type;
+using object_routes =
+    typename dingo::detail::binding_object_resolutions<int, storage>::type;
+using rvalue_routes = typename dingo::detail::
+    binding_rvalue_reference_resolutions<int, storage>::type;
 
-static_assert(dingo::type_list_size_v<routes> != 0,
-              "storage cell publishes no routes");
+static_assert((dingo::type_list_size_v<value_routes> != 0) ==
+                  {{ "true" if row.value else "false" }},
+              "value route availability changed");
+static_assert((dingo::type_list_size_v<object_routes> != 0) ==
+                  {{ "true" if row.object else "false" }},
+              "object route availability changed");
+static_assert((dingo::type_list_size_v<rvalue_routes> != 0) ==
+                  {{ "true" if row.rvalue else "false" }},
+              "rvalue route availability changed");
 
 TEST(route_cells, {{ row.scope_name }}_{{ row.form_name }}) { SUCCEED(); }
 

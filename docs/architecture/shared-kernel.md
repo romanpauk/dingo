@@ -36,9 +36,10 @@ infrastructure described below. It changes no public API and no behavior.
   and address helpers.
 - `tools/model/` is the first coverage catalog. It enumerates every built-in
   storage scope by form cell, every selection policy by source status, and the
-  route list of every enabled non-array storage cell. The generator emits one
-  translation unit of compile-time assertions and one GoogleTest rule, and
-  `cells-check` fails when the library catalog and the model drift.
+  value/object/rvalue route availability of every enabled non-array storage
+  cell. The generator emits one translation unit of compile-time assertions and
+  one GoogleTest rule, and `cells-check` fails when the library catalog and the
+  model drift.
 - `include/dingo/storage/scopes.gen.h` owns the built-in `storage_scope_policy`
   specializations and the `shared_cyclical` cell-list table. The per-scope
   headers keep their public tag and storage implementation, but the policy and

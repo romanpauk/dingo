@@ -14,8 +14,9 @@ hand-curated matrix tags.
   statuses. It compares the model against the C++ policy and status enums and
   renders the full rule table as compile-time assertions.
 - `route_cells.py` instantiates the real storage type and resolution list for
-  every enabled non-array storage cell. A cell that stops publishing routes
-  fails to compile.
+  every enabled non-array storage cell. It checks value, object, and rvalue
+  route availability against the scope/form model, so a cell that stops
+  publishing a category fails to compile.
 - `templates/` contains logic-free Jinja templates. The Python model computes
   rows; the templates only lay them out.
 - `*_test.py` is the pytest suite for the models and their deterministic

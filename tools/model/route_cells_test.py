@@ -28,6 +28,21 @@ def test_library_catalog_matches_model() -> None:
     validate_catalog(Path(__file__).resolve().parents[2] / "include")
 
 
+def test_route_categories_follow_scope_and_form() -> None:
+    rows = {
+        (row["scope_name"], row["form_name"]): row for row in build_rows()
+    }
+    assert rows[("shared", "plain")]["value"] is True
+    assert rows[("shared", "plain")]["object"] is True
+    assert rows[("shared", "plain")]["rvalue"] is False
+    assert rows[("unique", "plain")]["value"] is True
+    assert rows[("unique", "plain")]["object"] is True
+    assert rows[("unique", "plain")]["rvalue"] is True
+    assert rows[("shared_cyclical", "plain")]["value"] is False
+    assert rows[("shared_cyclical", "plain")]["object"] is True
+    assert rows[("shared_cyclical", "shared_handle")]["value"] is True
+
+
 def test_render_names_every_cell(tmp_path: Path) -> None:
     content = render(tmp_path / "route_cells.cpp")
     assert content == render(tmp_path / "route_cells.cpp")
