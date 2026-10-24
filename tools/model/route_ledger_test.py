@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+#
+# This file is part of dingo project <https://github.com/romanpauk/dingo>
+#
+# See LICENSE for license and copyright information
+# SPDX-License-Identifier: MIT
+#
+
+from __future__ import annotations
+
+import pytest
+
+from route_ledger import (
+    CATEGORIES,
+    GAP_ARRAY_ROUTES,
+    build_rows,
+    gaps,
+    supported_categories,
+    validate,
+)
+from storage_cells import FORMS, SCOPES, exposure
+
+
+def test_every_row_has_one_outcome() -> None:
+    validate()
+    rows = build_rows()
+    assert len(rows) == len(SCOPES) * len(FORMS) * len(CATEGORIES)
+    assert len({(row.scope, row.form, row.category) for row in rows}) == len(
+        rows
+    )
+
+
+def test_unavailable_rows_have_reasons() -> None:
+    for row in build_rows():
+        if row.outcome == "unavailable":
+            assert row.reason
+            assert not row.gap
+
+
+def test_gaps_are_explicit_and_tracked() -> None:
+    gap_rows = gaps()
+    assert gap_rows
+    assert {row.gap for row in gap_rows} == {GAP_ARRAY_ROUTES}
+    for row in gap_rows:
+        assert exposure(
+            next(scope for scope in SCOPES if scope.name == row.scope),
+            next(form for form in FORMS if form.name == row.form),
+        ) != 0
+
+
+def test_supported_categories_match_the_scope_form_product() -> None:
+    assert supported_categories("shared", "plain") == {"value", "object"}
+    assert supported_categories("unique", "plain") == {
+        "value",
+        "object",
+        "rvalue",
+    }
+    assert supported_categories("shared_cyclical", "plain") == {"object"}
+    assert supported_categories("shared_cyclical", "optional") == set()
+    assert supported_categories("shared", "array") == set()
+
+
+if __name__ == "__main__":
+    raise SystemExit(pytest.main([__file__]))

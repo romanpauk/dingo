@@ -178,6 +178,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/storage_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/selection_rules_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/route_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/route_ledger_test.py"
     "${PROJECT_SOURCE_DIR}/tools/cost/measure_test.py")
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python
@@ -248,7 +249,8 @@ add_test(NAME dingo_model_generator_test
     COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q
         ${PROJECT_SOURCE_DIR}/tools/model/storage_cells_test.py
         ${PROJECT_SOURCE_DIR}/tools/model/selection_rules_test.py
-        ${PROJECT_SOURCE_DIR}/tools/model/route_cells_test.py)
+        ${PROJECT_SOURCE_DIR}/tools/model/route_cells_test.py
+        ${PROJECT_SOURCE_DIR}/tools/model/route_ledger_test.py)
 set_tests_properties(dingo_model_generator_test PROPERTIES
     LABELS "unit;generator"
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/model)

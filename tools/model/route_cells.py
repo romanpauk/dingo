@@ -6,13 +6,12 @@
 # SPDX-License-Identifier: MIT
 #
 
-"""Generate route-coverage probes for the built-in storage cells.
+"""Generate route-category probes for the built-in storage cells.
 
 Each enabled scope/form cell is instantiated through the real storage type and
-the real resolution list. A cell that stops publishing at least one route fails
-to compile. Array forms are not part of this probe yet because not every scope
-can store an array directly; they keep their storage-cell coverage until the
-route shape for them is modelled.
+the real resolution lists. Value, object, and rvalue availability is compared
+with the route ledger. Cells whose route shape is not modeled stay in the ledger
+as tracked gaps instead of disappearing from the product.
 """
 
 from __future__ import annotations
@@ -22,41 +21,16 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from storage_cells import (
-    FORMS,
-    LVALUE,
-    POINTER,
-    RVALUE,
-    SCOPES,
-    VALUE,
-    exposure,
-    validate_catalog,
-)
-
-
-ROUTE_FORM_NAMES = (
-    "plain",
-    "alternative",
-    "pointer",
-    "unique_handle",
-    "shared_handle",
-    "optional",
-)
+from route_ledger import supported_categories, validate as validate_ledger
+from storage_cells import FORMS, SCOPES, validate_catalog
 
 
 def build_rows() -> list[dict[str, object]]:
     rows = []
     for scope in SCOPES:
         for form in FORMS:
-            if form.name not in ROUTE_FORM_NAMES:
-                continue
-            bits = exposure(scope, form)
-            if bits == 0:
-                continue
-            value = bool(bits & VALUE and form.has_value) or bool(bits & RVALUE)
-            object_route = bool(bits & (LVALUE | POINTER))
-            rvalue = bool(bits & RVALUE)
-            if not (value or object_route or rvalue):
+            categories = supported_categories(scope.name, form.name)
+            if not categories:
                 continue
             rows.append(
                 {
@@ -66,24 +40,22 @@ def build_rows() -> list[dict[str, object]]:
                     "form_name": form.name,
                     "form_type": form.cpp_type,
                     "form_headers": form.headers,
-                    "value": value,
-                    "object": object_route,
-                    "rvalue": rvalue,
+                    "value": "value" in categories,
+                    "object": "object" in categories,
+                    "rvalue": "rvalue" in categories,
                 }
             )
     return rows
 
 
 def validate() -> None:
+    validate_ledger()
     rows = build_rows()
     if not rows:
         raise ValueError("route catalog must not be empty")
     keys = {(row["scope_name"], row["form_name"]) for row in rows}
     if len(keys) != len(rows):
         raise ValueError("route catalog contains duplicate cells")
-    for row in rows:
-        if row["form_name"] not in ROUTE_FORM_NAMES:
-            raise ValueError(f"unknown route form {row['form_name']!r}")
 
 
 def render(output: Path) -> str:

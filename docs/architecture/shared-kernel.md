@@ -35,11 +35,11 @@ infrastructure described below. It changes no public API and no behavior.
   descriptor used by both binding backends, in addition to the materialization
   and address helpers.
 - `tools/model/` is the first coverage catalog. It enumerates every built-in
-  storage scope by form cell, every selection policy by source status, and the
-  value/object/rvalue route availability of every enabled non-array storage
-  cell. The generator emits one translation unit of compile-time assertions and
-  one GoogleTest rule, and `cells-check` fails when the library catalog and the
-  model drift.
+  storage scope by form cell, every selection policy by source status, and every
+  scope/form/route-category row. Every route row is classified as supported,
+  unavailable with a reason, or a tracked gap; the generator emits one
+  translation unit of compile-time assertions for the supported rows, and
+  `cells-check` fails when the library catalog and the model drift.
 - `include/dingo/storage/scopes.gen.h` owns the built-in `storage_scope_policy`
   specializations and the `shared_cyclical` cell-list table. The per-scope
   headers keep their public tag and storage implementation, but the policy and
