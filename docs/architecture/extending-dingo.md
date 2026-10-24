@@ -342,7 +342,7 @@ A lookup backend, the last argument of
 `base<Cardinality, Backend>` in
 [include/dingo/lookup/lookup.h](../../include/dingo/lookup/lookup.h), is a type
 that names a member template `index<Value, Candidate>`, an index as
-[backend/index.h](../../include/dingo/backend/index.h) describes it. An index is
+[lookup/index.h](../../include/dingo/lookup/index.h) describes it. An index is
 default constructible and assignable and has:
 
 ```c++
@@ -425,7 +425,7 @@ declarations that take a backend.
 - [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
 - [include/dingo/conversion/scopes.gen.h](../../include/dingo/conversion/scopes.gen.h)
 - [include/dingo/backend/slot.h](../../include/dingo/backend/slot.h)
-- [include/dingo/backend/index.h](../../include/dingo/backend/index.h)
+- [include/dingo/lookup/index.h](../../include/dingo/lookup/index.h)
 - [include/dingo/lookup/indexes.h](../../include/dingo/lookup/indexes.h)
 - [test/support/custom_wrappers.h](../../test/support/custom_wrappers.h)
 - [test/next/containers/scopes.cpp](../../test/next/containers/scopes.cpp)

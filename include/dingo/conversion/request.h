@@ -9,8 +9,9 @@
 
 // The descriptor of a request type.
 
-#include <dingo/conversion/key.h>
 #include <dingo/conversion/route.h>
+#include <dingo/lookup/annotated_key.h>
+#include <dingo/lookup/key.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/wrapper_traits.h>
 

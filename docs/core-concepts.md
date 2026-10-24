@@ -567,7 +567,7 @@ assert(container.construct<A>(callable<A(int)>(overloaded_factory{})).value ==
 
 See:
 
-- [test/next/primitives/constructor.cpp](../test/next/primitives/constructor.cpp)
+- [test/next/constructor/constructor.cpp](../test/next/constructor/constructor.cpp)
 - [test/matrix/README.md](../test/matrix/README.md)
 - [include/dingo/constructor/constructor_detection.h](../include/dingo/constructor/constructor_detection.h)
 - [include/dingo/factory/constructor.h](../include/dingo/factory/constructor.h)

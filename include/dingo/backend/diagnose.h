@@ -13,10 +13,10 @@
 #include <dingo/base/config.h>
 #include <dingo/base/mechanics.h>
 #include <dingo/conversion/convert.h>
-#include <dingo/conversion/key.h>
 #include <dingo/diagnostics/diagnostics.gen.h>
 #include <dingo/diagnostics/type_name.h>
 #include <dingo/diagnostics/type_path.h>
+#include <dingo/lookup/key.h>
 
 #include <string>
 #include <type_traits>

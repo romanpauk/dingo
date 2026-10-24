@@ -107,7 +107,7 @@ The ledger leaves these open:
 
 The cases of `test/container/` and `test/factory/`. Making detection try arity 0
 first, in a scratch copy of `include/dingo`, fails the `static_assert`s of
-`test/next/primitives/constructor.cpp` and four `next_recursion` tests, and
+`test/next/constructor/constructor.cpp` and four `next_recursion` tests, and
 ignoring `dingo_constructor_type` in `invoke_constructor` fails
 `next_construct.auto_constructs_a_dependency_by_its_declared_constructor`. The
 other new tests are not mutation-checked.
@@ -295,7 +295,7 @@ signature.
 - (file-scope `static_assert`s, not a TEST): scalar arity 0, cv-qualified scalar
   same, empty aggregate arity 0, empty derived aggregate arity 1, annotated
   aggregate uses its declared constructor, per-type `max_arity`. **replaced**:
-  `test/next/primitives/constructor.cpp`
+  `test/next/constructor/constructor.cpp`
   `next_constructor.value_initializes_a_scalar`,
   `next_constructor.detects_the_constructor_of_the_largest_arity`,
   `next_constructor.takes_the_declared_constructor_arguments`; tests
@@ -305,7 +305,7 @@ signature.
 - `constructor_detection_test.public_constructor_argument_metadata`:
   `constructor<T(int,float)>::arguments`, detected argument types (int, float),
   the `DINGO_CONSTRUCTOR` argument list, a defaulted constructor's empty list.
-  **replaced**: `test/next/primitives/constructor.cpp`
+  **replaced**: `test/next/constructor/constructor.cpp`
   `next_constructor.takes_the_declared_constructor_arguments` (declared
   `(double, const char*)` and `(int)` lists) and
   `next_constructor.detects_the_constructor_of_the_largest_arity` (arity 2 / 0),
@@ -315,19 +315,19 @@ signature.
 - `constructor_detection_test.unresolved_signature_arguments_fall_back_to_void`:
   old `detail::constructor_signature_arguments` yields `void` for an argument
   category it cannot resolve. **replaced**:
-  `test/next/primitives/constructor.cpp`
+  `test/next/constructor/constructor.cpp`
   `next_constructor.an_unrecorded_argument_category_is_not_recovered`; tests
   `constructor/constructor_signature.h`.
 - `constructor_detection_test.traits_limit_only_the_public_search`: a per-type
   arity limit bounds the public search but not an explicit search with a higher
-  limit. **replaced**: `test/next/primitives/constructor.cpp`
+  limit. **replaced**: `test/next/constructor/constructor.cpp`
   `next_constructor.detects_the_constructor_of_the_largest_arity`
   (`find_arity<T, 2>` finds 2 where the unbounded search finds 3); tests
   `constructor/constructor.h`. The only limit in next is
   `DINGO_CONSTRUCTOR_DETECTION_ARGS` (`config_constructor_detection_args`)
 - `constructor_detection_test.public_detection_defaults_to_shape`: the public
   `constructor_detection<T>` is the `constructor_arity` detection mode.
-  **replaced**: `test/next/primitives/constructor.cpp`
+  **replaced**: `test/next/constructor/constructor.cpp`
   `next_constructor.the_signature_mode_recovers_the_argument_types` (the type
   tree mode reports no argument types) and
   `next_constructor.the_engine_detects_by_the_selected_backend`; tests
@@ -341,24 +341,24 @@ signature.
 - `constructor_detection_test.array_traits_construct_move_only_elements_in_place`:
   `std::array<std::unique_ptr<int>,2>` is built from move-only arguments in
   order (old `constructor_traits<std::array>`) **replaced**:
-  `test/next/primitives/constructor.cpp`
+  `test/next/constructor/constructor.cpp`
   `next_constructor.constructs_an_array_of_move_only_handles_in_order`; tests
   `invoke_constructor` (list-initialization) in `constructor/constructor.h`.
 - `constructor_detection_test.array_traits_construct_nested_move_only_elements_in_place`:
   the same for a nested array of unique_ptr. **replaced**:
-  `test/next/primitives/constructor.cpp`
+  `test/next/constructor/constructor.cpp`
   `next_constructor.constructs_a_nested_array_of_move_only_handles`.
 - `constructor_detection_test.array_traits_construct_nested_move_only_values_in_place`:
   a nested array of move-only values is constructed. **replaced**:
-  `test/next/primitives/constructor.cpp`
+  `test/next/constructor/constructor.cpp`
   `next_constructor.resolves_every_move_only_element_of_a_nested_array`.
 - `constructor_detection_test.array_shape_constructs_typed_move_only_elements_in_place`:
   detection of an array resolves each move-only element by its type (2
-  resolutions) **replaced**: `test/next/primitives/constructor.cpp`
+  resolutions) **replaced**: `test/next/constructor/constructor.cpp`
   `next_constructor.resolves_every_move_only_element_of_an_array`.
 - `constructor_detection_test.nested_array_shape_constructs_typed_move_only_elements_in_place`:
   the same for a nested array (4 resolutions) **replaced**:
-  `test/next/primitives/constructor.cpp`
+  `test/next/constructor/constructor.cpp`
   `next_constructor.resolves_every_move_only_element_of_a_nested_array`.
 - `constructor_detection_test.selected_alternative_uses_the_conversion_operation`:
   `construct<optional<variant>, constructor<A>>`, doubly nested optional and
@@ -392,21 +392,21 @@ not mutation-checked. The covered rows were read and assert the same property.
   (`is_static_lookup_key_v`) and what `make_lookup_key` returns for each
   selector. **replaced**: `test/next/backend/index.cpp` file-scope
   `static_assert`s on `key_has_value`, `key_of_t`, `request_key_of`; tests
-  `conversion/key.h`.
+  `lookup/key.h`.
 - `index_test.lookup_backend_inserts_key_value_rows`: a `one`/ordered key-value
   backend finds the row of a key, refuses a second row, and forgets the row once
   it is erased. **replaced**:
   `next_index.finds_the_candidate_of_a_key_value_and_no_other` and
   `next_index.a_rebuilt_index_holds_only_the_candidates_of_its_last_build`;
-  tests `backend/index.h`. In next the backend rejects duplicates, not the
-  index: see `next_keys.rejects_a_second_binding_of_a_key` and
+  tests `lookup/index.h`. In next the backend rejects duplicates, not the index:
+  see `next_keys.rejects_a_second_binding_of_a_key` and
   `next_lookups.an_unordered_domain_of_one_selects_by_key_value`.
 - `index_test.lookup_backend_iterates_many_key_value_rows`: a `many`/unordered
   backend visits every row of a key, and erasing one leaves the other.
   **replaced**:
   `next_index.visits_the_candidates_of_a_key_in_order_until_told_to_stop` and
   `next_index.a_rebuilt_index_holds_only_the_candidates_of_its_last_build` (both
-  run linear, sorted, hashed and dense); tests `backend/index.h`.
+  run linear, sorted, hashed and dense); tests `lookup/index.h`.
 - `index_test.lookup_backend_inserts_no_key_rows`: a no-key `one` backend holds
   a row, refuses a second, finds it, and erases it. **replaced**:
   `next_index.a_memo_of_a_key_without_a_value_visits_every_candidate`
@@ -426,7 +426,7 @@ not mutation-checked. The covered rows were read and assert the same property.
   each lookup entry its own backend. **replaced**:
   `next_index.a_domain_is_indexed_by_the_index_of_its_declaration` and
   `next_index.a_default_declaration_indexes_every_other_domain`; tests
-  `declaration_list` in `conversion/lookup.h` and `backend_indexing` in
+  `declaration_list` in `lookup/declarations.h` and `backend_indexing` in
   `dingo/lookup/lookup.h`.
 
 ### test/lookup/index_registration.cpp
@@ -701,12 +701,12 @@ are obsolete.
   `next_allocator.a_container_allocates_its_bindings_from_its_allocator`.
 - `arena_allocator_test.buffer_backed_reset_releases_overflow_and_rewinds`:
   reset gives the overflow blocks back to the allocator and rewinds to the
-  buffer. **replaced**: `test/next/primitives/allocation.cpp`
+  buffer. **replaced**: `test/next/memory/allocation.cpp`
   `next_allocation.frees_the_bytes_it_allocated` (same pointers and byte counts
   handed back); tests `memory/allocation.h`. Rewinding has no counterpart.
 - `arena_allocator_test.checkpoint_rewind_reuses_storage_after_mark`: rewinding
   to a mark drops the allocations after it. **replaced**:
-  `test/next/primitives/retained.cpp`
+  `test/next/memory/retained.cpp`
   `next_retained.a_failed_transaction_destroys_the_objects_kept_during_it`,
   `next_retained.objects_kept_after_an_undo_follow_the_remaining_ones`; tests
   `memory/retained.h` (undo to the mark). Address reuse is arena-specific and
@@ -752,7 +752,7 @@ are obsolete.
 
 - `object_store_test.object_store_destroys_constructed_objects_in_reverse_order`:
   stored objects are destroyed in reverse order of construction. **replaced**:
-  `test/next/primitives/retained.cpp`
+  `test/next/memory/retained.cpp`
   `next_retained.destroys_its_objects_in_the_reverse_order_they_were_kept`;
   tests `memory/retained.h`.
 - `object_store_test.object_store_first_destructor_record_stays_in_inline_arena`:
@@ -779,7 +779,7 @@ are obsolete.
 
 - `container_runtime_test.container_runtime_destroys_constructed_objects_in_reverse_order`:
   the runtime destroys its objects in reverse order. **replaced**:
-  `test/next/primitives/retained.cpp`
+  `test/next/memory/retained.cpp`
   `next_retained.destroys_its_objects_in_the_reverse_order_they_were_kept`;
   tests `memory/retained.h`.
 - `container_runtime_test.container_runtime_rollback_destroys_objects_after_checkpoint`:
@@ -806,7 +806,7 @@ are obsolete.
 
 - `runtime_transaction_test.runtime_transaction_rollback_allows_following_committed_allocation`:
   after a rollback, the next transaction commits and keeps its objects.
-  **replaced**: `test/next/primitives/retained.cpp`
+  **replaced**: `test/next/memory/retained.cpp`
   `next_retained.a_transaction_after_a_failed_one_keeps_its_objects`; tests
   `retained.h` + `slot.h` `basic_transaction_log`.
 - `runtime_transaction_test.runtime_transaction_without_persistent_allocations_is_harmless`:
@@ -836,7 +836,7 @@ are obsolete.
   no action state in next.
 - `runtime_transaction_test.runtime_transaction_destroys_action_states_after_rollback_callbacks`:
   rollback actions run in reverse order (then their states are destroyed)
-  **replaced**: `test/next/primitives/transaction_log.cpp`
+  **replaced**: `test/next/memory/transaction_log.cpp`
   `next_transaction_log.a_failed_request_undoes_its_effects_in_reverse`; tests
   `memory/lifetime_slot.h` `basic_transaction_log`. State destruction is
   obsolete.
@@ -908,7 +908,7 @@ are obsolete.
   only on failure). Commit and finish actions are obsolete.
 - `runtime_transaction_test.rollback_processes_action_installed_by_rollback_callback`:
   a rollback action may install another rollback action, which also runs.
-  **replaced**: `test/next/primitives/transaction_log.cpp`
+  **replaced**: `test/next/memory/transaction_log.cpp`
   `next_transaction_log.an_effect_recorded_while_undoing_is_undone` (an undo
   records an effect while the log, grown out of line to its capacity, is undone;
   the recorded effect is undone too); tests `memory/lifetime_slot.h`
@@ -974,7 +974,7 @@ are obsolete.
 ### test/type/type_name.cpp
 
 - `type_name_test.value_type_name`: the raw name of a class is the compiler
-  spelling. **replaced**: `test/next/primitives/type_name.cpp`
+  spelling. **replaced**: `test/next/diagnostics/type_name.cpp`
   `next_type_name.spells_a_class_as_the_compiler_does` (+ static_assert on
   `spelled_type_name`); tests `diagnostics/type_name.h`.
 - `type_name_test.array_type_name_keeps_closing_bracket`: an array name keeps
@@ -1017,7 +1017,7 @@ are obsolete.
   `next_type_name.names_the_parts_of_a_function_type`.
 - (file-scope static_asserts) `detail::type_name_find`, `raw_type_name`
   non-empty: substring search, and a non-empty raw name. **replaced**:
-  static_asserts in `test/next/primitives/type_name.cpp` on `detail::find_text`
+  static_asserts in `test/next/diagnostics/type_name.cpp` on `detail::find_text`
   and `spelled_type_name`.
 
 ### test/type/type_traits.cpp
@@ -1027,7 +1027,7 @@ are obsolete.
   default-constructible. **replaced**: `test/next/conversion/request_types.cpp`
   `next_request_types.an_annotated_value_copies_a_copy_only_value` (annotated
   and keyed, from an lvalue and an rvalue); tests `type/annotated.h` and
-  `conversion/key.h` `keyed`.
+  `lookup/key.h` `keyed`.
 - (file-scope static_asserts) `detail::recursion_guard` not copyable or movable:
   the old RAII recursion guard cannot be copied. **obsolete**: next guards
   recursion with a local guard struct in `backend/slot.h`, not a type. Recursion
@@ -1636,7 +1636,7 @@ no case is kept as is. `RR` below stands for
   `next_runtime_registration.a_failed_request_keeps_a_committed_shared_cyclical_handle`.
 - `type_registration_test.runtime_context_construct_uses_explicit_lifetimes`:
   ephemeral objects of a context die with it in reverse order, persistent ones
-  with the runtime. **replaced**: `test/next/primitives/retained.cpp`
+  with the runtime. **replaced**: `test/next/memory/retained.cpp`
   `next_retained.destroys_its_objects_in_the_reverse_order_they_were_kept`
   (tests `memory/retained.h`); public lifetimes: `RR`
   `next_runtime_registration.a_value_dependency_lives_as_long_as_the_request`,
@@ -1657,7 +1657,7 @@ no case is kept as is. `RR` below stands for
   the behavior change `rvalue_references_to_copy_only_objects`.
 - `type_registration_test.runtime_context_explicit_scopes_are_independent`: the
   ephemeral and persistent lifetimes do not depend on the order of construction.
-  **replaced**: `test/next/primitives/retained.cpp`
+  **replaced**: `test/next/memory/retained.cpp`
   `next_retained.destroys_its_objects_in_the_reverse_order_they_were_kept` and
   `next_retained.a_failed_transaction_destroys_the_objects_kept_during_it`
   (tests `memory/retained.h`)
@@ -1673,7 +1673,7 @@ no case is kept as is. `RR` below stands for
   `next_retained.a_failed_transaction_destroys_the_objects_kept_during_it`.
 - `type_registration_test.runtime_context_ephemeral_store_preserves_pending_transaction_actions`:
   rollback actions recorded during a request still run when it fails.
-  **replaced**: `test/next/primitives/transaction_log.cpp`
+  **replaced**: `test/next/memory/transaction_log.cpp`
   `next_transaction_log.a_failed_request_undoes_its_effects_in_reverse` (tests
   `memory/lifetime_slot.h` `basic_transaction_log`)
 - `type_registration_test.successful_runtime_registration_keeps_state_until_container_destruction`:

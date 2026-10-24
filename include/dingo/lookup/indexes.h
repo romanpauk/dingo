@@ -9,15 +9,15 @@
 
 // The indexes of the lookup backends of the library: a linear scan, the
 // sorted key values, a hash table, and a dense array of a bound, each an index
-// as backend/index.h describes it, which a backend of the user could
+// as lookup/index.h describes it, which a backend of the user could
 // name too. One the key type cannot serve falls back to one it can: an
 // ordered index to a hash table, a hash table to the sorted key values, a
 // dense array to a hash table, and each to a linear scan.
 // spec: index_structures
 
-#include <dingo/backend/index.h>
-#include <dingo/conversion/key.h>
-#include <dingo/conversion/lookup.h>
+#include <dingo/lookup/declarations.h>
+#include <dingo/lookup/index.h>
+#include <dingo/lookup/key.h>
 
 #include <algorithm>
 #include <cstddef>

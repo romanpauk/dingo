@@ -27,11 +27,12 @@
 #include <dingo/backend/diagnose.h>
 #include <dingo/base/mechanics.h>
 #include <dingo/conversion/construct.h>
-#include <dingo/conversion/key.h>
-#include <dingo/conversion/key_kinds.gen.h>
 #include <dingo/conversion/request.h>
 #include <dingo/conversion/selection_rules.gen.h>
 #include <dingo/diagnostics/diagnostic_message.h>
+#include <dingo/lookup/annotated_key.h>
+#include <dingo/lookup/key.h>
+#include <dingo/lookup/key_kinds.gen.h>
 #include <dingo/memory/retained.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/auto_constructible.h>

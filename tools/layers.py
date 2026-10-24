@@ -67,10 +67,6 @@ COMPONENTS = {
 
 # The headers that are not in the directory of their component yet.
 MOVING = {
-    "conversion/key": "lookup",
-    "conversion/key_kinds.gen": "lookup",
-    "conversion/lookup": "lookup",
-    "backend/index": "lookup",
     "conversion/storage_forms.gen": "storage",
     "conversion/scopes.gen": "storage",
     "conversion/construct": "factory",
@@ -93,16 +89,10 @@ MOVING = {
     "storage/unique": PUBLIC,
     "factory/constructor": PUBLIC,
     "lookup/lookup": PUBLIC,
-    "lookup/indexes": PUBLIC,
 }
 
 # Includes that violate the structure and that a planned change removes.
-KNOWN = {
-    # The conflicts of two bindings move out of the lookup declarations.
-    ("conversion/lookup", "conversion/route"),
-    # The key side of the annotated interfaces moves to lookup.
-    ("type/annotated", "conversion/key"),
-}
+KNOWN = set()
 
 INCLUDE = re.compile(r"^\s*#\s*include\s*<dingo/([^>]+)\.(?:h|hpp)>")
 

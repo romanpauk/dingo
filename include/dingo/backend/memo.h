@@ -14,11 +14,11 @@
 // indexes its candidates by their key values, by the index the lookup
 // declaration of its domain names, see index.h. spec: index_structures
 
-#include <dingo/backend/index.h>
 #include <dingo/conversion/convert.h>
-#include <dingo/conversion/key.h>
-#include <dingo/conversion/lookup.h>
 #include <dingo/conversion/route.h>
+#include <dingo/lookup/declarations.h>
+#include <dingo/lookup/index.h>
+#include <dingo/lookup/key.h>
 
 #include <atomic>
 #include <cstddef>

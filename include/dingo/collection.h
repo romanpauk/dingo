@@ -11,8 +11,8 @@
 // arguments of construct_collection, and the factory of a binding that stores
 // a collection.
 
-#include <dingo/conversion/key.h>
 #include <dingo/diagnostics/compile_diagnostics.gen.h>
+#include <dingo/lookup/key.h>
 #include <dingo/type/collection_traits.h>
 
 #include <type_traits>

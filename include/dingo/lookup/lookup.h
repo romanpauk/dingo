@@ -13,12 +13,12 @@
 // only accelerates the lookup and never changes which bindings a request
 // names.
 
-#include <dingo/backend/index.h>
 #include <dingo/base/mechanics.h>
-#include <dingo/conversion/key.h>
-#include <dingo/conversion/lookup.h>
 #include <dingo/diagnostics/compile_diagnostics.gen.h>
+#include <dingo/lookup/declarations.h>
+#include <dingo/lookup/index.h>
 #include <dingo/lookup/indexes.h>
+#include <dingo/lookup/key.h>
 #include <dingo/registration.h>
 
 #include <cstddef>
@@ -33,7 +33,7 @@ struct one {};
 struct many {};
 
 // A lookup backend indexes the key values of a domain. It is a type with a
-// member template index<Value, Candidate>, an index as backend/index.h
+// member template index<Value, Candidate>, an index as lookup/index.h
 // describes it, and it may name the bound of its key values, `bound`, the size
 // of a dense array. The backends of the library are such types, as a backend
 // of the user is.

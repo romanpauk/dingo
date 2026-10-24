@@ -341,10 +341,10 @@ def selection_rules(spec):
 
 
 def key_kinds(spec):
-    """include/dingo/conversion/key_kinds.gen.h from the key kinds."""
+    """include/dingo/lookup/key_kinds.gen.h from the key kinds."""
     return [
         GeneratedFile(
-            path="include/dingo/conversion/key_kinds.gen.h",
+            path="include/dingo/lookup/key_kinds.gen.h",
             content=render(
                 "key_kinds.gen.h.j2",
                 key_kinds=[

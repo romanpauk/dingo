@@ -10,7 +10,7 @@
 // The keys of the public API of the next implementation: key_type, key_value,
 // and dependency, a constructor parameter that requests its type by a key.
 
-#include <dingo/conversion/key.h> // IWYU pragma: export
+#include <dingo/lookup/key.h> // IWYU pragma: export
 
 #include <type_traits>
 

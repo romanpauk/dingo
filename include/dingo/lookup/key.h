@@ -11,9 +11,9 @@
 // the program is compiled, or a value supplied at runtime, and the keyed
 // request a constructor parameter declares.
 
-#include <dingo/conversion/key_kinds.gen.h>
 #include <dingo/diagnostics/compile_diagnostics.gen.h>
 #include <dingo/diagnostics/type_name.h>
+#include <dingo/lookup/key_kinds.gen.h>
 #include <dingo/type/type_tree.h>
 
 #include <string>
@@ -72,6 +72,19 @@ struct key_descriptor {
   key_kind kind = key_kind::none;
   type_id type = nullptr;
 };
+
+// Whether two keys are of one domain: keys without a value of the same kind, or
+// keys with a value of the same type, whether fixed or supplied at runtime.
+constexpr bool same_key_domain(const key_descriptor &left,
+                               const key_descriptor &right) {
+  if (has_value(left.kind) != has_value(right.kind)) {
+    return false;
+  }
+  if (!has_value(left.kind) && left.kind != right.kind) {
+    return false;
+  }
+  return left.type == right.type;
+}
 
 // Whether a key carries a value, which a request compares after the domain.
 constexpr bool key_has_value(const key_descriptor &key) {

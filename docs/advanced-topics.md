@@ -392,7 +392,7 @@ See:
 
 - [include/dingo/lookup/lookup.h](../include/dingo/lookup/lookup.h)
 - [include/dingo/lookup/indexes.h](../include/dingo/lookup/indexes.h)
-- [include/dingo/backend/index.h](../include/dingo/backend/index.h)
+- [include/dingo/lookup/index.h](../include/dingo/lookup/index.h)
 - [test/next/containers/lookups.cpp](../test/next/containers/lookups.cpp)
 
 ## Annotated Types

@@ -16,10 +16,10 @@
 // at compile time and runtime containers at registration, so both serve a
 // request by the same derivation.
 
-#include <dingo/conversion/key.h>
-#include <dingo/conversion/key_kinds.gen.h>
 #include <dingo/conversion/scopes.gen.h>
 #include <dingo/conversion/storage_forms.gen.h>
+#include <dingo/lookup/key.h>
+#include <dingo/lookup/key_kinds.gen.h>
 #include <dingo/type/type_tree.h>
 #include <dingo/type/wrapper_traits.h>
 
@@ -125,21 +125,6 @@ constexpr semantics_set semantics_in(const type_tree &stored) {
   return kinds;
 }
 
-// A binding as the engine sees it: the stored type tree, the scope, and the
-// leaf type trees of the declared interfaces. Whether two keys are of one
-// domain: keys without a value of the same kind, or keys with a value of the
-// same type, whether fixed or supplied at runtime.
-constexpr bool same_key_domain(const key_descriptor &left,
-                               const key_descriptor &right) {
-  if (has_value(left.kind) != has_value(right.kind)) {
-    return false;
-  }
-  if (!has_value(left.kind) && left.kind != right.kind) {
-    return false;
-  }
-  return left.type == right.type;
-}
-
 // A set of leaves, in the order they are added.
 struct leaf_set {
   type_id items[type_tree_capacity] = {};
@@ -167,6 +152,8 @@ struct leaf_set {
 
 inline constexpr std::size_t max_key_aliases = 4;
 
+// A binding as the engine sees it: the stored type tree, the scope, and the
+// leaf type trees of the declared interfaces.
 struct binding_descriptor {
   type_tree stored;
   // The leaves the stored type tree names the binding by without declared

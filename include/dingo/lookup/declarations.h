@@ -13,9 +13,8 @@
 // spec: lookup_declarations, index_structures
 
 #include <dingo/base/mechanics.h>
-#include <dingo/conversion/key.h>
-#include <dingo/conversion/route.h>
 #include <dingo/diagnostics/compile_diagnostics.gen.h>
+#include <dingo/lookup/key.h>
 #include <dingo/type/type_tree.h>
 
 #include <cstddef>
@@ -76,81 +75,6 @@ constexpr bool holds_many(const lookup_table &table, type_id interface,
     }
   }
   return many;
-}
-
-// Whether a binding of the key of `added` conflicts with `existing`: they
-// share an interface whose domain holds one binding. The values of their keys
-// are compared by the backend.
-// Whether two bindings conflict in the key domain `key` of `added`.
-constexpr bool conflicts_in(const lookup_table &table,
-                            const binding_descriptor &existing,
-                            const binding_descriptor &added,
-                            const key_descriptor &key) {
-  if (!has_key_domain(existing, key)) {
-    return false;
-  }
-  auto conflict_on = [&](type_id interface) {
-    return serves_interface(existing, interface) &&
-           !holds_many(table, interface, key);
-  };
-  if (added.interface_count == 0) {
-    for (std::size_t index = 0; index < added.leaves.size; ++index) {
-      if (conflict_on(added.leaves.items[index])) {
-        return true;
-      }
-    }
-    return false;
-  }
-  for (std::size_t index = 0; index < added.interface_count; ++index) {
-    if (conflict_on(added.interfaces[index].nodes[0].type)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-constexpr bool conflicts(const lookup_table &table,
-                         const binding_descriptor &existing,
-                         const binding_descriptor &added) {
-  if (conflicts_in(table, existing, added, added.key)) {
-    return true;
-  }
-  for (std::size_t index = 0; index < added.alias_count; ++index) {
-    if (conflicts_in(table, existing, added, added.aliases[index])) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// The bound of the key values of the domain of a binding: the least bound of
-// the declarations of the domains of its interfaces, or of the leaves its
-// stored type tree names without interfaces.
-constexpr std::size_t key_bound(const lookup_table &table,
-                                const binding_descriptor &binding) {
-  auto bound_of = [&](type_id interface) {
-    for (std::size_t index = 0; index < table.size; ++index) {
-      const lookup_descriptor &declaration = table.items[index];
-      if (declaration.interface == interface &&
-          same_key_domain(declaration.domain, binding.key)) {
-        return declaration.bound;
-      }
-    }
-    return unbounded;
-  };
-  std::size_t bound = unbounded;
-  if (binding.interface_count == 0) {
-    for (std::size_t index = 0; index < binding.leaves.size; ++index) {
-      const std::size_t of = bound_of(binding.leaves.items[index]);
-      bound = of < bound ? of : bound;
-    }
-    return bound;
-  }
-  for (std::size_t index = 0; index < binding.interface_count; ++index) {
-    const std::size_t of = bound_of(binding.interfaces[index].nodes[0].type);
-    bound = of < bound ? of : bound;
-  }
-  return bound;
 }
 
 // A lookup declaration of the domains of the interfaces `Interfaces`, a
