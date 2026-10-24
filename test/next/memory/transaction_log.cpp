@@ -10,7 +10,7 @@
 // undoes it. A request that fails undoes them in the reverse order they
 // happened, and one that returns keeps them. spec: transaction_rules
 
-#include <dingo/primitives/slot.h>
+#include <dingo/memory/lifetime_slot.h>
 
 #include <gtest/gtest.h>
 

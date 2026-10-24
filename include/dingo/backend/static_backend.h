@@ -25,7 +25,7 @@
 #include <dingo/conversion/route.h>
 #include <dingo/conversion/scopes.gen.h>
 #include <dingo/diagnostics/diagnostic_message.h>
-#include <dingo/primitives/retained.h>
+#include <dingo/memory/retained.h>
 
 #include <cstddef>
 #include <tuple>

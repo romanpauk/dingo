@@ -30,7 +30,7 @@
 #include <dingo/diagnostics/compile_diagnostics.gen.h>
 #include <dingo/diagnostics/diagnostics.gen.h>
 #include <dingo/diagnostics/type_name.h>
-#include <dingo/primitives/retained.h>
+#include <dingo/memory/retained.h>
 #include <dingo/primitives/type_tree.h>
 
 #include <cstddef>

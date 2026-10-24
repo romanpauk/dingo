@@ -265,11 +265,11 @@ add_executable(dingo_next_test
     next/conversion/execute.cpp
     next/conversion/registration.cpp
     next/conversion/routes.cpp
-    next/primitives/allocation.cpp
+    next/memory/allocation.cpp
     next/primitives/constructor.cpp
     next/diagnostics/diagnostic_message.cpp
-    next/primitives/retained.cpp
-    next/primitives/transaction_log.cpp
+    next/memory/retained.cpp
+    next/memory/transaction_log.cpp
     next/diagnostics/type_name.cpp
     next/conversion/request_types.cpp
     next/conversion/type_tree.cpp

@@ -22,7 +22,7 @@
 #include <dingo/factory/function.h>       // IWYU pragma: export
 #include <dingo/key.h>                    // IWYU pragma: export
 #include <dingo/lookup/lookup.h>
-#include <dingo/primitives/allocation.h>
+#include <dingo/memory/allocation.h>
 #include <dingo/registration.h>
 #include <dingo/registration_proxy.h>
 

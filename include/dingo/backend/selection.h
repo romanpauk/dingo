@@ -35,7 +35,7 @@
 #include <dingo/conversion/request.h>
 #include <dingo/conversion/selection_rules.gen.h>
 #include <dingo/diagnostics/diagnostic_message.h>
-#include <dingo/primitives/retained.h>
+#include <dingo/memory/retained.h>
 
 #include <cstddef>
 #include <type_traits>

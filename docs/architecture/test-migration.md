@@ -683,9 +683,9 @@ The old arena (`dingo/memory/arena_allocator.h`), object store
 (`dingo/memory/object_store.h`), container runtime, and runtime transaction
 (`dingo/runtime/*`) have no one-to-one counterpart. In the next implementation
 each binding is one allocation from the container allocator
-(`primitives/allocation.h`); `primitives/retained.h` keeps the objects of a
+(`memory/allocation.h`); `memory/retained.h` keeps the objects of a
 container, which a failed transaction destroys back to its mark; and
-`basic_transaction_log` of `primitives/slot.h` is the undo log of the requests
+`basic_transaction_log` of `memory/lifetime_slot.h` is the undo log of the requests
 of a container, in which every request undoes its own effects when it fails. The
 next implementation has no commit or finish actions, no action state, no scratch
 or inline arena, and no block-size policy, which is why several rows are
@@ -703,13 +703,13 @@ obsolete.
   reset gives the overflow blocks back to the allocator and rewinds to the
   buffer. **replaced**: `test/next/primitives/allocation.cpp`
   `next_allocation.frees_the_bytes_it_allocated` (same pointers and byte counts
-  handed back); tests `primitives/allocation.h`. Rewinding has no counterpart.
+  handed back); tests `memory/allocation.h`. Rewinding has no counterpart.
 - `arena_allocator_test.checkpoint_rewind_reuses_storage_after_mark`: rewinding
   to a mark drops the allocations after it. **replaced**:
   `test/next/primitives/retained.cpp`
   `next_retained.a_failed_transaction_destroys_the_objects_kept_during_it`,
   `next_retained.objects_kept_after_an_undo_follow_the_remaining_ones`; tests
-  `primitives/retained.h` (undo to the mark). Address reuse is arena-specific
+  `memory/retained.h` (undo to the mark). Address reuse is arena-specific
   and obsolete.
 - `arena_allocator_test.checkpoint_rewind_releases_later_overflow_blocks`:
   rewinding frees the blocks allocated after the mark. **replaced**:
@@ -754,7 +754,7 @@ obsolete.
   stored objects are destroyed in reverse order of construction. **replaced**:
   `test/next/primitives/retained.cpp`
   `next_retained.destroys_its_objects_in_the_reverse_order_they_were_kept`;
-  tests `primitives/retained.h`.
+  tests `memory/retained.h`.
 - `object_store_test.object_store_first_destructor_record_stays_in_inline_arena`:
   the first destructor record fits the inline arena. **obsolete**: next has no
   destructor records and no inline arena: every kept object is a heap holder
@@ -781,7 +781,7 @@ obsolete.
   the runtime destroys its objects in reverse order. **replaced**:
   `test/next/primitives/retained.cpp`
   `next_retained.destroys_its_objects_in_the_reverse_order_they_were_kept`;
-  tests `primitives/retained.h`.
+  tests `memory/retained.h`.
 - `container_runtime_test.container_runtime_rollback_destroys_objects_after_checkpoint`:
   rollback destroys only the objects after the mark, in reverse; earlier ones
   live until the end. **replaced**:
@@ -838,7 +838,7 @@ obsolete.
   rollback actions run in reverse order (then their states are destroyed)
   **replaced**: `test/next/primitives/transaction_log.cpp`
   `next_transaction_log.a_failed_request_undoes_its_effects_in_reverse`; tests
-  `primitives/slot.h` `basic_transaction_log`. State destruction is obsolete.
+  `memory/lifetime_slot.h` `basic_transaction_log`. State destruction is obsolete.
 - `runtime_transaction_test.runtime_transaction_action_state_finishes_once`: a
   finish action runs once, on commit or on rollback. **obsolete**: no finish
   actions in next. Undone-once is covered for undo entries by
@@ -851,7 +851,7 @@ obsolete.
   a nested commit holds only until the root finishes. **replaced**:
   `next_transaction_log.every_request_undoes_its_own_effects` (block 1: a nested
   request returns, the outer one fails, and both are undone inner first); tests
-  `primitives/slot.h` `basic_transaction_log`. Public side:
+  `memory/lifetime_slot.h` `basic_transaction_log`. Public side:
   `next_nested_requests.a_failure_undoes_the_effects_of_the_requests_that_returned`.
 - `runtime_transaction_test.transactions_on_different_runtimes_finish_independently`:
   transactions of two runtimes commit and roll back independently. **replaced**:
@@ -910,7 +910,7 @@ obsolete.
   **replaced**: `test/next/primitives/transaction_log.cpp`
   `next_transaction_log.an_effect_recorded_while_undoing_is_undone` (an undo
   records an effect while the log, grown out of line to its capacity, is undone;
-  the recorded effect is undone too); tests `primitives/slot.h`
+  the recorded effect is undone too); tests `memory/lifetime_slot.h`
   `basic_transaction_log`.
 - `runtime_transaction_test.inner_rollback_discards_inner_actions_and_preserves_outer_actions`:
   an inner rollback undoes the inner actions at once and the outer transaction
@@ -1448,7 +1448,7 @@ ported retention tests declare their dependencies, as the old ones did.
   each scope: lazy object+state, external one pointer, unique one bool,
   two-phase bound, +1 pointer for kept handles, not polymorphic),
   `next_object_sizes.kept_objects_are_a_list_of_one_pointer`. Tests
-  `backend/slot.h`, `primitives/slot.h`, `primitives/retained.h`. Growth of
+  `backend/slot.h`, `memory/lifetime_slot.h`, `memory/retained.h`. Growth of
   container size is contract `object_size_runtime_container` (constant) and
   `object_size_static_*`/`object_size_mixed_container` in
   `spec/content/contracts.py`, measured by `test/contracts/probe.py`
@@ -1474,7 +1474,7 @@ ported retention tests declare their dependencies, as the old ones did.
   materialized for an rvalue source is destroyed once. **covered**:
   `next_unique.retains_the_object_of_an_rvalue_reference` (read: two `&&`
   requests keep two live objects, `live == 0` after the container is gone).
-  Mechanism `primitives/retained.h`. Partly confirmed, see Unresolved.
+  Mechanism `memory/retained.h`. Partly confirmed, see Unresolved.
 - `resolution_operation_test.nested_conversions_publish_retained_cache_types`: a
   retaining conversion nested in borrow, alternative, wrapper,
   target-alternative and construction conversions still publishes its cache
@@ -1510,7 +1510,7 @@ ported retention tests declare their dependencies, as the old ones did.
   (`no_kept_objects` empty, `binding_context` empty, slot size = object size,
   and a binding with a cached rule adds `kept_objects`),
   `next_slot.keeps_a_derived_object_until_its_object_is_reset`. Tests
-  `backend/slot.h`, `primitives/retained.h`.
+  `backend/slot.h`, `memory/retained.h`.
 - `cache_test.stable_storage_trait_requires_explicit_stability`: only storage
   that declares itself stable is cached. **replaced**:
   `next_slot.an_unstable_scope_is_reached_by_every_request` (scope descriptors:
@@ -1522,7 +1522,7 @@ ported retention tests declare their dependencies, as the old ones did.
   `next_slot.keeps_a_derived_object_until_its_object_is_reset`
   (`binding_slot<lazy>` context: `get_or_emplace` makes the handle once, and it
   is forgotten when a failed transaction resets the slot). Tests
-  `backend/slot.h` + `primitives/retained.h` `kept_objects`. Not
+  `backend/slot.h` + `memory/retained.h` `kept_objects`. Not
   mutation-checked.
 - `cache_test.tracked_conversion_clears_slot_on_rollback`: a tracked cache entry
   is cleared by the context's rollback. **replaced**:
@@ -1639,7 +1639,7 @@ no case is kept as is. `RR` below stands for
   ephemeral objects of a context die with it in reverse order, persistent ones
   with the runtime. **replaced**: `test/next/primitives/retained.cpp`
   `next_retained.destroys_its_objects_in_the_reverse_order_they_were_kept`
-  (tests `primitives/retained.h`); public lifetimes: `RR`
+  (tests `memory/retained.h`); public lifetimes: `RR`
   `next_runtime_registration.a_value_dependency_lives_as_long_as_the_request`,
   `next_runtime_registration.a_shared_object_does_not_outlive_its_rvalue_dependency`.
 - `type_registration_test.runtime_context_detection_construction_uses_explicit_scope`:
@@ -1648,7 +1648,7 @@ no case is kept as is. `RR` below stands for
   `next_runtime_registration.a_value_dependency_lives_as_long_as_the_request`
   (detected constructor) and
   `next_runtime_registration.a_shared_object_does_not_outlive_its_rvalue_dependency`;
-  tests `primitives/retained.h` through `runtime_backend::make_with`.
+  tests `memory/retained.h` through `runtime_backend::make_with`.
 - `type_registration_test.runtime_context_detection_construction_copies_copy_only_values`:
   a copy-only (move deleted) type is constructed by value and as `T&&`.
   **ported**: `RR` `next_runtime_registration.constructs_a_copy_only_object` and
@@ -1661,7 +1661,7 @@ no case is kept as is. `RR` below stands for
   **replaced**: `test/next/primitives/retained.cpp`
   `next_retained.destroys_its_objects_in_the_reverse_order_they_were_kept` and
   `next_retained.a_failed_transaction_destroys_the_objects_kept_during_it`
-  (tests `primitives/retained.h`)
+  (tests `memory/retained.h`)
 - `type_registration_test.runtime_context_scratch_destructor_runs_once_on_commit`:
   a temporary of a request that returns is destroyed exactly once. **replaced**:
   `RR`
@@ -1676,7 +1676,7 @@ no case is kept as is. `RR` below stands for
   rollback actions recorded during a request still run when it fails.
   **replaced**: `test/next/primitives/transaction_log.cpp`
   `next_transaction_log.a_failed_request_undoes_its_effects_in_reverse` (tests
-  `primitives/slot.h` `basic_transaction_log`)
+  `memory/lifetime_slot.h` `basic_transaction_log`)
 - `type_registration_test.successful_runtime_registration_keeps_state_until_container_destruction`:
   the factory object of a registration lives until the container is destroyed.
   **ported**: `RR`
@@ -1832,7 +1832,7 @@ none can be kept. The file does not compile against next.
   destructible unique value) **replaced**:
   `next_static_bindings.keeps_the_object_of_an_rvalue_request_until_the_container_is_destroyed`
   (`payload &&` and `std::optional<payload>` from a unique binding; live
-  counts); tests `static_backend::resolve_from` and `primitives/retained.h`.
+  counts); tests `static_backend::resolve_from` and `memory/retained.h`.
   next has no published temporary-type list: it keeps what an rvalue request
   refers to in `retained_objects`.
 - `static_execution_traits_test.static_context_frames_are_not_polymorphic`: the

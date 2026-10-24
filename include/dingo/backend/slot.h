@@ -18,7 +18,7 @@
 #include <dingo/diagnostics/diagnostics.gen.h>
 #include <dingo/diagnostics/type_name.h>
 #include <dingo/diagnostics/type_path.h>
-#include <dingo/primitives/slot.h>
+#include <dingo/memory/lifetime_slot.h>
 
 #include <cstdint>
 #include <new>

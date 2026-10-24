@@ -17,8 +17,8 @@
 #include <dingo/backend/selection.h>
 #include <dingo/base/mechanics.h>
 #include <dingo/conversion/lookup.h>
-#include <dingo/primitives/retained.h>
-#include <dingo/primitives/slot.h>
+#include <dingo/memory/retained.h>
+#include <dingo/memory/lifetime_slot.h>
 
 #include <cstddef>
 #include <memory>

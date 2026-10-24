@@ -1243,7 +1243,7 @@ wrapper semantics of the spec. `conversion/wrapper_traits.h`, a wrapper between
 the declarations and the engine, classifies C++ types into wrapper semantics:
 pointers, references, and arrays as language wrappers, and the standard wrappers
 through the same `wrapper_traits` a user wrapper specializes.
-`primitives/slot.h` holds the lazy and external lifetime slots; the lazy slot
+`memory/lifetime_slot.h` holds the lazy and external lifetime slots; the lazy slot
 reports a recursion while its object is being constructed and is empty again
 after a failed construction. `primitives/constructor.h` detects the constructor
 of a type and calls it with arguments that resolve their parameter types, the

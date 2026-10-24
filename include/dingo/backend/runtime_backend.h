@@ -26,9 +26,9 @@
 #include <dingo/diagnostics/exceptions.h>
 #include <dingo/diagnostics/type_name.h>
 #include <dingo/diagnostics/type_path.h>
-#include <dingo/primitives/allocation.h>
-#include <dingo/primitives/retained.h>
-#include <dingo/primitives/slot.h>
+#include <dingo/memory/allocation.h>
+#include <dingo/memory/retained.h>
+#include <dingo/memory/lifetime_slot.h>
 #include <dingo/primitives/type_tree.h>
 
 #include <cstddef>

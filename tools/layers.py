@@ -67,9 +67,6 @@ COMPONENTS = {
 
 # The headers that are not in the directory of their component yet.
 MOVING = {
-    "primitives/allocation": "memory",
-    "primitives/retained": "memory",
-    "primitives/slot": "memory",
     "primitives/constructor": "constructor",
     "primitives/constructor_probe": "constructor",
     "primitives/constructor_arity": "constructor",

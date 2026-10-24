@@ -8,7 +8,7 @@
 // Objects of any alignment allocated from an allocator of bytes, which need
 // not align them, and freed with the bytes they took.
 
-#include <dingo/primitives/allocation.h>
+#include <dingo/memory/allocation.h>
 
 #include <gtest/gtest.h>
 

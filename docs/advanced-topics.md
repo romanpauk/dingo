@@ -707,7 +707,7 @@ container<dingo::dynamic_container_traits, std::allocator<char>>
 
 See:
 
-- [include/dingo/primitives/allocation.h](../include/dingo/primitives/allocation.h)
+- [include/dingo/memory/allocation.h](../include/dingo/memory/allocation.h)
 - [include/dingo/container_traits.h](../include/dingo/container_traits.h)
 - [test/next/containers/allocator.cpp](../test/next/containers/allocator.cpp)
 

@@ -10,7 +10,7 @@
 // The traits of the containers of the next implementation: the lookup
 // declarations they list, none by default.
 
-#include <dingo/primitives/allocation.h>
+#include <dingo/memory/allocation.h>
 #include <dingo/rtti/typeid_provider.h>
 
 #include <memory>
