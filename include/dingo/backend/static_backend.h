@@ -653,7 +653,8 @@ private:
     static_assert(
         require<selected != no_reachable_type, diag::type_not_convertible,
                 Request, typename binding::stored_type>());
-    static_assert(walk_supported_v<binding, selected>,
+    using followed = published_route<binding, selected>;
+    static_assert(walk_supported_v<followed>,
                   "the next implementation does not provide the route of the "
                   "requested type yet");
     using made_type = typename request_traits<Request>::made_type;
@@ -676,22 +677,19 @@ private:
                     plan.kind == completion::address) {
         // The request takes the address of the object the binding refers to,
         // null for the element of a wrapper that holds none.
-        return address_from<binding, selected,
-                            binding::published.items[selected].rule_count>(
+        return address_from<followed, followed::value.rule_count>(
             holder.slot.context(), source, true);
       } else if constexpr (plan.created == 0) {
-        return walk_from<binding, selected,
-                         binding::published.items[selected].rule_count>(
+        return walk_from<followed, followed::value.rule_count>(
             holder.slot.context(), source);
       } else {
         using wrappers = planned_wrappers_t<made_type, route>;
         static_assert(wrappers::valid &&
                           std::is_same_v<typename wrappers::boundary,
-                                         boundary_t<binding, selected>>,
+                                         boundary_t<followed>>,
                       "the requested wrapper cannot be created by the route");
         return wrappers::make([&]() DINGO_INLINE_LAMBDA -> decltype(auto) {
-          return walk_to_boundary<binding, selected>(holder.slot.context(),
-                                                     source);
+          return walk_to_boundary<followed>(holder.slot.context(), source);
         });
       }
     };

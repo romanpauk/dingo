@@ -226,20 +226,22 @@ public:
   }
 
 private:
+  template <std::size_t ReachableType>
+  using route = published_route<Binding, ReachableType>;
+
   // Whether a request may borrow the object of a reachable type: one the
   // reachable type refers to, copies, or takes the address of, or an array,
   // which a request takes the address of and never by value.
   template <std::size_t ReachableType>
   static constexpr bool borrows =
-      plan_v<Binding, ReachableType>.kind != completion::construct ||
-      has_properties(
-          semantics_of(Binding::published.items[ReachableType].value),
-          property::immovable);
+      plan_v<route<ReachableType>>.kind != completion::construct ||
+      has_properties(semantics_of(route<ReachableType>::value.value),
+                     property::immovable);
 
   template <std::size_t ReachableType>
   static void *borrow_reachable_type(entry &binding, Resolver &resolver,
                                      bool null_allowed) {
-    if constexpr (!walk_supported_v<Binding, ReachableType> ||
+    if constexpr (!walk_supported_v<route<ReachableType>> ||
                   !borrows<ReachableType>) {
       throw std::logic_error(
           "the next implementation does not provide this route yet");
@@ -247,8 +249,8 @@ private:
       auto &self = static_cast<runtime_binding &>(binding);
       auto view = self.view(resolver);
       const auto address =
-          address_from<Binding, ReachableType,
-                       plan_v<Binding, ReachableType>.binding_steps>(
+          address_from<route<ReachableType>,
+                       plan_v<route<ReachableType>>.binding_steps>(
               self.slot_.context(),
               [&]() -> decltype(auto) { return self.slot_.get(view); },
               null_allowed);
@@ -259,11 +261,11 @@ private:
   }
 
   template <std::size_t ReachableType>
-  static boundary_t<Binding, ReachableType>
+  static boundary_t<route<ReachableType>>
   make_reachable_type(entry &binding, Resolver &resolver) {
     auto &self = static_cast<runtime_binding &>(binding);
     auto view = self.view(resolver);
-    return walk_to_boundary<Binding, ReachableType>(
+    return walk_to_boundary<route<ReachableType>>(
         self.slot_.context(),
         [&]() -> decltype(auto) { return self.slot_.get(view); });
   }
@@ -272,20 +274,20 @@ private:
   // array is never a boundary object, as no request takes one by value.
   template <std::size_t ReachableType>
   static constexpr bool constructs =
-      walk_supported_v<Binding, ReachableType> && !borrows<ReachableType> &&
-      !std::is_array_v<boundary_t<Binding, ReachableType>>;
+      walk_supported_v<route<ReachableType>> && !borrows<ReachableType> &&
+      !std::is_array_v<boundary_t<route<ReachableType>>>;
 
   template <std::size_t ReachableType>
   static constexpr const void *boundary_of() {
     if constexpr (constructs<ReachableType>) {
-      return type_address_v<boundary_t<Binding, ReachableType>>;
+      return type_address_v<boundary_t<route<ReachableType>>>;
     } else {
       return nullptr;
     }
   }
 
   template <std::size_t ReachableType>
-  static constexpr boundary_maker<boundary_t<Binding, ReachableType>, Resolver>
+  static constexpr boundary_maker<boundary_t<route<ReachableType>>, Resolver>
       maker{&make_reachable_type<ReachableType>};
 
   template <std::size_t ReachableType> static constexpr const void *maker_of() {
@@ -299,7 +301,7 @@ private:
   template <std::size_t... ReachableTypes>
   static const completion_plan *plans(std::index_sequence<ReachableTypes...>) {
     static constexpr completion_plan table[] = {
-        plan_v<Binding, ReachableTypes>..., completion_plan{}};
+        plan_v<route<ReachableTypes>>..., completion_plan{}};
     return table;
   }
 
