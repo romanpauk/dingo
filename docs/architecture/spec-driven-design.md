@@ -1991,7 +1991,111 @@ Steps, each checked against the route table, which must not change:
 A container's traits may add selection sources, a type per source with the time
 its bindings are known, which the selection rule asks at a declared step.
 
+#### M10.5: Exact Sizes
+
+Status: proposed.
+
+M10.3 made a wrapper semantics a declaration of the user, so no bound on what a
+derivation produces can be proved for every semantics: a user's operations may
+reach a reachable type more often, or a route longer, than the semantics of the
+library do. The derivation sizes its results by constants anyway:
+`max_reachable_types` (96), `max_rules_per_route` (8), `max_created_wrappers`
+(2), `max_semantics` (32), `type_tree_capacity` (16 nodes), `max_interfaces`
+(8), and `max_key_aliases` (4). Only the interfaces and the key aliases are
+checked, by a diagnostic. The others fail without saying why:
+
+- a derivation that fills `reachable_types` sets `overflow`, which nothing
+  reads, and the binding publishes an incomplete set, so a request it should
+  serve is refused as not found
+- a route of more than `max_rules_per_route` rules is dropped, and the set of
+  semantics a type tree uses stops growing at `max_semantics`
+- a type tree of more than 16 nodes is an index past the end of an array in
+  constant evaluation, so a `std::variant` of 20 alternatives cannot be
+  registered, and the error names an array, not the variant
+
+The constants also cost every binding type, whatever it needs. `type_tree` is
+648 bytes, `reachable_type` 832, `reachable_types` 79,888, and
+`binding_descriptor` 6,096. A runtime container that registers 10 distinct
+shared types holds 1.0 MB of read-only data, and one that registers 20 holds 2.0
+MB, about 100 KB per binding type, measured at `-O2`. The bindings use few of
+the 96 reachable types they have room for: a shared `int` has 2, a shared
+`std::shared_ptr<impl>` declared as two interfaces has 12, and a
+`std::shared_ptr` of a `std::variant` of two handles and an `int`, declared as
+two interfaces, has 19.
+
+The design:
+
+1. **Sizes are counted, never bounded.** The room of an array is the number of
+   things it holds, found by a `constexpr` function over the types, as the
+   conversion-engine branch does (`reachable_types_count`,
+   `creating_steps_count` there). The bounds that are theorems of the rules of
+   the library, `derivation_bound` among them, stay as claims the tests check,
+   and nothing is sized by them.
+2. **A reachable type is a small value that refers into its binding.** No step
+   makes a type larger than the stored one, so the type tree of a reachable type
+   is the subtree of the stored type tree at a node, with at most the wrapper
+   the last step made around it, and a declared interface in place of its leaf.
+   A reachable type holds that node, the semantics and family of the made
+   wrapper, the replaced leaf, the category, the operation it came by, and its
+   parent: a few dozen bytes in place of 832. The 19 reachable types above take
+   under a kilobyte in place of 80,000 bytes.
+3. **The derivation is sized by its own count.** The first evaluation counts the
+   reachable types with room that doubles when it is full, so it is never
+   truncated, and the second evaluation fills an array of exactly that size. The
+   room does not depend on the language tier. Where `constexpr_dynamic_alloc`
+   holds, the first evaluation may use transient allocation instead of the
+   doubling, which changes no result. The limit that remains is the one of the
+   compiler for constant evaluation, and an evaluation that reaches it is
+   reported as a diagnostic that names the binding.
+4. **A type tree has the nodes it has.** `type_tree_capacity` goes, and a type
+   tree holds the number of nodes the type has, found by counting them, as do
+   the interface trees of a binding and the type tree of a request. The routes
+   and the creating steps of a request are counted the same way, so
+   `max_rules_per_route` and `max_created_wrappers` go.
+5. **A count that a consumer cannot take is refused.** Where a count is larger
+   than what the part that reads it accepts, the operation is refused with a
+   diagnostic that names the binding. Nothing is truncated and no flag is left
+   unread.
+
+The runtime path does not change. A runtime binding keeps references into the
+constants of its binding type, a request finds its reachable type in the memo,
+and the thunk and the inline completion are as they were. What changes is that
+the constants are as large as the binding, the first request of a type compares
+small values, and the registration instantiates the same thunks.
+
+Steps, each checked against the route tables, which must not change:
+
+1. a diagnostic for the overflow, raised when a binding is compiled in a static
+   container and when it is registered in a runtime one, and a contract that
+   measures the read-only data of N distinct bindings, so the 100 KB per binding
+   is a number the checks see
+2. the small reachable type, with the completion and the walk reading the type
+   tree from the binding
+3. counted type trees, with the diagnostic for a tree the compiler cannot
+   evaluate
+4. the counted derivation, and the counted routes and creating steps, which
+   remove `max_reachable_types`, `max_rules_per_route`, and
+   `max_created_wrappers`
+5. counted interfaces, key aliases, and set of semantics, so the diagnostics for
+   `max_interfaces` and `max_key_aliases` go with their constants
+6. the contracts: the read-only data of a binding is linear in its reachable
+   types, the number of evaluations of the derivation is two, and the claims of
+   the bounds are tests
+
+A larger change stays open and does not block these steps. The proposal in
+[route-normal-form.md](route-normal-form.md) finds a route from the request by
+matching the type trees, so no set of reachable types exists to size and a
+runtime binding publishes a thunk per wrapper in place of a thunk per reachable
+type. It rests on a hypothesis about the form of every route that a read-only
+script over the reference implementation checks first. If it holds, the counted
+type trees and routes of steps 3 and 4 are all that remains of the sizing.
+
 ## Decision Log
+
+- 2026-10-24: Sizes are counted, not bounded; see M10.5. A wrapper semantics of
+  the user can break any bound the rules of the library prove, a derivation that
+  fills a fixed array must not stop without saying so, and a constant sized for
+  the worst binding costs about 100 KB of read-only data in each binding type.
 
 - 2026-10-21: A binding of a variant names its alternatives. A request of an
   alternative the object does not hold finds the binding and fails with

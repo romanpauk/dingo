@@ -84,12 +84,16 @@ From the smallest change to the largest:
 
 ## The Normal Form
 
-The hypothesis is that every route the conversion rules selects has three phases:
+The hypothesis is that every route the conversion rules selects has three
+phases:
 
 1. peel: borrow, take, decay, or release outer wrappers of the stored type tree
 2. leaf rule: at most one copy, upcast, or conversion, possibly under the wrappers
    that are kept, as `std::shared_ptr<impl>` to `std::shared_ptr<iface>`
 3. build: wrap, adopt, address, or share up to the requested type tree
+
+The classification below confirms the three phases with one refinement: a
+`share` may come before the upcast, so the second phase may be preceded by one.
 
 When it holds, the request type tree is aligned against the stored type tree from the
 leaf outward, each step is checked against its access, the scope, and its
@@ -119,8 +123,9 @@ type tree, per declared interface `i` or none, and per access, borrow or consume
 - consume constructs the object when the scope needs it, peels to wrapper `k`, and
   moves or converts it into a buffer the request supplies
 
-The table has a few entries: depth times interfaces, independent of the number
-of routes.
+The table has about as many entries as the node count times the interfaces plus
+one, independent of the number of routes, and a variant adds its alternatives;
+see [What The Classification Found](#what-the-classification-found).
 
 ### The Request: Every Split Inline
 
@@ -162,14 +167,84 @@ The cost of a request changes too. The memoized path keeps one indirect call,
 but the first request of a runtime binding computes its route instead of
 comparing published reachable types. The benchmarks and the contract probes measure it.
 
-## Next Step
+## What The Classification Found
 
-A read-only script over the reference implementation,
-[spec/reference/routes.py](../../spec/reference/routes.py), and the route table
-classifies every route the reference selects: whether it is peel, at most one
-leaf rule, and build, and whether a structural matcher selects the same route.
+[test/routes/normal_form.py](../../test/routes/normal_form.py) reads the routes
+the reference implementation selects, over the cases that
+[test/next/conversion_cases.py](../../test/next/conversion_cases.py) enumerates,
+and classifies each by the word its stages spell: peel, a rule of a leaf, an
+upcast under a kept wrapper, and build. It changes nothing.
 
-- If the hypothesis holds, matching replaces the search in the reference first,
-  the tables check the C++ change against it, and the thunks per wrapper follow.
-- If it does not, the exceptions name the rules that need a search, and the
-  search from the request still removes the derivation in advance.
+### The Form Holds
+
+- The wrappers of the library: 62,832 requests, 2,635 served, 20 distinct stage
+  words, none longer than 4 steps. 2,599 of the routes (98.63%) are peel, then at
+  most one rule of a leaf and one upcast, then build. The other 36 are two
+  sequences, `share > upcast_consumed` and `take > share > upcast_consumed`: a
+  sole-owner handle that is shared and then upcast.
+- The wrapper semantics of the user: with the 12 wrappers of one argument of the
+  route probes (3 that stand in for the library, 3 of the same operations, and 6
+  mutations that lack `share`, `adopt`, `wrap`, `borrow`, `copy`, or `retain`), a
+  variant, and an array, 836,640 requests, of which 11,914 are served, give the
+  same 20 words, none longer than 4 steps, and the same two sequences outside the
+  form. A wrapper semantics chooses its operations from the closed set of the
+  conversion rules and each operation has one stage, so the form is a property
+  of the operations, not of any semantics. A mutation changes which routes exist,
+  not their form.
+
+### The Order Of Sharing And Upcasting
+
+A sole-owner handle requested as a sharing handle of an interface can be shared
+and then upcast, which the reference selects because `share` comes first in the
+order of the operations, or upcast and then shared, which is also a route since
+that handle has `upcast_consumed`. The results are the same type, but the two
+delete the object differently: a `std::shared_ptr` made before the upcast keeps
+the deleter of `impl`, and a `std::unique_ptr` upcast first deletes through
+`iface`, which needs a virtual destructor. The reference does not model the
+destructor, the C++ does differ, and the form should keep the order the reference
+selects: peel, an optional `share`, the rule of a leaf and the upcast, build.
+Making the upcast first would change 36 of the 2,635 routes of the table.
+
+### Memory And Compile Time
+
+The form does not save memory. The thunks a binding has today, one for each
+reachable type, are about as many as the table of the proposal, one for each node
+of the stored type tree and each interface or none:
+
+| binding | reachable types | nodes x (interfaces + 1) |
+|---|---|---|
+| shared `impl`, two interfaces | 4 | 3 |
+| shared `std::shared_ptr<impl>`, two interfaces | 10 | 6 |
+| unique `std::unique_ptr<impl>`, two interfaces | 6 | 6 |
+| shared `std::optional<std::shared_ptr<impl>>` | 12 | 9 |
+| shared `std::variant<impl, other>` | 8 | 9 |
+| shared `std::shared_ptr<std::variant<sp, up, other>>` | 16 | 21 |
+
+It is fewer for a plain handle, equal for a unique pointer, and more for a
+variant, whose alternatives are positions of their own. The memory that matters
+is not the thunks but the constants sized by capacity, about 100 KB in each
+binding type, and exact sizes remove it without the form, see M10.5 in
+[spec-driven-design.md](spec-driven-design.md#m105-exact-sizes).
+
+The derivation is not a cost of compiling either: constant evaluation is 2% of
+the compile of 20 bindings on GCC and 4% on Clang, and code generation, which
+follows the number of thunks, is most of the rest. The form moves work and does
+not remove it: the first request of a type matches the type trees, and the
+request site instantiates up to `d + 1` splits for a request of depth `d`.
+
+## What Remains To Check
+
+The classification is necessary and not sufficient. A matcher has to
+
+1. align the request with the stored type tree, so that every build wrapper sits
+   on a core that is a subtree of the stored type tree, with the leaf replaced by
+   an interface at most
+2. choose among the routes that tie as the reference does: fewer rules, then no
+   copy, then the order of the operations, with `share` before the upcast
+
+The next step is a matcher in the reference implementation, run beside
+`resolve` over the 2,635 routes of the library and the 11,914 with the wrappers
+of the user, and compared route by route. The proposal is worth more than the
+derivation it replaces only if the matcher agrees, and even then it is a
+simplification of the model, not a saving of memory. The exact sizes of M10.5
+come first.
