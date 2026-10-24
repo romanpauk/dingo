@@ -163,7 +163,7 @@ class Model:
     # a predicate a route requires, "exposure" for the request category it
     # needs a scope to expose, or "handle_copies" for the copy rule's need of
     # a sharing handle in a scope that copies handles. A test relaxes the
-    # algebra so to find the cases a condition decides.
+    # rules so to find the cases a condition decides.
     relaxed: frozenset = frozenset()
     semantics_by_id: dict = field(init=False)
     scopes: dict = field(init=False)
@@ -690,7 +690,7 @@ def serve(model: "Model", scope_id, stored, request, interfaces) -> Derivation |
     if not candidates:
         return None
     # Prefer the derivation with the fewest rules, then without a copy, then the
-    # one whose rules come first in the order of the algebra, which orders the
+    # one whose rules come first in the order of the rules, which orders the
     # forms and not the kinds, then the one derived first.
     order = {}
     first = {}

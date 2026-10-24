@@ -50,7 +50,7 @@ enum class access : std::uint8_t {
 };
 
 // spec: operations, routes
-// The forms of the routes in the order of the algebra, with the rules of a
+// The operations in the order of the rules, with the rules of a
 // leaf among them: a derivation prefers, of two routes of as many rules, the
 // one whose forms come first.
 enum class operation : std::uint8_t {

@@ -3,7 +3,7 @@
 import dataclasses
 
 import spec
-from spec.schema import Capability, CppProjection, Spec
+from spec.schema import Capability, CppSection, Spec
 
 EXPECTED_CAPABILITIES = {
     "concepts": ("__cpp_concepts", 201907, None, None),
@@ -22,7 +22,7 @@ EXPECTED_CAPABILITIES = {
 def test_load_spec_returns_a_spec():
     loaded = spec.load_spec()
     assert isinstance(loaded, Spec)
-    assert isinstance(loaded.cpp, CppProjection)
+    assert isinstance(loaded.cpp, CppSection)
 
 
 def test_capabilities_are_sorted_by_id():
@@ -47,7 +47,7 @@ def test_every_section_is_a_tuple():
     for field in dataclasses.fields(Spec):
         if field.name != "cpp":
             assert isinstance(getattr(loaded, field.name), tuple), field.name
-    for field in dataclasses.fields(spec.CppProjection):
+    for field in dataclasses.fields(spec.CppSection):
         assert isinstance(getattr(loaded.cpp, field.name), tuple), field.name
 
 
@@ -58,7 +58,7 @@ def test_every_section_has_a_content_module():
         if field.name != "cpp":
             module = importlib.import_module(f"spec.content.{field.name}")
             assert hasattr(module, field.name)
-    for field in dataclasses.fields(CppProjection):
+    for field in dataclasses.fields(CppSection):
         module = importlib.import_module(f"spec.content.cpp_{field.name}")
         assert hasattr(module, f"cpp_{field.name}")
 

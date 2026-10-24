@@ -24,7 +24,7 @@ public_api: tuple[PublicApiEntry, ...] = (
     entry(
         "include_container",
         INCLUDE,
-        "The combined container together with the registration vocabulary, "
+        "The combined container together with the registration declarations, "
         "keys, lookups, annotations, container traits, and exceptions.",
     ),
     entry("include_runtime_container", INCLUDE, "The runtime-only container."),
@@ -128,7 +128,7 @@ public_api: tuple[PublicApiEntry, ...] = (
         "Calls a callable with the arguments resolved from the container, with "
         "an optional signature that selects an overload.",
     ),
-    # Registration vocabulary
+    # Registration declarations
     entry("bindings", NAME, "The list of compile-time bindings of a container."),
     entry("bind", NAME, "A compile-time binding built from the registration policies."),
     entry("scope", NAME, "The registration policy that selects the lifetime."),

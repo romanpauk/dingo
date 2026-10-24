@@ -55,6 +55,8 @@ ALLOWED_PHRASES = (
     "layers-check",
     "layers_check",
     "layers.py",
+    # The module of the standard library that loads a module from a path.
+    "importlib.util",
 )
 # Directories that must not exist, as names of a directory under the include
 # directory or under test/next: the modules of the library are directly under
@@ -66,13 +68,20 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCANNED = (
     "benchmark",
     "examples",
-    "include/dingo/base",
-    "include/dingo/registration",
-    "include/dingo/rtti",
+    "include/dingo",
+    "spec",
+    "test/contracts",
+    "test/differential",
+    "test/lit/generated",
     "test/matrix/common",
     "test/matrix/containers",
     "test/matrix/scenarios/lookup",
     "test/matrix/scenarios/runtime",
+    "test/next",
+    "test/routes",
+    "test/selection",
+    "test/support",
+    "tools/generator",
 )
 SUFFIXES = frozenset({".py", ".h", ".hpp", ".cpp", ".j2", ".md", ".txt", ".cmake", ".t"})
 SELF = Path(__file__).resolve()
@@ -115,7 +124,12 @@ def python_identifiers(tree):
         if isinstance(node, ast.Name):
             names.append(node.id)
         elif isinstance(node, ast.Attribute):
-            names.append(node.attr)
+            # The module an attribute belongs to is part of its name, so an
+            # allowed phrase such as importlib.util is found whole.
+            if isinstance(node.value, ast.Name):
+                names.append(node.value.id + "." + node.attr)
+            else:
+                names.append(node.attr)
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             names.append(node.name)
         elif isinstance(node, ast.arg):
@@ -123,9 +137,9 @@ def python_identifiers(tree):
         elif isinstance(node, ast.keyword) and node.arg:
             names.append(node.arg)
         elif isinstance(node, ast.alias):
-            names.extend(part for part in (node.name + "." + (node.asname or "")).split("."))
+            names.extend((node.name, node.asname or ""))
         elif isinstance(node, ast.ImportFrom) and node.module:
-            names.extend(node.module.split("."))
+            names.append(node.module)
         elif isinstance(node, (ast.Global, ast.Nonlocal)):
             names.extend(node.names)
         for name in names:
@@ -263,8 +277,10 @@ def test_kind_is_not_banned():
     assert banned_in("key_kind, FactoryKind, constructor_kind, kinds") == []
 
 
-def test_the_layers_of_the_headers_are_allowed():
+def test_the_ordering_of_the_headers_is_allowed():
     assert banned_in("the header layers, layers-check, tools/layers.py") == []
+    assert banned_in("importlib.util.module_from_spec") == []
+    assert banned_in("a util module") == ["util"]
     assert banned_in("a layer of the headers") == ["layer"]
 
 

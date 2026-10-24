@@ -7,9 +7,9 @@
 
 #pragma once
 
-// The vocabulary of constructor detection, shared by its backends: the kinds of
-// a detected constructor, the detection modes and backends, and the arguments
-// that probe a constructor.
+// The declarations of constructor detection, shared by its backends: the kinds
+// of a detected constructor, the detection modes and backends, and the
+// arguments that probe a constructor.
 //
 // A detection mode says what a detection reports. constructor_arity reports
 // the kind and the arity of the detected constructor, and

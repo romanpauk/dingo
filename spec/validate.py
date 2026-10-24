@@ -34,7 +34,7 @@ from spec.schema import (
     Cardinality,
     Combine,
     ContractDimension,
-    CppProjection,
+    CppSection,
     SelectionMode,
     SelectionSource,
     TypeTreePattern,
@@ -58,7 +58,7 @@ def sections(spec: Spec) -> Iterator[tuple[str, tuple]]:
     for field in dataclasses.fields(Spec):
         if field.name != "cpp":
             yield field.name, getattr(spec, field.name)
-    for field in dataclasses.fields(CppProjection):
+    for field in dataclasses.fields(CppSection):
         yield f"cpp.{field.name}", getattr(spec.cpp, field.name)
 
 
@@ -735,16 +735,16 @@ def check_cpp(spec: Spec, errors: list[str]) -> None:
     for capability in spec.cpp.capabilities:
         check_capability(capability, errors)
     scope_ids = ids(spec.scopes)
-    for projection in spec.cpp.scope_projections:
-        where = f"cpp.scope_projections.{projection.id}"
-        require_ref(errors, where, "scope", projection.scope, scope_ids)
-        if not projection.spelling.strip():
+    for scope_tag in spec.cpp.scope_tags:
+        where = f"cpp.scope_tags.{scope_tag.id}"
+        require_ref(errors, where, "scope", scope_tag.scope, scope_ids)
+        if not scope_tag.spelling.strip():
             errors.append(f"{where}: spelling is empty")
-        if not HEADER_NAME.match(projection.header):
-            errors.append(f"{where}: header {projection.header!r} is malformed")
-    projected = [projection.scope for projection in spec.cpp.scope_projections]
-    check_unique(errors, "cpp.scope_projections", "scopes", projected)
+        if not HEADER_NAME.match(scope_tag.header):
+            errors.append(f"{where}: header {scope_tag.header!r} is malformed")
+    tagged = [scope_tag.scope for scope_tag in spec.cpp.scope_tags]
+    check_unique(errors, "cpp.scope_tags", "scopes", tagged)
     for scope in spec.scopes:
-        if scope.id not in projected:
-            errors.append(f"scopes.{scope.id}: has no C++ scope projection")
+        if scope.id not in tagged:
+            errors.append(f"scopes.{scope.id}: has no C++ scope tag")
     check_api_bindings(spec, errors)

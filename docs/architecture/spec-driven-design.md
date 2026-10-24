@@ -47,7 +47,7 @@ starting point the new implementation has to evolve from.
 - Using the generator to multiply variants. Generation serves unification, see
   [Unification Rules](#unification-rules).
 - Putting C++ text into the spec. The spec stays language-agnostic, and C++
-  lives in the generator's templates as the C++ projection.
+  lives in the generator's templates as the C++ section.
 - Preserving internal headers, names, directory layout, or structure.
 
 ## Current State
@@ -151,16 +151,16 @@ in one engine.
   a constant input. The runtime part is merged by the same function. This is
   partial evaluation of one function.
 
-Execution is the typed kernels: construction, storage, materialization, and
+Execution is the typed converters: construction, storage, materialization, and
 conversion. Generated code composes them from hand-written primitives. The
-static backend calls a kernel directly. The runtime backend calls the same
+static backend calls a converter directly. The runtime backend calls the same
 instantiation through a thunk.
 
 Both backends are kept free of decisions:
 
 ```text
-static:  constexpr table -> engine::select -> index -> type_list_at<I> -> kernel
-runtime: arena table     -> engine::select -> index -> thunks[I]       -> kernel
+static:  constexpr table -> engine::select -> index -> type_list_at<I> -> converter
+runtime: arena table     -> engine::select -> index -> thunks[I]       -> converter
 ```
 
 A backend that makes no decision cannot diverge from the other one.
@@ -173,8 +173,8 @@ only in data, they are one C++ construct consuming different data.
 ### Domains
 
 Static, runtime, and mixed containers share the engine, the descriptors, and the
-kernels. They differ only in where the binding table lives and how the selected
-index is dispatched.
+converters. They differ only in where the binding table lives and how the
+selected index is dispatched.
 
 ### Storages
 
@@ -228,7 +228,7 @@ projection maps them to C++ spellings.
 ### Public API
 
 The public API is the only part of the current library the new implementation
-must keep. The C++ projection lists it explicitly:
+must keep. The C++ section lists it explicitly:
 
 - public include paths: the container headers, `container.h`,
   `runtime_container.h`, and `static_container.h`, and the headers users include
@@ -390,10 +390,10 @@ contracts:
   container<>:
     object_size: fixed, independent of the number of registrations
   register_type<T>:
-    compile: binding facts and binding-side thunks only, no request kernels
+    compile: binding facts and binding-side thunks only, no request converters
     inline: never
   resolve<T>:
-    compile: selection_v<T> and one kernel per used route
+    compile: selection_v<T> and one converter per used route
     runtime.static: no indirect calls, no allocations
     runtime.runtime: one memoized lookup, at most one indirect call, none for
       an object of a stable binding, no allocations after the first resolution
@@ -439,7 +439,7 @@ The static backend:
 ```c++
 constexpr auto s = engine::select(static_table, request_desc<T>);
 if constexpr (s.status == status::ok)
-  return kernel<type_list_at_t<s.index, bindings>>(...);
+  return converter<type_list_at_t<s.index, bindings>>(...);
 else
   fail<s.status, T>();  // generated from the diagnostics catalog
 ```
@@ -619,11 +619,11 @@ produce:
 ```yaml
 cost:
   descriptor:     { inputs: [type],                    per: distinct type }
-  route_plan:     { inputs: [scope, shape],            per: distinct shape }
+  route_data:     { inputs: [scope, shape],            per: distinct shape }
   binding_facts:  { inputs: [binding],                 per: binding }
   selection:      { inputs: [request, table],          per: request type }
-  kernel:         { inputs: [binding, route],          per: used route, lazy }
-  static_kernel:  { inputs: [binding, route, request], per: used pair, static only }
+  converter:         { inputs: [binding, route],          per: used route, lazy }
+  static_converter:  { inputs: [binding, route, request], per: used pair, static only }
 ```
 
 The generator emits scaling probes per tier: synthetic programs with N bindings,
@@ -633,9 +633,9 @@ chain depth D, K distinct shapes, and R request types. They compile with Clang
 investigations. A checker counts instantiations of each `dingo::` entity and
 asserts the contract:
 
-- `route_plan` instantiations equal the number of distinct shapes, not the
+- `route_data` instantiations equal the number of distinct shapes, not the
   number of bindings
-- registering without resolving produces no `kernel` instantiations
+- registering without resolving produces no `converter` instantiations
 - instantiation counts grow linearly in N and D
 - a higher tier never instantiates more than a lower tier
 
@@ -1045,7 +1045,7 @@ The package is described in [Spec Package](../development.md#spec-package). The
 schema covers every section of the [specification](#specification). All sections
 are empty except the C++ language capabilities, which the later milestones build
 on. Public API entries are language-agnostic, and their C++ spellings live in
-the C++ projection as API bindings.
+the C++ section as API bindings.
 
 #### M1.2: Generator Infrastructure
 
@@ -1099,15 +1099,14 @@ results.
 
 Status: done.
 
-Specify the shape algebra, the C++ projection, and the four scopes as
-descriptors.
+Specify the shape algebra, the C++ section, and the four scopes as descriptors.
 
 The spec records 8 wrapper semantics, 10 storage forms as patterns over wrapper
 semantics, and the four scopes with their slot, materialized category,
 stability, source access, recursion guard, source retention, and the request
 categories they publish per storage form. `shared_cyclical` publishes the leaf
 and a sharing handle whatever the stored form, which its descriptor records as
-its own exposure rule. The C++ projection names only the scope tags. The
+its own exposure rule. The C++ section names only the scope tags. The
 [Scope Check](../development.md#scope-check) compares the descriptors with the
 current scope policies.
 
@@ -1674,11 +1673,11 @@ Status: done.
 
 Generate lit tests checking the diagnostic text per tier.
 
-The C++ projection gives every diagnostic reported when compiled an example
-program and the spelling of its subjects. The generator makes two lit tests of
-each under `test/lit/generated/diagnostics`: one checks the formatted message
-where the compiler formats one, the other the literal message where C++17
-formats none, which the lit configuration detects as the features
+The C++ section gives every diagnostic reported when compiled an example program
+and the spelling of its subjects. The generator makes two lit tests of each
+under `test/lit/generated/diagnostics`: one checks the formatted message where
+the compiler formats one, the other the literal message where C++17 formats
+none, which the lit configuration detects as the features
 `static-assert-message` and `literal-static-assert`.
 
 ### M6: Resolve Asymmetries

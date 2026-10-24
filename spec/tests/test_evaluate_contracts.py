@@ -16,7 +16,7 @@ from spec.schema import (
     Contract,
     ContractDimension,
     CppContractProbe,
-    CppProjection,
+    CppSection,
     Spec,
 )
 
@@ -34,7 +34,7 @@ def load_evaluate():
 
 
 evaluate = load_evaluate()
-SHIPPED = Spec(contracts=contracts, cpp=CppProjection(contract_probes=cpp_contract_probes))
+SHIPPED = Spec(contracts=contracts, cpp=CppSection(contract_probes=cpp_contract_probes))
 
 
 @pytest.fixture
@@ -290,7 +290,7 @@ def test_shipped_contracts_on_a_synthetic_baseline():
     assert verdicts["header_cost_container"].status == evaluate.HOLDS
     assert verdicts["header_cost_static_container"].status == evaluate.UNOBSERVABLE
     assert verdicts["compile_instantiations_bindings"].status == evaluate.UNOBSERVABLE
-    assert verdicts["compile_kernel"].status == evaluate.UNOBSERVABLE
+    assert verdicts["compile_converter"].status == evaluate.UNOBSERVABLE
     counts = evaluate.summarize(verdicts)
     assert counts[evaluate.VIOLATED] == 0
     assert sum(counts.values()) == len(contracts)
@@ -346,7 +346,7 @@ def test_main_prints_a_report_per_toolchain(scratch, shipped_spec, capsys):
     out = capsys.readouterr().out
     assert out.index("tc-a\n") < out.index("tc-b\n")
     assert "  holds        object_size_static_container [object_size]" in out
-    assert "  unobservable compile_kernel [compile_cost]: " in out
+    assert "  unobservable compile_converter [compile_cost]: " in out
     assert f"of {len(contracts)} contracts" in out
 
 

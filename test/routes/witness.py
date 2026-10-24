@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Runs the witnesses of the algebra against the next implementation.
+"""Runs the witnesses of the conversion rules against the next implementation.
 
 A witness is the smallest case of the route probes that shows one rule of the
-algebra, chosen by the reference implementation from the cases of
+conversion rules, chosen by the reference implementation from the cases of
 extract.py, the kind probes among them:
 
 - a route: the smallest served case whose route takes it, for every route of

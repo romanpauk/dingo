@@ -7,8 +7,8 @@
 
 #pragma once
 
-// The wrapper semantics a C++ type is: the projection of the conversion rules
-// of the spec onto C++ types. Raw pointers, references, and arrays are language
+// The wrapper semantics a C++ type has, as the conversion rules of the spec say
+// it for C++ types. Raw pointers, references, and arrays are language
 // wrappers, of the pointer, reference, and array kinds of the library. Wrappers
 // are classified by wrapper_traits, which the standard wrappers specialize here
 // and user wrappers through the public extension point; no wrapper gets other
@@ -40,8 +40,8 @@
 
 namespace dingo {
 
-// The public extension point that makes a wrapper type a wrapper of the type
-// tree algebra. A specialization declares
+// The public extension point that makes a wrapper type a wrapper of the
+// conversion rules. A specialization declares
 //
 //   kind       the wrapper semantics of the wrapper, a tag whose
 //   wrapper_semantics

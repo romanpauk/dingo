@@ -1,5 +1,5 @@
-"""The type tree patterns of the routes and their forms, a helper of the content
-modules: a variable binds any type tree, a wrapper applies a kind to its arguments.
+"""The type tree patterns of the rules and their operations, used by the content
+modules: a variable binds any type tree, a wrapper applies a semantics to its arguments.
 """
 
 from spec.schema import PatternForm, TypeTreePattern, ValueCategory

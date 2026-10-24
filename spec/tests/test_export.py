@@ -8,7 +8,7 @@ import pytest
 
 from spec import load_spec
 from spec.export import main, to_json, to_jsonable
-from spec.schema import CppProjection, Spec
+from spec.schema import CppSection, Spec
 from spec.tests.fixtures import sample_spec
 
 # Scratch output goes under a gitignored build directory, never /tmp.
@@ -51,7 +51,7 @@ def test_top_level_type_tree_matches_the_schema():
     data = json.loads(to_json(load_spec()))
     expected = set(Spec.__dataclass_fields__)
     assert set(data) == expected
-    assert set(data["cpp"]) == set(CppProjection.__dataclass_fields__)
+    assert set(data["cpp"]) == set(CppSection.__dataclass_fields__)
     for name in expected - {"cpp"}:
         assert isinstance(data[name], list)
 

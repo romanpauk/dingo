@@ -7,8 +7,8 @@
 
 #pragma once
 
-// The registration vocabulary of the public API and its reduction to a binding
-// type of the next implementation.
+// The registration declarations of the public API and its reduction to a
+// binding type of the next implementation.
 
 #include <dingo/base/mechanics.h>
 #include <dingo/collection.h>

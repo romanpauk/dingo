@@ -16,7 +16,7 @@ from spec.schema import (
     BoundKind,
     ContractDimension,
     CppContractProbe,
-    CppProjection,
+    CppSection,
     Spec,
 )
 from spec.tests.fixtures import sample_spec
@@ -25,7 +25,7 @@ BASELINE = Path(__file__).resolve().parents[2] / "test" / "contracts" / "baselin
 
 # Only the contract sections, so these tests do not depend on other sections.
 CONTRACT_SPEC = Spec(
-    contracts=contracts, cpp=CppProjection(contract_probes=cpp_contract_probes)
+    contracts=contracts, cpp=CppSection(contract_probes=cpp_contract_probes)
 )
 
 
@@ -118,13 +118,13 @@ def test_construct_is_for_compile_cost():
     compile_cost = with_contract(
         dimension=ContractDimension.COMPILE_COST,
         bound=Bound(kind=BoundKind.AT_MOST, value=0),
-        construct="kernel",
+        construct="converter",
     )
     assert errors_of(compile_cost) == []
-    assert_one_error(with_contract(construct="kernel"), "only a compile cost contract names a construct")
+    assert_one_error(with_contract(construct="converter"), "only a compile cost contract names a construct")
     assert_one_error(
-        replace(compile_cost, contracts=(replace(compile_cost.contracts[0], construct="Kernel"),)),
-        "construct 'Kernel' is not snake_case",
+        replace(compile_cost, contracts=(replace(compile_cost.contracts[0], construct="Converter"),)),
+        "construct 'Converter' is not snake_case",
     )
 
 
@@ -202,11 +202,11 @@ def test_the_design_contracts_are_present():
     }
     per = {
         "descriptor": "distinct_types",
-        "route_plan": "distinct_type_trees",
+        "route_data": "distinct_type_trees",
         "binding_facts": "bindings",
         "selection": "request_types",
-        "kernel": "used_routes",
-        "static_kernel": "used_pairs",
+        "converter": "used_routes",
+        "static_converter": "used_pairs",
     }
     for construct, variable in per.items():
         bound = constructs[construct].bound
@@ -216,7 +216,7 @@ def test_the_design_contracts_are_present():
         for contract in contracts
         if contract.operation == "register_type" and contract.bound.kind is BoundKind.AT_MOST
     }
-    assert set(register_type) == {"kernel", "static_kernel", "selection"}
+    assert set(register_type) == {"converter", "static_converter", "selection"}
     assert all(bound.value == 0 for bound in register_type.values())
 
 

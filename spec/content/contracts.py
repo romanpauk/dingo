@@ -5,14 +5,14 @@ abstract operations, constructs, and variables. Nothing here names a C++
 entity or a toolchain, except where noted: the header cost limits are the
 largest preprocessed sizes over the toolchains recorded in
 test/contracts/baseline.json. Which contract is observable by which probe is
-in the C++ projection (cpp_contract_probes.py).
+in the C++ section (cpp_contract_probes.py).
 
 Operations: `register_type`, `resolve` (`resolve.memoized` and
 `resolve.first_resolution` for the runtime domain), `static_container`,
 `mixed_container`, `runtime_container`, `container`, `diagnostics.throw`, and
 `header.<name>`. Constructs are the internal constructs of the Instantiation
-Contracts table: descriptor, route_plan, binding_facts, binding_thunk,
-selection, kernel, and static_kernel.
+Contracts table: descriptor, route_data, binding_facts, binding_thunk,
+selection, converter, and static_converter.
 """
 
 from spec.schema import Bound, BoundKind, Contract, ContractDimension, Domain
@@ -88,21 +88,21 @@ contracts: tuple[Contract, ...] = (
     ),
     # Compile cost
     Contract(
-        id="compile_register_type_no_kernels",
-        description="Registering a type produces no request kernel; kernels appear only when a request is resolved.",
+        id="compile_register_type_no_converters",
+        description="Registering a type produces no request converter; converters appear only when a request is resolved.",
         operation="register_type",
         dimension=COMPILE_COST,
         bound=at_most(0, "instantiations"),
-        construct="kernel",
+        construct="converter",
     ),
     Contract(
-        id="compile_register_type_no_static_kernels",
-        description="Registering a type produces no static request kernel.",
+        id="compile_register_type_no_static_converters",
+        description="Registering a type produces no static request converter.",
         operation="register_type",
         dimension=COMPILE_COST,
         bound=at_most(0, "instantiations"),
         domain=Domain.STATIC,
-        construct="static_kernel",
+        construct="static_converter",
     ),
     Contract(
         id="compile_register_type_no_selections",
@@ -129,12 +129,12 @@ contracts: tuple[Contract, ...] = (
         construct="descriptor",
     ),
     Contract(
-        id="compile_route_plan",
-        description="A route plan is instantiated once per distinct type tree, not once per binding.",
+        id="compile_route_data",
+        description="The route data is instantiated once per distinct type tree, not once per binding.",
         operation="container",
         dimension=COMPILE_COST,
         bound=linear("distinct_type_trees", "instantiations", per=1),
-        construct="route_plan",
+        construct="route_data",
     ),
     Contract(
         id="compile_binding_facts",
@@ -153,21 +153,21 @@ contracts: tuple[Contract, ...] = (
         construct="selection",
     ),
     Contract(
-        id="compile_kernel",
-        description="A kernel is instantiated once per used route, and only when the route is used.",
+        id="compile_converter",
+        description="A converter is instantiated once per used route, and only when the route is used.",
         operation="resolve",
         dimension=COMPILE_COST,
         bound=linear("used_routes", "instantiations", per=1),
-        construct="kernel",
+        construct="converter",
     ),
     Contract(
-        id="compile_static_kernel",
-        description="A static kernel is instantiated once per used binding, route, and request combination.",
+        id="compile_static_converter",
+        description="A static converter is instantiated once per used binding, route, and request combination.",
         operation="resolve",
         dimension=COMPILE_COST,
         bound=linear("used_pairs", "instantiations", per=1),
         domain=Domain.STATIC,
-        construct="static_kernel",
+        construct="static_converter",
     ),
     Contract(
         id="compile_instantiations_bindings",

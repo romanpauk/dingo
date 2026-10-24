@@ -632,7 +632,7 @@ constexpr bool creates(const operation_info &rule) {
 
 namespace detail {
 // Applies every form that does not create a wrapper to the reachable type at
-// `next` of `found`, in the order of the algebra: a rule of a leaf to the
+// `next` of `found`, in the order of the rules: a rule of a leaf to the
 // reachable type, and a form of the kind of its wrapper.
 constexpr void derive_from(const binding_descriptor &binding,
                            reachable_types &found, std::size_t next,
@@ -759,7 +759,7 @@ constexpr bool accepts(const request_descriptor &request,
 }
 
 // Whether `left` is preferred to `right`: fewer rules, then no copy, then the
-// forms that come first in the order of the algebra, which orders forms and
+// forms that come first in the order of the rules, which orders forms and
 // not kinds; of others, the one derived first is.
 constexpr bool preferred(const reachable_type &left,
                          const reachable_type &right) {

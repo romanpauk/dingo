@@ -3,9 +3,9 @@
 The specification is the language-agnostic source of truth described in
 docs/architecture/spec-driven-design.md. Every entity has a snake_case `id`
 that is unique within its section. The semantic sections (everything outside
-`CppProjection`) contain no C++ text: type trees are abstract constructors,
+`CppSection`) contain no C++ text: type trees are abstract constructors,
 scopes are descriptors, and routes are rules over type tree patterns. C++
-spellings live only in `CppProjection`.
+spellings live only in `CppSection`.
 
 All types are frozen dataclasses and every collection is a tuple, so a
 `Spec` is immutable, hashable, and exports to deterministic JSON.
@@ -31,8 +31,8 @@ __all__ = [
     "CppContractProbe",
     "CppDiagnosticExample",
     "CppSemanticsTag",
-    "CppProjection",
-    "CppScopeProjection",
+    "CppSection",
+    "CppScopeTag",
     "Decoration",
     "DependencyVisibility",
     "Diagnostic",
@@ -330,7 +330,7 @@ class Via(Enum):
 class Operation(Enum):
     """The forms of the routes of a wrapper, each executed by one operation of
     the traits of a wrapper of the kind. The forms, the rules of a leaf, and the
-    value categories are the algebra of type_trees; a wrapper semantics, of the library or
+    value categories are the conversion rules over type trees; a wrapper semantics, of the library or
     of the user, is a declaration of the forms it has."""
 
     # A borrowed wrapper reaches its element (element).
@@ -769,7 +769,7 @@ class Contract(Entity):
     """The bound on one dimension of one operation or component.
 
     A compile cost contract names the internal `construct` whose
-    instantiations it counts, such as a kernel; without one it counts all
+    instantiations it counts, such as a converter; without one it counts all
     instantiations of the operation. Constructs and operations are abstract
     names, their C++ spellings are not part of the contract.
     """
@@ -820,13 +820,13 @@ class ApiKind(Enum):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PublicApiEntry(Entity):
-    """A member of the public API. Its spelling is in the C++ projection."""
+    """A member of the public API. Its spelling is in the C++ section."""
 
     kind: ApiKind
     description: str
 
 
-# C++ projection
+# C++ section
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -840,7 +840,7 @@ class Capability:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class CppScopeProjection(Entity):
+class CppScopeTag(Entity):
     """The C++ tag of a scope and the header that declares it."""
 
     scope: str  # scope id
@@ -907,9 +907,9 @@ class CppDiagnosticExample(Entity):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class CppProjection:
+class CppSection:
     capabilities: tuple[Capability, ...] = ()
-    scope_projections: tuple[CppScopeProjection, ...] = ()
+    scope_tags: tuple[CppScopeTag, ...] = ()
     semantics_tags: tuple[CppSemanticsTag, ...] = ()
     api_bindings: tuple[CppApiBinding, ...] = ()
     contract_probes: tuple[CppContractProbe, ...] = ()
@@ -942,4 +942,4 @@ class Spec:
     contracts: tuple[Contract, ...] = ()
     behavior_changes: tuple[BehaviorChange, ...] = ()
     public_api: tuple[PublicApiEntry, ...] = ()
-    cpp: CppProjection = CppProjection()
+    cpp: CppSection = CppSection()

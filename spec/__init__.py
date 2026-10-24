@@ -13,7 +13,7 @@ import dataclasses
 import importlib
 
 from spec.schema import *  # noqa: F403 - the schema types are part of the package API
-from spec.schema import CppProjection, Spec, __all__ as _schema_names
+from spec.schema import CppSection, Spec, __all__ as _schema_names
 from spec.validate import validate
 
 __all__ = [*_schema_names, "SpecError", "build_spec", "load_spec", "validate"]
@@ -36,10 +36,10 @@ def build_spec() -> Spec:
     }
     cpp = {
         field.name: section(f"cpp_{field.name}")
-        for field in dataclasses.fields(CppProjection)
+        for field in dataclasses.fields(CppSection)
     }
     cpp["capabilities"] = tuple(sorted(cpp["capabilities"], key=lambda c: c.id))
-    return Spec(**sections, cpp=CppProjection(**cpp))
+    return Spec(**sections, cpp=CppSection(**cpp))
 
 
 def load_spec() -> Spec:

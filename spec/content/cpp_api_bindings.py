@@ -116,8 +116,8 @@ def path(api: str, spelling: str) -> CppApiBinding:
     return CppApiBinding(id=f"{api}_cpp", api=api, spelling=spelling)
 
 
-# A sharing kind of the user and a handle of it, for the wrapper semantics entry.
-LAYER_KIND_TRAITS = """\
+# A sharing semantics of the user and a handle of it, for the wrapper semantics entry.
+USER_SEMANTICS = """\
 struct @P@kind {};
 template <> struct {name}<@P@kind> {
   static constexpr std::uint16_t properties =
@@ -371,7 +371,7 @@ int selected = container.{name}<int(int)>(overloaded{});
 (void)selected;
 """,
     ),
-    # Registration vocabulary
+    # Registration declarations
     name(
         "bindings",
         "dingo::bindings",
@@ -1106,7 +1106,7 @@ service &borrowed = container.resolve<service &>();
 (void)copy;
 """,
         ),
-        declarations=handle("wrapper_semantics", HANDLE_CLASS + LAYER_KIND_TRAITS),
+        declarations=handle("wrapper_semantics", HANDLE_CLASS + USER_SEMANTICS),
     ),
     name(
         "conversion_traits",

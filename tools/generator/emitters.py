@@ -1,7 +1,7 @@
 """Emitters of the generated files.
 
 Each emitter takes the loaded spec and returns a list of GeneratedFile. The
-emitter computes every value in Python and hands the prepared fields to a
+emitter computes every value in Python and hands the computed fields to a
 template that only lays them out.
 """
 
@@ -224,7 +224,7 @@ def form_fields(name, rule, of_semantics, where):
 
 
 def operation_entries(spec):
-    """The operations and the rules of a leaf in the order of the algebra,
+    """The operations and the rules of a leaf in the order of the rules,
     the order of their first routes."""
     templates = {template.form: template for template in spec.operations}
     entries, seen = [], set()
@@ -393,7 +393,7 @@ def wrapper_semantics(spec):
 
 def scopes(spec):
     """include/dingo/conversion/scopes.gen.h from the scopes and
-    cpp.scope_projections: the descriptor of a scope, and the tag of each
+    cpp.scope_tags: the descriptor of a scope, and the tag of each
     built-in scope with its scope_traits, which hold its descriptor."""
     from spec.schema import ExposureRule, RecursionGuard, Slot
 
@@ -402,19 +402,19 @@ def scopes(spec):
     scope_data = {scope.id: scope_fields(scope, form_ids) for scope in spec.scopes}
     tags = []
     namespaces = set()
-    for projection in sorted(spec.cpp.scope_projections, key=lambda p: p.scope):
-        namespace, _, name = projection.spelling.rpartition("::")
+    for scope_tag in sorted(spec.cpp.scope_tags, key=lambda p: p.scope):
+        namespace, _, name = scope_tag.spelling.rpartition("::")
         if not namespace or not name:
             raise GeneratorError(
-                f"cpp.scope_projections.{projection.id}: {projection.spelling} "
+                f"cpp.scope_tags.{scope_tag.id}: {scope_tag.spelling} "
                 "is not a qualified name"
             )
         namespaces.add(namespace)
         tags.append(
-            {"scope": projection.scope, "name": name, "fields": scope_data[projection.scope]}
+            {"scope": scope_tag.scope, "name": name, "fields": scope_data[scope_tag.scope]}
         )
     if len(namespaces) != 1:
-        raise GeneratorError("cpp.scope_projections: tags span several namespaces")
+        raise GeneratorError("cpp.scope_tags: tags span several namespaces")
     return [
         GeneratedFile(
             path="include/dingo/conversion/scopes.gen.h",
@@ -426,7 +426,7 @@ def scopes(spec):
                 guards=[g.value for g in RecursionGuard],
                 exposure_rules=[r.value for r in ExposureRule],
             ),
-            spec_ids=("scopes", "cpp.scope_projections"),
+            spec_ids=("scopes", "cpp.scope_tags"),
         )
     ]
 

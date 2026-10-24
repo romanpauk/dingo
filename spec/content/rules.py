@@ -1,10 +1,10 @@
 """Content of the routes section.
 
-The routes are the rules of the algebra of type trees: the rules of a leaf, which
+The rules are the conversion rules over type trees: the rules of a leaf, which
 copy it, upcast it to a declared interface, or convert it to one, and the
 operations of the wrapper semantics, each a form of operations with the kind and
 the kind it leads to filled in. A kind of the user has its routes as a kind of
-the library does. The routes are in the order of the algebra, the forms in
+the library does. The rules are in the order of the operations, the forms in
 their order with the rules of a leaf among them, and the kinds of a form in
 their order: a derivation prefers, of two routes of as many rules, the one of
 the rules that come first.
@@ -79,7 +79,7 @@ CONVERT_CONSUMED = Rule(
     via=Via.CONVERT,
 )
 
-# The order of the algebra: the forms, with the rules of a leaf among them.
+# The order of the rules: the forms, with the rules of a leaf among them.
 ORDER = (
     Operation.BORROW,
     COPY,
@@ -125,7 +125,7 @@ def semantics_rules(kinds, form):
 
 
 def rules_of(kinds):
-    """The routes of the algebra for the wrapper semantics `kinds`."""
+    """The rules for the wrapper semantics `kinds`."""
     result = []
     for entry in ORDER:
         if isinstance(entry, Rule):

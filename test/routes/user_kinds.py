@@ -1,6 +1,6 @@
 """The wrapper semantics of the user that the route probes check, as the library's.
 
-Each kind is declared once, here, for both implementations of the algebra:
+Each kind is declared once, here, for both implementations of the conversion rules:
 the reference implementation derives its routes from it, and the C++
 declaration the next implementation compiles, its tag and wrapper_semantics,
 is generated from it by cpp_declarations().

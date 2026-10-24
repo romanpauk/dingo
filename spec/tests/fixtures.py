@@ -25,8 +25,8 @@ from spec.schema import (
     Contract,
     ContractDimension,
     CppApiBinding,
-    CppProjection,
-    CppScopeProjection,
+    CppSection,
+    CppScopeTag,
     Decoration,
     DependencyVisibility,
     Diagnostic,
@@ -339,7 +339,7 @@ def sample_spec() -> Spec:
             PublicApiEntry(id="container_header", kind=ApiKind.INCLUDE_PATH, description="The container."),
             PublicApiEntry(id="shared_ptr_type_tree", kind=ApiKind.NAME, description="A name."),
         ),
-        cpp=CppProjection(
+        cpp=CppSection(
             capabilities=(
                 Capability(
                     id="pack_indexing",
@@ -348,14 +348,14 @@ def sample_spec() -> Spec:
                     minimum=202311,
                 ),
             ),
-            scope_projections=(
-                CppScopeProjection(
+            scope_tags=(
+                CppScopeTag(
                     id="shared_tag",
                     scope="shared",
                     spelling="dingo::shared",
                     header="dingo/storage/shared.h",
                 ),
-                CppScopeProjection(
+                CppScopeTag(
                     id="shared_cyclical_tag",
                     scope="shared_cyclical",
                     spelling="dingo::shared_cyclical",
