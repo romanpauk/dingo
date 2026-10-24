@@ -29,9 +29,6 @@
 
 namespace dingo {
 
-inline constexpr std::size_t max_interfaces = 8;
-inline constexpr std::size_t max_semantics = 32;
-
 constexpr const semantics_descriptor *semantics_of(type_tree_view value,
                                                    std::size_t index = 0) {
   return value.nodes[index].kind;
@@ -90,10 +87,20 @@ constexpr const semantics_descriptor *to_semantics(const route_step &step) {
   return semantics_at(step, info(step.form).to_position);
 }
 
-// A set of wrapper semantics, each with the kinds its forms lead to.
+// A set of wrapper semantics, as a view of the array it is in.
 struct semantics_set {
-  const semantics_descriptor *items[max_semantics] = {};
+  const semantics_descriptor *const *items = nullptr;
   std::size_t size = 0;
+};
+
+// Where the wrapper semantics of a type tree are added, each with the kinds its
+// forms lead to. When there is no room left it sets `full`, so the caller adds
+// them again with more.
+struct semantics_buffer {
+  const semantics_descriptor **items = nullptr;
+  std::size_t capacity = 0;
+  std::size_t size = 0;
+  bool full = false;
 
   constexpr void add(const semantics_descriptor *kind) {
     if (!kind->wrapper) {
@@ -104,29 +111,54 @@ struct semantics_set {
         return;
       }
     }
-    if (size < max_semantics) {
-      items[size++] = kind;
-      for (std::size_t form = 0; form < max_semantics_operations; ++form) {
-        if ((kind->targeted & (std::uint32_t(1) << form)) != 0) {
-          add(kind->targets[form]);
-        }
+    if (size == capacity) {
+      full = true;
+      return;
+    }
+    items[size++] = kind;
+    for (std::size_t form = 0; form < max_semantics_operations; ++form) {
+      if ((kind->targeted & (std::uint32_t(1) << form)) != 0) {
+        add(kind->targets[form]);
       }
     }
   }
 };
 
-// The kinds of a stored type tree and the ones their forms lead to.
-constexpr semantics_set semantics_in(type_tree_view stored) {
-  semantics_set kinds;
+// The room the sets of this kind stop doubling at.
+inline constexpr std::size_t largest_set_room = 1024;
+
+// A set larger than the largest room is not built. The call is not a constant
+// expression, so a build at compile time stops here and names the cause.
+[[noreturn]] inline void a_set_is_larger_than_the_largest_room() {
+  std::abort();
+}
+
+// Gives `use` the wrapper semantics of a stored type tree and of the address of
+// the language, and the ones their forms lead to, built in room for `Room` of
+// them and in twice the room again while they do not fit. What `use` returns
+// does not depend on the room.
+template <std::size_t Room, typename Use>
+constexpr auto semantics_then(type_tree_view stored, Use &&use) {
+  const semantics_descriptor *storage[Room] = {};
+  semantics_buffer kinds{storage, Room};
   for (std::size_t index = 0; index < stored.size; ++index) {
     kinds.add(stored.nodes[index].kind);
   }
-  return kinds;
+  kinds.add(address_semantics_v);
+  if (!kinds.full) {
+    return use(semantics_set{storage, kinds.size});
+  }
+  if constexpr (Room < largest_set_room) {
+    return semantics_then<Room * 2>(stored, static_cast<Use &&>(use));
+  } else {
+    a_set_is_larger_than_the_largest_room();
+    return use(semantics_set{storage, kinds.size});
+  }
 }
 
-// A set of leaves, in the order they are added.
+// A set of leaves, as a view of the array it is in.
 struct leaf_set {
-  type_id items[type_tree_capacity] = {};
+  const type_id *items = nullptr;
   std::size_t size = 0;
 
   constexpr bool contains(type_id leaf) const {
@@ -141,15 +173,69 @@ struct leaf_set {
     }
     return false;
   }
+};
+
+// Where the leaves are added, in the order they are added. A type tree names no
+// more leaves than it has nodes, which is the room it needs.
+struct leaf_buffer {
+  type_id *items = nullptr;
+  std::size_t capacity = 0;
+  std::size_t size = 0;
 
   constexpr void add(type_id leaf) {
-    if (!contains(leaf)) {
+    if (!leaf_set{items, size}.contains(leaf)) {
       items[size++] = leaf;
     }
   }
 };
 
-inline constexpr std::size_t max_key_aliases = 4;
+// An array of exactly `Count` leaves, or of one when there are none.
+template <std::size_t Count> struct leaf_array {
+  type_id items[Count != 0 ? Count : 1] = {};
+
+  constexpr leaf_set view() const { return {items, Count}; }
+};
+
+// An interface a binding declares, and whether its stored leaf declares a user
+// conversion to it.
+struct declared_interface {
+  type_tree_view tree;
+  bool converts = false;
+};
+
+// The interfaces of a binding, over an array of exactly as many.
+struct declared_interfaces {
+  const declared_interface *items = nullptr;
+  std::size_t size = 0;
+
+  constexpr const declared_interface &operator[](std::size_t index) const {
+    return items[index];
+  }
+};
+
+// The keys of other types of a binding, over an array of exactly as many.
+struct key_descriptors {
+  const key_descriptor *items = nullptr;
+  std::size_t size = 0;
+
+  constexpr const key_descriptor &operator[](std::size_t index) const {
+    return items[index];
+  }
+};
+
+// An array of exactly `Count` interfaces, or of one when there are none.
+template <std::size_t Count> struct declared_interface_array {
+  declared_interface items[Count != 0 ? Count : 1] = {};
+
+  constexpr declared_interfaces view() const { return {items, Count}; }
+};
+
+// An array of exactly `Count` keys, or of one when there are none.
+template <std::size_t Count> struct key_descriptor_array {
+  key_descriptor items[Count != 0 ? Count : 1] = {};
+
+  constexpr key_descriptors view() const { return {items, Count}; }
+};
 
 // A binding as the routes see it: the stored type tree, the scope, and the
 // leaf type trees of the declared interfaces.
@@ -161,17 +247,13 @@ struct binding_descriptor {
   key_descriptor key;
   // The keys of other domains the binding is also found by, each of a key
   // type of its own.
-  key_descriptor aliases[max_key_aliases] = {};
-  std::size_t alias_count = 0;
+  key_descriptors aliases;
   // The descriptor of the scope of the binding.
   scope_info scope = {};
-  type_tree_view interfaces[max_interfaces] = {};
-  std::size_t interface_count = 0;
+  declared_interfaces interfaces;
   // Whether the binding declares its factory, so its leaf need not be
   // constructible.
   bool declared_factory = false;
-  // The interfaces, by bit, the stored leaf declares a user conversion to.
-  std::uint32_t converted = 0;
 };
 
 enum class request_kind : std::uint8_t {
@@ -388,7 +470,7 @@ constexpr type_id innermost_leaf(type_tree_view value) {
 
 namespace detail {
 constexpr void add_named_leaves(type_tree_view value, std::size_t index,
-                                leaf_set &leaves) {
+                                leaf_buffer &leaves) {
   const semantics_descriptor *kind = semantics_of(value, index);
   if (!is_wrapper(kind)) {
     leaves.add(value.nodes[index].type);
@@ -407,10 +489,18 @@ constexpr void add_named_leaves(type_tree_view value, std::size_t index,
 // interfaces: the leaf its wrappers hold, and through a wrapper of a variadic
 // kind, the leaf of each of its alternatives, whichever the object holds. spec:
 // lookup_filters.binding_filter
-constexpr leaf_set named_leaves(type_tree_view value) {
-  leaf_set leaves;
+constexpr void named_leaves_into(type_tree_view value, leaf_buffer &leaves) {
   detail::add_named_leaves(value, 0, leaves);
-  return leaves;
+}
+
+// The number of leaves a stored type tree of `Nodes` nodes names its binding
+// by, which is room enough for them.
+template <std::size_t Nodes>
+constexpr std::size_t named_leaf_count(type_tree_view value) {
+  type_id storage[Nodes] = {};
+  leaf_buffer leaves{storage, Nodes};
+  named_leaves_into(value, leaves);
+  return leaves.size;
 }
 
 // Whether a wrapper that a route creates can be copied: a wrapper copied as a
@@ -633,13 +723,13 @@ constexpr void apply(const binding_descriptor &binding,
     if (bound.nodes[0].type != innermost_leaf(binding.stored)) {
       return;
     }
-    for (std::size_t index = 0; index < binding.interface_count; ++index) {
-      if (rule.converts && (binding.converted & (1u << index)) == 0) {
+    for (std::size_t index = 0; index < binding.interfaces.size; ++index) {
+      if (rule.converts && !binding.interfaces[index].converts) {
         continue;
       }
       // An upcast keeps the qualifiers of the leaf; a conversion makes a new
       // object.
-      type_tree interface = copy_of(binding.interfaces[index]);
+      type_tree interface = copy_of(binding.interfaces[index].tree);
       interface.nodes[0].qualifiers =
           rule.converts ? std::uint8_t(0) : bound.nodes[0].qualifiers;
       type_tree value = !is_wrapper(to)
@@ -739,7 +829,7 @@ constexpr void derive_into(const binding_descriptor &binding,
 // The room a derivation of the binding starts with: a few reachable types for
 // each node of the stored type tree and each interface, as a power of two.
 constexpr std::size_t initial_room(const binding_descriptor &binding) {
-  std::size_t wanted = binding.stored.size * (binding.interface_count + 1) * 2;
+  std::size_t wanted = binding.stored.size * (binding.interfaces.size + 1) * 2;
   std::size_t room = 8;
   while (room < wanted) {
     room *= 2;
@@ -1061,11 +1151,11 @@ constexpr route_choice select_route(const binding_descriptor &binding,
 // interfaces, or the leaves its stored type tree names without them.
 constexpr bool serves_interface(const binding_descriptor &binding,
                                 type_id requested) {
-  if (binding.interface_count == 0) {
+  if (binding.interfaces.size == 0) {
     return binding.leaves.contains(requested);
   }
-  for (std::size_t index = 0; index < binding.interface_count; ++index) {
-    if (binding.interfaces[index].nodes[0].type == requested) {
+  for (std::size_t index = 0; index < binding.interfaces.size; ++index) {
+    if (binding.interfaces[index].tree.nodes[0].type == requested) {
       return true;
     }
   }
@@ -1080,7 +1170,7 @@ constexpr bool has_key_domain(const binding_descriptor &binding,
   if (same_key_domain(binding.key, key)) {
     return true;
   }
-  for (std::size_t index = 0; index < binding.alias_count; ++index) {
+  for (std::size_t index = 0; index < binding.aliases.size; ++index) {
     if (same_key_domain(binding.aliases[index], key)) {
       return true;
     }
@@ -1099,13 +1189,13 @@ constexpr bool finds(const binding_descriptor &binding,
 constexpr bool share_domain(const binding_descriptor &left,
                             const binding_descriptor &right) {
   bool shared = has_key_domain(left, right.key);
-  for (std::size_t index = 0; index < right.alias_count; ++index) {
+  for (std::size_t index = 0; index < right.aliases.size; ++index) {
     shared = shared || has_key_domain(left, right.aliases[index]);
   }
   if (!shared) {
     return false;
   }
-  if (right.interface_count == 0) {
+  if (right.interfaces.size == 0) {
     for (std::size_t index = 0; index < right.leaves.size; ++index) {
       if (serves_interface(left, right.leaves.items[index])) {
         return true;
@@ -1113,8 +1203,8 @@ constexpr bool share_domain(const binding_descriptor &left,
     }
     return false;
   }
-  for (std::size_t index = 0; index < right.interface_count; ++index) {
-    if (serves_interface(left, right.interfaces[index].nodes[0].type)) {
+  for (std::size_t index = 0; index < right.interfaces.size; ++index) {
+    if (serves_interface(left, right.interfaces[index].tree.nodes[0].type)) {
       return true;
     }
   }
@@ -1137,40 +1227,52 @@ enum class registration_status : std::uint8_t {
 // handles of its kinds and the address of the language stand for them all: a
 // handle that adopts its element adopts an address the binding serves. A const
 // leaf serves its interfaces as const ones.
+namespace detail {
+// Whether the binding serves a handle of one of `kinds` to `interface`, by
+// value.
+constexpr bool serves_by_handle(const binding_descriptor &binding,
+                                const reachable_types &found,
+                                std::uint8_t exposed,
+                                const semantics_set &kinds,
+                                const type_tree &interface) {
+  constexpr property_class handle{true, property::nullable, property::in_place};
+  for (std::size_t kind = 0; kind < kinds.size; ++kind) {
+    const semantics_descriptor *of = kinds.items[kind];
+    if (!of_class(of, handle)) {
+      continue;
+    }
+    const type_tree wrapped = wrap(of, is_mapped(of) ? any_family : nullptr,
+                                   created_copyable(of, interface), interface);
+    const request_descriptor probe{request_kind::value, wrapped, binding.key};
+    if (select_route(binding, found, probe, exposed).reachable_type !=
+        no_reachable_type) {
+      return true;
+    }
+  }
+  return false;
+}
+} // namespace detail
+
 constexpr bool serves_an_interface(const binding_descriptor &binding,
                                    const reachable_types &found,
                                    std::uint8_t exposed) {
-  semantics_set kinds = semantics_in(binding.stored);
-  kinds.add(address_semantics_v);
-  constexpr property_class handle{true, property::nullable, property::in_place};
-  for (std::size_t index = 0; index < binding.interface_count; ++index) {
-    for (const std::uint8_t qualifiers : {std::uint8_t(0), const_qualified}) {
-      type_tree interface = copy_of(binding.interfaces[index]);
-      interface.nodes[0].qualifiers |= qualifiers;
-      if (select_route(binding, found,
-                       {request_kind::lvalue_reference, interface, binding.key},
-                       exposed)
-              .reachable_type != no_reachable_type) {
-        return true;
-      }
-      for (std::size_t kind = 0; kind < kinds.size; ++kind) {
-        const semantics_descriptor *of = kinds.items[kind];
-        if (!of_class(of, handle)) {
-          continue;
-        }
-        const type_tree wrapped =
-            wrap(of, is_mapped(of) ? any_family : nullptr,
-                 created_copyable(of, interface), interface);
-        const request_descriptor probe{request_kind::value, wrapped,
-                                       binding.key};
-        if (select_route(binding, found, probe, exposed).reachable_type !=
-            no_reachable_type) {
+  return semantics_then<8>(binding.stored, [&](const semantics_set &kinds) {
+    for (std::size_t index = 0; index < binding.interfaces.size; ++index) {
+      for (const std::uint8_t qualifiers : {std::uint8_t(0), const_qualified}) {
+        type_tree interface = copy_of(binding.interfaces[index].tree);
+        interface.nodes[0].qualifiers |= qualifiers;
+        const request_descriptor reference{request_kind::lvalue_reference,
+                                           interface, binding.key};
+        if (select_route(binding, found, reference, exposed).reachable_type !=
+                no_reachable_type ||
+            detail::serves_by_handle(binding, found, exposed, kinds,
+                                     interface)) {
           return true;
         }
       }
     }
-  }
-  return false;
+    return false;
+  });
 }
 
 constexpr registration_status
@@ -1193,7 +1295,7 @@ register_status(const binding_descriptor &binding) {
       !constructible(binding.stored)) {
     return registration_status::no_default_factory;
   }
-  if (binding.interface_count != 0) {
+  if (binding.interfaces.size != 0) {
     if (holds_in_array(binding.stored)) {
       return registration_status::interface_in_array;
     }

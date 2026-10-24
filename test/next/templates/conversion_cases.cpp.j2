@@ -29,7 +29,7 @@ struct conversion_case {
   const char *name;
   const dingo::type_tree *stored;
   const dingo::scope_info *scope;
-  const dingo::type_tree *interfaces[dingo::max_interfaces];
+  const dingo::type_tree *const *interfaces;
   std::size_t interface_count;
   dingo::request_kind kind;
   const dingo::type_tree *request;
@@ -45,11 +45,16 @@ static const dingo::route_step case_rules[] = {
 {% for case in cases %}{% for rule in case.rules %}    {operation::{{ rule.form }}, {% if rule.kind %}&dingo::semantics_v<::{{ rule.kind }}>{% else %}&dingo::leaf_semantics{% endif %}},
 {% endfor %}{% endfor %}    {operation::borrow, &dingo::leaf_semantics}};
 
-{% set position = namespace(next=0) %}
+// The declared interfaces of the cases one after the other.
+static const dingo::type_tree *const case_interfaces[] = {
+{% for case in cases %}{% for interface in case.interfaces %}    &type_tree_v<{{ interface }}>,
+{% endfor %}{% endfor %}    nullptr};
+
+{% set position = namespace(next=0, interface=0) %}
 extern const conversion_case conversion_cases[] = {
 {% for case in cases %}
-    {"{{ case.scope }} {{ case.interfaces | join(",") }} {{ spell(case.stored) }} {{ case.kind }} {{ spell(case.request) }}", &type_tree_v<{{ spell(case.stored) }}>, &::dingo::scope_traits<::dingo::{{ case.scope }}>::descriptor, { {% for interface in case.interfaces %}&type_tree_v<{{ interface }}>{{ ", " if not loop.last }}{% endfor %} }, {{ case.interfaces | length }}, dingo::request_kind::{{ case.kind }}, &type_tree_v<{{ spell(case.request) }}>, {{ case.registered | lower }}, {{ case.found | lower }}, {{ case.served | lower }}, case_rules + {{ position.next }}, {{ case.rules | length }}},
-{% set position.next = position.next + case.rules | length %}{% endfor %}
+    {"{{ case.scope }} {{ case.interfaces | join(",") }} {{ spell(case.stored) }} {{ case.kind }} {{ spell(case.request) }}", &type_tree_v<{{ spell(case.stored) }}>, &::dingo::scope_traits<::dingo::{{ case.scope }}>::descriptor, case_interfaces + {{ position.interface }}, {{ case.interfaces | length }}, dingo::request_kind::{{ case.kind }}, &type_tree_v<{{ spell(case.request) }}>, {{ case.registered | lower }}, {{ case.found | lower }}, {{ case.served | lower }}, case_rules + {{ position.next }}, {{ case.rules | length }}},
+{% set position.next = position.next + case.rules | length %}{% set position.interface = position.interface + case.interfaces | length %}{% endfor %}
 };
 
 extern const std::size_t conversion_case_count = {{ cases | length }};

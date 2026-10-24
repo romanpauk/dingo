@@ -48,9 +48,7 @@ template <typename... Subjects> struct cyclical_virtual_interface_carrier {};
 template <typename... Subjects> struct dense_key_type_carrier {};
 template <typename... Subjects> struct factory_not_declared_carrier {};
 template <typename... Subjects> struct interface_in_array_carrier {};
-template <typename... Subjects> struct interface_limit_carrier {};
 template <typename... Subjects> struct interface_not_derived_carrier {};
-template <typename... Subjects> struct key_alias_limit_carrier {};
 template <typename... Subjects> struct key_interface_undeclared_carrier {};
 template <typename... Subjects> struct key_type_values_carrier {};
 template <typename... Subjects> struct key_value_not_of_key_type_carrier {};
@@ -101,9 +99,7 @@ enum class diag : std::uint8_t {
   dense_key_type,
   factory_not_declared,
   interface_in_array,
-  interface_limit,
   interface_not_derived,
-  key_alias_limit,
   key_interface_undeclared,
   key_type_values,
   key_value_not_of_key_type,
@@ -141,8 +137,8 @@ enum class diag : std::uint8_t {
 
 // The number of subjects of each diagnostic, one per placeholder.
 inline constexpr std::uint8_t diag_subjects[] = {
-    1, 0, 1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 1, 2, 1, 1, 3, 1, 2, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 3, 1, 0, 0, 1, 1, 1, 1, 0, 1, 1, 2, 1, 2, 2, 1};
+    1, 0, 1, 1, 1, 2, 2, 2, 1, 1, 2, 2, 1, 1, 3, 1, 2, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 3, 1, 0, 0, 1, 1, 1, 1, 0, 1, 1, 2, 1, 2, 2, 1};
 
 #if DINGO_HAS_STATIC_ASSERT_MESSAGE
 // The text of a diagnostic around its placeholders, and its carrier.
@@ -232,28 +228,12 @@ template <> struct diag_text<diag::interface_in_array> {
       "an element of the array ", " cannot be exposed as an interface"};
 };
 
-// spec: diagnostics.interface_limit
-template <> struct diag_text<diag::interface_limit> {
-  template <typename... Subjects>
-  using carrier = ::dingo::interface_limit_carrier<Subjects...>;
-  static constexpr std::string_view pieces[] = {
-      "a binding of ", " declares more than max_interfaces interfaces"};
-};
-
 // spec: diagnostics.interface_not_derived
 template <> struct diag_text<diag::interface_not_derived> {
   template <typename... Subjects>
   using carrier = ::dingo::interface_not_derived_carrier<Subjects...>;
   static constexpr std::string_view pieces[] = {
       "", " does not derive from the interface ", ""};
-};
-
-// spec: diagnostics.key_alias_limit
-template <> struct diag_text<diag::key_alias_limit> {
-  template <typename... Subjects>
-  using carrier = ::dingo::key_alias_limit_carrier<Subjects...>;
-  static constexpr std::string_view pieces[] = {
-      "a binding of ", " has more than max_key_aliases keys of other types"};
 };
 
 // spec: diagnostics.key_interface_undeclared
@@ -651,16 +631,6 @@ struct diag_report<diag::interface_in_array, Subjects...> {
   }
 };
 
-// spec: diagnostics.interface_limit
-template <typename... Subjects>
-struct diag_report<diag::interface_limit, Subjects...> {
-  static constexpr void fail() {
-    static_assert(
-        dependent_false<::dingo::interface_limit_carrier<Subjects...>>,
-        "a binding of {stored} declares more than max_interfaces interfaces");
-  }
-};
-
 // spec: diagnostics.interface_not_derived
 template <typename... Subjects>
 struct diag_report<diag::interface_not_derived, Subjects...> {
@@ -668,17 +638,6 @@ struct diag_report<diag::interface_not_derived, Subjects...> {
     static_assert(
         dependent_false<::dingo::interface_not_derived_carrier<Subjects...>>,
         "{stored} does not derive from the interface {interface}");
-  }
-};
-
-// spec: diagnostics.key_alias_limit
-template <typename... Subjects>
-struct diag_report<diag::key_alias_limit, Subjects...> {
-  static constexpr void fail() {
-    static_assert(
-        dependent_false<::dingo::key_alias_limit_carrier<Subjects...>>,
-        "a binding of {stored} has more than max_key_aliases keys of other "
-        "types");
   }
 };
 

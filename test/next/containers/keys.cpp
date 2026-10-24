@@ -102,6 +102,25 @@ TEST(next_keys, selects_static_bindings_by_key) {
   EXPECT_THROW(container.resolve<iface &>(9), dingo::type_not_found_exception);
 }
 
+// A binding is found by as many keys of other types as it is given.
+template <int Id> struct alias_key {
+  int value;
+  bool operator==(const alias_key &other) const { return value == other.value; }
+  bool operator<(const alias_key &other) const { return value < other.value; }
+};
+
+TEST(next_keys, a_binding_is_found_by_six_keys_of_other_types) {
+  dingo::container<> container;
+  container.register_type<scope<dingo::shared>, storage<impl<0>>,
+                          dingo::interfaces<iface>>(
+      dingo::key_value{alias_key<0>{0}}, dingo::key_value{alias_key<1>{1}},
+      dingo::key_value{alias_key<2>{2}}, dingo::key_value{alias_key<3>{3}},
+      dingo::key_value{alias_key<4>{4}}, dingo::key_value{alias_key<5>{5}});
+  EXPECT_EQ(container.resolve<iface &>(alias_key<5>{5}).id(), 0);
+  EXPECT_EQ(&container.resolve<iface &>(alias_key<1>{1}),
+            &container.resolve<iface &>(alias_key<4>{4}));
+}
+
 } // namespace
 
 namespace {

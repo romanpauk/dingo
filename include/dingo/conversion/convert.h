@@ -47,23 +47,36 @@ template <typename Leaf, typename List> struct interface_type_trees;
 
 template <typename Leaf, typename... Interfaces>
 struct interface_type_trees<Leaf, type_list<Interfaces...>> {
-  static_assert(require<sizeof...(Interfaces) <= max_interfaces,
-                        diag::interface_limit, Leaf>());
+  static constexpr declared_interface_array<sizeof...(Interfaces)> list = {
+      {declared_interface{interface_view_v<Interfaces>,
+                          declares_conversion<interface_object_t<Interfaces>,
+                                              Leaf>::value}...}};
 
   static constexpr binding_descriptor apply(binding_descriptor binding) {
-    std::size_t index = 0;
-    ((binding.interfaces[index++] = interface_view_v<Interfaces>), ...);
-    binding.interface_count = sizeof...(Interfaces);
-    index = 0;
-    ((binding.converted |=
-      (declares_conversion<interface_object_t<Interfaces>, Leaf>::value
-           ? 1u << index
-           : 0u),
-      ++index),
-     ...);
+    binding.interfaces = list.view();
     return binding;
   }
 };
+
+// The leaves a stored type names its binding by, in an array of exactly as
+// many.
+template <typename Stored> constexpr auto named_leaf_array() {
+  constexpr std::size_t count =
+      named_leaf_count<type_tree_view_v<Stored>.size>(type_tree_view_v<Stored>);
+  leaf_array<count> result;
+  leaf_buffer leaves{result.items, count != 0 ? count : 1};
+  named_leaves_into(type_tree_view_v<Stored>, leaves);
+  return result;
+}
+
+template <typename Stored>
+inline constexpr auto named_leaf_array_v = named_leaf_array<Stored>();
+
+// The keys of other types a binding is found by, in an array of exactly as
+// many.
+template <typename... Aliases>
+inline constexpr key_descriptor_array<sizeof...(Aliases)>
+    key_alias_descriptors = {{Aliases::descriptor...}};
 
 // Whether a reachable type derives an object by a cached rule.
 constexpr bool keeps_objects(const reachable_types &published) {
@@ -110,20 +123,18 @@ struct binding_type {
   static constexpr binding_descriptor make_descriptor() {
     binding_descriptor binding;
     binding.stored = type_tree_view_v<Stored>;
-    binding.leaves = named_leaves(binding.stored);
+    binding.leaves = named_leaf_array_v<Stored>.view();
     binding.scope = scope;
     binding.declared_factory = !std::is_same_v<Factory, detected_factory>;
     binding.key = Key::descriptor;
-    set_aliases(binding, KeyAliases());
+    binding.aliases = alias_descriptors(KeyAliases());
     return interface_type_trees<leaf_of_t<Stored>, Interfaces>::apply(binding);
   }
 
   template <typename... Aliases>
-  static constexpr void set_aliases(binding_descriptor &binding,
-                                    type_list<Aliases...> /*aliases*/) {
-    static_assert(require<sizeof...(Aliases) <= max_key_aliases,
-                          diag::key_alias_limit, Stored>());
-    ((binding.aliases[binding.alias_count++] = Aliases::descriptor), ...);
+  static constexpr key_descriptors
+  alias_descriptors(type_list<Aliases...> /*aliases*/) {
+    return key_alias_descriptors<Aliases...>.view();
   }
 
   static constexpr binding_descriptor descriptor = make_descriptor();

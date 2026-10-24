@@ -206,7 +206,7 @@ public:
                   "key");
     constexpr std::size_t index =
         type_list_index_of<Interface, typename Binding::interfaces>();
-    static_assert(require<index != Binding::descriptor.interface_count,
+    static_assert(require<index != Binding::descriptor.interfaces.size,
                           diag::key_interface_undeclared, Interface,
                           typename Binding::stored_type>());
     interface_keys_[index] = value;
@@ -333,6 +333,13 @@ private:
         resolver, &locals_.statics(), locals_.runtime());
   }
 
+  // The number of declared interfaces, or one when there are none, which the
+  // key values of the declared interfaces are in an array of.
+  static constexpr std::size_t interface_slots =
+      Binding::descriptor.interfaces.size != 0
+          ? Binding::descriptor.interfaces.size
+          : 1;
+
   // The key values of the declared interfaces a registration names its own
   // for.
   template <typename Key, typename = void> struct interface_keys_of {
@@ -342,7 +349,7 @@ private:
   template <typename Key>
   struct interface_keys_of<
       Key, std::enable_if_t<Key::descriptor.kind == key_kind::runtime>> {
-    using type = std::optional<typename Key::value_type>[max_interfaces];
+    using type = std::optional<typename Key::value_type>[interface_slots];
   };
 
   static constexpr bool has_interface_keys =
@@ -351,9 +358,10 @@ private:
   static constexpr std::size_t no_index = static_cast<std::size_t>(-1);
 
   static std::size_t interface_index(type_id interface) {
-    for (std::size_t index = 0; index < Binding::descriptor.interface_count;
+    for (std::size_t index = 0; index < Binding::descriptor.interfaces.size;
          ++index) {
-      if (Binding::descriptor.interfaces[index].nodes[0].type == interface) {
+      if (Binding::descriptor.interfaces[index].tree.nodes[0].type ==
+          interface) {
         return index;
       }
     }
@@ -364,7 +372,7 @@ private:
   // each.
   template <typename Alias> struct alias_keys {
     std::optional<typename Alias::value_type> shared;
-    std::optional<typename Alias::value_type> interfaces[max_interfaces];
+    std::optional<typename Alias::value_type> interfaces[interface_slots];
   };
 
   using aliases_type = typename Binding::key_aliases;
@@ -693,12 +701,12 @@ private:
   template <typename Binding, typename Visit>
   static void for_each_interface(Visit &&visit) {
     constexpr const binding_descriptor &binding = Binding::descriptor;
-    if constexpr (binding.interface_count == 0) {
+    if constexpr (binding.interfaces.size == 0) {
       visit_leaves<Binding>(
           visit, std::make_index_sequence<Binding::descriptor.leaves.size>());
     } else {
-      for (std::size_t index = 0; index < binding.interface_count; ++index) {
-        visit(binding.interfaces[index].nodes[0].type);
+      for (std::size_t index = 0; index < binding.interfaces.size; ++index) {
+        visit(binding.interfaces[index].tree.nodes[0].type);
       }
     }
   }

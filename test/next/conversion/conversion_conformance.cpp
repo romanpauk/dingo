@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace dingo::next_test {
 
@@ -25,7 +26,7 @@ struct conversion_case {
   const char *name;
   const dingo::type_tree *stored;
   const dingo::scope_info *scope;
-  const dingo::type_tree *interfaces[dingo::max_interfaces];
+  const dingo::type_tree *const *interfaces;
   std::size_t interface_count;
   dingo::request_kind kind;
   const dingo::type_tree *request;
@@ -59,12 +60,16 @@ TEST(conversion_conformance, computes_what_the_reference_computes) {
     const conversion_case &expected = conversion_cases[index];
     dingo::binding_descriptor binding;
     binding.stored = *expected.stored;
-    binding.leaves = dingo::named_leaves(binding.stored);
+    std::vector<dingo::type_id> leaves(binding.stored.size);
+    dingo::leaf_buffer named{leaves.data(), leaves.size()};
+    dingo::named_leaves_into(binding.stored, named);
+    binding.leaves = {leaves.data(), named.size};
     binding.scope = *expected.scope;
+    std::vector<dingo::declared_interface> interfaces;
     for (std::size_t i = 0; i < expected.interface_count; ++i) {
-      binding.interfaces[i] = *expected.interfaces[i];
+      interfaces.push_back({*expected.interfaces[i], false});
     }
-    binding.interface_count = expected.interface_count;
+    binding.interfaces = {interfaces.data(), interfaces.size()};
     dingo::request_descriptor request{expected.kind, *expected.request, {}};
 
     bool registered = dingo::register_status(binding) ==

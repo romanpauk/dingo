@@ -682,4 +682,36 @@ TEST(next_stored_type_trees,
                dingo::type_not_found_exception);
 }
 
+template <int Id> struct base {
+  virtual ~base() = default;
+};
+
+struct many : base<0>,
+              base<1>,
+              base<2>,
+              base<3>,
+              base<4>,
+              base<5>,
+              base<6>,
+              base<7>,
+              base<8> {};
+
+// A binding declares as many interfaces as it needs.
+TEST(next_stored_type_trees, a_binding_declares_nine_interfaces) {
+  using interfaces =
+      dingo::interfaces<base<0>, base<1>, base<2>, base<3>, base<4>, base<5>,
+                        base<6>, base<7>, base<8>>;
+  dingo::container<> container;
+  container.register_type<scope<dingo::shared>, storage<many>, interfaces>();
+  many *first = &static_cast<many &>(container.resolve<base<0> &>());
+  EXPECT_EQ(&static_cast<many &>(container.resolve<base<5> &>()), first);
+  EXPECT_EQ(&static_cast<many &>(container.resolve<base<8> &>()), first);
+
+  using bindings = dingo::bindings<
+      dingo::bind<scope<dingo::shared>, storage<many>, interfaces>>;
+  dingo::static_container<bindings> fixed;
+  many *kept = &static_cast<many &>(fixed.resolve<base<0> &>());
+  EXPECT_EQ(&static_cast<many &>(fixed.resolve<base<8> &>()), kept);
+}
+
 } // namespace

@@ -543,48 +543,6 @@ int main() {
         "double",
     ),
     example(
-        "interface_limit",
-        SHARED,
-        """
-template <int Id> struct base {
-  virtual ~base() = default;
-};
-
-struct many : base<0>, base<1>, base<2>, base<3>, base<4>, base<5>, base<6>,
-              base<7>, base<8> {};
-
-int main() {
-  dingo::container<> container;
-  container.register_type<
-      dingo::scope<dingo::shared>, dingo::storage<many>,
-      dingo::interfaces<base<0>, base<1>, base<2>, base<3>, base<4>, base<5>,
-                        base<6>, base<7>, base<8>>>();
-}
-""",
-        "many",
-    ),
-    example(
-        "key_alias_limit",
-        SHARED,
-        CONFIG
-        + """
-template <int Id> struct key {
-  int value;
-  bool operator==(const key &other) const { return value == other.value; }
-  bool operator<(const key &other) const { return value < other.value; }
-};
-
-int main() {
-  dingo::container<> container;
-  container.register_type<dingo::scope<dingo::shared>, dingo::storage<config>>(
-      dingo::key_value{key<0>{0}}, dingo::key_value{key<1>{1}},
-      dingo::key_value{key<2>{2}}, dingo::key_value{key<3>{3}},
-      dingo::key_value{key<4>{4}}, dingo::key_value{key<5>{5}});
-}
-""",
-        "config",
-    ),
-    example(
         "scope_kind_not_stored",
         SHARED,
         CONFIG

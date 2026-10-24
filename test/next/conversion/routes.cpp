@@ -365,7 +365,7 @@ TEST(next_engine, interfaces_do_not_rebind_the_stored_type_tree) {
 
   using two = binding_t<shared, std::shared_ptr<A>, I, J>;
   static_assert(two::descriptor.stored == one::descriptor.stored);
-  static_assert(two::descriptor.interface_count == 2);
+  static_assert(two::descriptor.interfaces.size == 2);
   static_assert(dingo::serves_interface(two::descriptor, dingo::type_id_v<I>));
   static_assert(dingo::serves_interface(two::descriptor, dingo::type_id_v<J>));
   static_assert(!dingo::serves_interface(two::descriptor, dingo::type_id_v<A>));

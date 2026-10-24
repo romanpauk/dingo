@@ -335,24 +335,6 @@ diagnostics: tuple[Diagnostic, ...] = (
         reported=COMPILE,
     ),
     Diagnostic(
-        id="interface_limit",
-        condition="A binding declares more interfaces than the limit.",
-        exception=None,
-        message="a binding of {stored} declares more than max_interfaces interfaces",
-        placeholders=("stored",),
-        fallback_carrier="interface_limit_carrier",
-        reported=COMPILE,
-    ),
-    Diagnostic(
-        id="key_alias_limit",
-        condition="A binding has more keys of other key types than the limit.",
-        exception=None,
-        message="a binding of {stored} has more than max_key_aliases keys of other types",
-        placeholders=("stored",),
-        fallback_carrier="key_alias_limit_carrier",
-        reported=COMPILE,
-    ),
-    Diagnostic(
         id="interface_not_derived",
         condition=(
             "A request is served by converting the stored leaf to an interface "
