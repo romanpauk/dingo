@@ -11,6 +11,7 @@
 #include <dingo/registration/type_registration.h>
 #include <dingo/resolution/resolution_operation.h>
 #include <dingo/static/registry.h>
+#include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>
 
 #include <algorithm>
@@ -23,8 +24,6 @@
 namespace dingo {
 
 struct shared;
-struct unique;
-struct shared_cyclical;
 
 namespace detail {
 
@@ -355,14 +354,14 @@ constexpr void graph_add_vertex(graph_structure<Vertices, Edges> &structure,
   using requests = typename graph_requests<model>::type;
 
   constexpr std::size_t slots = graph_node_slots<Host, Binding>();
-  structure.vertices[vertex] =
-      graph_vertex{std::is_same_v<typename model::storage_tag, shared_cyclical>,
-                   !std::is_void_v<binding_dependencies_t<model>>,
-                   !std::is_void_v<requests>,
-                   graph_requests_bounded(
-                       static_cast<binding_dependencies_t<model> *>(nullptr)),
-                   edge,
-                   slots};
+  structure.vertices[vertex] = graph_vertex{
+      storage_scope_policy<typename model::storage_tag>::allows_cycles,
+      !std::is_void_v<binding_dependencies_t<model>>,
+      !std::is_void_v<requests>,
+      graph_requests_bounded(
+          static_cast<binding_dependencies_t<model> *>(nullptr)),
+      edge,
+      slots};
   if constexpr (std::is_void_v<typename model::bindings_type>) {
     graph_write_requests<Host, Universe>(static_cast<requests *>(nullptr),
                                          structure.edges, edge);
@@ -623,10 +622,13 @@ template <typename Binding> constexpr graph_cost graph_binding_cost() {
   using stored = typename model::storage_type::type;
   using temporaries = binding_temporary_storage_traits<Binding>;
 
-  constexpr bool cyclical = std::is_same_v<tag, shared_cyclical>;
+  constexpr bool cyclical =
+      storage_scope_policy<typename model::storage_tag>::allows_cycles;
   constexpr std::size_t rollback = cyclical ? 1 : 0;
   constexpr std::size_t storage_slots =
-      (std::is_same_v<tag, unique> || cyclical) ? 1 : 0;
+      (storage_scope_policy<typename model::storage_tag>::consumes || cyclical)
+          ? 1
+          : 0;
   constexpr std::size_t stored_destructible =
       std::is_trivially_destructible_v<stored> ? 0 : 1;
   const graph_request_summary requests = graph_summarize_requests(

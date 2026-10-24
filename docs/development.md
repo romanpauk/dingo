@@ -61,6 +61,27 @@ generic row behavior, and `scenarios/` contains complete behavioral and
 regression cases. Axis definitions declare the headers needed by each generated
 shard so unrelated scenarios are not compiled together.
 
+## Generated Cell Coverage
+
+The storage and selection models under [`tools/model/`](../tools/model)
+enumerate the built-in cells independently of the C++ headers. The generator
+writes one translation unit for the full storage scope-by-form product and one
+for every selection policy and source status. It also generates the committed
+`include/dingo/storage/scopes.gen.h` header, which owns the built-in
+`storage_scope_policy` data. Compile-time assertions compare the generated
+expectation with the library; a missing cell, changed exposure, or stale catalog
+fails the build.
+
+The generated sources live in the build tree, so consumer builds never run
+Python. The `cells-check` target regenerates them and verifies that they are up
+to date, and the model's pytest suite checks the catalog against the library
+declarations in `include/dingo/storage` and `include/dingo/binding`.
+
+```bash
+cmake --build build -t cells-check
+uv run --locked pytest -q tools/model
+```
+
 ## Code Size Tests
 
 The lit suite also contains code-generation probes in
@@ -87,6 +108,33 @@ can be inspected with normal `perf` commands.
 
 This is useful when a registration or resolution change affects compile time and
 the expensive template instantiations need to be identified directly.
+
+## Cost Comparisons
+
+[`tools/cost/measure.py`](../tools/cost/measure.py) records deterministic probe
+sizes and optional Clang instantiation counts, then compares two records. Use it
+when a refactor is supposed to preserve binary size or compile cost:
+
+```bash
+uv run --locked python tools/cost/measure.py record \
+    --include /path/to/baseline/include \
+    --source test/lit/codegen-static-probes.cpp \
+    --out build/cost/baseline.json --time-trace
+uv run --locked python tools/cost/measure.py record \
+    --include include \
+    --source test/lit/codegen-static-probes.cpp \
+    --out build/cost/current.json --time-trace
+uv run --locked python tools/cost/measure.py compare \
+    build/cost/baseline.json build/cost/current.json
+```
+
+The hard gate is text/data/bss size and, when present, the number of `dingo::`
+events in the time trace. Wall time is printed as a trend only, because it is
+too noisy to fail a build.
+
+`cmake --build build -t cost-record` records the current probe under
+`build/cost/current.json` with the configured compiler. Use the explicit
+`record` commands above when comparing against a baseline include tree.
 
 ## Container Images
 

@@ -26,64 +26,37 @@
 namespace dingo {
 struct shared_cyclical {};
 
-template <> struct storage_scope_policy<shared_cyclical> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = false;
-  static constexpr bool consumes = false;
-  static constexpr materialization_guard guard = materialization_guard::none;
-  static constexpr bool retains_unresolved_source = false;
-
-  // Only plain objects, raw pointers and shared_ptr can be stored in a cycle.
-  static constexpr storage_exposure exposed(storage_form form) {
-    switch (form) {
-    case storage_form::plain:
-    case storage_form::alternative:
-    case storage_form::pointer:
-    case storage_form::array:
-    case storage_form::bounded_array:
-      return storage_exposure::lvalue | storage_exposure::pointer;
-    case storage_form::shared_handle:
-    case storage_form::shared_array_handle:
-      return storage_exposure::value | storage_exposure::lvalue |
-             storage_exposure::pointer;
-    case storage_form::unique_handle:
-    case storage_form::unique_array_handle:
-    case storage_form::optional:
-    case storage_form::unknown:
-      break;
-    }
-    return storage_exposure::none;
-  }
-};
-
 namespace detail {
 // Cells of shared_cyclical, which publishes the leaf U and a shared_ptr<U>
-// directly, whatever the registered shape: every cell deviates from the generic
-// rule, so the scope lists them itself.
+// directly, whatever the registered shape. The published lists are generated
+// per form in storage/scopes.gen.h; this cell joins the data with the type
+// lists that the shape traits already define.
 template <storage_form Form, typename U> struct shared_cyclical_cell {
+  static constexpr unsigned lists =
+      shared_cyclical_cell_lists[static_cast<unsigned>(Form)];
+  static constexpr bool shares_handle =
+      Form == storage_form::shared_handle ||
+      Form == storage_form::shared_array_handle;
+
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
 
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<U &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *>;
+  using value_types =
+      std::conditional_t<(lists & 1u) != 0, type_list<std::shared_ptr<U>>,
+                         type_list<>>;
+  using lvalue_reference_types = std::conditional_t<
+      (lists & 2u) != 0,
+      std::conditional_t<shares_handle, type_list<U &, std::shared_ptr<U> &>,
+                         type_list<U &>>,
+      type_list<>>;
+  using rvalue_reference_types =
+      std::conditional_t<(lists & 4u) != 0, type_list<U &&>, type_list<>>;
+  using pointer_types = std::conditional_t<
+      (lists & 8u) != 0,
+      std::conditional_t<shares_handle, type_list<U *, std::shared_ptr<U> *>,
+                         type_list<U *>>,
+      type_list<>>;
 };
-
-template <typename U>
-struct shared_cyclical_cell<storage_form::shared_handle, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = false;
-
-  using value_types = type_list<std::shared_ptr<U>>;
-  using lvalue_reference_types = type_list<U &, std::shared_ptr<U> &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *, std::shared_ptr<U> *>;
-};
-
-template <typename U>
-struct shared_cyclical_cell<storage_form::shared_array_handle, U>
-    : shared_cyclical_cell<storage_form::shared_handle, U> {};
 
 template <storage_form Form, typename Type, typename U>
 struct storage_cell<shared_cyclical, Form, Type, U>

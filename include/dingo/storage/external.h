@@ -19,19 +19,6 @@
 namespace dingo {
 struct external {};
 
-template <> struct storage_scope_policy<external> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-  static constexpr bool consumes = false;
-  static constexpr materialization_guard guard = materialization_guard::none;
-  static constexpr bool retains_unresolved_source = false;
-
-  static constexpr storage_exposure exposed(storage_form) {
-    return storage_exposure::value | storage_exposure::lvalue |
-           storage_exposure::pointer;
-  }
-};
-
 namespace detail {
 template <typename Type, typename U>
 struct conversions<external, Type, U> : type_storage_traits<external, Type, U> {

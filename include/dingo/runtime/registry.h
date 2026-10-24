@@ -1187,6 +1187,7 @@ class DINGO_EMPTY_BASES runtime_registry
                            ResolveRoot, OwnsRuntimeData>>,
       protected detail::registry_store<ContainerTraits, Allocator> {
   template <typename> friend class runtime_context;
+  template <typename> friend class detail::context_resolution;
   template <typename> friend class detail::runtime_registration_api;
   template <typename, typename, typename, typename>
   friend class runtime_binding_state;

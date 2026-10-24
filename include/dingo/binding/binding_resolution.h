@@ -46,6 +46,23 @@ struct has_storage_resolve_conversion<
             std::declval<Context &>(), std::declval<Source>()))>>
     : std::true_type {};
 
+// The conversion slots a binding of one interface and storage can retain. The
+// static and runtime backends share this computation; they differ only in
+// whether they aggregate it per binding or per registration.
+template <typename Interface, typename Storage>
+using binding_conversion_cache_types_t = resolution_cache_types_t<
+    typename binding_resolutions<Interface, Storage>::type,
+    storage_shape_t<Storage>>;
+
+template <typename Types>
+inline constexpr bool has_binding_conversion_cache_types_v =
+    type_list_size_v<Types> != 0;
+
+template <typename Storage>
+constexpr type_descriptor binding_registered_type() {
+  return describe_type<typename Storage::type>();
+}
+
 template <bool Enabled, typename ConversionTypes>
 struct binding_conversion_cache_base;
 
@@ -87,6 +104,49 @@ struct binding_conversion_cache_base<false, ConversionTypes> {
   }
 
   void reset_conversions() {}
+};
+
+// One storage owner for both binding backends. Static slots default-construct
+// it; runtime state constructs it with the registration argument.
+template <typename Storage> class binding_storage_holder {
+public:
+  binding_storage_holder() = default;
+
+  template <typename... Args>
+  explicit binding_storage_holder(Args &&...args)
+      : storage_(std::forward<Args>(args)...) {}
+
+  Storage &storage() noexcept { return storage_; }
+  const Storage &storage() const noexcept { return storage_; }
+
+private:
+  Storage storage_;
+};
+
+// One conversion-cache slot for both binding backends. A cached slot constructs
+// with the owner that tracks the lifetime; a non-cached slot constructs in the
+// context. The two callers differ only in the owner they pass.
+template <bool Enabled, typename ConversionTypes>
+class binding_cache_slot
+    : public binding_conversion_cache_base<Enabled, ConversionTypes> {
+  using base_type = binding_conversion_cache_base<Enabled, ConversionTypes>;
+
+public:
+  using base_type::construct_conversion;
+  using base_type::construct_conversion_with;
+  using base_type::reset_conversions;
+
+  template <typename T, typename Owner, typename Context, typename... Args>
+  T &construct_conversion_for(Owner &owner, construction_scope scope,
+                              Context &context, Args &&...args) {
+    if constexpr (Enabled) {
+      return base_type::template construct_conversion_with<T>(
+          owner, scope, context, std::forward<Args>(args)...);
+    } else {
+      return base_type::template construct_conversion<T>(
+          scope, context, std::forward<Args>(args)...);
+    }
+  }
 };
 
 template <typename Context> struct retained_frame_scope {
@@ -411,40 +471,6 @@ decltype(auto) apply_consumed_resolution(Resolver &resolver, Context &context,
       resolver, context, std::forward<MaterializedSource>(source));
   return consume_resolved_binding<Request>(
       std::forward<decltype(instance)>(instance), std::forward<Fn>(fn));
-}
-
-template <typename Request, typename Resolution, typename Storage,
-          typename Resolver, typename Context, typename Owner, typename Fn>
-decltype(auto) consume_runtime_binding_resolution_request(
-    construction_scope scope, Context &context, Storage &storage, Owner &owner,
-    Resolver &resolver, Fn &&fn) {
-  return with_runtime_binding_source(
-      scope, context, storage, owner, [&](auto &&source) -> decltype(auto) {
-        return apply_consumed_resolution<Request, Resolution, Storage>(
-            resolver, context, std::forward<decltype(source)>(source),
-            std::forward<Fn>(fn));
-      });
-}
-
-template <typename Request, typename Resolution, typename Storage,
-          typename Resolver, typename Context, typename Owner, typename Fn>
-decltype(auto)
-consume_binding_resolution_request(construction_scope scope, Context &context,
-                                   Storage &storage, Owner &owner,
-                                   Resolver &resolver, Fn &&fn) {
-  auto consume = [&](auto &&source) -> decltype(auto) {
-    return apply_consumed_resolution<Request, Resolution, Storage>(
-        resolver, context, std::forward<decltype(source)>(source),
-        std::forward<Fn>(fn));
-  };
-  using operation = typename Resolution::operation;
-  if constexpr (operation_requires_source_retention_v<operation>) {
-    return with_retained_binding_source(scope, context, storage, owner,
-                                        std::move(consume));
-  } else {
-    return with_binding_source(scope, context, storage, owner,
-                               std::move(consume));
-  }
 }
 
 template <typename Target, typename Context, typename Instance>

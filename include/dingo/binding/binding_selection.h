@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <dingo/base/exceptions.h>
 #include <dingo/base/type_list.h>
 
 #include <cstddef>
@@ -84,6 +85,22 @@ make_runtime_selection(Binding *binding, State state = nullptr) {
   return binding
              ? runtime_binding_selection<Binding, State>::found(*binding, state)
              : runtime_binding_selection<Binding, State>::miss();
+}
+
+// Resolves a runtime selection. A selection that matched several bindings is
+// ambiguous in every container; a selection that matched none is handed to the
+// missing callback, which owns parent fallback and auto-construction.
+template <typename R, typename Request, typename Binding, typename State,
+          typename Context, typename Found, typename Missing>
+R resolve_selection(const runtime_binding_selection<Binding, State> &selection,
+                    Context &context, Found &&found, Missing &&missing) {
+  if (selection.ambiguous()) {
+    throw make_type_ambiguous_exception<Request>(context);
+  }
+  if (selection.found()) {
+    return std::forward<Found>(found)();
+  }
+  return std::forward<Missing>(missing)();
 }
 
 template <typename Binding, typename State = std::nullptr_t, typename Visitor>

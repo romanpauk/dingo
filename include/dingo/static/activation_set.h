@@ -35,11 +35,12 @@ namespace detail {
 
 template <typename... Registrations> class basic_static_activation_set;
 
-template <typename Registration> struct binding_storage_slot {
+template <typename Registration>
+struct binding_storage_slot
+    : detail::binding_storage_holder<
+          typename detail::binding_model<Registration>::storage_type> {
   using binding_model = detail::binding_model<Registration>;
   using storage_type = typename binding_model::storage_type;
-
-  storage_type storage;
 };
 
 template <typename BindingModel>
@@ -76,10 +77,8 @@ private:
   using storage_type = typename BindingModel::storage_type;
 
   template <typename Interface>
-  using interface_cache_types = resolution_cache_types_t<
-      typename binding_resolutions<typename annotated_traits<Interface>::type,
-                                   storage_type>::type,
-      storage_shape_t<storage_type>>;
+  using interface_cache_types = binding_conversion_cache_types_t<
+      typename annotated_traits<Interface>::type, storage_type>;
 
 public:
   using type =
@@ -180,7 +179,7 @@ struct registration_cache_types<Registration, false> {
 };
 
 template <typename Registration, bool Enabled>
-using registration_conversion_cache_base = binding_conversion_cache_base<
+using registration_conversion_cache_base = binding_cache_slot<
     Enabled, typename registration_cache_types<Registration, Enabled>::type>;
 
 template <typename Registration, bool Enabled>
@@ -209,7 +208,7 @@ class static_binding_storage
 
 public:
   template <typename Registration> auto &get_storage() {
-    return static_cast<storage_slot<Registration> &>(*this).storage;
+    return static_cast<storage_slot<Registration> &>(*this).storage();
   }
 
   template <typename BindingModel> auto &get_storage_for_model() {
@@ -463,7 +462,7 @@ struct static_binding_resolver {
   construction_scope scope;
 
   static constexpr type_descriptor registered_type() {
-    return describe_type<typename storage_type::type>();
+    return detail::binding_registered_type<storage_type>();
   }
 
   template <typename Request, typename Context>
@@ -515,19 +514,17 @@ struct static_binding_resolver {
   // and does not add a level to the template depth of a dependency chain.
   template <typename Request, typename Resolution, typename Context>
   decltype(auto) resolve_request_address(Context &context) {
-    using target_type =
-        std::remove_reference_t<typename Resolution::target_type>;
     using operation = typename Resolution::operation;
 
     binding_activation<State, Host, binding_model_type> activation{state, host,
                                                                    scope};
     auto &&storage = state.template get_storage_for_model<binding_model_type>();
     auto materialize = [&](auto &&source) -> void * {
-      auto &&instance =
-          detail::apply_resolution<Request, Resolution, storage_type>(
-              activation, context, std::forward<decltype(source)>(source));
-      return detail::result_address<target_type>(
-          scope, context, std::forward<decltype(instance)>(instance));
+      return detail::resolve_address_from_source<Resolution, storage_type>(
+                 scope, activation, context,
+                 std::forward<decltype(source)>(source),
+                 describe_type<Request>(), registered_type())
+          .address;
     };
 
     if constexpr ((std::is_lvalue_reference_v<Request> ||
@@ -559,29 +556,33 @@ struct static_binding_resolver {
     binding_activation<State, Host, binding_model_type> activation{state, host,
                                                                    scope};
     auto &&storage = state.template get_storage_for_model<binding_model_type>();
+    auto consume = [&](auto &&source) -> decltype(auto) {
+      return detail::apply_consumed_resolution<Request, Resolution,
+                                               storage_type>(
+          activation, context, std::forward<decltype(source)>(source),
+          std::forward<Fn>(fn));
+    };
+    using operation = typename Resolution::operation;
     if constexpr ((std::is_lvalue_reference_v<Request> ||
                    std::is_pointer_v<Request>) &&
                   detail::materializes_value_source_v<
                       std::remove_reference_t<decltype(storage)>, Context,
                       decltype(activation)>) {
-      auto materialize = [&](auto &&source) -> decltype(auto) {
-        auto &&instance =
-            detail::apply_resolution<Request, Resolution, storage_type>(
-                activation, context, std::forward<decltype(source)>(source));
-        return detail::consume_resolved_binding<Request>(
-            std::forward<decltype(instance)>(instance), std::forward<Fn>(fn));
-      };
-      return detail::with_context_lvalue_source(
-          scope, context, storage, activation, std::move(materialize));
+      return detail::with_context_lvalue_source(scope, context, storage,
+                                                activation, std::move(consume));
     } else if constexpr (is_runtime_context_v<Context>) {
-      return detail::consume_runtime_binding_resolution_request<Request,
-                                                                Resolution>(
-          scope, context, storage, activation, activation,
-          std::forward<Fn>(fn));
+      return detail::with_runtime_binding_source(
+          scope, context, storage, activation, std::move(consume));
+    } else if constexpr (detail::operation_requires_source_retention_v<
+                             operation> &&
+                         !std::is_same_v<
+                             std::remove_cv_t<std::remove_reference_t<Context>>,
+                             no_dependency_context>) {
+      return detail::with_retained_binding_source(
+          scope, context, storage, activation, std::move(consume));
     } else {
-      return detail::consume_binding_resolution_request<Request, Resolution>(
-          scope, context, storage, activation, activation,
-          std::forward<Fn>(fn));
+      return detail::with_binding_source(scope, context, storage, activation,
+                                         std::move(consume));
     }
   }
 };

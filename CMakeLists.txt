@@ -92,6 +92,7 @@ if(DINGO_DEVELOPMENT_MODE)
         static/graph.h
         static/registry.h
         container.h
+        container_api.h
         type/auto_constructible.h
         binding/binding_model.h
         binding/binding_resolution.h
@@ -159,6 +160,7 @@ if(DINGO_DEVELOPMENT_MODE)
         resolution/materialized_source.h
         storage/shared_cyclical.h
         storage/shared.h
+        storage/scopes.gen.h
         storage/storage.h
         storage/storage_scope_policy.h
         storage/type_storage_traits.h
@@ -245,6 +247,9 @@ if(DINGO_DEVELOPMENT_MODE)
     include(cmake/quality.cmake)
     configure_quality_targets(DINGO_QUALITY_CHECK_TARGETS)
     list(APPEND DINGO_CHECK_TARGETS ${DINGO_QUALITY_CHECK_TARGETS})
+    if(TARGET cells-check)
+        list(APPEND DINGO_CHECK_TARGETS cells-check)
+    endif()
 
     add_custom_target(check
         DEPENDS ${DINGO_CHECK_TARGETS}

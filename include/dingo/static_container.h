@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/container.h>
+#include <dingo/container_api.h>
 #include <dingo/factory/invoke.h>
 #include <dingo/lookup/container_lookup_definition.h>
 #include <dingo/static/activation_set.h>
@@ -91,7 +92,10 @@ template <typename ParentContainer, typename ContainerTraits,
 class static_container_impl<static_bindings<Registrations...>, ParentContainer,
                             ContainerTraits>
     : private static_container_dependency_diagnostics_base<
-          static_bindings<Registrations...>, !std::is_void_v<ParentContainer>> {
+          static_bindings<Registrations...>, !std::is_void_v<ParentContainer>>,
+      public container_api<
+          static_container_impl<static_bindings<Registrations...>,
+                                ParentContainer, ContainerTraits>> {
 public:
   using static_bindings_type = static_bindings<Registrations...>;
   using context_static_bindings_type = static_bindings_cat_t<
@@ -106,11 +110,6 @@ private:
   using context_type = static_context<context_static_bindings_type>;
   using index_entries_ = detail::normalize_lookup_definitions_t<
       detail::container_lookup_definition_type_t<ContainerTraits>>;
-
-  template <typename Collection, typename Fn>
-  using collection_insert_invocable =
-      std::is_invocable<Fn &, Collection &,
-                        typename collection_traits<Collection>::resolve_type>;
 
   template <typename Request, typename Key>
   using selection_t =
@@ -212,6 +211,22 @@ private:
     return parent_
         ->template resolve<user_type, Request::removes_rvalue_references>(
             scope, context, origin, key);
+  }
+
+  // A request no binding of this container answers goes to the parent and is
+  // reported unresolved when there is none.
+  template <typename Request, typename R, typename Context, typename Origin,
+            typename LookupKey>
+  R resolve_missing(construction_scope scope, Context &context, Origin &origin,
+                    LookupKey key) {
+    if constexpr (has_parent_v) {
+      if (parent_) {
+        return resolve_parent<Request>(scope, context, origin, std::move(key));
+      }
+    }
+    return origin
+        .template unresolved<Request, false, LookupKey, R, !has_parent_v>(
+            scope, context, key);
   }
 
 public:
@@ -346,11 +361,8 @@ public:
     }
     if constexpr (collection_traits<R>::is_collection) {
       if constexpr (has_parent_v && collection_count_v<R, LookupKey> == 0) {
-        if (parent_) {
-          return resolve_parent<request>(scope, context, origin, key);
-        }
-        return origin.template unresolved<request, false, LookupKey, R>(
-            scope, context, key);
+        return resolve_missing<request, R>(scope, context, origin,
+                                           std::move(key));
       } else {
         return resolve_request<request, R>(scope, context, origin, key);
       }
@@ -464,51 +476,39 @@ private:
   }
 
 public:
-  template <typename T> T construct_collection() {
+  using container_api<
+      static_container_impl<static_bindings<Registrations...>, ParentContainer,
+                            ContainerTraits>>::append_collection;
+  using container_api<
+      static_container_impl<static_bindings<Registrations...>, ParentContainer,
+                            ContainerTraits>>::construct_collection;
+  using container_api<
+      static_container_impl<static_bindings<Registrations...>, ParentContainer,
+                            ContainerTraits>>::count_collection;
+
+private:
+  friend class container_api<static_container_impl<
+      static_bindings<Registrations...>, ParentContainer, ContainerTraits>>;
+
+  template <typename T, typename LookupKey>
+  T construct_collection_by_key(LookupKey key) {
     context_type context;
-    return construct_collection<T>(ephemeral_scope, context,
-                                   detail::no_lookup_key());
+    return construct_collection<T>(ephemeral_scope, context, std::move(key));
   }
 
-  template <typename T, typename Fn,
-            std::enable_if_t<
-                !detail::is_lookup_key_v<std::decay_t<Fn>> &&
-                    !detail::is_key_value_v<Fn> &&
-                    collection_insert_invocable<T, std::decay_t<Fn>>::value,
-                int> = 0>
-  T construct_collection(Fn &&fn) {
+  template <typename T, typename Fn, typename LookupKey>
+  T construct_collection_by_key(Fn &&fn, LookupKey key) {
     context_type context;
     return construct_collection<T>(ephemeral_scope, context,
-                                   std::forward<Fn>(fn),
-                                   detail::no_lookup_key());
+                                   std::forward<Fn>(fn), std::move(key));
   }
 
+public:
   template <typename T, typename Context, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   T construct_collection(construction_scope scope, Context &context,
                          LookupKey) {
     return construct_collection_static<T, LookupKey>(scope, context);
-  }
-
-  template <typename T, typename IdType,
-            std::enable_if_t<!detail::is_lookup_key_v<IdType> &&
-                                 !collection_insert_invocable<
-                                     T, std::decay_t<IdType>>::value,
-                             int> = 0>
-  T construct_collection(IdType &&id) {
-    context_type context;
-    return construct_collection<T>(
-        ephemeral_scope, context,
-        detail::make_lookup_key(std::forward<IdType>(id)));
-  }
-
-  template <typename T, typename Fn, typename IdType,
-            std::enable_if_t<!detail::is_lookup_key_v<IdType>, int> = 0>
-  T construct_collection(Fn &&fn, IdType &&id) {
-    context_type context;
-    return construct_collection<T>(
-        ephemeral_scope, context, std::forward<Fn>(fn),
-        detail::make_lookup_key(std::forward<IdType>(id)));
   }
 
   template <typename T, typename Fn, typename Context, typename LookupKey,
@@ -519,34 +519,12 @@ public:
                                                      std::forward<Fn>(fn));
   }
 
-  template <typename T, typename Fn, typename Context>
-  std::size_t append_collection(construction_scope scope, T &results,
-                                Context &context, Fn &&fn) {
-    return append_collection<T>(scope, results, context, std::forward<Fn>(fn),
-                                detail::no_lookup_key());
-  }
-
-  template <typename T, typename Key, typename Fn, typename Context>
-  std::size_t append_collection(construction_scope scope, T &results,
-                                Context &context, Fn &&fn) {
-    return append_collection<T>(scope, results, context, std::forward<Fn>(fn),
-                                detail::make_lookup_key(type_selector<Key>{}));
-  }
-
   template <typename T, typename Fn, typename Context, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   std::size_t append_collection(construction_scope scope, T &results,
                                 Context &context, Fn &&fn, LookupKey) {
     return static_registry_.template append_collection<T, LookupKey>(
         scope, results, *this, context, std::forward<Fn>(fn));
-  }
-
-  template <typename T> std::size_t count_collection() {
-    return count_collection<T>(detail::no_lookup_key());
-  }
-
-  template <typename T, typename Key> std::size_t count_collection() {
-    return count_collection<T>(detail::make_lookup_key(type_selector<Key>{}));
   }
 
   template <typename T, typename LookupKey,
@@ -598,12 +576,8 @@ private:
                     LookupKey key) {
     if constexpr (collection_traits<R>::is_collection) {
       if constexpr (has_parent_v && collection_count_v<R, LookupKey> == 0) {
-        if (parent_) {
-          return resolve_parent<Request>(scope, context, origin,
-                                         std::move(key));
-        }
-        return origin.template unresolved<Request, false, LookupKey, R>(
-            scope, context, key);
+        return resolve_missing<Request, R>(scope, context, origin,
+                                           std::move(key));
       } else {
         return static_registry_.template construct_collection<R, LookupKey>(
             scope, *this, context);
@@ -623,15 +597,8 @@ private:
                       "static_container cannot resolve an ambiguously bound "
                       "type");
       } else {
-        if constexpr (has_parent_v) {
-          if (parent_) {
-            return resolve_parent<Request>(scope, context, origin,
+        return resolve_missing<Request, R>(scope, context, origin,
                                            std::move(key));
-          }
-        }
-        return origin
-            .template unresolved<Request, false, LookupKey, R, !has_parent_v>(
-                scope, context, key);
       }
     }
   }

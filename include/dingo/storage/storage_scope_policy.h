@@ -106,6 +106,7 @@ template <typename StorageTag> struct storage_scope_policy {
   static constexpr bool consumes = false;
   static constexpr materialization_guard guard = materialization_guard::none;
   static constexpr bool retains_unresolved_source = false;
+  static constexpr bool allows_cycles = false;
 
   static constexpr storage_exposure exposed(storage_form) {
     return storage_exposure::none;
@@ -462,3 +463,8 @@ public:
   }
 };
 } // namespace dingo
+
+// The built-in scope descriptors and policies are generated from the shared
+// model. The header only forward-declares the tags, so each scope header can
+// still define its tag in its own public header.
+#include <dingo/storage/scopes.gen.h>

@@ -19,35 +19,6 @@
 namespace dingo {
 struct unique {};
 
-template <> struct storage_scope_policy<unique> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = false;
-  static constexpr bool consumes = true;
-  static constexpr materialization_guard guard = materialization_guard::always;
-  static constexpr bool retains_unresolved_source = false;
-
-  static constexpr storage_exposure exposed(storage_form form) {
-    switch (form) {
-    case storage_form::plain:
-      return storage_exposure::lvalue | storage_exposure::rvalue;
-    case storage_form::pointer:
-    case storage_form::array:
-    case storage_form::bounded_array:
-      return storage_exposure::rvalue | storage_exposure::pointer;
-    case storage_form::alternative:
-    case storage_form::unique_handle:
-    case storage_form::unique_array_handle:
-    case storage_form::shared_handle:
-    case storage_form::shared_array_handle:
-    case storage_form::optional:
-      return storage_exposure::rvalue;
-    case storage_form::unknown:
-      break;
-    }
-    return storage_exposure::none;
-  }
-};
-
 // A plain value is additionally consumable as an optional. This is the only
 // resolution_traits specialization; it applies to the registered type itself,
 // not to a reference to it.

@@ -11,6 +11,8 @@ Read these pages in order for the full picture:
 - [Overview](overview.md): the main data flow and the key owners.
 - [Registration And Resolution](registration-and-resolution.md): runtime and
   compile-time registration, and the shared path to `resolve<T>()`.
+- [Shared Kernel](shared-kernel.md): the proposed unification of runtime and
+  compile-time selection and resolution, and the generated coverage model.
 - [Handles, Leaf Types, And Lookup](handles-leaf-types-and-lookup.md): wrapper
   algebra, `leaf_type_t`, `rebind_leaf_t`, `lookup_type_t`, and
   `exact_lookup<T>`.

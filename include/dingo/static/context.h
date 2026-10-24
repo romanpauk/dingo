@@ -18,7 +18,9 @@
 namespace dingo {
 
 template <typename StaticRegistry>
-class static_context : public detail::context_path_state {
+class static_context
+    : public detail::context_path_state,
+      public detail::context_resolution<static_context<StaticRegistry>> {
   using execution_traits =
       detail::basic_static_execution_traits<StaticRegistry>;
   static constexpr std::size_t frame_capacity_ =
@@ -51,28 +53,6 @@ public:
   ~static_context() {
     while (frame_count_ != 0) {
       frames_[--frame_count_]->reset();
-    }
-  }
-
-  template <typename T, typename Container>
-  T resolve(construction_scope scope, Container &container) {
-    if constexpr (detail::is_selected_v<T>) {
-      using request_type = detail::selected_type_t<T>;
-      using selector_type = detail::selected_selector_t<T>;
-      if constexpr (detail::is_type_selector_v<selector_type>) {
-        using selector_key_type = detail::type_selector_type_t<selector_type>;
-        return T(container.template resolve<request_type, false>(
-            scope, *this,
-            detail::make_lookup_key(
-                detail::type_selector<selector_key_type>{})));
-      } else {
-        static_assert(detail::is_value_selector_v<selector_type>);
-        return T(container.template resolve<request_type, false>(
-            scope, *this, detail::make_lookup_key(selector_type{})));
-      }
-    } else {
-      return container.template resolve<T, false>(scope, *this,
-                                                  detail::no_lookup_key());
     }
   }
 

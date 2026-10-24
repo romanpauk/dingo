@@ -48,7 +48,10 @@ private:
 template <typename Owner, typename InstanceContainer, typename Storage,
           typename RegistrationParent = typename Owner::parent_container_type>
 class runtime_binding_state : private detail::runtime_binding_base<
-                                  detail::cache::is_stable_storage_v<Storage>> {
+                                  detail::cache::is_stable_storage_v<Storage>>,
+                              private detail::binding_storage_holder<Storage> {
+  using storage_holder = detail::binding_storage_holder<Storage>;
+
 public:
   using owner_type = Owner;
   using container_type = InstanceContainer;
@@ -62,7 +65,7 @@ public:
 
   template <typename... Args>
   explicit runtime_binding_state(owner_type *owner, Args &&...args)
-      : owner_(owner), storage_(std::forward<Args>(args)...) {}
+      : storage_holder(std::forward<Args>(args)...), owner_(owner) {}
 
   runtime_type &runtime() { return owner().runtime(); }
   parent_container_type *parent() {
@@ -75,7 +78,7 @@ public:
     }
   }
   allocator_type &get_allocator() { return owner().get_allocator(); }
-  Storage &storage() { return storage_; }
+  Storage &storage() { return storage_holder::storage(); }
   detail::cache::entry *cache_slot() noexcept {
     return state_base::binding_cache_slot();
   }
@@ -144,7 +147,6 @@ private:
   }
 
   owner_type *owner_ = nullptr;
-  Storage storage_;
   InstanceContainer *instance_container_ = nullptr;
 };
 
@@ -182,12 +184,11 @@ template <typename Storage> using registered_type_t = typename Storage::type;
 
 template <typename Type, typename Storage>
 using runtime_binding_cache_types_t =
-    resolution_cache_types_t<typename binding_resolutions<Type, Storage>::type,
-                             storage_shape_t<Storage>>;
+    binding_conversion_cache_types_t<Type, Storage>;
 
 template <typename Types>
 static constexpr bool has_runtime_binding_cache_v =
-    type_list_size_v<Types> != 0;
+    has_binding_conversion_cache_types_v<Types>;
 
 template <typename Storage, typename = void>
 struct runtime_storage_can_reset : std::false_type {};
@@ -247,7 +248,7 @@ class runtime_binding
     : public runtime_binding_interface<
           typename Container::rtti_type,
           runtime_context<typename Container::allocator_type>>,
-      private detail::binding_conversion_cache_base<
+      private detail::binding_cache_slot<
           Storage::conversions::is_stable &&
               detail::has_runtime_binding_cache_v<
                   detail::runtime_binding_cache_types_t<Type, Storage>>,
@@ -276,20 +277,14 @@ public:
       storage_materialization_traits<typename Storage::tag_type,
                                      typename Storage::type>;
   using conversion_cache_base =
-      detail::binding_conversion_cache_base<uses_cached_conversions,
-                                            cache_types>;
+      detail::binding_cache_slot<uses_cached_conversions, cache_types>;
 
 private:
   template <typename T, typename Context, typename... Args>
   T &construct_conversion(construction_scope scope, Context &context,
                           Args &&...args) {
-    if constexpr (uses_cached_conversions) {
-      return conversion_cache_base::template construct_conversion_with<T>(
-          state().runtime(), scope, context, std::forward<Args>(args)...);
-    } else {
-      return conversion_cache_base::template construct_conversion<T>(
-          scope, context, std::forward<Args>(args)...);
-    }
+    return conversion_cache_base::template construct_conversion_for<T>(
+        state().runtime(), scope, context, std::forward<Args>(args)...);
   }
 
   struct binding_activation {
@@ -418,7 +413,7 @@ private:
   }
 
   static constexpr type_descriptor registered_type() {
-    return describe_type<detail::registered_type_t<Storage>>();
+    return detail::binding_registered_type<Storage>();
   }
 
 public:

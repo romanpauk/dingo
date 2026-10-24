@@ -10,6 +10,8 @@
 #include <dingo/base/exceptions.h>
 #include <dingo/binding/binding_selection.h>
 
+#include <utility>
+
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4702)
@@ -92,6 +94,32 @@ resolve_binding_status(binding_status primary,
                        binding_resolution_policy policy) {
   return binding_status_from_result(
       resolve_binding(primary, SecondaryStatus, policy));
+}
+
+// Resolves a request that two sources may answer. The primary source selected
+// at run time; the status of the secondary is known at compile time. The policy
+// decides which side wins, or whether both finding a binding is an error.
+template <binding_resolution_policy Policy, binding_status SecondaryStatus,
+          typename R, typename Request, typename PrimarySelection,
+          typename Context, typename PrimaryResolve, typename SecondaryResolve,
+          typename Missing>
+R resolve_combined_selection(const PrimarySelection &primary, Context &context,
+                             PrimaryResolve &&resolve_primary,
+                             SecondaryResolve &&resolve_secondary,
+                             Missing &&missing) {
+  const auto result = resolve_binding(primary.status, SecondaryStatus, Policy);
+  if (result == binding_result::primary) {
+    return std::forward<PrimaryResolve>(resolve_primary)();
+  }
+  if constexpr (SecondaryStatus == binding_status::found) {
+    if (result == binding_result::secondary) {
+      return std::forward<SecondaryResolve>(resolve_secondary)();
+    }
+  }
+  if (result == binding_result::missing) {
+    return std::forward<Missing>(missing)();
+  }
+  throw make_type_ambiguous_exception<Request>(context);
 }
 
 template <typename ErrorRequest, typename ResolveRequest = ErrorRequest,

@@ -144,6 +144,104 @@ if(NOT DINGO_MATRIX_GENERATOR_RESULT EQUAL 0)
 endif()
 include(${DINGO_MATRIX_TEST_CMAKE})
 
+set(DINGO_MODEL_GENERATOR
+    "${PROJECT_SOURCE_DIR}/tools/model/storage_cells.py")
+set(DINGO_SELECTION_MODEL_GENERATOR
+    "${PROJECT_SOURCE_DIR}/tools/model/selection_rules.py")
+set(DINGO_MODEL_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/tools/model/templates/storage_cells.cpp.j2")
+set(DINGO_SCOPES_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/tools/model/templates/scopes.gen.h.j2")
+set(DINGO_SCOPES_HEADER
+    "${PROJECT_SOURCE_DIR}/include/dingo/storage/scopes.gen.h")
+set(DINGO_SELECTION_MODEL_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/tools/model/templates/selection_rules.cpp.j2")
+set(DINGO_MODEL_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/storage_cells.cpp")
+set(DINGO_SELECTION_MODEL_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/selection_rules.cpp")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${DINGO_MODEL_GENERATOR}"
+    "${DINGO_SELECTION_MODEL_GENERATOR}"
+    "${DINGO_MODEL_TEMPLATE}"
+    "${DINGO_SCOPES_TEMPLATE}"
+    "${DINGO_SELECTION_MODEL_TEMPLATE}"
+    "${DINGO_SCOPES_HEADER}"
+    "${PROJECT_SOURCE_DIR}/tools/model/storage_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/selection_rules_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/cost/measure_test.py")
+execute_process(
+    COMMAND ${DINGO_UV_RUN_COMMAND} python
+        ${DINGO_MODEL_GENERATOR}
+        --out ${DINGO_MODEL_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE DINGO_MODEL_GENERATOR_RESULT)
+if(NOT DINGO_MODEL_GENERATOR_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to generate storage-cell coverage: "
+        "${DINGO_MODEL_GENERATOR_RESULT}")
+endif()
+execute_process(
+    COMMAND ${DINGO_UV_RUN_COMMAND} python
+        ${DINGO_SELECTION_MODEL_GENERATOR}
+        --out ${DINGO_SELECTION_MODEL_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE DINGO_SELECTION_MODEL_GENERATOR_RESULT)
+if(NOT DINGO_SELECTION_MODEL_GENERATOR_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to generate selection-rule coverage: "
+        "${DINGO_SELECTION_MODEL_GENERATOR_RESULT}")
+endif()
+
+add_custom_target(cells-check
+    COMMENT "Verifying generated cell coverage"
+    COMMAND ${DINGO_UV_RUN_COMMAND} python
+        ${DINGO_MODEL_GENERATOR}
+        --out ${DINGO_MODEL_TEST_SOURCE}
+        --header ${DINGO_SCOPES_HEADER}
+        --include ${PROJECT_SOURCE_DIR}/include
+        --check
+    COMMAND ${DINGO_UV_RUN_COMMAND} python
+        ${DINGO_SELECTION_MODEL_GENERATOR}
+        --out ${DINGO_SELECTION_MODEL_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+        --check
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
+add_executable(dingo_model_test
+    ${DINGO_MODEL_TEST_SOURCE}
+    ${DINGO_SELECTION_MODEL_TEST_SOURCE})
+target_link_libraries(dingo_model_test dingo::dingo gtest_main)
+add_test(NAME dingo_model_test COMMAND dingo_model_test)
+set_tests_properties(dingo_model_test PROPERTIES LABELS "unit;generator")
+
+add_test(NAME dingo_model_generator_test
+    COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q
+        ${PROJECT_SOURCE_DIR}/tools/model/storage_cells_test.py
+        ${PROJECT_SOURCE_DIR}/tools/model/selection_rules_test.py)
+set_tests_properties(dingo_model_generator_test PROPERTIES
+    LABELS "unit;generator"
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/model)
+
+add_test(NAME dingo_cost_tool_test
+    COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q
+        ${PROJECT_SOURCE_DIR}/tools/cost/measure_test.py)
+set_tests_properties(dingo_cost_tool_test PROPERTIES
+    LABELS "unit;generator"
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/cost)
+
+add_custom_target(cost-record
+    COMMENT "Recording the current code-size and compile-cost probe"
+    COMMAND ${DINGO_UV_RUN_COMMAND} python
+        ${PROJECT_SOURCE_DIR}/tools/cost/measure.py
+        record
+        --include ${PROJECT_SOURCE_DIR}/include
+        --source ${PROJECT_SOURCE_DIR}/test/lit/codegen-static-probes.cpp
+        --out ${PROJECT_BINARY_DIR}/cost/current.json
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
 add_test(NAME dingo_matrix_generator_test
     COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q
         ${CMAKE_CURRENT_SOURCE_DIR}/matrix/generator_test.py)

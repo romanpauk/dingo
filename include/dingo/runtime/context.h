@@ -18,7 +18,9 @@
 namespace dingo {
 
 template <typename Allocator>
-class runtime_context : public detail::context_path_state {
+class runtime_context
+    : public detail::context_path_state,
+      public detail::context_resolution<runtime_context<Allocator>> {
   using transaction_type = runtime_transaction<Allocator>;
 
 public:
@@ -101,28 +103,6 @@ public:
 
   void add_runtime_destructor(void *instance, void (*dtor)(void *) noexcept) {
     transaction_->add_runtime_destructor(instance, dtor);
-  }
-
-  template <typename T, typename Container>
-  T resolve(construction_scope scope, Container &container) {
-    if constexpr (detail::is_selected_v<T>) {
-      using request_type = detail::selected_type_t<T>;
-      using selector_type = detail::selected_selector_t<T>;
-      if constexpr (detail::is_type_selector_v<selector_type>) {
-        using selector_key_type = detail::type_selector_type_t<selector_type>;
-        return T(container.template resolve<request_type, false>(
-            scope, *this,
-            detail::make_lookup_key(
-                detail::type_selector<selector_key_type>{})));
-      } else {
-        static_assert(detail::is_value_selector_v<selector_type>);
-        return T(container.template resolve<request_type, false>(
-            scope, *this, detail::make_lookup_key(selector_type{})));
-      }
-    } else {
-      return container.template resolve<T, false>(scope, *this,
-                                                  detail::no_lookup_key());
-    }
   }
 
 private:

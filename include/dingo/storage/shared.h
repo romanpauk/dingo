@@ -24,20 +24,6 @@
 namespace dingo {
 struct shared {};
 
-template <> struct storage_scope_policy<shared> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-  static constexpr bool consumes = false;
-  static constexpr materialization_guard guard =
-      materialization_guard::while_unresolved;
-  static constexpr bool retains_unresolved_source = true;
-
-  static constexpr storage_exposure exposed(storage_form) {
-    return storage_exposure::value | storage_exposure::lvalue |
-           storage_exposure::pointer;
-  }
-};
-
 namespace detail {
 template <typename Type, typename U>
 struct conversions<shared, Type, U> : type_storage_traits<shared, Type, U> {};
