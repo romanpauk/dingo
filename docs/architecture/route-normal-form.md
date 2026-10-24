@@ -18,7 +18,7 @@ value category, and the rules that reached it.
 
 The forms that create a wrapper, `wrap`, `adopt`, and `address`, are not derived,
 since only the request names the kind it wants. They apply at the request, on
-top of a reachable type the binding serves, up to `max_created_wrappers` (2) wrappers.
+top of a reachable type the binding serves, as many wrappers as the request names.
 
 The set of reachable types is closed under the rules, so no list states which requests a
 binding serves: a shared `std::unique_ptr<impl>` serves `iface*` because the
@@ -26,7 +26,7 @@ rules borrow, upcast, and take the address. A kind of the user is derived the
 same way, by the forms it declares. The set is bounded:
 
 - a derived type tree is at most one wrapper larger than the stored one
-  (`derivation_bound`), and a route has at most `max_rules_per_route` (8) rules
+  (`derivation_bound`), and a route has as many rules as it needs
 - a scope that borrows, `shared` or `external`, offers no consuming form
 - a rule applies only when its predicate holds: `copy` needs a copyable object,
   and `address` an addressable one; a request does not drop qualifiers
@@ -39,15 +39,13 @@ same way, by the forms it declares. The set is bounded:
 
 ### The Overflow Gap
 
-A derivation holds at most `max_reachable_types` (96) reachable types. A derivation that would
-produce more sets `reachable_types::overflow`, which nothing reads: no diagnostic reports
-it, and the reference implementation has no counterpart. A binding over the
-limit would publish an incomplete set, and some requests of it would be refused
-as not found or not convertible with no explanation. The route tables do not
-reach the limit, but a deep stack of wrappers or many interfaces could.
-
-The smallest fix is a catalog diagnostic that rejects such a binding, when it is
-compiled in a static container and when it is registered in a runtime one.
+A derivation held at most 96 reachable types, and one that would produce more set
+a flag that nothing read, so a binding over the limit published an incomplete
+set and some requests of it were refused as not found with no explanation. The
+derivation now runs with room that doubles while it is full and fills an array of
+exactly the reachable types it found, up to 1024 of them, where it stops at a
+function that names the cause. See M10.5 in
+[spec-driven-design.md](spec-driven-design.md#m105-exact-sizes).
 
 ## Why Derivation Is Needed
 
@@ -263,15 +261,20 @@ whole form. Only 23% of the routes it walks are relevant to the request, a
 reachable type that is a subtree of the request or a pointer to one; a search
 pruned to them walks about a quarter. It has not been written.
 
-The C++ is unchanged. The sets are still derived, stored, and sized by
-constants, and a runtime binding still instantiates a walk for each reachable
+The C++ does not use it. The sets are still derived, but they are sized by what
+they hold, and a runtime binding still instantiates a walk for each reachable
 type.
 
 ## What Remains
 
+A static binary does not contain the published set, which is only read as a
+constant, and a runtime container instantiates its walks where a binding is
+registered, before any request is known, and cannot instantiate those a request
+uses: the binding and the request are never in one place. So a route found from
+the request in the C++ would save neither memory nor code, and would derive per
+request what is derived per binding now. What is left of this proposal is:
+
 1. a search pruned to the subtrees of the request, in the reference, with the
    same zero differences
-2. the static path of the C++ with a route constant in place of
-   `published.items[RT]`, which removes the stored sets of static bindings
-3. the runtime path, which lists the routes a binding can take from the form and
-   instantiates a walk for each, without type trees
+2. the listing of the routes a runtime binding can take from the form, as a
+   description of the walks it instantiates, if the closure becomes the cost

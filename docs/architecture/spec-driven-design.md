@@ -1993,108 +1993,105 @@ its bindings are known, which the selection rule asks at a declared step.
 
 #### M10.5: Exact Sizes
 
-Status: proposed.
+Status: in progress. The derivation, the type trees of bindings and requests,
+the rules of a route, and the wrappers a request creates are sized by what they
+hold. The working type trees, the interfaces, the key aliases, and the set of
+semantics are not yet.
 
 M10.3 made a wrapper semantics a declaration of the user, so no bound on what a
 derivation produces can be proved for every semantics: a user's operations may
 reach a reachable type more often, or a route longer, than the semantics of the
-library do. The derivation sizes its results by constants anyway:
+library do. The derivation sized its results by constants anyway:
 `max_reachable_types` (96), `max_rules_per_route` (8), `max_created_wrappers`
 (2), `max_semantics` (32), `type_tree_capacity` (16 nodes), `max_interfaces`
 (8), and `max_key_aliases` (4). Only the interfaces and the key aliases are
-checked, by a diagnostic. The others fail without saying why:
+checked, by a diagnostic. The others failed without saying why:
 
-- a derivation that fills `reachable_types` sets `overflow`, which nothing
-  reads, and the binding publishes an incomplete set, so a request it should
-  serve is refused as not found
-- a route of more than `max_rules_per_route` rules is dropped, and the set of
-  semantics a type tree uses stops growing at `max_semantics`
+- a derivation that filled `reachable_types` set `overflow`, which nothing read,
+  and the binding published an incomplete set, so a request it should serve was
+  refused as not found
+- a route of more than `max_rules_per_route` rules was dropped, and a request
+  could create no more than two wrappers, whatever the reference implementation
+  said
 - a type tree of more than 16 nodes is an index past the end of an array in
   constant evaluation, so a `std::variant` of 20 alternatives cannot be
   registered, and the error names an array, not the variant
 
-The constants also cost every binding type, whatever it needs. `type_tree` is
+The constants also cost every binding type, whatever it needs. `type_tree` was
 648 bytes, `reachable_type` 832, `reachable_types` 79,888, and
-`binding_descriptor` 6,096. A runtime container that registers 10 distinct
-shared types holds 1.0 MB of read-only data, and one that registers 20 holds 2.0
-MB, about 100 KB per binding type, measured at `-O2`. The bindings use few of
-the 96 reachable types they have room for: a shared `int` has 2, a shared
-`std::shared_ptr<impl>` declared as two interfaces has 12, and a
-`std::shared_ptr` of a `std::variant` of two handles and an `int`, declared as
-two interfaces, has 19.
+`binding_descriptor` 6,096, and a runtime container reads the whole set when it
+chooses the route of a request, so every binding type put about 100 KB of
+read-only data in the binary and in the pages a registration touches. The
+bindings use few of the 96 reachable types they have room for: a shared `int`
+has 2, and a shared `std::shared_ptr<impl>` declared as two interfaces has 10.
 
-The design:
+What was done, each step checked against the route tables, which did not change:
 
-1. **Sizes are counted, never bounded.** The room of an array is the number of
-   things it holds, found by a `constexpr` function over the types, as the
-   conversion-engine branch does (`reachable_types_count`,
-   `creating_steps_count` there). The bounds that are theorems of the rules of
-   the library, `derivation_bound` among them, stay as claims the tests check,
-   and nothing is sized by them.
-2. **A reachable type is a small value that refers into its binding.** No step
-   makes a type larger than the stored one, so the type tree of a reachable type
-   is the subtree of the stored type tree at a node, with at most the wrapper
-   the last step made around it, and a declared interface in place of its leaf.
-   A reachable type holds that node, the semantics and family of the made
-   wrapper, the replaced leaf, the category, the operation it came by, and its
-   parent: a few dozen bytes in place of 832. The 19 reachable types above take
-   under a kilobyte in place of 80,000 bytes.
-3. **The derivation is sized by its own count.** The first evaluation counts the
-   reachable types with room that doubles when it is full, so it is never
-   truncated, and the second evaluation fills an array of exactly that size. The
-   room does not depend on the language tier. Where `constexpr_dynamic_alloc`
-   holds, the first evaluation may use transient allocation instead of the
-   doubling, which changes no result. The limit that remains is the one of the
-   compiler for constant evaluation, and an evaluation that reaches it is
-   reported as a diagnostic that names the binding.
-4. **A type tree has the nodes it has.** `type_tree_capacity` goes, and a type
-   tree holds the number of nodes the type has, found by counting them, as do
-   the interface trees of a binding and the type tree of a request. The routes
-   and the creating steps of a request are counted the same way, so
-   `max_rules_per_route` and `max_created_wrappers` go.
-5. **A count that a consumer cannot take is refused.** Where a count is larger
-   than what the part that reads it accepts, the operation is refused with a
-   diagnostic that names the binding. Nothing is truncated and no flag is left
-   unread.
+1. **The derivation is sized by its own count.** It writes into a buffer that
+   sets `full` when it has no room, `derive_then` runs it with room that doubles
+   while it is full and gives the result to a callable, and a binding type
+   counts its reachable types that way and derives them a second time into an
+   array of exactly that count. `reachable_types` is a view of it. A binding of
+   more than 1024 reachable types stops at a function that names the cause,
+   where it set a flag nobody read.
+2. **The type trees of a binding and of a request are views of exact nodes.** A
+   `type_tree_view` is the nodes of a tree and their number, over an array of
+   exactly as many that a variable template of the type keeps. The working type
+   trees of a derivation keep their room.
+3. **The walk follows a route.** The walk, its steps, and the plans are
+   templates of a route type, which has the reachable type as a constant and the
+   siblings it takes by the alternatives a variadic wrapper holds, and not of an
+   index into the published ones.
+4. **A route has the rules it needs.** A reachable type holds its last rule, its
+   argument, and the reachable type it continues, and `rule_at` reads the rule
+   at a position along them. `select_route` keeps a candidate, the reachable
+   type it starts from and the wrappers it creates.
+5. **A request creates as many wrappers as it holds.** `select_route` offers a
+   chain of creating forms, outermost first, and extends it by the forms of the
+   wrapper under the last one, as the reference does, as many as the request has
+   nodes; the plan keeps the forms in four bits each, and a runtime container
+   fixes them one at a time, no more than the wrappers of the type it makes. The
+   generated cases include requests of three wrappers, which both refuse.
 
-The runtime path does not change. A runtime binding keeps references into the
-constants of its binding type, a request finds its reachable type in the memo,
-and the thunk and the inline completion are as they were. What changes is that
-the constants are as large as the binding, the first request of a type compares
-small values, and the registration instantiates the same thunks.
+Measured at `-O2` with GCC, for thirty runtime bindings of an implementation
+declared as an interface: text and read-only data went from 2.95 MB to 0.46 MB,
+the former implementation having 0.39 MB; registering a binding from 5 to about
+1 microsecond, the former implementation having 1; the first request of a type
+stays at about 2 microseconds, the former implementation having 0.9, and a
+request that is repeated is as it was. A static container never emitted the
+published set, which it only reads as a constant.
 
-Steps, each checked against the route tables, which must not change:
+What remains:
 
-1. a diagnostic for the overflow, raised when a binding is compiled in a static
-   container and when it is registered in a runtime one, and a contract that
-   measures the read-only data of N distinct bindings, so the 100 KB per binding
-   is a number the checks see
-2. the small reachable type, with the completion and the walk reading the type
-   tree from the binding
-3. counted type trees, with the diagnostic for a tree the compiler cannot
-   evaluate
-4. the counted derivation, and the counted routes and creating steps, which
-   remove `max_reachable_types`, `max_rules_per_route`, and
-   `max_created_wrappers`
-5. counted interfaces, key aliases, and set of semantics, so the diagnostics for
-   `max_interfaces` and `max_key_aliases` go with their constants
-6. the contracts: the read-only data of a binding is linear in its reachable
-   types, the number of evaluations of the derivation is two, and the claims of
-   the bounds are tests
+1. a `type_tree_capacity` that grows with the type for the working trees of a
+   derivation, with a diagnostic that names the type when a tree is too large,
+   and counted interfaces, key aliases, and set of semantics, so the diagnostics
+   for `max_interfaces` and `max_key_aliases` go with their constants
+2. the contract that measures the read-only data of N distinct bindings, so the
+   footprint is a number the checks see, and the claims of the bounds as tests
+3. the first request of a type, where the remaining difference to the former
+   implementation is the choice of a route among the reachable types
 
-The sets themselves may not be needed. The proposal in
+The sets themselves are not needed to choose a route. The proposal in
 [route-normal-form.md](route-normal-form.md) finds a route from the request, and
-the reference implementation now does: `route_for` walks the routes of the form
+the reference implementation does: `route_for` walks the routes of the form
 peel, share, the rule of a leaf and the upcast, share, keeps none, and agrees
-with the closure on every request of the universes checked, the wrappers of the
-library and of the user with their mutations. A request creates as many wrappers
-as its type tree names, since the limit of two is lifted in the reference and no
-request in the universe needs a third. If the C++ follows, a static binding
-keeps no set and a runtime binding lists its possible routes without type trees,
-and the counted derivation of steps 3 and 4 is not needed; the counted type
-trees, interfaces, and key aliases of step 5 still are.
+with the closure on every request of the universes checked. The C++ does not
+follow it, for two measured reasons. A static container emits nothing for the
+set, so removing it saves no memory and adds a derivation per request to the
+compile. And a runtime container cannot instantiate a walk for the routes that
+are used: the binding is known where it is registered and the request where it
+is resolved, and neither sees the other, so the walks are instantiated for the
+routes the binding can take. An experiment that instantiated only the route the
+benchmark requested bounded what laziness could gain at 50 KB and 0.9
+microseconds of the first request.
 
 ## Decision Log
+
+- 2026-10-24: The routes are not found from the request in the C++; see M10.5. A
+  static binary never contained the published set, and a runtime container
+  instantiates its walks where the binding is registered, before any request is
+  known, so a route found from the request saves neither memory nor code there.
 
 - 2026-10-24: Sizes are counted, not bounded; see M10.5. A wrapper semantics of
   the user can break any bound the rules of the library prove, a derivation that
