@@ -24,7 +24,7 @@ template <typename Type> std::string type_name() {
 #if !defined(DINGO_MATRIX_BASELINE)
   return ::dingo::type_name_of<Type>();
 #else
-  return ::dingo::type_name<Type>();
+  return ::dingo::detail::type_name<Type>();
 #endif
 }
 

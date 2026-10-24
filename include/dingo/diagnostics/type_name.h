@@ -47,7 +47,7 @@ inline constexpr std::size_t type_name_trailer =
 
 // The compiler's spelling of `Type`.
 template <typename Type> constexpr std::string_view spelled_type_name() {
-  constexpr std::string_view signature = type_name<Type>();
+  constexpr std::string_view signature = detail::type_name<Type>();
   return signature.substr(detail::type_name_prefix,
                           signature.size() - detail::type_name_prefix -
                               detail::type_name_trailer);

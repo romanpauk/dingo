@@ -151,9 +151,11 @@ constexpr bool constant_evaluated() {
 #endif
 }
 
+namespace detail {
 // The name of a type as the compiler spells it in a function signature,
 // usable in constant evaluation; distinct types of a translation unit have
-// distinct names.
+// distinct names. The function is in detail, not in dingo, because GCC leaves
+// the namespace of the function out of the names of the types in it.
 template <typename Type> constexpr const char *type_name() {
 #if defined(_MSC_VER) && !defined(__clang__)
   return __FUNCSIG__;
@@ -161,6 +163,7 @@ template <typename Type> constexpr const char *type_name() {
   return __PRETTY_FUNCTION__;
 #endif
 }
+} // namespace detail
 
 // The tag whose address identifies a type.
 template <typename Type> struct type_tag {
