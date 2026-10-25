@@ -475,12 +475,13 @@ model suites. In priority order:
    reachable from both request matchers with satisfied scope access. The matrix
    interface surface is therefore fully model-covered: `resolve_interface` and
    `resolve_unique_wrapper` produce no executables, and their exposure axis
-   members are declared model-covered in the matrix manifest. Behavior cases
-   also cover shared annotated concrete values (plain, shared pointer, optional,
-   pointer storage) and annotated interface references, pointers, shared
-   handles, and handle references. The matrix drops the shared annotated
-   interface rows; annotated concrete and external annotated rows keep their
-   matrix registration variety.
+   members are declared model-covered in the matrix manifest. Annotation recipes
+   now cover shared annotated concrete values (plain, shared pointer, optional,
+   pointer storage), annotated interface references, pointers, shared handles,
+   and handle references, and external annotated value, reference, pointer, and
+   shared-handle registrations. Negative cases refuse unannotated and wrong-tag
+   requests and reject duplicate annotated registration. The matrix annotation
+   rows are fully model-covered, so `annotated` produces no executable.
 6. **Keys, collections, local bindings.** Add model axes only if the generated
    product stays compact; otherwise keep them in the matrix.
 

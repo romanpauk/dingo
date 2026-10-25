@@ -180,7 +180,7 @@ def shared_cyclical_rows() -> tuple[SharedCyclicalRow, ...]:
 
 
 def test_matrix_cardinality_remains_bounded(rows: tuple[MatrixRow, ...]) -> None:
-    assert len(rows) == 1857
+    assert len(rows) == 1740
     assert len({(row.feature.name, row.name) for row in rows}) == len(rows)
 
 
@@ -247,7 +247,9 @@ def _model_interface_cases() -> set[str]:
         import behavior_cells
     finally:
         sys.path.remove(str(model_dir))
-    return {case.name for case in behavior_cells.INTERFACE_CASES}
+    return {case.name for case in behavior_cells.INTERFACE_CASES} | {
+        recipe.name for recipe in behavior_cells.ANNOTATION_RECIPES
+    }
 
 
 def test_model_restrictions_name_real_features_and_cells() -> None:
@@ -2177,7 +2179,7 @@ def test_matrix_families_preserve_total_registration_behavior(
         + len(scenario_rows)
         + len(invoke_rows)
         + len(shared_cyclical_rows)
-        == 4827
+        == 4710
     )
 
 
@@ -2352,10 +2354,9 @@ def test_dependency_provisioning_rejects_rows_from_unrelated_features(
 
 @pytest.mark.parametrize(
     ("scope", "exposed_type"),
-    (
-        ("external", "annotated_concrete"),
-        ("external", "keyed_concrete"),
-    ),
+    # Annotated external provisioning is model-covered, so removing its rows no
+    # longer leaves an expected matrix case.
+    (("external", "keyed_concrete"),),
 )
 def test_dependency_provisioning_rejects_missing_external_shapes(
     rows: tuple[MatrixRow, ...], scope: str, exposed_type: str
@@ -2813,21 +2814,21 @@ def test_invalid_registration_plan_is_an_error(
         "expected_compiled_rows",
     ),
     (
-        (None, frozenset(), Compiler(), 117, 0, 1602),
+        (None, frozenset(), Compiler(), 116, 0, 1602),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset(),
             Compiler(),
-            245,
+            244,
             0,
             1602,
         ),
-        (64, frozenset(), Compiler(), 141, 0, 1602),
+        (64, frozenset(), Compiler(), 140, 0, 1602),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset({("invoke", 4), ("resolve", 4)}),
             Compiler(),
-            611,
+            610,
             400,
             1602,
         ),
@@ -2835,7 +2836,7 @@ def test_invalid_registration_plan_is_an_error(
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset(),
             Compiler.parse("MSVC", "19.49", "x64"),
-            245,
+            244,
             0,
             1602,
         ),
@@ -2878,7 +2879,7 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
     )
     runner_sources = tuple(out_dir.glob("matrix_runner_*.cpp"))
     assert len(implementation_sources) == expected_implementation_sources
-    assert len(runner_sources) == 54
+    assert len(runner_sources) == 53
     coverage_report = out_dir / MATRIX_REPORT
     matrix_exclusions = compiler_exclusions(compiler)
     selected_composition_rows = project_dependency_composition_rows(

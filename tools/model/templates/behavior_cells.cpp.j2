@@ -24,6 +24,7 @@
 namespace behavior_cells {
 
 struct tag_a {};
+struct tag_b {};
 
 struct tracked_interface {
   virtual ~tracked_interface() = default;
@@ -181,4 +182,31 @@ TEST(behavior_cells, {{ row.name }}) {
 }
 
 {% endfor %}
+TEST(annotation_cells, refuses_unannotated_request) {
+  dingo::container<> container;
+  container.register_type<dingo::scope<dingo::shared>, dingo::storage<tracked>,
+                          dingo::interfaces<dingo::annotated<tracked, tag_a>>>();
+  EXPECT_THROW((container.resolve<tracked &>()),
+               dingo::type_not_found_exception);
+}
+
+TEST(annotation_cells, refuses_wrong_tag) {
+  dingo::container<> container;
+  container.register_type<dingo::scope<dingo::shared>, dingo::storage<tracked>,
+                          dingo::interfaces<dingo::annotated<tracked, tag_a>>>();
+  EXPECT_THROW((container.resolve<dingo::annotated<tracked &, tag_b>>()),
+               dingo::type_not_found_exception);
+}
+
+TEST(annotation_cells, rejects_duplicate_annotated_registration) {
+  dingo::container<> container;
+  container.register_type<dingo::scope<dingo::shared>, dingo::storage<tracked>,
+                          dingo::interfaces<dingo::annotated<tracked, tag_a>>>();
+  EXPECT_THROW(
+      (container.register_type<
+          dingo::scope<dingo::shared>, dingo::storage<tracked>,
+          dingo::interfaces<dingo::annotated<tracked, tag_a>>>()),
+      dingo::lookup_already_registered_exception);
+}
+
 } // namespace behavior_cells

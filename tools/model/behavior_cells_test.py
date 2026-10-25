@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from behavior_cells import (
+    ANNOTATION_RECIPES,
     BEHAVIOR_GAPS,
     INTERFACE_CASES,
     REQUEST_COSTS,
@@ -44,11 +45,29 @@ def test_behavior_gaps_have_reasons() -> None:
 
 
 def test_interface_cases_cover_both_containers() -> None:
-    rows = [row for row in build_rows() if row.get("interface")]
+    rows = [
+        row
+        for row in build_rows()
+        if row.get("interface") and not row.get("annotation")
+    ]
     assert INTERFACE_CASES
     assert rows
     assert {row["container"] for row in rows} == {"runtime", "static"}
     assert {row["scope"] for row in rows} == {"shared", "unique"}
+    assert all(row["request_class"] in REQUEST_COSTS for row in rows)
+
+
+def test_annotation_recipes_are_valid() -> None:
+    rows = [row for row in build_rows() if row.get("annotation")]
+    assert ANNOTATION_RECIPES
+    assert rows
+    assert len({recipe.name for recipe in ANNOTATION_RECIPES}) == len(
+        ANNOTATION_RECIPES
+    )
+    assert {row["scope"] for row in rows} == {"shared", "external"}
+    assert {
+        row["container"] for row in rows if row["scope"] == "external"
+    } == {"runtime"}
     assert all(row["request_class"] in REQUEST_COSTS for row in rows)
 
 

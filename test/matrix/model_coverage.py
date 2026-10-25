@@ -130,6 +130,8 @@ FEATURE_RESTRICTIONS = (
         feature="annotated",
         drop=frozenset(
             {
+                ("shared", "annotated_value_ref"),
+                ("external", "annotated_value_ref"),
                 ("shared", "annotated_interface_ref"),
                 ("shared", "annotated_interface_ptr"),
                 ("shared", "annotated_interface_shared_ptr"),
@@ -139,16 +141,24 @@ FEATURE_RESTRICTIONS = (
         covered_cells=frozenset(),
         interface_cases=frozenset(
             {
+                "shared_annotated_ref",
+                "shared_annotated_value",
+                "shared_annotated_shared_ptr_ref",
+                "shared_annotated_optional_ref",
+                "shared_annotated_pointer_ref",
                 "shared_annotated_interface_ref",
                 "shared_annotated_interface_ptr",
                 "shared_annotated_interface_handle",
                 "shared_annotated_interface_handle_ref",
+                "external_annotated_value",
+                "external_annotated_ref",
+                "external_annotated_ptr",
+                "external_annotated_shared_ptr",
             }
         ),
         reason=(
-            "annotated interface behavior cases cover the shared annotated "
-            "interface shapes; annotated concrete values and external rows keep "
-            "their matrix registration variety"
+            "annotation recipes cover shared annotated concrete values, "
+            "annotated interfaces, and external annotated registrations"
         ),
     ),
 )
@@ -157,6 +167,8 @@ FEATURE_RESTRICTIONS = (
 # model-covered. Other scopes of the same resolved type are unaffected.
 MODEL_COVERED_PROVISIONING_CELLS = frozenset(
     {
+        ("shared", "annotated_value_ref"),
+        ("external", "annotated_value_ref"),
         ("shared", "annotated_interface_ref"),
         ("shared", "annotated_interface_ptr"),
         ("shared", "annotated_interface_shared_ptr"),
@@ -172,13 +184,23 @@ RESTRICTIONS_BY_FEATURE = {
 # axis stays declared so the catalog keeps its identity, but the coverage check
 # no longer requires a matrix row.
 MODEL_COVERED_EXPOSED_TYPES = frozenset(
-    {"copyable_interface_type", "multiple_interfaces", "annotated_interface"}
+    {
+        "annotated_concrete",
+        "annotated_interface",
+        "copyable_interface_type",
+        "multiple_interfaces",
+    }
 )
 
 # Features whose supported rows are now entirely owned by the model, so the
 # matrix no longer generates a case for them.
 FULLY_MODEL_COVERED_FEATURES = frozenset(
-    {"lifetime_counts", "resolve_interface", "resolve_unique_wrapper"}
+    {
+        "annotated",
+        "lifetime_counts",
+        "resolve_interface",
+        "resolve_unique_wrapper",
+    }
 )
 
 
@@ -250,6 +272,24 @@ MODEL_COVERED_RESOLVED_TYPES = (
         reason="the multiple-interface behavior case resolves the second interface",
     ),
     ResolvedTypeCoverage(
+        resolved_type="annotated_value_ref",
+        covered_cells=frozenset(),
+        interface_cases=frozenset(
+            {
+                "shared_annotated_ref",
+                "shared_annotated_value",
+                "shared_annotated_shared_ptr_ref",
+                "shared_annotated_optional_ref",
+                "shared_annotated_pointer_ref",
+                "external_annotated_value",
+                "external_annotated_ref",
+                "external_annotated_ptr",
+                "external_annotated_shared_ptr",
+            }
+        ),
+        reason="annotation recipes cover the annotated concrete reference requests",
+    ),
+    ResolvedTypeCoverage(
         resolved_type="annotated_interface_ref",
         covered_cells=frozenset(),
         interface_cases=frozenset({"shared_annotated_interface_ref"}),
@@ -318,6 +358,11 @@ MODEL_COVERED_POLICY_SOURCES = frozenset(
         ),
         ("lifetime", "unique", "unique_value_type", "concrete", "value_rvalue"),
         ("resolved_type", "variant_value", "variant"),
+        (
+            "resolved_type",
+            "annotated_value_ref",
+            "annotated",
+        ),
         (
             "resolved_type",
             "annotated_interface_ref",

@@ -431,100 +431,6 @@ INTERFACE_CASES = (
         other_relation="first->value() == other->value()",
     ),
     InterfaceCase(
-        name="shared_annotated_ref",
-        scope="shared",
-        storage="dingo::storage<tracked>",
-        factory=None,
-        interfaces=("dingo::annotated<tracked, tag_a>",),
-        request="dingo::annotated<tracked &, tag_a>",
-        relation="&first == &second",
-        constructions=1,
-        request_class="reference",
-        bind_reference=True,
-    ),
-    InterfaceCase(
-        name="shared_annotated_shared_ptr",
-        scope="shared",
-        storage="dingo::storage<std::shared_ptr<tracked>>",
-        factory="make_shared_tracked",
-        interfaces=("dingo::annotated<tracked, tag_a>",),
-        request="dingo::annotated<tracked &, tag_a>",
-        relation="&first == &second",
-        constructions=1,
-        request_class="reference",
-        bind_reference=True,
-    ),
-    InterfaceCase(
-        name="shared_annotated_optional",
-        scope="shared",
-        storage="dingo::storage<std::optional<tracked>>",
-        factory="make_optional_tracked",
-        interfaces=("dingo::annotated<tracked, tag_a>",),
-        request="dingo::annotated<tracked &, tag_a>",
-        relation="&first == &second",
-        constructions=1,
-        request_class="reference",
-        bind_reference=True,
-    ),
-    InterfaceCase(
-        name="shared_annotated_pointer",
-        scope="shared",
-        storage="dingo::storage<tracked *>",
-        factory="make_pointer_tracked",
-        interfaces=("dingo::annotated<tracked, tag_a>",),
-        request="dingo::annotated<tracked &, tag_a>",
-        relation="&first == &second",
-        constructions=1,
-        request_class="reference",
-        bind_reference=True,
-    ),
-    InterfaceCase(
-        name="shared_annotated_interface_ref",
-        scope="shared",
-        storage="dingo::storage<std::shared_ptr<tracked>>",
-        factory="make_shared_tracked",
-        interfaces=("dingo::annotated<tracked_interface, tag_a>",),
-        request="dingo::annotated<tracked_interface &, tag_a>",
-        relation="&first == &second",
-        constructions=1,
-        request_class="reference",
-        bind_reference=True,
-    ),
-    InterfaceCase(
-        name="shared_annotated_interface_ptr",
-        scope="shared",
-        storage="dingo::storage<std::shared_ptr<tracked>>",
-        factory="make_shared_tracked",
-        interfaces=("dingo::annotated<tracked_interface, tag_a>",),
-        request="dingo::annotated<tracked_interface *, tag_a>",
-        relation="first == second",
-        constructions=1,
-        request_class="reference",
-    ),
-    InterfaceCase(
-        name="shared_annotated_interface_handle",
-        scope="shared",
-        storage="dingo::storage<std::shared_ptr<tracked>>",
-        factory="make_shared_tracked",
-        interfaces=("dingo::annotated<tracked_interface, tag_a>",),
-        request="dingo::annotated<std::shared_ptr<tracked_interface>, tag_a>",
-        relation="first == second",
-        constructions=1,
-        request_class="handle",
-    ),
-    InterfaceCase(
-        name="shared_annotated_interface_handle_ref",
-        scope="shared",
-        storage="dingo::storage<std::shared_ptr<tracked>>",
-        factory="make_shared_tracked",
-        interfaces=("dingo::annotated<tracked_interface, tag_a>",),
-        request="dingo::annotated<std::shared_ptr<tracked_interface> &, tag_a>",
-        relation="&first == &second",
-        constructions=1,
-        request_class="reference",
-        bind_reference=True,
-    ),
-    InterfaceCase(
         name="shared_copyable_value",
         scope="shared",
         storage="dingo::storage<std::shared_ptr<copyable_implementation>>",
@@ -588,6 +494,248 @@ def _interface_rows() -> list[dict[str, object]]:
                     "other_relation": case.other_relation,
                     "bind_reference": case.bind_reference,
                     "interface": True,
+                }
+            )
+    return rows
+
+
+@dataclass(frozen=True)
+class AnnotationRecipe:
+    """An annotated exposure derived from a covered storage shape."""
+
+    name: str
+    scope: str
+    storage: str
+    factory: str | None
+    leaf: str
+    request: str
+    relation: str
+    constructions: int
+    request_class: str
+    bind_reference: bool = False
+    external_instance: str = ""
+    external_argument: str = ""
+    registration_moves: int = 0
+
+
+ANNOTATION_RECIPES = (
+    AnnotationRecipe(
+        name="shared_annotated_ref",
+        scope="shared",
+        storage="dingo::storage<tracked>",
+        factory=None,
+        leaf="tracked",
+        request="dingo::annotated<tracked &, tag_a>",
+        relation="&first == &second",
+        constructions=1,
+        request_class="reference",
+        bind_reference=True,
+    ),
+    AnnotationRecipe(
+        name="shared_annotated_value",
+        scope="shared",
+        storage="dingo::storage<tracked>",
+        factory=None,
+        leaf="tracked",
+        request="dingo::annotated<tracked, tag_a>",
+        relation="first.id == second.id",
+        constructions=1,
+        request_class="borrow_value",
+    ),
+    AnnotationRecipe(
+        name="shared_annotated_shared_ptr_ref",
+        scope="shared",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory="make_shared_tracked",
+        leaf="tracked",
+        request="dingo::annotated<tracked &, tag_a>",
+        relation="&first == &second",
+        constructions=1,
+        request_class="reference",
+        bind_reference=True,
+    ),
+    AnnotationRecipe(
+        name="shared_annotated_optional_ref",
+        scope="shared",
+        storage="dingo::storage<std::optional<tracked>>",
+        factory="make_optional_tracked",
+        leaf="tracked",
+        request="dingo::annotated<tracked &, tag_a>",
+        relation="&first == &second",
+        constructions=1,
+        request_class="reference",
+        bind_reference=True,
+    ),
+    AnnotationRecipe(
+        name="shared_annotated_pointer_ref",
+        scope="shared",
+        storage="dingo::storage<tracked *>",
+        factory="make_pointer_tracked",
+        leaf="tracked",
+        request="dingo::annotated<tracked &, tag_a>",
+        relation="&first == &second",
+        constructions=1,
+        request_class="reference",
+        bind_reference=True,
+    ),
+    AnnotationRecipe(
+        name="shared_annotated_interface_ref",
+        scope="shared",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory="make_shared_tracked",
+        leaf="tracked_interface",
+        request="dingo::annotated<tracked_interface &, tag_a>",
+        relation="&first == &second",
+        constructions=1,
+        request_class="reference",
+        bind_reference=True,
+    ),
+    AnnotationRecipe(
+        name="shared_annotated_interface_ptr",
+        scope="shared",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory="make_shared_tracked",
+        leaf="tracked_interface",
+        request="dingo::annotated<tracked_interface *, tag_a>",
+        relation="first == second",
+        constructions=1,
+        request_class="reference",
+    ),
+    AnnotationRecipe(
+        name="shared_annotated_interface_handle",
+        scope="shared",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory="make_shared_tracked",
+        leaf="tracked_interface",
+        request="dingo::annotated<std::shared_ptr<tracked_interface>, tag_a>",
+        relation="first == second",
+        constructions=1,
+        request_class="handle",
+    ),
+    AnnotationRecipe(
+        name="shared_annotated_interface_handle_ref",
+        scope="shared",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory="make_shared_tracked",
+        leaf="tracked_interface",
+        request="dingo::annotated<std::shared_ptr<tracked_interface> &, tag_a>",
+        relation="&first == &second",
+        constructions=1,
+        request_class="reference",
+        bind_reference=True,
+    ),
+    AnnotationRecipe(
+        name="external_annotated_value",
+        scope="external",
+        storage="dingo::storage<tracked>",
+        factory=None,
+        leaf="tracked",
+        request="dingo::annotated<tracked &, tag_a>",
+        relation="&first == &second",
+        constructions=0,
+        request_class="reference",
+        bind_reference=True,
+        external_instance="tracked external_instance",
+        external_argument="std::move(external_instance)",
+        registration_moves=1,
+    ),
+    AnnotationRecipe(
+        name="external_annotated_ref",
+        scope="external",
+        storage="dingo::storage<tracked &>",
+        factory=None,
+        leaf="tracked",
+        request="dingo::annotated<tracked &, tag_a>",
+        relation="&first == &second",
+        constructions=0,
+        request_class="reference",
+        bind_reference=True,
+        external_instance="tracked external_instance",
+        external_argument="external_instance",
+    ),
+    AnnotationRecipe(
+        name="external_annotated_ptr",
+        scope="external",
+        storage="dingo::storage<tracked *>",
+        factory=None,
+        leaf="tracked",
+        request="dingo::annotated<tracked &, tag_a>",
+        relation="&first == &second",
+        constructions=0,
+        request_class="reference",
+        bind_reference=True,
+        external_instance="tracked external_instance",
+        external_argument="std::addressof(external_instance)",
+    ),
+    AnnotationRecipe(
+        name="external_annotated_shared_ptr",
+        scope="external",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory=None,
+        leaf="tracked",
+        request="dingo::annotated<tracked &, tag_a>",
+        relation="&first == &second",
+        constructions=0,
+        request_class="reference",
+        bind_reference=True,
+        external_instance="auto external_instance = make_shared_tracked()",
+        external_argument="external_instance",
+    ),
+)
+
+
+def _annotation_rows() -> list[dict[str, object]]:
+    rows = []
+    for recipe in ANNOTATION_RECIPES:
+        copies, moves = REQUEST_COSTS[recipe.request_class]
+        moves += recipe.registration_moves
+        containers = (
+            ("runtime",) if recipe.scope == "external" else CONTAINERS
+        )
+        interfaces = (f"dingo::annotated<{recipe.leaf}, tag_a>",)
+        for container in containers:
+            if recipe.scope == "external":
+                registration = (
+                    "container.register_type<dingo::scope<dingo::external>, "
+                    f"{recipe.storage}, dingo::interfaces<"
+                    f"dingo::annotated<{recipe.leaf}, tag_a>>>("
+                    f"{recipe.external_argument});"
+                )
+                static_source = ""
+            else:
+                registration, static_source = _registration(
+                    recipe.storage,
+                    recipe.factory,
+                    recipe.scope,
+                    container,
+                    interfaces,
+                )
+            rows.append(
+                {
+                    "name": f"{recipe.scope}_annotation_{recipe.name}_{container}",
+                    "scope": recipe.scope,
+                    "form": recipe.name,
+                    "container": container,
+                    "scope_type": f"dingo::scope<dingo::{recipe.scope}>",
+                    "storage": recipe.storage,
+                    "instance": recipe.external_instance,
+                    "registration": registration,
+                    "static_source": static_source,
+                    "request": recipe.request,
+                    "relation": recipe.relation,
+                    "constructions": recipe.constructions,
+                    "request_class": recipe.request_class,
+                    "copies": copies,
+                    "moves": moves,
+                    "leaf": "",
+                    "array_element": "",
+                    "move_out": False,
+                    "delete_result": "",
+                    "other_request": "",
+                    "other_relation": "",
+                    "bind_reference": recipe.bind_reference,
+                    "interface": True,
+                    "annotation": True,
                 }
             )
     return rows
@@ -746,6 +894,7 @@ def build_rows() -> list[dict[str, object]]:
                         }
                     )
     rows.extend(_interface_rows())
+    rows.extend(_annotation_rows())
     return rows
 
 
@@ -797,6 +946,25 @@ def validate() -> None:
                     f"behavior cell {scope}/{form_name}/{case} has unknown "
                     f"request class {extra.request_class!r}"
                 )
+    if not ANNOTATION_RECIPES:
+        raise ValueError("annotation behavior catalog must not be empty")
+    annotation_names = [recipe.name for recipe in ANNOTATION_RECIPES]
+    if len(annotation_names) != len(set(annotation_names)):
+        raise ValueError("annotation catalog contains duplicate names")
+    for recipe in ANNOTATION_RECIPES:
+        if recipe.request_class not in REQUEST_COSTS:
+            raise ValueError(
+                f"annotation case {recipe.name} has unknown request class "
+                f"{recipe.request_class!r}"
+            )
+        if recipe.scope not in SCOPES:
+            raise ValueError(
+                f"annotation case {recipe.name} has unknown scope {recipe.scope!r}"
+            )
+        if recipe.scope == "external" and not recipe.external_instance:
+            raise ValueError(
+                f"external annotation case {recipe.name} needs an instance"
+            )
     for form in FORMS:
         if form.registration_moves < 0:
             raise ValueError(
