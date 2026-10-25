@@ -14,6 +14,7 @@
 #include <dingo/context/context_base.h>
 #include <dingo/resolution/conversion_cache.h>
 #include <dingo/resolution/resolution_operation.h>
+#include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/collection_traits.h>
@@ -321,6 +322,82 @@ inline constexpr bool materializes_value_source_v = [] {
   using source_type = std::remove_cv_t<std::remove_reference_t<source_result>>;
   return !std::is_reference_v<source_result> && !std::is_pointer_v<source_type>;
 }();
+
+// A flat source plan for the value path: one policy decision, then the
+// existing lifetime backends. It uses the scope/source descriptors instead of
+// probing storage.resolve.
+enum class source_plan {
+  context_lvalue,
+  context,
+  retained,
+  local,
+};
+
+template <typename Context, typename = void>
+struct context_supports_construct : std::false_type {};
+
+template <typename Context>
+struct context_supports_construct<
+    Context,
+    std::void_t<decltype(std::declval<Context &>().template construct<int>(
+        std::declval<construction_scope>()))>> : std::true_type {};
+
+template <typename Context, typename = void>
+struct context_supports_retained_frame : std::false_type {};
+
+template <typename Context>
+struct context_supports_retained_frame<
+    Context, std::void_t<typename Context::frame_type,
+                         decltype(std::declval<Context &>().push_frame(
+                             std::declval<typename Context::frame_type *>())),
+                         decltype(std::declval<Context &>().pop_frame())>>
+    : std::true_type {};
+
+template <typename Context>
+inline constexpr bool context_supports_retained_frame_v =
+    context_supports_retained_frame<Context>::value;
+
+template <typename Operation, typename Request, typename Storage,
+          typename Context, typename Owner, typename Fn>
+decltype(auto) with_binding_source_plan(construction_scope scope,
+                                        Context &context, Storage &storage,
+                                        Owner &owner, Fn &&fn) {
+  constexpr bool context_lvalue =
+      (std::is_lvalue_reference_v<Request> || std::is_pointer_v<Request>) &&
+      source_category_of<Storage> == source_category::consume_value;
+  constexpr bool retained_source = Operation::requires_source_retention &&
+                                   context_supports_retained_frame_v<Context>;
+  if constexpr (context_lvalue) {
+    return with_context_lvalue_source(scope, context, storage, owner,
+                                      std::forward<Fn>(fn));
+  } else if constexpr (is_runtime_context_v<Context>) {
+    return with_runtime_binding_source(scope, context, storage, owner,
+                                       std::forward<Fn>(fn));
+  } else if constexpr (!context_supports_construct<Context>::value) {
+    if constexpr (retained_source) {
+      return with_retained_binding_source(scope, context, storage, owner,
+                                          std::forward<Fn>(fn));
+    } else {
+      return with_binding_source(scope, context, storage, owner,
+                                 std::forward<Fn>(fn));
+    }
+  } else {
+    using materialization_traits =
+        storage_materialization_traits<typename Storage::tag_type,
+                                       typename Storage::type>;
+    if constexpr (has_context_materialize_source<
+                      materialization_traits, Context, Storage, Owner>::value) {
+      return with_runtime_binding_source(scope, context, storage, owner,
+                                         std::forward<Fn>(fn));
+    } else if constexpr (retained_source) {
+      return with_retained_binding_source(scope, context, storage, owner,
+                                          std::forward<Fn>(fn));
+    } else {
+      return with_binding_source(scope, context, storage, owner,
+                                 std::forward<Fn>(fn));
+    }
+  }
+}
 
 template <typename Storage, typename Context, typename Owner, typename Fn>
 decltype(auto) with_context_lvalue_source(construction_scope scope,

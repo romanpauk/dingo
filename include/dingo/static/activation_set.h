@@ -623,27 +623,8 @@ struct static_binding_resolver {
           std::forward<Fn>(fn));
     };
     using operation = typename Resolution::operation;
-    if constexpr ((std::is_lvalue_reference_v<Request> ||
-                   std::is_pointer_v<Request>) &&
-                  detail::materializes_value_source_v<
-                      std::remove_reference_t<decltype(storage)>, Context,
-                      decltype(activation)>) {
-      return detail::with_context_lvalue_source(scope, context, storage,
-                                                activation, std::move(consume));
-    } else if constexpr (uses_context_materialized_source_v<Context>) {
-      return detail::with_runtime_binding_source(
-          scope, context, storage, activation, std::move(consume));
-    } else if constexpr (detail::operation_requires_source_retention_v<
-                             operation> &&
-                         !std::is_same_v<
-                             std::remove_cv_t<std::remove_reference_t<Context>>,
-                             no_dependency_context>) {
-      return detail::with_retained_binding_source(
-          scope, context, storage, activation, std::move(consume));
-    } else {
-      return detail::with_binding_source(scope, context, storage, activation,
-                                         std::move(consume));
-    }
+    return detail::with_binding_source_plan<operation, Request>(
+        scope, context, storage, activation, std::move(consume));
   }
 };
 
