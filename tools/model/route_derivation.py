@@ -23,13 +23,25 @@ from wrapper_semantics import FORM_WRAPPERS, WrapperSemantics
 
 
 @dataclass(frozen=True)
-class ResolutionCandidate:
+class CandidateSpec:
+    """The kind and retention a derivation rule declares."""
+
     kind: str
     retention: bool = False
 
 
-def _candidate(kind: str, retention: bool = False) -> ResolutionCandidate:
-    return ResolutionCandidate(kind, retention)
+@dataclass(frozen=True)
+class RouteCandidate:
+    """One published route and its derived metadata."""
+
+    kind: str
+    retention: bool
+    steps: tuple[str, ...]
+    target: str
+
+
+def _candidate(kind: str, retention: bool = False) -> CandidateSpec:
+    return CandidateSpec(kind, retention)
 
 
 
@@ -55,7 +67,7 @@ class Rule:
     kind: str
     source: str | None
     requires: frozenset[str]
-    candidates: tuple[ResolutionCandidate, ...] = ()
+    candidates: tuple[CandidateSpec, ...] = ()
 
     def matches(
         self,
@@ -80,7 +92,7 @@ def _rule(
     kind: str,
     source: str | None,
     requires: set[str] | frozenset[str] = frozenset(),
-    candidates: tuple[ResolutionCandidate, ...] = (),
+    candidates: tuple[CandidateSpec, ...] = (),
 ) -> Rule:
     return Rule(category, kind, source, frozenset(requires), candidates)
 
@@ -385,10 +397,8 @@ def _candidate_steps(
 def route_candidate_steps(
     scope_name: str, form_name: str, category: str
 ) -> tuple[tuple[str, ...], ...]:
-    source = source_shape(scope_name, form_name)
-    form = form_kind(form_name)
     return tuple(
-        _candidate_steps(category, candidate.kind, form, source)
+        candidate.steps
         for candidate in route_candidates(scope_name, form_name, category)
     )
 
@@ -454,12 +464,9 @@ def _candidate_target_shape(
 def route_candidate_targets(
     scope_name: str, form_name: str, category: str
 ) -> tuple[str, ...]:
-    source = source_shape(scope_name, form_name)
-    form = form_kind(form_name)
-    candidates = route_candidates(scope_name, form_name, category)
     return tuple(
-        _candidate_target_shape(category, candidate.kind, form, source, index)
-        for index, candidate in enumerate(candidates)
+        candidate.target
+        for candidate in route_candidates(scope_name, form_name, category)
     )
 
 
@@ -482,13 +489,23 @@ def source_shape(scope_name: str, form_name: str) -> str:
 
 def route_candidates(
     scope_name: str, form_name: str, category: str
-) -> tuple[ResolutionCandidate, ...]:
+) -> tuple[RouteCandidate, ...]:
     source = source_shape(scope_name, form_name)
-    kind = form_kind(form_name)
+    form = form_kind(form_name)
     stored = wrapper(form_name)
     for rule in DERIVATION_RULES:
-        if rule.matches(category, kind, source, stored):
-            return rule.candidates
+        if rule.matches(category, form, source, stored):
+            return tuple(
+                RouteCandidate(
+                    spec.kind,
+                    spec.retention,
+                    _candidate_steps(category, spec.kind, form, source),
+                    _candidate_target_shape(
+                        category, spec.kind, form, source, index
+                    ),
+                )
+                for index, spec in enumerate(rule.candidates)
+            )
     raise KeyError(
         f"no {category} route rule for {scope_name}/{form_name} from {source}"
     )

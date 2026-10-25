@@ -40,7 +40,7 @@ def test_unavailable_categories_have_absence_assertions(tmp_path: Path) -> None:
 def test_render_asserts_every_candidate_target_shape(tmp_path: Path) -> None:
     rows = build_rows()
     expected = sum(
-        len(row[f"{category}_targets"])
+        len(row[f"{category}_candidates"])
         for row in rows
         for category in ("value", "object", "rvalue")
     )

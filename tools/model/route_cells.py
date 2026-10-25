@@ -23,10 +23,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from route_ledger import (
     category_access,
-    category_kinds,
-    category_retention,
-    category_steps,
-    category_targets,
+    category_candidates,
     supported_categories,
     validate as validate_ledger,
 )
@@ -102,63 +99,18 @@ def build_rows() -> list[dict[str, object]]:
                         if "rvalue" in categories
                         else ""
                     ),
-                    "value_kinds": (
-                        category_kinds(scope.name, form.name, "value")
+                    "value_candidates": (
+                        category_candidates(scope.name, form.name, "value")
                         if "value" in categories
                         else ()
                     ),
-                    "object_kinds": (
-                        category_kinds(scope.name, form.name, "object")
+                    "object_candidates": (
+                        category_candidates(scope.name, form.name, "object")
                         if "object" in categories
                         else ()
                     ),
-                    "rvalue_kinds": (
-                        category_kinds(scope.name, form.name, "rvalue")
-                        if "rvalue" in categories
-                        else ()
-                    ),
-                    "value_retention": (
-                        category_retention(scope.name, form.name, "value")
-                        if "value" in categories
-                        else ()
-                    ),
-                    "value_steps": (
-                        category_steps(scope.name, form.name, "value")
-                        if "value" in categories
-                        else ()
-                    ),
-                    "value_targets": (
-                        category_targets(scope.name, form.name, "value")
-                        if "value" in categories
-                        else ()
-                    ),
-                    "object_retention": (
-                        category_retention(scope.name, form.name, "object")
-                        if "object" in categories
-                        else ()
-                    ),
-                    "object_steps": (
-                        category_steps(scope.name, form.name, "object")
-                        if "object" in categories
-                        else ()
-                    ),
-                    "object_targets": (
-                        category_targets(scope.name, form.name, "object")
-                        if "object" in categories
-                        else ()
-                    ),
-                    "rvalue_retention": (
-                        category_retention(scope.name, form.name, "rvalue")
-                        if "rvalue" in categories
-                        else ()
-                    ),
-                    "rvalue_steps": (
-                        category_steps(scope.name, form.name, "rvalue")
-                        if "rvalue" in categories
-                        else ()
-                    ),
-                    "rvalue_targets": (
-                        category_targets(scope.name, form.name, "rvalue")
+                    "rvalue_candidates": (
+                        category_candidates(scope.name, form.name, "rvalue")
                         if "rvalue" in categories
                         else ()
                     ),

@@ -65,105 +65,93 @@ static_assert(all_targets_match<value_routes>::value,
               "not every value route target is reachable from both matchers");
 static_assert(all_routes_accept_access<dingo::{{ row.value_access }}>(value_routes{}),
               "value route requires more access than the scope supplies");
-{% if row.value_kinds %}
 static_assert(dingo::type_list_size_v<value_routes> ==
-                  {{ row.value_kinds | length }},
+                  {{ row.value_candidates | length }},
               "value route count changed");
-{% for steps in row.value_steps %}
+{% for candidate in row.value_candidates %}
 {% set route_index = loop.index0 %}
-static_assert(route_kind_at<{{ route_index }}, value_routes>::value ==
-                  dingo::detail::conversion_kind::{{ row.value_kinds[route_index] }},
+static_assert(route_kind_v<route_at_t<{{ route_index }}, value_routes>> ==
+                  dingo::detail::conversion_kind::{{ candidate.kind }},
               "value route operation changed");
-static_assert(route_step_count_at<{{ route_index }}, value_routes>::value ==
-                  {{ steps | length }},
+static_assert(route_step_count_v<route_at_t<{{ route_index }}, value_routes>> ==
+                  {{ candidate.steps | length }},
               "value route step count changed");
-{% for kind in steps %}
-static_assert(route_step_kind_at<{{ route_index }}, {{ loop.index0 }}, value_routes>::value ==
+{% for kind in candidate.steps %}
+static_assert(route_step_at_t<{{ loop.index0 }}, route_at_t<{{ route_index }}, value_routes>>::kind ==
                   dingo::detail::conversion_kind::{{ kind }},
               "value route step changed");
 {% endfor %}
-static_assert(route_target_shape_at<{{ route_index }}, value_routes>::value ==
-                  target_shape::{{ row.value_targets[route_index] }},
+static_assert(route_target_shape_v<route_at_t<{{ route_index }}, value_routes>> ==
+                  target_shape::{{ candidate.target }},
               "value route target shape changed");
+static_assert(route_retention_v<route_at_t<{{ route_index }}, value_routes>> ==
+                  {{ "true" if candidate.retention else "false" }},
+              "value route retention changed");
 {% endfor %}
 static_assert(all_routes_have_no_cache(value_routes{}),
               "value route unexpectedly caches a conversion");
-{% for retention in row.value_retention %}
-static_assert(route_retention_at<{{ loop.index0 }}, value_routes>::value ==
-                  {{ "true" if retention else "false" }},
-              "value route retention changed");
-{% endfor %}
-{% endif %}
 {% endif %}
 {% if row.object %}
 static_assert(all_targets_match<object_routes>::value,
               "not every object route target is reachable from both matchers");
 static_assert(all_routes_accept_access<dingo::{{ row.object_access }}>(object_routes{}),
               "object route requires more access than the scope supplies");
-{% if row.object_kinds %}
 static_assert(dingo::type_list_size_v<object_routes> ==
-                  {{ row.object_kinds | length }},
+                  {{ row.object_candidates | length }},
               "object route count changed");
-{% for steps in row.object_steps %}
+{% for candidate in row.object_candidates %}
 {% set route_index = loop.index0 %}
-static_assert(route_kind_at<{{ route_index }}, object_routes>::value ==
-                  dingo::detail::conversion_kind::{{ row.object_kinds[route_index] }},
+static_assert(route_kind_v<route_at_t<{{ route_index }}, object_routes>> ==
+                  dingo::detail::conversion_kind::{{ candidate.kind }},
               "object route operation changed");
-static_assert(route_step_count_at<{{ route_index }}, object_routes>::value ==
-                  {{ steps | length }},
+static_assert(route_step_count_v<route_at_t<{{ route_index }}, object_routes>> ==
+                  {{ candidate.steps | length }},
               "object route step count changed");
-{% for kind in steps %}
-static_assert(route_step_kind_at<{{ route_index }}, {{ loop.index0 }}, object_routes>::value ==
+{% for kind in candidate.steps %}
+static_assert(route_step_at_t<{{ loop.index0 }}, route_at_t<{{ route_index }}, object_routes>>::kind ==
                   dingo::detail::conversion_kind::{{ kind }},
               "object route step changed");
 {% endfor %}
-static_assert(route_target_shape_at<{{ route_index }}, object_routes>::value ==
-                  target_shape::{{ row.object_targets[route_index] }},
+static_assert(route_target_shape_v<route_at_t<{{ route_index }}, object_routes>> ==
+                  target_shape::{{ candidate.target }},
               "object route target shape changed");
+static_assert(route_retention_v<route_at_t<{{ route_index }}, object_routes>> ==
+                  {{ "true" if candidate.retention else "false" }},
+              "object route retention changed");
 {% endfor %}
 static_assert(all_routes_have_no_cache(object_routes{}),
               "object route unexpectedly caches a conversion");
-{% for retention in row.object_retention %}
-static_assert(route_retention_at<{{ loop.index0 }}, object_routes>::value ==
-                  {{ "true" if retention else "false" }},
-              "object route retention changed");
-{% endfor %}
-{% endif %}
 {% endif %}
 {% if row.rvalue %}
 static_assert(all_targets_match<rvalue_routes>::value,
               "not every rvalue route target is reachable from both matchers");
 static_assert(all_routes_accept_access<dingo::{{ row.rvalue_access }}>(rvalue_routes{}),
               "rvalue route requires more access than the scope supplies");
-{% if row.rvalue_kinds %}
 static_assert(dingo::type_list_size_v<rvalue_routes> ==
-                  {{ row.rvalue_kinds | length }},
+                  {{ row.rvalue_candidates | length }},
               "rvalue route count changed");
-{% for steps in row.rvalue_steps %}
+{% for candidate in row.rvalue_candidates %}
 {% set route_index = loop.index0 %}
-static_assert(route_kind_at<{{ route_index }}, rvalue_routes>::value ==
-                  dingo::detail::conversion_kind::{{ row.rvalue_kinds[route_index] }},
+static_assert(route_kind_v<route_at_t<{{ route_index }}, rvalue_routes>> ==
+                  dingo::detail::conversion_kind::{{ candidate.kind }},
               "rvalue route operation changed");
-static_assert(route_step_count_at<{{ route_index }}, rvalue_routes>::value ==
-                  {{ steps | length }},
+static_assert(route_step_count_v<route_at_t<{{ route_index }}, rvalue_routes>> ==
+                  {{ candidate.steps | length }},
               "rvalue route step count changed");
-{% for kind in steps %}
-static_assert(route_step_kind_at<{{ route_index }}, {{ loop.index0 }}, rvalue_routes>::value ==
+{% for kind in candidate.steps %}
+static_assert(route_step_at_t<{{ loop.index0 }}, route_at_t<{{ route_index }}, rvalue_routes>>::kind ==
                   dingo::detail::conversion_kind::{{ kind }},
               "rvalue route step changed");
 {% endfor %}
-static_assert(route_target_shape_at<{{ route_index }}, rvalue_routes>::value ==
-                  target_shape::{{ row.rvalue_targets[route_index] }},
+static_assert(route_target_shape_v<route_at_t<{{ route_index }}, rvalue_routes>> ==
+                  target_shape::{{ candidate.target }},
               "rvalue route target shape changed");
+static_assert(route_retention_v<route_at_t<{{ route_index }}, rvalue_routes>> ==
+                  {{ "true" if candidate.retention else "false" }},
+              "rvalue route retention changed");
 {% endfor %}
 static_assert(all_routes_have_no_cache(rvalue_routes{}),
               "rvalue route unexpectedly caches a conversion");
-{% for retention in row.rvalue_retention %}
-static_assert(route_retention_at<{{ loop.index0 }}, rvalue_routes>::value ==
-                  {{ "true" if retention else "false" }},
-              "rvalue route retention changed");
-{% endfor %}
-{% endif %}
 {% endif %}
 
 TEST(route_cells, {{ row.scope_name }}_{{ row.form_name }}) { SUCCEED(); }

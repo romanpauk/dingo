@@ -35,11 +35,12 @@ hand-curated matrix tags.
   declarations for every built-in wrapper and the `test_optional`,
   `test_unique`, and `test_shared` families. A wrapper cannot silently drift
   from its declared semantics.
-- `route_derivation.py` derives the published `ResolutionCandidate` sequence for
-  a supported route from an ordered rule list over the form's semantic kind, the
+- `route_derivation.py` derives the published `RouteCandidate` sequence for a
+  supported route from an ordered rule list over the form's semantic kind, the
   source shape the scope hands out (pointer, lvalue, rvalue, cyclical row
-  pointer, or cyclical handle), and the stored wrapper properties. Each candidate
-  carries its operation kind and source-retention flag. A second rule layer
+  pointer, or cyclical handle), and the stored wrapper properties. Each
+  candidate carries its operation kind, source-retention flag, conversion
+  steps, and target shape. A second rule layer
   derives each candidate's internal conversion step kinds in execution order,
   so dereference, borrow, and wrapper candidates expose their composed leaf. A
   target-shape rule derives whether the candidate resolves a value, reference,

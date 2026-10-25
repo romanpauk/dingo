@@ -101,76 +101,29 @@ constexpr bool all_routes_accept_access(type_list<Resolutions...>) {
       ...);
 }
 
-template <std::size_t Index, typename Resolutions> struct route_kind_at;
+template <std::size_t Index, typename Resolutions>
+using route_at_t = type_list_at_t<Resolutions, Index>;
 
-template <typename Head, typename... Tail>
-struct route_kind_at<0, type_list<Head, Tail...>> {
-  static constexpr auto value = Head::operation::kind;
-};
+template <typename Route>
+using route_steps_t = typename Route::operation::conversion_steps;
 
-template <std::size_t Index, typename Head, typename... Tail>
-struct route_kind_at<Index, type_list<Head, Tail...>>
-    : route_kind_at<Index - 1, type_list<Tail...>> {};
+template <std::size_t Index, typename Route>
+using route_step_at_t = type_list_at_t<route_steps_t<Route>, Index>;
 
-template <std::size_t Index, typename Resolutions> struct route_retention_at;
+template <typename Route>
+inline constexpr auto route_kind_v = Route::operation::kind;
 
-template <typename Head, typename... Tail>
-struct route_retention_at<0, type_list<Head, Tail...>> {
-  static constexpr bool value = Head::operation::requires_source_retention;
-};
+template <typename Route>
+inline constexpr bool route_retention_v =
+    Route::operation::requires_source_retention;
 
-template <std::size_t Index, typename Head, typename... Tail>
-struct route_retention_at<Index, type_list<Head, Tail...>>
-    : route_retention_at<Index - 1, type_list<Tail...>> {};
+template <typename Route>
+inline constexpr std::size_t route_step_count_v =
+    type_list_size_v<route_steps_t<Route>>;
 
-template <std::size_t Index, typename Resolutions> struct route_step_count_at;
-
-template <typename Head, typename... Tail>
-struct route_step_count_at<0, type_list<Head, Tail...>> {
-  static constexpr std::size_t value =
-      type_list_size_v<typename Head::operation::conversion_steps>;
-};
-
-template <std::size_t Index, typename Head, typename... Tail>
-struct route_step_count_at<Index, type_list<Head, Tail...>>
-    : route_step_count_at<Index - 1, type_list<Tail...>> {};
-
-template <std::size_t Index, typename Resolutions> struct route_target_shape_at;
-
-template <typename Head, typename... Tail>
-struct route_target_shape_at<0, type_list<Head, Tail...>> {
-  static constexpr auto value =
-      target_shape_of<typename Head::target_type>::value;
-};
-
-template <std::size_t Index, typename Head, typename... Tail>
-struct route_target_shape_at<Index, type_list<Head, Tail...>>
-    : route_target_shape_at<Index - 1, type_list<Tail...>> {};
-
-template <std::size_t Index, typename Steps> struct conversion_step_kind_at;
-
-template <typename Head, typename... Tail>
-struct conversion_step_kind_at<0, type_list<Head, Tail...>> {
-  static constexpr auto value = Head::kind;
-};
-
-template <std::size_t Index, typename Head, typename... Tail>
-struct conversion_step_kind_at<Index, type_list<Head, Tail...>>
-    : conversion_step_kind_at<Index - 1, type_list<Tail...>> {};
-
-template <std::size_t RouteIndex, std::size_t StepIndex, typename Resolutions>
-struct route_step_kind_at;
-
-template <std::size_t StepIndex, typename Head, typename... Tail>
-struct route_step_kind_at<0, StepIndex, type_list<Head, Tail...>> {
-  static constexpr auto value = conversion_step_kind_at<
-      StepIndex, typename Head::operation::conversion_steps>::value;
-};
-
-template <std::size_t RouteIndex, std::size_t StepIndex, typename Head,
-          typename... Tail>
-struct route_step_kind_at<RouteIndex, StepIndex, type_list<Head, Tail...>>
-    : route_step_kind_at<RouteIndex - 1, StepIndex, type_list<Tail...>> {};
+template <typename Route>
+inline constexpr auto route_target_shape_v =
+    target_shape_of<typename Route::target_type>::value;
 
 template <typename... Resolutions>
 constexpr bool all_routes_have_no_cache(type_list<Resolutions...>) {

@@ -128,8 +128,8 @@ def test_retention_is_modeled_for_every_supported_route() -> None:
 def test_all_supported_routes_have_operation_kinds() -> None:
     for row in build_rows():
         if row.outcome == "supported":
-            assert row.kinds
-            assert not row.kind_gap
+            assert row.candidates
+            assert all(candidate.kind for candidate in row.candidates)
 
 
 def test_non_plain_operation_kinds_are_modeled() -> None:

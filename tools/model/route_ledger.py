@@ -21,12 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from route_derivation import (
-    route_candidate_steps,
-    route_candidate_targets,
-    route_kinds,
-    route_retention,
-)
+from route_derivation import RouteCandidate, route_candidates
 from storage_cells import FORMS, LVALUE, POINTER, RVALUE, SCOPES, VALUE, exposure
 
 
@@ -70,11 +65,23 @@ class LedgerRow:
     reason: str = ""
     gap: str = ""
     access: str = ""
-    kinds: tuple[str, ...] = ()
-    kind_gap: str = ""
-    retention: tuple[int, ...] = ()
-    steps: tuple[tuple[str, ...], ...] = ()
-    targets: tuple[str, ...] = ()
+    candidates: tuple[RouteCandidate, ...] = ()
+
+    @property
+    def kinds(self) -> tuple[str, ...]:
+        return tuple(candidate.kind for candidate in self.candidates)
+
+    @property
+    def retention(self) -> tuple[int, ...]:
+        return tuple(int(candidate.retention) for candidate in self.candidates)
+
+    @property
+    def steps(self) -> tuple[tuple[str, ...], ...]:
+        return tuple(candidate.steps for candidate in self.candidates)
+
+    @property
+    def targets(self) -> tuple[str, ...]:
+        return tuple(candidate.target for candidate in self.candidates)
 
 
 def _category_outcome(
@@ -84,37 +91,37 @@ def _category_outcome(
     form = next(form for form in FORMS if form.name == form_name)
     if form_name == "array":
         return LedgerRow(
-            scope_name,
-            form_name,
-            category,
-            "unavailable",
-            RAW_ARRAY_UNAVAILABLE,
+            scope=scope_name,
+            form=form_name,
+            category=category,
+            outcome="unavailable",
+            reason=RAW_ARRAY_UNAVAILABLE,
         )
     if bits == 0:
         return LedgerRow(
-            scope_name,
-            form_name,
-            category,
-            "unavailable",
-            "scope does not publish the form",
+            scope=scope_name,
+            form=form_name,
+            category=category,
+            outcome="unavailable",
+            reason="scope does not publish the form",
         )
     unavailable = ARRAY_UNAVAILABLE.get((scope_name, form_name))
     if unavailable is not None:
         return LedgerRow(
-            scope_name,
-            form_name,
-            category,
-            "unavailable",
-            unavailable,
+            scope=scope_name,
+            form=form_name,
+            category=category,
+            outcome="unavailable",
+            reason=unavailable,
         )
     if form_name not in ROUTE_FORM_NAMES:
         return LedgerRow(
-            scope_name,
-            form_name,
-            category,
-            "gap",
-            "array route shape is not modeled",
-            GAP_ARRAY_ROUTES,
+            scope=scope_name,
+            form=form_name,
+            category=category,
+            outcome="gap",
+            reason="array route shape is not modeled",
+            gap=GAP_ARRAY_ROUTES,
         )
     if category == "value":
         supported = bool(bits & VALUE and form.has_value) or bool(bits & RVALUE)
@@ -126,13 +133,12 @@ def _category_outcome(
         supported = bool(bits & RVALUE)
         reason = "scope/form publishes no rvalue route"
     return LedgerRow(
-        scope_name,
-        form_name,
-        category,
-        "supported" if supported else "unavailable",
-        "" if supported else reason,
-        "",
-        (
+        scope=scope_name,
+        form=form_name,
+        category=category,
+        outcome="supported" if supported else "unavailable",
+        reason="" if supported else reason,
+        access=(
             "consume"
             if supported and category == "value" and scope.consumes
             else "consume"
@@ -141,15 +147,11 @@ def _category_outcome(
             if supported
             else ""
         ),
-        route_kinds(scope_name, form_name, category) if supported else (),
-        "",
-        route_retention(scope_name, form_name, category) if supported else (),
-        route_candidate_steps(scope_name, form_name, category)
-        if supported
-        else (),
-        route_candidate_targets(scope_name, form_name, category)
-        if supported
-        else (),
+        candidates=(
+            route_candidates(scope_name, form_name, category)
+            if supported
+            else ()
+        ),
     )
 
 
@@ -186,22 +188,19 @@ def validate() -> None:
             raise ValueError(f"supported row has no access: {row}")
         if row.outcome != "supported" and row.access:
             raise ValueError(f"non-supported row has an access: {row}")
-        if row.outcome == "supported" and not row.kinds:
-            raise ValueError(f"supported row has no operation kinds: {row}")
-        if row.outcome != "supported" and row.kinds:
-            raise ValueError(f"non-supported row has operation kinds: {row}")
-        if len(row.retention) != len(row.kinds):
-            raise ValueError(f"retention sequence length mismatch: {row}")
-        if any(value not in (0, 1) for value in row.retention):
-            raise ValueError(f"retention value is not boolean: {row}")
-        if len(row.steps) != len(row.kinds):
-            raise ValueError(f"step sequence length mismatch: {row}")
-        if any(not steps for steps in row.steps):
-            raise ValueError(f"candidate has no conversion steps: {row}")
-        if len(row.targets) != len(row.kinds):
-            raise ValueError(f"target shape length mismatch: {row}")
-        if row.kind_gap:
-            raise ValueError(f"operation-kind gap remains: {row}")
+        if row.outcome == "supported" and not row.candidates:
+            raise ValueError(f"supported row has no candidates: {row}")
+        if row.outcome != "supported" and row.candidates:
+            raise ValueError(f"non-supported row has candidates: {row}")
+        for candidate in row.candidates:
+            if not candidate.kind:
+                raise ValueError(f"candidate has no operation kind: {row}")
+            if candidate.retention not in (0, 1):
+                raise ValueError(f"candidate retention is not boolean: {row}")
+            if not candidate.steps:
+                raise ValueError(f"candidate has no conversion steps: {row}")
+            if not candidate.target:
+                raise ValueError(f"candidate has no target shape: {row}")
 
 
 def supported_categories(scope_name: str, form_name: str) -> set[str]:
@@ -214,7 +213,9 @@ def supported_categories(scope_name: str, form_name: str) -> set[str]:
     }
 
 
-def category_access(scope_name: str, form_name: str, category: str) -> str:
+def _supported_row(
+    scope_name: str, form_name: str, category: str
+) -> LedgerRow:
     for row in build_rows():
         if (
             row.scope == scope_name
@@ -222,64 +223,42 @@ def category_access(scope_name: str, form_name: str, category: str) -> str:
             and row.category == category
             and row.outcome == "supported"
         ):
-            return row.access
+            return row
     raise KeyError((scope_name, form_name, category))
+
+
+def category_access(scope_name: str, form_name: str, category: str) -> str:
+    return _supported_row(scope_name, form_name, category).access
+
+
+def category_candidates(
+    scope_name: str, form_name: str, category: str
+) -> tuple[RouteCandidate, ...]:
+    return _supported_row(scope_name, form_name, category).candidates
 
 
 def category_kinds(
     scope_name: str, form_name: str, category: str
 ) -> tuple[str, ...]:
-    for row in build_rows():
-        if (
-            row.scope == scope_name
-            and row.form == form_name
-            and row.category == category
-            and row.outcome == "supported"
-        ):
-            return row.kinds
-    raise KeyError((scope_name, form_name, category))
+    return _supported_row(scope_name, form_name, category).kinds
 
 
 def category_retention(
     scope_name: str, form_name: str, category: str
 ) -> tuple[int, ...]:
-    for row in build_rows():
-        if (
-            row.scope == scope_name
-            and row.form == form_name
-            and row.category == category
-            and row.outcome == "supported"
-        ):
-            return row.retention
-    raise KeyError((scope_name, form_name, category))
+    return _supported_row(scope_name, form_name, category).retention
 
 
 def category_steps(
     scope_name: str, form_name: str, category: str
 ) -> tuple[tuple[str, ...], ...]:
-    for row in build_rows():
-        if (
-            row.scope == scope_name
-            and row.form == form_name
-            and row.category == category
-            and row.outcome == "supported"
-        ):
-            return row.steps
-    raise KeyError((scope_name, form_name, category))
+    return _supported_row(scope_name, form_name, category).steps
 
 
 def category_targets(
     scope_name: str, form_name: str, category: str
 ) -> tuple[str, ...]:
-    for row in build_rows():
-        if (
-            row.scope == scope_name
-            and row.form == form_name
-            and row.category == category
-            and row.outcome == "supported"
-        ):
-            return row.targets
-    raise KeyError((scope_name, form_name, category))
+    return _supported_row(scope_name, form_name, category).targets
 
 
 def gaps() -> list[LedgerRow]:
