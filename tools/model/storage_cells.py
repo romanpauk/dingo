@@ -52,6 +52,7 @@ class Scope:
     guard: str
     retains_unresolved_source: bool
     allows_cycles: bool
+    returns_pointer: bool
     exposures: dict[str, int]
 
 
@@ -76,6 +77,7 @@ SCOPES = (
         guard="while_unresolved",
         retains_unresolved_source=True,
         allows_cycles=False,
+        returns_pointer=True,
         exposures={},
     ),
     Scope(
@@ -87,6 +89,7 @@ SCOPES = (
         guard="always",
         retains_unresolved_source=False,
         allows_cycles=False,
+        returns_pointer=False,
         exposures={
             "plain": LVALUE | RVALUE,
             "pointer": RVALUE | POINTER,
@@ -109,6 +112,7 @@ SCOPES = (
         guard="none",
         retains_unresolved_source=False,
         allows_cycles=False,
+        returns_pointer=False,
         exposures={},
     ),
     Scope(
@@ -120,6 +124,7 @@ SCOPES = (
         guard="none",
         retains_unresolved_source=False,
         allows_cycles=True,
+        returns_pointer=True,
         exposures={
             "plain": LVALUE | POINTER,
             "alternative": LVALUE | POINTER,
@@ -229,6 +234,8 @@ FORMS = (
 )
 
 FORM_ENUM = ("unknown", *(form.name for form in FORMS))
+SCOPE_BY_NAME = {scope.name: scope for scope in SCOPES}
+FORM_BY_NAME = {form.name: form for form in FORMS}
 
 
 def exposure(scope: Scope, form: Form) -> int:

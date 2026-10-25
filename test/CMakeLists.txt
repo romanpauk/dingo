@@ -210,11 +210,13 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_TYPE_BEHAVIOR_TEMPLATE}"
     "${PROJECT_SOURCE_DIR}/tools/model/wrapper_semantics.py"
     "${PROJECT_SOURCE_DIR}/tools/model/route_rules.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/route_recipes.py"
     "${DINGO_SCOPES_HEADER}"
     "${PROJECT_SOURCE_DIR}/tools/model/storage_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/selection_rules_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/route_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/route_ledger_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/route_recipes_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/behavior_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/interface_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/type_matrix_test.py"
@@ -370,6 +372,7 @@ add_test(NAME dingo_model_generator_test
         ${PROJECT_SOURCE_DIR}/tools/model/selection_rules_test.py
         ${PROJECT_SOURCE_DIR}/tools/model/route_cells_test.py
         ${PROJECT_SOURCE_DIR}/tools/model/route_ledger_test.py
+        ${PROJECT_SOURCE_DIR}/tools/model/route_recipes_test.py
         ${PROJECT_SOURCE_DIR}/tools/model/behavior_cells_test.py
         ${PROJECT_SOURCE_DIR}/tools/model/interface_cells_test.py
         ${PROJECT_SOURCE_DIR}/tools/model/type_matrix_test.py

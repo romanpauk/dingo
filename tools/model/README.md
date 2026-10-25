@@ -20,14 +20,20 @@ hand-curated matrix tags.
   not part of the type, so no scope can size, construct, or destroy them.
   Unsized shared array handles under `shared_cyclical` are an explicit
   constraint for the same reason.
+- `route_recipes.py` derives the operation-kind and retention sequence for a
+  supported route from the form's stored wrapper and the source shape the scope
+  hands out (pointer, lvalue, rvalue, cyclical row pointer, or cyclical handle).
+  The scripts are keyed by form, not by scope/form cell, so a new scope reuses
+  them and a new form adds one script. A supported cell with no script fails
+  validation instead of losing its kind coverage.
 - `route_cells.py` instantiates the real storage type and resolution list for
   every supported storage cell, including bounded arrays and array handles. It
   checks value, object, and rvalue route availability against the ledger,
   requires every published route target to be reachable from both the static and
   runtime request matchers, checks that every route's required access is
-  satisfied by the scope, checks the modeled operation-kind and source-retention
-  sequences, and asserts that representative routes do not unexpectedly cache
-  conversions.
+  satisfied by the scope, checks the operation-kind and source-retention
+  sequences derived by `route_recipes.py`, and asserts that representative
+  routes do not unexpectedly cache conversions.
 - `wrapper_semantics.py` describes request shapes as a leaf wrapped in zero or
   more wrappers. A wrapper declares its semantics (`owning`, `sharing`,
   `nullable`, `borrowable`, `array`, `variant`, `in_place`), its C++ spelling,

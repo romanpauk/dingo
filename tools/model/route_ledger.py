@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from route_recipes import route_kinds, route_retention
 from storage_cells import FORMS, LVALUE, POINTER, RVALUE, SCOPES, VALUE, exposure
 
 
@@ -54,188 +55,6 @@ RAW_ARRAY_UNAVAILABLE = (
     "raw dynamic array storage is not supported: the element count is not part "
     "of the type"
 )
-
-OPERATION_KINDS = {
-    ("shared", "plain", "value"): ("dereference",),
-    ("shared", "plain", "object"): ("traits",),
-    ("shared", "alternative", "value"): ("dereference",),
-    ("shared", "alternative", "object"): ("dereference", "borrowed"),
-    ("shared", "pointer", "value"): ("dereference",),
-    ("shared", "pointer", "object"): ("traits",),
-    ("shared", "unique_handle", "value"): ("borrowed",),
-    ("shared", "unique_handle", "object"): (
-        "address",
-        "borrowed",
-        "pointer_access",
-    ),
-    ("shared", "shared_handle", "value"): ("borrowed", "traits", "identity"),
-    ("shared", "shared_handle", "object"): (
-        "address",
-        "borrowed",
-        "pointer_access",
-    ),
-    ("shared", "optional", "value"): ("borrowed", "identity"),
-    ("shared", "optional", "object"): (
-        "borrowed",
-        "traits",
-        "pointer_access",
-        "address",
-    ),
-    ("unique", "plain", "value"): ("identity", "wrapper"),
-    ("unique", "plain", "object"): ("traits",),
-    ("unique", "plain", "rvalue"): ("identity", "wrapper"),
-    ("unique", "alternative", "value"): ("alternative",),
-    ("unique", "alternative", "rvalue"): ("alternative",),
-    ("unique", "pointer", "value"): ("traits", "traits", "traits", "traits"),
-    ("unique", "pointer", "object"): ("traits",),
-    ("unique", "pointer", "rvalue"): ("traits", "traits", "traits", "traits"),
-    ("unique", "unique_handle", "value"): ("identity", "traits", "traits", "traits"),
-    ("unique", "unique_handle", "rvalue"): ("identity", "traits", "traits", "traits"),
-    ("unique", "shared_handle", "value"): ("identity", "traits"),
-    ("unique", "shared_handle", "rvalue"): ("identity", "traits"),
-    ("unique", "optional", "value"): ("identity",),
-    ("unique", "optional", "rvalue"): ("identity",),
-    ("external", "plain", "value"): ("identity",),
-    ("external", "plain", "object"): ("address",),
-    ("external", "alternative", "value"): ("alternative",),
-    ("external", "alternative", "object"): ("alternative", "alternative"),
-    ("external", "pointer", "value"): ("dereference",),
-    ("external", "pointer", "object"): ("traits",),
-    ("external", "unique_handle", "value"): ("borrowed",),
-    ("external", "unique_handle", "object"): (
-        "address",
-        "borrowed",
-        "pointer_access",
-    ),
-    ("external", "shared_handle", "value"): ("borrowed", "traits", "identity"),
-    ("external", "shared_handle", "object"): (
-        "address",
-        "borrowed",
-        "pointer_access",
-    ),
-    ("external", "optional", "value"): ("borrowed", "identity"),
-    ("external", "optional", "object"): (
-        "borrowed",
-        "traits",
-        "pointer_access",
-        "address",
-    ),
-    ("shared_cyclical", "plain", "object"): ("traits",),
-    ("shared_cyclical", "alternative", "object"): (
-        "dereference",
-        "borrowed",
-    ),
-    ("shared_cyclical", "pointer", "object"): ("dereference", "borrowed"),
-    ("shared_cyclical", "shared_handle", "value"): ("identity", "traits"),
-    ("shared_cyclical", "shared_handle", "object"): (
-        "address",
-        "borrowed",
-        "pointer_access",
-    ),
-    ("shared_cyclical", "bounded_array", "object"): (
-        "array_reference",
-        "traits",
-        "array_pointer",
-    ),
-    ("shared", "bounded_array", "object"): (
-        "array_reference",
-        "traits",
-        "array_pointer",
-    ),
-    ("unique", "bounded_array", "value"): ("traits", "traits", "traits", "traits"),
-    ("unique", "bounded_array", "object"): ("traits", "array_pointer"),
-    ("unique", "bounded_array", "rvalue"): ("traits", "traits", "traits", "traits"),
-    ("external", "bounded_array", "object"): (
-        "array_reference",
-        "traits",
-        "array_pointer",
-    ),
-    ("shared", "unique_array_handle", "object"): (
-        "address",
-        "pointer_access",
-    ),
-    ("unique", "unique_array_handle", "value"): ("identity", "traits", "traits", "traits"),
-    ("unique", "unique_array_handle", "rvalue"): ("identity", "traits", "traits", "traits"),
-    ("shared", "shared_array_handle", "value"): ("identity", "traits"),
-    ("shared", "shared_array_handle", "object"): (
-        "address",
-        "pointer_access",
-    ),
-    ("unique", "shared_array_handle", "value"): ("identity", "traits"),
-    ("unique", "shared_array_handle", "rvalue"): ("identity", "traits"),
-    ("external", "unique_array_handle", "object"): (
-        "address",
-        "pointer_access",
-    ),
-    ("external", "shared_array_handle", "value"): ("identity", "traits"),
-    ("external", "shared_array_handle", "object"): (
-        "address",
-        "pointer_access",
-    ),
-}
-
-RETENTION = {
-    ("shared", "plain", "value"): (0,),
-    ("shared", "plain", "object"): (0,),
-    ("shared", "alternative", "value"): (1,),
-    ("shared", "alternative", "object"): (1, 1),
-    ("shared", "pointer", "value"): (0,),
-    ("shared", "pointer", "object"): (0,),
-    ("shared", "unique_handle", "value"): (1,),
-    ("shared", "unique_handle", "object"): (0, 1, 1),
-    ("shared", "shared_handle", "value"): (1, 1, 0),
-    ("shared", "shared_handle", "object"): (0, 1, 1),
-    ("shared", "optional", "value"): (1, 0),
-    ("shared", "optional", "object"): (1, 0, 1, 0),
-    ("unique", "plain", "value"): (0, 1),
-    ("unique", "plain", "object"): (0,),
-    ("unique", "plain", "rvalue"): (0, 1),
-    ("unique", "alternative", "value"): (1,),
-    ("unique", "alternative", "rvalue"): (1,),
-    ("unique", "pointer", "value"): (1, 1, 1, 1),
-    ("unique", "pointer", "object"): (0,),
-    ("unique", "pointer", "rvalue"): (1, 1, 1, 1),
-    ("unique", "unique_handle", "value"): (0, 1, 1, 1),
-    ("unique", "unique_handle", "rvalue"): (0, 1, 1, 1),
-    ("unique", "shared_handle", "value"): (0, 1),
-    ("unique", "shared_handle", "rvalue"): (0, 1),
-    ("unique", "optional", "value"): (0,),
-    ("unique", "optional", "rvalue"): (0,),
-    ("external", "plain", "value"): (0,),
-    ("external", "plain", "object"): (0,),
-    ("external", "alternative", "value"): (1,),
-    ("external", "alternative", "object"): (1, 1),
-    ("external", "pointer", "value"): (0,),
-    ("external", "pointer", "object"): (0,),
-    ("external", "unique_handle", "value"): (1,),
-    ("external", "unique_handle", "object"): (0, 1, 1),
-    ("external", "shared_handle", "value"): (1, 1, 0),
-    ("external", "shared_handle", "object"): (0, 1, 1),
-    ("external", "optional", "value"): (1, 0),
-    ("external", "optional", "object"): (1, 0, 1, 0),
-    ("shared_cyclical", "plain", "object"): (0,),
-    ("shared_cyclical", "alternative", "object"): (1, 1),
-    ("shared_cyclical", "pointer", "object"): (1, 1),
-    ("shared_cyclical", "shared_handle", "value"): (0, 1),
-    ("shared_cyclical", "shared_handle", "object"): (0, 1, 1),
-    ("shared_cyclical", "bounded_array", "object"): (1, 0, 1),
-    ("shared", "bounded_array", "object"): (1, 0, 1),
-    ("unique", "bounded_array", "value"): (1, 1, 1, 1),
-    ("unique", "bounded_array", "object"): (0, 1),
-    ("unique", "bounded_array", "rvalue"): (1, 1, 1, 1),
-    ("external", "bounded_array", "object"): (1, 0, 1),
-    ("shared", "unique_array_handle", "object"): (0, 1),
-    ("unique", "unique_array_handle", "value"): (0, 1, 1, 1),
-    ("unique", "unique_array_handle", "rvalue"): (0, 1, 1, 1),
-    ("shared", "shared_array_handle", "value"): (0, 1),
-    ("shared", "shared_array_handle", "object"): (0, 1),
-    ("unique", "shared_array_handle", "value"): (0, 1),
-    ("unique", "shared_array_handle", "rvalue"): (0, 1),
-    ("external", "unique_array_handle", "object"): (0, 1),
-    ("external", "shared_array_handle", "value"): (0, 1),
-    ("external", "shared_array_handle", "object"): (0, 1),
-}
-
 
 @dataclass(frozen=True)
 class LedgerRow:
@@ -315,11 +134,9 @@ def _category_outcome(
             if supported
             else ""
         ),
-        OPERATION_KINDS.get((scope_name, form_name, category), ())
-        if supported
-        else (),
+        route_kinds(scope_name, form_name, category) if supported else (),
         "",
-        RETENTION.get((scope_name, form_name, category), ()) if supported else (),
+        route_retention(scope_name, form_name, category) if supported else (),
     )
 
 
