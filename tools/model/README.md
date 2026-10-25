@@ -26,11 +26,13 @@ hand-curated matrix tags.
   satisfied by the scope, checks the modeled operation-kind and source-retention
   sequences, and asserts that representative routes do not unexpectedly cache
   conversions.
-- `behavior_cells.py` generates the first behavior classes: shared, unique,
-  external, and shared-cyclical plain bindings in the applicable runtime and
-  static containers, checking construction, copy, move, identity, repeated
-  resolution, and destruction after the container scope ends. Runtime and static
-  unique values now agree on the move and destruction counts.
+- `behavior_cells.py` generates behavior classes for plain shared, unique,
+  external, and shared-cyclical bindings, shared/unique handles, optional,
+  variant, raw pointer, and bounded array storage in the applicable runtime and
+  static containers. The tests check construction, copy, move, identity,
+  repeated resolution, array identity, and destruction after the container
+  scope ends. Runtime and static unique values agree on move and destruction
+  counts.
 - `templates/` contains logic-free Jinja templates. The Python model computes
   rows; the templates only lay them out.
 - `*_test.py` is the pytest suite for the models and their deterministic

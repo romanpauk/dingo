@@ -47,18 +47,47 @@ def build_rows() -> list[dict[str, object]]:
             rows.append(
                 {
                     "name": f"{scope}_{container}",
+                    "kind": "plain",
                     "scope": scope,
                     "scope_type": f"dingo::scope<dingo::{scope}>",
                     "container": container,
                     "destructions": DESTRUCTIONS[(scope, container)],
                 }
             )
+    for scope, container, kind, destructions in (
+        ("shared", "runtime", "shared_handle", 1),
+        ("shared", "static", "shared_handle", 1),
+        ("unique", "runtime", "unique_handle", 2),
+        ("unique", "static", "unique_handle", 2),
+        ("shared", "runtime", "shared_optional", 4),
+        ("shared", "static", "shared_optional", 4),
+        ("unique", "runtime", "unique_optional", 4),
+        ("unique", "static", "unique_optional", 4),
+        ("shared", "runtime", "shared_variant", 3),
+        ("shared", "static", "shared_variant", 3),
+        ("unique", "runtime", "unique_variant", 4),
+        ("unique", "static", "unique_variant", 4),
+        ("shared", "runtime", "shared_pointer", 3),
+        ("shared", "static", "shared_pointer", 3),
+        ("shared", "runtime", "shared_bounded_array", 2),
+        ("shared", "static", "shared_bounded_array", 2),
+    ):
+        rows.append(
+            {
+                "name": f"{scope}_{kind}_{container}",
+                "kind": kind,
+                "scope": scope,
+                "scope_type": f"dingo::scope<dingo::{scope}>",
+                "container": container,
+                "destructions": destructions,
+            }
+        )
     return rows
 
 
 def validate() -> None:
     rows = build_rows()
-    expected = len(SCOPES) * len(CONTAINERS) - len(RUNTIME_ONLY)
+    expected = len(SCOPES) * len(CONTAINERS) - len(RUNTIME_ONLY) + 16
     if len(rows) != expected:
         raise ValueError("behavior product is incomplete")
     if len({row["name"] for row in rows}) != len(rows):

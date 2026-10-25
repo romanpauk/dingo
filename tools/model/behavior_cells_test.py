@@ -19,7 +19,7 @@ from storage_cells import validate_catalog
 def test_behavior_product_is_complete() -> None:
     validate()
     rows = build_rows()
-    assert len(rows) == 7
+    assert len(rows) == 23
     assert len({row["name"] for row in rows}) == len(rows)
 
 
