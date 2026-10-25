@@ -48,6 +48,7 @@ template <typename T, typename = void> struct type_traits {
   static constexpr bool is_pointer_like = false;
   static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = false;
+  static constexpr bool is_array_handle = false;
 
   template <typename> static constexpr bool is_handle_rebindable = false;
 
@@ -520,6 +521,7 @@ struct type_traits<std::unique_ptr<Array, Deleter>,
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = true;
+  static constexpr bool is_array_handle = true;
 
   template <typename Target>
   static constexpr bool is_handle_rebindable =
@@ -626,6 +628,11 @@ struct type_traits<std::unique_ptr<T, Deleter>,
     return std::unique_ptr<T, Deleter>(ptr);
   }
 
+  template <typename Value>
+  static std::unique_ptr<T, Deleter> wrap(Value &&value) {
+    return std::unique_ptr<T, Deleter>(new T(std::forward<Value>(value)));
+  }
+
   template <typename TargetType, typename Factory, typename Context>
   static TargetType &resolve_type(Factory &factory, Context &context,
                                   type_descriptor requested_type,
@@ -646,6 +653,7 @@ struct type_traits<std::shared_ptr<Array>,
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = true;
+  static constexpr bool is_array_handle = true;
 
   template <typename Target>
   static constexpr bool is_handle_rebindable =
@@ -738,6 +746,10 @@ struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>> {
 
   static std::shared_ptr<T> from_pointer(T *ptr) {
     return std::shared_ptr<T>(ptr);
+  }
+
+  template <typename Value> static std::shared_ptr<T> wrap(Value &&value) {
+    return std::make_shared<T>(std::forward<Value>(value));
   }
 
   template <typename TargetType, typename Factory, typename Context>

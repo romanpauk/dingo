@@ -42,6 +42,7 @@
 #include <dingo/type/dependency.h>
 #include <dingo/type/dependency_traits.h>
 #include <dingo/type/normalized_type.h>
+#include <dingo/type/request_lift.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -622,7 +623,7 @@ private:
   }
 
   template <typename Request, typename R, typename LookupKey>
-  R resolve_entry(LookupKey key) {
+  R resolve_entry_direct(LookupKey key) {
     using interface_type = typename Request::interface_type;
     if constexpr (is_cacheable<Request, R, LookupKey>()) {
       auto selected = runtime_registry_.template select_binding<
@@ -653,6 +654,38 @@ private:
                 runtime_auto_constructible_v<typename Request::user_type>>(
                 ephemeral_scope, context, *this, std::move(key));
           });
+    }
+  }
+
+  // A request for a wrapper type that the binding does not publish is lifted
+  // from its value. Direct routes still win; a missing route raises the
+  // distinct exception the lift catches.
+  template <typename Request, typename R, typename LookupKey>
+  R resolve_entry(LookupKey key) {
+    using user_type = typename Request::user_type;
+    using wrapper = std::remove_cv_t<user_type>;
+    using lift = detail::request_lift<wrapper>;
+    if constexpr (lift::enabled) {
+      constexpr bool static_present =
+          detail::static_request_present_v<static_bindings_type, wrapper,
+                                           LookupKey>;
+      constexpr bool static_direct =
+          detail::static_request_served_v<static_bindings_type, wrapper,
+                                          LookupKey>;
+      if constexpr (static_present && !static_direct) {
+        // The static binding exists but does not publish the wrapper route.
+        // Do not instantiate the direct static request, which would reject the
+        // shape at compile time.
+        return lift::make(resolve<typename lift::inner_type>(key));
+      } else {
+        return detail::resolve_request_or_lift<wrapper, R>(
+            [&]() -> R { return resolve_entry_direct<Request, R>(key); },
+            [&]() -> R {
+              return lift::make(resolve<typename lift::inner_type>(key));
+            });
+      }
+    } else {
+      return resolve_entry_direct<Request, R>(std::move(key));
     }
   }
 
@@ -1124,12 +1157,40 @@ public:
                                 LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
     constexpr bool may_auto = runtime_auto_constructible_v<T>;
-    if (context.owns(runtime_registry_.runtime())) {
+    using wrapper = std::remove_cv_t<T>;
+    using lift = detail::request_lift<wrapper>;
+    if constexpr (lift::enabled) {
+      constexpr bool static_present =
+          detail::static_request_present_v<static_bindings_type, wrapper,
+                                           LookupKey>;
+      constexpr bool static_direct =
+          detail::static_request_served_v<static_bindings_type, wrapper,
+                                          LookupKey>;
+      if constexpr (static_present && !static_direct) {
+        return lift::make(resolve<typename lift::inner_type, false>(
+            scope, context, origin, key));
+      } else {
+        return detail::resolve_request_or_lift<wrapper, R>(
+            [&]() -> R {
+              if (context.owns(runtime_registry_.runtime())) {
+                return resolve<request, R, may_auto>(scope, context, origin,
+                                                     key);
+              }
+              return resolve_nested<request, R, may_auto>(scope, context,
+                                                          origin, key);
+            },
+            [&]() -> R {
+              return lift::make(resolve<typename lift::inner_type, false>(
+                  scope, context, origin, key));
+            });
+      }
+    } else if (context.owns(runtime_registry_.runtime())) {
       return resolve<request, R, may_auto>(scope, context, origin,
                                            std::move(key));
+    } else {
+      return resolve_nested<request, R, may_auto>(scope, context, origin,
+                                                  std::move(key));
     }
-    return resolve_nested<request, R, may_auto>(scope, context, origin,
-                                                std::move(key));
   }
 
   template <typename Request, bool MayAutoConstruct, typename LookupKey,

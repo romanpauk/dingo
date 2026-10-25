@@ -201,6 +201,29 @@ See:
 - [include/dingo/storage/shared.h](../include/dingo/storage/shared.h)
 - [include/dingo/storage/shared_cyclical.h](../include/dingo/storage/shared_cyclical.h)
 
+### Wrapper Requests
+
+A request may name a wrapper that the registration does not store directly. If
+the wrapper's value can be resolved, Dingo builds the wrapper from it:
+
+- an optional-like wrapper copies or moves its value into a new wrapper
+- an owning handle (`std::shared_ptr`, `std::unique_ptr`, or a user-provided
+  equivalent) is only built from a **consumed** value, so a borrowed instance
+  can never silently become an owner
+- raw pointers and array handles are not lifted into owners
+- a directly stored wrapper still wins over the lift
+
+The wrapper contract is the existing `type_traits` specialization: `value_type`,
+`wrap`, `make`, `make_empty`, `is_pointer_like`, and `is_owning_handle`.
+User-provided optional-like, handle-like, and variant-like classes therefore
+participate without a library change. A variant is resolved as a value;
+`alternative_type_traits` still handles selecting an alternative.
+
+For example, a unique registration of `std::optional<T>` can satisfy
+`std::shared_ptr<std::optional<T>>` by moving the optional into a new shared
+owner, and a shared registration of `std::shared_ptr<T>` can satisfy
+`std::optional<std::shared_ptr<T>>` by copying the handle.
+
 ## Arrays
 
 Dingo supports raw C++ arrays, `std::unique_ptr<T[]>`, and

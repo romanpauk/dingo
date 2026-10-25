@@ -17,6 +17,7 @@
 #include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/storage/unique.h>
+#include <dingo/type/request_lift.h>
 
 #include <gtest/gtest.h>
 
@@ -41,9 +42,35 @@ constexpr bool request_supported(dingo::type_list<Resolutions...>) {
 }
 
 template <typename Request, typename Storage>
-constexpr bool request_supported() {
+constexpr bool direct_supported() {
   return request_supported<Request>(
       typename dingo::detail::binding_resolutions<int, Storage>::type{});
+}
+
+template <typename Request, typename Storage>
+constexpr bool request_supported_impl() {
+  if constexpr (dingo::detail::request_lift<Request>::enabled) {
+    using lift = dingo::detail::request_lift<Request>;
+    return direct_supported<Request, Storage>() ||
+           request_supported_impl<typename lift::inner_type, Storage>();
+  } else {
+    return direct_supported<Request, Storage>();
+  }
+}
+
+template <typename Request, typename Storage>
+constexpr bool request_supported() {
+  return request_supported_impl<Request, Storage>();
+}
+
+template <typename Request> std::string lifted_reason() {
+  if constexpr (dingo::detail::request_lift<Request>::enabled) {
+    return std::string("lifted from ") +
+           dingo::type_name<typename dingo::detail::request_lift<
+               Request>::inner_type>();
+  } else {
+    return "lifted";
+  }
 }
 
 template <typename... Resolutions>
@@ -70,7 +97,9 @@ using object_routes = typename dingo::detail::
 using rvalue_routes = typename dingo::detail::
     binding_rvalue_reference_resolutions<int, storage>::type;
 {% for shape in shapes %}
+static constexpr bool {{ shape.name }}_direct = direct_supported<{{ shape.cpp_type }}, storage>();
 static constexpr bool {{ shape.name }} = request_supported<{{ shape.cpp_type }}, storage>();
+static constexpr bool {{ shape.name }}_lifted = {{ shape.name }} && !{{ shape.name }}_direct;
 {% endfor %}
 } // namespace {{ row.cell }}
 
@@ -79,40 +108,57 @@ TEST(type_matrix, writes_support_report) {
   std::ofstream out(DINGO_TYPE_MATRIX_REPORT);
   ASSERT_TRUE(out.is_open());
   std::map<std::string, std::pair<int, std::string>> gaps;
-  out << "| scope | form | shape | route | top-level | reason |\n";
-  out << "| --- | --- | --- | --- | --- | --- |\n";
+  int supported = 0;
+  int lifted = 0;
+  out << "| scope | form | shape | direct | lifted | top-level | reason |\n";
+  out << "| --- | --- | --- | --- | --- | --- | --- |\n";
 {% for row in rows %}
+{
 {% for shape in shapes %}
+  constexpr bool direct_{{ shape.name }} = {{ row.cell }}::{{ shape.name }}_direct;
+  constexpr bool lifted_{{ shape.name }} = {{ row.cell }}::{{ shape.name }}_lifted;
+  constexpr bool supported_{{ shape.name }} = {{ row.cell }}::{{ shape.name }};
+  constexpr bool top_ok_{{ shape.name }} =
+      direct_{{ shape.name }}
+          ? ({{ "true" if row.top_level[shape.name] else "false" }})
+          : true;
   out << "| {{ row.scope }} | {{ row.form }} | {{ shape.name }} | "
-      << ({{ row.cell }}::{{ shape.name }} ? "yes" : "no") << " | ";
-  if ({{ row.cell }}::{{ shape.name }} &&
-      {{ "true" if row.top_level[shape.name] else "false" }}) {
-    out << "yes";
-  } else {
-    out << "no";
-  }
-  out << " | ";
-  if ({{ row.cell }}::{{ shape.name }}) {
+      << (direct_{{ shape.name }} ? "yes" : "no") << " | "
+      << (lifted_{{ shape.name }} ? "yes" : "no") << " | "
+      << (supported_{{ shape.name }} && top_ok_{{ shape.name }} ? "yes" : "no")
+      << " | ";
+  if (direct_{{ shape.name }}) {
     out << "-";
+  } else if (lifted_{{ shape.name }}) {
+    out << lifted_reason<{{ shape.cpp_type }}>();
   } else {
     out << "{{ row.reasons[shape.name] }}";
     auto &entry = gaps["{{ row.reasons[shape.name] }}"];
     ++entry.first;
     if (entry.second.empty()) {
-      entry.second =
-          "{{ row.scope }}/{{ row.form }} {{ shape.cpp_type }}";
+      entry.second = "{{ row.scope }}/{{ row.form }} {{ shape.cpp_type }}";
     }
   }
   out << " |\n";
+  if (supported_{{ shape.name }}) {
+    ++supported;
+  }
+  if (lifted_{{ shape.name }}) {
+    ++lifted;
+  }
 {% endfor %}
+}
 {% endfor %}
-  out << "\nRoute: the storage publishes a request list that matches the "
+  out << "\nDirect: the storage publishes a request list that matches the "
          "shape.\n";
-  out << "Top-level: the route is safe to call directly on the container. A "
+  out << "Lifted: the shape is not a direct target but is built from its "
+         "value type.\n";
+  out << "Top-level: the result is safe to call directly on the container. A "
          "consuming\n";
   out << "scope can lend an lvalue reference to a longer-lived construction, "
          "but a\n";
   out << "top-level borrow would outlive the resolution that produced it.\n";
+  out << "Supported rows: " << supported << " (lifted: " << lifted << ").\n";
   out << "\n| reason | rows | example |\n";
   out << "| --- | --- | --- |\n";
   for (const auto &[reason, entry] : gaps) {

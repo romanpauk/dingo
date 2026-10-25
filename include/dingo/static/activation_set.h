@@ -450,6 +450,42 @@ template <typename Request, typename InterfaceBinding>
 inline constexpr bool binding_supports_request_v =
     binding_supports_request<Request, InterfaceBinding>::value;
 
+// Whether a static binding serves the request directly. A runtime key has no
+// static selection, so it is never served statically.
+template <typename Bindings, typename T, typename LookupKey>
+constexpr bool static_request_present_v = [] {
+  if constexpr (!is_static_lookup_key_definition_v<LookupKey>) {
+    return false;
+  } else {
+    using request = request_type<std::remove_cv_t<T>, false>;
+    using selection =
+        typename Bindings::template selection<typename request::lookup_type,
+                                              LookupKey>;
+    return selection::status != binding_status::not_found;
+  }
+}();
+
+template <typename Bindings, typename T, typename LookupKey>
+constexpr bool static_request_served_v = [] {
+  if constexpr (!is_static_lookup_key_definition_v<LookupKey>) {
+    return false;
+  } else {
+    using request = request_type<std::remove_cv_t<T>, false>;
+    using selection =
+        typename Bindings::template selection<typename request::lookup_type,
+                                              LookupKey>;
+    if constexpr (selection::status == binding_status::ambiguous) {
+      // Let the normal path report the ambiguity.
+      return true;
+    } else if constexpr (selection::status == binding_status::found) {
+      return binding_supports_request_v<typename request::interface_type,
+                                        typename selection::binding_type>;
+    } else {
+      return false;
+    }
+  }
+}();
+
 template <typename State, typename Host, typename InterfaceBinding>
 struct static_binding_resolver {
   using binding_model_type = typename InterfaceBinding::binding_model_type;

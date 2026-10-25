@@ -439,14 +439,18 @@ public:
     if constexpr (type_list_size_v<request_resolutions> == 0) {
       (void)scope;
       (void)cache_key;
-      throw detail::make_type_not_convertible_exception(
-          request.requested_type, registered_type(), context);
+      throw ::dingo::request_route_not_found_exception(
+          detail::make_type_not_convertible_exception(
+              request.requested_type, registered_type(), context)
+              .what());
     } else {
       const auto resolution_index = detail::resolution_request_index(
           request_resolutions{}, request.requested_type);
       if (resolution_index == type_list_size_v<request_resolutions>) {
-        throw detail::make_type_not_convertible_exception(
-            request.requested_type, registered_type(), context);
+        throw ::dingo::request_route_not_found_exception(
+            detail::make_type_not_convertible_exception(
+                request.requested_type, registered_type(), context)
+                .what());
       }
 
       binding_activation activation{binding, scope};

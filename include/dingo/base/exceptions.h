@@ -43,6 +43,13 @@ struct type_not_convertible_exception : exception {
   using exception::exception;
 };
 
+// The binding publishes no route for the requested type. Request lifting uses
+// this distinct type so a conversion failure is never mistaken for a missing
+// route.
+struct request_route_not_found_exception : type_not_convertible_exception {
+  using type_not_convertible_exception::type_not_convertible_exception;
+};
+
 struct type_ambiguous_exception : exception {
   using exception::exception;
 };

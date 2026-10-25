@@ -83,42 +83,58 @@ constexpr bool request_supported(dingo::type_list<Resolutions...>) {
 }
 
 template <typename Request, typename Storage>
-constexpr bool request_supported() {
+constexpr bool direct_supported() {
   return request_supported<Request>(
       typename dingo::detail::binding_resolutions<tracked, Storage>::type{});
+}
+
+template <typename Request, typename Storage>
+constexpr bool request_supported_impl() {
+  if constexpr (dingo::detail::request_lift<Request>::enabled) {
+    using lift = dingo::detail::request_lift<Request>;
+    return direct_supported<Request, Storage>() ||
+           request_supported_impl<typename lift::inner_type, Storage>();
+  } else {
+    return direct_supported<Request, Storage>();
+  }
+}
+
+template <typename Request, typename Storage>
+constexpr bool request_supported() {
+  return request_supported_impl<Request, Storage>();
 }
 
 template <typename T> auto id_of(const T &value) -> decltype(value.id) {
   return value.id;
 }
 
-template <typename T> auto id_of(T *value) -> decltype(value->id) {
-  return value->id;
+template <typename T> auto id_of(T *value) -> decltype(id_of(*value)) {
+  return id_of(*value);
 }
 
 template <typename T>
-auto id_of(const std::shared_ptr<T> &value) -> decltype(value->id) {
-  return value->id;
+auto id_of(const std::shared_ptr<T> &value) -> decltype(id_of(*value)) {
+  return id_of(*value);
 }
 
 template <typename T>
-auto id_of(const std::unique_ptr<T> &value) -> decltype(value->id) {
-  return value->id;
+auto id_of(const std::unique_ptr<T> &value) -> decltype(id_of(*value)) {
+  return id_of(*value);
 }
 
 template <typename T>
-auto id_of(const std::optional<T> &value) -> decltype(value->id) {
-  return value->id;
+auto id_of(const std::optional<T> &value) -> decltype(id_of(*value)) {
+  return id_of(*value);
 }
 
 template <typename T>
-auto id_of(const std::shared_ptr<T[]> &value) -> decltype(value[0].id) {
-  return value[0].id;
+auto id_of(const std::shared_ptr<T[]> &value) -> decltype(id_of(value.get()[0])) {
+  return id_of(value.get()[0]);
 }
 
 template <typename T>
-auto id_of(const std::unique_ptr<T[]> &value) -> decltype(value[0].id) {
-  return value[0].id;
+auto id_of(const std::unique_ptr<T[]> &value) -> decltype(id_of(value.get()[0])) {
+  return id_of(value.get()[0]);
 }
 
 enum class delete_kind { none, single, array };

@@ -432,9 +432,12 @@ The implemented model uses that split directly:
   grammar (const, references, pointers, optional, owning handles, array handles,
   array references/pointers) to a bounded depth and applies every derived shape
   to every storable cell through the real resolution kernel. It writes the
-  exhaustive table with the matching route, the top-level verdict, a structural
-  reason for every miss, and the published route targets. A matching route can
-  still be unsafe at the container boundary: a consuming scope may lend an
+  exhaustive table with the direct route, the lifted request, the top-level
+  verdict, a structural reason for every miss, and the published route targets.
+  A request for a wrapper the cell does not store is lifted from the wrapper's
+  value: value wrappers copy or move, and owning handles only move from a
+  consumed value so a borrowed instance cannot become an owner. A matching route
+  can still be unsafe at the container boundary: a consuming scope may lend an
   lvalue reference to a longer-lived dependent, but a borrow returned from the
   container would outlive the transaction that produced it. The report marks
   those rows as top-level gaps instead of hiding them, and groups the remaining

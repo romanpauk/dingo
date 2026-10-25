@@ -426,6 +426,7 @@ add_executable(dingo_unit_test
     registration/object_routes.cpp
     registration/object_sizes.cpp
     registration/registration_traits.cpp
+    registration/request_lift.cpp
     registration/runtime_registration.cpp
     registration/static_bindings_source.cpp
     registration/static_parent_container.cpp
