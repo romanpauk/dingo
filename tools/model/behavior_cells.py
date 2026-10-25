@@ -49,6 +49,7 @@ class Form:
     # A move of a contained value is performed when external storage takes
     # ownership of the registered wrapper.
     registration_moves: int = 0
+    interfaces: tuple[str, ...] = ()
 
 
 FORMS = (
@@ -315,6 +316,131 @@ EXTRA_EXPECTATIONS = {
 }
 
 
+@dataclass(frozen=True)
+class InterfaceCase:
+    """A storage exposed through one or more interfaces."""
+
+    name: str
+    scope: str
+    storage: str
+    factory: str | None
+    interfaces: tuple[str, ...]
+    request: str
+    relation: str
+    constructions: int
+    request_class: str
+    containers: tuple[str, ...] = CONTAINERS
+
+
+INTERFACE_CASES = (
+    InterfaceCase(
+        name="shared_ref",
+        scope="shared",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory="make_shared_tracked",
+        interfaces=("tracked_interface",),
+        request="tracked_interface &",
+        relation="&first == &second",
+        constructions=1,
+        request_class="reference",
+    ),
+    InterfaceCase(
+        name="shared_ptr",
+        scope="shared",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory="make_shared_tracked",
+        interfaces=("tracked_interface",),
+        request="tracked_interface *",
+        relation="first == second",
+        constructions=1,
+        request_class="reference",
+    ),
+    InterfaceCase(
+        name="shared_handle",
+        scope="shared",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory="make_shared_tracked",
+        interfaces=("tracked_interface",),
+        request="std::shared_ptr<tracked_interface>",
+        relation="first == second",
+        constructions=1,
+        request_class="handle",
+    ),
+    InterfaceCase(
+        name="shared_plain_ref",
+        scope="shared",
+        storage="dingo::storage<tracked>",
+        factory=None,
+        interfaces=("tracked_interface",),
+        request="tracked_interface &",
+        relation="&first == &second",
+        constructions=1,
+        request_class="reference",
+    ),
+    InterfaceCase(
+        name="unique_handle",
+        scope="unique",
+        storage="dingo::storage<std::unique_ptr<tracked>>",
+        factory="make_unique_tracked",
+        interfaces=("tracked_interface",),
+        request="std::unique_ptr<tracked_interface>",
+        relation="first->value() != second->value()",
+        constructions=2,
+        request_class="handle",
+    ),
+    InterfaceCase(
+        name="unique_shared_handle",
+        scope="unique",
+        storage="dingo::storage<std::unique_ptr<tracked>>",
+        factory="make_unique_tracked",
+        interfaces=("tracked_interface",),
+        request="std::shared_ptr<tracked_interface>",
+        relation="first != second",
+        constructions=2,
+        request_class="handle",
+    ),
+)
+
+
+def _interface_rows() -> list[dict[str, object]]:
+    rows = []
+    for case in INTERFACE_CASES:
+        copies, moves = REQUEST_COSTS[case.request_class]
+        for container in case.containers:
+            registration, static_source = _registration(
+                case.storage,
+                case.factory,
+                case.scope,
+                container,
+                case.interfaces,
+            )
+            rows.append(
+                {
+                    "name": f"{case.scope}_interface_{case.name}_{container}",
+                    "scope": case.scope,
+                    "form": case.name,
+                    "container": container,
+                    "scope_type": f"dingo::scope<dingo::{case.scope}>",
+                    "storage": case.storage,
+                    "instance": "",
+                    "registration": registration,
+                    "static_source": static_source,
+                    "request": case.request,
+                    "relation": case.relation,
+                    "constructions": case.constructions,
+                    "request_class": case.request_class,
+                    "copies": copies,
+                    "moves": moves,
+                    "leaf": "",
+                    "array_element": "",
+                    "move_out": False,
+                    "delete_result": "",
+                    "interface": True,
+                }
+            )
+    return rows
+
+
 # Supported cells the route model publishes but that have no resolvable
 # behavior case yet. Each one must state why, so the contract distinguishes a
 # missing test from a shape the library cannot actually serve.
@@ -337,14 +463,20 @@ BEHAVIOR_GAPS = {
 }
 
 
-def _form(name: str) -> Form:
-    return next(form for form in FORMS if form.name == name)
+def _form_by_storage(storage: str) -> Form | None:
+    return next((form for form in FORMS if form.storage == storage), None)
 
 
-def _registration(form: Form, scope: str, container: str) -> tuple[str, str]:
-    storage = form.storage
+def _registration(
+    storage: str,
+    factory_name: str | None,
+    scope: str,
+    container: str,
+    interfaces: tuple[str, ...] = (),
+) -> tuple[str, str]:
     scope_type = f"dingo::scope<dingo::{scope}>"
-    instance = EXTERNAL_INSTANCES.get(form.name)
+    form = _form_by_storage(storage)
+    instance = EXTERNAL_INSTANCES.get(form.name) if form is not None else None
     if scope == "external" and instance is not None:
         instance_storage = instance[1]
         argument = instance[2]
@@ -354,18 +486,27 @@ def _registration(form: Form, scope: str, container: str) -> tuple[str, str]:
         )
     # A cyclical shared handle constructs its leaf in place, so its factory is
     # the leaf constructor rather than a handle factory.
-    use_factory = form.factory is not None and not (
-        scope == "shared_cyclical" and form.name == "shared_handle"
+    interface_args = "".join(
+        f", dingo::interfaces<{interface}>" for interface in interfaces
     )
-    factory = (
-        f", dingo::factory<dingo::function<&{form.factory}>>" if use_factory else ""
+    use_factory = factory_name is not None and not (
+        scope == "shared_cyclical" and factory_name == "make_shared_tracked"
+    )
+    factory_args = (
+        f", dingo::factory<dingo::function<&{factory_name}>>"
+        if use_factory
+        else ""
     )
     if container == "runtime":
         return (
-            f"container.register_type<{scope_type}, {storage}{factory}>();",
+            f"container.register_type<{scope_type}, {storage}{interface_args}"
+            f"{factory_args}>();",
             "",
         )
-    source = f"dingo::bindings<dingo::bind<{scope_type}, {storage}{factory}>>"
+    source = (
+        f"dingo::bindings<dingo::bind<{scope_type}, {storage}"
+        f"{interface_args}{factory_args}>>"
+    )
     return "", f"using source = {source};"
 
 
@@ -388,7 +529,9 @@ def build_rows() -> list[dict[str, object]]:
             for container in CONTAINERS:
                 if scope in RUNTIME_ONLY_SCOPES and container == "static":
                     continue
-                registration, static_source = _registration(form, scope, container)
+                registration, static_source = _registration(
+                    form.storage, form.factory, scope, container, form.interfaces
+                )
                 copies, moves = REQUEST_COSTS[expectation.request_class]
                 if scope == "external":
                     moves += form.registration_moves
@@ -406,6 +549,7 @@ def build_rows() -> list[dict[str, object]]:
                         "request": expectation.request,
                         "relation": expectation.relation,
                         "constructions": expectation.constructions,
+                        "request_class": expectation.request_class,
                         "copies": copies,
                         "moves": moves,
                         "leaf": expectation.leaf,
@@ -434,6 +578,7 @@ def build_rows() -> list[dict[str, object]]:
                             "request": extra.request,
                             "relation": extra.relation,
                             "constructions": extra.constructions,
+                            "request_class": extra.request_class,
                             "copies": extra_copies,
                             "moves": extra_moves,
                             "leaf": extra.leaf,
@@ -442,12 +587,17 @@ def build_rows() -> list[dict[str, object]]:
                             "delete_result": extra.delete_result,
                         }
                     )
+    rows.extend(_interface_rows())
     return rows
 
 
 def covered_cells() -> set[tuple[str, str]]:
     rows = build_rows()
-    return {(str(row["scope"]), str(row["form"])) for row in rows}
+    return {
+        (str(row["scope"]), str(row["form"]))
+        for row in rows
+        if not row.get("interface")
+    }
 
 
 def supported_cells() -> set[tuple[str, str]]:
@@ -493,6 +643,21 @@ def validate() -> None:
         if form.registration_moves < 0:
             raise ValueError(
                 f"behavior form {form.name} has negative registration moves"
+            )
+    if not INTERFACE_CASES:
+        raise ValueError("interface behavior catalog must not be empty")
+    interface_names = [case.name for case in INTERFACE_CASES]
+    if len(interface_names) != len(set(interface_names)):
+        raise ValueError("interface behavior catalog contains duplicate names")
+    for case in INTERFACE_CASES:
+        if case.request_class not in REQUEST_COSTS:
+            raise ValueError(
+                f"interface case {case.name} has unknown request class "
+                f"{case.request_class!r}"
+            )
+        if case.scope not in SCOPES:
+            raise ValueError(
+                f"interface case {case.name} has unknown scope {case.scope!r}"
             )
 
 

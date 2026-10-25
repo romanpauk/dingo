@@ -14,6 +14,8 @@ import pytest
 
 from behavior_cells import (
     BEHAVIOR_GAPS,
+    INTERFACE_CASES,
+    REQUEST_COSTS,
     build_rows,
     covered_cells,
     render,
@@ -39,6 +41,15 @@ def test_behavior_gaps_have_reasons() -> None:
     for cell, reason in BEHAVIOR_GAPS.items():
         assert cell in supported_cells()
         assert reason
+
+
+def test_interface_cases_cover_both_containers() -> None:
+    rows = [row for row in build_rows() if row.get("interface")]
+    assert INTERFACE_CASES
+    assert rows
+    assert {row["container"] for row in rows} == {"runtime", "static"}
+    assert {row["scope"] for row in rows} == {"shared", "unique"}
+    assert all(row["request_class"] in REQUEST_COSTS for row in rows)
 
 
 def test_external_cells_are_runtime_only() -> None:

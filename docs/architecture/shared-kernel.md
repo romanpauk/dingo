@@ -468,7 +468,10 @@ model suites. In priority order:
    stored form, so multiplying every form by every container adds instantiations
    without adding a new failure mode.
 5. **Interface and annotated exposure**. Add an interface dimension to the
-   model, then remove `annotated` and most of `resolve_interface`.
+   model, then remove `annotated` and most of `resolve_interface`. Behavior
+   cases already cover shared interface references, pointers, shared handles,
+   and unique owning handles through `dingo::interfaces<...>`; the route model
+   still needs an interface dimension before the matrix rows can move.
 6. **Keys, collections, local bindings.** Add model axes only if the generated
    product stays compact; otherwise keep them in the matrix.
 

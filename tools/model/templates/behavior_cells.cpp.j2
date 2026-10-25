@@ -23,7 +23,12 @@
 
 namespace behavior_cells {
 
-struct tracked {
+struct tracked_interface {
+  virtual ~tracked_interface() = default;
+  virtual int value() const = 0;
+};
+
+struct tracked : tracked_interface {
   static inline int constructions = 0;
   static inline int copies = 0;
   static inline int moves = 0;
@@ -42,6 +47,8 @@ struct tracked {
     destructions = 0;
     next_id = 0;
   }
+
+  int value() const override { return id; }
 
   int id;
 };

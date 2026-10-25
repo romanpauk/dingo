@@ -44,7 +44,11 @@ hand-curated matrix tags.
   secondary cases: the unique plain cell also moves the rvalue route, and the
   shared alternative cell also copies the variant wrapper value. Supported
   cells without a resolvable behavior case are listed in `BEHAVIOR_GAPS` with a
-  reason, so a cell cannot silently lose its test.
+  reason, so a cell cannot silently lose its test. A separate interface case
+  list exercises storage exposed through `dingo::interfaces<...>`: shared
+  references, pointers, and shared handles, plus unique owning handles. These
+  cases use the same request-class cost model and assert the same construction,
+  copy, move, and lifetime balance checks.
 - `templates/` contains logic-free Jinja templates. The Python model computes
   rows; the templates only lay them out.
 - `*_test.py` is the pytest suite for the models and their deterministic
