@@ -77,6 +77,25 @@ private:
   bool initialized_ = false;
 };
 
+// A source that owns its value for as long as the resolution context lives.
+// Routes can publish an address into it instead of copying the value into a
+// second context slot.
+template <typename Source>
+class context_rvalue_source : public rvalue_source<Source> {
+public:
+  using rvalue_source<Source>::rvalue_source;
+};
+
+template <typename Source> struct is_context_rvalue_source : std::false_type {};
+
+template <typename Value>
+struct is_context_rvalue_source<context_rvalue_source<Value>> : std::true_type {
+};
+
+template <typename Source>
+inline constexpr bool is_context_rvalue_source_v = is_context_rvalue_source<
+    std::remove_cv_t<std::remove_reference_t<Source>>>::value;
+
 template <typename Source> struct lvalue_source {
   using value_type = Source;
 
@@ -144,6 +163,10 @@ struct materialized_source_traits<rvalue_source<Source>> {
     return source.get_ptr();
   }
 };
+
+template <typename Source>
+struct materialized_source_traits<context_rvalue_source<Source>>
+    : materialized_source_traits<rvalue_source<Source>> {};
 
 template <typename Source>
 struct materialized_source_traits<lvalue_source<Source>> {

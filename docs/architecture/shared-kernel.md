@@ -34,10 +34,12 @@ infrastructure described below. It changes no public API and no behavior.
   type computation, cache-slot construction policy, and registered-type
   descriptor used by both binding backends, in addition to the materialization
   and address helpers.
-- Runtime value requests ask the selected binding for a typed boundary maker.
-  Consumed value routes construct the boundary object directly in the request
-  type, so the runtime path no longer materializes a context value and moves it
-  out afterward. This removes the extra move unique values had at runtime.
+- Runtime value requests address consumed routes directly. A consuming scope
+  materializes its source in the resolution context, so the route hands that
+  address over with consume access instead of moving the value into a second
+  context slot. The runtime path therefore constructs the result with one move,
+  the same as the static container, and requests no longer need a typed maker
+  indirection.
 - `tools/model/` is the first coverage catalog. It enumerates every built-in
   storage scope by form cell, every selection policy by source status, and every
   scope/form/route-category row. Every route row is classified as supported,

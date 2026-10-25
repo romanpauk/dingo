@@ -456,10 +456,11 @@ public:
     using source_type =
         std::remove_cv_t<std::remove_reference_t<decltype(storage.resolve(
             scope, context, container))>>;
-    return context.template construct<detail::rvalue_source<source_type>>(
-        scope, std::in_place, [&](void *ptr) {
-          new (ptr) source_type(storage.resolve(scope, context, container));
-        });
+    return context
+        .template construct<detail::context_rvalue_source<source_type>>(
+            scope, std::in_place, [&](void *ptr) {
+              new (ptr) source_type(storage.resolve(scope, context, container));
+            });
   }
 };
 } // namespace dingo

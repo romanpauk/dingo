@@ -68,15 +68,15 @@ enumerate the built-in cells independently of the C++ headers. The generator
 writes one translation unit for the full storage scope-by-form product, one for
 every selection policy and source status, one route probe for every supported
 storage cell, and one behavior class for plain bindings in the applicable
-runtime and static containers. Runtime value routes use a typed boundary maker
-when the selected route consumes a value, so value requests construct the result
-directly instead of materializing a context value and moving it out. The route
-ledger classifies every scope/form/category row as supported, unavailable with a
-reason, or a tracked gap. The route probes check value, object, and rvalue
-availability against that ledger, require every published route target to be
-reachable from both the static and runtime request matchers, check that the
-scope's access satisfies every route, and check the modeled operation-kind and
-source-retention sequences. It also generates the committed
+runtime and static containers. Runtime value routes address the source a
+consuming scope already materialized in the context, so value requests construct
+the result with one move instead of copying a context value and moving it out.
+The route ledger classifies every scope/form/category row as supported,
+unavailable with a reason, or a tracked gap. The route probes check value,
+object, and rvalue availability against that ledger, require every published
+route target to be reachable from both the static and runtime request matchers,
+check that the scope's access satisfies every route, and check the modeled
+operation-kind and source-retention sequences. It also generates the committed
 `include/dingo/storage/scopes.gen.h` header, which owns the built-in
 `storage_scope_policy` data. Compile-time assertions compare the generated
 expectation with the library; a missing cell, changed exposure, or stale catalog

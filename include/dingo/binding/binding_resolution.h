@@ -22,7 +22,6 @@
 #include <dingo/type/type_traits.h>
 
 #include <cassert>
-#include <cstddef>
 #include <memory>
 #include <new>
 #include <type_traits>
@@ -488,6 +487,13 @@ resolved_address resolve_binding_address_from_instance(construction_scope scope,
                      : resolved_address::access_kind::borrow};
 }
 
+// A source materialized in the context outlives the resolution, so a route that
+// yields an rvalue reference to it can hand that address over directly instead
+// of moving the value into a second context slot.
+template <typename Source>
+inline constexpr bool context_owned_source_v = is_context_rvalue_source_v<
+    std::remove_cv_t<std::remove_reference_t<Source>>>;
+
 template <typename Resolution, typename Storage, typename Resolver,
           typename Context, typename MaterializedSource>
 resolved_address
@@ -497,49 +503,36 @@ resolve_address_from_source(construction_scope scope, Resolver &resolver,
                             type_descriptor registered_type) {
   using address_type = typename Resolution::result_type;
   using operation = typename Resolution::operation;
-  auto &&instance = operation::template apply<Storage>(
-      resolver, context, std::forward<MaterializedSource>(source),
-      requested_type, registered_type);
-  return resolve_binding_address_from_instance<address_type>(
-      scope, context, std::forward<decltype(instance)>(instance));
+  auto produce = [&]() -> decltype(auto) {
+    return operation::template apply<Storage>(
+        resolver, context, std::forward<MaterializedSource>(source),
+        requested_type, registered_type);
+  };
+  using produced_type = decltype(produce());
+
+  if constexpr (context_owned_source_v<MaterializedSource> &&
+                std::is_rvalue_reference_v<produced_type>) {
+    using instance_type = std::remove_reference_t<produced_type>;
+    auto &&instance = produce();
+    return {const_cast<std::remove_cv_t<instance_type> *>(
+                std::addressof(static_cast<instance_type &>(instance))),
+            resolved_address::access_kind::consume};
+  } else {
+    auto &&instance = produce();
+    return resolve_binding_address_from_instance<address_type>(
+        scope, context, std::forward<decltype(instance)>(instance));
+  }
 }
 
-// The typed boundary a value route constructs. The runtime binding returns a
-// pointer to the maker for the selected route; the request site, which knows
-// the boundary type, calls it and receives the value directly.
-template <typename Boundary, typename Interface, typename Context>
-struct binding_value_maker {
-  Boundary (*make)(Interface &, construction_scope, Context &);
-};
-
 } // namespace detail
-
-template <typename T>
-inline constexpr bool resolved_value_fast_path_v =
-    std::is_object_v<T> && !std::is_array_v<T> && !std::is_reference_v<T> &&
-    !std::is_pointer_v<T> && !std::is_const_v<T> && !std::is_volatile_v<T>;
 
 template <typename T, typename RTTI, typename Binding, typename Context>
 T resolve_binding_request(construction_scope scope, Binding &binding,
                           Context &context, const void *cache_key = nullptr) {
   auto request = detail::make_binding_request<T, RTTI>(cache_key);
-  if constexpr (resolved_value_fast_path_v<T>) {
-    const void *maker = nullptr;
-    auto result =
-        binding.resolve_request(scope, context, request.request, cache_key,
-                                detail::type_address_v<T>, &maker);
-    if (maker != nullptr) {
-      const auto *typed =
-          static_cast<const detail::binding_value_maker<T, Binding, Context> *>(
-              maker);
-      return typed->make(binding, scope, context);
-    }
-    return detail::convert_resolved_binding<T>(result);
-  } else {
-    auto result =
-        binding.resolve_request(scope, context, request.request, cache_key);
-    return detail::convert_resolved_binding<T>(result);
-  }
+  auto result =
+      binding.resolve_request(scope, context, request.request, cache_key);
+  return detail::convert_resolved_binding<T>(result);
 }
 
 template <typename Request>
