@@ -302,13 +302,7 @@ def wrapper(form_name: str) -> WrapperSemantics | None:
 
 
 def form_kind(form_name: str) -> str:
-    stored = wrapper(form_name)
-    if stored is not None:
-        # A value wrapper is optional-like; plain values have no wrapper and
-        # are handled by has_value below.
-        return "optional" if stored.kind == "value" else stored.kind
-    form = FORM_BY_NAME[form_name]
-    return "value" if form.has_value else "array"
+    return FORM_BY_NAME[form_name].kind
 
 
 _IN_PLACE_KINDS = frozenset({"handle", "array_handle", "optional"})

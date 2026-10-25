@@ -53,7 +53,6 @@ class Scope:
     retains_unresolved_source: bool
     allows_cycles: bool
     returns_pointer: bool
-    exposures: dict[str, int]
 
 
 @dataclass(frozen=True)
@@ -61,10 +60,12 @@ class Form:
     name: str
     cpp_type: str
     headers: tuple[str, ...]
+    kind: str
     has_value: bool
     has_lvalue: bool
     has_rvalue_reference: bool
     has_pointer: bool
+    sharing: bool = False
 
 
 SCOPES = (
@@ -78,7 +79,6 @@ SCOPES = (
         retains_unresolved_source=True,
         allows_cycles=False,
         returns_pointer=True,
-        exposures={},
     ),
     Scope(
         name="unique",
@@ -90,18 +90,6 @@ SCOPES = (
         retains_unresolved_source=False,
         allows_cycles=False,
         returns_pointer=False,
-        exposures={
-            "plain": LVALUE | RVALUE,
-            "pointer": RVALUE | POINTER,
-            "array": 0,
-            "bounded_array": RVALUE | POINTER,
-            "alternative": RVALUE,
-            "unique_handle": RVALUE,
-            "unique_array_handle": RVALUE,
-            "shared_handle": RVALUE,
-            "shared_array_handle": RVALUE,
-            "optional": RVALUE,
-        },
     ),
     Scope(
         name="external",
@@ -113,7 +101,6 @@ SCOPES = (
         retains_unresolved_source=False,
         allows_cycles=False,
         returns_pointer=False,
-        exposures={},
     ),
     Scope(
         name="shared_cyclical",
@@ -125,18 +112,6 @@ SCOPES = (
         retains_unresolved_source=False,
         allows_cycles=True,
         returns_pointer=True,
-        exposures={
-            "plain": LVALUE | POINTER,
-            "alternative": LVALUE | POINTER,
-            "pointer": LVALUE | POINTER,
-            "array": 0,
-            "bounded_array": LVALUE | POINTER,
-            "shared_handle": VALUE | LVALUE | POINTER,
-            "shared_array_handle": VALUE | LVALUE | POINTER,
-            "unique_handle": 0,
-            "unique_array_handle": 0,
-            "optional": 0,
-        },
     ),
 )
 
@@ -145,6 +120,7 @@ FORMS = (
         name="plain",
         cpp_type="int",
         headers=(),
+        kind="value",
         has_value=True,
         has_lvalue=True,
         has_rvalue_reference=True,
@@ -154,6 +130,7 @@ FORMS = (
         name="alternative",
         cpp_type="std::variant<int, long>",
         headers=("variant",),
+        kind="variant",
         has_value=True,
         has_lvalue=True,
         has_rvalue_reference=True,
@@ -163,6 +140,7 @@ FORMS = (
         name="pointer",
         cpp_type="int *",
         headers=(),
+        kind="pointer",
         has_value=True,
         has_lvalue=True,
         has_rvalue_reference=True,
@@ -172,6 +150,7 @@ FORMS = (
         name="array",
         cpp_type="int[]",
         headers=(),
+        kind="array",
         has_value=False,
         has_lvalue=False,
         has_rvalue_reference=True,
@@ -181,6 +160,7 @@ FORMS = (
         name="bounded_array",
         cpp_type="int[2]",
         headers=(),
+        kind="array",
         has_value=False,
         has_lvalue=True,
         has_rvalue_reference=True,
@@ -190,6 +170,7 @@ FORMS = (
         name="unique_handle",
         cpp_type="std::unique_ptr<int>",
         headers=("memory",),
+        kind="handle",
         has_value=True,
         has_lvalue=True,
         has_rvalue_reference=True,
@@ -199,6 +180,7 @@ FORMS = (
         name="unique_array_handle",
         cpp_type="std::unique_ptr<int[]>",
         headers=("memory",),
+        kind="array_handle",
         has_value=False,
         has_lvalue=True,
         has_rvalue_reference=True,
@@ -208,6 +190,8 @@ FORMS = (
         name="shared_handle",
         cpp_type="std::shared_ptr<int>",
         headers=("memory",),
+        kind="handle",
+        sharing=True,
         has_value=True,
         has_lvalue=True,
         has_rvalue_reference=True,
@@ -217,6 +201,8 @@ FORMS = (
         name="shared_array_handle",
         cpp_type="std::shared_ptr<int[]>",
         headers=("memory",),
+        kind="array_handle",
+        sharing=True,
         has_value=True,
         has_lvalue=True,
         has_rvalue_reference=True,
@@ -226,6 +212,7 @@ FORMS = (
         name="optional",
         cpp_type="std::optional<int>",
         headers=("optional",),
+        kind="optional",
         has_value=True,
         has_lvalue=True,
         has_rvalue_reference=True,
@@ -239,23 +226,29 @@ FORM_BY_NAME = {form.name: form for form in FORMS}
 
 
 def exposure(scope: Scope, form: Form) -> int:
-    """Return the exposure of one scope/form cell.
+    """Return the exposure of one scope/form cell from scope capabilities.
 
-    A form the library does not implement is never exposed, whatever the scope
-    table says. A scope with no explicit table exposes every other form it can
-    store for the borrowed categories. Scopes with an explicit table must name
-    every form, including the forms they reject with zero.
+    Borrowing scopes publish value, lvalue, and pointer access. A consuming
+    scope publishes its consumed value plus the leaf lvalue or pointer it can
+    still lend. A cyclical scope publishes the leaf and sharing handles; it
+    does not store sole-owner or optional forms. Raw arrays are never exposed,
+    and the cyclical shared-array handle remains an explicit unavailable cell.
     """
     if form.name in UNAVAILABLE_FORMS:
         return 0
-    if not scope.exposures:
-        return VALUE | LVALUE | POINTER
-    try:
-        return scope.exposures[form.name]
-    except KeyError as error:
-        raise ValueError(
-            f"scope {scope.name!r} does not declare form {form.name!r}"
-        ) from error
+    if scope.consumes:
+        if form.kind == "value":
+            return LVALUE | RVALUE
+        if form.kind in {"pointer", "array"}:
+            return RVALUE | POINTER
+        return RVALUE
+    if scope.allows_cycles:
+        if form.kind in {"value", "variant", "pointer", "array"}:
+            return LVALUE | POINTER
+        if form.sharing:
+            return VALUE | LVALUE | POINTER
+        return 0
+    return VALUE | LVALUE | POINTER
 
 
 def scope_exposures(scope: Scope) -> list[int]:
@@ -324,12 +317,8 @@ def validate() -> None:
     if not scope_names or not form_names:
         raise ValueError("scope and form catalogs must not be empty")
     for scope in SCOPES:
-        if scope.exposures and set(scope.exposures) != set(form_names):
-            raise ValueError(
-                f"scope {scope.name!r} must name every form: "
-                f"missing {sorted(set(form_names) - set(scope.exposures))}, "
-                f"extra {sorted(set(scope.exposures) - set(form_names))}"
-            )
+        for form in FORMS:
+            exposure(scope, form)
     build_rows()
 
 

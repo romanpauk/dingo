@@ -12,7 +12,20 @@ from pathlib import Path
 
 import pytest
 
-from storage_cells import FORMS, SCOPES, build_rows, render, validate
+from storage_cells import (
+    FORM_BY_NAME,
+    FORMS,
+    LVALUE,
+    POINTER,
+    RVALUE,
+    SCOPE_BY_NAME,
+    SCOPES,
+    VALUE,
+    build_rows,
+    exposure,
+    render,
+    validate,
+)
 from storage_cells import render_header, validate_catalog
 
 
@@ -28,11 +41,18 @@ def test_product_is_complete() -> None:
     assert len(keys) == len(rows)
 
 
-def test_every_scope_names_every_form() -> None:
-    form_names = {form.name for form in FORMS}
+def test_exposures_are_derived_for_every_scope_form_pair() -> None:
     for scope in SCOPES:
-        if scope.exposures:
-            assert set(scope.exposures) == form_names
+        for form in FORMS:
+            assert exposure(scope, form) >= 0
+    assert exposure(SCOPE_BY_NAME["shared"], FORM_BY_NAME["plain"]) == (
+        VALUE | LVALUE | POINTER
+    )
+    assert exposure(SCOPE_BY_NAME["unique"], FORM_BY_NAME["alternative"]) == RVALUE
+    assert (
+        exposure(SCOPE_BY_NAME["shared_cyclical"], FORM_BY_NAME["unique_handle"])
+        == 0
+    )
 
 
 def test_intentional_exclusions_are_explicit() -> None:

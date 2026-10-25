@@ -5,10 +5,14 @@ owns the declarations that the library used to keep only in C++ and in the
 hand-curated matrix tags.
 
 - `storage_cells.py` enumerates every built-in storage scope by storage form
-  cell. It compares the model against the scope policies and the `storage_form`
-  enum, renders one compile-time assertion per cell, and rejects a catalog that
-  is missing or stale. It also generates the committed
-  `include/dingo/storage/scopes.gen.h` header, which now owns the built-in
+  cell. Each scope declares capabilities (consuming, cyclical, pointer source)
+  and each form declares its semantic kind and array/handle facts; the exposure
+  bits are derived from those capabilities rather than a per-form table. Raw
+  arrays and the cyclical shared-array handle stay explicit unavailable
+  exceptions. The model is compared against the scope policies and the
+  `storage_form` enum, renders one compile-time assertion per cell, and rejects
+  a catalog that is missing or stale. It also generates the committed
+  `include/dingo/storage/scopes.gen.h` header, which owns the built-in
   `storage_scope_policy` specializations.
 - `selection_rules.py` enumerates every selection policy and pair of source
   statuses. It compares the model against the C++ policy and status enums and
@@ -144,7 +148,8 @@ an error rather than an untested cell.
 Add a form or scope by extending the model first:
 
 1. Add the C++ declaration.
-2. Add the name, representative type, and exposure behavior to the model.
+2. Add the name, representative type, semantic kind, and capability facts to
+   the model. Exposure is derived from the scope and form capabilities.
 3. Run `cells-check`; the generated assertions are the list of cells that must
    be implemented.
 
