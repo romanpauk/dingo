@@ -15,15 +15,59 @@ import pytest
 from behavior_cells import (
     ANNOTATION_RECIPES,
     BEHAVIOR_GAPS,
+    FORMS,
     INTERFACE_CASES,
     REQUEST_COSTS,
     build_rows,
     covered_cells,
+    derive_expectation,
     render,
     supported_cells,
     validate,
 )
 from storage_cells import validate_catalog
+
+
+def _form(name: str):
+    return next(form for form in FORMS if form.name == name)
+
+
+def test_expectations_follow_the_semantic_form_kind() -> None:
+    shared_handle = derive_expectation(_form("shared_handle"), "shared")
+    assert shared_handle.request == "std::shared_ptr<tracked>"
+    assert shared_handle.request_class == "handle"
+    assert shared_handle.leaf == "pointer"
+
+    unique_handle = derive_expectation(_form("unique_handle"), "unique")
+    assert unique_handle.request == "std::unique_ptr<tracked>"
+    assert unique_handle.request_class == "handle"
+
+    unique_array = derive_expectation(_form("bounded_array"), "unique")
+    assert unique_array.request == "tracked *"
+    assert unique_array.request_class == "array"
+    assert unique_array.delete_result == "delete[]"
+    assert unique_array.constructions == 4
+
+    cyclical_array = derive_expectation(
+        _form("bounded_array"), "shared_cyclical"
+    )
+    assert cyclical_array.request == "tracked (*)[2]"
+    assert cyclical_array.constructions == 2
+
+    external = derive_expectation(_form("plain"), "external")
+    assert external.constructions == 0
+    assert external.leaf == "external"
+
+
+def test_every_non_gap_supported_cell_derives_a_known_request_class() -> None:
+    for form in FORMS:
+        for scope in ("shared", "unique", "external", "shared_cyclical"):
+            if (scope, form.name) in BEHAVIOR_GAPS:
+                continue
+            if (scope, form.name) not in supported_cells():
+                continue
+            expectation = derive_expectation(form, scope)
+            assert expectation.request_class in REQUEST_COSTS
 
 
 def test_behavior_product_is_complete() -> None:

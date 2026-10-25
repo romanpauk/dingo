@@ -101,11 +101,13 @@ hand-curated matrix tags.
   product is derived from the route ledger. The tests check request identity,
   construction counts, copy and move counts, array element identity, leaf
   addresses, repeated resolution, and the lifetime balance after the container
-  scope ends. Copy and move counts are derived from a request class
-  (`borrow_value`, `consume_value`, `consume_rvalue`, `reference`, `handle`,
-  `array`) instead of being hand-written per cell, so a count that does not
-  match the request shape fails the build. Only the external registration move
-  and the storage-shape construction counts are explicit data. A consumed raw
+  scope ends. The primary request, relation, request class, and construction
+  count are derived from the semantic form kind, wrapper properties, and scope.
+  Copy and move counts come from the derived request class (`borrow_value`,
+  `consume_value`, `consume_rvalue`, `reference`, `handle`, `array`) instead of
+  being hand-written per cell, so a count that does not match the request shape
+  fails the build. Only the external registration move remains explicit form
+  data. A consumed raw
   pointer or row pointer transfers ownership to the caller, and its behavior
   case deletes the result before checking the balance. Multi-route cells add
   secondary cases: the unique plain cell also moves the rvalue route, and the

@@ -9,9 +9,11 @@
 """Generate behavior classes from the scope/form model.
 
 The generator owns the product: every supported scope/form cell from the route
-ledger becomes a behavior class in each applicable container front-end. Per-cell
-expectations are data, so a new form or scope is one table entry plus a
-registration description instead of a hand-written test.
+ledger becomes a behavior class in each applicable container front-end. The
+primary request, relation, request class, and construction count are derived
+from the semantic form kind, stored wrapper properties, and scope; a form adds
+its registration facts and capabilities, not a hand-written expectation per
+cell.
 
 Behavior gaps are cells the ledger publishes but that have no resolvable
 behavior case yet. They carry a reason and are checked by the coverage
@@ -27,7 +29,9 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from route_ledger import supported_categories
+from route_recipes import form_kind
 from storage_cells import validate_catalog
+from wrapper_semantics import FORM_WRAPPERS
 
 
 SCOPES = ("shared", "unique", "external", "shared_cyclical")
@@ -170,122 +174,165 @@ REQUEST_COSTS = {
 }
 
 
-EXPECTATIONS = {
-    ("plain", "shared"): Expectation(
-        "tracked", "first.id == second.id", 1, "borrow_value", leaf="id"
-    ),
-    ("plain", "unique"): Expectation(
-        "tracked", "first.id != second.id", 2, "consume_value"
-    ),
-    ("plain", "external"): Expectation(
-        "tracked",
-        "first.id == second.id",
-        0,
-        "borrow_value",
-        leaf="external",
-    ),
-    ("plain", "shared_cyclical"): Expectation(
-        "tracked &", "&first == &second", 1, "reference"
-    ),
-    ("alternative", "shared"): Expectation(
-        "tracked", "first.id == second.id", 1, "borrow_value", leaf="id"
-    ),
-    ("alternative", "unique"): Expectation(
-        "variant_t",
-        "std::get<0>(first).id != std::get<0>(second).id",
-        2,
-        "consume_value",
-    ),
-    ("alternative", "external"): Expectation(
-        "tracked", "first.id == second.id", 0, "borrow_value", leaf="id"
-    ),
-    ("pointer", "shared"): Expectation(
-        "tracked", "first.id == second.id", 1, "borrow_value", leaf="id"
-    ),
-    # A consumed raw pointer transfers ownership: the caller deletes it.
-    ("pointer", "unique"): Expectation(
-        "tracked *",
-        "first->id != second->id",
-        2,
-        "handle",
-        delete_result="delete",
-    ),
-    ("pointer", "external"): Expectation(
-        "tracked", "first.id == second.id", 0, "borrow_value", leaf="id"
-    ),
-    ("bounded_array", "shared"): Expectation(
-        "tracked *",
-        "first[0].id == second[0].id",
-        2,
-        "array",
-        array_element="first[0].id != first[1].id",
-    ),
-    # A consumed raw row pointer transfers ownership: the caller deletes it.
-    ("bounded_array", "unique"): Expectation(
-        "tracked *",
-        "first[0].id != second[0].id",
-        4,
-        "array",
-        array_element="first[0].id != first[1].id",
-        delete_result="delete[]",
-    ),
-    ("bounded_array", "external"): Expectation(
-        "tracked *",
-        "first[0].id == second[0].id",
-        0,
-        "array",
-        array_element="first[0].id != first[1].id",
-    ),
-    ("bounded_array", "shared_cyclical"): Expectation(
-        "tracked (*)[2]",
-        "first == second",
-        2,
-        "array",
-        array_element="(*first)[0].id != (*first)[1].id",
-    ),
-    ("unique_handle", "unique"): Expectation(
-        "std::unique_ptr<tracked>", "first->id != second->id", 2, "handle"
-    ),
-    ("unique_array_handle", "shared"): Expectation(
-        "std::unique_ptr<tracked[]>&", "&first == &second", 2, "reference"
-    ),
-    ("unique_array_handle", "unique"): Expectation(
-        "std::unique_ptr<tracked[]>",
-        "first[0].id != second[0].id",
-        4,
-        "array",
-    ),
-    ("shared_handle", "shared"): Expectation(
-        "std::shared_ptr<tracked>", "first == second", 1, "handle", leaf="pointer"
-    ),
-    ("shared_handle", "unique"): Expectation(
-        "std::shared_ptr<tracked>", "first != second", 2, "handle"
-    ),
-    ("shared_handle", "external"): Expectation(
-        "std::shared_ptr<tracked>", "first == second", 0, "handle", leaf="pointer"
-    ),
-    ("shared_handle", "shared_cyclical"): Expectation(
-        "std::shared_ptr<tracked>", "first == second", 1, "handle", leaf="pointer"
-    ),
-    ("shared_array_handle", "shared"): Expectation(
-        "std::shared_ptr<tracked[]>", "first == second", 2, "array"
-    ),
-    ("shared_array_handle", "unique"): Expectation(
-        "std::shared_ptr<tracked[]>", "first != second", 4, "array"
-    ),
-    ("shared_array_handle", "external"): Expectation(
-        "std::shared_ptr<tracked[]>", "first == second", 0, "array"
-    ),
-    ("optional", "shared"): Expectation(
-        "tracked", "first.id == second.id", 1, "borrow_value", leaf="id"
-    ),
-    ("optional", "unique"): Expectation(
-        "std::optional<tracked>", "first->id != second->id", 2, "consume_value"
-    ),
-    ("optional", "external"): Expectation(
-        "tracked", "first.id == second.id", 0, "borrow_value", leaf="id"
-    ),
-}
+def _elements(kind: str) -> int:
+    return 2 if kind in {"array", "array_handle"} else 1
+
+
+def _constructions(scope: str, kind: str) -> int:
+    if scope == "external":
+        return 0
+    if scope == "unique":
+        return 2 * _elements(kind)
+    return _elements(kind)
+
+
+def derive_expectation(form: Form, scope: str) -> Expectation:
+    """Derive the primary behavior request from the selected route shape.
+
+    The request class, relation, constructions, and optional leaf checks all
+    follow from the form's semantic kind, its stored wrapper properties, and the
+    scope. Construction counts are a form fact: external storage constructs
+    nothing, unique storage constructs two resolutions, and the other scopes
+    construct one. Array-shaped forms hold two tracked elements.
+    """
+    kind = form_kind(form.name)
+    stored = FORM_WRAPPERS.get(form.name)
+    constructions = _constructions(scope, kind)
+    elements = _elements(kind)
+
+    if kind == "value":
+        if scope == "shared_cyclical":
+            return Expectation(
+                "tracked &", "&first == &second", constructions, "reference"
+            )
+        if scope == "unique":
+            return Expectation(
+                "tracked",
+                "first.id != second.id",
+                constructions,
+                "consume_value",
+            )
+        return Expectation(
+            "tracked",
+            "first.id == second.id",
+            constructions,
+            "borrow_value",
+            leaf="external" if scope == "external" else "id",
+        )
+
+    if kind == "variant":
+        if scope == "unique":
+            return Expectation(
+                "variant_t",
+                "std::get<0>(first).id != std::get<0>(second).id",
+                constructions,
+                "consume_value",
+            )
+        return Expectation(
+            "tracked",
+            "first.id == second.id",
+            constructions,
+            "borrow_value",
+            leaf="id",
+        )
+
+    if kind == "pointer":
+        if scope == "unique":
+            return Expectation(
+                "tracked *",
+                "first->id != second->id",
+                constructions,
+                "handle",
+                delete_result="delete",
+            )
+        return Expectation(
+            "tracked",
+            "first.id == second.id",
+            constructions,
+            "borrow_value",
+            leaf="id",
+        )
+
+    if kind == "array":
+        if scope == "shared_cyclical":
+            return Expectation(
+                "tracked (*)[2]",
+                "first == second",
+                constructions,
+                "array",
+                array_element="(*first)[0].id != (*first)[1].id",
+            )
+        return Expectation(
+            "tracked *",
+            "first[0].id == second[0].id"
+            if scope != "unique"
+            else "first[0].id != second[0].id",
+            constructions,
+            "array",
+            array_element="first[0].id != first[1].id",
+            delete_result="delete[]" if scope == "unique" else "",
+        )
+
+    if kind == "handle":
+        sharing = stored is not None and stored.has("sharing")
+        if sharing:
+            relation = "first == second" if scope != "unique" else "first != second"
+            return Expectation(
+                "std::shared_ptr<tracked>",
+                relation,
+                constructions,
+                "handle",
+                leaf="" if scope == "unique" else "pointer",
+            )
+        return Expectation(
+            "std::unique_ptr<tracked>",
+            "first->id != second->id",
+            constructions,
+            "handle",
+        )
+
+    if kind == "array_handle":
+        sharing = stored is not None and stored.has("sharing")
+        if sharing:
+            relation = "first == second" if scope != "unique" else "first != second"
+            return Expectation(
+                "std::shared_ptr<tracked[]>",
+                relation,
+                constructions,
+                "array",
+            )
+        if scope == "unique":
+            return Expectation(
+                "std::unique_ptr<tracked[]>",
+                "first[0].id != second[0].id",
+                constructions,
+                "array",
+            )
+        return Expectation(
+            "std::unique_ptr<tracked[]>&",
+            "&first == &second",
+            constructions,
+            "reference",
+        )
+
+    if kind == "optional":
+        if scope == "unique":
+            return Expectation(
+                "std::optional<tracked>",
+                "first->id != second->id",
+                constructions,
+                "consume_value",
+            )
+        return Expectation(
+            "tracked",
+            "first.id == second.id",
+            constructions,
+            "borrow_value",
+            leaf="id",
+        )
+
+    raise ValueError(f"no behavior expectation for {form.name}/{scope}")
+
 
 # Additional request shapes for a cell that the primary expectation does not
 # exercise: the unique rvalue route and the shared wrapper-value route.
@@ -816,14 +863,9 @@ def build_rows() -> list[dict[str, object]]:
         for scope in SCOPES:
             if not supported_categories(scope, form.name):
                 continue
-            expectation = EXPECTATIONS.get((form.name, scope))
-            if expectation is None:
-                if (scope, form.name) not in BEHAVIOR_GAPS:
-                    raise ValueError(
-                        f"unsupported behavior cell {scope}/{form.name} has no "
-                        "expectation and no declared behavior gap"
-                    )
+            if (scope, form.name) in BEHAVIOR_GAPS:
                 continue
+            expectation = derive_expectation(form, scope)
             instance = EXTERNAL_INSTANCES.get(form.name) if scope == "external" else None
             extras = EXTRA_EXPECTATIONS.get((form.name, scope), ())
             for container in CONTAINERS:
@@ -933,12 +975,18 @@ def validate() -> None:
     for cell, reason in BEHAVIOR_GAPS.items():
         if not reason:
             raise ValueError(f"behavior gap {cell} has no reason")
-    for (form_name, scope), expectation in EXPECTATIONS.items():
-        if expectation.request_class not in REQUEST_COSTS:
-            raise ValueError(
-                f"behavior cell {scope}/{form_name} has unknown request class "
-                f"{expectation.request_class!r}"
-            )
+    for form in FORMS:
+        for scope in SCOPES:
+            if (scope, form.name) in BEHAVIOR_GAPS:
+                continue
+            if not supported_categories(scope, form.name):
+                continue
+            expectation = derive_expectation(form, scope)
+            if expectation.request_class not in REQUEST_COSTS:
+                raise ValueError(
+                    f"behavior cell {scope}/{form.name} has unknown request "
+                    f"class {expectation.request_class!r}"
+                )
     for (form_name, scope), extras in EXTRA_EXPECTATIONS.items():
         for case, extra in extras:
             if extra.request_class not in REQUEST_COSTS:
