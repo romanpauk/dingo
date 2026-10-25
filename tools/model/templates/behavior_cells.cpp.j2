@@ -23,6 +23,8 @@
 
 namespace behavior_cells {
 
+struct tag_a {};
+
 struct tracked_interface {
   virtual ~tracked_interface() = default;
   virtual int value() const = 0;
@@ -122,7 +124,10 @@ TEST(behavior_cells, {{ row.name }}) {
   auto other = container.resolve<{{ row.other_request }}>();
 {% endif %}
 {% endif %}
-{% if row.move_out %}
+{% if row.bind_reference %}
+  auto &first = container.resolve<{{ row.request }}>();
+  auto &second = container.resolve<{{ row.request }}>();
+{% elif row.move_out %}
   auto &&first_rvalue = container.resolve<{{ row.request }}>();
   tracked first = std::move(first_rvalue);
   auto &&second_rvalue = container.resolve<{{ row.request }}>();

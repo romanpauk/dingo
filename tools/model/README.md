@@ -58,7 +58,9 @@ hand-curated matrix tags.
   covered too: each interface is resolved through the same implementation, and
   the secondary request check proves both interfaces alias one object. A
   copyable interface value case covers value slicing, including the tracked
-  copy count.
+  copy count. Annotated behavior cases cover shared annotated concrete values
+  and annotated interface references, pointers, shared handles, and handle
+  references.
 - `templates/` contains logic-free Jinja templates. The Python model computes
   rows; the templates only lay them out.
 - `*_test.py` is the pytest suite for the models and their deterministic

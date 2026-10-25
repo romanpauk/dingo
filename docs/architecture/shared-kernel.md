@@ -475,8 +475,12 @@ model suites. In priority order:
    reachable from both request matchers with satisfied scope access. The matrix
    interface surface is therefore fully model-covered: `resolve_interface` and
    `resolve_unique_wrapper` produce no executables, and their exposure axis
-   members are declared model-covered in the matrix manifest. Annotated exposure
-   still needs the annotation dimension.
+   members are declared model-covered in the matrix manifest. Behavior cases
+   also cover shared annotated concrete values (plain, shared pointer, optional,
+   pointer storage) and annotated interface references, pointers, shared
+   handles, and handle references. The matrix drops the shared annotated
+   interface rows; annotated concrete and external annotated rows keep their
+   matrix registration variety.
 6. **Keys, collections, local bindings.** Add model axes only if the generated
    product stays compact; otherwise keep them in the matrix.
 

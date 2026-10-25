@@ -332,6 +332,9 @@ class InterfaceCase:
     containers: tuple[str, ...] = CONTAINERS
     other_request: str = ""
     other_relation: str = ""
+    # An annotated reference request returns a reference from a value-shaped
+    # wrapper, so the generated test must bind by reference explicitly.
+    bind_reference: bool = False
 
 
 INTERFACE_CASES = (
@@ -428,6 +431,100 @@ INTERFACE_CASES = (
         other_relation="first->value() == other->value()",
     ),
     InterfaceCase(
+        name="shared_annotated_ref",
+        scope="shared",
+        storage="dingo::storage<tracked>",
+        factory=None,
+        interfaces=("dingo::annotated<tracked, tag_a>",),
+        request="dingo::annotated<tracked &, tag_a>",
+        relation="&first == &second",
+        constructions=1,
+        request_class="reference",
+        bind_reference=True,
+    ),
+    InterfaceCase(
+        name="shared_annotated_shared_ptr",
+        scope="shared",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory="make_shared_tracked",
+        interfaces=("dingo::annotated<tracked, tag_a>",),
+        request="dingo::annotated<tracked &, tag_a>",
+        relation="&first == &second",
+        constructions=1,
+        request_class="reference",
+        bind_reference=True,
+    ),
+    InterfaceCase(
+        name="shared_annotated_optional",
+        scope="shared",
+        storage="dingo::storage<std::optional<tracked>>",
+        factory="make_optional_tracked",
+        interfaces=("dingo::annotated<tracked, tag_a>",),
+        request="dingo::annotated<tracked &, tag_a>",
+        relation="&first == &second",
+        constructions=1,
+        request_class="reference",
+        bind_reference=True,
+    ),
+    InterfaceCase(
+        name="shared_annotated_pointer",
+        scope="shared",
+        storage="dingo::storage<tracked *>",
+        factory="make_pointer_tracked",
+        interfaces=("dingo::annotated<tracked, tag_a>",),
+        request="dingo::annotated<tracked &, tag_a>",
+        relation="&first == &second",
+        constructions=1,
+        request_class="reference",
+        bind_reference=True,
+    ),
+    InterfaceCase(
+        name="shared_annotated_interface_ref",
+        scope="shared",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory="make_shared_tracked",
+        interfaces=("dingo::annotated<tracked_interface, tag_a>",),
+        request="dingo::annotated<tracked_interface &, tag_a>",
+        relation="&first == &second",
+        constructions=1,
+        request_class="reference",
+        bind_reference=True,
+    ),
+    InterfaceCase(
+        name="shared_annotated_interface_ptr",
+        scope="shared",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory="make_shared_tracked",
+        interfaces=("dingo::annotated<tracked_interface, tag_a>",),
+        request="dingo::annotated<tracked_interface *, tag_a>",
+        relation="first == second",
+        constructions=1,
+        request_class="reference",
+    ),
+    InterfaceCase(
+        name="shared_annotated_interface_handle",
+        scope="shared",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory="make_shared_tracked",
+        interfaces=("dingo::annotated<tracked_interface, tag_a>",),
+        request="dingo::annotated<std::shared_ptr<tracked_interface>, tag_a>",
+        relation="first == second",
+        constructions=1,
+        request_class="handle",
+    ),
+    InterfaceCase(
+        name="shared_annotated_interface_handle_ref",
+        scope="shared",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory="make_shared_tracked",
+        interfaces=("dingo::annotated<tracked_interface, tag_a>",),
+        request="dingo::annotated<std::shared_ptr<tracked_interface> &, tag_a>",
+        relation="&first == &second",
+        constructions=1,
+        request_class="reference",
+        bind_reference=True,
+    ),
+    InterfaceCase(
         name="shared_copyable_value",
         scope="shared",
         storage="dingo::storage<std::shared_ptr<copyable_implementation>>",
@@ -489,6 +586,7 @@ def _interface_rows() -> list[dict[str, object]]:
                     "delete_result": "",
                     "other_request": case.other_request,
                     "other_relation": case.other_relation,
+                    "bind_reference": case.bind_reference,
                     "interface": True,
                 }
             )
@@ -612,6 +710,7 @@ def build_rows() -> list[dict[str, object]]:
                         "delete_result": expectation.delete_result,
                         "other_request": "",
                         "other_relation": "",
+                        "bind_reference": False,
                     }
                 )
                 for case, extra in extras:
@@ -643,6 +742,7 @@ def build_rows() -> list[dict[str, object]]:
                             "delete_result": extra.delete_result,
                             "other_request": "",
                             "other_relation": "",
+                            "bind_reference": False,
                         }
                     )
     rows.extend(_interface_rows())

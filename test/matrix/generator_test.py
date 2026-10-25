@@ -23,6 +23,7 @@ from model_coverage import (
     FULLY_MODEL_COVERED_FEATURES,
     MODEL_COVERED_EXPOSED_TYPES,
     MODEL_COVERED_POLICY_SOURCES,
+    MODEL_COVERED_PROVISIONING_CELLS,
     MODEL_COVERED_RESOLVED_TYPE_NAMES,
     MODEL_COVERED_RESOLVED_TYPES,
     RESTRICTIONS_BY_FEATURE,
@@ -179,7 +180,7 @@ def shared_cyclical_rows() -> tuple[SharedCyclicalRow, ...]:
 
 
 def test_matrix_cardinality_remains_bounded(rows: tuple[MatrixRow, ...]) -> None:
-    assert len(rows) == 1917
+    assert len(rows) == 1857
     assert len({(row.feature.name, row.name) for row in rows}) == len(rows)
 
 
@@ -294,6 +295,18 @@ def test_model_covered_exposed_types_stay_declared() -> None:
         exposed_type.name for exposed_type in EXPOSED_TYPES
     }
     assert FULLY_MODEL_COVERED_FEATURES
+
+
+def test_model_covered_provisioning_cells_stay_declared() -> None:
+    from axes.dependency_forms import DEPENDENCY_PROVISIONINGS
+
+    declared = {
+        (provisioning.scope, resolved_type)
+        for provisioning in DEPENDENCY_PROVISIONINGS
+        for _, resolved_type, _ in provisioning.resolution_cases
+    }
+    assert MODEL_COVERED_PROVISIONING_CELLS
+    assert MODEL_COVERED_PROVISIONING_CELLS <= declared
 
 
 def test_model_covered_policy_sources_stay_declared() -> None:
@@ -2164,7 +2177,7 @@ def test_matrix_families_preserve_total_registration_behavior(
         + len(scenario_rows)
         + len(invoke_rows)
         + len(shared_cyclical_rows)
-        == 4887
+        == 4827
     )
 
 
@@ -2800,21 +2813,21 @@ def test_invalid_registration_plan_is_an_error(
         "expected_compiled_rows",
     ),
     (
-        (None, frozenset(), Compiler(), 118, 0, 1602),
+        (None, frozenset(), Compiler(), 117, 0, 1602),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset(),
             Compiler(),
-            246,
+            245,
             0,
             1602,
         ),
-        (64, frozenset(), Compiler(), 142, 0, 1602),
+        (64, frozenset(), Compiler(), 141, 0, 1602),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset({("invoke", 4), ("resolve", 4)}),
             Compiler(),
-            612,
+            611,
             400,
             1602,
         ),
@@ -2822,7 +2835,7 @@ def test_invalid_registration_plan_is_an_error(
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset(),
             Compiler.parse("MSVC", "19.49", "x64"),
-            246,
+            245,
             0,
             1602,
         ),

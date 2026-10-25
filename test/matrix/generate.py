@@ -34,6 +34,7 @@ from model_coverage import (
     FULLY_MODEL_COVERED_FEATURES,
     MODEL_COVERED_EXPOSED_TYPES,
     MODEL_COVERED_POLICY_SOURCES,
+    MODEL_COVERED_PROVISIONING_CELLS,
     MODEL_COVERED_RESOLVED_TYPE_NAMES,
     RESTRICTIONS_BY_FEATURE,
 )
@@ -444,6 +445,8 @@ def assert_dependency_provisioning_coverage(
         for provisioning in DEPENDENCY_PROVISIONINGS
         for form, resolved_type, feature in provisioning.resolution_cases
         if resolved_type not in MODEL_COVERED_RESOLVED_TYPE_NAMES
+        and (provisioning.scope, resolved_type)
+        not in MODEL_COVERED_PROVISIONING_CELLS
     }
     generated_resolution_cases = {
         (
@@ -460,6 +463,8 @@ def assert_dependency_provisioning_coverage(
         for form in row.resolved_type.dependency_forms
         if (form, row.resolved_type.name, row.feature.name)
         in declared_resolution_cases
+        and (row.scope.name, row.resolved_type.name)
+        not in MODEL_COVERED_PROVISIONING_CELLS
     }
     expected_resolution_cases = {
         (
@@ -475,6 +480,8 @@ def assert_dependency_provisioning_coverage(
         for provisioning in DEPENDENCY_PROVISIONINGS
         for form, resolved_type, feature in provisioning.resolution_cases
         if resolved_type not in MODEL_COVERED_RESOLVED_TYPE_NAMES
+        and (provisioning.scope, resolved_type)
+        not in MODEL_COVERED_PROVISIONING_CELLS
         for mode in provisioning.supported_modes
         for container in implemented(CONTAINERS)
         if mode in container.modes

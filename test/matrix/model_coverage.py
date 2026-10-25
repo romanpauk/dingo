@@ -126,6 +126,42 @@ FEATURE_RESTRICTIONS = (
             "shared_ptr owning handles"
         ),
     ),
+    FeatureRestriction(
+        feature="annotated",
+        drop=frozenset(
+            {
+                ("shared", "annotated_interface_ref"),
+                ("shared", "annotated_interface_ptr"),
+                ("shared", "annotated_interface_shared_ptr"),
+                ("shared", "annotated_interface_shared_ptr_ref"),
+            }
+        ),
+        covered_cells=frozenset(),
+        interface_cases=frozenset(
+            {
+                "shared_annotated_interface_ref",
+                "shared_annotated_interface_ptr",
+                "shared_annotated_interface_handle",
+                "shared_annotated_interface_handle_ref",
+            }
+        ),
+        reason=(
+            "annotated interface behavior cases cover the shared annotated "
+            "interface shapes; annotated concrete values and external rows keep "
+            "their matrix registration variety"
+        ),
+    ),
+)
+
+# (scope, resolved type) provisioning cells whose expected matrix rows are
+# model-covered. Other scopes of the same resolved type are unaffected.
+MODEL_COVERED_PROVISIONING_CELLS = frozenset(
+    {
+        ("shared", "annotated_interface_ref"),
+        ("shared", "annotated_interface_ptr"),
+        ("shared", "annotated_interface_shared_ptr"),
+        ("shared", "annotated_interface_shared_ptr_ref"),
+    }
 )
 
 RESTRICTIONS_BY_FEATURE = {
@@ -136,7 +172,7 @@ RESTRICTIONS_BY_FEATURE = {
 # axis stays declared so the catalog keeps its identity, but the coverage check
 # no longer requires a matrix row.
 MODEL_COVERED_EXPOSED_TYPES = frozenset(
-    {"copyable_interface_type", "multiple_interfaces"}
+    {"copyable_interface_type", "multiple_interfaces", "annotated_interface"}
 )
 
 # Features whose supported rows are now entirely owned by the model, so the
@@ -214,6 +250,32 @@ MODEL_COVERED_RESOLVED_TYPES = (
         reason="the multiple-interface behavior case resolves the second interface",
     ),
     ResolvedTypeCoverage(
+        resolved_type="annotated_interface_ref",
+        covered_cells=frozenset(),
+        interface_cases=frozenset({"shared_annotated_interface_ref"}),
+        reason="the annotated interface behavior case resolves the reference",
+    ),
+    ResolvedTypeCoverage(
+        resolved_type="annotated_interface_ptr",
+        covered_cells=frozenset(),
+        interface_cases=frozenset({"shared_annotated_interface_ptr"}),
+        reason="the annotated interface behavior case resolves the pointer",
+    ),
+    ResolvedTypeCoverage(
+        resolved_type="annotated_interface_shared_ptr",
+        covered_cells=frozenset(),
+        interface_cases=frozenset({"shared_annotated_interface_handle"}),
+        reason="the annotated interface behavior case resolves the shared handle",
+    ),
+    ResolvedTypeCoverage(
+        resolved_type="annotated_interface_shared_ptr_ref",
+        covered_cells=frozenset(),
+        interface_cases=frozenset(
+            {"shared_annotated_interface_handle_ref"}
+        ),
+        reason="the annotated interface behavior case resolves the handle reference",
+    ),
+    ResolvedTypeCoverage(
         resolved_type="unique_interface_unique_ptr",
         covered_cells=frozenset(),
         interface_cases=frozenset(
@@ -256,6 +318,26 @@ MODEL_COVERED_POLICY_SOURCES = frozenset(
         ),
         ("lifetime", "unique", "unique_value_type", "concrete", "value_rvalue"),
         ("resolved_type", "variant_value", "variant"),
+        (
+            "resolved_type",
+            "annotated_interface_ref",
+            "annotated",
+        ),
+        (
+            "resolved_type",
+            "annotated_interface_ptr",
+            "annotated",
+        ),
+        (
+            "resolved_type",
+            "annotated_interface_shared_ptr",
+            "annotated",
+        ),
+        (
+            "resolved_type",
+            "annotated_interface_shared_ptr_ref",
+            "annotated",
+        ),
         ("resolved_type", "interface_ref", "resolve_interface"),
         ("resolved_type", "interface_ptr", "resolve_interface"),
         (
