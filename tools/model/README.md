@@ -120,8 +120,10 @@ hand-curated matrix tags.
   and the shared alternative cell also copies the variant wrapper value.
   Supported
   cells without a resolvable behavior case are listed in `BEHAVIOR_GAPS` with a
-  reason, so a cell cannot silently lose its test. A separate interface case
-  list exercises storage exposed through `dingo::interfaces<...>`: shared
+  reason, so a cell cannot silently lose its test. Interface and annotation
+  scenarios are derived from storage shapes plus a small request-form rule set,
+  not a flat list of complete cases. The interface cases exercise storage
+  exposed through `dingo::interfaces<...>`: shared
   references, pointers, and shared handles, plus unique owning handles. These
   cases use the same request-class cost model and assert the same construction,
   copy, move, and lifetime balance checks. Multiple-interface bindings are

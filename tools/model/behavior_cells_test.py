@@ -14,9 +14,11 @@ import pytest
 
 from behavior_cells import (
     ANNOTATION_RECIPES,
+    ANNOTATION_SHAPES,
     BEHAVIOR_GAPS,
     FORMS,
     INTERFACE_CASES,
+    INTERFACE_SHAPES,
     REQUEST_COSTS,
     build_rows,
     covered_cells,
@@ -104,6 +106,31 @@ def test_behavior_gaps_have_reasons() -> None:
         assert reason
 
 
+def test_interface_cases_are_derived_from_shapes() -> None:
+    assert len(INTERFACE_SHAPES) == 6
+    names = {case.name for case in INTERFACE_CASES}
+    assert {
+        "shared_ref",
+        "shared_ptr",
+        "shared_handle",
+        "shared_plain_ref",
+        "unique_handle",
+        "unique_shared_handle",
+        "shared_second_ref",
+        "shared_second_handle",
+        "unique_second_handle",
+        "shared_copyable_value",
+    } == names
+    by_name = {case.name: case for case in INTERFACE_CASES}
+    assert by_name["unique_handle"].request == (
+        "std::unique_ptr<tracked_interface>"
+    )
+    assert by_name["shared_second_handle"].request == (
+        "std::shared_ptr<tracked_interface2>"
+    )
+    assert by_name["shared_copyable_value"].request_class == "borrow_value"
+
+
 def test_interface_cases_cover_both_containers() -> None:
     rows = [
         row
@@ -115,6 +142,32 @@ def test_interface_cases_cover_both_containers() -> None:
     assert {row["container"] for row in rows} == {"runtime", "static"}
     assert {row["scope"] for row in rows} == {"shared", "unique"}
     assert all(row["request_class"] in REQUEST_COSTS for row in rows)
+
+
+def test_annotation_recipes_are_derived_from_shapes() -> None:
+    assert len(ANNOTATION_SHAPES) == 9
+    names = {recipe.name for recipe in ANNOTATION_RECIPES}
+    assert {
+        "shared_annotated_ref",
+        "shared_annotated_value",
+        "shared_annotated_shared_ptr_ref",
+        "shared_annotated_optional_ref",
+        "shared_annotated_pointer_ref",
+        "shared_annotated_interface_ref",
+        "shared_annotated_interface_ptr",
+        "shared_annotated_interface_handle",
+        "shared_annotated_interface_handle_ref",
+        "external_annotated_value",
+        "external_annotated_ref",
+        "external_annotated_ptr",
+        "external_annotated_shared_ptr",
+    } == names
+    by_name = {recipe.name: recipe for recipe in ANNOTATION_RECIPES}
+    assert by_name["shared_annotated_interface_handle"].request_class == "handle"
+    assert by_name["external_annotated_value"].registration_moves == 1
+    assert by_name["external_annotated_ptr"].external_argument == (
+        "std::addressof(external_instance)"
+    )
 
 
 def test_annotation_recipes_are_valid() -> None:

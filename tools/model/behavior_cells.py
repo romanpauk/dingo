@@ -396,124 +396,158 @@ class InterfaceCase:
     bind_reference: bool = False
 
 
-INTERFACE_CASES = (
-    InterfaceCase(
-        name="shared_ref",
+@dataclass(frozen=True)
+class InterfaceShape:
+    """A storage exposed through one or more interfaces."""
+
+    name: str
+    scope: str
+    storage: str
+    factory: str | None
+    kind: str
+    interfaces: tuple[str, ...]
+    constructions: int
+
+
+INTERFACE_SHAPES = (
+    InterfaceShape(
+        name="shared",
         scope="shared",
         storage="dingo::storage<std::shared_ptr<tracked>>",
         factory="make_shared_tracked",
+        kind="shared_handle",
         interfaces=("tracked_interface",),
-        request="tracked_interface &",
-        relation="&first == &second",
         constructions=1,
-        request_class="reference",
     ),
-    InterfaceCase(
-        name="shared_ptr",
-        scope="shared",
-        storage="dingo::storage<std::shared_ptr<tracked>>",
-        factory="make_shared_tracked",
-        interfaces=("tracked_interface",),
-        request="tracked_interface *",
-        relation="first == second",
-        constructions=1,
-        request_class="reference",
-    ),
-    InterfaceCase(
-        name="shared_handle",
-        scope="shared",
-        storage="dingo::storage<std::shared_ptr<tracked>>",
-        factory="make_shared_tracked",
-        interfaces=("tracked_interface",),
-        request="std::shared_ptr<tracked_interface>",
-        relation="first == second",
-        constructions=1,
-        request_class="handle",
-    ),
-    InterfaceCase(
-        name="shared_plain_ref",
+    InterfaceShape(
+        name="shared_plain",
         scope="shared",
         storage="dingo::storage<tracked>",
         factory=None,
+        kind="plain",
         interfaces=("tracked_interface",),
-        request="tracked_interface &",
-        relation="&first == &second",
         constructions=1,
-        request_class="reference",
     ),
-    InterfaceCase(
-        name="unique_handle",
+    InterfaceShape(
+        name="unique",
         scope="unique",
         storage="dingo::storage<std::unique_ptr<tracked>>",
         factory="make_unique_tracked",
+        kind="unique_handle",
         interfaces=("tracked_interface",),
-        request="std::unique_ptr<tracked_interface>",
-        relation="first->value() != second->value()",
         constructions=2,
-        request_class="handle",
     ),
-    InterfaceCase(
-        name="unique_shared_handle",
+    InterfaceShape(
+        name="shared_second",
+        scope="shared",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory="make_shared_tracked",
+        kind="shared_handle",
+        interfaces=("tracked_interface", "tracked_interface2"),
+        constructions=1,
+    ),
+    InterfaceShape(
+        name="unique_second",
         scope="unique",
         storage="dingo::storage<std::unique_ptr<tracked>>",
         factory="make_unique_tracked",
-        interfaces=("tracked_interface",),
-        request="std::shared_ptr<tracked_interface>",
-        relation="first != second",
-        constructions=2,
-        request_class="handle",
-    ),
-    InterfaceCase(
-        name="shared_second_ref",
-        scope="shared",
-        storage="dingo::storage<std::shared_ptr<tracked>>",
-        factory="make_shared_tracked",
+        kind="unique_handle",
         interfaces=("tracked_interface", "tracked_interface2"),
-        request="tracked_interface &",
-        relation="&first == &second",
-        constructions=1,
-        request_class="reference",
-        other_request="tracked_interface2 &",
-        other_relation="first.value() == other.value()",
+        constructions=3,
     ),
-    InterfaceCase(
-        name="shared_second_handle",
-        scope="shared",
-        storage="dingo::storage<std::shared_ptr<tracked>>",
-        factory="make_shared_tracked",
-        interfaces=("tracked_interface", "tracked_interface2"),
-        request="std::shared_ptr<tracked_interface2>",
-        relation="first == second",
-        constructions=1,
-        request_class="handle",
-        other_request="std::shared_ptr<tracked_interface>",
-        other_relation="first->value() == other->value()",
-    ),
-    InterfaceCase(
-        name="shared_copyable_value",
+    InterfaceShape(
+        name="shared_copyable",
         scope="shared",
         storage="dingo::storage<std::shared_ptr<copyable_implementation>>",
         factory="make_copyable_implementation",
+        kind="copyable",
         interfaces=("copyable_interface",),
-        request="copyable_interface",
-        relation="first.value.id == second.value.id",
         constructions=1,
-        request_class="borrow_value",
-    ),
-    InterfaceCase(
-        name="unique_second_handle",
-        scope="unique",
-        storage="dingo::storage<std::unique_ptr<tracked>>",
-        factory="make_unique_tracked",
-        interfaces=("tracked_interface", "tracked_interface2"),
-        request="std::unique_ptr<tracked_interface2>",
-        relation="first->value() != second->value()",
-        constructions=3,
-        request_class="handle",
-        other_request="std::unique_ptr<tracked_interface>",
-        other_relation="first->value() != other->value()",
     ),
 )
+
+
+def _interface_forms(shape: InterfaceShape) -> tuple[str, ...]:
+    if shape.kind == "shared_handle":
+        if len(shape.interfaces) == 1:
+            return ("ref", "ptr", "handle")
+        return ("ref", "handle")
+    if shape.kind == "plain":
+        return ("ref",)
+    if shape.kind == "unique_handle":
+        if len(shape.interfaces) == 1:
+            return ("unique_handle", "shared_handle")
+        return ("unique_handle",)
+    if shape.kind == "copyable":
+        return ("value",)
+    raise ValueError(f"no interface forms for {shape.name}")
+
+
+def _interface_request(form: str, primary: str, scope: str) -> tuple[str, str, str]:
+    if form == "ref":
+        return f"{primary} &", "&first == &second", "reference"
+    if form == "ptr":
+        return f"{primary} *", "first == second", "reference"
+    if form in {"handle", "shared_handle"}:
+        relation = "first == second" if scope != "unique" else "first != second"
+        return f"std::shared_ptr<{primary}>", relation, "handle"
+    if form == "unique_handle":
+        return (
+            f"std::unique_ptr<{primary}>",
+            "first->value() != second->value()",
+            "handle",
+        )
+    if form == "value":
+        return primary, "first.value.id == second.value.id", "borrow_value"
+    raise ValueError(f"no interface request for form {form}")
+
+
+def derive_interface_cases() -> tuple[InterfaceCase, ...]:
+    cases = []
+    for shape in INTERFACE_SHAPES:
+        twin = len(shape.interfaces) > 1
+        other_interface = shape.interfaces[0] if twin else ""
+        for form in _interface_forms(shape):
+            primary = (
+                shape.interfaces[-1]
+                if twin and form in {"handle", "shared_handle", "unique_handle"}
+                else shape.interfaces[0]
+            )
+            request, relation, request_class = _interface_request(
+                form, primary, shape.scope
+            )
+            other_request = ""
+            other_relation = ""
+            if twin:
+                other_request, _, _ = _interface_request(
+                    form, other_interface, shape.scope
+                )
+                if form == "ref":
+                    other_relation = "first.value() == other.value()"
+                elif form == "unique_handle":
+                    other_relation = "first->value() != other->value()"
+                else:
+                    other_relation = "first->value() == other->value()"
+            suffix = "handle" if form == "unique_handle" else form
+            cases.append(
+                InterfaceCase(
+                    name=f"{shape.name}_{suffix}",
+                    scope=shape.scope,
+                    storage=shape.storage,
+                    factory=shape.factory,
+                    interfaces=shape.interfaces,
+                    request=request,
+                    relation=relation,
+                    constructions=shape.constructions,
+                    request_class=request_class,
+                    other_request=other_request,
+                    other_relation=other_relation,
+                )
+            )
+    return tuple(cases)
+
+
+INTERFACE_CASES = derive_interface_cases()
 
 
 def _interface_rows() -> list[dict[str, object]]:
@@ -577,170 +611,182 @@ class AnnotationRecipe:
     registration_moves: int = 0
 
 
-ANNOTATION_RECIPES = (
-    AnnotationRecipe(
-        name="shared_annotated_ref",
+@dataclass(frozen=True)
+class AnnotationShape:
+    """A storage shape exposed through an annotated interface."""
+
+    name: str
+    scope: str
+    storage: str
+    factory: str | None
+    leaf: str
+    forms: tuple[str, ...]
+    append_form: bool = True
+    external_instance: str = ""
+    external_argument: str = ""
+    registration_moves: int = 0
+
+
+ANNOTATION_SHAPES = (
+    AnnotationShape(
+        name="shared_annotated",
         scope="shared",
         storage="dingo::storage<tracked>",
         factory=None,
         leaf="tracked",
-        request="dingo::annotated<tracked &, tag_a>",
-        relation="&first == &second",
-        constructions=1,
-        request_class="reference",
-        bind_reference=True,
+        forms=("ref", "value"),
     ),
-    AnnotationRecipe(
-        name="shared_annotated_value",
-        scope="shared",
-        storage="dingo::storage<tracked>",
-        factory=None,
-        leaf="tracked",
-        request="dingo::annotated<tracked, tag_a>",
-        relation="first.id == second.id",
-        constructions=1,
-        request_class="borrow_value",
-    ),
-    AnnotationRecipe(
-        name="shared_annotated_shared_ptr_ref",
+    AnnotationShape(
+        name="shared_annotated_shared_ptr",
         scope="shared",
         storage="dingo::storage<std::shared_ptr<tracked>>",
         factory="make_shared_tracked",
         leaf="tracked",
-        request="dingo::annotated<tracked &, tag_a>",
-        relation="&first == &second",
-        constructions=1,
-        request_class="reference",
-        bind_reference=True,
+        forms=("ref",),
     ),
-    AnnotationRecipe(
-        name="shared_annotated_optional_ref",
+    AnnotationShape(
+        name="shared_annotated_optional",
         scope="shared",
         storage="dingo::storage<std::optional<tracked>>",
         factory="make_optional_tracked",
         leaf="tracked",
-        request="dingo::annotated<tracked &, tag_a>",
-        relation="&first == &second",
-        constructions=1,
-        request_class="reference",
-        bind_reference=True,
+        forms=("ref",),
     ),
-    AnnotationRecipe(
-        name="shared_annotated_pointer_ref",
+    AnnotationShape(
+        name="shared_annotated_pointer",
         scope="shared",
         storage="dingo::storage<tracked *>",
         factory="make_pointer_tracked",
         leaf="tracked",
-        request="dingo::annotated<tracked &, tag_a>",
-        relation="&first == &second",
-        constructions=1,
-        request_class="reference",
-        bind_reference=True,
+        forms=("ref",),
     ),
-    AnnotationRecipe(
-        name="shared_annotated_interface_ref",
+    AnnotationShape(
+        name="shared_annotated",
         scope="shared",
         storage="dingo::storage<std::shared_ptr<tracked>>",
         factory="make_shared_tracked",
         leaf="tracked_interface",
-        request="dingo::annotated<tracked_interface &, tag_a>",
-        relation="&first == &second",
-        constructions=1,
-        request_class="reference",
-        bind_reference=True,
+        forms=("interface_ref", "interface_ptr", "interface_handle",
+               "interface_handle_ref"),
     ),
-    AnnotationRecipe(
-        name="shared_annotated_interface_ptr",
-        scope="shared",
-        storage="dingo::storage<std::shared_ptr<tracked>>",
-        factory="make_shared_tracked",
-        leaf="tracked_interface",
-        request="dingo::annotated<tracked_interface *, tag_a>",
-        relation="first == second",
-        constructions=1,
-        request_class="reference",
-    ),
-    AnnotationRecipe(
-        name="shared_annotated_interface_handle",
-        scope="shared",
-        storage="dingo::storage<std::shared_ptr<tracked>>",
-        factory="make_shared_tracked",
-        leaf="tracked_interface",
-        request="dingo::annotated<std::shared_ptr<tracked_interface>, tag_a>",
-        relation="first == second",
-        constructions=1,
-        request_class="handle",
-    ),
-    AnnotationRecipe(
-        name="shared_annotated_interface_handle_ref",
-        scope="shared",
-        storage="dingo::storage<std::shared_ptr<tracked>>",
-        factory="make_shared_tracked",
-        leaf="tracked_interface",
-        request="dingo::annotated<std::shared_ptr<tracked_interface> &, tag_a>",
-        relation="&first == &second",
-        constructions=1,
-        request_class="reference",
-        bind_reference=True,
-    ),
-    AnnotationRecipe(
+    AnnotationShape(
         name="external_annotated_value",
         scope="external",
         storage="dingo::storage<tracked>",
         factory=None,
         leaf="tracked",
-        request="dingo::annotated<tracked &, tag_a>",
-        relation="&first == &second",
-        constructions=0,
-        request_class="reference",
-        bind_reference=True,
+        forms=("ref",),
+        append_form=False,
         external_instance="tracked external_instance",
         external_argument="std::move(external_instance)",
         registration_moves=1,
     ),
-    AnnotationRecipe(
+    AnnotationShape(
         name="external_annotated_ref",
         scope="external",
         storage="dingo::storage<tracked &>",
         factory=None,
         leaf="tracked",
-        request="dingo::annotated<tracked &, tag_a>",
-        relation="&first == &second",
-        constructions=0,
-        request_class="reference",
-        bind_reference=True,
+        forms=("ref",),
+        append_form=False,
         external_instance="tracked external_instance",
         external_argument="external_instance",
     ),
-    AnnotationRecipe(
+    AnnotationShape(
         name="external_annotated_ptr",
         scope="external",
         storage="dingo::storage<tracked *>",
         factory=None,
         leaf="tracked",
-        request="dingo::annotated<tracked &, tag_a>",
-        relation="&first == &second",
-        constructions=0,
-        request_class="reference",
-        bind_reference=True,
+        forms=("ref",),
+        append_form=False,
         external_instance="tracked external_instance",
         external_argument="std::addressof(external_instance)",
     ),
-    AnnotationRecipe(
+    AnnotationShape(
         name="external_annotated_shared_ptr",
         scope="external",
         storage="dingo::storage<std::shared_ptr<tracked>>",
         factory=None,
         leaf="tracked",
-        request="dingo::annotated<tracked &, tag_a>",
-        relation="&first == &second",
-        constructions=0,
-        request_class="reference",
-        bind_reference=True,
+        forms=("ref",),
+        append_form=False,
         external_instance="auto external_instance = make_shared_tracked()",
         external_argument="external_instance",
     ),
 )
+
+
+def _annotation_form(
+    shape: AnnotationShape, form: str
+) -> tuple[str, str, str, bool]:
+    if form == "ref" or form == "interface_ref":
+        return (
+            f"dingo::annotated<{shape.leaf} &, tag_a>",
+            "&first == &second",
+            "reference",
+            True,
+        )
+    if form == "value":
+        return (
+            f"dingo::annotated<{shape.leaf}, tag_a>",
+            "first.id == second.id",
+            "borrow_value",
+            False,
+        )
+    if form == "interface_ptr":
+        return (
+            f"dingo::annotated<{shape.leaf} *, tag_a>",
+            "first == second",
+            "reference",
+            False,
+        )
+    if form == "interface_handle":
+        return (
+            f"dingo::annotated<std::shared_ptr<{shape.leaf}>, tag_a>",
+            "first == second",
+            "handle",
+            False,
+        )
+    if form == "interface_handle_ref":
+        return (
+            f"dingo::annotated<std::shared_ptr<{shape.leaf}> &, tag_a>",
+            "&first == &second",
+            "reference",
+            True,
+        )
+    raise ValueError(f"no annotation request for form {form}")
+
+
+def derive_annotation_recipes() -> tuple[AnnotationRecipe, ...]:
+    recipes = []
+    for shape in ANNOTATION_SHAPES:
+        for form in shape.forms:
+            request, relation, request_class, bind_reference = _annotation_form(
+                shape, form
+            )
+            name = f"{shape.name}_{form}" if shape.append_form else shape.name
+            recipes.append(
+                AnnotationRecipe(
+                    name=name,
+                    scope=shape.scope,
+                    storage=shape.storage,
+                    factory=shape.factory,
+                    leaf=shape.leaf,
+                    request=request,
+                    relation=relation,
+                    constructions=0 if shape.scope == "external" else 1,
+                    request_class=request_class,
+                    bind_reference=bind_reference,
+                    external_instance=shape.external_instance,
+                    external_argument=shape.external_argument,
+                    registration_moves=shape.registration_moves,
+                )
+            )
+    return tuple(recipes)
+
+
+ANNOTATION_RECIPES = derive_annotation_recipes()
 
 
 def _annotation_rows() -> list[dict[str, object]]:
