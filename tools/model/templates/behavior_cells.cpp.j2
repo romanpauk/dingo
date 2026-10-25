@@ -49,6 +49,7 @@ TEST(behavior_cells, {{ row.name }}) {
   tracked external_instance;
 {% endif %}
   tracked::reset();
+  {
 {% if row.container == "runtime" %}
   dingo::container<> container;
 {% if row.scope == "external" %}
@@ -90,6 +91,7 @@ TEST(behavior_cells, {{ row.name }}) {
   EXPECT_NE(first.id, second.id);
   EXPECT_EQ(tracked::constructions, 2);
   EXPECT_EQ(tracked::copies, 0);
+  EXPECT_EQ(tracked::moves, 2);
 {% else %}
   EXPECT_EQ(first.id, second.id);
   EXPECT_EQ(tracked::constructions, 0);
@@ -104,6 +106,8 @@ TEST(behavior_cells, {{ row.name }}) {
             std::addressof(external_instance));
 {% endif %}
 {% endif %}
+  }
+  EXPECT_EQ(tracked::destructions, {{ row.destructions }});
 }
 
 {% endfor %}

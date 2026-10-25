@@ -63,6 +63,9 @@ namespace detail {
 // Deliberately not const: identical read-only data may be folded by linkers.
 template <typename T> inline char type_tag = 0;
 
+template <typename T>
+inline constexpr const void *type_address_v = &type_tag<std::remove_cv_t<T>>;
+
 constexpr bool same_type_shape(type_descriptor lhs, type_descriptor rhs) {
   if (lhs.reference != rhs.reference ||
       (lhs.pointee == nullptr) != (rhs.pointee == nullptr)) {

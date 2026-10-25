@@ -430,15 +430,17 @@ public:
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-  static resolved_address dispatch_request(interface_base &erased,
-                                           construction_scope scope,
-                                           runtime_context_type &context,
-                                           const request_type &request,
-                                           const void *cache_key) {
+  static resolved_address
+  dispatch_request(interface_base &erased, construction_scope scope,
+                   runtime_context_type &context, const request_type &request,
+                   const void *cache_key, const void *boundary,
+                   const void **maker) {
     auto &binding = static_cast<runtime_binding &>(erased);
     if constexpr (type_list_size_v<request_resolutions> == 0) {
       (void)scope;
       (void)cache_key;
+      (void)boundary;
+      (void)maker;
       throw detail::make_type_not_convertible_exception(
           request.requested_type, registered_type(), context);
     } else {
@@ -447,6 +449,16 @@ public:
       if (resolution_index == type_list_size_v<request_resolutions>) {
         throw detail::make_type_not_convertible_exception(
             request.requested_type, registered_type(), context);
+      }
+
+      if (boundary != nullptr) {
+        const auto *entry = binding.value_maker_table() + resolution_index;
+        if (entry->boundary == boundary) {
+          if (maker != nullptr) {
+            *maker = entry->maker;
+          }
+          return {};
+        }
       }
 
       binding_activation activation{binding, scope};
@@ -469,6 +481,76 @@ public:
       return result;
     }
   }
+
+  struct value_maker_entry {
+    const void *boundary;
+    const void *maker;
+  };
+
+  template <typename Resolution>
+  static constexpr bool makes_value_boundary_v = [] {
+    using target_type = std::remove_cv_t<typename Resolution::target_type>;
+    constexpr bool consumes = detail::access_satisfies<
+        consume, typename Resolution::operation::required_access>::value;
+    return consumes && !std::is_void_v<target_type> &&
+           !std::is_pointer_v<target_type> &&
+           !std::is_reference_v<target_type> && !std::is_array_v<target_type> &&
+           std::is_move_constructible_v<target_type>;
+  }();
+
+  template <typename Resolution> static constexpr const void *value_boundary() {
+    if constexpr (makes_value_boundary_v<Resolution>) {
+      using target_type = std::remove_cv_t<typename Resolution::target_type>;
+      return detail::type_address_v<target_type>;
+    } else {
+      return nullptr;
+    }
+  }
+
+  template <typename Resolution>
+  static auto make_boundary(interface_base &erased, construction_scope scope,
+                            runtime_context_type &context) {
+    using target_type = std::remove_cv_t<typename Resolution::target_type>;
+    auto &binding = static_cast<runtime_binding &>(erased);
+    binding_activation activation{binding, scope};
+    return binding.with_source(
+        scope, context, [&](auto &&source) -> target_type {
+          auto &&instance = Resolution::operation::template apply<Storage>(
+              activation, context, std::forward<decltype(source)>(source),
+              describe_type<target_type>(), registered_type());
+          return static_cast<target_type>(
+              std::forward<decltype(instance)>(instance));
+        });
+  }
+
+  template <typename Resolution> static const void *value_maker() {
+    if constexpr (makes_value_boundary_v<Resolution>) {
+      using target_type = std::remove_cv_t<typename Resolution::target_type>;
+      using maker_type =
+          detail::binding_value_maker<target_type, interface_base,
+                                      runtime_context_type>;
+      static const maker_type maker{&make_boundary<Resolution>};
+      return &maker;
+    } else {
+      return nullptr;
+    }
+  }
+
+  template <std::size_t... Indices>
+  static const value_maker_entry *
+  value_makers(std::index_sequence<Indices...>) {
+    static const value_maker_entry table[] = {
+        {value_boundary<type_list_at_t<request_resolutions, Indices>>(),
+         value_maker<type_list_at_t<request_resolutions, Indices>>()}...,
+        {nullptr, nullptr}};
+    return table;
+  }
+
+  static const value_maker_entry *value_maker_table() {
+    return value_makers(
+        std::make_index_sequence<type_list_size_v<request_resolutions>>{});
+  }
+
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif

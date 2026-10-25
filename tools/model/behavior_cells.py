@@ -27,9 +27,18 @@ from storage_cells import validate_catalog
 SCOPES = ("shared", "unique", "external", "shared_cyclical")
 CONTAINERS = ("runtime", "static")
 RUNTIME_ONLY = {"external"}
+DESTRUCTIONS = {
+    ("shared", "runtime"): 3,
+    ("shared", "static"): 3,
+    ("unique", "runtime"): 4,
+    ("unique", "static"): 4,
+    ("external", "runtime"): 2,
+    ("shared_cyclical", "runtime"): 1,
+    ("shared_cyclical", "static"): 1,
+}
 
 
-def build_rows() -> list[dict[str, str]]:
+def build_rows() -> list[dict[str, object]]:
     rows = []
     for scope in SCOPES:
         for container in CONTAINERS:
@@ -41,6 +50,7 @@ def build_rows() -> list[dict[str, str]]:
                     "scope": scope,
                     "scope_type": f"dingo::scope<dingo::{scope}>",
                     "container": container,
+                    "destructions": DESTRUCTIONS[(scope, container)],
                 }
             )
     return rows

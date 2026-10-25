@@ -14,6 +14,7 @@
 #include <dingo/type/rebind_type.h>
 
 #include <cassert>
+#include <cstddef>
 
 namespace dingo {
 template <typename Allocator> class runtime_context;
@@ -69,15 +70,19 @@ public:
   using resolve_function = resolved_address (*)(runtime_binding_interface &,
                                                 construction_scope, Context &,
                                                 const request_type &,
-                                                const void *);
+                                                const void *, const void *,
+                                                const void **);
 
   detail::cache::entry *cache_slot() noexcept { return cache_slot_; }
 
-  // A null cache_key means the request is not cached.
+  // A null cache_key means the request is not cached. A non-null boundary asks
+  // for the typed value maker of the selected route; maker receives it.
   resolved_address resolve_request(construction_scope scope, Context &context,
                                    const request_type &request,
-                                   const void *cache_key) {
-    return resolve_(*this, scope, context, request, cache_key);
+                                   const void *cache_key = nullptr,
+                                   const void *boundary = nullptr,
+                                   const void **maker = nullptr) {
+    return resolve_(*this, scope, context, request, cache_key, boundary, maker);
   }
 
   // Publishes a stable address for the request key until the transaction

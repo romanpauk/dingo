@@ -34,6 +34,10 @@ infrastructure described below. It changes no public API and no behavior.
   type computation, cache-slot construction policy, and registered-type
   descriptor used by both binding backends, in addition to the materialization
   and address helpers.
+- Runtime value requests ask the selected binding for a typed boundary maker.
+  Consumed value routes construct the boundary object directly in the request
+  type, so the runtime path no longer materializes a context value and moves it
+  out afterward. This removes the extra move unique values had at runtime.
 - `tools/model/` is the first coverage catalog. It enumerates every built-in
   storage scope by form cell, every selection policy by source status, and every
   scope/form/route-category row. Every route row is classified as supported,

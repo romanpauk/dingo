@@ -41,6 +41,20 @@ template <typename... Lists> struct type_list_cat {
 template <typename... Lists>
 using type_list_cat_t = typename type_list_cat<Lists...>::type;
 
+template <typename List, std::size_t Index> struct type_list_at;
+
+template <typename Head, typename... Tail>
+struct type_list_at<type_list<Head, Tail...>, 0> {
+  using type = Head;
+};
+
+template <typename Head, typename... Tail, std::size_t Index>
+struct type_list_at<type_list<Head, Tail...>, Index>
+    : type_list_at<type_list<Tail...>, Index - 1> {};
+
+template <typename List, std::size_t Index>
+using type_list_at_t = typename type_list_at<List, Index>::type;
+
 template <typename List> struct type_list_size;
 
 template <typename... Types>

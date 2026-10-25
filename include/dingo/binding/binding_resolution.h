@@ -22,7 +22,9 @@
 #include <dingo/type/type_traits.h>
 
 #include <cassert>
+#include <cstddef>
 #include <memory>
+#include <new>
 #include <type_traits>
 #include <utility>
 
@@ -502,24 +504,42 @@ resolve_address_from_source(construction_scope scope, Resolver &resolver,
       scope, context, std::forward<decltype(instance)>(instance));
 }
 
-template <typename RTTI, typename Binding, typename Context>
-resolved_address
-dispatch_binding_request(construction_scope scope, Binding &binding,
-                         Context &context,
-                         const binding_request<RTTI> &request) {
-  return binding.resolve_request(scope, context, request.request,
-                                 request.cache_key);
-}
+// The typed boundary a value route constructs. The runtime binding returns a
+// pointer to the maker for the selected route; the request site, which knows
+// the boundary type, calls it and receives the value directly.
+template <typename Boundary, typename Interface, typename Context>
+struct binding_value_maker {
+  Boundary (*make)(Interface &, construction_scope, Context &);
+};
 
 } // namespace detail
+
+template <typename T>
+inline constexpr bool resolved_value_fast_path_v =
+    std::is_object_v<T> && !std::is_array_v<T> && !std::is_reference_v<T> &&
+    !std::is_pointer_v<T> && !std::is_const_v<T> && !std::is_volatile_v<T>;
 
 template <typename T, typename RTTI, typename Binding, typename Context>
 T resolve_binding_request(construction_scope scope, Binding &binding,
                           Context &context, const void *cache_key = nullptr) {
   auto request = detail::make_binding_request<T, RTTI>(cache_key);
-  auto result =
-      detail::dispatch_binding_request<RTTI>(scope, binding, context, request);
-  return detail::convert_resolved_binding<T>(result);
+  if constexpr (resolved_value_fast_path_v<T>) {
+    const void *maker = nullptr;
+    auto result =
+        binding.resolve_request(scope, context, request.request, cache_key,
+                                detail::type_address_v<T>, &maker);
+    if (maker != nullptr) {
+      const auto *typed =
+          static_cast<const detail::binding_value_maker<T, Binding, Context> *>(
+              maker);
+      return typed->make(binding, scope, context);
+    }
+    return detail::convert_resolved_binding<T>(result);
+  } else {
+    auto result =
+        binding.resolve_request(scope, context, request.request, cache_key);
+    return detail::convert_resolved_binding<T>(result);
+  }
 }
 
 template <typename Request>
