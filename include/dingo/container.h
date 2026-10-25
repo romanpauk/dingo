@@ -34,8 +34,8 @@
 #include <dingo/static/container_traits.h>
 #include <dingo/static/graph.h>
 #include <dingo/static/registry.h>
-#include <dingo/static/request_plan.h>
 #include <dingo/static/resolution.h>
+#include <dingo/static/resolution_policy.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/auto_constructible.h>
@@ -649,20 +649,20 @@ private:
   template <typename Request, typename R, typename LookupKey>
   R resolve_entry(LookupKey key) {
     using user_type = typename Request::user_type;
-    using plan =
-        detail::request_plan<user_type, LookupKey, static_bindings_type,
-                             detail::request_route_policy::runtime_fallback>;
-    if constexpr (!plan::lift_enabled) {
+    using policy =
+        detail::resolution_policy<user_type, LookupKey, static_bindings_type,
+                                  detail::resolution_mode::runtime_fallback>;
+    if constexpr (!policy::lift_enabled) {
       return resolve_entry_direct<Request, R>(std::move(key));
     }
-    return plan::template execute<R>(
+    return policy::template resolve<R>(
         [&](auto) -> R {
           return resolve_entry_direct<Request, R>(std::move(key));
         },
         [&](auto tag) -> R {
-          using selected_plan = typename decltype(tag)::plan;
-          return selected_plan::lift_type::make(
-              resolve<typename selected_plan::inner_type>(key));
+          using selected_policy = typename decltype(tag)::policy;
+          return selected_policy::lift_type::make(
+              resolve<typename selected_policy::inner_type>(key));
         });
   }
 
@@ -1129,10 +1129,10 @@ public:
                                 LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
     constexpr bool may_auto = runtime_auto_constructible_v<T>;
-    using plan =
-        detail::request_plan<T, LookupKey, static_bindings_type,
-                             detail::request_route_policy::runtime_fallback>;
-    if constexpr (!plan::lift_enabled) {
+    using policy =
+        detail::resolution_policy<T, LookupKey, static_bindings_type,
+                                  detail::resolution_mode::runtime_fallback>;
+    if constexpr (!policy::lift_enabled) {
       if (context.owns(runtime_registry_.runtime())) {
         return resolve<request, R, may_auto>(scope, context, origin,
                                              std::move(key));
@@ -1140,7 +1140,7 @@ public:
       return resolve_nested<request, R, may_auto>(scope, context, origin,
                                                   std::move(key));
     }
-    return plan::template execute<R>(
+    return policy::template resolve<R>(
         [&](auto) -> R {
           if (context.owns(runtime_registry_.runtime())) {
             return resolve<request, R, may_auto>(scope, context, origin,
@@ -1150,10 +1150,10 @@ public:
                                                       std::move(key));
         },
         [&](auto tag) -> R {
-          using selected_plan = typename decltype(tag)::plan;
-          return selected_plan::lift_type::make(
-              resolve<typename selected_plan::inner_type, false>(scope, context,
-                                                                 origin, key));
+          using selected_policy = typename decltype(tag)::policy;
+          return selected_policy::lift_type::make(
+              resolve<typename selected_policy::inner_type, false>(
+                  scope, context, origin, key));
         });
   }
 

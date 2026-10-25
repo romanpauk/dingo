@@ -314,10 +314,10 @@ struct has_context_materialize_source<
         std::declval<Storage &>(), std::declval<Owner &>()))>>
     : std::true_type {};
 
-// A flat source plan: one policy decision, then the existing lifetime
-// backends. It uses the scope/source descriptors instead of probing
+// A flat source-lifetime dispatcher: one lifetime decision, then the existing
+// lifetime backends. It uses the scope/source descriptors instead of probing
 // storage.resolve.
-enum class source_plan {
+enum class source_lifetime {
   context_lvalue,
   context,
   retained,
@@ -350,9 +350,8 @@ inline constexpr bool context_supports_retained_frame_v =
 
 template <typename Operation, typename Request, typename Storage,
           typename Context, typename Owner, typename Fn>
-decltype(auto) with_binding_source_plan(construction_scope scope,
-                                        Context &context, Storage &storage,
-                                        Owner &owner, Fn &&fn) {
+decltype(auto) with_source_lifetime(construction_scope scope, Context &context,
+                                    Storage &storage, Owner &owner, Fn &&fn) {
   constexpr bool context_lvalue =
       (std::is_lvalue_reference_v<Request> || std::is_pointer_v<Request>) &&
       source_category_of<Storage> == source_category::consume_value;

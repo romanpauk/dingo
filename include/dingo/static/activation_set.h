@@ -12,7 +12,7 @@
 #include <dingo/binding/binding_collection.h>
 #include <dingo/binding/binding_model.h>
 #include <dingo/binding/binding_resolution.h>
-#include <dingo/binding/route_plan.h>
+#include <dingo/binding/resolution_route.h>
 #include <dingo/context/context_base.h>
 #include <dingo/factory/factory_traits.h>
 #include <dingo/resolution/cache.h>
@@ -557,14 +557,14 @@ struct static_binding_resolver {
                                                                    scope};
     auto &&storage = state.template get_storage_for_model<binding_model_type>();
     auto materialize = [&](auto &&source) -> void * {
-      return detail::route_plan<storage_type, Resolution>::execute(
+      return detail::resolution_route<storage_type, Resolution>::apply(
                  scope, activation, context,
                  std::forward<decltype(source)>(source),
                  describe_type<Request>(), registered_type())
           .address;
     };
 
-    return detail::with_binding_source_plan<operation, Request>(
+    return detail::with_source_lifetime<operation, Request>(
         scope, context, storage, activation, std::move(materialize));
   }
 
@@ -581,7 +581,7 @@ struct static_binding_resolver {
           std::forward<Fn>(fn));
     };
     using operation = typename Resolution::operation;
-    return detail::with_binding_source_plan<operation, Request>(
+    return detail::with_source_lifetime<operation, Request>(
         scope, context, storage, activation, std::move(consume));
   }
 };

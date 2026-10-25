@@ -23,7 +23,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from route_recipes import interface_route_counts
+from route_derivation import interface_route_counts
 from storage_cells import validate_catalog
 
 

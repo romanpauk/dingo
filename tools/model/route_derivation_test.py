@@ -11,8 +11,8 @@ from __future__ import annotations
 import pytest
 
 from route_ledger import build_rows, supported_categories
-from route_recipes import (
-    RULES,
+from route_derivation import (
+    DERIVATION_RULES,
     form_kind,
     interface_route_counts,
     route_kinds,
@@ -58,7 +58,7 @@ def test_rules_are_unique_and_use_known_properties() -> None:
         "mapped",
     }
     keys = set()
-    for rule in RULES:
+    for rule in DERIVATION_RULES:
         key = (rule.category, rule.kind, rule.source, rule.requires)
         assert key not in keys
         keys.add(key)

@@ -14,8 +14,8 @@
 #include <dingo/static/activation_set.h>
 #include <dingo/static/container_traits.h>
 #include <dingo/static/context.h>
-#include <dingo/static/request_plan.h>
 #include <dingo/static/resolution.h>
+#include <dingo/static/resolution_policy.h>
 #include <dingo/type/dependency_traits.h>
 
 #include <type_traits>
@@ -295,10 +295,10 @@ public:
   R resolve(LookupKey key) {
     using lookup_request = request_type<T, true>;
     using request = request_type<T, false>;
-    using plan =
-        detail::request_plan<T, LookupKey, static_bindings_type,
-                             detail::request_route_policy::compile_time>;
-    return plan::template execute<R>(
+    using policy =
+        detail::resolution_policy<T, LookupKey, static_bindings_type,
+                                  detail::resolution_mode::compile_time>;
+    return policy::template resolve<R>(
         [&](auto) -> R {
           if constexpr (!collection_traits<R>::is_collection) {
             if constexpr (uses_static_minimal_context_v<request, R,
@@ -332,11 +332,11 @@ public:
           }
         },
         [&](auto tag) -> R {
-          using selected_plan = typename decltype(tag)::plan;
-          return selected_plan::lift_type::make(
+          using selected_policy = typename decltype(tag)::policy;
+          return selected_policy::lift_type::make(
               resolve<
-                  typename selected_plan::inner_type, LookupKey,
-                  request_result_t<typename selected_plan::inner_type, true>>(
+                  typename selected_policy::inner_type, LookupKey,
+                  request_result_t<typename selected_policy::inner_type, true>>(
                   key));
         });
   }
@@ -360,10 +360,10 @@ public:
             LookupKey key) {
     using lookup_request = request_type<T, true>;
     using request = request_type<T, RemoveRvalueReferences>;
-    using plan =
-        detail::request_plan<T, LookupKey, static_bindings_type,
-                             detail::request_route_policy::compile_time>;
-    return plan::template execute<R>(
+    using policy =
+        detail::resolution_policy<T, LookupKey, static_bindings_type,
+                                  detail::resolution_mode::compile_time>;
+    return policy::template resolve<R>(
         [&](auto) -> R {
           if constexpr (!collection_traits<R>::is_collection) {
             using selection = typename static_bindings_type::template selection<
@@ -406,10 +406,10 @@ public:
           }
         },
         [&](auto tag) -> R {
-          using selected_plan = typename decltype(tag)::plan;
-          return selected_plan::lift_type::make(
-              resolve<typename selected_plan::inner_type, false>(scope, context,
-                                                                 origin, key));
+          using selected_policy = typename decltype(tag)::policy;
+          return selected_policy::lift_type::make(
+              resolve<typename selected_policy::inner_type, false>(
+                  scope, context, origin, key));
         });
   }
 

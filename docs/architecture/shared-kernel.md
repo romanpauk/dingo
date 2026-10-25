@@ -47,7 +47,7 @@ infrastructure described below. It changes no public API and no behavior.
   translation unit of compile-time assertions for the supported rows and checks
   that every published route target is reachable from both request matchers,
   that the scope access satisfies each route, and that the operation-kind and
-  source-retention sequences derived by `route_recipes.py` match. The recipes
+  source-retention sequences derived by `route_derivation.py` match. The recipes
   are ordered rules over semantic kind, source shape, and wrapper properties, so
   a new scope reuses them and a custom wrapper with the same shape follows the
   same rule instead of adding a row per cell. Representative routes also assert
@@ -61,19 +61,19 @@ infrastructure described below. It changes no public API and no behavior.
   consuming/stability/guard/retention from the generated policy, and
   `storage_yield_traits` derives the yielded type and source category from the
   storage shape. Both value and reference/dependency paths use them through
-  `with_binding_source_plan`; the old `with_*` functions remain as lifetime
-  backends behind the plan.
-- The direct/lift decision and execution are one `request_plan` in
-  `include/dingo/static/request_plan.h`. It probes whether the static binding
-  serves the wrapper route, exposes a compile-time or runtime-fallback policy,
-  and provides `execute` for the selected arm. The direct and lift bodies are
-  passed as tagged callables, so the arm that is not selected is not
+  `with_source_lifetime`; the old `with_*` functions remain as lifetime backends
+  behind that dispatch.
+- The direct/lift decision and execution are one `resolution_policy` in
+  `include/dingo/static/resolution_policy.h`. It probes whether the static
+  binding serves the wrapper route, exposes a compile-time or runtime-fallback
+  mode, and provides `resolve` for the selected arm. The direct and lift bodies
+  are passed as tagged callables, so the arm that is not selected is not
   instantiated. `container::resolve_entry`, the dependency origin overload,
   `static_container` public resolve, and the `static_container` origin overload
-  all use the same executor. A selected binding exposes a `route_plan` for one
-  resolution and a `route_plan_list` for its request list; both the runtime
-  index dispatch and the compile-time static selection execute through the same
-  plan types.
+  all use the same executor. A selected binding exposes a `resolution_route` for
+  one resolution and a `resolution_candidates` for its request list; both the
+  runtime index dispatch and the compile-time static selection resolve through
+  the same route types.
 - Behavior coverage follows the same catalog. `behavior_cells.py` declares each
   form once (storage, factory, external instance) plus one expectation entry per
   scope, then derives the runtime and static product from the route ledger.
@@ -210,7 +210,7 @@ Split the current binding into a decision-free kernel and an erasure adapter.
 
 ```cpp
 // One binding, no erasure, no selection decisions.
-template <typename Plan, typename Slot, typename StatePolicy>
+template <typename Resolution, typename Slot, typename StatePolicy>
 class binding_core {
 public:
   template <typename Request, typename Context>
@@ -221,16 +221,16 @@ public:
 };
 
 // Runtime adds the type-erased entry point only where erasure is required.
-template <typename Plan, typename Slot, typename StatePolicy>
+template <typename Resolution, typename Slot, typename StatePolicy>
 class runtime_binding final
-    : public binding_core<Plan, Slot, StatePolicy>,
+    : public binding_core<Resolution, Slot, StatePolicy>,
       public runtime_binding_interface<...> {
   static resolved_address dispatch_request(...);
 };
 
 // Static uses the same core without a vtable and without an erased request.
-template <typename Plan, typename Slot, typename StatePolicy>
-using static_binding = binding_core<Plan, Slot, StatePolicy>;
+template <typename Resolution, typename Slot, typename StatePolicy>
+using static_binding = binding_core<Resolution, Slot, StatePolicy>;
 ```
 
 The kernel owns the part that is identical today:
@@ -605,7 +605,7 @@ work.
   time. The checks are:
 
   - no request kernel is instantiated for a registration that is never resolved;
-  - route planning instantiations grow with distinct shapes, not bindings;
+  - route derivation instantiations grow with distinct shapes, not bindings;
   - a static request instantiates no runtime-only selection code;
   - a runtime container instantiates no static-only graph code;
   - the generated headers stay within their include-cost budget.

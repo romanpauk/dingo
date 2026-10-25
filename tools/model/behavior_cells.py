@@ -29,7 +29,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from route_ledger import supported_categories
-from route_recipes import form_kind
+from route_derivation import form_kind
 from storage_cells import validate_catalog
 from wrapper_semantics import FORM_WRAPPERS
 

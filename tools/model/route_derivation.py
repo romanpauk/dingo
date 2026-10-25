@@ -23,13 +23,13 @@ from wrapper_semantics import FORM_WRAPPERS, WrapperSemantics
 
 
 @dataclass(frozen=True)
-class RouteStep:
+class ResolutionStep:
     kind: str
     retention: bool = False
 
 
-def _step(kind: str, retention: bool = False) -> RouteStep:
-    return RouteStep(kind, retention)
+def _step(kind: str, retention: bool = False) -> ResolutionStep:
+    return ResolutionStep(kind, retention)
 
 
 
@@ -55,7 +55,7 @@ class Rule:
     kind: str
     source: str | None
     requires: frozenset[str]
-    steps: tuple[RouteStep, ...] = ()
+    steps: tuple[ResolutionStep, ...] = ()
 
     def matches(
         self,
@@ -80,7 +80,7 @@ def _rule(
     kind: str,
     source: str | None,
     requires: set[str] | frozenset[str] = frozenset(),
-    steps: tuple[RouteStep, ...] = (),
+    steps: tuple[ResolutionStep, ...] = (),
 ) -> Rule:
     return Rule(category, kind, source, frozenset(requires), steps)
 
@@ -88,7 +88,7 @@ def _rule(
 # Ordered rules. Specific source/ownership cases come before wildcards; the
 # first match wins. The sequences are the same ones the generated C++ route
 # asserts check.
-RULES = (
+DERIVATION_RULES = (
     # Value requests.
     _rule("value", "value", "pointer", steps=(_step("dereference"),)),
     _rule("value", "value", "lvalue", steps=(_step("identity"),)),
@@ -327,11 +327,11 @@ def source_shape(scope_name: str, form_name: str) -> str:
 
 def route_steps(
     scope_name: str, form_name: str, category: str
-) -> tuple[RouteStep, ...]:
+) -> tuple[ResolutionStep, ...]:
     source = source_shape(scope_name, form_name)
     kind = form_kind(form_name)
     stored = wrapper(form_name)
-    for rule in RULES:
+    for rule in DERIVATION_RULES:
         if rule.matches(category, kind, source, stored):
             return rule.steps
     raise KeyError(

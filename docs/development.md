@@ -89,7 +89,7 @@ example. Runtime value routes address the source a consuming scope already
 materialized in the context, so value requests construct the result with one
 move instead of copying a context value and moving it out. The route ledger
 classifies every scope/form/category row as supported, unavailable with a
-reason, or a tracked gap. `route_recipes.py` derives the operation-kind and
+reason, or a tracked gap. `route_derivation.py` derives the operation-kind and
 retention sequence from the form's stored wrapper and the source shape the scope
 publishes, so the ledger no longer keeps one hand-written sequence per cell. The
 route probes check value, object, and rvalue availability against that ledger,

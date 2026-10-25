@@ -16,9 +16,9 @@
 namespace dingo {
 namespace detail {
 
-// A selected route plan. It owns the route descriptor (the resolution) and the
-// storage it was selected for, and executes the shared conversion path.
-template <typename Storage, typename Resolution> struct route_plan {
+// A selected route. It owns the route descriptor (the resolution) and the
+// storage it was selected for, and applies the shared conversion path.
+template <typename Storage, typename Resolution> struct resolution_route {
   using storage_type = Storage;
   using resolution_type = Resolution;
   using target_type = typename Resolution::target_type;
@@ -29,27 +29,28 @@ template <typename Storage, typename Resolution> struct route_plan {
 
   template <typename Resolver, typename Context, typename MaterializedSource>
   DINGO_ALWAYS_INLINE static resolved_address
-  execute(construction_scope scope, Resolver &resolver, Context &context,
-          MaterializedSource &&source, type_descriptor requested_type,
-          type_descriptor registered_type) {
+  apply(construction_scope scope, Resolver &resolver, Context &context,
+        MaterializedSource &&source, type_descriptor requested_type,
+        type_descriptor registered_type) {
     return resolve_address_from_source<Resolution, Storage>(
         scope, resolver, context, std::forward<MaterializedSource>(source),
         requested_type, registered_type);
   }
 };
 
-// The plans a binding publishes for one request list. Runtime selection picks
-// an index; static selection already names the resolution type and uses
-// route_plan directly.
-template <typename Storage, typename... Resolutions> struct route_plan_list {
+// The candidate routes a binding publishes for one request list. Runtime
+// selection picks an index; static selection already names the resolution type
+// and uses resolution_route directly.
+template <typename Storage, typename... Resolutions>
+struct resolution_candidates {
   using storage_type = Storage;
   static constexpr std::size_t size = sizeof...(Resolutions);
 };
 
 template <typename Storage, typename... Resolutions, typename Resolver,
           typename Context, typename MaterializedSource>
-DINGO_ALWAYS_INLINE resolved_address execute_route_plan_list(
-    route_plan_list<Storage, Resolutions...>, std::size_t index,
+DINGO_ALWAYS_INLINE resolved_address resolve_candidate(
+    resolution_candidates<Storage, Resolutions...>, std::size_t index,
     construction_scope scope, Resolver &resolver, Context &context,
     MaterializedSource &&source, type_descriptor requested_type,
     type_descriptor registered_type) {
@@ -57,7 +58,7 @@ DINGO_ALWAYS_INLINE resolved_address execute_route_plan_list(
   std::size_t current = 0;
   const bool matched =
       (((index == current++)
-            ? (result = route_plan<Storage, Resolutions>::execute(
+            ? (result = resolution_route<Storage, Resolutions>::apply(
                    scope, resolver, context,
                    std::forward<MaterializedSource>(
                        source), // NOLINT(bugprone-use-after-move)
