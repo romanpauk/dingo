@@ -75,14 +75,28 @@ static constexpr bool {{ shape.name }} = request_supported<{{ shape.cpp_type }},
 TEST(type_matrix, writes_support_report) {
   std::ofstream out(DINGO_TYPE_MATRIX_REPORT);
   ASSERT_TRUE(out.is_open());
-  out << "| scope | form | shape | supported |\n";
-  out << "| --- | --- | --- | --- |\n";
+  out << "| scope | form | shape | route | top-level |\n";
+  out << "| --- | --- | --- | --- | --- |\n";
 {% for row in rows %}
 {% for shape in shapes %}
   out << "| {{ row.scope }} | {{ row.form }} | {{ shape.name }} | "
-      << ({{ row.cell }}::{{ shape.name }} ? "yes" : "no") << " |\n";
+      << ({{ row.cell }}::{{ shape.name }} ? "yes" : "no") << " | ";
+  if ({{ row.cell }}::{{ shape.name }} &&
+      {{ "true" if row.top_level[shape.name] else "false" }}) {
+    out << "yes";
+  } else {
+    out << "no";
+  }
+  out << " |\n";
 {% endfor %}
 {% endfor %}
+  out << "\nRoute: the storage publishes a request list that matches the "
+         "shape.\n";
+  out << "Top-level: the route is safe to call directly on the container. A "
+         "consuming\n";
+  out << "scope can lend an lvalue reference to a longer-lived construction, "
+         "but a\n";
+  out << "top-level borrow would outlive the resolution that produced it.\n";
   out << "\n| scope | form | category | target |\n";
   out << "| --- | --- | --- | --- |\n";
 {% for row in rows %}

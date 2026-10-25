@@ -432,9 +432,20 @@ The implemented model uses that split directly:
   grammar (const, references, pointers, optional, owning handles, array handles,
   array references/pointers) to a bounded depth and applies every derived shape
   to every storable cell through the real resolution kernel. It writes the
-  exhaustive supported/unsupported table with the published route targets. This
-  is the foundation for deriving behavior and decorator cases from shapes
-  instead of listing supported requests by hand.
+  exhaustive table with the matching route, the top-level verdict, and the
+  published route targets. A matching route can still be unsafe at the container
+  boundary: a consuming scope may lend an lvalue reference to a longer-lived
+  dependent, but a borrow returned from the container would outlive the
+  transaction that produced it. The report marks those rows as top-level gaps
+  instead of hiding them.
+- **The supported top-level rows execute.** `type_behavior.py` resolves every
+  supported shape twice through the behavior registrations, checks stable
+  identity and fresh distinctness, releases only pointers whose ownership the
+  consuming scope transferred, and asserts the lifetime balance after each
+  block. The shape catalog and the top-level verdict are shared with the matrix,
+  so the executable set is derived rather than maintained separately. This is
+  the foundation for deriving behavior and decorator cases from shapes instead
+  of listing supported requests by hand.
 - **The matrix keeps the scenarios that a cell catalog cannot express**:
   constructor detection, invocation, dependency graphs, collections, keys,
   annotations, parent containers, caching, transactions, error paths, custom

@@ -33,10 +33,24 @@ hand-curated matrix tags.
   `std::shared_ptr`, owning array handles, and array reference/pointer
   constructors composed to depth two. It applies every derived shape to every
   storable scope/form cell through the real resolution kernel and writes a
-  `type-matrix.md` report with the supported/unsupported row for every shape and
-  the published route targets per cell. Supported rows are answered by the
-  library, not by a hand-written case list; the report is the exhaustive
-  support table. The depth bound is an explicit model limitation.
+  `type-matrix.md` report with the matching route and top-level verdict for
+  every shape, plus the published route targets per cell. Supported rows are
+  answered by the library, not by a hand-written case list; the report is the
+  exhaustive support table. The depth bound is an explicit model limitation.
+  A route that only works as a dependency of a longer-lived construction is
+  reported as `top-level = no`: a consuming scope can lend an lvalue reference
+  to its dependent, but a borrow returned from the container itself would
+  outlive the transaction that produced it.
+- `type_behavior.py` executes the top-level half of that matrix. Every
+  supported shape is resolved twice through the same registration recipe as the
+  behavior cells, stable scopes are checked for identity, fresh scopes for
+  distinctness, owned raw pointers are released according to the transfer
+  contract, and every block finishes with the lifetime balance intact. The
+  shape catalog and the top-level verdict come from `type_matrix.py`, so the
+  suite follows the library instead of listing supported requests by hand.
+  Unowned or non-transferred pointers are never released, and the two consuming
+  lvalue-borrow shapes are emitted as explicit top-level gaps rather than
+  silently skipped.
 - `interface_cells.py` instantiates the real interface resolution kernel for
   storage exposed through `dingo::interfaces<...>`. It checks value, object, and
   rvalue availability and exact route counts, requires every published target to

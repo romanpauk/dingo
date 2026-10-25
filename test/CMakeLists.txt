@@ -156,6 +156,8 @@ set(DINGO_INTERFACE_MODEL_GENERATOR
     "${PROJECT_SOURCE_DIR}/tools/model/interface_cells.py")
 set(DINGO_TYPE_MATRIX_GENERATOR
     "${PROJECT_SOURCE_DIR}/tools/model/type_matrix.py")
+set(DINGO_TYPE_BEHAVIOR_GENERATOR
+    "${PROJECT_SOURCE_DIR}/tools/model/type_behavior.py")
 set(DINGO_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/templates/storage_cells.cpp.j2")
 set(DINGO_SCOPES_TEMPLATE
@@ -168,6 +170,8 @@ set(DINGO_INTERFACE_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/templates/interface_cells.cpp.j2")
 set(DINGO_TYPE_MATRIX_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/templates/type_matrix.cpp.j2")
+set(DINGO_TYPE_BEHAVIOR_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/tools/model/templates/type_behavior.cpp.j2")
 set(DINGO_SCOPES_HEADER
     "${PROJECT_SOURCE_DIR}/include/dingo/storage/scopes.gen.h")
 set(DINGO_SELECTION_MODEL_TEMPLATE
@@ -184,6 +188,8 @@ set(DINGO_INTERFACE_MODEL_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/interface_cells.cpp")
 set(DINGO_TYPE_MATRIX_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/type_matrix.cpp")
+set(DINGO_TYPE_BEHAVIOR_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/type_behavior.cpp")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_MODEL_GENERATOR}"
     "${DINGO_SELECTION_MODEL_GENERATOR}"
@@ -198,6 +204,8 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_BEHAVIOR_MODEL_TEMPLATE}"
     "${DINGO_INTERFACE_MODEL_TEMPLATE}"
     "${DINGO_TYPE_MATRIX_TEMPLATE}"
+    "${DINGO_TYPE_BEHAVIOR_GENERATOR}"
+    "${DINGO_TYPE_BEHAVIOR_TEMPLATE}"
     "${DINGO_SCOPES_HEADER}"
     "${PROJECT_SOURCE_DIR}/tools/model/storage_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/selection_rules_test.py"
@@ -206,6 +214,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/behavior_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/interface_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/type_matrix_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/type_behavior_test.py"
     "${PROJECT_SOURCE_DIR}/tools/cost/measure_test.py")
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python
@@ -279,6 +288,18 @@ if(NOT DINGO_TYPE_MATRIX_GENERATOR_RESULT EQUAL 0)
         "Failed to generate the type matrix: "
         "${DINGO_TYPE_MATRIX_GENERATOR_RESULT}")
 endif()
+execute_process(
+    COMMAND ${DINGO_UV_RUN_COMMAND} python
+        ${DINGO_TYPE_BEHAVIOR_GENERATOR}
+        --out ${DINGO_TYPE_BEHAVIOR_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE DINGO_TYPE_BEHAVIOR_GENERATOR_RESULT)
+if(NOT DINGO_TYPE_BEHAVIOR_GENERATOR_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to generate type behavior coverage: "
+        "${DINGO_TYPE_BEHAVIOR_GENERATOR_RESULT}")
+endif()
 
 add_custom_target(cells-check
     COMMENT "Verifying generated cell coverage"
@@ -313,6 +334,11 @@ add_custom_target(cells-check
         --out ${DINGO_TYPE_MATRIX_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
+    COMMAND ${DINGO_UV_RUN_COMMAND} python
+        ${DINGO_TYPE_BEHAVIOR_GENERATOR}
+        --out ${DINGO_TYPE_BEHAVIOR_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+        --check
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 add_executable(dingo_model_test
@@ -321,7 +347,8 @@ add_executable(dingo_model_test
     ${DINGO_ROUTE_MODEL_TEST_SOURCE}
     ${DINGO_BEHAVIOR_MODEL_TEST_SOURCE}
     ${DINGO_INTERFACE_MODEL_TEST_SOURCE}
-    ${DINGO_TYPE_MATRIX_TEST_SOURCE})
+    ${DINGO_TYPE_MATRIX_TEST_SOURCE}
+    ${DINGO_TYPE_BEHAVIOR_TEST_SOURCE})
 target_link_libraries(dingo_model_test dingo::dingo gtest_main)
 target_compile_definitions(dingo_model_test PRIVATE
     DINGO_TYPE_MATRIX_REPORT="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.md")
@@ -336,7 +363,8 @@ add_test(NAME dingo_model_generator_test
         ${PROJECT_SOURCE_DIR}/tools/model/route_ledger_test.py
         ${PROJECT_SOURCE_DIR}/tools/model/behavior_cells_test.py
         ${PROJECT_SOURCE_DIR}/tools/model/interface_cells_test.py
-        ${PROJECT_SOURCE_DIR}/tools/model/type_matrix_test.py)
+        ${PROJECT_SOURCE_DIR}/tools/model/type_matrix_test.py
+        ${PROJECT_SOURCE_DIR}/tools/model/type_behavior_test.py)
 set_tests_properties(dingo_model_generator_test PROPERTIES
     LABELS "unit;generator"
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/model)

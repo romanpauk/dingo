@@ -10,7 +10,7 @@
 
 The model owns the request-shape catalog and the storage-cell product. Every
 cell is checked against every shape through the real resolution kernel, and the
-generated test writes the supported/unsupported table. Supported rows are not
+generated test writes the route/top-level table. Supported rows are not
 hand-written: the library answers them, and the report makes the gaps visible.
 """
 
@@ -32,6 +32,8 @@ class Shape:
     cpp_type: str
     depth: int = 0
     is_reference: bool = False
+    is_lvalue_reference: bool = False
+    is_pointer: bool = False
     is_array: bool = False
     is_const: bool = False
 
@@ -44,6 +46,8 @@ class Constructor:
     name: str
     render: str
     is_reference: bool = False
+    is_lvalue_reference: bool = False
+    is_pointer: bool = False
     is_array: bool = False
     is_const: bool = False
 
@@ -53,6 +57,8 @@ class Constructor:
             cpp_type=self.render.format(inner=inner.cpp_type),
             depth=inner.depth + 1,
             is_reference=self.is_reference,
+            is_lvalue_reference=self.is_lvalue_reference,
+            is_pointer=self.is_pointer,
             is_array=self.is_array,
             is_const=self.is_const,
         )
@@ -81,9 +87,12 @@ class Constructor:
 
 CONSTRUCTORS = (
     Constructor("const", "const {inner}", is_const=True),
-    Constructor("lvalue_reference", "{inner} &", is_reference=True),
+    Constructor(
+        "lvalue_reference", "{inner} &", is_reference=True,
+        is_lvalue_reference=True,
+    ),
     Constructor("rvalue_reference", "{inner} &&", is_reference=True),
-    Constructor("pointer", "{inner} *"),
+    Constructor("pointer", "{inner} *", is_pointer=True),
     Constructor("optional", "std::optional<{inner}>"),
     Constructor("unique_ptr", "std::unique_ptr<{inner}>"),
     Constructor("shared_ptr", "std::shared_ptr<{inner}>"),
@@ -91,9 +100,10 @@ CONSTRUCTORS = (
     Constructor("shared_array", "std::shared_ptr<{inner}[]>"),
     Constructor(
         "array_lvalue_reference", "{inner} (&)[2]", is_reference=True,
-        is_array=True,
+        is_lvalue_reference=True, is_array=True,
     ),
-    Constructor("array_pointer", "{inner} (*)[2]", is_array=True),
+    Constructor("array_pointer", "{inner} (*)[2]", is_pointer=True,
+                is_array=True),
 )
 
 SHAPE_DEPTH = 2
@@ -135,6 +145,20 @@ ARRAY_FORMS = frozenset(
     {"array", "bounded_array", "unique_array_handle", "shared_array_handle"}
 )
 
+CONSUMING_SCOPES = frozenset(scope.name for scope in SCOPES if scope.consumes)
+
+
+def top_level_safe(scope_name: str, shape: Shape) -> bool:
+    """Whether a matching route is safe to call on the container itself.
+
+    A consuming scope produces its instance for one resolution. It can lend an
+    lvalue reference to a longer-lived construction that owns the result, but a
+    top-level borrow would outlive the transaction that produced it. Every other
+    published route either returns the value, transfers ownership, or points at
+    stable storage.
+    """
+    return not (scope_name in CONSUMING_SCOPES and shape.is_lvalue_reference)
+
 
 def _constructor(form) -> str:
     return "int" if form.name in ARRAY_FORMS else form.cpp_type
@@ -160,6 +184,10 @@ def build_rows() -> list[dict[str, object]]:
                     "constructor": _constructor(form),
                     "scope_type": scope.cpp_type,
                     "form_header": scope.header,
+                    "top_level": {
+                        shape.name: top_level_safe(scope.name, shape)
+                        for shape in SHAPES
+                    },
                 }
             )
     return rows
