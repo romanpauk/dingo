@@ -323,6 +323,8 @@ add_executable(dingo_model_test
     ${DINGO_INTERFACE_MODEL_TEST_SOURCE}
     ${DINGO_TYPE_MATRIX_TEST_SOURCE})
 target_link_libraries(dingo_model_test dingo::dingo gtest_main)
+target_compile_definitions(dingo_model_test PRIVATE
+    DINGO_TYPE_MATRIX_REPORT="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.md")
 add_test(NAME dingo_model_test COMMAND dingo_model_test)
 set_tests_properties(dingo_model_test PROPERTIES LABELS "unit;generator")
 

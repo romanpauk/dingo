@@ -24,6 +24,10 @@
 #include <memory>
 #include <optional>
 
+#ifndef DINGO_TYPE_MATRIX_REPORT
+#define DINGO_TYPE_MATRIX_REPORT "type-matrix.md"
+#endif
+
 namespace type_matrix {
 
 template <typename Request, typename... Resolutions>
@@ -69,7 +73,7 @@ static constexpr bool {{ shape.name }} = request_supported<{{ shape.cpp_type }},
 
 {% endfor %}
 TEST(type_matrix, writes_support_report) {
-  std::ofstream out("type-matrix.md");
+  std::ofstream out(DINGO_TYPE_MATRIX_REPORT);
   ASSERT_TRUE(out.is_open());
   out << "| scope | form | shape | supported |\n";
   out << "| --- | --- | --- | --- |\n";
