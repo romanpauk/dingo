@@ -214,10 +214,17 @@ the wrapper's value can be resolved, Dingo builds the wrapper from it:
 - a directly stored wrapper still wins over the lift
 
 The wrapper contract is the existing `type_traits` specialization: `value_type`,
-`wrap`, `make`, `make_empty`, `is_pointer_like`, and `is_owning_handle`.
-User-provided optional-like, handle-like, and variant-like classes therefore
-participate without a library change. A variant is resolved as a value;
-`alternative_type_traits` still handles selecting an alternative.
+`wrap`, `make`, `make_empty`, `is_pointer_like`, `is_owning_handle`, and the
+semantic properties `is_owning`, `is_sharing`, `is_nullable`, `is_borrowable`,
+`is_array`, and `is_variant`. The semantic properties default from the legacy
+flags, so an existing specialization keeps working; declaring them explicitly
+lets the lift and route rules use one property instead of a type-specific
+branch. The route operations are `can_copy_out` and `can_take`: a wrapper that
+can take ownership is lifted from a consumed value, while a value wrapper can
+copy or move its value. User-provided optional-like, handle-like, and
+variant-like classes therefore participate without a library change. A variant
+is resolved as a value; `alternative_type_traits` still handles selecting an
+alternative.
 
 For example, a unique registration of `std::optional<T>` can satisfy
 `std::shared_ptr<std::optional<T>>` by moving the optional into a new shared

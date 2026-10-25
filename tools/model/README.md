@@ -20,6 +20,12 @@ hand-curated matrix tags.
   not part of the type, so no scope can size, construct, or destroy them.
   Unsized shared array handles under `shared_cyclical` are an explicit
   constraint for the same reason.
+- `property_cells.py` generates static assertions that compare the C++ wrapper
+  properties (`is_owning`, `is_sharing`, `is_nullable`, `is_borrowable`,
+  `is_array`, `is_variant`, `can_copy_out`, `can_take`) with the Python wrapper
+  declarations for every built-in wrapper and the `test_optional`,
+  `test_unique`, and `test_shared` families. A wrapper cannot silently drift
+  from its declared semantics.
 - `route_recipes.py` derives the operation-kind and retention sequence for a
   supported route from the form's stored wrapper and the source shape the scope
   hands out (pointer, lvalue, rvalue, cyclical row pointer, or cyclical handle).

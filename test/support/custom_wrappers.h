@@ -113,6 +113,14 @@ template <typename T> struct type_traits<test_shared<T>> {
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = true;
   static constexpr bool is_owning_handle = true;
+  static constexpr bool is_owning = true;
+  static constexpr bool is_sharing = true;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = true;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = true;
+  static constexpr bool can_take = true;
 
   template <typename> static constexpr bool is_handle_rebindable = true;
 
@@ -154,6 +162,14 @@ template <typename T> struct type_traits<test_unique<T>> {
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = true;
   static constexpr bool is_owning_handle = true;
+  static constexpr bool is_owning = true;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = true;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = true;
+  static constexpr bool can_take = true;
 
   template <typename> static constexpr bool is_handle_rebindable = true;
 
@@ -200,6 +216,14 @@ template <typename T> struct type_traits<test_optional<T>> {
   static constexpr bool is_pointer_like = false;
   static constexpr bool is_value_borrowable = true;
   static constexpr bool is_owning_handle = false;
+  static constexpr bool is_owning = true;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = true;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = true;
+  static constexpr bool can_take = false;
 
   template <typename> static constexpr bool is_handle_rebindable = false;
 

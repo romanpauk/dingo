@@ -28,21 +28,6 @@ struct liftable_value<T, true>
 template <typename T>
 inline constexpr bool liftable_value_v = liftable_value<T>::value;
 
-// An array handle holds an element type; lifting one scalar into an array
-// owner would allocate the wrong shape. The flag is part of type_traits so a
-// user-provided handle can declare the same contract.
-template <typename Wrapper, typename = void>
-struct is_array_handle_wrapper : std::false_type {};
-
-template <typename Wrapper>
-struct is_array_handle_wrapper<
-    Wrapper, std::void_t<decltype(type_traits<Wrapper>::is_array_handle)>>
-    : std::bool_constant<type_traits<Wrapper>::is_array_handle> {};
-
-template <typename Wrapper>
-inline constexpr bool is_array_handle_wrapper_v =
-    is_array_handle_wrapper<Wrapper>::value;
-
 template <typename T, typename = void>
 struct request_has_value_type : std::false_type {};
 
@@ -97,13 +82,14 @@ struct request_lift<
     std::enable_if_t<
         !std::is_reference_v<T> && type_traits<std::remove_cv_t<T>>::enabled &&
         request_has_value_type_v<std::remove_cv_t<T>> &&
-        !is_array_handle_wrapper_v<std::remove_cv_t<T>> &&
+        !type_traits_is_array_v<std::remove_cv_t<T>> &&
+        !is_variant_type_v<std::remove_cv_t<T>> &&
         !std::is_pointer_v<
             typename type_traits<std::remove_cv_t<T>>::value_type> &&
         liftable_value_v<
             typename type_traits<std::remove_cv_t<T>>::value_type> &&
         (!type_traits<std::remove_cv_t<T>>::is_pointer_like ||
-         type_traits<std::remove_cv_t<T>>::is_owning_handle) &&
+         type_traits_can_take_v<std::remove_cv_t<T>>) &&
         (can_wrap_value<
              std::remove_cv_t<T>,
              typename type_traits<std::remove_cv_t<T>>::value_type &&>::value ||
@@ -115,11 +101,23 @@ struct request_lift<
                             &&>::value)>> {
   using type = std::remove_cv_t<T>;
   using value_type = typename type_traits<type>::value_type;
-  // Value wrappers may copy or move their value. Owning handles must move from
-  // a consumed route, so a borrowed value can never become an owner.
-  using inner_type = std::conditional_t<type_traits<type>::is_owning_handle,
+  using traits = type_traits<type>;
+  // Value wrappers may copy or move their value. A wrapper that takes
+  // ownership must move from a consumed route, so a borrowed value can never
+  // become an owner.
+  using inner_type = std::conditional_t<type_traits_can_take_v<type>,
                                         value_type &&, value_type>;
   static constexpr bool enabled = true;
+
+  // Route operations: copy the contained value out, take ownership, wrap an
+  // existing value, adopt a pointer, or construct a fresh wrapper.
+  static constexpr bool copy_out = traits::can_copy_out;
+  static constexpr bool take = type_traits_can_take_v<type>;
+  static constexpr bool wrap_value = can_wrap_value<type, value_type &&>::value;
+  static constexpr bool adopt_pointer =
+      can_wrap_value_pointer<type, value_type &&>::value;
+  static constexpr bool construct_value =
+      can_make_value<type, value_type &&>::value;
 
   static_assert(!std::is_same_v<type, value_type>,
                 "request wrapper must not resolve to itself");

@@ -50,6 +50,20 @@ template <typename T, typename = void> struct type_traits {
   static constexpr bool is_owning_handle = false;
   static constexpr bool is_array_handle = false;
 
+  // Semantic properties. The defaults keep a user wrapper that only declares
+  // the legacy flags working; a wrapper that owns, shares, or holds a null
+  // state declares the properties explicitly.
+  static constexpr bool is_owning = is_owning_handle;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = is_pointer_like;
+  static constexpr bool is_borrowable = is_value_borrowable;
+  static constexpr bool is_array = is_array_handle;
+  static constexpr bool is_variant = false;
+
+  // Route operations the wrapper can perform.
+  static constexpr bool can_copy_out = is_borrowable;
+  static constexpr bool can_take = is_owning_handle;
+
   template <typename> static constexpr bool is_handle_rebindable = false;
 
   template <typename> static constexpr bool is_rebindable = false;
@@ -227,6 +241,62 @@ template <typename Type, typename Interface>
 inline constexpr bool is_alternative_type_interface_compatible_v =
     detail::alternative_type_count<std::remove_cv_t<Type>,
                                    std::remove_cv_t<Interface>>::value == 1;
+
+// One property for every alternative-like wrapper. A std::variant and a user
+// alternative specialize alternative_type_traits; a type_traits wrapper may
+// also declare is_variant when it carries an alternative shape.
+template <typename T, typename = void>
+struct type_traits_is_variant : std::false_type {};
+
+template <typename T>
+struct type_traits_is_variant<T,
+                              std::void_t<decltype(type_traits<T>::is_variant)>>
+    : std::bool_constant<type_traits<T>::is_variant> {};
+
+template <typename T>
+inline constexpr bool is_variant_type_v =
+    type_traits_is_variant<std::remove_cv_t<T>>::value ||
+    alternative_type_traits<std::remove_cv_t<T>>::enabled;
+
+// Semantic accessors keep older user specializations working: they only have
+// the legacy flags, so a missing semantic flag falls back to the flag it was
+// derived from. The legacy flags themselves are optional on a specialization
+// that predates them.
+template <typename T, typename = void>
+struct type_traits_legacy_owning_handle : std::false_type {};
+
+template <typename T>
+struct type_traits_legacy_owning_handle<
+    T, std::void_t<decltype(type_traits<T>::is_owning_handle)>>
+    : std::bool_constant<type_traits<T>::is_owning_handle> {};
+
+template <typename T, typename = void>
+struct type_traits_legacy_array_handle : std::false_type {};
+
+template <typename T>
+struct type_traits_legacy_array_handle<
+    T, std::void_t<decltype(type_traits<T>::is_array_handle)>>
+    : std::bool_constant<type_traits<T>::is_array_handle> {};
+
+template <typename T, typename = void>
+struct type_traits_can_take : type_traits_legacy_owning_handle<T> {};
+
+template <typename T>
+struct type_traits_can_take<T, std::void_t<decltype(type_traits<T>::can_take)>>
+    : std::bool_constant<type_traits<T>::can_take> {};
+
+template <typename T>
+inline constexpr bool type_traits_can_take_v = type_traits_can_take<T>::value;
+
+template <typename T, typename = void>
+struct type_traits_is_array : type_traits_legacy_array_handle<T> {};
+
+template <typename T>
+struct type_traits_is_array<T, std::void_t<decltype(type_traits<T>::is_array)>>
+    : std::bool_constant<type_traits<T>::is_array> {};
+
+template <typename T>
+inline constexpr bool type_traits_is_array_v = type_traits_is_array<T>::value;
 
 template <typename StorageTag, typename Type, typename U, typename = void>
 struct storage_traits {
@@ -414,6 +484,14 @@ template <typename T> struct type_traits<T *> {
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = true;
   static constexpr bool is_owning_handle = false;
+  static constexpr bool is_owning = false;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = true;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = true;
+  static constexpr bool can_take = false;
 
   template <typename Target>
   static constexpr bool is_handle_rebindable =
@@ -449,6 +527,14 @@ template <> struct type_traits<void *> {
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = false;
+  static constexpr bool is_owning = false;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = false;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = false;
+  static constexpr bool can_take = false;
 
   template <typename Target>
   static constexpr bool is_handle_rebindable =
@@ -483,6 +569,14 @@ template <> struct type_traits<const void *> {
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = false;
+  static constexpr bool is_owning = false;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = false;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = false;
+  static constexpr bool can_take = false;
 
   template <typename Target>
   static constexpr bool is_handle_rebindable =
@@ -522,6 +616,14 @@ struct type_traits<std::unique_ptr<Array, Deleter>,
   static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = true;
   static constexpr bool is_array_handle = true;
+  static constexpr bool is_owning = true;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = false;
+  static constexpr bool is_array = true;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = false;
+  static constexpr bool can_take = true;
 
   template <typename Target>
   static constexpr bool is_handle_rebindable =
@@ -581,6 +683,14 @@ struct type_traits<std::unique_ptr<T, Deleter>,
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = true;
   static constexpr bool is_owning_handle = true;
+  static constexpr bool is_owning = true;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = true;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = true;
+  static constexpr bool can_take = true;
 
   template <typename Target>
   static constexpr bool is_handle_rebindable =
@@ -654,6 +764,14 @@ struct type_traits<std::shared_ptr<Array>,
   static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = true;
   static constexpr bool is_array_handle = true;
+  static constexpr bool is_owning = true;
+  static constexpr bool is_sharing = true;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = false;
+  static constexpr bool is_array = true;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = false;
+  static constexpr bool can_take = true;
 
   template <typename Target>
   static constexpr bool is_handle_rebindable =
@@ -704,6 +822,14 @@ struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>> {
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = true;
   static constexpr bool is_owning_handle = true;
+  static constexpr bool is_owning = true;
+  static constexpr bool is_sharing = true;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = true;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = true;
+  static constexpr bool can_take = true;
 
   template <typename Target>
   static constexpr bool is_handle_rebindable =
@@ -764,6 +890,14 @@ template <typename T> struct type_traits<std::optional<T>> {
   static constexpr bool is_pointer_like = false;
   static constexpr bool is_value_borrowable = true;
   static constexpr bool is_owning_handle = false;
+  static constexpr bool is_owning = true;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = true;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = true;
+  static constexpr bool can_take = false;
 
   template <typename> static constexpr bool is_handle_rebindable = false;
 

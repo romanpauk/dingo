@@ -22,13 +22,25 @@ introducing a new wrapper or handle type.
 - whether the type participates in Dingo's wrapper machinery
 - whether it behaves like a pointer-like handle
 - whether it owns the pointee
+- whether ownership is shared, whether the wrapper can be empty, and whether it
+  can lend its contained object (`is_owning`, `is_sharing`, `is_nullable`,
+  `is_borrowable`)
+- whether it holds an array or an alternative shape (`is_array`, `is_variant`)
+- whether it can copy its value out or must take ownership (`can_copy_out`,
+  `can_take`)
 - how to get or borrow the underlying object
 - how to reset it
 - how to rebind it to a different leaf type
 - whether Dingo may resolve references through it
 - how wrapper-shaped resolution should behave for that type
 
-If Dingo needs to understand a wrapper's shape, start here.
+If Dingo needs to understand a wrapper's shape, start here. The semantic
+properties default from `is_owning_handle`, `is_pointer_like`,
+`is_value_borrowable`, and `is_array_handle`, so a specialization that only
+declares the legacy flags keeps its previous behavior. A new wrapper that owns,
+shares, or can be empty should declare the semantic properties explicitly;
+`request_lift` then chooses `wrap`, `from_pointer`/adopt, or `make` and decides
+whether the contained value must be consumed.
 
 Set `is_owning_handle` to `true` for adopting or shared-ownership handles and to
 `false` for observers. Dingo does not create an owning handle from a borrowed

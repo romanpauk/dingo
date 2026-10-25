@@ -99,7 +99,13 @@ WRAPPERS = (
         {"move"},
         is_reference=True,
     ),
-    _wrapper("pointer", "{inner} *", "pointer", {"borrowable"}, is_pointer=True),
+    _wrapper(
+        "pointer",
+        "{inner} *",
+        "pointer",
+        {"nullable", "borrowable"},
+        is_pointer=True,
+    ),
     _wrapper(
         "optional",
         "std::optional<{inner}>",
@@ -110,25 +116,25 @@ WRAPPERS = (
         "unique_ptr",
         "std::unique_ptr<{inner}>",
         "handle",
-        {"owning", "sole_owner", "borrowable"},
+        {"owning", "sole_owner", "nullable", "borrowable"},
     ),
     _wrapper(
         "shared_ptr",
         "std::shared_ptr<{inner}>",
         "handle",
-        {"owning", "sharing", "borrowable"},
+        {"owning", "sharing", "nullable", "borrowable"},
     ),
     _wrapper(
         "unique_array",
         "std::unique_ptr<{inner}[]>",
         "array_handle",
-        {"owning", "sole_owner", "borrowable", "array_handle"},
+        {"owning", "sole_owner", "nullable", "array_handle"},
     ),
     _wrapper(
         "shared_array",
         "std::shared_ptr<{inner}[]>",
         "array_handle",
-        {"owning", "sharing", "borrowable", "array_handle"},
+        {"owning", "sharing", "nullable", "array_handle"},
     ),
     _wrapper(
         "array_lvalue_reference",
@@ -156,6 +162,30 @@ WRAPPERS = (
 )
 
 WRAPPER_BY_NAME = {wrapper.name: wrapper for wrapper in WRAPPERS}
+
+# Test-only wrapper families. They use the same semantic fields as the built-in
+# wrappers so the generated property probe can compare the C++ trait flags with
+# one Python declaration.
+CUSTOM_WRAPPERS = (
+    _wrapper(
+        "test_optional",
+        "test_optional<{inner}>",
+        "value",
+        {"owning", "nullable", "borrowable", "in_place"},
+    ),
+    _wrapper(
+        "test_unique",
+        "test_unique<{inner}>",
+        "handle",
+        {"owning", "sole_owner", "nullable", "borrowable"},
+    ),
+    _wrapper(
+        "test_shared",
+        "test_shared<{inner}>",
+        "handle",
+        {"owning", "sharing", "nullable", "borrowable"},
+    ),
+)
 
 # The wrapper each storage form stores. `bounded_array` and `array` are array
 # storage, not a wrapper shape; `plain` is the bare leaf.
