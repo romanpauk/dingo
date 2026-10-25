@@ -121,8 +121,10 @@ hand-curated matrix tags.
   Supported
   cells without a resolvable behavior case are listed in `BEHAVIOR_GAPS` with a
   reason, so a cell cannot silently lose its test. Interface and annotation
-  scenarios are derived from storage shapes plus a small request-form rule set,
-  not a flat list of complete cases. The interface cases exercise storage
+  scenarios are derived from the behavior forms plus a request-form rule set,
+  not a flat list of complete cases. Forms with no interface or annotation
+  route are listed in `INTERFACE_GAPS` / `ANNOTATION_GAPS`. The interface cases
+  exercise storage
   exposed through `dingo::interfaces<...>`: shared
   references, pointers, and shared handles, plus unique owning handles. These
   cases use the same request-class cost model and assert the same construction,

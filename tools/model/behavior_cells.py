@@ -401,6 +401,7 @@ class InterfaceShape:
     """A storage exposed through one or more interfaces."""
 
     name: str
+    form_name: str
     scope: str
     storage: str
     factory: str | None
@@ -409,62 +410,89 @@ class InterfaceShape:
     constructions: int
 
 
-INTERFACE_SHAPES = (
-    InterfaceShape(
-        name="shared",
-        scope="shared",
-        storage="dingo::storage<std::shared_ptr<tracked>>",
-        factory="make_shared_tracked",
-        kind="shared_handle",
-        interfaces=("tracked_interface",),
-        constructions=1,
-    ),
-    InterfaceShape(
-        name="shared_plain",
-        scope="shared",
-        storage="dingo::storage<tracked>",
-        factory=None,
-        kind="plain",
-        interfaces=("tracked_interface",),
-        constructions=1,
-    ),
-    InterfaceShape(
-        name="unique",
-        scope="unique",
-        storage="dingo::storage<std::unique_ptr<tracked>>",
-        factory="make_unique_tracked",
-        kind="unique_handle",
-        interfaces=("tracked_interface",),
-        constructions=2,
-    ),
-    InterfaceShape(
-        name="shared_second",
-        scope="shared",
-        storage="dingo::storage<std::shared_ptr<tracked>>",
-        factory="make_shared_tracked",
-        kind="shared_handle",
-        interfaces=("tracked_interface", "tracked_interface2"),
-        constructions=1,
-    ),
-    InterfaceShape(
-        name="unique_second",
-        scope="unique",
-        storage="dingo::storage<std::unique_ptr<tracked>>",
-        factory="make_unique_tracked",
-        kind="unique_handle",
-        interfaces=("tracked_interface", "tracked_interface2"),
-        constructions=3,
-    ),
-    InterfaceShape(
-        name="shared_copyable",
-        scope="shared",
-        storage="dingo::storage<std::shared_ptr<copyable_implementation>>",
-        factory="make_copyable_implementation",
-        kind="copyable",
-        interfaces=("copyable_interface",),
-        constructions=1,
-    ),
-)
+# Interface storage shapes are derived from the behavior forms. The concrete
+# storage/factory facts come from the form; the interface fixture and copyable
+# implementation are the only test-specific data.
+INTERFACE_GAPS = {
+    "alternative": "variant storage does not publish an interface route",
+    "pointer": "raw pointer storage does not publish an interface route",
+    "bounded_array": "bounded-array storage does not publish an interface route",
+    "unique_array_handle": "array-handle storage does not publish an interface route",
+    "shared_array_handle": "array-handle storage does not publish an interface route",
+    "optional": "optional storage does not publish an interface route",
+}
+
+
+def _interface_shape(
+    form_name: str,
+    *,
+    twin: bool = False,
+    copyable: bool = False,
+) -> InterfaceShape:
+    form = next(form for form in FORMS if form.name == form_name)
+    wrapper = FORM_WRAPPERS.get(form_name)
+    sharing = wrapper is not None and wrapper.has("sharing")
+    sole_owner = wrapper is not None and wrapper.has("sole_owner")
+    if copyable:
+        return InterfaceShape(
+            name="shared_copyable",
+            form_name=form_name,
+            scope="shared",
+            storage=(
+                "dingo::storage<std::shared_ptr<copyable_implementation>>"
+            ),
+            factory="make_copyable_implementation",
+            kind="copyable",
+            interfaces=("copyable_interface",),
+            constructions=1,
+        )
+    if sharing:
+        prefix = "shared"
+        scope = "shared"
+        kind = "shared_handle"
+        constructions = 1
+    elif sole_owner:
+        prefix = "unique"
+        scope = "unique"
+        kind = "unique_handle"
+        constructions = 2
+    else:
+        prefix = "shared_plain"
+        scope = "shared"
+        kind = "plain"
+        constructions = 1
+    if twin:
+        prefix = f"{prefix}_second"
+        constructions = 3 if sole_owner else constructions
+    interfaces = (
+        ("tracked_interface", "tracked_interface2")
+        if twin
+        else ("tracked_interface",)
+    )
+    return InterfaceShape(
+        name=prefix,
+        form_name=form_name,
+        scope=scope,
+        storage=form.storage,
+        factory=form.factory,
+        kind=kind,
+        interfaces=interfaces,
+        constructions=constructions,
+    )
+
+
+def derive_interface_shapes() -> tuple[InterfaceShape, ...]:
+    return (
+        _interface_shape("shared_handle"),
+        _interface_shape("plain"),
+        _interface_shape("unique_handle"),
+        _interface_shape("shared_handle", twin=True),
+        _interface_shape("unique_handle", twin=True),
+        _interface_shape("shared_handle", copyable=True),
+    )
+
+
+INTERFACE_SHAPES = derive_interface_shapes()
 
 
 def _interface_forms(shape: InterfaceShape) -> tuple[str, ...]:
@@ -627,94 +655,103 @@ class AnnotationShape:
     registration_moves: int = 0
 
 
-ANNOTATION_SHAPES = (
-    AnnotationShape(
-        name="shared_annotated",
+ANNOTATION_GAPS = {
+    "alternative": "variant storage has no annotation scenario",
+    "bounded_array": "array storage has no annotation scenario",
+    "unique_handle": "unique handle storage has no annotation scenario",
+    "unique_array_handle": "array handle storage has no annotation scenario",
+    "shared_array_handle": "array handle storage has no annotation scenario",
+}
+
+
+def _shared_annotation_shape(
+    form_name: str,
+    name: str,
+    *,
+    leaf: str = "tracked",
+    forms: tuple[str, ...] = ("ref",),
+) -> AnnotationShape:
+    form = next(form for form in FORMS if form.name == form_name)
+    return AnnotationShape(
+        name=name,
         scope="shared",
-        storage="dingo::storage<tracked>",
-        factory=None,
-        leaf="tracked",
-        forms=("ref", "value"),
-    ),
-    AnnotationShape(
-        name="shared_annotated_shared_ptr",
-        scope="shared",
-        storage="dingo::storage<std::shared_ptr<tracked>>",
-        factory="make_shared_tracked",
-        leaf="tracked",
-        forms=("ref",),
-    ),
-    AnnotationShape(
-        name="shared_annotated_optional",
-        scope="shared",
-        storage="dingo::storage<std::optional<tracked>>",
-        factory="make_optional_tracked",
-        leaf="tracked",
-        forms=("ref",),
-    ),
-    AnnotationShape(
-        name="shared_annotated_pointer",
-        scope="shared",
-        storage="dingo::storage<tracked *>",
-        factory="make_pointer_tracked",
-        leaf="tracked",
-        forms=("ref",),
-    ),
-    AnnotationShape(
-        name="shared_annotated",
-        scope="shared",
-        storage="dingo::storage<std::shared_ptr<tracked>>",
-        factory="make_shared_tracked",
-        leaf="tracked_interface",
-        forms=("interface_ref", "interface_ptr", "interface_handle",
-               "interface_handle_ref"),
-    ),
-    AnnotationShape(
-        name="external_annotated_value",
-        scope="external",
-        storage="dingo::storage<tracked>",
-        factory=None,
-        leaf="tracked",
-        forms=("ref",),
-        append_form=False,
-        external_instance="tracked external_instance",
-        external_argument="std::move(external_instance)",
-        registration_moves=1,
-    ),
-    AnnotationShape(
-        name="external_annotated_ref",
-        scope="external",
-        storage="dingo::storage<tracked &>",
-        factory=None,
-        leaf="tracked",
-        forms=("ref",),
-        append_form=False,
-        external_instance="tracked external_instance",
-        external_argument="external_instance",
-    ),
-    AnnotationShape(
-        name="external_annotated_ptr",
-        scope="external",
-        storage="dingo::storage<tracked *>",
-        factory=None,
-        leaf="tracked",
-        forms=("ref",),
-        append_form=False,
-        external_instance="tracked external_instance",
-        external_argument="std::addressof(external_instance)",
-    ),
-    AnnotationShape(
-        name="external_annotated_shared_ptr",
-        scope="external",
-        storage="dingo::storage<std::shared_ptr<tracked>>",
-        factory=None,
-        leaf="tracked",
-        forms=("ref",),
-        append_form=False,
-        external_instance="auto external_instance = make_shared_tracked()",
-        external_argument="external_instance",
-    ),
-)
+        storage=form.storage,
+        factory=form.factory,
+        leaf=leaf,
+        forms=forms,
+    )
+
+
+def derive_annotation_shapes() -> tuple[AnnotationShape, ...]:
+    return (
+        _shared_annotation_shape(
+            "plain", "shared_annotated", forms=("ref", "value")
+        ),
+        _shared_annotation_shape(
+            "shared_handle", "shared_annotated_shared_ptr"
+        ),
+        _shared_annotation_shape("optional", "shared_annotated_optional"),
+        _shared_annotation_shape("pointer", "shared_annotated_pointer"),
+        _shared_annotation_shape(
+            "shared_handle",
+            "shared_annotated",
+            leaf="tracked_interface",
+            forms=(
+                "interface_ref",
+                "interface_ptr",
+                "interface_handle",
+                "interface_handle_ref",
+            ),
+        ),
+        AnnotationShape(
+            name="external_annotated_value",
+            scope="external",
+            storage="dingo::storage<tracked>",
+            factory=None,
+            leaf="tracked",
+            forms=("ref",),
+            append_form=False,
+            external_instance="tracked external_instance",
+            external_argument="std::move(external_instance)",
+            registration_moves=1,
+        ),
+        AnnotationShape(
+            name="external_annotated_ref",
+            scope="external",
+            storage="dingo::storage<tracked &>",
+            factory=None,
+            leaf="tracked",
+            forms=("ref",),
+            append_form=False,
+            external_instance="tracked external_instance",
+            external_argument="external_instance",
+        ),
+        AnnotationShape(
+            name="external_annotated_ptr",
+            scope="external",
+            storage="dingo::storage<tracked *>",
+            factory=None,
+            leaf="tracked",
+            forms=("ref",),
+            append_form=False,
+            external_instance="tracked external_instance",
+            external_argument="std::addressof(external_instance)",
+        ),
+        AnnotationShape(
+            name="external_annotated_shared_ptr",
+            scope="external",
+            storage="dingo::storage<std::shared_ptr<tracked>>",
+            factory=None,
+            leaf="tracked",
+            forms=("ref",),
+            append_form=False,
+            external_instance="auto external_instance = make_shared_tracked()",
+            external_argument="external_instance",
+        ),
+    )
+
+
+ANNOTATION_SHAPES = derive_annotation_shapes()
 
 
 def _annotation_form(

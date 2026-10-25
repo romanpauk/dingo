@@ -13,11 +13,13 @@ from pathlib import Path
 import pytest
 
 from behavior_cells import (
+    ANNOTATION_GAPS,
     ANNOTATION_RECIPES,
     ANNOTATION_SHAPES,
     BEHAVIOR_GAPS,
     FORMS,
     INTERFACE_CASES,
+    INTERFACE_GAPS,
     INTERFACE_SHAPES,
     REQUEST_COSTS,
     build_rows,
@@ -131,6 +133,12 @@ def test_interface_cases_are_derived_from_shapes() -> None:
     assert by_name["shared_copyable_value"].request_class == "borrow_value"
 
 
+def test_interface_shapes_cover_forms_or_declare_gaps() -> None:
+    covered = {shape.form_name for shape in INTERFACE_SHAPES}
+    assert covered | set(INTERFACE_GAPS) == {form.name for form in FORMS}
+    assert covered & set(INTERFACE_GAPS) == set()
+
+
 def test_interface_cases_cover_both_containers() -> None:
     rows = [
         row
@@ -168,6 +176,17 @@ def test_annotation_recipes_are_derived_from_shapes() -> None:
     assert by_name["external_annotated_ptr"].external_argument == (
         "std::addressof(external_instance)"
     )
+
+
+def test_annotation_shapes_cover_forms_or_declare_gaps() -> None:
+    covered = {
+        "plain",
+        "shared_handle",
+        "optional",
+        "pointer",
+    }
+    assert covered | set(ANNOTATION_GAPS) == {form.name for form in FORMS}
+    assert covered & set(ANNOTATION_GAPS) == set()
 
 
 def test_annotation_recipes_are_valid() -> None:
