@@ -96,7 +96,7 @@ namespace {{ row.scope_name }}_{{ row.form_name }} {
 using scope = {{ row.scope_type }};
 using type = {{ row.form_type }};
 using storage = dingo::detail::storage<
-    scope, type, type, dingo::constructor<type>,
+    scope, type, type, dingo::constructor<{{ row.constructor_type }}>,
     dingo::detail::conversions<scope, type, int>>;
 using value_routes =
     typename dingo::detail::binding_value_resolutions<int, storage>::type;

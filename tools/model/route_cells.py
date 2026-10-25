@@ -46,6 +46,17 @@ def build_rows() -> list[dict[str, object]]:
                     "form_name": form.name,
                     "form_type": form.cpp_type,
                     "form_headers": form.headers,
+                    "constructor_type": (
+                        "int"
+                        if form.name
+                        in {
+                            "array",
+                            "bounded_array",
+                            "unique_array_handle",
+                            "shared_array_handle",
+                        }
+                        else form.cpp_type
+                    ),
                     "value": "value" in categories,
                     "object": "object" in categories,
                     "rvalue": "rvalue" in categories,

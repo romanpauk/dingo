@@ -15,15 +15,17 @@ hand-curated matrix tags.
   renders the full rule table as compile-time assertions.
 - `route_ledger.py` enumerates every scope, form, and route category with one
   explicit outcome: supported, unavailable with a reason, or a tracked gap.
-  Supported non-array routes also carry their expected operation-kind and
-  source-retention sequence.
+  Supported routes also carry their expected operation-kind and source-retention
+  sequence. Raw dynamic arrays and the unsupported cyclical array cells remain
+  explicit gaps.
 - `route_cells.py` instantiates the real storage type and resolution list for
-  every supported non-array storage cell. It checks value, object, and rvalue
-  route availability against the ledger, requires every published route target
-  to be reachable from both the static and runtime request matchers, checks that
-  every route's required access is satisfied by the scope, checks the modeled
-  operation-kind sequences, source-retention flags, and that these representative
-  routes do not unexpectedly cache conversions.
+  every supported storage cell, including bounded arrays and array handles. It
+  checks value, object, and rvalue route availability against the ledger,
+  requires every published route target to be reachable from both the static and
+  runtime request matchers, checks that every route's required access is
+  satisfied by the scope, checks the modeled operation-kind and source-retention
+  sequences, and asserts that representative routes do not unexpectedly cache
+  conversions.
 - `templates/` contains logic-free Jinja templates. The Python model computes
   rows; the templates only lay them out.
 - `*_test.py` is the pytest suite for the models and their deterministic

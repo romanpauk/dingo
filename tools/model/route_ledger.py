@@ -29,11 +29,22 @@ ROUTE_FORM_NAMES = (
     "plain",
     "alternative",
     "pointer",
+    "bounded_array",
     "unique_handle",
+    "unique_array_handle",
     "shared_handle",
+    "shared_array_handle",
     "optional",
 )
 GAP_ARRAY_ROUTES = "array-routes"
+GAP_RAW_ARRAY_STORAGE = "raw-array-storage"
+GAP_CYCLICAL_SHARED_ARRAY_HANDLE = "cyclical-shared-array-handle"
+GAP_CYCLICAL_BOUNDED_ARRAY_ROUTES = "cyclical-bounded-array-routes"
+
+ARRAY_GAPS = {
+    ("shared_cyclical", "shared_array_handle"): GAP_CYCLICAL_SHARED_ARRAY_HANDLE,
+    ("shared_cyclical", "bounded_array"): GAP_CYCLICAL_BOUNDED_ARRAY_ROUTES,
+}
 
 OPERATION_KINDS = {
     ("shared", "plain", "value"): ("dereference",),
@@ -112,6 +123,41 @@ OPERATION_KINDS = {
         "borrowed",
         "pointer_access",
     ),
+    ("shared", "bounded_array", "object"): (
+        "array_reference",
+        "traits",
+        "array_pointer",
+    ),
+    ("unique", "bounded_array", "value"): ("traits", "traits"),
+    ("unique", "bounded_array", "object"): ("traits", "array_pointer"),
+    ("unique", "bounded_array", "rvalue"): ("traits", "traits"),
+    ("external", "bounded_array", "object"): (
+        "array_reference",
+        "traits",
+        "array_pointer",
+    ),
+    ("shared", "unique_array_handle", "object"): (
+        "address",
+        "pointer_access",
+    ),
+    ("unique", "unique_array_handle", "value"): ("identity", "traits"),
+    ("unique", "unique_array_handle", "rvalue"): ("identity", "traits"),
+    ("shared", "shared_array_handle", "value"): ("identity",),
+    ("shared", "shared_array_handle", "object"): (
+        "address",
+        "pointer_access",
+    ),
+    ("unique", "shared_array_handle", "value"): ("identity",),
+    ("unique", "shared_array_handle", "rvalue"): ("identity",),
+    ("external", "unique_array_handle", "object"): (
+        "address",
+        "pointer_access",
+    ),
+    ("external", "shared_array_handle", "value"): ("identity",),
+    ("external", "shared_array_handle", "object"): (
+        "address",
+        "pointer_access",
+    ),
 }
 
 RETENTION = {
@@ -158,6 +204,21 @@ RETENTION = {
     ("shared_cyclical", "pointer", "object"): (1, 1),
     ("shared_cyclical", "shared_handle", "value"): (0,),
     ("shared_cyclical", "shared_handle", "object"): (0, 1, 1),
+    ("shared", "bounded_array", "object"): (1, 0, 1),
+    ("unique", "bounded_array", "value"): (1, 1),
+    ("unique", "bounded_array", "object"): (0, 1),
+    ("unique", "bounded_array", "rvalue"): (1, 1),
+    ("external", "bounded_array", "object"): (1, 0, 1),
+    ("shared", "unique_array_handle", "object"): (0, 1),
+    ("unique", "unique_array_handle", "value"): (0, 1),
+    ("unique", "unique_array_handle", "rvalue"): (0, 1),
+    ("shared", "shared_array_handle", "value"): (0,),
+    ("shared", "shared_array_handle", "object"): (0, 1),
+    ("unique", "shared_array_handle", "value"): (0,),
+    ("unique", "shared_array_handle", "rvalue"): (0,),
+    ("external", "unique_array_handle", "object"): (0, 1),
+    ("external", "shared_array_handle", "value"): (0,),
+    ("external", "shared_array_handle", "object"): (0, 1),
 }
 
 
@@ -187,6 +248,25 @@ def _category_outcome(
             category,
             "unavailable",
             "scope does not publish the form",
+        )
+    if form_name == "array":
+        return LedgerRow(
+            scope_name,
+            form_name,
+            category,
+            "gap",
+            "raw dynamic array has no storage class",
+            GAP_RAW_ARRAY_STORAGE,
+        )
+    gap = ARRAY_GAPS.get((scope_name, form_name))
+    if gap is not None:
+        return LedgerRow(
+            scope_name,
+            form_name,
+            category,
+            "gap",
+            "array route shape is not modeled",
+            gap,
         )
     if form_name not in ROUTE_FORM_NAMES:
         return LedgerRow(

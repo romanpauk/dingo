@@ -67,16 +67,16 @@ The storage and selection models under [`tools/model/`](../tools/model)
 enumerate the built-in cells independently of the C++ headers. The generator
 writes one translation unit for the full storage scope-by-form product, one for
 every selection policy and source status, and one route probe for every
-supported non-array storage cell. The route ledger classifies every
-scope/form/category row as supported, unavailable with a reason, or a tracked
-gap. The route probes check value, object, and rvalue availability against that
-ledger, require every published route target to be reachable from both the
-static and runtime request matchers, check that the scope's access satisfies
-every route, and check the modeled operation-kind and source-retention
-sequences. It also generates the committed `include/dingo/storage/scopes.gen.h`
-header, which owns the built-in `storage_scope_policy` data. Compile-time
-assertions compare the generated expectation with the library; a missing cell,
-changed exposure, or stale catalog fails the build.
+supported storage cell. The route ledger classifies every scope/form/category
+row as supported, unavailable with a reason, or a tracked gap. The route probes
+check value, object, and rvalue availability against that ledger, require every
+published route target to be reachable from both the static and runtime request
+matchers, check that the scope's access satisfies every route, and check the
+modeled operation-kind and source-retention sequences. It also generates the
+committed `include/dingo/storage/scopes.gen.h` header, which owns the built-in
+`storage_scope_policy` data. Compile-time assertions compare the generated
+expectation with the library; a missing cell, changed exposure, or stale catalog
+fails the build.
 
 The generated sources live in the build tree, so consumer builds never run
 Python. The `cells-check` target regenerates them and verifies that they are up

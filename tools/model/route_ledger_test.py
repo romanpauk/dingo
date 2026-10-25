@@ -12,7 +12,9 @@ import pytest
 
 from route_ledger import (
     CATEGORIES,
-    GAP_ARRAY_ROUTES,
+    GAP_CYCLICAL_BOUNDED_ARRAY_ROUTES,
+    GAP_CYCLICAL_SHARED_ARRAY_HANDLE,
+    GAP_RAW_ARRAY_STORAGE,
     build_rows,
     category_access,
     category_kinds,
@@ -43,7 +45,11 @@ def test_unavailable_rows_have_reasons() -> None:
 def test_gaps_are_explicit_and_tracked() -> None:
     gap_rows = gaps()
     assert gap_rows
-    assert {row.gap for row in gap_rows} == {GAP_ARRAY_ROUTES}
+    assert {row.gap for row in gap_rows} == {
+        GAP_RAW_ARRAY_STORAGE,
+        GAP_CYCLICAL_SHARED_ARRAY_HANDLE,
+        GAP_CYCLICAL_BOUNDED_ARRAY_ROUTES,
+    }
     for row in gap_rows:
         assert exposure(
             next(scope for scope in SCOPES if scope.name == row.scope),
@@ -61,6 +67,16 @@ def test_supported_categories_match_the_scope_form_product() -> None:
     assert supported_categories("shared_cyclical", "plain") == {"object"}
     assert supported_categories("shared_cyclical", "optional") == set()
     assert supported_categories("shared", "array") == set()
+    assert supported_categories("shared", "bounded_array") == {"object"}
+    assert supported_categories("unique", "bounded_array") == {
+        "value",
+        "object",
+        "rvalue",
+    }
+    assert supported_categories("shared", "shared_array_handle") == {
+        "value",
+        "object",
+    }
 
 
 def test_access_follows_scope_and_category() -> None:

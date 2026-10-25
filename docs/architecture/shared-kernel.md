@@ -42,9 +42,9 @@ infrastructure described below. It changes no public API and no behavior.
   that every published route target is reachable from both request matchers,
   that the scope access satisfies each route, and that the modeled
   operation-kind and source-retention sequences match. Representative routes
-  also assert that no conversion cache is published unexpectedly. Array route
-  shapes remain the tracked `array-routes` gap. `cells-check` fails when the
-  library catalog and the model drift.
+  also assert that no conversion cache is published unexpectedly. Raw dynamic
+  arrays and the two unsupported cyclical array cells remain explicit tracked
+  gaps. `cells-check` fails when the library catalog and the model drift.
 - `include/dingo/storage/scopes.gen.h` owns the built-in `storage_scope_policy`
   specializations and the `shared_cyclical` cell-list table. The per-scope
   headers keep their public tag and storage implementation, but the policy and
