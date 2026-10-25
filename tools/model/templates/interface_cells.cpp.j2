@@ -32,6 +32,12 @@ struct implementation_type : interface_type, interface_type2 {
   int value() const override { return 0; }
 };
 
+struct copyable_interface {
+  int tag = 0;
+};
+
+struct copyable_implementation : copyable_interface {};
+
 template <typename Request, typename Resolutions>
 struct static_request_supported;
 

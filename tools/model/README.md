@@ -56,7 +56,9 @@ hand-curated matrix tags.
   cases use the same request-class cost model and assert the same construction,
   copy, move, and lifetime balance checks. Multiple-interface bindings are
   covered too: each interface is resolved through the same implementation, and
-  the secondary request check proves both interfaces alias one object.
+  the secondary request check proves both interfaces alias one object. A
+  copyable interface value case covers value slicing, including the tracked
+  copy count.
 - `templates/` contains logic-free Jinja templates. The Python model computes
   rows; the templates only lay them out.
 - `*_test.py` is the pytest suite for the models and their deterministic

@@ -20,6 +20,8 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, Template
 from data import CATALOG, CONTAINERS, FEATURES, STORED_TYPES, validate_catalog
 from model_coverage import (
     FEATURE_RESTRICTIONS,
+    FULLY_MODEL_COVERED_FEATURES,
+    MODEL_COVERED_EXPOSED_TYPES,
     MODEL_COVERED_POLICY_SOURCES,
     MODEL_COVERED_RESOLVED_TYPE_NAMES,
     MODEL_COVERED_RESOLVED_TYPES,
@@ -177,7 +179,7 @@ def shared_cyclical_rows() -> tuple[SharedCyclicalRow, ...]:
 
 
 def test_matrix_cardinality_remains_bounded(rows: tuple[MatrixRow, ...]) -> None:
-    assert len(rows) == 1947
+    assert len(rows) == 1917
     assert len({(row.feature.name, row.name) for row in rows}) == len(rows)
 
 
@@ -282,6 +284,16 @@ def test_model_covered_resolved_types_are_behavior_cells() -> None:
             f"{coverage.resolved_type} claims interface cases without a "
             f"behavior case: {sorted(missing_interfaces)}"
         )
+
+
+def test_model_covered_exposed_types_stay_declared() -> None:
+    from axes.exposed_types import EXPOSED_TYPES
+
+    assert MODEL_COVERED_EXPOSED_TYPES
+    assert MODEL_COVERED_EXPOSED_TYPES <= {
+        exposed_type.name for exposed_type in EXPOSED_TYPES
+    }
+    assert FULLY_MODEL_COVERED_FEATURES
 
 
 def test_model_covered_policy_sources_stay_declared() -> None:
@@ -2152,7 +2164,7 @@ def test_matrix_families_preserve_total_registration_behavior(
         + len(scenario_rows)
         + len(invoke_rows)
         + len(shared_cyclical_rows)
-        == 4917
+        == 4887
     )
 
 
@@ -2788,21 +2800,21 @@ def test_invalid_registration_plan_is_an_error(
         "expected_compiled_rows",
     ),
     (
-        (None, frozenset(), Compiler(), 119, 0, 1602),
+        (None, frozenset(), Compiler(), 118, 0, 1602),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset(),
             Compiler(),
-            247,
+            246,
             0,
             1602,
         ),
-        (64, frozenset(), Compiler(), 143, 0, 1602),
+        (64, frozenset(), Compiler(), 142, 0, 1602),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset({("invoke", 4), ("resolve", 4)}),
             Compiler(),
-            613,
+            612,
             400,
             1602,
         ),
@@ -2810,7 +2822,7 @@ def test_invalid_registration_plan_is_an_error(
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset(),
             Compiler.parse("MSVC", "19.49", "x64"),
-            247,
+            246,
             0,
             1602,
         ),
@@ -2853,7 +2865,7 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
     )
     runner_sources = tuple(out_dir.glob("matrix_runner_*.cpp"))
     assert len(implementation_sources) == expected_implementation_sources
-    assert len(runner_sources) == 55
+    assert len(runner_sources) == 54
     coverage_report = out_dir / MATRIX_REPORT
     matrix_exclusions = compiler_exclusions(compiler)
     selected_composition_rows = project_dependency_composition_rows(

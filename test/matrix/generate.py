@@ -32,6 +32,7 @@ from data import (
 from dependency_contract import validate_dependency_contract
 from model_coverage import (
     FULLY_MODEL_COVERED_FEATURES,
+    MODEL_COVERED_EXPOSED_TYPES,
     MODEL_COVERED_POLICY_SOURCES,
     MODEL_COVERED_RESOLVED_TYPE_NAMES,
     RESTRICTIONS_BY_FEATURE,
@@ -541,7 +542,11 @@ def assert_coverage(
     assert_axis_used(
         row_tuple,
         "exposed_type",
-        {exposed_type.name for exposed_type in implemented(EXPOSED_TYPES)},
+        {
+            exposed_type.name
+            for exposed_type in implemented(EXPOSED_TYPES)
+            if exposed_type.name not in MODEL_COVERED_EXPOSED_TYPES
+        },
     )
     assert_axis_used(
         row_tuple,

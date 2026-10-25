@@ -428,6 +428,17 @@ INTERFACE_CASES = (
         other_relation="first->value() == other->value()",
     ),
     InterfaceCase(
+        name="shared_copyable_value",
+        scope="shared",
+        storage="dingo::storage<std::shared_ptr<copyable_implementation>>",
+        factory="make_copyable_implementation",
+        interfaces=("copyable_interface",),
+        request="copyable_interface",
+        relation="first.value.id == second.value.id",
+        constructions=1,
+        request_class="borrow_value",
+    ),
+    InterfaceCase(
         name="unique_second_handle",
         scope="unique",
         storage="dingo::storage<std::unique_ptr<tracked>>",

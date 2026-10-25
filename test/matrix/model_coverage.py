@@ -89,6 +89,8 @@ FEATURE_RESTRICTIONS = (
                 ("shared", "interface_ptr"),
                 ("shared", "interface_ref_ptr_shared_ptr"),
                 ("shared", "multiple_interface_shared_ptr_ref"),
+                ("shared", "interface_value"),
+                ("shared", "second_interface_ref"),
             }
         ),
         covered_cells=frozenset(),
@@ -99,13 +101,14 @@ FEATURE_RESTRICTIONS = (
                 "shared_handle",
                 "shared_plain_ref",
                 "shared_second_handle",
+                "shared_second_ref",
+                "shared_copyable_value",
             }
         ),
         reason=(
-            "behavior interface cases cover the shared reference, pointer, "
-            "shared-handle, plain-value, and multiple-interface handle shapes; "
-            "copyable values and the second-interface exposure keep their "
-            "matrix rows"
+            "behavior and interface route cases cover the shared reference, "
+            "pointer, shared-handle, plain-value, copyable-value, and "
+            "multiple-interface shapes"
         ),
     ),
     FeatureRestriction(
@@ -129,10 +132,17 @@ RESTRICTIONS_BY_FEATURE = {
     restriction.feature: restriction for restriction in FEATURE_RESTRICTIONS
 }
 
+# Exposed-type axis members whose matrix rows are entirely model-covered. The
+# axis stays declared so the catalog keeps its identity, but the coverage check
+# no longer requires a matrix row.
+MODEL_COVERED_EXPOSED_TYPES = frozenset(
+    {"copyable_interface_type", "multiple_interfaces"}
+)
+
 # Features whose supported rows are now entirely owned by the model, so the
 # matrix no longer generates a case for them.
 FULLY_MODEL_COVERED_FEATURES = frozenset(
-    {"lifetime_counts", "resolve_unique_wrapper"}
+    {"lifetime_counts", "resolve_interface", "resolve_unique_wrapper"}
 )
 
 
@@ -190,6 +200,18 @@ MODEL_COVERED_RESOLVED_TYPES = (
         covered_cells=frozenset(),
         interface_cases=frozenset({"shared_second_handle"}),
         reason="the multiple-interface shared handle behavior case covers the wrapper",
+    ),
+    ResolvedTypeCoverage(
+        resolved_type="interface_value",
+        covered_cells=frozenset(),
+        interface_cases=frozenset({"shared_copyable_value"}),
+        reason="the copyable interface value behavior case covers the sliced value",
+    ),
+    ResolvedTypeCoverage(
+        resolved_type="second_interface_ref",
+        covered_cells=frozenset(),
+        interface_cases=frozenset({"shared_second_ref"}),
+        reason="the multiple-interface behavior case resolves the second interface",
     ),
     ResolvedTypeCoverage(
         resolved_type="unique_interface_unique_ptr",
@@ -251,5 +273,7 @@ MODEL_COVERED_POLICY_SOURCES = frozenset(
             "multiple_interface_shared_ptr_ref",
             "resolve_interface",
         ),
+        ("resolved_type", "interface_value", "resolve_interface"),
+        ("resolved_type", "second_interface_ref", "resolve_interface"),
     }
 )

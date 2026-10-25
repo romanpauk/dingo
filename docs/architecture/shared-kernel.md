@@ -467,15 +467,16 @@ model suites. In priority order:
    recipe per container and feature. Container mechanics are orthogonal to the
    stored form, so multiplying every form by every container adds instantiations
    without adding a new failure mode.
-5. **Interface and annotated exposure**. Behavior cases now cover shared
-   interface references, pointers, shared handles, and unique owning handles
-   through `dingo::interfaces<...>`, including multiple interfaces on one
-   binding. The matrix `resolve_interface` product drops its covered reference,
-   pointer, shared-handle, and multiple-interface shared-handle rows (107 to
-   30), keeping copyable interface values and the second-interface exposure for
-   container variety; `resolve_unique_wrapper` is fully model-covered and no
-   longer produces an executable. The route model still needs an interface
-   dimension before the remaining interface rows can move.
+5. **Interface and annotated exposure**. Behavior cases cover shared interface
+   references, pointers, shared handles, unique owning handles, multiple
+   interfaces on one binding, and a copyable interface value. Interface route
+   probes instantiate the real resolution kernel, assert exact
+   value/object/rvalue route counts, and require every published target to be
+   reachable from both request matchers with satisfied scope access. The matrix
+   interface surface is therefore fully model-covered: `resolve_interface` and
+   `resolve_unique_wrapper` produce no executables, and their exposure axis
+   members are declared model-covered in the matrix manifest. Annotated exposure
+   still needs the annotation dimension.
 6. **Keys, collections, local bindings.** Add model axes only if the generated
    product stays compact; otherwise keep them in the matrix.
 

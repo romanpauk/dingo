@@ -70,6 +70,16 @@ std::shared_ptr<tracked> make_shared_tracked() {
   return std::make_shared<tracked>();
 }
 
+struct copyable_interface {
+  tracked value;
+};
+
+struct copyable_implementation : copyable_interface {};
+
+std::shared_ptr<copyable_implementation> make_copyable_implementation() {
+  return std::make_shared<copyable_implementation>();
+}
+
 std::shared_ptr<tracked[]> make_shared_array_tracked() {
   return std::shared_ptr<tracked[]>(new tracked[2]);
 }
