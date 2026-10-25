@@ -25,6 +25,14 @@ enum class request_route_policy {
   runtime_fallback,
 };
 
+// A direct route body ignores its tag. A lift body reads the plan from its tag,
+// so the inner request type is only named when the lift arm is instantiated.
+struct request_plan_direct_tag {};
+
+template <typename Plan> struct request_plan_lift_tag {
+  using plan = Plan;
+};
+
 // The inner request type only exists when the lift is enabled. Keeping it in a
 // base class avoids naming it from a branch that a non-liftable request would
 // instantiate.
@@ -79,9 +87,21 @@ struct request_plan
                            ? static_binding_present && !static_route_served
                            : !static_route_served);
 
-  static constexpr bool direct_with_runtime_fallback =
-      lift_enabled && Policy == request_route_policy::runtime_fallback &&
-      !lift_before_direct;
+  // One executor for the direct and lift arms. The callables are generic
+  // lambdas so the arm that is not selected is not instantiated.
+  template <typename R, typename Direct, typename Lift>
+  static R execute(Direct &&direct, Lift &&lift) {
+    if constexpr (lift_enabled && lift_before_direct) {
+      return lift(request_plan_lift_tag<request_plan>{});
+    } else if constexpr (lift_enabled &&
+                         Policy == request_route_policy::runtime_fallback) {
+      return resolve_request_or_lift<wrapper, R>(
+          [&]() -> R { return direct(request_plan_direct_tag{}); },
+          [&]() -> R { return lift(request_plan_lift_tag<request_plan>{}); });
+    } else {
+      return direct(request_plan_direct_tag{});
+    }
+  }
 };
 
 } // namespace detail

@@ -667,20 +667,18 @@ private:
     using plan =
         detail::request_plan<user_type, LookupKey, static_bindings_type,
                              detail::request_route_policy::runtime_fallback>;
-    if constexpr (plan::lift_before_direct) {
-      return plan::lift_type::make(resolve<typename plan::inner_type>(key));
-    } else if constexpr (plan::direct_with_runtime_fallback) {
-      // Keep the key intact: the lift may retry after the direct route
-      // reports a missing route.
-      return detail::resolve_request_or_lift<typename plan::wrapper, R>(
-          [&]() -> R { return resolve_entry_direct<Request, R>(key); },
-          [&]() -> R {
-            return plan::lift_type::make(
-                resolve<typename plan::inner_type>(key));
-          });
-    } else {
+    if constexpr (!plan::lift_enabled) {
       return resolve_entry_direct<Request, R>(std::move(key));
     }
+    return plan::template execute<R>(
+        [&](auto) -> R {
+          return resolve_entry_direct<Request, R>(std::move(key));
+        },
+        [&](auto tag) -> R {
+          using selected_plan = typename decltype(tag)::plan;
+          return selected_plan::lift_type::make(
+              resolve<typename selected_plan::inner_type>(key));
+        });
   }
 
 public:
@@ -1154,32 +1152,29 @@ public:
     using plan =
         detail::request_plan<T, LookupKey, static_bindings_type,
                              detail::request_route_policy::runtime_fallback>;
-    if constexpr (plan::lift_before_direct) {
-      return plan::lift_type::make(resolve<typename plan::inner_type, false>(
-          scope, context, origin, key));
-    } else if constexpr (plan::direct_with_runtime_fallback) {
-      // Keep the key intact: the lift may retry after the direct route
-      // reports a missing route.
-      return detail::resolve_request_or_lift<typename plan::wrapper, R>(
-          [&]() -> R {
-            if (context.owns(runtime_registry_.runtime())) {
-              return resolve<request, R, may_auto>(scope, context, origin, key);
-            }
-            return resolve_nested<request, R, may_auto>(scope, context, origin,
-                                                        key);
-          },
-          [&]() -> R {
-            return plan::lift_type::make(
-                resolve<typename plan::inner_type, false>(scope, context,
-                                                          origin, key));
-          });
-    } else if (context.owns(runtime_registry_.runtime())) {
-      return resolve<request, R, may_auto>(scope, context, origin,
-                                           std::move(key));
-    } else {
+    if constexpr (!plan::lift_enabled) {
+      if (context.owns(runtime_registry_.runtime())) {
+        return resolve<request, R, may_auto>(scope, context, origin,
+                                             std::move(key));
+      }
       return resolve_nested<request, R, may_auto>(scope, context, origin,
                                                   std::move(key));
     }
+    return plan::template execute<R>(
+        [&](auto) -> R {
+          if (context.owns(runtime_registry_.runtime())) {
+            return resolve<request, R, may_auto>(scope, context, origin,
+                                                 std::move(key));
+          }
+          return resolve_nested<request, R, may_auto>(scope, context, origin,
+                                                      std::move(key));
+        },
+        [&](auto tag) -> R {
+          using selected_plan = typename decltype(tag)::plan;
+          return selected_plan::lift_type::make(
+              resolve<typename selected_plan::inner_type, false>(scope, context,
+                                                                 origin, key));
+        });
   }
 
   template <typename Request, bool MayAutoConstruct, typename LookupKey,

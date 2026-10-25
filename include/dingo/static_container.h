@@ -298,39 +298,47 @@ public:
     using plan =
         detail::request_plan<T, LookupKey, static_bindings_type,
                              detail::request_route_policy::compile_time>;
-    if constexpr (plan::lift_before_direct) {
-      return plan::lift_type::make(
-          resolve<typename plan::inner_type, LookupKey,
-                  request_result_t<typename plan::inner_type, true>>(key));
-    } else {
-      if constexpr (!collection_traits<R>::is_collection) {
-        if constexpr (uses_static_minimal_context_v<request, R, LookupKey>) {
-          using selected = typename static_registry_type::template selection<
-              typename lookup_request::lookup_type, LookupKey>;
-          static_resolution_context_t<request, R, LookupKey> context;
-          return static_registry_.template resolve_binding<
-              typename lookup_request::lookup_type, R, selected>(
-              ephemeral_scope, context, *this);
-        }
-      }
-      if constexpr (collection_traits<R>::is_collection) {
-        context_type context;
-        return resolve_request<request, R>(ephemeral_scope, context, *this,
-                                           key);
-      } else {
-        if constexpr (has_parent_v && resolve_status_v<request, LookupKey> ==
-                                          binding_status::not_found) {
-          if (parent_) {
-            context_type context;
-            return resolve_parent<request>(ephemeral_scope, context, *this,
-                                           key);
+    return plan::template execute<R>(
+        [&](auto) -> R {
+          if constexpr (!collection_traits<R>::is_collection) {
+            if constexpr (uses_static_minimal_context_v<request, R,
+                                                        LookupKey>) {
+              using selected =
+                  typename static_registry_type::template selection<
+                      typename lookup_request::lookup_type, LookupKey>;
+              static_resolution_context_t<request, R, LookupKey> context;
+              return static_registry_.template resolve_binding<
+                  typename lookup_request::lookup_type, R, selected>(
+                  ephemeral_scope, context, *this);
+            }
           }
-        }
-        context_type context;
-        return resolve_request<request, R>(ephemeral_scope, context, *this,
-                                           key);
-      }
-    }
+          if constexpr (collection_traits<R>::is_collection) {
+            context_type context;
+            return resolve_request<request, R>(ephemeral_scope, context, *this,
+                                               key);
+          } else {
+            if constexpr (has_parent_v &&
+                          resolve_status_v<request, LookupKey> ==
+                              binding_status::not_found) {
+              if (parent_) {
+                context_type context;
+                return resolve_parent<request>(ephemeral_scope, context, *this,
+                                               key);
+              }
+            }
+            context_type context;
+            return resolve_request<request, R>(ephemeral_scope, context, *this,
+                                               key);
+          }
+        },
+        [&](auto tag) -> R {
+          using selected_plan = typename decltype(tag)::plan;
+          return selected_plan::lift_type::make(
+              resolve<
+                  typename selected_plan::inner_type, LookupKey,
+                  request_result_t<typename selected_plan::inner_type, true>>(
+                  key));
+        });
   }
 
   template <typename T, bool RemoveRvalueReferences, typename Context,
@@ -355,47 +363,54 @@ public:
     using plan =
         detail::request_plan<T, LookupKey, static_bindings_type,
                              detail::request_route_policy::compile_time>;
-    if constexpr (plan::lift_before_direct) {
-      return plan::lift_type::make(resolve<typename plan::inner_type, false>(
-          scope, context, origin, key));
-    } else {
-      if constexpr (!collection_traits<R>::is_collection) {
-        using selection = typename static_bindings_type::template selection<
-            typename lookup_request::lookup_type, LookupKey>;
-        if constexpr (selection::status == binding_status::found) {
-          using binding = typename selection::binding_type;
-          using binding_model_type = typename binding::binding_model_type;
-          if constexpr (binding_supports_request_v<R, binding> &&
-                        (std::is_reference_v<R> || std::is_pointer_v<R>) &&
-                        stored_request_identity_v<
-                            R, typename binding_model_type::storage_type> &&
-                        factory_without_dependencies_v<
-                            typename binding_model_type::factory_type>) {
-            using selected = typename static_registry_type::template selection<
+    return plan::template execute<R>(
+        [&](auto) -> R {
+          if constexpr (!collection_traits<R>::is_collection) {
+            using selection = typename static_bindings_type::template selection<
                 typename lookup_request::lookup_type, LookupKey>;
-            return static_registry_.template resolve_binding<
-                typename lookup_request::lookup_type, R, selected>(
-                scope, context, *this);
+            if constexpr (selection::status == binding_status::found) {
+              using binding = typename selection::binding_type;
+              using binding_model_type = typename binding::binding_model_type;
+              if constexpr (binding_supports_request_v<R, binding> &&
+                            (std::is_reference_v<R> || std::is_pointer_v<R>) &&
+                            stored_request_identity_v<
+                                R, typename binding_model_type::storage_type> &&
+                            factory_without_dependencies_v<
+                                typename binding_model_type::factory_type>) {
+                using selected =
+                    typename static_registry_type::template selection<
+                        typename lookup_request::lookup_type, LookupKey>;
+                return static_registry_.template resolve_binding<
+                    typename lookup_request::lookup_type, R, selected>(
+                    scope, context, *this);
+              }
+            }
           }
-        }
-      }
-      if constexpr (collection_traits<R>::is_collection) {
-        if constexpr (has_parent_v && collection_count_v<R, LookupKey> == 0) {
-          return resolve_missing<request, R>(scope, context, origin,
-                                             std::move(key));
-        } else {
-          return resolve_request<request, R>(scope, context, origin, key);
-        }
-      } else {
-        if constexpr (has_parent_v && resolve_status_v<request, LookupKey> ==
-                                          binding_status::not_found) {
-          if (parent_) {
-            return resolve_parent<request>(scope, context, origin, key);
+          if constexpr (collection_traits<R>::is_collection) {
+            if constexpr (has_parent_v &&
+                          collection_count_v<R, LookupKey> == 0) {
+              return resolve_missing<request, R>(scope, context, origin,
+                                                 std::move(key));
+            } else {
+              return resolve_request<request, R>(scope, context, origin, key);
+            }
+          } else {
+            if constexpr (has_parent_v &&
+                          resolve_status_v<request, LookupKey> ==
+                              binding_status::not_found) {
+              if (parent_) {
+                return resolve_parent<request>(scope, context, origin, key);
+              }
+            }
+            return resolve_request<request, R>(scope, context, origin, key);
           }
-        }
-        return resolve_request<request, R>(scope, context, origin, key);
-      }
-    }
+        },
+        [&](auto tag) -> R {
+          using selected_plan = typename decltype(tag)::plan;
+          return selected_plan::lift_type::make(
+              resolve<typename selected_plan::inner_type, false>(scope, context,
+                                                                 origin, key));
+        });
   }
 
   template <typename T, typename IdType, typename R = request_result_t<T, true>,
