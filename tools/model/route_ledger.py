@@ -38,12 +38,13 @@ ROUTE_FORM_NAMES = (
 )
 GAP_ARRAY_ROUTES = "array-routes"
 GAP_RAW_ARRAY_STORAGE = "raw-array-storage"
-GAP_CYCLICAL_SHARED_ARRAY_HANDLE = "cyclical-shared-array-handle"
-GAP_CYCLICAL_BOUNDED_ARRAY_ROUTES = "cyclical-bounded-array-routes"
 
-ARRAY_GAPS = {
-    ("shared_cyclical", "shared_array_handle"): GAP_CYCLICAL_SHARED_ARRAY_HANDLE,
-    ("shared_cyclical", "bounded_array"): GAP_CYCLICAL_BOUNDED_ARRAY_ROUTES,
+ARRAY_GAPS = {}
+ARRAY_UNAVAILABLE = {
+    (
+        "shared_cyclical",
+        "shared_array_handle",
+    ): "shared_cyclical cannot allocate an unsized array handle",
 }
 
 OPERATION_KINDS = {
@@ -122,6 +123,10 @@ OPERATION_KINDS = {
         "address",
         "borrowed",
         "pointer_access",
+    ),
+    ("shared_cyclical", "bounded_array", "object"): (
+        "dereference",
+        "traits",
     ),
     ("shared", "bounded_array", "object"): (
         "array_reference",
@@ -204,6 +209,7 @@ RETENTION = {
     ("shared_cyclical", "pointer", "object"): (1, 1),
     ("shared_cyclical", "shared_handle", "value"): (0,),
     ("shared_cyclical", "shared_handle", "object"): (0, 1, 1),
+    ("shared_cyclical", "bounded_array", "object"): (0, 0),
     ("shared", "bounded_array", "object"): (1, 0, 1),
     ("unique", "bounded_array", "value"): (1, 1),
     ("unique", "bounded_array", "object"): (0, 1),
@@ -257,6 +263,15 @@ def _category_outcome(
             "gap",
             "raw dynamic array has no storage class",
             GAP_RAW_ARRAY_STORAGE,
+        )
+    unavailable = ARRAY_UNAVAILABLE.get((scope_name, form_name))
+    if unavailable is not None:
+        return LedgerRow(
+            scope_name,
+            form_name,
+            category,
+            "unavailable",
+            unavailable,
         )
     gap = ARRAY_GAPS.get((scope_name, form_name))
     if gap is not None:

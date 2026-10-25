@@ -71,6 +71,8 @@ def build_rows() -> list[dict[str, object]]:
         ("shared", "static", "shared_pointer", 3),
         ("shared", "runtime", "shared_bounded_array", 2),
         ("shared", "static", "shared_bounded_array", 2),
+        ("shared_cyclical", "runtime", "shared_cyclical_bounded_array", 2),
+        ("shared_cyclical", "static", "shared_cyclical_bounded_array", 2),
     ):
         rows.append(
             {
@@ -87,7 +89,7 @@ def build_rows() -> list[dict[str, object]]:
 
 def validate() -> None:
     rows = build_rows()
-    expected = len(SCOPES) * len(CONTAINERS) - len(RUNTIME_ONLY) + 16
+    expected = len(SCOPES) * len(CONTAINERS) - len(RUNTIME_ONLY) + 18
     if len(rows) != expected:
         raise ValueError("behavior product is incomplete")
     if len({row["name"] for row in rows}) != len(rows):

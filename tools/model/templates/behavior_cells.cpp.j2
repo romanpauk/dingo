@@ -100,7 +100,7 @@ TEST(behavior_cells, {{ row.name }}) {
   container.register_type<
       {{ row.scope_type }}, dingo::storage<tracked *>,
       dingo::factory<dingo::function<&make_pointer_tracked>>>();
-{% elif row.kind == "shared_bounded_array" %}
+{% elif row.kind == "shared_bounded_array" or row.kind == "shared_cyclical_bounded_array" %}
   container.register_type<{{ row.scope_type }},
                            dingo::storage<tracked[2]>>();
 {% elif row.scope == "external" %}
@@ -130,7 +130,7 @@ TEST(behavior_cells, {{ row.name }}) {
   using source = dingo::bindings<dingo::bind<
       {{ row.scope_type }}, dingo::storage<tracked *>,
       dingo::factory<dingo::function<&make_pointer_tracked>>>>;
-{% elif row.kind == "shared_bounded_array" %}
+{% elif row.kind == "shared_bounded_array" or row.kind == "shared_cyclical_bounded_array" %}
   using source = dingo::bindings<
       dingo::bind<{{ row.scope_type }}, dingo::storage<tracked[2]>>>;
 {% else %}
@@ -204,6 +204,14 @@ TEST(behavior_cells, {{ row.name }}) {
   tracked *second = container.resolve<tracked *>();
   EXPECT_EQ(first, second);
   EXPECT_NE(first[0].id, first[1].id);
+  EXPECT_EQ(tracked::constructions, 2);
+  EXPECT_EQ(tracked::copies, 0);
+  EXPECT_EQ(tracked::moves, 0);
+{% elif row.kind == "shared_cyclical_bounded_array" %}
+  tracked (*first)[2] = container.resolve<tracked (*)[2]>();
+  tracked (*second)[2] = container.resolve<tracked (*)[2]>();
+  EXPECT_EQ(first, second);
+  EXPECT_NE((*first)[0].id, (*first)[1].id);
   EXPECT_EQ(tracked::constructions, 2);
   EXPECT_EQ(tracked::copies, 0);
   EXPECT_EQ(tracked::moves, 0);

@@ -117,14 +117,14 @@ template <typename Storage> struct storage_source_traits {
 private:
   using stored_value_type = remove_cvref_t<typename Storage::type>;
   using resolved_type = typename Storage::resolved_type;
-  using resolved_leaf_type =
+  using resolved_leaf_type = std::remove_all_extents_t<
       std::conditional_t<std::is_pointer_v<resolved_type>,
-                         std::remove_pointer_t<resolved_type>, resolved_type>;
+                         std::remove_pointer_t<resolved_type>, resolved_type>>;
 
 public:
   using stored_type = stored_value_type;
-  using direct_leaf_type =
-      std::remove_cv_t<std::remove_pointer_t<stored_value_type>>;
+  using direct_leaf_type = std::remove_cv_t<
+      std::remove_all_extents_t<std::remove_pointer_t<stored_value_type>>>;
   using borrowed_type = storage_borrow_source_t<Storage>;
   using consumed_type = storage_consume_source_t<Storage>;
   using qualification_type = resolved_leaf_type;

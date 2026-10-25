@@ -12,6 +12,7 @@
 #include <dingo/base/type_descriptor.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/memory/aligned_storage.h>
+#include <dingo/memory/object_lifetime.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>
@@ -60,7 +61,10 @@ template <storage_form Form, typename U> struct shared_cyclical_cell {
 
 template <storage_form Form, typename Type, typename U>
 struct storage_cell<shared_cyclical, Form, Type, U>
-    : shared_cyclical_cell<Form, U> {};
+    : std::conditional_t<Form == storage_form::array ||
+                             Form == storage_form::bounded_array,
+                         storage_cell_rule<shared_cyclical, Type, U>,
+                         shared_cyclical_cell<Form, U>> {};
 } // namespace detail
 
 template <typename Base, typename Derived> struct is_virtual_base {
@@ -143,7 +147,7 @@ public:
     resolved_ = false;
     if (constructed_) {
       constructed_ = false;
-      std::launder(reinterpret_cast<Type *>(&instance_))->~Type();
+      detail::destroy_object_value(*get());
     }
   }
 

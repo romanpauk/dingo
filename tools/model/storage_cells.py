@@ -261,12 +261,14 @@ def build_rows() -> list[dict[str, object]]:
             enabled = bits != 0
             if scope.name == "shared_cyclical":
                 # shared_cyclical publishes its own cells: the leaf and a
-                # sharing handle, independent of the generic form lists.
+                # sharing handle, independent of the generic form lists. Raw
+                # dynamic arrays use the generic rule because no stored array
+                # class exists for them.
                 has_value = form.name in {
                     "shared_handle",
                     "shared_array_handle",
                 }
-                has_lvalue = enabled
+                has_lvalue = enabled and form.name != "array"
                 has_rvalue = False
                 has_pointer = enabled
             else:
