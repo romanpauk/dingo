@@ -470,13 +470,23 @@ struct static_binding_resolver {
   // copying it into a second slot. Runtime contexts always do; static contexts
   // do whenever the storage scope consumes its source.
   template <typename Context>
-  static constexpr bool uses_context_materialized_source_v =
-      is_runtime_context_v<Context> ||
-      detail::has_context_materialize_source<
+  static constexpr bool uses_context_materialized_source_v = [] {
+    if constexpr (is_runtime_context_v<Context>) {
+      return true;
+    } else if constexpr (std::is_same_v<
+                             std::remove_cv_t<std::remove_reference_t<Context>>,
+                             no_dependency_context>) {
+      // The minimal context has no storage of its own; the local source path
+      // is the only option.
+      return false;
+    } else {
+      return detail::has_context_materialize_source<
           storage_materialization_traits<typename storage_type::tag_type,
                                          typename storage_type::type>,
           Context, storage_type,
           binding_activation<State, Host, binding_model_type>>::value;
+    }
+  }();
 
   template <typename Request, typename Context>
   Request resolve(Context &context) {

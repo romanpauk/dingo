@@ -484,6 +484,15 @@ incremental and safe. `test/matrix/model_coverage.py` is that manifest:
 `FEATURE_RESTRICTIONS` lists the dropped rows with the model cells that justify
 them, and the generator test fails if any claimed cell loses its behavior class.
 
+Behavior copy and move counts are not hand-written per cell. Each behavior case
+declares a request class, and the generator derives the minimum count from it:
+one copy per borrowed value resolution, one move per consumed value resolution,
+one library move plus one caller move for a consumed rvalue reference, and no
+tracked transfers for references, owning handles, and arrays. Only storage-shape
+construction counts and the external registration move stay explicit. A consumed
+raw pointer or row pointer transfers ownership to the caller, so its behavior
+case deletes the result and checks the lifetime balance.
+
 The behavior rvalue case pins the construction count, the move count, and the
 lifetime balance. The static container reaches the same move count as the
 runtime container because a static binding now materializes a consuming source

@@ -46,11 +46,14 @@ class Form:
     instance: str | None = None
     instance_storage: str | None = None
     instance_argument: str | None = None
+    # A move of a contained value is performed when external storage takes
+    # ownership of the registered wrapper.
+    registration_moves: int = 0
 
 
 FORMS = (
     Form(name="plain", storage="dingo::storage<tracked>"),
-    Form(name="alternative", storage="dingo::storage<variant_t>"),
+    Form(name="alternative", storage="dingo::storage<variant_t>", registration_moves=1),
     Form(name="pointer", storage="dingo::storage<tracked *>"),
     Form(name="bounded_array", storage="dingo::storage<tracked[2]>"),
     Form(
@@ -77,6 +80,7 @@ FORMS = (
         name="optional",
         storage="dingo::storage<std::optional<tracked>>",
         factory="make_optional_tracked",
+        registration_moves=1,
     ),
 )
 
@@ -131,141 +135,154 @@ EXTERNAL_INSTANCES = {
 
 @dataclass(frozen=True)
 class Expectation:
-    """The resolvable request and its expected identity and lifetime counts."""
+    """The resolvable request, its identity relation, and its shape.
+
+    Construction counts are storage-shape facts and stay explicit. Copy and
+    move counts are derived from the request class and the scope, so a cell
+    cannot silently carry a count that no longer matches its shape.
+    """
 
     request: str
     relation: str
     constructions: int
+    request_class: str
     leaf: str = ""
-    copies: int | None = None
-    moves: int | None = None
     array_element: str = ""
     move_out: bool = False
+    delete_result: str = ""
+
+
+# The minimum copy and move count for two resolutions of each request class.
+# The class describes the request shape, not the storage form.
+REQUEST_COSTS = {
+    # A value copied out of a borrowed source: one copy per resolution.
+    "borrow_value": (2, 0),
+    # A value moved out of a consumed source: one move per resolution.
+    "consume_value": (0, 2),
+    # An rvalue reference moved into a caller object: one library move and one
+    # caller move per resolution.
+    "consume_rvalue": (0, 4),
+    # References, owning handles, and arrays transfer no tracked object.
+    "reference": (0, 0),
+    "handle": (0, 0),
+    "array": (0, 0),
+}
 
 
 EXPECTATIONS = {
     ("plain", "shared"): Expectation(
-        "tracked", "first.id == second.id", 1, leaf="id", copies=2, moves=0
+        "tracked", "first.id == second.id", 1, "borrow_value", leaf="id"
     ),
     ("plain", "unique"): Expectation(
-        "tracked", "first.id != second.id", 2, copies=0, moves=2
+        "tracked", "first.id != second.id", 2, "consume_value"
     ),
     ("plain", "external"): Expectation(
         "tracked",
         "first.id == second.id",
         0,
+        "borrow_value",
         leaf="external",
-        copies=2,
-        moves=0,
     ),
     ("plain", "shared_cyclical"): Expectation(
-        "tracked &", "&first == &second", 1, copies=0, moves=0
+        "tracked &", "&first == &second", 1, "reference"
     ),
     ("alternative", "shared"): Expectation(
-        "tracked", "first.id == second.id", 1, leaf="id", copies=2, moves=0
+        "tracked", "first.id == second.id", 1, "borrow_value", leaf="id"
     ),
     ("alternative", "unique"): Expectation(
         "variant_t",
         "std::get<0>(first).id != std::get<0>(second).id",
         2,
-        copies=0,
-        moves=2,
+        "consume_value",
     ),
     ("alternative", "external"): Expectation(
-        "tracked",
-        "first.id == second.id",
-        0,
-        leaf="id",
-        copies=2,
-        moves=1,
+        "tracked", "first.id == second.id", 0, "borrow_value", leaf="id"
     ),
     ("pointer", "shared"): Expectation(
-        "tracked", "first.id == second.id", 1, leaf="id", copies=2, moves=0
+        "tracked", "first.id == second.id", 1, "borrow_value", leaf="id"
+    ),
+    # A consumed raw pointer transfers ownership: the caller deletes it.
+    ("pointer", "unique"): Expectation(
+        "tracked *",
+        "first->id != second->id",
+        2,
+        "handle",
+        delete_result="delete",
     ),
     ("pointer", "external"): Expectation(
-        "tracked", "first.id == second.id", 0, leaf="id", copies=2, moves=0
+        "tracked", "first.id == second.id", 0, "borrow_value", leaf="id"
     ),
     ("bounded_array", "shared"): Expectation(
         "tracked *",
         "first[0].id == second[0].id",
         2,
-        copies=0,
-        moves=0,
+        "array",
         array_element="first[0].id != first[1].id",
+    ),
+    # A consumed raw row pointer transfers ownership: the caller deletes it.
+    ("bounded_array", "unique"): Expectation(
+        "tracked *",
+        "first[0].id != second[0].id",
+        4,
+        "array",
+        array_element="first[0].id != first[1].id",
+        delete_result="delete[]",
     ),
     ("bounded_array", "external"): Expectation(
         "tracked *",
         "first[0].id == second[0].id",
         0,
-        copies=0,
-        moves=0,
+        "array",
         array_element="first[0].id != first[1].id",
     ),
     ("bounded_array", "shared_cyclical"): Expectation(
         "tracked (*)[2]",
         "first == second",
         2,
-        copies=0,
-        moves=0,
+        "array",
         array_element="(*first)[0].id != (*first)[1].id",
     ),
     ("unique_handle", "unique"): Expectation(
-        "std::unique_ptr<tracked>", "first->id != second->id", 2, copies=0, moves=0
+        "std::unique_ptr<tracked>", "first->id != second->id", 2, "handle"
     ),
     ("unique_array_handle", "shared"): Expectation(
-        "std::unique_ptr<tracked[]>&", "&first == &second", 2, copies=0, moves=0
+        "std::unique_ptr<tracked[]>&", "&first == &second", 2, "reference"
     ),
     ("unique_array_handle", "unique"): Expectation(
         "std::unique_ptr<tracked[]>",
         "first[0].id != second[0].id",
         4,
-        copies=0,
-        moves=0,
+        "array",
     ),
     ("shared_handle", "shared"): Expectation(
-        "std::shared_ptr<tracked>",
-        "first == second",
-        1,
-        leaf="pointer",
-        copies=0,
-        moves=0,
+        "std::shared_ptr<tracked>", "first == second", 1, "handle", leaf="pointer"
     ),
     ("shared_handle", "unique"): Expectation(
-        "std::shared_ptr<tracked>", "first != second", 2, copies=0, moves=0
+        "std::shared_ptr<tracked>", "first != second", 2, "handle"
     ),
     ("shared_handle", "external"): Expectation(
-        "std::shared_ptr<tracked>",
-        "first == second",
-        0,
-        leaf="pointer",
-        copies=0,
-        moves=0,
+        "std::shared_ptr<tracked>", "first == second", 0, "handle", leaf="pointer"
     ),
     ("shared_handle", "shared_cyclical"): Expectation(
-        "std::shared_ptr<tracked>",
-        "first == second",
-        1,
-        leaf="pointer",
-        copies=0,
-        moves=0,
+        "std::shared_ptr<tracked>", "first == second", 1, "handle", leaf="pointer"
     ),
     ("shared_array_handle", "shared"): Expectation(
-        "std::shared_ptr<tracked[]>", "first == second", 2, copies=0, moves=0
+        "std::shared_ptr<tracked[]>", "first == second", 2, "array"
     ),
     ("shared_array_handle", "unique"): Expectation(
-        "std::shared_ptr<tracked[]>", "first != second", 4, copies=0, moves=0
+        "std::shared_ptr<tracked[]>", "first != second", 4, "array"
     ),
     ("shared_array_handle", "external"): Expectation(
-        "std::shared_ptr<tracked[]>", "first == second", 0, copies=0, moves=0
+        "std::shared_ptr<tracked[]>", "first == second", 0, "array"
     ),
     ("optional", "shared"): Expectation(
-        "tracked", "first.id == second.id", 1, leaf="id", copies=2, moves=0
+        "tracked", "first.id == second.id", 1, "borrow_value", leaf="id"
     ),
     ("optional", "unique"): Expectation(
-        "std::optional<tracked>", "first->id != second->id", 2, copies=0, moves=2
+        "std::optional<tracked>", "first->id != second->id", 2, "consume_value"
     ),
     ("optional", "external"): Expectation(
-        "tracked", "first.id == second.id", 0, leaf="id", copies=2, moves=1
+        "tracked", "first.id == second.id", 0, "borrow_value", leaf="id"
     ),
 }
 
@@ -279,8 +296,7 @@ EXTRA_EXPECTATIONS = {
                 "tracked &&",
                 "first.id != second.id",
                 2,
-                copies=0,
-                moves=4,
+                "consume_rvalue",
                 move_out=True,
             ),
         ),
@@ -292,8 +308,7 @@ EXTRA_EXPECTATIONS = {
                 "variant_t",
                 "std::get<0>(first).id == std::get<0>(second).id",
                 1,
-                copies=2,
-                moves=0,
+                "borrow_value",
             ),
         ),
     ),
@@ -306,14 +321,6 @@ EXTRA_EXPECTATIONS = {
 BEHAVIOR_GAPS = {
     ("shared", "unique_handle"): (
         "the published unique-handle value route is not convertible"
-    ),
-    ("unique", "pointer"): (
-        "the consumed raw pointer has no ownership contract, so the behavior "
-        "case would leak"
-    ),
-    ("unique", "bounded_array"): (
-        "the consumed raw array pointer has no ownership contract, so the "
-        "behavior case would leak"
     ),
     ("external", "unique_handle"): (
         "external storage publishes no resolvable unique-handle route"
@@ -382,6 +389,9 @@ def build_rows() -> list[dict[str, object]]:
                 if scope in RUNTIME_ONLY_SCOPES and container == "static":
                     continue
                 registration, static_source = _registration(form, scope, container)
+                copies, moves = REQUEST_COSTS[expectation.request_class]
+                if scope == "external":
+                    moves += form.registration_moves
                 rows.append(
                     {
                         "name": f"{scope}_{form.name}_{container}",
@@ -396,14 +406,20 @@ def build_rows() -> list[dict[str, object]]:
                         "request": expectation.request,
                         "relation": expectation.relation,
                         "constructions": expectation.constructions,
-                        "copies": expectation.copies,
-                        "moves": expectation.moves,
+                        "copies": copies,
+                        "moves": moves,
                         "leaf": expectation.leaf,
                         "array_element": expectation.array_element,
                         "move_out": expectation.move_out,
+                        "delete_result": expectation.delete_result,
                     }
                 )
                 for case, extra in extras:
+                    extra_copies, extra_moves = REQUEST_COSTS[
+                        extra.request_class
+                    ]
+                    if scope == "external":
+                        extra_moves += form.registration_moves
                     rows.append(
                         {
                             "name": f"{scope}_{form.name}_{case}_{container}",
@@ -418,11 +434,12 @@ def build_rows() -> list[dict[str, object]]:
                             "request": extra.request,
                             "relation": extra.relation,
                             "constructions": extra.constructions,
-                            "copies": extra.copies,
-                            "moves": extra.moves,
+                            "copies": extra_copies,
+                            "moves": extra_moves,
                             "leaf": extra.leaf,
                             "array_element": extra.array_element,
                             "move_out": extra.move_out,
+                            "delete_result": extra.delete_result,
                         }
                     )
     return rows
@@ -459,6 +476,24 @@ def validate() -> None:
     for cell, reason in BEHAVIOR_GAPS.items():
         if not reason:
             raise ValueError(f"behavior gap {cell} has no reason")
+    for (form_name, scope), expectation in EXPECTATIONS.items():
+        if expectation.request_class not in REQUEST_COSTS:
+            raise ValueError(
+                f"behavior cell {scope}/{form_name} has unknown request class "
+                f"{expectation.request_class!r}"
+            )
+    for (form_name, scope), extras in EXTRA_EXPECTATIONS.items():
+        for case, extra in extras:
+            if extra.request_class not in REQUEST_COSTS:
+                raise ValueError(
+                    f"behavior cell {scope}/{form_name}/{case} has unknown "
+                    f"request class {extra.request_class!r}"
+                )
+    for form in FORMS:
+        if form.registration_moves < 0:
+            raise ValueError(
+                f"behavior form {form.name} has negative registration moves"
+            )
 
 
 def render(output: Path) -> str:

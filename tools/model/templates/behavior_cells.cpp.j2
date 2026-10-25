@@ -134,6 +134,10 @@ TEST(behavior_cells, {{ row.name }}) {
   EXPECT_EQ(std::addressof(first_reference),
             std::addressof(external_instance));
 {% endif %}
+{% if row.delete_result %}
+  {{ row.delete_result }} first;
+  {{ row.delete_result }} second;
+{% endif %}
   }
   EXPECT_EQ(tracked::destructions,
             tracked::constructions + tracked::copies + tracked::moves);
