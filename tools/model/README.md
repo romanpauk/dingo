@@ -31,11 +31,12 @@ hand-curated matrix tags.
   `test_unique`, and `test_shared` families. A wrapper cannot silently drift
   from its declared semantics.
 - `route_recipes.py` derives the operation-kind and retention sequence for a
-  supported route from the form's stored wrapper and the source shape the scope
-  hands out (pointer, lvalue, rvalue, cyclical row pointer, or cyclical handle).
-  The scripts are keyed by form, not by scope/form cell, so a new scope reuses
-  them and a new form adds one script. A supported cell with no script fails
-  validation instead of losing its kind coverage.
+  supported route from an ordered rule list over the form's semantic kind, the
+  source shape the scope hands out (pointer, lvalue, rvalue, cyclical row
+  pointer, or cyclical handle), and the stored wrapper properties. Rules do not
+  name a storage form, so a custom wrapper with the same kind and properties
+  follows the same rule as the built-in wrapper it mirrors. A supported cell
+  with no matching rule fails validation instead of losing its kind coverage.
 - `route_cells.py` instantiates the real storage type and resolution list for
   every supported storage cell, including bounded arrays and array handles. It
   checks value, object, and rvalue route availability against the ledger,
@@ -91,9 +92,9 @@ hand-curated matrix tags.
   rvalue availability and exact route counts, requires every published target to
   be reachable from both request matchers, and checks that the scope access
   satisfies every interface route. The counts come from
-  `route_recipes.interface_route_counts`, keyed by the exposed form and whether
-  the interface is a copyable value. Single- and multiple-interface bindings are
-  covered.
+  `route_recipes.interface_route_counts`, keyed by the exposed semantic kind and
+  whether the interface is a copyable value. Single- and multiple-interface
+  bindings are covered.
 - `behavior_cells.py` generates one behavior class per supported scope/form
   cell in the applicable runtime and static containers. Form registration and
   expectations are data: a form is one table entry, and its scope/container

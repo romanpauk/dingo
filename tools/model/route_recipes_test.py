@@ -12,6 +12,8 @@ import pytest
 
 from route_ledger import build_rows, supported_categories
 from route_recipes import (
+    RULES,
+    form_kind,
     interface_route_counts,
     route_kinds,
     route_retention,
@@ -31,6 +33,36 @@ def test_every_supported_cell_has_a_route_script() -> None:
         assert tuple(
             int(step.retention) for step in steps
         ) == row.retention
+
+
+def test_form_kinds_are_semantic_categories() -> None:
+    assert form_kind("plain") == "value"
+    assert form_kind("alternative") == "variant"
+    assert form_kind("pointer") == "pointer"
+    assert form_kind("bounded_array") == "array"
+    assert form_kind("unique_handle") == "handle"
+    assert form_kind("shared_array_handle") == "array_handle"
+    assert form_kind("optional") == "optional"
+
+
+def test_rules_are_unique_and_use_known_properties() -> None:
+    properties = {
+        "owning",
+        "sharing",
+        "sole_owner",
+        "nullable",
+        "borrowable",
+        "array_handle",
+        "variant",
+        "in_place",
+        "mapped",
+    }
+    keys = set()
+    for rule in RULES:
+        key = (rule.category, rule.kind, rule.source, rule.requires)
+        assert key not in keys
+        keys.add(key)
+        assert rule.requires <= properties
 
 
 def test_source_shape_describes_how_the_scope_hands_out_the_value() -> None:
