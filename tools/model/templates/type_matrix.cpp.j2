@@ -21,8 +21,11 @@
 #include <gtest/gtest.h>
 
 #include <fstream>
+#include <map>
 #include <memory>
 #include <optional>
+#include <string>
+#include <utility>
 
 #ifndef DINGO_TYPE_MATRIX_REPORT
 #define DINGO_TYPE_MATRIX_REPORT "type-matrix.md"
@@ -75,8 +78,9 @@ static constexpr bool {{ shape.name }} = request_supported<{{ shape.cpp_type }},
 TEST(type_matrix, writes_support_report) {
   std::ofstream out(DINGO_TYPE_MATRIX_REPORT);
   ASSERT_TRUE(out.is_open());
-  out << "| scope | form | shape | route | top-level |\n";
-  out << "| --- | --- | --- | --- | --- |\n";
+  std::map<std::string, std::pair<int, std::string>> gaps;
+  out << "| scope | form | shape | route | top-level | reason |\n";
+  out << "| --- | --- | --- | --- | --- | --- |\n";
 {% for row in rows %}
 {% for shape in shapes %}
   out << "| {{ row.scope }} | {{ row.form }} | {{ shape.name }} | "
@@ -86,6 +90,18 @@ TEST(type_matrix, writes_support_report) {
     out << "yes";
   } else {
     out << "no";
+  }
+  out << " | ";
+  if ({{ row.cell }}::{{ shape.name }}) {
+    out << "-";
+  } else {
+    out << "{{ row.reasons[shape.name] }}";
+    auto &entry = gaps["{{ row.reasons[shape.name] }}"];
+    ++entry.first;
+    if (entry.second.empty()) {
+      entry.second =
+          "{{ row.scope }}/{{ row.form }} {{ shape.cpp_type }}";
+    }
   }
   out << " |\n";
 {% endfor %}
@@ -97,6 +113,12 @@ TEST(type_matrix, writes_support_report) {
   out << "scope can lend an lvalue reference to a longer-lived construction, "
          "but a\n";
   out << "top-level borrow would outlive the resolution that produced it.\n";
+  out << "\n| reason | rows | example |\n";
+  out << "| --- | --- | --- |\n";
+  for (const auto &[reason, entry] : gaps) {
+    out << "| " << reason << " | " << entry.first << " | " << entry.second
+        << " |\n";
+  }
   out << "\n| scope | form | category | target |\n";
   out << "| --- | --- | --- | --- |\n";
 {% for row in rows %}

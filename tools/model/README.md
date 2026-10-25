@@ -33,14 +33,18 @@ hand-curated matrix tags.
   `std::shared_ptr`, owning array handles, and array reference/pointer
   constructors composed to depth two. It applies every derived shape to every
   storable scope/form cell through the real resolution kernel and writes a
-  `type-matrix.md` report with the matching route and top-level verdict for
-  every shape, plus the published route targets per cell. Supported rows are
-  answered by the library, not by a hand-written case list; the report is the
-  exhaustive support table. The depth bound is an explicit model limitation.
-  A route that only works as a dependency of a longer-lived construction is
-  reported as `top-level = no`: a consuming scope can lend an lvalue reference
-  to its dependent, but a borrow returned from the container itself would
-  outlive the transaction that produced it.
+  `type-matrix.md` report with the matching route, the top-level verdict, a
+  structural reason for every miss, and the published route targets per cell.
+  Supported rows are answered by the library, not by a hand-written case list;
+  the report is the exhaustive support table. The depth bound is an explicit
+  model limitation. A route that only works as a dependency of a longer-lived
+  construction is reported as `top-level = no`: a consuming scope can lend an
+  lvalue reference to its dependent, but a borrow returned from the container
+  itself would outlive the transaction that produced it. Misses are grouped by
+  the composition that the cell does not publish (nested wrapper, access form
+  inside a wrapper, const-qualified wrapper element, reference to an access
+  form, array view, stable move-out, consuming borrow, or a wrapper-family
+  mismatch), and the report prints the count and one example per reason.
 - `type_behavior.py` executes the top-level half of that matrix. Every
   supported shape is resolved twice through the same registration recipe as the
   behavior cells, stable scopes are checked for identity, fresh scopes for

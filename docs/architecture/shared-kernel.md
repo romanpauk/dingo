@@ -432,12 +432,13 @@ The implemented model uses that split directly:
   grammar (const, references, pointers, optional, owning handles, array handles,
   array references/pointers) to a bounded depth and applies every derived shape
   to every storable cell through the real resolution kernel. It writes the
-  exhaustive table with the matching route, the top-level verdict, and the
-  published route targets. A matching route can still be unsafe at the container
-  boundary: a consuming scope may lend an lvalue reference to a longer-lived
-  dependent, but a borrow returned from the container would outlive the
-  transaction that produced it. The report marks those rows as top-level gaps
-  instead of hiding them.
+  exhaustive table with the matching route, the top-level verdict, a structural
+  reason for every miss, and the published route targets. A matching route can
+  still be unsafe at the container boundary: a consuming scope may lend an
+  lvalue reference to a longer-lived dependent, but a borrow returned from the
+  container would outlive the transaction that produced it. The report marks
+  those rows as top-level gaps instead of hiding them, and groups the remaining
+  misses by the composition the cell does not publish.
 - **The supported top-level rows execute.** `type_behavior.py` resolves every
   supported shape twice through the behavior registrations, checks stable
   identity and fresh distinctness, releases only pointers whose ownership the

@@ -31,6 +31,9 @@ class Shape:
     name: str
     cpp_type: str
     depth: int = 0
+    # Outermost constructor first. The chain is the shape's derivation path and
+    # is what the support report groups on.
+    constructors: tuple[str, ...] = ()
     is_reference: bool = False
     is_lvalue_reference: bool = False
     is_pointer: bool = False
@@ -56,6 +59,7 @@ class Constructor:
             name=f"{self.name}_{inner.name}",
             cpp_type=self.render.format(inner=inner.cpp_type),
             depth=inner.depth + 1,
+            constructors=(self.name,) + inner.constructors,
             is_reference=self.is_reference,
             is_lvalue_reference=self.is_lvalue_reference,
             is_pointer=self.is_pointer,
@@ -147,6 +151,95 @@ ARRAY_FORMS = frozenset(
 
 CONSUMING_SCOPES = frozenset(scope.name for scope in SCOPES if scope.consumes)
 
+WRAPPER_CONSTRUCTORS = frozenset(
+    {"optional", "unique_ptr", "shared_ptr", "unique_array", "shared_array"}
+)
+ACCESS_CONSTRUCTORS = frozenset(
+    {
+        "lvalue_reference",
+        "rvalue_reference",
+        "pointer",
+        "array_lvalue_reference",
+        "array_pointer",
+    }
+)
+
+STORED_DESCRIPTIONS = {
+    "plain": "a value",
+    "alternative": "a variant",
+    "pointer": "a raw pointer",
+    "bounded_array": "a bounded array",
+    "unique_handle": "a unique handle",
+    "unique_array_handle": "a unique array handle",
+    "shared_handle": "a shared handle",
+    "shared_array_handle": "a shared array handle",
+    "optional": "an optional",
+}
+
+
+def shape_access(shape: Shape) -> str:
+    if shape.constructors and shape.constructors[0] in ACCESS_CONSTRUCTORS:
+        return shape.constructors[0]
+    return "value"
+
+
+def shape_family(shape: Shape) -> str:
+    """The structural reason a shape composes beyond one storage level."""
+    chain = shape.constructors
+    wrappers = [
+        index for index, name in enumerate(chain) if name in WRAPPER_CONSTRUCTORS
+    ]
+    if len(wrappers) >= 2:
+        return "nested wrapper"
+    if wrappers:
+        inner = chain[wrappers[0] + 1 :]
+        if any(name in ACCESS_CONSTRUCTORS for name in inner):
+            return "access form inside a wrapper"
+        if "const" in inner:
+            return "const-qualified wrapper element"
+    if sum(1 for name in chain if name in ACCESS_CONSTRUCTORS) > 1:
+        return "reference or pointer to an access form"
+    if chain and chain[0] in {"array_lvalue_reference", "array_pointer"}:
+        return "array view"
+    return ""
+
+
+def gap_reason(scope_name: str, form_name: str, shape: Shape) -> str:
+    """Why a shape is not a published target of one cell.
+
+    The reason is structural: it names the composition the cell does not
+    publish. The library still answers whether the row matches; this only
+    groups the misses so the report says more than "no".
+    """
+    family = shape_family(shape)
+    if family == "nested wrapper":
+        return "nested wrapper: a cell publishes one wrapper level"
+    if family == "access form inside a wrapper":
+        return "access form inside a wrapper is not a stored target"
+    if family == "const-qualified wrapper element":
+        return "const-qualified wrapper element is not a stored target"
+    if family == "reference or pointer to an access form":
+        return "reference or pointer to an access form is not a stored target"
+    if family == "array view":
+        if form_name != "bounded_array":
+            return "array view requested from a non-array storage"
+        return "array view requested for a target the cell does not publish"
+    if shape_access(shape) == "rvalue_reference" and (
+        scope_name not in CONSUMING_SCOPES
+    ):
+        return "stable scope does not publish move-out"
+    if shape_access(shape) in {
+        "lvalue_reference",
+        "pointer",
+        "array_lvalue_reference",
+        "array_pointer",
+    } and scope_name in CONSUMING_SCOPES:
+        return "consuming scope does not publish borrows"
+    return (
+        f"not a published target: the cell stores "
+        f"{STORED_DESCRIPTIONS[form_name]}"
+    )
+
 
 def top_level_safe(scope_name: str, shape: Shape) -> bool:
     """Whether a matching route is safe to call on the container itself.
@@ -188,6 +281,10 @@ def build_rows() -> list[dict[str, object]]:
                         shape.name: top_level_safe(scope.name, shape)
                         for shape in SHAPES
                     },
+                    "reasons": {
+                        shape.name: gap_reason(scope.name, form.name, shape)
+                        for shape in SHAPES
+                    },
                 }
             )
     return rows
@@ -203,6 +300,12 @@ def validate() -> None:
         raise ValueError("type matrix must not be empty")
     if len({row["cell"] for row in rows}) != len(rows):
         raise ValueError("type matrix contains duplicate cells")
+    for row in rows:
+        for shape in SHAPES:
+            if not row["reasons"][shape.name]:
+                raise ValueError(
+                    f"cell {row['cell']} has no gap reason for {shape.name}"
+                )
 
 
 def render(output: Path) -> str:

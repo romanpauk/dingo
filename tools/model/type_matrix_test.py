@@ -13,7 +13,15 @@ from pathlib import Path
 import pytest
 
 from storage_cells import validate_catalog
-from type_matrix import SHAPES, build_rows, render, validate
+from type_matrix import (
+    SHAPES,
+    build_rows,
+    gap_reason,
+    render,
+    shape_family,
+    top_level_safe,
+    validate,
+)
 
 
 def test_type_matrix_product_is_complete() -> None:
@@ -23,6 +31,8 @@ def test_type_matrix_product_is_complete() -> None:
     assert SHAPES
     assert len({row["cell"] for row in rows}) == len(rows)
     assert len({shape.name for shape in SHAPES}) == len(SHAPES)
+    for row in rows:
+        assert set(row["reasons"]) == {shape.name for shape in SHAPES}
 
 
 def test_type_matrix_derives_wrapper_shapes() -> None:
@@ -55,6 +65,37 @@ def test_type_matrix_cells_are_instantiables() -> None:
 
 def test_library_catalog_matches_model() -> None:
     validate_catalog(Path(__file__).resolve().parents[2] / "include")
+
+
+def test_shape_families_name_every_composition() -> None:
+    families = {shape.name: shape_family(shape) for shape in SHAPES}
+    assert families["optional_optional_value"] == "nested wrapper"
+    assert (
+        families["optional_pointer_value"]
+        == "access form inside a wrapper"
+    )
+    assert (
+        families["shared_ptr_const_value"]
+        == "const-qualified wrapper element"
+    )
+    assert (
+        families["pointer_pointer_value"]
+        == "reference or pointer to an access form"
+    )
+    assert families["array_pointer_value"] == "array view"
+    assert families["value"] == ""
+    assert families["lvalue_reference_value"] == ""
+    assert families["shared_ptr_value"] == ""
+
+
+def test_unsupported_shapes_get_a_structural_reason() -> None:
+    assert gap_reason("shared", "plain", SHAPES[0])
+    for row in build_rows():
+        for shape in SHAPES:
+            reason = row["reasons"][shape.name]
+            assert reason
+            if shape_family(shape) == "nested wrapper":
+                assert reason == "nested wrapper: a cell publishes one wrapper level"
 
 
 def test_render_names_every_cell(tmp_path: Path) -> None:
