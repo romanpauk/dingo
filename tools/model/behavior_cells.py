@@ -89,7 +89,7 @@ EXTERNAL_INSTANCES = {
     "alternative": (
         "auto external_instance = make_variant_tracked()",
         "dingo::storage<variant_t>",
-        "external_instance",
+        "std::move(external_instance)",
     ),
     "pointer": (
         "auto external_instance = make_pointer_tracked()",
@@ -104,12 +104,12 @@ EXTERNAL_INSTANCES = {
     "unique_handle": (
         "auto external_instance = make_unique_tracked()",
         "dingo::storage<std::unique_ptr<tracked>>",
-        "external_instance",
+        "std::move(external_instance)",
     ),
     "unique_array_handle": (
         "auto external_instance = make_unique_array_tracked()",
         "dingo::storage<std::unique_ptr<tracked[]>>",
-        "external_instance",
+        "std::move(external_instance)",
     ),
     "shared_handle": (
         "auto external_instance = make_shared_tracked()",
@@ -124,7 +124,7 @@ EXTERNAL_INSTANCES = {
     "optional": (
         "auto external_instance = make_optional_tracked()",
         "dingo::storage<std::optional<tracked>>",
-        "external_instance",
+        "std::move(external_instance)",
     ),
 }
 
@@ -176,8 +176,8 @@ EXPECTATIONS = {
         "first.id == second.id",
         0,
         leaf="id",
-        copies=3,
-        moves=0,
+        copies=2,
+        moves=1,
     ),
     ("pointer", "shared"): Expectation(
         "tracked", "first.id == second.id", 1, leaf="id", copies=2, moves=0
@@ -259,13 +259,13 @@ EXPECTATIONS = {
         "std::shared_ptr<tracked[]>", "first == second", 0, copies=0, moves=0
     ),
     ("optional", "shared"): Expectation(
-        "tracked", "first.id == second.id", 1, leaf="id", copies=2, moves=1
+        "tracked", "first.id == second.id", 1, leaf="id", copies=2, moves=0
     ),
     ("optional", "unique"): Expectation(
         "std::optional<tracked>", "first->id != second->id", 2, copies=0, moves=2
     ),
     ("optional", "external"): Expectation(
-        "tracked", "first.id == second.id", 0, leaf="id", copies=3, moves=0
+        "tracked", "first.id == second.id", 0, leaf="id", copies=2, moves=1
     ),
 }
 

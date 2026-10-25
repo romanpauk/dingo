@@ -124,8 +124,15 @@ public:
   auto construct(construction_scope scope, Context &context,
                  Container &container) {
     assert(empty());
-    new (&instance_) StoredType(detail::convert_type<StoredType, consume>(
-        Factory::template construct<Type>(scope, context, container)));
+    // When the stored type is the registered type there is no conversion to
+    // perform, so let the factory's prvalue initialize the slot directly.
+    if constexpr (std::is_same_v<Type, StoredType>) {
+      new (&instance_) StoredType(
+          Factory::template construct<Type>(scope, context, container));
+    } else {
+      new (&instance_) StoredType(detail::convert_type<StoredType, consume>(
+          Factory::template construct<Type>(scope, context, container)));
+    }
     initialized_ = true;
   }
 
