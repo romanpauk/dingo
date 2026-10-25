@@ -28,6 +28,12 @@ hand-curated matrix tags.
   satisfied by the scope, checks the modeled operation-kind and source-retention
   sequences, and asserts that representative routes do not unexpectedly cache
   conversions.
+- `interface_cells.py` instantiates the real interface resolution kernel for
+  storage exposed through `dingo::interfaces<...>`. It checks value, object, and
+  rvalue availability and exact route counts, requires every published target to
+  be reachable from both request matchers, and checks that the scope access
+  satisfies every interface route. Single- and multiple-interface bindings are
+  covered.
 - `behavior_cells.py` generates one behavior class per supported scope/form
   cell in the applicable runtime and static containers. Form registration and
   expectations are data: a form is one table entry, and its scope/container

@@ -152,6 +152,8 @@ set(DINGO_ROUTE_MODEL_GENERATOR
     "${PROJECT_SOURCE_DIR}/tools/model/route_cells.py")
 set(DINGO_BEHAVIOR_MODEL_GENERATOR
     "${PROJECT_SOURCE_DIR}/tools/model/behavior_cells.py")
+set(DINGO_INTERFACE_MODEL_GENERATOR
+    "${PROJECT_SOURCE_DIR}/tools/model/interface_cells.py")
 set(DINGO_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/templates/storage_cells.cpp.j2")
 set(DINGO_SCOPES_TEMPLATE
@@ -160,6 +162,8 @@ set(DINGO_ROUTE_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/templates/route_cells.cpp.j2")
 set(DINGO_BEHAVIOR_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/templates/behavior_cells.cpp.j2")
+set(DINGO_INTERFACE_MODEL_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/tools/model/templates/interface_cells.cpp.j2")
 set(DINGO_SCOPES_HEADER
     "${PROJECT_SOURCE_DIR}/include/dingo/storage/scopes.gen.h")
 set(DINGO_SELECTION_MODEL_TEMPLATE
@@ -172,22 +176,27 @@ set(DINGO_ROUTE_MODEL_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/route_cells.cpp")
 set(DINGO_BEHAVIOR_MODEL_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/behavior_cells.cpp")
+set(DINGO_INTERFACE_MODEL_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/interface_cells.cpp")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_MODEL_GENERATOR}"
     "${DINGO_SELECTION_MODEL_GENERATOR}"
     "${DINGO_ROUTE_MODEL_GENERATOR}"
     "${DINGO_BEHAVIOR_MODEL_GENERATOR}"
+    "${DINGO_INTERFACE_MODEL_GENERATOR}"
     "${DINGO_MODEL_TEMPLATE}"
     "${DINGO_SCOPES_TEMPLATE}"
     "${DINGO_SELECTION_MODEL_TEMPLATE}"
     "${DINGO_ROUTE_MODEL_TEMPLATE}"
     "${DINGO_BEHAVIOR_MODEL_TEMPLATE}"
+    "${DINGO_INTERFACE_MODEL_TEMPLATE}"
     "${DINGO_SCOPES_HEADER}"
     "${PROJECT_SOURCE_DIR}/tools/model/storage_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/selection_rules_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/route_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/route_ledger_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/behavior_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/interface_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/cost/measure_test.py")
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python
@@ -237,6 +246,18 @@ if(NOT DINGO_BEHAVIOR_MODEL_GENERATOR_RESULT EQUAL 0)
         "Failed to generate behavior coverage: "
         "${DINGO_BEHAVIOR_MODEL_GENERATOR_RESULT}")
 endif()
+execute_process(
+    COMMAND ${DINGO_UV_RUN_COMMAND} python
+        ${DINGO_INTERFACE_MODEL_GENERATOR}
+        --out ${DINGO_INTERFACE_MODEL_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE DINGO_INTERFACE_MODEL_GENERATOR_RESULT)
+if(NOT DINGO_INTERFACE_MODEL_GENERATOR_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to generate interface coverage: "
+        "${DINGO_INTERFACE_MODEL_GENERATOR_RESULT}")
+endif()
 
 add_custom_target(cells-check
     COMMENT "Verifying generated cell coverage"
@@ -261,13 +282,19 @@ add_custom_target(cells-check
         --out ${DINGO_BEHAVIOR_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
+    COMMAND ${DINGO_UV_RUN_COMMAND} python
+        ${DINGO_INTERFACE_MODEL_GENERATOR}
+        --out ${DINGO_INTERFACE_MODEL_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+        --check
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 add_executable(dingo_model_test
     ${DINGO_MODEL_TEST_SOURCE}
     ${DINGO_SELECTION_MODEL_TEST_SOURCE}
     ${DINGO_ROUTE_MODEL_TEST_SOURCE}
-    ${DINGO_BEHAVIOR_MODEL_TEST_SOURCE})
+    ${DINGO_BEHAVIOR_MODEL_TEST_SOURCE}
+    ${DINGO_INTERFACE_MODEL_TEST_SOURCE})
 target_link_libraries(dingo_model_test dingo::dingo gtest_main)
 add_test(NAME dingo_model_test COMMAND dingo_model_test)
 set_tests_properties(dingo_model_test PROPERTIES LABELS "unit;generator")
@@ -278,7 +305,8 @@ add_test(NAME dingo_model_generator_test
         ${PROJECT_SOURCE_DIR}/tools/model/selection_rules_test.py
         ${PROJECT_SOURCE_DIR}/tools/model/route_cells_test.py
         ${PROJECT_SOURCE_DIR}/tools/model/route_ledger_test.py
-        ${PROJECT_SOURCE_DIR}/tools/model/behavior_cells_test.py)
+        ${PROJECT_SOURCE_DIR}/tools/model/behavior_cells_test.py
+        ${PROJECT_SOURCE_DIR}/tools/model/interface_cells_test.py)
 set_tests_properties(dingo_model_generator_test PROPERTIES
     LABELS "unit;generator"
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/model)
