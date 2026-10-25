@@ -502,29 +502,6 @@ struct static_binding_resolver {
     return detail::binding_registered_type<storage_type>();
   }
 
-  // A context that can materialize a consuming source keeps it alive for the
-  // whole resolution, so the address kernel can publish it directly instead of
-  // copying it into a second slot. Runtime contexts always do; static contexts
-  // do whenever the storage scope consumes its source.
-  template <typename Context>
-  static constexpr bool uses_context_materialized_source_v = [] {
-    if constexpr (is_runtime_context_v<Context>) {
-      return true;
-    } else if constexpr (std::is_same_v<
-                             std::remove_cv_t<std::remove_reference_t<Context>>,
-                             no_dependency_context>) {
-      // The minimal context has no storage of its own; the local source path
-      // is the only option.
-      return false;
-    } else {
-      return detail::has_context_materialize_source<
-          storage_materialization_traits<typename storage_type::tag_type,
-                                         typename storage_type::type>,
-          Context, storage_type,
-          binding_activation<State, Host, binding_model_type>>::value;
-    }
-  }();
-
   template <typename Request, typename Context>
   Request resolve(Context &context) {
     static_assert(is_runtime_context_v<Context> ||
@@ -587,27 +564,8 @@ struct static_binding_resolver {
           .address;
     };
 
-    if constexpr ((std::is_lvalue_reference_v<Request> ||
-                   std::is_pointer_v<Request>) &&
-                  detail::materializes_value_source_v<
-                      std::remove_reference_t<decltype(storage)>, Context,
-                      decltype(activation)>) {
-      return detail::with_context_lvalue_source(
-          scope, context, storage, activation, std::move(materialize));
-    } else if constexpr (uses_context_materialized_source_v<Context>) {
-      return detail::with_runtime_binding_source(
-          scope, context, storage, activation, std::move(materialize));
-    } else if constexpr (detail::operation_requires_source_retention_v<
-                             operation> &&
-                         !std::is_same_v<
-                             std::remove_cv_t<std::remove_reference_t<Context>>,
-                             no_dependency_context>) {
-      return detail::with_retained_binding_source(
-          scope, context, storage, activation, std::move(materialize));
-    } else {
-      return detail::with_binding_source(scope, context, storage, activation,
-                                         std::move(materialize));
-    }
+    return detail::with_binding_source_plan<operation, Request>(
+        scope, context, storage, activation, std::move(materialize));
   }
 
   template <typename Request, typename Resolution, typename Context,

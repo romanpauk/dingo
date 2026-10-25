@@ -60,9 +60,9 @@ infrastructure described below. It changes no public API and no behavior.
 - Scope lifetime and source shape are descriptors now: `scope_info_of` derives
   consuming/stability/guard/retention from the generated policy, and
   `storage_yield_traits` derives the yielded type and source category from the
-  storage shape. The value path uses them through `with_binding_source_plan`;
-  the reference/dependency path still uses the older branches to preserve
-  template-depth headroom.
+  storage shape. Both value and reference/dependency paths use them through
+  `with_binding_source_plan`; the old `with_*` functions remain as lifetime
+  backends behind the plan.
 - The direct/lift decision and execution are one `request_plan` in
   `include/dingo/static/request_plan.h`. It probes whether the static binding
   serves the wrapper route, exposes a compile-time or runtime-fallback policy,

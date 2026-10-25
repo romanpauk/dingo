@@ -314,18 +314,9 @@ struct has_context_materialize_source<
         std::declval<Storage &>(), std::declval<Owner &>()))>>
     : std::true_type {};
 
-template <typename Storage, typename Context, typename Owner>
-inline constexpr bool materializes_value_source_v = [] {
-  using source_result = decltype(std::declval<Storage &>().resolve(
-      std::declval<construction_scope>(), std::declval<Context &>(),
-      std::declval<Owner &>()));
-  using source_type = std::remove_cv_t<std::remove_reference_t<source_result>>;
-  return !std::is_reference_v<source_result> && !std::is_pointer_v<source_type>;
-}();
-
-// A flat source plan for the value path: one policy decision, then the
-// existing lifetime backends. It uses the scope/source descriptors instead of
-// probing storage.resolve.
+// A flat source plan: one policy decision, then the existing lifetime
+// backends. It uses the scope/source descriptors instead of probing
+// storage.resolve.
 enum class source_plan {
   context_lvalue,
   context,

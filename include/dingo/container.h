@@ -376,21 +376,6 @@ private:
 
   static_registry_type &statics() { return *this; }
 
-  // The combined selection calls the secondary resolver only when its status is
-  // found, but the lambda that wraps it is still instantiated. Keep the
-  // impossible branch out of instantiation.
-  template <typename Lookup, typename R, typename LookupKey>
-  R resolve_static_selection(construction_scope scope,
-                             runtime_context_type &context) {
-    using selection = static_selection_t<Lookup, LookupKey>;
-    if constexpr (selection::status == detail::binding_status::found) {
-      return statics().template resolve_binding<Lookup, R, selection>(
-          scope, context, *this);
-    } else {
-      std::abort();
-    }
-  }
-
   // A request no binding of this container answers goes to the parent, when
   // the parent can serve it, and is reported unresolved otherwise.
   template <typename Request, typename R, bool MayAutoConstruct,
@@ -998,36 +983,6 @@ private:
   template <typename Request, typename R, bool MayAutoConstruct,
             typename Origin, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve_singular(construction_scope scope, runtime_context_type &context,
-                     Origin &origin, LookupKey key) {
-    using lookup_type = typename Request::lookup_type;
-    using result_type = R;
-    constexpr auto static_status = static_status_v<lookup_type, LookupKey>;
-    auto runtime_selection = runtime_registry_.template select_binding<
-        typename Request::value_type, typename Request::exact_type>(key);
-    return detail::resolve_combined_selection<
-        detail::binding_resolution_policy::ambiguous_on_conflict, static_status,
-        R, lookup_type>(
-        runtime_selection, context,
-        [&]() -> R {
-          return runtime_registry_
-              .template resolve_binding<result_type, result_type>(
-                  runtime_selection, scope, context);
-        },
-        [&]() -> R {
-          return resolve_static_selection<lookup_type, R, LookupKey>(scope,
-                                                                     context);
-        },
-        [&]() -> R {
-          return resolve_missing<Request, R, MayAutoConstruct,
-                                 parent_serves<lookup_type, LookupKey>()>(
-              scope, context, origin, std::move(key));
-        });
-  }
-
-  template <typename Request, typename R, bool MayAutoConstruct,
-            typename Origin, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   // NOLINTNEXTLINE(readability-function-cognitive-complexity)
   R resolve_collection(construction_scope scope, runtime_context_type &context,
                        Origin &origin, LookupKey key) {
@@ -1105,8 +1060,33 @@ private:
           scope, context, origin, std::move(key));
     } else if constexpr (!runtime_only_v &&
                          detail::is_static_lookup_key_definition_v<LookupKey>) {
-      return resolve_singular<Request, R, MayAutoConstruct>(
-          scope, context, origin, std::move(key));
+      using lookup_type = typename Request::lookup_type;
+      constexpr auto static_status = static_status_v<lookup_type, LookupKey>;
+      auto runtime_selection = runtime_registry_.template select_binding<
+          typename Request::value_type, typename Request::exact_type>(key);
+      return detail::resolve_combined_selection<
+          detail::binding_resolution_policy::ambiguous_on_conflict,
+          static_status, R, lookup_type>(
+          runtime_selection, context,
+          [&]() -> R {
+            return runtime_registry_.template resolve_binding<R, R>(
+                runtime_selection, scope, context);
+          },
+          [&]() -> R {
+            using selection = static_selection_t<lookup_type, LookupKey>;
+            if constexpr (selection::status == detail::binding_status::found) {
+              return statics()
+                  .template resolve_binding<lookup_type, R, selection>(
+                      scope, context, *this);
+            } else {
+              std::abort();
+            }
+          },
+          [&]() -> R {
+            return resolve_missing<Request, R, MayAutoConstruct,
+                                   parent_serves<lookup_type, LookupKey>()>(
+                scope, context, origin, std::move(key));
+          });
     } else {
       auto selected = runtime_registry_.template select_binding<
           typename Request::value_type, typename Request::exact_type>(key);
