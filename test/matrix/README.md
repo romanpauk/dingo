@@ -109,9 +109,11 @@ instantiation cost instead of letting one suite become the build straggler.
 Rows whose behavior the generated model suites now own are declared in
 `model_coverage.py`. A feature restriction keeps the feature in the catalog (so
 its policy sources and dependency provisionings still validate) but stops
-generating the resolved-type rows that a behavior class already executes. The
-declared model cells are checked against the model's behavior product by the
+generating the scope/resolved-type rows that a behavior class already executes.
+The declared model cells are checked against the model's behavior product by the
 generator test, so a restriction cannot outlive the test that justifies it.
+Features whose rows are entirely model-owned are listed in
+`FULLY_MODEL_COVERED_FEATURES` and no longer produce an executable.
 
 Axis members declare their required C++ includes through `headers`. Scenario
 headers belong to the feature or feature case that executes them; they are not

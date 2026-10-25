@@ -93,7 +93,12 @@ TEST(behavior_cells, {{ row.name }}) {
   {{ row.static_source }}
   dingo::static_container<source> container;
 {% endif %}
-{% if row.request.endswith("&") %}
+{% if row.move_out %}
+  auto &&first_rvalue = container.resolve<{{ row.request }}>();
+  tracked first = std::move(first_rvalue);
+  auto &&second_rvalue = container.resolve<{{ row.request }}>();
+  tracked second = std::move(second_rvalue);
+{% elif row.request.endswith("&") %}
   auto &first = container.resolve<{{ row.request }}>();
   auto &second = container.resolve<{{ row.request }}>();
 {% else %}

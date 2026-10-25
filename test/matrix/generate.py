@@ -31,6 +31,7 @@ from data import (
 )
 from dependency_contract import validate_dependency_contract
 from model_coverage import (
+    FULLY_MODEL_COVERED_FEATURES,
     MODEL_COVERED_POLICY_SOURCES,
     MODEL_COVERED_RESOLVED_TYPE_NAMES,
     RESTRICTIONS_BY_FEATURE,
@@ -266,11 +267,10 @@ def iter_candidates(
                             restriction = RESTRICTIONS_BY_FEATURE.get(
                                 feature.name
                             )
-                            if (
-                                restriction is not None
-                                and resolved_type.name
-                                not in restriction.keep_resolved_types
-                            ):
+                            if restriction is not None and (
+                                scope.name,
+                                resolved_type.name,
+                            ) in restriction.drop:
                                 rejected[RejectionReason.MODEL_COVERED] += 1
                                 continue
                             base_tags = frozenset({mode.name}) | (
@@ -411,6 +411,8 @@ def assert_feature_mode_container_coverage(rows: tuple[MatrixRow, ...]) -> None:
     missing: list[str] = []
 
     for feature in implemented(FEATURES):
+        if feature.name in FULLY_MODEL_COVERED_FEATURES:
+            continue
         required_container_tags = feature.container_requires | (
             feature.requires & container_tags
         )
@@ -498,7 +500,13 @@ def assert_coverage(
 
     row_tuple = tuple(rows)
     assert_axis_used(
-        row_tuple, "feature", {feature.name for feature in implemented(FEATURES)}
+        row_tuple,
+        "feature",
+        {
+            feature.name
+            for feature in implemented(FEATURES)
+            if feature.name not in FULLY_MODEL_COVERED_FEATURES
+        },
     )
     used_feature_cases = {
         (row.feature_case.feature, row.feature_case.name)

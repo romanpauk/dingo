@@ -34,9 +34,11 @@ hand-curated matrix tags.
   product is derived from the route ledger. The tests check request identity,
   construction counts, optional copy and move counts, array element identity,
   leaf addresses, repeated resolution, and the lifetime balance after the
-  container scope ends. Supported cells without a resolvable behavior case are
-  listed in `BEHAVIOR_GAPS` with a reason, so a cell cannot silently lose its
-  test.
+  container scope ends. Multi-route cells add secondary cases: the unique plain
+  cell also moves the rvalue route, and the shared alternative cell also copies
+  the variant wrapper value. Supported cells without a resolvable behavior case
+  are listed in `BEHAVIOR_GAPS` with a reason, so a cell cannot silently lose
+  its test.
 - `templates/` contains logic-free Jinja templates. The Python model computes
   rows; the templates only lay them out.
 - `*_test.py` is the pytest suite for the models and their deterministic

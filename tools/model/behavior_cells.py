@@ -140,6 +140,7 @@ class Expectation:
     copies: int | None = None
     moves: int | None = None
     array_element: str = ""
+    move_out: bool = False
 
 
 EXPECTATIONS = {
@@ -268,6 +269,39 @@ EXPECTATIONS = {
     ),
 }
 
+# Additional request shapes for a cell that the primary expectation does not
+# exercise: the unique rvalue route and the shared wrapper-value route.
+EXTRA_EXPECTATIONS = {
+    ("plain", "unique"): (
+        (
+            "rvalue",
+            # The static container materializes the rvalue route with two
+            # extra moves, so only the construction count and the lifetime
+            # balance are pinned for this route.
+            Expectation(
+                "tracked &&",
+                "first.id != second.id",
+                2,
+                copies=0,
+                move_out=True,
+            ),
+        ),
+    ),
+    ("alternative", "shared"): (
+        (
+            "wrapper",
+            Expectation(
+                "variant_t",
+                "std::get<0>(first).id == std::get<0>(second).id",
+                1,
+                copies=2,
+                moves=0,
+            ),
+        ),
+    ),
+}
+
+
 # Supported cells the route model publishes but that have no resolvable
 # behavior case yet. Each one must state why, so the contract distinguishes a
 # missing test from a shape the library cannot actually serve.
@@ -345,6 +379,7 @@ def build_rows() -> list[dict[str, object]]:
                     )
                 continue
             instance = EXTERNAL_INSTANCES.get(form.name) if scope == "external" else None
+            extras = EXTRA_EXPECTATIONS.get((form.name, scope), ())
             for container in CONTAINERS:
                 if scope in RUNTIME_ONLY_SCOPES and container == "static":
                     continue
@@ -367,8 +402,31 @@ def build_rows() -> list[dict[str, object]]:
                         "moves": expectation.moves,
                         "leaf": expectation.leaf,
                         "array_element": expectation.array_element,
+                        "move_out": expectation.move_out,
                     }
                 )
+                for case, extra in extras:
+                    rows.append(
+                        {
+                            "name": f"{scope}_{form.name}_{case}_{container}",
+                            "scope": scope,
+                            "form": form.name,
+                            "container": container,
+                            "scope_type": f"dingo::scope<dingo::{scope}>",
+                            "storage": form.storage,
+                            "instance": instance[0] if instance else "",
+                            "registration": registration,
+                            "static_source": static_source,
+                            "request": extra.request,
+                            "relation": extra.relation,
+                            "constructions": extra.constructions,
+                            "copies": extra.copies,
+                            "moves": extra.moves,
+                            "leaf": extra.leaf,
+                            "array_element": extra.array_element,
+                            "move_out": extra.move_out,
+                        }
+                    )
     return rows
 
 

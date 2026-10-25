@@ -9,10 +9,10 @@
 """Matrix rows whose behavior the model-generated suites now own.
 
 A restriction keeps the feature in the catalog so its policy sources and
-dependency provisionings still validate, but stops generating the resolved-type
-rows that a behavior class already executes. The covered cells are checked
-against the model's behavior product by the generator test, so a restriction
-cannot outlive the test that justifies it.
+dependency provisionings still validate, but stops generating the
+scope/resolved-type rows that a behavior class already executes. The covered
+cells are checked against the model's behavior product by the generator test,
+so a restriction cannot outlive the test that justifies it.
 """
 
 from __future__ import annotations
@@ -23,7 +23,8 @@ from dataclasses import dataclass
 @dataclass(frozen=True, slots=True)
 class FeatureRestriction:
     feature: str
-    keep_resolved_types: frozenset[str]
+    # (scope, resolved type) cells that the model now executes.
+    drop: frozenset[tuple[str, str]]
     covered_cells: frozenset[tuple[str, str]]
     reason: str
 
@@ -31,7 +32,16 @@ class FeatureRestriction:
 FEATURE_RESTRICTIONS = (
     FeatureRestriction(
         feature="lifetime_counts",
-        keep_resolved_types=frozenset({"value_rvalue"}),
+        drop=frozenset(
+            {
+                ("shared", "value_ref_ptr"),
+                ("shared", "value_shared_ptr"),
+                ("shared", "value_optional_ref"),
+                ("unique", "value_unique_ptr"),
+                ("unique", "value_optional"),
+                ("unique", "value_rvalue"),
+            }
+        ),
         covered_cells=frozenset(
             {
                 ("shared", "plain"),
@@ -45,17 +55,16 @@ FEATURE_RESTRICTIONS = (
         ),
         reason=(
             "behavior classes assert construction, copy, move, destruction and "
-            "the lifetime balance for these cells; only the unique rvalue route "
-            "has no behavior case"
+            "the lifetime balance for these cells, including the unique rvalue "
+            "route"
         ),
     ),
     FeatureRestriction(
         feature="variant",
-        keep_resolved_types=frozenset(
+        drop=frozenset(
             {
-                "variant_alternative_value",
-                "variant_alternative_ref",
-                "variant_alternative_ptr",
+                ("shared", "variant_value"),
+                ("unique", "variant_value"),
             }
         ),
         covered_cells=frozenset(
@@ -65,9 +74,9 @@ FEATURE_RESTRICTIONS = (
             }
         ),
         reason=(
-            "behavior classes resolve the variant value and the alternative "
-            "object; the alternative reference and pointer routes keep their "
-            "matrix rows"
+            "behavior classes resolve both the variant wrapper value and the "
+            "alternative object; the alternative reference and pointer routes "
+            "keep their matrix rows"
         ),
     ),
 )
@@ -75,6 +84,10 @@ FEATURE_RESTRICTIONS = (
 RESTRICTIONS_BY_FEATURE = {
     restriction.feature: restriction for restriction in FEATURE_RESTRICTIONS
 }
+
+# Features whose supported rows are now entirely owned by the model, so the
+# matrix no longer generates a case for them.
+FULLY_MODEL_COVERED_FEATURES = frozenset({"lifetime_counts"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,7 +109,12 @@ MODEL_COVERED_RESOLVED_TYPES = (
                 ("unique", "alternative"),
             }
         ),
-        reason="behavior classes resolve the variant value directly",
+        reason="behavior classes resolve the variant wrapper value directly",
+    ),
+    ResolvedTypeCoverage(
+        resolved_type="value_rvalue",
+        covered_cells=frozenset({("unique", "plain")}),
+        reason="the unique plain behavior class resolves and moves the rvalue route",
     ),
 )
 
@@ -131,6 +149,7 @@ MODEL_COVERED_POLICY_SOURCES = frozenset(
             "concrete",
             "value_unique_ptr",
         ),
+        ("lifetime", "unique", "unique_value_type", "concrete", "value_rvalue"),
         ("resolved_type", "variant_value", "variant"),
     }
 )

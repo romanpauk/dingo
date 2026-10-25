@@ -450,18 +450,18 @@ Anything that is a function of the scope/form catalog belongs in the generated
 model suites. In priority order:
 
 1. **Lifetime and count rows** (`lifetime_counts`, plain value rows). The
-   behavior classes already assert construction, copy, move, destruction, and
-   the lifetime balance. The implemented restriction keeps only the unique
-   rvalue row, which has no behavior case, and drops the rest.
+   behavior classes assert construction, copy, move, destruction, and the
+   lifetime balance, including the unique rvalue route, so the whole feature is
+   now model-owned.
 2. **Plain registration rows**: one stored type, direct value/reference/pointer
    request, no wrapper, key, or feature. These are fully covered by behavior
    classes and can leave the matrix product.
 3. **Forms already covered behaviorally**: variant, optional, pointer, bounded
-   array, unique/shared handles, array handles. The implemented restriction
-   keeps the unique/shared alternative reference and pointer rows and drops the
-   variant value row that the behavior class already executes. Keep the
-   remaining type-variety rows (nested wrappers, custom wrappers, interfaces)
-   that the model does not express.
+   array, unique/shared handles, array handles. The shared and unique variant
+   wrapper values are behavior-tested, so both `variant_value` rows are dropped;
+   the alternative reference and pointer rows stay because the model does not
+   execute them. Keep the remaining type-variety rows (nested wrappers, custom
+   wrappers, interfaces) that the model does not express.
 4. **Container variants** (indexed, indexed DSL, allocator, custom RTTI).
    Replace the full container cross product with one representative registration
    recipe per container and feature. Container mechanics are orthogonal to the
