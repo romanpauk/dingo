@@ -9,7 +9,9 @@
 
 #include <dingo/container.h>
 #include <dingo/static_container.h>
+#include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
+#include <dingo/storage/shared_cyclical.h>
 #include <dingo/storage/unique.h>
 
 #include <gtest/gtest.h>
@@ -43,31 +45,64 @@ struct tracked {
 
 {% for row in rows %}
 TEST(behavior_cells, {{ row.name }}) {
+{% if row.scope == "external" %}
+  tracked external_instance;
+{% endif %}
   tracked::reset();
 {% if row.container == "runtime" %}
   dingo::container<> container;
+{% if row.scope == "external" %}
+  container.register_type<{{ row.scope_type }}, dingo::storage<tracked &>>(
+      external_instance);
+{% else %}
   container.register_type<{{ row.scope_type }}, dingo::storage<tracked>>();
+{% endif %}
 {% else %}
   using source = dingo::bindings<
       dingo::bind<{{ row.scope_type }}, dingo::storage<tracked>>>;
   dingo::static_container<source> container;
 {% endif %}
 
+{% if row.scope == "shared_cyclical" %}
+  tracked &first_reference = container.resolve<tracked &>();
+  tracked &second_reference = container.resolve<tracked &>();
+  tracked *pointer = container.resolve<tracked *>();
+  EXPECT_EQ(std::addressof(first_reference),
+            std::addressof(second_reference));
+  EXPECT_EQ(pointer, std::addressof(first_reference));
+  EXPECT_EQ(tracked::constructions, 1);
+  EXPECT_EQ(tracked::copies, 0);
+  EXPECT_EQ(tracked::moves, 0);
+{% else %}
   tracked first = container.resolve<tracked>();
   tracked second = container.resolve<tracked>();
 {% if row.scope == "shared" %}
   EXPECT_EQ(first.id, second.id);
   EXPECT_EQ(tracked::constructions, 1);
   EXPECT_EQ(tracked::copies, 2);
+  EXPECT_EQ(tracked::moves, 0);
 
   tracked &first_reference = container.resolve<tracked &>();
   tracked &second_reference = container.resolve<tracked &>();
   EXPECT_EQ(std::addressof(first_reference),
             std::addressof(second_reference));
-{% else %}
+{% elif row.scope == "unique" %}
   EXPECT_NE(first.id, second.id);
   EXPECT_EQ(tracked::constructions, 2);
   EXPECT_EQ(tracked::copies, 0);
+{% else %}
+  EXPECT_EQ(first.id, second.id);
+  EXPECT_EQ(tracked::constructions, 0);
+  EXPECT_EQ(tracked::copies, 2);
+  EXPECT_EQ(tracked::moves, 0);
+
+  tracked &first_reference = container.resolve<tracked &>();
+  tracked &second_reference = container.resolve<tracked &>();
+  EXPECT_EQ(std::addressof(first_reference),
+            std::addressof(second_reference));
+  EXPECT_EQ(std::addressof(first_reference),
+            std::addressof(external_instance));
+{% endif %}
 {% endif %}
 }
 

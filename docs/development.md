@@ -67,7 +67,7 @@ The storage and selection models under [`tools/model/`](../tools/model)
 enumerate the built-in cells independently of the C++ headers. The generator
 writes one translation unit for the full storage scope-by-form product, one for
 every selection policy and source status, one route probe for every supported
-storage cell, and one behavior class for shared/unique plain bindings in the
+storage cell, and one behavior class for plain bindings in the applicable
 runtime and static containers. The route ledger classifies every
 scope/form/category row as supported, unavailable with a reason, or a tracked
 gap. The route probes check value, object, and rvalue availability against that

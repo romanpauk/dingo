@@ -24,26 +24,32 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from storage_cells import validate_catalog
 
 
-SCOPES = ("shared", "unique")
+SCOPES = ("shared", "unique", "external", "shared_cyclical")
 CONTAINERS = ("runtime", "static")
+RUNTIME_ONLY = {"external"}
 
 
 def build_rows() -> list[dict[str, str]]:
-    return [
-        {
-            "name": f"{scope}_{container}",
-            "scope": scope,
-            "scope_type": f"dingo::scope<dingo::{scope}>",
-            "container": container,
-        }
-        for scope in SCOPES
-        for container in CONTAINERS
-    ]
+    rows = []
+    for scope in SCOPES:
+        for container in CONTAINERS:
+            if scope in RUNTIME_ONLY and container == "static":
+                continue
+            rows.append(
+                {
+                    "name": f"{scope}_{container}",
+                    "scope": scope,
+                    "scope_type": f"dingo::scope<dingo::{scope}>",
+                    "container": container,
+                }
+            )
+    return rows
 
 
 def validate() -> None:
     rows = build_rows()
-    if len(rows) != len(SCOPES) * len(CONTAINERS):
+    expected = len(SCOPES) * len(CONTAINERS) - len(RUNTIME_ONLY)
+    if len(rows) != expected:
         raise ValueError("behavior product is incomplete")
     if len({row["name"] for row in rows}) != len(rows):
         raise ValueError("behavior product contains duplicate cells")
