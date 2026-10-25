@@ -38,7 +38,7 @@ static_assert(dingo::detail::has_storage_cell_v<scope, type> ==
               "storage cell availability changed");
 static_assert(traits::enabled == {{ "true" if row.enabled else "false" }},
               "storage traits availability changed");
-static_assert(traits::is_stable == {{ "true" if row.scope_stable else "false" }},
+static_assert(traits::is_stable == {{ "true" if row.enabled and row.scope_stable else "false" }},
               "storage stability changed");
 static_assert(dingo::storage_scope_policy<scope>::enabled,
               "storage scope became disabled");

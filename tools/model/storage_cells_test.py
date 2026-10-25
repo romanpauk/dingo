@@ -39,6 +39,8 @@ def test_intentional_exclusions_are_explicit() -> None:
     rows = {
         (row["scope_name"], row["form_name"]): row for row in build_rows()
     }
+    for scope in SCOPES:
+        assert rows[(scope.name, "array")]["enabled"] is False
     for form in (
         "unique_handle",
         "unique_array_handle",

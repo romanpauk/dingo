@@ -37,15 +37,23 @@ ROUTE_FORM_NAMES = (
     "optional",
 )
 GAP_ARRAY_ROUTES = "array-routes"
-GAP_RAW_ARRAY_STORAGE = "raw-array-storage"
 
-ARRAY_GAPS = {}
+# Constraints that are not gaps: the shape is declared, but the combination is
+# rejected for a concrete reason.
 ARRAY_UNAVAILABLE = {
     (
         "shared_cyclical",
         "shared_array_handle",
     ): "shared_cyclical cannot allocate an unsized array handle",
 }
+
+# The raw dynamic array form has no element count, so it can never be sized,
+# constructed, or destroyed by a scope. It is declared unavailable rather than
+# a tracked gap.
+RAW_ARRAY_UNAVAILABLE = (
+    "raw dynamic array storage is not supported: the element count is not part "
+    "of the type"
+)
 
 OPERATION_KINDS = {
     ("shared", "plain", "value"): ("dereference",),
@@ -247,6 +255,14 @@ def _category_outcome(
 ) -> LedgerRow:
     scope = next(scope for scope in SCOPES if scope.name == scope_name)
     form = next(form for form in FORMS if form.name == form_name)
+    if form_name == "array":
+        return LedgerRow(
+            scope_name,
+            form_name,
+            category,
+            "unavailable",
+            RAW_ARRAY_UNAVAILABLE,
+        )
     if bits == 0:
         return LedgerRow(
             scope_name,
@@ -254,15 +270,6 @@ def _category_outcome(
             category,
             "unavailable",
             "scope does not publish the form",
-        )
-    if form_name == "array":
-        return LedgerRow(
-            scope_name,
-            form_name,
-            category,
-            "gap",
-            "raw dynamic array has no storage class",
-            GAP_RAW_ARRAY_STORAGE,
         )
     unavailable = ARRAY_UNAVAILABLE.get((scope_name, form_name))
     if unavailable is not None:
@@ -272,16 +279,6 @@ def _category_outcome(
             category,
             "unavailable",
             unavailable,
-        )
-    gap = ARRAY_GAPS.get((scope_name, form_name))
-    if gap is not None:
-        return LedgerRow(
-            scope_name,
-            form_name,
-            category,
-            "gap",
-            "array route shape is not modeled",
-            gap,
         )
     if form_name not in ROUTE_FORM_NAMES:
         return LedgerRow(

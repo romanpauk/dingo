@@ -31,7 +31,7 @@ template <> struct storage_scope_policy<shared> {
     constexpr storage_exposure exposures[] = {
         static_cast<storage_exposure>(0),  static_cast<storage_exposure>(11),
         static_cast<storage_exposure>(11), static_cast<storage_exposure>(11),
-        static_cast<storage_exposure>(11), static_cast<storage_exposure>(11),
+        static_cast<storage_exposure>(0),  static_cast<storage_exposure>(11),
         static_cast<storage_exposure>(11), static_cast<storage_exposure>(11),
         static_cast<storage_exposure>(11), static_cast<storage_exposure>(11),
         static_cast<storage_exposure>(11),
@@ -50,11 +50,11 @@ template <> struct storage_scope_policy<unique> {
 
   static constexpr storage_exposure exposed(storage_form form) {
     constexpr storage_exposure exposures[] = {
-        static_cast<storage_exposure>(0),  static_cast<storage_exposure>(6),
-        static_cast<storage_exposure>(4),  static_cast<storage_exposure>(12),
-        static_cast<storage_exposure>(12), static_cast<storage_exposure>(12),
-        static_cast<storage_exposure>(4),  static_cast<storage_exposure>(4),
-        static_cast<storage_exposure>(4),  static_cast<storage_exposure>(4),
+        static_cast<storage_exposure>(0), static_cast<storage_exposure>(6),
+        static_cast<storage_exposure>(4), static_cast<storage_exposure>(12),
+        static_cast<storage_exposure>(0), static_cast<storage_exposure>(12),
+        static_cast<storage_exposure>(4), static_cast<storage_exposure>(4),
+        static_cast<storage_exposure>(4), static_cast<storage_exposure>(4),
         static_cast<storage_exposure>(4),
     };
     return exposures[static_cast<unsigned>(form)];
@@ -73,7 +73,7 @@ template <> struct storage_scope_policy<external> {
     constexpr storage_exposure exposures[] = {
         static_cast<storage_exposure>(0),  static_cast<storage_exposure>(11),
         static_cast<storage_exposure>(11), static_cast<storage_exposure>(11),
-        static_cast<storage_exposure>(11), static_cast<storage_exposure>(11),
+        static_cast<storage_exposure>(0),  static_cast<storage_exposure>(11),
         static_cast<storage_exposure>(11), static_cast<storage_exposure>(11),
         static_cast<storage_exposure>(11), static_cast<storage_exposure>(11),
         static_cast<storage_exposure>(11),
@@ -94,7 +94,7 @@ template <> struct storage_scope_policy<shared_cyclical> {
     constexpr storage_exposure exposures[] = {
         static_cast<storage_exposure>(0),  static_cast<storage_exposure>(10),
         static_cast<storage_exposure>(10), static_cast<storage_exposure>(10),
-        static_cast<storage_exposure>(10), static_cast<storage_exposure>(10),
+        static_cast<storage_exposure>(0),  static_cast<storage_exposure>(10),
         static_cast<storage_exposure>(0),  static_cast<storage_exposure>(0),
         static_cast<storage_exposure>(11), static_cast<storage_exposure>(11),
         static_cast<storage_exposure>(0),
@@ -105,7 +105,7 @@ template <> struct storage_scope_policy<shared_cyclical> {
 
 namespace detail {
 inline constexpr unsigned shared_cyclical_cell_lists[] = {
-    0, 10, 10, 10, 10, 10, 0, 0, 11, 11, 0,
+    0, 10, 10, 10, 0, 10, 0, 0, 11, 11, 0,
 };
 } // namespace detail
 

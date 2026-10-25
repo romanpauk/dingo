@@ -16,9 +16,10 @@ hand-curated matrix tags.
 - `route_ledger.py` enumerates every scope, form, and route category with one
   explicit outcome: supported, unavailable with a reason, or a tracked gap.
   Supported routes also carry their expected operation-kind and source-retention
-  sequence. Raw dynamic arrays remain the explicit `raw-array-storage` gap;
-  unsized shared array handles under `shared_cyclical` are an explicit
-  constraint.
+  sequence. Raw dynamic arrays are declared unavailable: the element count is
+  not part of the type, so no scope can size, construct, or destroy them.
+  Unsized shared array handles under `shared_cyclical` are an explicit
+  constraint for the same reason.
 - `route_cells.py` instantiates the real storage type and resolution list for
   every supported storage cell, including bounded arrays and array handles. It
   checks value, object, and rvalue route availability against the ledger,

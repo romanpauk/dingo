@@ -35,6 +35,12 @@ LVALUE = 2
 RVALUE = 4
 POINTER = 8
 
+# Storage forms the library declares but does not implement. The raw dynamic
+# array `T[]` has no element count, so no scope can size, construct, or destroy
+# it. It stays in the catalog so the form enum and the model stay in sync, but
+# no scope exposes it.
+UNAVAILABLE_FORMS = frozenset({"array"})
+
 
 @dataclass(frozen=True)
 class Scope:
@@ -84,7 +90,7 @@ SCOPES = (
         exposures={
             "plain": LVALUE | RVALUE,
             "pointer": RVALUE | POINTER,
-            "array": RVALUE | POINTER,
+            "array": 0,
             "bounded_array": RVALUE | POINTER,
             "alternative": RVALUE,
             "unique_handle": RVALUE,
@@ -118,7 +124,7 @@ SCOPES = (
             "plain": LVALUE | POINTER,
             "alternative": LVALUE | POINTER,
             "pointer": LVALUE | POINTER,
-            "array": LVALUE | POINTER,
+            "array": 0,
             "bounded_array": LVALUE | POINTER,
             "shared_handle": VALUE | LVALUE | POINTER,
             "shared_array_handle": VALUE | LVALUE | POINTER,
@@ -228,10 +234,13 @@ FORM_ENUM = ("unknown", *(form.name for form in FORMS))
 def exposure(scope: Scope, form: Form) -> int:
     """Return the exposure of one scope/form cell.
 
-    A scope with no explicit table exposes every form it can store for the
-    borrowed categories. Scopes with an explicit table must name every form,
-    including the forms they reject with zero.
+    A form the library does not implement is never exposed, whatever the scope
+    table says. A scope with no explicit table exposes every other form it can
+    store for the borrowed categories. Scopes with an explicit table must name
+    every form, including the forms they reject with zero.
     """
+    if form.name in UNAVAILABLE_FORMS:
+        return 0
     if not scope.exposures:
         return VALUE | LVALUE | POINTER
     try:
@@ -261,14 +270,12 @@ def build_rows() -> list[dict[str, object]]:
             enabled = bits != 0
             if scope.name == "shared_cyclical":
                 # shared_cyclical publishes its own cells: the leaf and a
-                # sharing handle, independent of the generic form lists. Raw
-                # dynamic arrays use the generic rule because no stored array
-                # class exists for them.
+                # sharing handle, independent of the generic form lists.
                 has_value = form.name in {
                     "shared_handle",
                     "shared_array_handle",
                 }
-                has_lvalue = enabled and form.name != "array"
+                has_lvalue = enabled
                 has_rvalue = False
                 has_pointer = enabled
             else:

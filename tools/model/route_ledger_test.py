@@ -12,7 +12,6 @@ import pytest
 
 from route_ledger import (
     CATEGORIES,
-    GAP_RAW_ARRAY_STORAGE,
     build_rows,
     category_access,
     category_kinds,
@@ -40,15 +39,18 @@ def test_unavailable_rows_have_reasons() -> None:
             assert not row.gap
 
 
-def test_gaps_are_explicit_and_tracked() -> None:
-    gap_rows = gaps()
-    assert gap_rows
-    assert {row.gap for row in gap_rows} == {GAP_RAW_ARRAY_STORAGE}
-    for row in gap_rows:
-        assert exposure(
-            next(scope for scope in SCOPES if scope.name == row.scope),
-            next(form for form in FORMS if form.name == row.form),
-        ) != 0
+def test_no_untracked_gaps() -> None:
+    assert gaps() == []
+
+
+def test_raw_dynamic_array_is_unavailable() -> None:
+    array_form = next(form for form in FORMS if form.name == "array")
+    for scope in SCOPES:
+        assert exposure(scope, array_form) == 0
+    rows = [row for row in build_rows() if row.form == "array"]
+    assert len(rows) == len(SCOPES) * len(CATEGORIES)
+    assert {row.outcome for row in rows} == {"unavailable"}
+    assert all(row.reason for row in rows)
 
 
 def test_unsized_cyclical_array_handle_is_unavailable() -> None:

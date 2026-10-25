@@ -68,6 +68,13 @@ template <typename Registration> struct binding_model_impl<Registration, true> {
   static constexpr bool use_interface_as_stored_leaf =
       use_interface_as_stored_leaf_v<registered_storage_type, interface_types>;
 
+  // A raw dynamic array has no extent, so no storage can size, construct, or
+  // destroy it. Bounded arrays and owning array handles carry their shape.
+  static_assert(!std::is_array_v<registered_storage_type> ||
+                    std::extent_v<registered_storage_type, 0> != 0,
+                "raw dynamic array storage has no element count; register "
+                "T[N] or an owning array handle instead");
+
   using stored_leaf_type = std::conditional_t<
       use_interface_as_stored_leaf,
       typename annotated_traits<type_list_head_t<interface_types>>::type,

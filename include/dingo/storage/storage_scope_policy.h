@@ -167,19 +167,12 @@ template <typename T, typename U> struct array_row_handle_promotions {
                          wrapper_rebind_leaf_t<std::shared_ptr<T[]>, U> &&>;
 };
 
+// The raw dynamic array form is classified so the catalog and the model agree
+// on its name, but no scope exposes it: without an extent the storage cannot
+// size, construct, or destroy the array. Registering one is a compile-time
+// "storage cell unavailable" error. Use T[N] or an owning array handle instead.
 template <typename T> struct storage_form_traits<T[]> {
   static constexpr storage_form form = storage_form::array;
-
-  template <typename U> struct borrowed {
-    using value_types = type_list<>;
-    using lvalue_reference_types = type_list<>;
-    using pointer_types = type_list<typename wrapper_rebind_leaf<T, U>::type *>;
-  };
-
-  template <typename U> struct consumed {
-    using rvalue_reference_types =
-        typename array_row_handle_promotions<T, U>::type;
-  };
 };
 
 template <typename T, size_t N> struct storage_form_traits<T[N]> {
