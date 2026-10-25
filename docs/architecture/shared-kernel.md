@@ -47,16 +47,17 @@ infrastructure described below. It changes no public API and no behavior.
   translation unit of compile-time assertions for the supported rows and checks
   that every published route target is reachable from both request matchers,
   that the scope access satisfies each route, and that the operation-kind and
-  source-retention sequences derived by `route_derivation.py` match. The recipes
-  are ordered rules over semantic kind, source shape, and wrapper properties, so
-  a new scope reuses them and a custom wrapper with the same shape follows the
-  same rule instead of adding a row per cell. Representative routes also assert
-  that no conversion cache is published unexpectedly. Interface probes derive
-  their value/object/rvalue counts from the same model by form and copyable
-  interface value. Raw dynamic arrays are declared unavailable because the
-  element count is not part of the type; unsized shared array handles under
-  `shared_cyclical` are an explicit constraint for the same reason.
-  `cells-check` fails when the library catalog and the model drift.
+  source-retention sequences and internal conversion step sequences derived by
+  `route_derivation.py` match. The recipes are ordered rules over semantic kind,
+  source shape, and wrapper properties, so a new scope reuses them and a custom
+  wrapper with the same shape follows the same rule instead of adding a row per
+  cell. Representative routes also assert that no conversion cache is published
+  unexpectedly. Interface probes derive their value/object/rvalue counts from
+  the same model by form and copyable interface value. Raw dynamic arrays are
+  declared unavailable because the element count is not part of the type;
+  unsized shared array handles under `shared_cyclical` are an explicit
+  constraint for the same reason. `cells-check` fails when the library catalog
+  and the model drift.
 - Scope lifetime and source shape are descriptors now: `scope_info_of` derives
   consuming/stability/guard/retention from the generated policy, and
   `storage_yield_traits` derives the yielded type and source category from the

@@ -57,12 +57,19 @@ static_assert(all_routes_accept_access<dingo::{{ row.value_access }}>(value_rout
 static_assert(dingo::type_list_size_v<value_routes> ==
                   {{ row.value_kinds | length }},
               "value route count changed");
-{% for kind in row.value_kinds %}
-static_assert(route_kind_at<{{ loop.index0 }}, value_routes>::value ==
-                  dingo::detail::conversion_kind::{{ kind }},
+{% for steps in row.value_steps %}
+{% set route_index = loop.index0 %}
+static_assert(route_kind_at<{{ route_index }}, value_routes>::value ==
+                  dingo::detail::conversion_kind::{{ row.value_kinds[route_index] }},
               "value route operation changed");
-static_assert(route_step_count_at<{{ loop.index0 }}, value_routes>::value != 0,
-              "value route has no conversion steps");
+static_assert(route_step_count_at<{{ route_index }}, value_routes>::value ==
+                  {{ steps | length }},
+              "value route step count changed");
+{% for kind in steps %}
+static_assert(route_step_kind_at<{{ route_index }}, {{ loop.index0 }}, value_routes>::value ==
+                  dingo::detail::conversion_kind::{{ kind }},
+              "value route step changed");
+{% endfor %}
 {% endfor %}
 static_assert(all_routes_have_no_cache(value_routes{}),
               "value route unexpectedly caches a conversion");
@@ -82,12 +89,19 @@ static_assert(all_routes_accept_access<dingo::{{ row.object_access }}>(object_ro
 static_assert(dingo::type_list_size_v<object_routes> ==
                   {{ row.object_kinds | length }},
               "object route count changed");
-{% for kind in row.object_kinds %}
-static_assert(route_kind_at<{{ loop.index0 }}, object_routes>::value ==
-                  dingo::detail::conversion_kind::{{ kind }},
+{% for steps in row.object_steps %}
+{% set route_index = loop.index0 %}
+static_assert(route_kind_at<{{ route_index }}, object_routes>::value ==
+                  dingo::detail::conversion_kind::{{ row.object_kinds[route_index] }},
               "object route operation changed");
-static_assert(route_step_count_at<{{ loop.index0 }}, object_routes>::value != 0,
-              "object route has no conversion steps");
+static_assert(route_step_count_at<{{ route_index }}, object_routes>::value ==
+                  {{ steps | length }},
+              "object route step count changed");
+{% for kind in steps %}
+static_assert(route_step_kind_at<{{ route_index }}, {{ loop.index0 }}, object_routes>::value ==
+                  dingo::detail::conversion_kind::{{ kind }},
+              "object route step changed");
+{% endfor %}
 {% endfor %}
 static_assert(all_routes_have_no_cache(object_routes{}),
               "object route unexpectedly caches a conversion");
@@ -107,12 +121,19 @@ static_assert(all_routes_accept_access<dingo::{{ row.rvalue_access }}>(rvalue_ro
 static_assert(dingo::type_list_size_v<rvalue_routes> ==
                   {{ row.rvalue_kinds | length }},
               "rvalue route count changed");
-{% for kind in row.rvalue_kinds %}
-static_assert(route_kind_at<{{ loop.index0 }}, rvalue_routes>::value ==
-                  dingo::detail::conversion_kind::{{ kind }},
+{% for steps in row.rvalue_steps %}
+{% set route_index = loop.index0 %}
+static_assert(route_kind_at<{{ route_index }}, rvalue_routes>::value ==
+                  dingo::detail::conversion_kind::{{ row.rvalue_kinds[route_index] }},
               "rvalue route operation changed");
-static_assert(route_step_count_at<{{ loop.index0 }}, rvalue_routes>::value != 0,
-              "rvalue route has no conversion steps");
+static_assert(route_step_count_at<{{ route_index }}, rvalue_routes>::value ==
+                  {{ steps | length }},
+              "rvalue route step count changed");
+{% for kind in steps %}
+static_assert(route_step_kind_at<{{ route_index }}, {{ loop.index0 }}, rvalue_routes>::value ==
+                  dingo::detail::conversion_kind::{{ kind }},
+              "rvalue route step changed");
+{% endfor %}
 {% endfor %}
 static_assert(all_routes_have_no_cache(rvalue_routes{}),
               "rvalue route unexpectedly caches a conversion");

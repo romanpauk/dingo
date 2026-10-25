@@ -95,13 +95,13 @@ publishes, so the ledger no longer keeps one hand-written sequence per cell. The
 route probes check value, object, and rvalue availability against that ledger,
 require every published route target to be reachable from both the static and
 runtime request matchers, check that the scope's access satisfies every route,
-and check the derived operation-kind and source-retention sequences. The
-interface probes ask the same model for their value/object/rvalue counts by
-exposed form and copyable interface value. It also generates the committed
-`include/dingo/storage/scopes.gen.h` header, which owns the built-in
-`storage_scope_policy` data. Compile-time assertions compare the generated
-expectation with the library; a missing cell, changed exposure, or stale catalog
-fails the build.
+and check the derived candidate kind, source-retention, and internal conversion
+step sequences. The interface probes ask the same model for their
+value/object/rvalue counts by exposed form and copyable interface value. It also
+generates the committed `include/dingo/storage/scopes.gen.h` header, which owns
+the built-in `storage_scope_policy` data. Compile-time assertions compare the
+generated expectation with the library; a missing cell, changed exposure, or
+stale catalog fails the build.
 
 Behavior classes are data-driven too. `behavior_cells.py` owns a registration
 description and an expectation entry per form, derives the scope and container

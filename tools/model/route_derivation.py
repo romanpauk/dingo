@@ -308,6 +308,91 @@ def form_kind(form_name: str) -> str:
 _IN_PLACE_KINDS = frozenset({"handle", "array_handle", "optional"})
 
 
+@dataclass(frozen=True)
+class StepRule:
+    """The internal conversion steps of one published candidate."""
+
+    category: str
+    candidate: str
+    form: str | None
+    source: str | None
+    steps: tuple[str, ...]
+
+    def matches(
+        self, category: str, candidate: str, form: str, source: str
+    ) -> bool:
+        return (
+            self.category == category
+            and self.candidate == candidate
+            and (self.form is None or self.form == form)
+            and (self.source is None or self.source == source)
+        )
+
+
+_SIMPLE_STEPS = frozenset(
+    {
+        "traits",
+        "identity",
+        "reference",
+        "address",
+        "array_reference",
+        "array_pointer",
+        "pointer_access",
+        "alternative",
+    }
+)
+
+# Internal steps are the conversion nodes in execution order. Most candidates
+# are one leaf conversion; dereference, borrow, and wrapper candidates compose
+# a leaf underneath their outer step.
+STEP_RULES = (
+    StepRule(
+        "value", "dereference", "variant", None,
+        ("dereference", "alternative"),
+    ),
+    StepRule(
+        "object", "dereference", "variant", None,
+        ("dereference", "alternative"),
+    ),
+    StepRule(
+        "object", "dereference", "pointer", "cyclical_double",
+        ("dereference", "dereference", "traits"),
+    ),
+    StepRule("value", "dereference", None, None, ("dereference", "identity")),
+    StepRule(
+        "object", "borrowed", "variant", None, ("borrowed", "alternative")
+    ),
+    StepRule("value", "borrowed", None, None, ("borrowed", "identity")),
+    StepRule("object", "borrowed", None, None, ("borrowed", "traits")),
+    StepRule("value", "wrapper", None, None, ("identity", "wrapper")),
+    StepRule("rvalue", "wrapper", None, None, ("identity", "wrapper")),
+)
+
+
+def _candidate_steps(
+    category: str, candidate: str, form: str, source: str
+) -> tuple[str, ...]:
+    for rule in STEP_RULES:
+        if rule.matches(category, candidate, form, source):
+            return rule.steps
+    if candidate in _SIMPLE_STEPS:
+        return (candidate,)
+    raise KeyError(
+        f"no {category} step rule for {candidate} from {form}/{source}"
+    )
+
+
+def route_candidate_steps(
+    scope_name: str, form_name: str, category: str
+) -> tuple[tuple[str, ...], ...]:
+    source = source_shape(scope_name, form_name)
+    form = form_kind(form_name)
+    return tuple(
+        _candidate_steps(category, candidate.kind, form, source)
+        for candidate in route_candidates(scope_name, form_name, category)
+    )
+
+
 def source_shape(scope_name: str, form_name: str) -> str:
     """How one cell hands its stored shape to a conversion."""
     scope = SCOPE_BY_NAME[scope_name]

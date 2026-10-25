@@ -21,7 +21,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from route_derivation import route_kinds, route_retention
+from route_derivation import (
+    route_candidate_steps,
+    route_kinds,
+    route_retention,
+)
 from storage_cells import FORMS, LVALUE, POINTER, RVALUE, SCOPES, VALUE, exposure
 
 
@@ -68,6 +72,7 @@ class LedgerRow:
     kinds: tuple[str, ...] = ()
     kind_gap: str = ""
     retention: tuple[int, ...] = ()
+    steps: tuple[tuple[str, ...], ...] = ()
 
 
 def _category_outcome(
@@ -137,6 +142,9 @@ def _category_outcome(
         route_kinds(scope_name, form_name, category) if supported else (),
         "",
         route_retention(scope_name, form_name, category) if supported else (),
+        route_candidate_steps(scope_name, form_name, category)
+        if supported
+        else (),
     )
 
 
@@ -181,6 +189,10 @@ def validate() -> None:
             raise ValueError(f"retention sequence length mismatch: {row}")
         if any(value not in (0, 1) for value in row.retention):
             raise ValueError(f"retention value is not boolean: {row}")
+        if len(row.steps) != len(row.kinds):
+            raise ValueError(f"step sequence length mismatch: {row}")
+        if any(not steps for steps in row.steps):
+            raise ValueError(f"candidate has no conversion steps: {row}")
         if row.kind_gap:
             raise ValueError(f"operation-kind gap remains: {row}")
 
@@ -232,6 +244,20 @@ def category_retention(
             and row.outcome == "supported"
         ):
             return row.retention
+    raise KeyError((scope_name, form_name, category))
+
+
+def category_steps(
+    scope_name: str, form_name: str, category: str
+) -> tuple[tuple[str, ...], ...]:
+    for row in build_rows():
+        if (
+            row.scope == scope_name
+            and row.form == form_name
+            and row.category == category
+            and row.outcome == "supported"
+        ):
+            return row.steps
     raise KeyError((scope_name, form_name, category))
 
 

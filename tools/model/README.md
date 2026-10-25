@@ -39,18 +39,21 @@ hand-curated matrix tags.
   a supported route from an ordered rule list over the form's semantic kind, the
   source shape the scope hands out (pointer, lvalue, rvalue, cyclical row
   pointer, or cyclical handle), and the stored wrapper properties. Each candidate
-  carries its operation kind and source-retention flag. Rules do not
-  name a storage form, so a custom wrapper with the same kind and properties
-  follows the same rule as the built-in wrapper it mirrors. A supported cell
-  with no matching rule fails validation instead of losing its kind coverage.
+  carries its operation kind and source-retention flag. A second rule layer
+  derives each candidate's internal conversion step kinds in execution order,
+  so dereference, borrow, and wrapper candidates expose their composed leaf.
+  Rules do not name a storage form, so a custom wrapper with the same kind and
+  properties follows the same rule as the built-in wrapper it mirrors. A
+  supported cell with no matching rule fails validation instead of losing its
+  kind coverage.
 - `route_cells.py` instantiates the real storage type and resolution list for
   every supported storage cell, including bounded arrays and array handles. It
   checks value, object, and rvalue route availability against the ledger,
   requires every published route target to be reachable from both the static and
   runtime request matchers, checks that every route's required access is
   satisfied by the scope, checks the operation-kind and source-retention
-  sequences derived by `route_derivation.py`, checks that each published route
-  exposes a non-empty C++ conversion step list, and asserts that representative
+  sequences derived by `route_derivation.py`, checks the full C++ conversion
+  step kind sequence for every published route, and asserts that representative
   routes do not unexpectedly cache conversions.
 - `wrapper_semantics.py` describes request shapes as a leaf wrapped in zero or
   more wrappers. A wrapper declares its semantics (`owning`, `sharing`,
