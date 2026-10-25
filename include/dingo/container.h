@@ -34,6 +34,7 @@
 #include <dingo/static/container_traits.h>
 #include <dingo/static/graph.h>
 #include <dingo/static/registry.h>
+#include <dingo/static/request_plan.h>
 #include <dingo/static/resolution.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/annotated.h>
@@ -663,27 +664,20 @@ private:
   template <typename Request, typename R, typename LookupKey>
   R resolve_entry(LookupKey key) {
     using user_type = typename Request::user_type;
-    using wrapper = std::remove_cv_t<user_type>;
-    using lift = detail::request_lift<wrapper>;
-    if constexpr (lift::enabled) {
-      constexpr bool static_present =
-          detail::static_request_present_v<static_bindings_type, wrapper,
-                                           LookupKey>;
-      constexpr bool static_direct =
-          detail::static_request_served_v<static_bindings_type, wrapper,
-                                          LookupKey>;
-      if constexpr (static_present && !static_direct) {
-        // The static binding exists but does not publish the wrapper route.
-        // Do not instantiate the direct static request, which would reject the
-        // shape at compile time.
-        return lift::make(resolve<typename lift::inner_type>(key));
-      } else {
-        return detail::resolve_request_or_lift<wrapper, R>(
-            [&]() -> R { return resolve_entry_direct<Request, R>(key); },
-            [&]() -> R {
-              return lift::make(resolve<typename lift::inner_type>(key));
-            });
-      }
+    using plan =
+        detail::request_plan<user_type, LookupKey, static_bindings_type,
+                             detail::request_route_policy::runtime_fallback>;
+    if constexpr (plan::lift_before_direct) {
+      return plan::lift_type::make(resolve<typename plan::inner_type>(key));
+    } else if constexpr (plan::direct_with_runtime_fallback) {
+      // Keep the key intact: the lift may retry after the direct route
+      // reports a missing route.
+      return detail::resolve_request_or_lift<typename plan::wrapper, R>(
+          [&]() -> R { return resolve_entry_direct<Request, R>(key); },
+          [&]() -> R {
+            return plan::lift_type::make(
+                resolve<typename plan::inner_type>(key));
+          });
     } else {
       return resolve_entry_direct<Request, R>(std::move(key));
     }
@@ -1157,33 +1151,28 @@ public:
                                 LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
     constexpr bool may_auto = runtime_auto_constructible_v<T>;
-    using wrapper = std::remove_cv_t<T>;
-    using lift = detail::request_lift<wrapper>;
-    if constexpr (lift::enabled) {
-      constexpr bool static_present =
-          detail::static_request_present_v<static_bindings_type, wrapper,
-                                           LookupKey>;
-      constexpr bool static_direct =
-          detail::static_request_served_v<static_bindings_type, wrapper,
-                                          LookupKey>;
-      if constexpr (static_present && !static_direct) {
-        return lift::make(resolve<typename lift::inner_type, false>(
-            scope, context, origin, key));
-      } else {
-        return detail::resolve_request_or_lift<wrapper, R>(
-            [&]() -> R {
-              if (context.owns(runtime_registry_.runtime())) {
-                return resolve<request, R, may_auto>(scope, context, origin,
-                                                     key);
-              }
-              return resolve_nested<request, R, may_auto>(scope, context,
-                                                          origin, key);
-            },
-            [&]() -> R {
-              return lift::make(resolve<typename lift::inner_type, false>(
-                  scope, context, origin, key));
-            });
-      }
+    using plan =
+        detail::request_plan<T, LookupKey, static_bindings_type,
+                             detail::request_route_policy::runtime_fallback>;
+    if constexpr (plan::lift_before_direct) {
+      return plan::lift_type::make(resolve<typename plan::inner_type, false>(
+          scope, context, origin, key));
+    } else if constexpr (plan::direct_with_runtime_fallback) {
+      // Keep the key intact: the lift may retry after the direct route
+      // reports a missing route.
+      return detail::resolve_request_or_lift<typename plan::wrapper, R>(
+          [&]() -> R {
+            if (context.owns(runtime_registry_.runtime())) {
+              return resolve<request, R, may_auto>(scope, context, origin, key);
+            }
+            return resolve_nested<request, R, may_auto>(scope, context, origin,
+                                                        key);
+          },
+          [&]() -> R {
+            return plan::lift_type::make(
+                resolve<typename plan::inner_type, false>(scope, context,
+                                                          origin, key));
+          });
     } else if (context.owns(runtime_registry_.runtime())) {
       return resolve<request, R, may_auto>(scope, context, origin,
                                            std::move(key));

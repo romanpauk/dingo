@@ -56,6 +56,12 @@ infrastructure described below. It changes no public API and no behavior.
   element count is not part of the type; unsized shared array handles under
   `shared_cyclical` are an explicit constraint for the same reason.
   `cells-check` fails when the library catalog and the model drift.
+- The direct/lift decision is one `request_plan` in
+  `include/dingo/static/request_plan.h`. It probes whether the static binding
+  serves the wrapper route and exposes a compile-time or runtime-fallback
+  policy. `container::resolve_entry`, the dependency origin overload,
+  `static_container` public resolve, and the `static_container` origin overload
+  branch on the same plan and supply only their route bodies.
 - Behavior coverage follows the same catalog. `behavior_cells.py` declares each
   form once (storage, factory, external instance) plus one expectation entry per
   scope, then derives the runtime and static product from the route ledger.

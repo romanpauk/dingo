@@ -14,6 +14,7 @@
 #include <dingo/static/activation_set.h>
 #include <dingo/static/container_traits.h>
 #include <dingo/static/context.h>
+#include <dingo/static/request_plan.h>
 #include <dingo/static/resolution.h>
 #include <dingo/type/dependency_traits.h>
 
@@ -294,15 +295,13 @@ public:
   R resolve(LookupKey key) {
     using lookup_request = request_type<T, true>;
     using request = request_type<T, false>;
-    using wrapper = std::remove_cv_t<T>;
-    using lift = detail::request_lift<wrapper>;
-    constexpr bool lift_request =
-        lift::enabled && !detail::static_request_served_v<static_bindings_type,
-                                                          wrapper, LookupKey>;
-    if constexpr (lift_request) {
-      return lift::make(
-          resolve<typename lift::inner_type, LookupKey,
-                  request_result_t<typename lift::inner_type, true>>(key));
+    using plan =
+        detail::request_plan<T, LookupKey, static_bindings_type,
+                             detail::request_route_policy::compile_time>;
+    if constexpr (plan::lift_before_direct) {
+      return plan::lift_type::make(
+          resolve<typename plan::inner_type, LookupKey,
+                  request_result_t<typename plan::inner_type, true>>(key));
     } else {
       if constexpr (!collection_traits<R>::is_collection) {
         if constexpr (uses_static_minimal_context_v<request, R, LookupKey>) {
@@ -353,13 +352,11 @@ public:
             LookupKey key) {
     using lookup_request = request_type<T, true>;
     using request = request_type<T, RemoveRvalueReferences>;
-    using wrapper = std::remove_cv_t<T>;
-    using lift = detail::request_lift<wrapper>;
-    constexpr bool lift_request =
-        lift::enabled && !detail::static_request_served_v<static_bindings_type,
-                                                          wrapper, LookupKey>;
-    if constexpr (lift_request) {
-      return lift::make(resolve<typename lift::inner_type, false>(
+    using plan =
+        detail::request_plan<T, LookupKey, static_bindings_type,
+                             detail::request_route_policy::compile_time>;
+    if constexpr (plan::lift_before_direct) {
+      return plan::lift_type::make(resolve<typename plan::inner_type, false>(
           scope, context, origin, key));
     } else {
       if constexpr (!collection_traits<R>::is_collection) {
