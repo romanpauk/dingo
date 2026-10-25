@@ -23,37 +23,13 @@
 
 namespace dingo {
 namespace detail {
-template <typename Source> class rvalue_source {
+// The storage and lifetime halves of an owning source. The lifetime half only
+// registers a destructor when the value actually needs one, so a source of a
+// trivially destructible value is itself trivially destructible and costs no
+// context destructor slot.
+template <typename Source> class rvalue_source_storage {
 public:
   using value_type = Source;
-
-  template <
-      typename Value,
-      typename = std::enable_if_t<
-          std::is_constructible_v<Source, Value &&> &&
-          !std::is_same_v<std::remove_cv_t<std::remove_reference_t<Value>>,
-                          rvalue_source>>>
-  explicit rvalue_source(Value &&value) {
-    new (&storage_) Source(std::forward<Value>(value));
-    initialized_ = true;
-  }
-
-  template <typename Builder>
-  explicit rvalue_source(std::in_place_t, Builder &&builder) {
-    builder(&storage_);
-    initialized_ = true;
-  }
-
-  rvalue_source(const rvalue_source &) = delete;
-  rvalue_source &operator=(const rvalue_source &) = delete;
-  rvalue_source(rvalue_source &&) = delete;
-  rvalue_source &operator=(rvalue_source &&) = delete;
-
-  ~rvalue_source() {
-    if (initialized_) {
-      destroy_object_value(get());
-    }
-  }
 
   Source *get_ptr() {
     return std::launder(reinterpret_cast<Source *>(&storage_));
@@ -72,9 +48,74 @@ public:
   Source *operator->() { return get_ptr(); }
   const Source *operator->() const { return get_ptr(); }
 
+protected:
+  ~rvalue_source_storage() = default;
+
+  void *storage_address() { return &storage_; }
+  void mark_initialized() { initialized_ = true; }
+  bool is_initialized() const { return initialized_; }
+
 private:
   alignas(Source) std::byte storage_[sizeof(Source)];
   bool initialized_ = false;
+};
+
+template <typename Source, bool Trivial> class rvalue_source_lifetime;
+
+template <typename Source>
+class rvalue_source_lifetime<Source, true>
+    : public rvalue_source_storage<Source> {
+protected:
+  ~rvalue_source_lifetime() = default;
+};
+
+template <typename Source>
+class rvalue_source_lifetime<Source, false>
+    : public rvalue_source_storage<Source> {
+protected:
+  ~rvalue_source_lifetime() {
+    if (this->is_initialized()) {
+      destroy_object_value(this->get());
+    }
+  }
+};
+
+template <typename Source>
+class rvalue_source
+    : public rvalue_source_lifetime<Source,
+                                    std::is_trivially_destructible_v<Source>> {
+  using lifetime =
+      rvalue_source_lifetime<Source, std::is_trivially_destructible_v<Source>>;
+
+public:
+  using value_type = Source;
+
+  template <
+      typename Value,
+      typename = std::enable_if_t<
+          std::is_constructible_v<Source, Value &&> &&
+          !std::is_same_v<std::remove_cv_t<std::remove_reference_t<Value>>,
+                          rvalue_source>>>
+  explicit rvalue_source(Value &&value) {
+    new (this->storage_address()) Source(std::forward<Value>(value));
+    this->mark_initialized();
+  }
+
+  template <typename Builder>
+  explicit rvalue_source(std::in_place_t, Builder &&builder) {
+    builder(this->storage_address());
+    this->mark_initialized();
+  }
+
+  rvalue_source(const rvalue_source &) = delete;
+  rvalue_source &operator=(const rvalue_source &) = delete;
+  rvalue_source(rvalue_source &&) = delete;
+  rvalue_source &operator=(rvalue_source &&) = delete;
+
+  using lifetime::get;
+  using lifetime::get_ptr;
+  using lifetime::operator*;
+  using lifetime::operator->;
 };
 
 // A source that owns its value for as long as the resolution context lives.

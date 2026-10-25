@@ -275,14 +275,12 @@ EXTRA_EXPECTATIONS = {
     ("plain", "unique"): (
         (
             "rvalue",
-            # The static container materializes the rvalue route with two
-            # extra moves, so only the construction count and the lifetime
-            # balance are pinned for this route.
             Expectation(
                 "tracked &&",
                 "first.id != second.id",
                 2,
                 copies=0,
+                moves=4,
                 move_out=True,
             ),
         ),

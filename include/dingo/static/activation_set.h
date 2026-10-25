@@ -465,6 +465,19 @@ struct static_binding_resolver {
     return detail::binding_registered_type<storage_type>();
   }
 
+  // A context that can materialize a consuming source keeps it alive for the
+  // whole resolution, so the address kernel can publish it directly instead of
+  // copying it into a second slot. Runtime contexts always do; static contexts
+  // do whenever the storage scope consumes its source.
+  template <typename Context>
+  static constexpr bool uses_context_materialized_source_v =
+      is_runtime_context_v<Context> ||
+      detail::has_context_materialize_source<
+          storage_materialization_traits<typename storage_type::tag_type,
+                                         typename storage_type::type>,
+          Context, storage_type,
+          binding_activation<State, Host, binding_model_type>>::value;
+
   template <typename Request, typename Context>
   Request resolve(Context &context) {
     static_assert(is_runtime_context_v<Context> ||
@@ -534,7 +547,7 @@ struct static_binding_resolver {
                       decltype(activation)>) {
       return detail::with_context_lvalue_source(
           scope, context, storage, activation, std::move(materialize));
-    } else if constexpr (is_runtime_context_v<Context>) {
+    } else if constexpr (uses_context_materialized_source_v<Context>) {
       return detail::with_runtime_binding_source(
           scope, context, storage, activation, std::move(materialize));
     } else if constexpr (detail::operation_requires_source_retention_v<
@@ -570,7 +583,7 @@ struct static_binding_resolver {
                       decltype(activation)>) {
       return detail::with_context_lvalue_source(scope, context, storage,
                                                 activation, std::move(consume));
-    } else if constexpr (is_runtime_context_v<Context>) {
+    } else if constexpr (uses_context_materialized_source_v<Context>) {
       return detail::with_runtime_binding_source(
           scope, context, storage, activation, std::move(consume));
     } else if constexpr (detail::operation_requires_source_retention_v<

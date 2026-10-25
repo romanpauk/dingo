@@ -484,6 +484,15 @@ incremental and safe. `test/matrix/model_coverage.py` is that manifest:
 `FEATURE_RESTRICTIONS` lists the dropped rows with the model cells that justify
 them, and the generator test fails if any claimed cell loses its behavior class.
 
+The behavior rvalue case pins the construction count, the move count, and the
+lifetime balance. The static container reaches the same move count as the
+runtime container because a static binding now materializes a consuming source
+in its context, exactly like the runtime binding, instead of keeping a local
+source and copying the value into a second context slot. The static execution
+graph accounts for that source wrapper in its temporary slot, size, and
+destructor bounds; the wrapper stays trivially destructible when the value does,
+so those bounds do not grow for trivial types.
+
 ## Cost Guarantees
 
 The design adds no abstraction that survives into the generated code as runtime

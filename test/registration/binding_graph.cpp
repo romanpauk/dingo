@@ -168,7 +168,7 @@ TEST(static_execution_traits_test,
 
   static_assert(static_traits::acyclic);
   static_assert(static_traits::max_retained_frame_depth == 0);
-  static_assert(static_traits::max_temporary_slots == 3);
+  static_assert(static_traits::max_temporary_slots == 6);
   static_assert(static_traits::max_destructible_slots == 0);
   static_assert(static_traits::max_temporary_size >= sizeof(root));
 }
@@ -188,7 +188,7 @@ TEST(static_execution_traits_test,
   using static_traits = detail::static_execution_traits<typename source::type>;
 
   static_assert(static_traits::acyclic);
-  static_assert(static_traits::max_temporary_slots == 3);
+  static_assert(static_traits::max_temporary_slots == 6);
   static_assert(static_traits::max_destructible_slots == 0);
 }
 
@@ -438,7 +438,7 @@ TEST(
 
   static_assert(static_traits::acyclic);
   static_assert(static_traits::max_retained_frame_depth == 2);
-  static_assert(static_traits::max_temporary_slots == 2);
+  static_assert(static_traits::max_temporary_slots == 4);
   static_assert(static_traits::max_destructible_slots == 0);
 }
 
@@ -471,8 +471,8 @@ TEST(static_execution_traits_test,
 
   static_assert(static_traits::acyclic);
   static_assert(static_traits::max_retained_frame_depth == 0);
-  static_assert(static_traits::max_temporary_slots == 1);
-  static_assert(static_traits::max_destructible_slots == 1);
+  static_assert(static_traits::max_temporary_slots == 2);
+  static_assert(static_traits::max_destructible_slots == 2);
   static_assert(static_traits::max_temporary_size >=
                 sizeof(std::optional<payload>));
   static_assert(static_traits::max_temporary_align >=
@@ -519,8 +519,8 @@ TEST(
   using static_traits = detail::static_execution_traits<typename source::type>;
 
   static_assert(static_traits::acyclic);
-  static_assert(static_traits::max_destructible_slots == 3);
-  static_assert(static_traits::max_temporary_slots == 3);
+  static_assert(static_traits::max_destructible_slots == 6);
+  static_assert(static_traits::max_temporary_slots == 6);
   static_assert(static_traits::max_temporary_size >=
                 sizeof(std::optional<payload>));
   static_assert(static_traits::max_temporary_align >=

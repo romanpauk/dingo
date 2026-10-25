@@ -631,22 +631,45 @@ template <typename Binding> constexpr graph_cost graph_binding_cost() {
           : 0;
   constexpr std::size_t stored_destructible =
       std::is_trivially_destructible_v<stored> ? 0 : 1;
+  // The materialized source wrapper owns a destructor only when the stored
+  // value needs one; a trivially destructible source stays trivial.
+  constexpr std::size_t source_destructible =
+      storage_scope_policy<typename model::storage_tag>::consumes &&
+              !std::is_trivially_destructible_v<stored>
+          ? 1
+          : 0;
   const graph_request_summary requests = graph_summarize_requests(
       static_cast<typename model::dependencies_type::type *>(nullptr));
 
   graph_cost cost{};
   cost.stable = model::storage_type::conversions::is_stable;
   cost.frame = std::is_same_v<tag, shared> ? 1 : 0;
-  cost.self_temporary = std::max(temporaries::slots, storage_slots);
+  // The storage slot and the temporary conversion slots are alive at the same
+  // time during a resolution, so the node needs both.
+  cost.self_temporary = temporaries::slots + storage_slots;
+  // The source wrapper replaces the stored value's own slot; a conversion
+  // temporary is alive beside it.
+  constexpr bool frame_storage =
+      storage_scope_policy<typename model::storage_tag>::consumes || cyclical;
+  constexpr std::size_t stored_slot_destructible =
+      frame_storage ? std::max(stored_destructible, source_destructible)
+                    : std::size_t{0};
   cost.self_destructible =
-      std::max({temporaries::destructible_slots,
-                cost.self_temporary != 0 ? stored_destructible : std::size_t{0},
-                rollback});
+      temporaries::destructible_slots + stored_slot_destructible + rollback;
   cost.destructible = requests.destructible + temporaries::destructible_slots +
-                      stored_destructible + rollback;
+                      stored_slot_destructible + rollback;
   cost.temporary = requests.temporary + temporaries::slots + storage_slots;
-  cost.size = std::max({requests.size, temporaries::size, sizeof(stored),
-                        cyclical ? sizeof(void *) : std::size_t{0}});
+  // A consuming scope materializes its source in the context as an owning
+  // wrapper around the stored value, so the temporary bound must cover the
+  // wrapper, not just the value.
+  constexpr std::size_t source_size =
+      storage_scope_policy<typename model::storage_tag>::consumes
+          ? ((sizeof(stored) + alignof(stored)) / alignof(stored)) *
+                alignof(stored)
+          : 0;
+  cost.size =
+      std::max({requests.size, temporaries::size, sizeof(stored), source_size,
+                cyclical ? sizeof(void *) : std::size_t{0}});
   cost.align = std::max({requests.align, temporaries::align, alignof(stored),
                          cyclical ? alignof(void *) : std::size_t{0}});
   return cost;
