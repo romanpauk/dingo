@@ -17,132 +17,18 @@ hand-written: the library answers them, and the report makes the gaps visible.
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from route_ledger import supported_categories
+from route_rules import reason_text
 from storage_cells import FORMS, SCOPES, exposure, validate_catalog
 
-
-@dataclass(frozen=True)
-class Shape:
-    name: str
-    cpp_type: str
-    depth: int = 0
-    # Outermost constructor first. The chain is the shape's derivation path and
-    # is what the support report groups on.
-    constructors: tuple[str, ...] = ()
-    is_reference: bool = False
-    is_lvalue_reference: bool = False
-    is_pointer: bool = False
-    is_array: bool = False
-    is_const: bool = False
-
-
-BASE = Shape("value", "int")
-
-
-@dataclass(frozen=True)
-class Constructor:
-    name: str
-    render: str
-    is_reference: bool = False
-    is_lvalue_reference: bool = False
-    is_pointer: bool = False
-    is_array: bool = False
-    is_const: bool = False
-
-    def apply(self, inner: Shape) -> Shape:
-        return Shape(
-            name=f"{self.name}_{inner.name}",
-            cpp_type=self.render.format(inner=inner.cpp_type),
-            depth=inner.depth + 1,
-            constructors=(self.name,) + inner.constructors,
-            is_reference=self.is_reference,
-            is_lvalue_reference=self.is_lvalue_reference,
-            is_pointer=self.is_pointer,
-            is_array=self.is_array,
-            is_const=self.is_const,
-        )
-
-    def applicable(self, inner: Shape) -> bool:
-        if self.is_const:
-            # const applies to the object, not to pointers or references; the
-            # pointer-to-const shape comes from pointer(const(T)).
-            return not inner.is_reference and not inner.is_const
-        if self.is_reference:
-            return not inner.is_reference and not inner.is_array
-        if self.is_array:
-            return not inner.is_reference and not inner.is_array
-        if self.name in {"pointer", "array_pointer"}:
-            return not inner.is_reference and not inner.is_array
-        if self.name in {
-            "optional",
-            "unique_ptr",
-            "shared_ptr",
-            "unique_array",
-            "shared_array",
-        }:
-            return not inner.is_reference and not inner.is_array
-        return False
-
-
-CONSTRUCTORS = (
-    Constructor("const", "const {inner}", is_const=True),
-    Constructor(
-        "lvalue_reference", "{inner} &", is_reference=True,
-        is_lvalue_reference=True,
-    ),
-    Constructor("rvalue_reference", "{inner} &&", is_reference=True),
-    Constructor("pointer", "{inner} *", is_pointer=True),
-    Constructor("optional", "std::optional<{inner}>"),
-    Constructor("unique_ptr", "std::unique_ptr<{inner}>"),
-    Constructor("shared_ptr", "std::shared_ptr<{inner}>"),
-    Constructor("unique_array", "std::unique_ptr<{inner}[]>"),
-    Constructor("shared_array", "std::shared_ptr<{inner}[]>"),
-    Constructor(
-        "array_lvalue_reference", "{inner} (&)[2]", is_reference=True,
-        is_lvalue_reference=True, is_array=True,
-    ),
-    Constructor("array_pointer", "{inner} (*)[2]", is_pointer=True,
-                is_array=True),
-)
-
-SHAPE_DEPTH = 2
-
-
-def enumerate_shapes(depth: int = SHAPE_DEPTH) -> tuple[Shape, ...]:
-    shapes = {BASE.name: BASE}
-    frontier = [BASE]
-    for _ in range(depth):
-        next_frontier = []
-        for inner in frontier:
-            for constructor in CONSTRUCTORS:
-                if not constructor.applicable(inner):
-                    continue
-                shape = constructor.apply(inner)
-                if shape.name in shapes:
-                    continue
-                shapes[shape.name] = shape
-                next_frontier.append(shape)
-        frontier = next_frontier
-    # A bare array or a top-level const is not a request type. Reference and
-    # pointer forms of arrays are included.
-    return tuple(
-        sorted(
-            (
-                shape
-                for shape in shapes.values()
-                if shape.depth == 0 or not shape.is_const
-            ),
-            key=lambda shape: shape.name,
-        )
-    )
-
-
-SHAPES = enumerate_shapes()
+# The shape catalog is a leaf plus a chain of wrapper semantics. The wrapper
+# model owns applicability and C++ spelling; the route rules own the reason a
+# request is not derived.
+from wrapper_semantics import SHAPES, Shape
 
 
 ARRAY_FORMS = frozenset(
@@ -151,9 +37,6 @@ ARRAY_FORMS = frozenset(
 
 CONSUMING_SCOPES = frozenset(scope.name for scope in SCOPES if scope.consumes)
 
-WRAPPER_CONSTRUCTORS = frozenset(
-    {"optional", "unique_ptr", "shared_ptr", "unique_array", "shared_array"}
-)
 ACCESS_CONSTRUCTORS = frozenset(
     {
         "lvalue_reference",
@@ -164,81 +47,57 @@ ACCESS_CONSTRUCTORS = frozenset(
     }
 )
 
-STORED_DESCRIPTIONS = {
-    "plain": "a value",
-    "alternative": "a variant",
-    "pointer": "a raw pointer",
-    "bounded_array": "a bounded array",
-    "unique_handle": "a unique handle",
-    "unique_array_handle": "a unique array handle",
-    "shared_handle": "a shared handle",
-    "shared_array_handle": "a shared array handle",
-    "optional": "an optional",
-}
-
-
-def shape_access(shape: Shape) -> str:
-    if shape.constructors and shape.constructors[0] in ACCESS_CONSTRUCTORS:
-        return shape.constructors[0]
-    return "value"
-
-
 def shape_family(shape: Shape) -> str:
-    """The structural reason a shape composes beyond one storage level."""
-    chain = shape.constructors
+    """The structural composition of a shape.
+
+    The report's reason is rule-based now, but this helper is still useful in
+    tests and for human-readable grouping.
+    """
+    names = [wrapper.name for wrapper in shape.wrappers]
     wrappers = [
-        index for index, name in enumerate(chain) if name in WRAPPER_CONSTRUCTORS
+        name
+        for name in names
+        if name
+        in {
+            "optional",
+            "unique_ptr",
+            "shared_ptr",
+            "unique_array",
+            "shared_array",
+            "variant",
+        }
+    ]
+    accesses = [
+        name
+        for name in names
+        if name
+        in {
+            "lvalue_reference",
+            "rvalue_reference",
+            "pointer",
+            "array_lvalue_reference",
+            "array_pointer",
+        }
     ]
     if len(wrappers) >= 2:
         return "nested wrapper"
     if wrappers:
-        inner = chain[wrappers[0] + 1 :]
+        first = names.index(wrappers[0])
+        inner = names[first + 1 :]
         if any(name in ACCESS_CONSTRUCTORS for name in inner):
             return "access form inside a wrapper"
         if "const" in inner:
             return "const-qualified wrapper element"
-    if sum(1 for name in chain if name in ACCESS_CONSTRUCTORS) > 1:
+    if len(accesses) > 1:
         return "reference or pointer to an access form"
-    if chain and chain[0] in {"array_lvalue_reference", "array_pointer"}:
+    if names and names[0] in {"array_lvalue_reference", "array_pointer"}:
         return "array view"
     return ""
 
 
 def gap_reason(scope_name: str, form_name: str, shape: Shape) -> str:
-    """Why a shape is not a published target of one cell.
-
-    The reason is structural: it names the composition the cell does not
-    publish. The library still answers whether the row matches; this only
-    groups the misses so the report says more than "no".
-    """
-    family = shape_family(shape)
-    if family == "nested wrapper":
-        return "nested wrapper: a cell publishes one wrapper level"
-    if family == "access form inside a wrapper":
-        return "access form inside a wrapper is not a stored target"
-    if family == "const-qualified wrapper element":
-        return "const-qualified wrapper element is not a stored target"
-    if family == "reference or pointer to an access form":
-        return "reference or pointer to an access form is not a stored target"
-    if family == "array view":
-        if form_name != "bounded_array":
-            return "array view requested from a non-array storage"
-        return "array view requested for a target the cell does not publish"
-    if shape_access(shape) == "rvalue_reference" and (
-        scope_name not in CONSUMING_SCOPES
-    ):
-        return "stable scope does not publish move-out"
-    if shape_access(shape) in {
-        "lvalue_reference",
-        "pointer",
-        "array_lvalue_reference",
-        "array_pointer",
-    } and scope_name in CONSUMING_SCOPES:
-        return "consuming scope does not publish borrows"
-    return (
-        f"not a published target: the cell stores "
-        f"{STORED_DESCRIPTIONS[form_name]}"
-    )
+    """Why a shape is not a published target of one cell."""
+    return reason_text(scope_name, form_name, shape)
 
 
 def top_level_safe(scope_name: str, shape: Shape) -> bool:

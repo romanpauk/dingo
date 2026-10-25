@@ -428,20 +428,23 @@ The implemented model uses that split directly:
   catalog. Each form declares its registration once and one expectation per
   scope; the runtime and static containers are generated. Cells the library
   publishes but cannot serve are listed as explicit behavior gaps with a reason.
-- **Request shapes are derived, not listed.** The type matrix composes a type
-  grammar (const, references, pointers, optional, owning handles, array handles,
-  array references/pointers) to a bounded depth and applies every derived shape
-  to every storable cell through the real resolution kernel. It writes the
-  exhaustive table with the direct route, the lifted request, the top-level
-  verdict, a structural reason for every miss, and the published route targets.
-  A request for a wrapper the cell does not store is lifted from the wrapper's
-  value: value wrappers copy or move, and owning handles only move from a
-  consumed value so a borrowed instance cannot become an owner. A matching route
-  can still be unsafe at the container boundary: a consuming scope may lend an
-  lvalue reference to a longer-lived dependent, but a borrow returned from the
-  container would outlive the transaction that produced it. The report marks
-  those rows as top-level gaps instead of hiding them, and groups the remaining
-  misses by the composition the cell does not publish.
+- **Request shapes are derived from wrapper semantics, not listed.** A shape is
+  a leaf wrapped in zero or more wrappers, and each wrapper declares what it can
+  do (`owning`, `sharing`, `nullable`, `borrowable`, `array`, `variant`) and how
+  it is spelled. The catalog includes const, references, pointers, optional,
+  owning handles, owning array handles, arrays, and variants. The route rules
+  (`copy_out`, `borrow`, `move`, `take`, `wrap`, `share`, `adopt`, `decay`,
+  `select_alternative`, ...) derive the first rule that blocks a request and
+  name it in the report. Every derived shape is applied to every storable cell
+  through the real resolution kernel. The report has the direct route, the
+  lifted request, the top-level verdict, the blocking rule, and the published
+  route targets. A request for a wrapper the cell does not store is lifted from
+  the wrapper's value: value wrappers copy or move, and owning handles only move
+  from a consumed value so a borrowed instance cannot become an owner. A
+  matching route can still be unsafe at the container boundary: a consuming
+  scope may lend an lvalue reference to a longer-lived dependent, but a borrow
+  returned from the container would outlive the transaction that produced it.
+  The report marks those rows as top-level gaps instead of hiding them.
 - **The supported top-level rows execute.** `type_behavior.py` resolves every
   supported shape twice through the behavior registrations, checks stable
   identity and fresh distinctness, releases only pointers whose ownership the

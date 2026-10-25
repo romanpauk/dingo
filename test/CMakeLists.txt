@@ -208,6 +208,8 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_TYPE_MATRIX_TEMPLATE}"
     "${DINGO_TYPE_BEHAVIOR_GENERATOR}"
     "${DINGO_TYPE_BEHAVIOR_TEMPLATE}"
+    "${PROJECT_SOURCE_DIR}/tools/model/wrapper_semantics.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/route_rules.py"
     "${DINGO_SCOPES_HEADER}"
     "${PROJECT_SOURCE_DIR}/tools/model/storage_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/selection_rules_test.py"
@@ -217,6 +219,8 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/interface_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/type_matrix_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/type_behavior_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/wrapper_semantics_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/route_rules_test.py"
     "${PROJECT_SOURCE_DIR}/tools/cost/measure_test.py")
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python
@@ -369,7 +373,9 @@ add_test(NAME dingo_model_generator_test
         ${PROJECT_SOURCE_DIR}/tools/model/behavior_cells_test.py
         ${PROJECT_SOURCE_DIR}/tools/model/interface_cells_test.py
         ${PROJECT_SOURCE_DIR}/tools/model/type_matrix_test.py
-        ${PROJECT_SOURCE_DIR}/tools/model/type_behavior_test.py)
+        ${PROJECT_SOURCE_DIR}/tools/model/type_behavior_test.py
+        ${PROJECT_SOURCE_DIR}/tools/model/wrapper_semantics_test.py
+        ${PROJECT_SOURCE_DIR}/tools/model/route_rules_test.py)
 set_tests_properties(dingo_model_generator_test PROPERTIES
     LABELS "unit;generator"
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/model)

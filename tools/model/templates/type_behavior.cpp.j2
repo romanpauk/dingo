@@ -48,7 +48,7 @@ struct tracked {
   int id;
 };
 
-using variant_t = std::variant<tracked, int>;
+using variant_t = std::variant<tracked, long>;
 
 inline std::unique_ptr<tracked> make_unique_tracked() {
   return std::make_unique<tracked>();
@@ -85,8 +85,13 @@ constexpr bool request_supported(dingo::type_list<Resolutions...>) {
 
 template <typename Request, typename Storage>
 constexpr bool direct_supported() {
+  // A binding exposes its leaf and its stored wrapper as interfaces. Ask both
+  // route lists so a leaf request and a stored-wrapper request are both seen.
   return request_supported<Request>(
-      typename dingo::detail::binding_resolutions<tracked, Storage>::type{});
+             typename dingo::detail::binding_resolutions<tracked, Storage>::type{}) ||
+         request_supported<Request>(
+             typename dingo::detail::binding_resolutions<typename Storage::type,
+                                                         Storage>::type{});
 }
 
 template <typename Request, typename Storage>
@@ -126,6 +131,12 @@ auto id_of(const std::unique_ptr<T> &value) -> decltype(id_of(*value)) {
 template <typename T>
 auto id_of(const std::optional<T> &value) -> decltype(id_of(*value)) {
   return id_of(*value);
+}
+
+template <typename... Ts>
+auto id_of(const std::variant<Ts...> &value)
+    -> decltype(id_of(std::get<0>(value))) {
+  return id_of(std::get<0>(value));
 }
 
 template <typename T>

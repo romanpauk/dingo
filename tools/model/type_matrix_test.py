@@ -52,6 +52,8 @@ def test_type_matrix_derives_wrapper_shapes() -> None:
         "std::unique_ptr<int>",
         "int (&)[2]",
         "int (*)[2]",
+        "std::variant<int, long>",
+        "std::optional<std::variant<int, long>>",
     } <= cpp_types
     assert all(shape.depth <= 2 for shape in SHAPES)
 
@@ -88,14 +90,46 @@ def test_shape_families_name_every_composition() -> None:
     assert families["shared_ptr_value"] == ""
 
 
-def test_unsupported_shapes_get_a_structural_reason() -> None:
+def test_unsupported_shapes_get_a_route_rule() -> None:
+    rules = {
+        "access",
+        "borrow",
+        "move",
+        "copy_out",
+        "take",
+        "wrap",
+        "share",
+        "adopt",
+        "decay",
+        "select_alternative",
+        "nested_access",
+        "const_copy",
+        "target",
+    }
     assert gap_reason("shared", "plain", SHAPES[0])
     for row in build_rows():
         for shape in SHAPES:
             reason = row["reasons"][shape.name]
             assert reason
-            if shape_family(shape) == "nested wrapper":
-                assert reason == "nested wrapper: a cell publishes one wrapper level"
+            rule = reason.split(":", 1)[0]
+            assert rule in rules, (row["scope"], row["form"], shape.name, reason)
+
+    by_name = {shape.name: shape for shape in SHAPES}
+    assert gap_reason("shared", "plain", by_name["rvalue_reference_value"]).startswith(
+        "move:"
+    )
+    assert gap_reason("unique", "plain", by_name["pointer_value"]).startswith(
+        "borrow:"
+    )
+    assert gap_reason("shared", "plain", by_name["array_pointer_value"]).startswith(
+        "decay:"
+    )
+    assert gap_reason("shared", "plain", by_name["pointer_pointer_value"]).startswith(
+        "nested_access:"
+    )
+    assert gap_reason("shared", "plain", by_name["optional_optional_value"]).startswith(
+        "wrap:"
+    )
 
 
 def test_render_names_every_cell(tmp_path: Path) -> None:

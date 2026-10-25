@@ -28,14 +28,24 @@ hand-curated matrix tags.
   satisfied by the scope, checks the modeled operation-kind and source-retention
   sequences, and asserts that representative routes do not unexpectedly cache
   conversions.
-- `type_matrix.py` derives the request-shape catalog from a small type grammar:
-  const, reference, pointer, `std::optional`, `std::unique_ptr`,
-  `std::shared_ptr`, owning array handles, and array reference/pointer
-  constructors composed to depth two. It applies every derived shape to every
-  storable scope/form cell through the real resolution kernel and writes a
-  `type-matrix.md` report with the direct route, the lifted request, the
-  top-level verdict, a structural reason for every miss, and the published
-  route targets per cell. Supported rows are answered by the library, not by a
+- `wrapper_semantics.py` describes request shapes as a leaf wrapped in zero or
+  more wrappers. A wrapper declares its semantics (`owning`, `sharing`,
+  `nullable`, `borrowable`, `array`, `variant`, `in_place`), its C++ spelling,
+  and which shapes it can wrap. The built-ins include const, references,
+  pointers, optional, unique/shared handles, owning array handles, arrays, and
+  variants; a user wrapper is another declaration with the same fields.
+- `route_rules.py` derives a request route from the wrapper semantics and the
+  scope/form exposure. The rules are `access`, `borrow`, `move`, `copy_out`,
+  `take`, `wrap`, `share`, `adopt`, `decay`, `select_alternative`,
+  `nested_access`, `const_copy`, and `target`. The library still answers
+  whether a route is published; the rule model names the first rule that blocks
+  a request, so the report says `take: a borrowing scope cannot become an
+  owner` instead of a structural category.
+- `type_matrix.py` composes every shape from the wrapper semantics and applies
+  it to every storable scope/form cell through the real resolution kernel. It
+  writes a `type-matrix.md` report with the direct route, the lifted request,
+  the top-level verdict, the route rule for every miss, and the published route
+  targets per cell. Supported rows are answered by the library, not by a
   hand-written case list; the report is the exhaustive support table. The depth
   bound is an explicit model limitation. A route that only works as a dependency
   of a longer-lived construction is reported as `top-level = no`: a consuming
@@ -43,11 +53,7 @@ hand-curated matrix tags.
   from the container itself would outlive the transaction that produced it.
   A shape that is not a direct target is reported as `lifted` when its value is
   resolvable: value wrappers copy or move their value, and owning handles only
-  lift from a consumed value. Misses are grouped by the composition that the
-  cell does not publish (nested wrapper, access form inside a wrapper,
-  const-qualified wrapper element, reference to an access form, array view,
-  stable move-out, consuming borrow, or a wrapper-family mismatch), and the
-  report prints the count and one example per reason.
+  lift from a consumed value. The report groups misses by rule.
 - `type_behavior.py` executes the top-level half of that matrix. Every
   supported shape is resolved twice through the same registration recipe as the
   behavior cells, stable scopes are checked for identity, fresh scopes for

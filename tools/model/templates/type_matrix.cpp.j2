@@ -43,8 +43,13 @@ constexpr bool request_supported(dingo::type_list<Resolutions...>) {
 
 template <typename Request, typename Storage>
 constexpr bool direct_supported() {
+  // A binding exposes its leaf and its stored wrapper as interfaces. Ask both
+  // route lists so a leaf request and a stored-wrapper request are both seen.
   return request_supported<Request>(
-      typename dingo::detail::binding_resolutions<int, Storage>::type{});
+             typename dingo::detail::binding_resolutions<int, Storage>::type{}) ||
+         request_supported<Request>(
+             typename dingo::detail::binding_resolutions<typename Storage::type,
+                                                         Storage>::type{});
 }
 
 template <typename Request, typename Storage>
