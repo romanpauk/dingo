@@ -336,31 +336,43 @@ def derive_expectation(form: Form, scope: str) -> Expectation:
 
 # Additional request shapes for a cell that the primary expectation does not
 # exercise: the unique rvalue route and the shared wrapper-value route.
-EXTRA_EXPECTATIONS = {
-    ("plain", "unique"): (
-        (
-            "rvalue",
-            Expectation(
-                "tracked &&",
-                "first.id != second.id",
-                2,
-                "consume_rvalue",
-                move_out=True,
-            ),
-        ),
-    ),
-    ("alternative", "shared"): (
-        (
-            "wrapper",
-            Expectation(
-                "variant_t",
-                "std::get<0>(first).id == std::get<0>(second).id",
-                1,
-                "borrow_value",
-            ),
-        ),
-    ),
-}
+def derive_extra_expectations(
+    form: Form, scope: str, primary: Expectation
+) -> tuple[tuple[str, Expectation], ...]:
+    """Additional route shapes worth executing for a cell.
+
+    These are not alternate expectations: they exercise a second published
+    route. The unique plain cell also moves its rvalue route; the shared
+    alternative cell also copies the variant wrapper value.
+    """
+    kind = form_kind(form.name)
+    extras = []
+    if kind == "value" and scope == "unique" and primary.request_class == "consume_value":
+        extras.append(
+            (
+                "rvalue",
+                Expectation(
+                    "tracked &&",
+                    "first.id != second.id",
+                    primary.constructions,
+                    "consume_rvalue",
+                    move_out=True,
+                ),
+            )
+        )
+    if kind == "variant" and scope == "shared" and primary.request_class == "borrow_value":
+        extras.append(
+            (
+                "wrapper",
+                Expectation(
+                    "variant_t",
+                    "std::get<0>(first).id == std::get<0>(second).id",
+                    primary.constructions,
+                    "borrow_value",
+                ),
+            )
+        )
+    return tuple(extras)
 
 
 @dataclass(frozen=True)
@@ -867,7 +879,7 @@ def build_rows() -> list[dict[str, object]]:
                 continue
             expectation = derive_expectation(form, scope)
             instance = EXTERNAL_INSTANCES.get(form.name) if scope == "external" else None
-            extras = EXTRA_EXPECTATIONS.get((form.name, scope), ())
+            extras = derive_extra_expectations(form, scope, expectation)
             for container in CONTAINERS:
                 if scope in RUNTIME_ONLY_SCOPES and container == "static":
                     continue
@@ -987,13 +999,19 @@ def validate() -> None:
                     f"behavior cell {scope}/{form.name} has unknown request "
                     f"class {expectation.request_class!r}"
                 )
-    for (form_name, scope), extras in EXTRA_EXPECTATIONS.items():
-        for case, extra in extras:
-            if extra.request_class not in REQUEST_COSTS:
-                raise ValueError(
-                    f"behavior cell {scope}/{form_name}/{case} has unknown "
-                    f"request class {extra.request_class!r}"
-                )
+    for form in FORMS:
+        for scope in SCOPES:
+            if (scope, form.name) in BEHAVIOR_GAPS:
+                continue
+            if not supported_categories(scope, form.name):
+                continue
+            primary = derive_expectation(form, scope)
+            for case, extra in derive_extra_expectations(form, scope, primary):
+                if extra.request_class not in REQUEST_COSTS:
+                    raise ValueError(
+                        f"behavior cell {scope}/{form.name}/{case} has unknown "
+                        f"request class {extra.request_class!r}"
+                    )
     if not ANNOTATION_RECIPES:
         raise ValueError("annotation behavior catalog must not be empty")
     annotation_names = [recipe.name for recipe in ANNOTATION_RECIPES]

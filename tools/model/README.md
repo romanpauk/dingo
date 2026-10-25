@@ -116,8 +116,9 @@ hand-curated matrix tags.
   data. A consumed raw
   pointer or row pointer transfers ownership to the caller, and its behavior
   case deletes the result before checking the balance. Multi-route cells add
-  secondary cases: the unique plain cell also moves the rvalue route, and the
-  shared alternative cell also copies the variant wrapper value. Supported
+  derived secondary cases: the unique plain cell also moves the rvalue route,
+  and the shared alternative cell also copies the variant wrapper value.
+  Supported
   cells without a resolvable behavior case are listed in `BEHAVIOR_GAPS` with a
   reason, so a cell cannot silently lose its test. A separate interface case
   list exercises storage exposed through `dingo::interfaces<...>`: shared

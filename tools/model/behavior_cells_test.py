@@ -21,6 +21,7 @@ from behavior_cells import (
     build_rows,
     covered_cells,
     derive_expectation,
+    derive_extra_expectations,
     render,
     supported_cells,
     validate,
@@ -57,6 +58,21 @@ def test_expectations_follow_the_semantic_form_kind() -> None:
     external = derive_expectation(_form("plain"), "external")
     assert external.constructions == 0
     assert external.leaf == "external"
+
+
+def test_extra_route_cases_are_derived() -> None:
+    unique_plain = derive_expectation(_form("plain"), "unique")
+    extras = derive_extra_expectations(_form("plain"), "unique", unique_plain)
+    assert [case for case, _ in extras] == ["rvalue"]
+    assert extras[0][1].request == "tracked &&"
+    assert extras[0][1].move_out is True
+
+    shared_variant = derive_expectation(_form("alternative"), "shared")
+    extras = derive_extra_expectations(
+        _form("alternative"), "shared", shared_variant
+    )
+    assert [case for case, _ in extras] == ["wrapper"]
+    assert extras[0][1].request == "variant_t"
 
 
 def test_every_non_gap_supported_cell_derives_a_known_request_class() -> None:
