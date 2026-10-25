@@ -451,15 +451,17 @@ model suites. In priority order:
 
 1. **Lifetime and count rows** (`lifetime_counts`, plain value rows). The
    behavior classes already assert construction, copy, move, destruction, and
-   the lifetime balance. Remove these matrix rows first; the risk is lowest and
-   the duplication is exact.
+   the lifetime balance. The implemented restriction keeps only the unique
+   rvalue row, which has no behavior case, and drops the rest.
 2. **Plain registration rows**: one stored type, direct value/reference/pointer
    request, no wrapper, key, or feature. These are fully covered by behavior
    classes and can leave the matrix product.
 3. **Forms already covered behaviorally**: variant, optional, pointer, bounded
-   array, unique/shared handles, array handles. Keep only the type-variety rows
-   (nested wrappers, custom wrappers, interfaces) that the model does not
-   express.
+   array, unique/shared handles, array handles. The implemented restriction
+   keeps the unique/shared alternative reference and pointer rows and drops the
+   variant value row that the behavior class already executes. Keep the
+   remaining type-variety rows (nested wrappers, custom wrappers, interfaces)
+   that the model does not express.
 4. **Container variants** (indexed, indexed DSL, allocator, custom RTTI).
    Replace the full container cross product with one representative registration
    recipe per container and feature. Container mechanics are orthogonal to the
@@ -478,7 +480,9 @@ function of a scope/form cell.
 Each step should land with a coverage manifest: the model declares the cells it
 covers, the matrix declares the registration rows it still owns, and a test
 fails when the union no longer covers the catalog. That makes the removal
-incremental and safe.
+incremental and safe. `test/matrix/model_coverage.py` is that manifest:
+`FEATURE_RESTRICTIONS` lists the dropped rows with the model cells that justify
+them, and the generator test fails if any claimed cell loses its behavior class.
 
 ## Cost Guarantees
 

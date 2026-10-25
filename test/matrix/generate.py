@@ -30,6 +30,11 @@ from data import (
     STORED_TYPES,
 )
 from dependency_contract import validate_dependency_contract
+from model_coverage import (
+    MODEL_COVERED_POLICY_SOURCES,
+    MODEL_COVERED_RESOLVED_TYPE_NAMES,
+    RESTRICTIONS_BY_FEATURE,
+)
 from schema import (
     ContainerSpec,
     ExposedType,
@@ -90,6 +95,7 @@ class RejectionReason(StrEnum):
     CONTAINER_REQUIRES = "container_requires"
     FEATURE_CASE_SUPPORTS_EXPOSURE = "feature_case_supports_exposure"
     FEATURE_HAS_CHECK = "feature_has_check"
+    MODEL_COVERED = "model_covered"
 
 
 @dataclass(frozen=True, slots=True)
@@ -257,6 +263,16 @@ def iter_candidates(
                             continue
 
                         for resolved_type in resolved_candidates:
+                            restriction = RESTRICTIONS_BY_FEATURE.get(
+                                feature.name
+                            )
+                            if (
+                                restriction is not None
+                                and resolved_type.name
+                                not in restriction.keep_resolved_types
+                            ):
+                                rejected[RejectionReason.MODEL_COVERED] += 1
+                                continue
                             base_tags = frozenset({mode.name}) | (
                                 scope.provides
                                 | stored_type.provides
@@ -424,6 +440,7 @@ def assert_dependency_provisioning_coverage(
         (form, resolved_type, feature)
         for provisioning in DEPENDENCY_PROVISIONINGS
         for form, resolved_type, feature in provisioning.resolution_cases
+        if resolved_type not in MODEL_COVERED_RESOLVED_TYPE_NAMES
     }
     generated_resolution_cases = {
         (
@@ -454,6 +471,7 @@ def assert_dependency_provisioning_coverage(
         )
         for provisioning in DEPENDENCY_PROVISIONINGS
         for form, resolved_type, feature in provisioning.resolution_cases
+        if resolved_type not in MODEL_COVERED_RESOLVED_TYPE_NAMES
         for mode in provisioning.supported_modes
         for container in implemented(CONTAINERS)
         if mode in container.modes
@@ -520,7 +538,11 @@ def assert_coverage(
     assert_axis_used(
         row_tuple,
         "resolved_type",
-        {resolved_type.name for resolved_type in implemented(RESOLVED_TYPES)},
+        {
+            resolved_type.name
+            for resolved_type in implemented(RESOLVED_TYPES)
+            if resolved_type.name not in MODEL_COVERED_RESOLVED_TYPE_NAMES
+        },
     )
     assert_axis_used(
         row_tuple,
@@ -542,7 +564,7 @@ def assert_coverage(
             ("lifetime", scope, stored_type, exposed_type, resolved_type)
             for scope, stored_type, exposed_type, resolved_type in LIFETIME_POLICIES
         ),
-    }
+    } - MODEL_COVERED_POLICY_SOURCES
     used_policy_sources = {row.lines.policy_source for row in row_tuple}
     unused_policy_sources = sorted(declared_policy_sources - used_policy_sources)
     if unused_policy_sources:

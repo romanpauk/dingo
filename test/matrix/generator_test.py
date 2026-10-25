@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import sys
+
 from collections import Counter
 from dataclasses import replace
 from pathlib import Path
@@ -15,7 +17,14 @@ from pathlib import Path
 import pytest
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, Template
 
-from data import CATALOG, CONTAINERS, STORED_TYPES, validate_catalog
+from data import CATALOG, CONTAINERS, FEATURES, STORED_TYPES, validate_catalog
+from model_coverage import (
+    FEATURE_RESTRICTIONS,
+    MODEL_COVERED_POLICY_SOURCES,
+    MODEL_COVERED_RESOLVED_TYPE_NAMES,
+    MODEL_COVERED_RESOLVED_TYPES,
+    RESTRICTIONS_BY_FEATURE,
+)
 from axes.constructor_detection import (
     CONSTRUCTOR_ARGUMENT_CATEGORIES,
     CONSTRUCTOR_ARGUMENT_STORAGES,
@@ -116,6 +125,7 @@ from generate import (
 )
 from invoke import InvokeRow, generate_invoke_rows
 from plugins import (
+    LIFETIME_POLICIES,
     RegistrationRecipe,
     build_registration_plan,
     build_registration_plan_from_recipe,
@@ -167,7 +177,7 @@ def shared_cyclical_rows() -> tuple[SharedCyclicalRow, ...]:
 
 
 def test_matrix_cardinality_remains_bounded(rows: tuple[MatrixRow, ...]) -> None:
-    assert len(rows) == 2159
+    assert len(rows) == 2054
     assert len({(row.feature.name, row.name) for row in rows}) == len(rows)
 
 
@@ -215,6 +225,61 @@ def test_registration_sources_are_bounded(tmp_path: Path) -> None:
     ]
     assert max(case_counts) <= REGISTRATION_SOURCE_CASE_LIMIT
     assert sum(case_counts) == len(generate_rows())
+
+
+def _model_behavior_cells() -> set[tuple[str, str]]:
+    model_dir = Path(__file__).resolve().parents[2] / "tools" / "model"
+    sys.path.insert(0, str(model_dir))
+    try:
+        import behavior_cells
+    finally:
+        sys.path.remove(str(model_dir))
+    return behavior_cells.covered_cells()
+
+
+def test_model_restrictions_name_real_features_and_cells() -> None:
+    covered = _model_behavior_cells()
+    feature_names = {feature.name for feature in FEATURES}
+    for restriction in FEATURE_RESTRICTIONS:
+        assert restriction.feature in feature_names
+        assert restriction.keep_resolved_types
+        assert restriction.reason
+        missing = restriction.covered_cells - covered
+        assert not missing, (
+            f"{restriction.feature} claims model cells without a behavior case: "
+            f"{sorted(missing)}"
+        )
+
+
+def test_model_covered_resolved_types_are_behavior_cells() -> None:
+    covered = _model_behavior_cells()
+    for coverage in MODEL_COVERED_RESOLVED_TYPES:
+        assert coverage.reason
+        missing = coverage.covered_cells - covered
+        assert not missing, (
+            f"{coverage.resolved_type} claims model cells without a behavior "
+            f"case: {sorted(missing)}"
+        )
+
+
+def test_model_covered_policy_sources_stay_declared() -> None:
+    declared = {
+        *CATALOG.policy_sources,
+        *(
+            ("lifetime", scope, stored_type, exposed_type, resolved_type)
+            for scope, stored_type, exposed_type, resolved_type in LIFETIME_POLICIES
+        ),
+    }
+    assert MODEL_COVERED_POLICY_SOURCES <= declared
+
+
+def test_restricted_features_keep_only_matrix_owned_rows(
+    rows: tuple[MatrixRow, ...],
+) -> None:
+    for row in rows:
+        restriction = RESTRICTIONS_BY_FEATURE.get(row.feature.name)
+        if restriction is not None:
+            assert row.resolved_type.name in restriction.keep_resolved_types
 
 
 def test_shared_cyclical_is_an_independent_full_product(
@@ -2062,7 +2127,7 @@ def test_matrix_families_preserve_total_registration_behavior(
         + len(scenario_rows)
         + len(invoke_rows)
         + len(shared_cyclical_rows)
-        == 5129
+        == 5024
     )
 
 
@@ -2180,6 +2245,7 @@ def test_dependency_provisionings_are_resolvable_registration_rows(
         )
         for provisioning in DEPENDENCY_PROVISIONINGS
         for form, resolved_type, feature in provisioning.resolution_cases
+        if resolved_type not in MODEL_COVERED_RESOLVED_TYPE_NAMES
         for mode in provisioning.supported_modes
         for container in implemented(CONTAINERS)
         if mode in container.modes
