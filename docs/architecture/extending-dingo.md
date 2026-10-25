@@ -34,13 +34,10 @@ introducing a new wrapper or handle type.
 - whether Dingo may resolve references through it
 - how wrapper-shaped resolution should behave for that type
 
-If Dingo needs to understand a wrapper's shape, start here. The semantic
-properties default from `is_owning_handle`, `is_pointer_like`,
-`is_value_borrowable`, and `is_array_handle`, so a specialization that only
-declares the legacy flags keeps its previous behavior. A new wrapper that owns,
-shares, or can be empty should declare the semantic properties explicitly;
-`request_lift` then chooses `wrap`, `from_pointer`/adopt, or `make` and decides
-whether the contained value must be consumed.
+If Dingo needs to understand a wrapper's shape, start here. An enabled
+specialization declares the semantic properties explicitly. `request_lift` then
+chooses `wrap`, `from_pointer`/adopt, or `make` and decides whether the
+contained value must be consumed.
 
 Set `is_owning_handle` to `true` for adopting or shared-ownership handles and to
 `false` for observers. Dingo does not create an owning handle from a borrowed

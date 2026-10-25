@@ -117,6 +117,14 @@ struct type_traits<conversion_compatibility_test::non_borrowable_wrapper> {
   static constexpr bool is_pointer_like = false;
   static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = false;
+  static constexpr bool is_owning = false;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = false;
+  static constexpr bool is_borrowable = false;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = false;
+  static constexpr bool can_take = false;
 
   template <typename> static constexpr bool is_handle_rebindable = false;
   template <typename> static constexpr bool is_rebindable = false;
@@ -130,6 +138,14 @@ template <> struct type_traits<conversion_compatibility_test::owning_source> {
   static constexpr bool is_pointer_like = false;
   static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = true;
+  static constexpr bool is_owning = true;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = false;
+  static constexpr bool is_borrowable = false;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = false;
+  static constexpr bool can_take = true;
 
   template <typename> static constexpr bool is_handle_rebindable = false;
   template <typename> static constexpr bool is_rebindable = false;
@@ -140,6 +156,14 @@ template <> struct type_traits<conversion_compatibility_test::pointer_like> {
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = true;
+  static constexpr bool is_owning = true;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = false;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = false;
+  static constexpr bool can_take = true;
 
   using value_type = int;
 
@@ -155,6 +179,14 @@ struct type_traits<conversion_compatibility_test::observer_pointer> {
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = false;
+  static constexpr bool is_owning = false;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = false;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = false;
+  static constexpr bool can_take = false;
 
   using value_type = int;
 
@@ -170,6 +202,14 @@ struct type_traits<conversion_compatibility_test::converted_observer_pointer> {
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = false;
+  static constexpr bool is_owning = false;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = false;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = false;
+  static constexpr bool can_take = false;
 
   using value_type = int;
 
@@ -185,6 +225,14 @@ struct type_traits<conversion_compatibility_test::safe_observer_pointer> {
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = false;
+  static constexpr bool is_owning = false;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = false;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = false;
+  static constexpr bool can_take = false;
 
   using value_type = long;
 
@@ -199,6 +247,14 @@ template <> struct type_traits<conversion_compatibility_test::consuming_owner> {
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = true;
+  static constexpr bool is_owning = true;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = false;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = false;
+  static constexpr bool can_take = true;
 
   using value_type = int;
 
@@ -213,6 +269,14 @@ template <> struct type_traits<conversion_compatibility_test::copying_owner> {
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = true;
+  static constexpr bool is_owning = true;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = false;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = false;
+  static constexpr bool can_take = true;
 
   using value_type = int;
 

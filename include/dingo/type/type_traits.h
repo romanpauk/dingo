@@ -50,9 +50,8 @@ template <typename T, typename = void> struct type_traits {
   static constexpr bool is_owning_handle = false;
   static constexpr bool is_array_handle = false;
 
-  // Semantic properties. The defaults keep a user wrapper that only declares
-  // the legacy flags working; a wrapper that owns, shares, or holds a null
-  // state declares the properties explicitly.
+  // Semantic properties. The primary template supplies the disabled defaults;
+  // an enabled specialization declares the properties it supports.
   static constexpr bool is_owning = is_owning_handle;
   static constexpr bool is_sharing = false;
   static constexpr bool is_nullable = is_pointer_like;
@@ -245,58 +244,11 @@ inline constexpr bool is_alternative_type_interface_compatible_v =
 // One property for every alternative-like wrapper. A std::variant and a user
 // alternative specialize alternative_type_traits; a type_traits wrapper may
 // also declare is_variant when it carries an alternative shape.
-template <typename T, typename = void>
-struct type_traits_is_variant : std::false_type {};
-
-template <typename T>
-struct type_traits_is_variant<T,
-                              std::void_t<decltype(type_traits<T>::is_variant)>>
-    : std::bool_constant<type_traits<T>::is_variant> {};
-
 template <typename T>
 inline constexpr bool is_variant_type_v =
-    type_traits_is_variant<std::remove_cv_t<T>>::value ||
+    (type_traits<std::remove_cv_t<T>>::enabled &&
+     type_traits<std::remove_cv_t<T>>::is_variant) ||
     alternative_type_traits<std::remove_cv_t<T>>::enabled;
-
-// Semantic accessors keep older user specializations working: they only have
-// the legacy flags, so a missing semantic flag falls back to the flag it was
-// derived from. The legacy flags themselves are optional on a specialization
-// that predates them.
-template <typename T, typename = void>
-struct type_traits_legacy_owning_handle : std::false_type {};
-
-template <typename T>
-struct type_traits_legacy_owning_handle<
-    T, std::void_t<decltype(type_traits<T>::is_owning_handle)>>
-    : std::bool_constant<type_traits<T>::is_owning_handle> {};
-
-template <typename T, typename = void>
-struct type_traits_legacy_array_handle : std::false_type {};
-
-template <typename T>
-struct type_traits_legacy_array_handle<
-    T, std::void_t<decltype(type_traits<T>::is_array_handle)>>
-    : std::bool_constant<type_traits<T>::is_array_handle> {};
-
-template <typename T, typename = void>
-struct type_traits_can_take : type_traits_legacy_owning_handle<T> {};
-
-template <typename T>
-struct type_traits_can_take<T, std::void_t<decltype(type_traits<T>::can_take)>>
-    : std::bool_constant<type_traits<T>::can_take> {};
-
-template <typename T>
-inline constexpr bool type_traits_can_take_v = type_traits_can_take<T>::value;
-
-template <typename T, typename = void>
-struct type_traits_is_array : type_traits_legacy_array_handle<T> {};
-
-template <typename T>
-struct type_traits_is_array<T, std::void_t<decltype(type_traits<T>::is_array)>>
-    : std::bool_constant<type_traits<T>::is_array> {};
-
-template <typename T>
-inline constexpr bool type_traits_is_array_v = type_traits_is_array<T>::value;
 
 template <typename StorageTag, typename Type, typename U, typename = void>
 struct storage_traits {

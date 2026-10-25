@@ -32,6 +32,14 @@ struct type_traits<runtime_registration_test::observer_pointer<T>> {
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = false;
+  static constexpr bool is_owning = false;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = true;
+  static constexpr bool is_borrowable = false;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = false;
+  static constexpr bool can_take = false;
 
   using value_type = T;
 

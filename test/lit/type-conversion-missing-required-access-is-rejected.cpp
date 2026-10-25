@@ -16,6 +16,14 @@ template <> struct type_traits<wrapper> {
   static constexpr bool is_pointer_like = false;
   static constexpr bool is_value_borrowable = true;
   static constexpr bool is_owning_handle = false;
+  static constexpr bool is_owning = false;
+  static constexpr bool is_sharing = false;
+  static constexpr bool is_nullable = false;
+  static constexpr bool is_borrowable = true;
+  static constexpr bool is_array = false;
+  static constexpr bool is_variant = false;
+  static constexpr bool can_copy_out = true;
+  static constexpr bool can_take = false;
 
   using value_type = int;
 
