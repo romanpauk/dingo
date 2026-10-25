@@ -28,6 +28,12 @@ hand-curated matrix tags.
   satisfied by the scope, checks the modeled operation-kind and source-retention
   sequences, and asserts that representative routes do not unexpectedly cache
   conversions.
+- `type_matrix.py` owns the request-shape catalog. It applies every shape to
+  every storable scope/form cell through the real resolution kernel and writes a
+  `type-matrix.md` report with the supported/unsupported row for every shape and
+  the published route targets per cell. Supported rows are answered by the
+  library, not by a hand-written case list; the report is the exhaustive
+  support table.
 - `interface_cells.py` instantiates the real interface resolution kernel for
   storage exposed through `dingo::interfaces<...>`. It checks value, object, and
   rvalue availability and exact route counts, requires every published target to

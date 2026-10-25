@@ -428,6 +428,12 @@ The implemented model uses that split directly:
   catalog. Each form declares its registration once and one expectation per
   scope; the runtime and static containers are generated. Cells the library
   publishes but cannot serve are listed as explicit behavior gaps with a reason.
+- **Request shapes are enumerated separately from cells.** The type matrix
+  applies `T`, `T&`, `T*`, `T**`, arrays, optional, and owning handles to every
+  storable cell through the real resolution kernel and writes the exhaustive
+  supported/unsupported table with the published route targets. This is the
+  foundation for deriving behavior and decorator cases from shapes instead of
+  listing supported requests by hand.
 - **The matrix keeps the scenarios that a cell catalog cannot express**:
   constructor detection, invocation, dependency graphs, collections, keys,
   annotations, parent containers, caching, transactions, error paths, custom
