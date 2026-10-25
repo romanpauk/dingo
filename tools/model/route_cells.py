@@ -23,6 +23,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from route_ledger import (
     category_access,
+    category_kinds,
     supported_categories,
     validate as validate_ledger,
 )
@@ -61,6 +62,21 @@ def build_rows() -> list[dict[str, object]]:
                         category_access(scope.name, form.name, "rvalue")
                         if "rvalue" in categories
                         else ""
+                    ),
+                    "value_kinds": (
+                        category_kinds(scope.name, form.name, "value")
+                        if "value" in categories
+                        else ()
+                    ),
+                    "object_kinds": (
+                        category_kinds(scope.name, form.name, "object")
+                        if "object" in categories
+                        else ()
+                    ),
+                    "rvalue_kinds": (
+                        category_kinds(scope.name, form.name, "rvalue")
+                        if "rvalue" in categories
+                        else ()
                     ),
                 }
             )

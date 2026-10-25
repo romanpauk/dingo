@@ -62,6 +62,17 @@ constexpr bool all_routes_accept_access(dingo::type_list<Resolutions...>) {
           ...);
 }
 
+template <std::size_t Index, typename Resolutions> struct route_kind_at;
+
+template <typename Head, typename... Tail>
+struct route_kind_at<0, dingo::type_list<Head, Tail...>> {
+  static constexpr auto value = Head::operation::kind;
+};
+
+template <std::size_t Index, typename Head, typename... Tail>
+struct route_kind_at<Index, dingo::type_list<Head, Tail...>>
+    : route_kind_at<Index - 1, dingo::type_list<Tail...>> {};
+
 {% for row in rows %}
 namespace {{ row.scope_name }}_{{ row.form_name }} {
 using scope = {{ row.scope_type }};
@@ -91,18 +102,48 @@ static_assert(all_targets_match<value_routes>::value,
               "not every value route target is reachable from both matchers");
 static_assert(all_routes_accept_access<dingo::{{ row.value_access }}>(value_routes{}),
               "value route requires more access than the scope supplies");
+{% if row.value_kinds %}
+static_assert(dingo::type_list_size_v<value_routes> ==
+                  {{ row.value_kinds | length }},
+              "value route count changed");
+{% for kind in row.value_kinds %}
+static_assert(route_kind_at<{{ loop.index0 }}, value_routes>::value ==
+                  dingo::detail::conversion_kind::{{ kind }},
+              "value route operation changed");
+{% endfor %}
+{% endif %}
 {% endif %}
 {% if row.object %}
 static_assert(all_targets_match<object_routes>::value,
               "not every object route target is reachable from both matchers");
 static_assert(all_routes_accept_access<dingo::{{ row.object_access }}>(object_routes{}),
               "object route requires more access than the scope supplies");
+{% if row.object_kinds %}
+static_assert(dingo::type_list_size_v<object_routes> ==
+                  {{ row.object_kinds | length }},
+              "object route count changed");
+{% for kind in row.object_kinds %}
+static_assert(route_kind_at<{{ loop.index0 }}, object_routes>::value ==
+                  dingo::detail::conversion_kind::{{ kind }},
+              "object route operation changed");
+{% endfor %}
+{% endif %}
 {% endif %}
 {% if row.rvalue %}
 static_assert(all_targets_match<rvalue_routes>::value,
               "not every rvalue route target is reachable from both matchers");
 static_assert(all_routes_accept_access<dingo::{{ row.rvalue_access }}>(rvalue_routes{}),
               "rvalue route requires more access than the scope supplies");
+{% if row.rvalue_kinds %}
+static_assert(dingo::type_list_size_v<rvalue_routes> ==
+                  {{ row.rvalue_kinds | length }},
+              "rvalue route count changed");
+{% for kind in row.rvalue_kinds %}
+static_assert(route_kind_at<{{ loop.index0 }}, rvalue_routes>::value ==
+                  dingo::detail::conversion_kind::{{ kind }},
+              "rvalue route operation changed");
+{% endfor %}
+{% endif %}
 {% endif %}
 
 TEST(route_cells, {{ row.scope_name }}_{{ row.form_name }}) { SUCCEED(); }

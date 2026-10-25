@@ -71,12 +71,13 @@ supported non-array storage cell. The route ledger classifies every
 scope/form/category row as supported, unavailable with a reason, or a tracked
 gap. The route probes check value, object, and rvalue availability against that
 ledger, require every published route target to be reachable from both the
-static and runtime request matchers, and check that the scope's access satisfies
-every route. It also generates the committed
-`include/dingo/storage/scopes.gen.h` header, which owns the built-in
-`storage_scope_policy` data. Compile-time assertions compare the generated
-expectation with the library; a missing cell, changed exposure, or stale catalog
-fails the build.
+static and runtime request matchers, check that the scope's access satisfies
+every route, and check the modeled operation-kind sequences. Plain-form kinds
+are modeled now; the other forms carry an explicit `operation-kind` gap. It also
+generates the committed `include/dingo/storage/scopes.gen.h` header, which owns
+the built-in `storage_scope_policy` data. Compile-time assertions compare the
+generated expectation with the library; a missing cell, changed exposure, or
+stale catalog fails the build.
 
 The generated sources live in the build tree, so consumer builds never run
 Python. The `cells-check` target regenerates them and verifies that they are up

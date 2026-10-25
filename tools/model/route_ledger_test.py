@@ -13,8 +13,10 @@ import pytest
 from route_ledger import (
     CATEGORIES,
     GAP_ARRAY_ROUTES,
+    GAP_OPERATION_KIND,
     build_rows,
     category_access,
+    category_kinds,
     gaps,
     supported_categories,
     validate,
@@ -68,6 +70,26 @@ def test_access_follows_scope_and_category() -> None:
     assert category_access("unique", "plain", "object") == "borrow"
     assert category_access("unique", "plain", "rvalue") == "consume"
     assert category_access("external", "plain", "value") == "borrow"
+
+
+def test_plain_operation_kinds_are_modeled() -> None:
+    assert category_kinds("shared", "plain", "value") == ("dereference",)
+    assert category_kinds("shared", "plain", "object") == ("traits",)
+    assert category_kinds("unique", "plain", "value") == (
+        "identity",
+        "wrapper",
+    )
+    assert category_kinds("external", "plain", "object") == ("address",)
+    assert category_kinds("shared_cyclical", "plain", "object") == (
+        "traits",
+    )
+
+
+def test_non_plain_operation_kinds_are_tracked_gaps() -> None:
+    for row in build_rows():
+        if row.outcome == "supported" and row.form != "plain":
+            assert row.kind_gap == GAP_OPERATION_KIND
+            assert row.kinds == ()
 
 
 if __name__ == "__main__":

@@ -116,8 +116,27 @@ struct custom_conversion_access<
   using type = typename Traits::template required_access<Source>;
 };
 
+enum class conversion_kind {
+  unavailable,
+  traits,
+  identity,
+  reference,
+  address,
+  array_reference,
+  array_pointer,
+  pointer_access,
+  dereference,
+  borrowed,
+  retained,
+  wrapper,
+  target_alternative,
+  alternative,
+  construction,
+};
+
 struct unavailable_type_conversion {
   static constexpr bool available = false;
+  static constexpr conversion_kind kind = conversion_kind::unavailable;
   using required_access = unavailable_access;
 };
 
@@ -125,6 +144,7 @@ template <typename Target, typename Source, typename RequiredAccess = borrow,
           typename Argument = Source>
 struct traits_type_conversion {
   static constexpr bool available = true;
+  static constexpr conversion_kind kind = conversion_kind::traits;
 
   using target_type = Target;
   using source_type = Source;
@@ -134,6 +154,7 @@ struct traits_type_conversion {
 
 template <typename Target, typename Source> struct identity_type_conversion {
   static constexpr bool available = true;
+  static constexpr conversion_kind kind = conversion_kind::identity;
 
   using target_type = Target;
   using source_type = Source;
@@ -143,6 +164,7 @@ template <typename Target, typename Source> struct identity_type_conversion {
 
 template <typename Target, typename Source> struct reference_type_conversion {
   static constexpr bool available = true;
+  static constexpr conversion_kind kind = conversion_kind::reference;
 
   using target_type = Target;
   using source_type = Source;
@@ -151,6 +173,7 @@ template <typename Target, typename Source> struct reference_type_conversion {
 
 template <typename Target, typename Source> struct address_type_conversion {
   static constexpr bool available = true;
+  static constexpr conversion_kind kind = conversion_kind::address;
 
   using target_type = Target;
   using source_type = Source;
@@ -160,6 +183,7 @@ template <typename Target, typename Source> struct address_type_conversion {
 template <typename Target, typename Source>
 struct array_reference_type_conversion {
   static constexpr bool available = true;
+  static constexpr conversion_kind kind = conversion_kind::array_reference;
 
   using target_type = Target;
   using source_type = Source;
@@ -169,6 +193,7 @@ struct array_reference_type_conversion {
 template <typename Target, typename Source>
 struct array_pointer_type_conversion {
   static constexpr bool available = true;
+  static constexpr conversion_kind kind = conversion_kind::array_pointer;
 
   using target_type = Target;
   using source_type = Source;
@@ -178,6 +203,7 @@ struct array_pointer_type_conversion {
 template <typename Target, typename Source>
 struct pointer_access_type_conversion {
   static constexpr bool available = true;
+  static constexpr conversion_kind kind = conversion_kind::pointer_access;
 
   using target_type = Target;
   using source_type = Source;
@@ -187,6 +213,7 @@ struct pointer_access_type_conversion {
 template <typename Target, typename Source, typename Conversion>
 struct dereference_type_conversion {
   static constexpr bool available = Conversion::available;
+  static constexpr conversion_kind kind = conversion_kind::dereference;
 
   using target_type = Target;
   using source_type = Source;
@@ -197,6 +224,7 @@ struct dereference_type_conversion {
 template <typename Target, typename Source, typename Conversion>
 struct borrowed_type_conversion {
   static constexpr bool available = Conversion::available;
+  static constexpr conversion_kind kind = conversion_kind::borrowed;
 
   using target_type = Target;
   using source_type = Source;
@@ -207,6 +235,7 @@ struct borrowed_type_conversion {
 template <typename Target, typename Source, typename Conversion>
 struct retained_type_conversion {
   static constexpr bool available = Conversion::available;
+  static constexpr conversion_kind kind = conversion_kind::retained;
 
   using target_type = Target;
   using source_type = Source;
@@ -218,6 +247,7 @@ template <typename Target, typename Source, typename Conversion,
           bool UnwrapSource>
 struct wrapper_type_conversion {
   static constexpr bool available = Conversion::available;
+  static constexpr conversion_kind kind = conversion_kind::wrapper;
 
   using target_type = Target;
   using source_type = Source;
@@ -230,6 +260,7 @@ template <typename Target, typename Source, typename Selected,
           typename Conversion>
 struct target_alternative_type_conversion {
   static constexpr bool available = Conversion::available;
+  static constexpr conversion_kind kind = conversion_kind::target_alternative;
 
   using target_type = Target;
   using source_type = Source;
@@ -240,6 +271,7 @@ struct target_alternative_type_conversion {
 
 template <typename Conversion> struct converted_construction {
   static constexpr bool available = Conversion::available;
+  static constexpr conversion_kind kind = conversion_kind::construction;
 
   using conversion = Conversion;
   using required_access = typename Conversion::required_access;
@@ -257,6 +289,7 @@ struct alternative_type_conversion;
 template <typename Target, typename Source, typename... Branches>
 struct alternative_type_conversion<Target, Source, type_list<Branches...>> {
   static constexpr bool available = (Branches::conversion::available || ...);
+  static constexpr conversion_kind kind = conversion_kind::alternative;
 
   using target_type = Target;
   using source_type = Source;

@@ -376,6 +376,7 @@ public:
   using conversion_type = Conversion;
   using required_access = typename Conversion::required_access;
   using cache_types = typename conversion_cache_types<Conversion>::type;
+  static constexpr conversion_kind kind = Conversion::kind;
 
   template <typename Storage>
   using temporary_types =

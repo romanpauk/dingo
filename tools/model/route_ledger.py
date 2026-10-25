@@ -34,6 +34,18 @@ ROUTE_FORM_NAMES = (
     "optional",
 )
 GAP_ARRAY_ROUTES = "array-routes"
+GAP_OPERATION_KIND = "operation-kind"
+
+PLAIN_KINDS = {
+    ("shared", "value"): ("dereference",),
+    ("shared", "object"): ("traits",),
+    ("unique", "value"): ("identity", "wrapper"),
+    ("unique", "object"): ("traits",),
+    ("unique", "rvalue"): ("identity", "wrapper"),
+    ("external", "value"): ("identity",),
+    ("external", "object"): ("address",),
+    ("shared_cyclical", "object"): ("traits",),
+}
 
 
 @dataclass(frozen=True)
@@ -45,6 +57,8 @@ class LedgerRow:
     reason: str = ""
     gap: str = ""
     access: str = ""
+    kinds: tuple[str, ...] = ()
+    kind_gap: str = ""
 
 
 def _category_outcome(
@@ -94,6 +108,8 @@ def _category_outcome(
             if supported
             else ""
         ),
+        PLAIN_KINDS.get((scope_name, category), ()) if supported and form_name == "plain" else (),
+        GAP_OPERATION_KIND if supported and form_name != "plain" else "",
     )
 
 
@@ -130,6 +146,16 @@ def validate() -> None:
             raise ValueError(f"supported row has no access: {row}")
         if row.outcome != "supported" and row.access:
             raise ValueError(f"non-supported row has an access: {row}")
+        if row.outcome == "supported" and row.form == "plain" and not row.kinds:
+            raise ValueError(f"supported plain row has no operation kinds: {row}")
+        if (
+            row.outcome == "supported"
+            and row.form != "plain"
+            and row.kind_gap != GAP_OPERATION_KIND
+        ):
+            raise ValueError(f"supported non-plain row has no kind gap: {row}")
+        if row.outcome != "supported" and (row.kinds or row.kind_gap):
+            raise ValueError(f"non-supported row has operation kinds: {row}")
 
 
 def supported_categories(scope_name: str, form_name: str) -> set[str]:
@@ -151,6 +177,20 @@ def category_access(scope_name: str, form_name: str, category: str) -> str:
             and row.outcome == "supported"
         ):
             return row.access
+    raise KeyError((scope_name, form_name, category))
+
+
+def category_kinds(
+    scope_name: str, form_name: str, category: str
+) -> tuple[str, ...]:
+    for row in build_rows():
+        if (
+            row.scope == scope_name
+            and row.form == form_name
+            and row.category == category
+            and row.outcome == "supported"
+        ):
+            return row.kinds
     raise KeyError((scope_name, form_name, category))
 
 

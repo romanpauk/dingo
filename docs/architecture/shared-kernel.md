@@ -39,9 +39,11 @@ infrastructure described below. It changes no public API and no behavior.
   scope/form/route-category row. Every route row is classified as supported,
   unavailable with a reason, or a tracked gap; the generator emits one
   translation unit of compile-time assertions for the supported rows and checks
-  that every published route target is reachable from both request matchers and
-  that the scope access satisfies each route. `cells-check` fails when the
-  library catalog and the model drift.
+  that every published route target is reachable from both request matchers,
+  that the scope access satisfies each route, and that the modeled
+  operation-kind sequence matches. Plain-form kinds are modeled; the remaining
+  forms are explicit `operation-kind` gaps. `cells-check` fails when the library
+  catalog and the model drift.
 - `include/dingo/storage/scopes.gen.h` owns the built-in `storage_scope_policy`
   specializations and the `shared_cyclical` cell-list table. The per-scope
   headers keep their public tag and storage implementation, but the policy and
