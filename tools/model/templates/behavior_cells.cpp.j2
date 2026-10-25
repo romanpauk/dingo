@@ -17,9 +17,15 @@
 
 #include <gtest/gtest.h>
 
+#include <fstream>
 #include <memory>
 #include <optional>
+#include <string>
 #include <variant>
+
+#ifndef DINGO_BEHAVIOR_REPORT
+#define DINGO_BEHAVIOR_REPORT "behavior-outcomes.jsonl"
+#endif
 
 namespace behavior_cells {
 
@@ -60,6 +66,68 @@ struct tracked : tracked_interface, tracked_interface2 {
 
   int id;
 };
+
+inline std::string behavior_json_escape(const std::string &value) {
+  std::string result;
+  result.reserve(value.size());
+  for (char character : value) {
+    switch (character) {
+    case '\\':
+      result += "\\\\";
+      break;
+    case '"':
+      result += "\\\"";
+      break;
+    case '\n':
+      result += "\\n";
+      break;
+    default:
+      result += character;
+      break;
+    }
+  }
+  return result;
+}
+
+inline std::ofstream &behavior_outcome_file() {
+  static std::ofstream out(DINGO_BEHAVIOR_REPORT, std::ios::trunc);
+  return out;
+}
+
+inline void write_behavior_outcome(const char *name, const char *scope,
+                                   const char *form, const char *container,
+                                   const char *request, const char *result) {
+  auto &out = behavior_outcome_file();
+  out << "{\"name\":\"" << behavior_json_escape(name) << "\","
+         "\"scope\":\""
+      << behavior_json_escape(scope) << "\",\"form\":\""
+      << behavior_json_escape(form) << "\",\"container\":\""
+      << behavior_json_escape(container) << "\",\"request\":\""
+      << behavior_json_escape(request) << "\",\"result\":\""
+      << behavior_json_escape(result) << "\",\"constructions\":"
+      << tracked::constructions << ",\"copies\":" << tracked::copies
+      << ",\"moves\":" << tracked::moves
+      << ",\"destructions\":" << tracked::destructions << "}\n";
+}
+
+template <typename Exception, typename Fn>
+void expect_behavior_exception(const char *name, const char *scope,
+                               const char *form, const char *request,
+                               const char *exception_name, Fn &&fn) {
+  tracked::reset();
+  try {
+    fn();
+    write_behavior_outcome(name, scope, form, "runtime", request,
+                           "unexpected-success");
+    ADD_FAILURE() << "expected " << exception_name;
+  } catch (const Exception &) {
+    write_behavior_outcome(name, scope, form, "runtime", request,
+                           exception_name);
+  } catch (const std::exception &) {
+    write_behavior_outcome(name, scope, form, "runtime", request,
+                           "exception:std::exception");
+  }
+}
 
 std::unique_ptr<tracked> make_unique_tracked() {
   return std::make_unique<tracked>();
@@ -179,6 +247,8 @@ TEST(behavior_cells, {{ row.name }}) {
   }
   EXPECT_EQ(tracked::destructions,
             tracked::constructions + tracked::copies + tracked::moves);
+  write_behavior_outcome("{{ row.name }}", "{{ row.scope }}", "{{ row.form }}",
+                         "{{ row.container }}", "{{ row.request }}", "ok");
 }
 
 {% endfor %}
@@ -186,16 +256,22 @@ TEST(annotation_cells, refuses_unannotated_request) {
   dingo::container<> container;
   container.register_type<dingo::scope<dingo::shared>, dingo::storage<tracked>,
                           dingo::interfaces<dingo::annotated<tracked, tag_a>>>();
-  EXPECT_THROW((container.resolve<tracked &>()),
-               dingo::type_not_found_exception);
+  expect_behavior_exception<dingo::type_not_found_exception>(
+      "annotation_refuses_unannotated_request", "annotation",
+      "refuses_unannotated_request", "tracked &",
+      "exception:dingo::type_not_found_exception",
+      [&] { (void)container.resolve<tracked &>(); });
 }
 
 TEST(annotation_cells, refuses_wrong_tag) {
   dingo::container<> container;
   container.register_type<dingo::scope<dingo::shared>, dingo::storage<tracked>,
                           dingo::interfaces<dingo::annotated<tracked, tag_a>>>();
-  EXPECT_THROW((container.resolve<dingo::annotated<tracked &, tag_b>>()),
-               dingo::type_not_found_exception);
+  expect_behavior_exception<dingo::type_not_found_exception>(
+      "annotation_refuses_wrong_tag", "annotation", "refuses_wrong_tag",
+      "dingo::annotated<tracked &, tag_b>",
+      "exception:dingo::type_not_found_exception",
+      [&] { (void)container.resolve<dingo::annotated<tracked &, tag_b>>(); });
 }
 
 TEST(annotation_cells, rejects_duplicate_annotated_registration) {

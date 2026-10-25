@@ -390,7 +390,8 @@ target_link_libraries(dingo_model_test dingo::dingo gtest_main)
 target_include_directories(dingo_model_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_definitions(dingo_model_test PRIVATE
     DINGO_TYPE_MATRIX_REPORT="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.md"
-    DINGO_TYPE_MATRIX_JSON="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.json")
+    DINGO_TYPE_MATRIX_JSON="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.json"
+    DINGO_BEHAVIOR_REPORT="${CMAKE_CURRENT_BINARY_DIR}/behavior-outcomes.jsonl")
 add_test(NAME dingo_model_test COMMAND dingo_model_test)
 set_tests_properties(dingo_model_test PROPERTIES LABELS "unit;generator")
 
@@ -398,6 +399,7 @@ add_test(NAME dingo_model_baseline_test
     COMMAND ${DINGO_UV_RUN_COMMAND} python
         ${PROJECT_SOURCE_DIR}/tools/model/outcome_baseline.py check
         --matrix ${CMAKE_CURRENT_BINARY_DIR}/type-matrix.json
+        --behavior ${CMAKE_CURRENT_BINARY_DIR}/behavior-outcomes.jsonl
         --baseline ${PROJECT_SOURCE_DIR}/test/baselines/model.json)
 set_tests_properties(dingo_model_baseline_test PROPERTIES
     LABELS "unit;generator"

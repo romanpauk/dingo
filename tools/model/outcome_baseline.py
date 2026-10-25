@@ -22,8 +22,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from behavior_cells import build_rows as build_behavior_rows
-
 
 def read_matrix(path: Path) -> dict[str, dict[str, Any]]:
     rows = {}
@@ -48,27 +46,40 @@ def read_matrix(path: Path) -> dict[str, dict[str, Any]]:
     return rows
 
 
-def build_behavior() -> dict[str, dict[str, Any]]:
+def read_behavior(path: Path) -> dict[str, dict[str, Any]]:
     rows = {}
-    for row in build_behavior_rows():
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"{path}:{number}: invalid JSON: {error}") from error
         key = str(row["name"])
+        if key in rows:
+            raise ValueError(f"{path}:{number}: duplicate row {key}")
         rows[key] = {
+            "scope": str(row["scope"]),
+            "form": str(row["form"]),
+            "container": str(row["container"]),
             "request": str(row["request"]),
-            "relation": str(row["relation"]),
+            "result": str(row["result"]),
             "constructions": int(row["constructions"]),
             "copies": int(row["copies"]),
             "moves": int(row["moves"]),
-            "destructions": (
-                int(row["constructions"]) + int(row["copies"]) + int(row["moves"])
-            ),
+            "destructions": int(row["destructions"]),
         }
+    if not rows:
+        raise ValueError(f"{path}: no behavior rows")
     return rows
 
 
-def build_outcomes(matrix: Path) -> dict[str, dict[str, dict[str, Any]]]:
+def build_outcomes(
+    matrix: Path, behavior: Path
+) -> dict[str, dict[str, dict[str, Any]]]:
     return {
         "matrix": read_matrix(matrix),
-        "behavior": build_behavior(),
+        "behavior": read_behavior(behavior),
     }
 
 
@@ -101,7 +112,7 @@ def write_json(path: Path, data: Any) -> None:
 
 
 def record(arguments: argparse.Namespace) -> int:
-    outcomes = build_outcomes(arguments.matrix)
+    outcomes = build_outcomes(arguments.matrix, arguments.behavior)
     write_json(arguments.out, outcomes)
     print(
         f"recorded {len(outcomes['matrix'])} matrix rows and "
@@ -119,7 +130,7 @@ def compare(
 
 def check(arguments: argparse.Namespace) -> int:
     baseline = json.loads(arguments.baseline.read_text(encoding="utf-8"))
-    current = build_outcomes(arguments.matrix)
+    current = build_outcomes(arguments.matrix, arguments.behavior)
     differences = compare(baseline, current)
     if not differences:
         print("model outcomes match the baseline")
@@ -132,7 +143,8 @@ def check(arguments: argparse.Namespace) -> int:
     print(
         "If this is intended, run:\n"
         "  python tools/model/outcome_baseline.py update "
-        f"--matrix {arguments.matrix} --baseline {arguments.baseline} "
+        f"--matrix {arguments.matrix} --behavior {arguments.behavior} "
+        f"--baseline {arguments.baseline} "
         "--changes test/baselines/model-changes.json --reason \"...\"",
         file=sys.stderr,
     )
@@ -142,7 +154,7 @@ def check(arguments: argparse.Namespace) -> int:
 def update(arguments: argparse.Namespace) -> int:
     if not arguments.reason.strip():
         raise SystemExit("an update requires a non-empty --reason")
-    current = build_outcomes(arguments.matrix)
+    current = build_outcomes(arguments.matrix, arguments.behavior)
     if arguments.baseline.exists():
         baseline = json.loads(arguments.baseline.read_text(encoding="utf-8"))
         differences = compare(baseline, current)
@@ -169,16 +181,19 @@ def main() -> int:
 
     record_parser = subparsers.add_parser("record")
     record_parser.add_argument("--matrix", type=Path, required=True)
+    record_parser.add_argument("--behavior", type=Path, required=True)
     record_parser.add_argument("--out", type=Path, required=True)
     record_parser.set_defaults(handler=record)
 
     check_parser = subparsers.add_parser("check")
     check_parser.add_argument("--matrix", type=Path, required=True)
+    check_parser.add_argument("--behavior", type=Path, required=True)
     check_parser.add_argument("--baseline", type=Path, required=True)
     check_parser.set_defaults(handler=check)
 
     update_parser = subparsers.add_parser("update")
     update_parser.add_argument("--matrix", type=Path, required=True)
+    update_parser.add_argument("--behavior", type=Path, required=True)
     update_parser.add_argument("--baseline", type=Path, required=True)
     update_parser.add_argument("--changes", type=Path, required=True)
     update_parser.add_argument("--reason", required=True)
