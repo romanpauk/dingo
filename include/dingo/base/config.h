@@ -57,3 +57,30 @@
 #elif __cplusplus <= 201703L || (defined(_MSVC_LANG) && _MSVC_LANG == 201703L)
 #define DINGO_CXX_STANDARD 17
 #endif
+
+// Indexes a type pack with the compiler builtin, in place of the portable
+// inheritance selection.
+#if defined(__has_builtin)
+#if __has_builtin(__type_pack_element)
+#define DINGO_HAS_TYPE_PACK_ELEMENT 1
+#else
+#define DINGO_HAS_TYPE_PACK_ELEMENT 0
+#endif
+#else
+#define DINGO_HAS_TYPE_PACK_ELEMENT 0
+#endif
+
+// Indexes a type pack directly with Ts...[I], in place of the builtin.
+#if defined(__cpp_pack_indexing) && __cpp_pack_indexing >= 202311L
+#define DINGO_HAS_PACK_INDEXING 1
+#else
+#define DINGO_HAS_PACK_INDEXING 0
+#endif
+
+#if !defined(DINGO_VARIANT_PACK_AT_INDEXING)
+#define DINGO_VARIANT_PACK_AT_INDEXING DINGO_HAS_PACK_INDEXING
+#endif
+
+#if !defined(DINGO_VARIANT_PACK_AT_BUILTIN)
+#define DINGO_VARIANT_PACK_AT_BUILTIN DINGO_HAS_TYPE_PACK_ELEMENT
+#endif

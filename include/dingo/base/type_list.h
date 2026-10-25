@@ -14,6 +14,10 @@
 #include <tuple>
 #include <type_traits>
 
+#if !DINGO_VARIANT_PACK_AT_INDEXING && !DINGO_VARIANT_PACK_AT_BUILTIN
+#include <utility>
+#endif
+
 namespace dingo {
 template <typename... Types> struct type_list {};
 template <typename T> struct type_list_iterator {
@@ -41,16 +45,56 @@ template <typename... Lists> struct type_list_cat {
 template <typename... Lists>
 using type_list_cat_t = typename type_list_cat<Lists...>::type;
 
+#if DINGO_VARIANT_PACK_AT_INDEXING
+// Clang offers pack indexing as an extension before C++26 and warns about it.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunknown-warning-option"
+#pragma clang diagnostic ignored "-Wc++26-extensions"
+#endif
 template <typename List, std::size_t Index> struct type_list_at;
 
-template <typename Head, typename... Tail>
-struct type_list_at<type_list<Head, Tail...>, 0> {
-  using type = Head;
+template <std::size_t Index, typename... Types>
+struct type_list_at<type_list<Types...>, Index> {
+  using type = Types...[Index];
+};
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+#elif DINGO_VARIANT_PACK_AT_BUILTIN
+template <typename List, std::size_t Index> struct type_list_at;
+
+template <std::size_t Index, typename... Types>
+struct type_list_at<type_list<Types...>, Index> {
+  using type = __type_pack_element<Index, Types...>;
+};
+#else
+namespace detail {
+template <std::size_t Index, typename Type> struct pack_indexed {
+  using type = Type;
 };
 
-template <typename Head, typename... Tail, std::size_t Index>
-struct type_list_at<type_list<Head, Tail...>, Index>
-    : type_list_at<type_list<Tail...>, Index - 1> {};
+template <typename Indices, typename... Types> struct pack_indexer;
+
+template <std::size_t... Indices, typename... Types>
+struct pack_indexer<std::index_sequence<Indices...>, Types...>
+    : pack_indexed<Indices, Types>... {};
+
+template <std::size_t Index, typename Type>
+pack_indexed<Index, Type> pack_select(const pack_indexed<Index, Type> &);
+} // namespace detail
+
+// The portable selection: overload resolution picks the base class with the
+// index, which is one instantiation per pack rather than one per element.
+template <typename List, std::size_t Index> struct type_list_at;
+
+template <std::size_t Index, typename... Types>
+struct type_list_at<type_list<Types...>, Index> {
+  using type = typename decltype(detail::pack_select<Index>(
+      detail::pack_indexer<std::index_sequence_for<Types...>,
+                           Types...>{}))::type;
+};
+#endif
 
 template <typename List, std::size_t Index>
 using type_list_at_t = typename type_list_at<List, Index>::type;

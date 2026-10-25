@@ -34,6 +34,18 @@ TEST(type_list_test, meta_utilities) {
   static_assert(type_list_size_v<type_list<>> == 0);
   static_assert(type_list_size_v<nested_list> == 2);
   static_assert(std::is_same_v<type_list_head_t<nested_list>, type_list_a>);
+  static_assert(
+      std::is_same_v<type_list_at_t<type_list<type_list_a, type_list_b>, 0>,
+                     type_list_a>);
+  static_assert(
+      std::is_same_v<type_list_at_t<type_list<type_list_a, type_list_b>, 1>,
+                     type_list_b>);
+#if !DINGO_VARIANT_PACK_AT_BUILTIN && !DINGO_VARIANT_PACK_AT_INDEXING
+  static_assert(std::is_same_v<pack_at_portable_t<0, type_list_a, type_list_b>,
+                               type_list_a>);
+  static_assert(std::is_same_v<pack_at_portable_t<1, type_list_a, type_list_b>,
+                               type_list_b>);
+#endif
   static_assert(std::is_same_v<to_type_list_t<nested_tuple>, nested_list>);
   static_assert(!type_list_contains_v<type_list_a, type_list<>>);
   static_assert(type_list_contains_v<type_list_a, nested_list>);
