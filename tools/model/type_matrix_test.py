@@ -25,24 +25,25 @@ def test_type_matrix_product_is_complete() -> None:
     assert len({shape.name for shape in SHAPES}) == len(SHAPES)
 
 
-def test_type_matrix_covers_wrapper_shapes() -> None:
-    names = {shape.name for shape in SHAPES}
+def test_type_matrix_derives_wrapper_shapes() -> None:
+    cpp_types = {shape.cpp_type for shape in SHAPES}
     assert {
-        "value",
-        "lvalue_reference",
-        "pointer",
-        "pointer_pointer",
-        "rvalue_reference",
-        "optional",
-        "unique_ptr",
-        "shared_ptr",
-        "array_lvalue_reference",
-        "array_pointer",
-        "unique_array_handle",
-        "shared_array_handle",
-        "optional_shared_ptr",
-        "shared_optional",
-    } <= names
+        "int",
+        "int &",
+        "const int &",
+        "int *",
+        "const int *",
+        "int * *",
+        "std::optional<int *>",
+        "std::optional<std::optional<int>>",
+        "std::shared_ptr<std::optional<int>>",
+        "std::optional<std::shared_ptr<int>>",
+        "std::shared_ptr<int>",
+        "std::unique_ptr<int>",
+        "int (&)[2]",
+        "int (*)[2]",
+    } <= cpp_types
+    assert all(shape.depth <= 2 for shape in SHAPES)
 
 
 def test_type_matrix_cells_are_instantiables() -> None:

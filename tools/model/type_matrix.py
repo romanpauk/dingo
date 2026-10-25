@@ -30,32 +30,106 @@ from storage_cells import FORMS, SCOPES, exposure, validate_catalog
 class Shape:
     name: str
     cpp_type: str
+    depth: int = 0
+    is_reference: bool = False
+    is_array: bool = False
+    is_const: bool = False
 
 
-SHAPES = (
-    Shape("value", "int"),
-    Shape("lvalue_reference", "int &"),
-    Shape("const_lvalue_reference", "const int &"),
-    Shape("rvalue_reference", "int &&"),
-    Shape("pointer", "int *"),
-    Shape("const_pointer", "const int *"),
-    Shape("pointer_pointer", "int **"),
-    Shape("optional", "std::optional<int>"),
-    Shape("optional_lvalue_reference", "std::optional<int> &"),
-    Shape("optional_pointer", "std::optional<int> *"),
-    Shape("unique_ptr", "std::unique_ptr<int>"),
-    Shape("unique_ptr_lvalue_reference", "std::unique_ptr<int> &"),
-    Shape("shared_ptr", "std::shared_ptr<int>"),
-    Shape("shared_ptr_lvalue_reference", "std::shared_ptr<int> &"),
-    Shape("array_lvalue_reference", "int (&)[2]"),
-    Shape("array_pointer", "int (*)[2]"),
-    Shape("unique_array_handle", "std::unique_ptr<int[]>"),
-    Shape("unique_array_handle_lvalue_reference", "std::unique_ptr<int[]> &"),
-    Shape("shared_array_handle", "std::shared_ptr<int[]>"),
-    Shape("shared_array_handle_lvalue_reference", "std::shared_ptr<int[]> &"),
-    Shape("optional_shared_ptr", "std::optional<std::shared_ptr<int>>"),
-    Shape("shared_optional", "std::shared_ptr<std::optional<int>>"),
+BASE = Shape("value", "int")
+
+
+@dataclass(frozen=True)
+class Constructor:
+    name: str
+    render: str
+    is_reference: bool = False
+    is_array: bool = False
+    is_const: bool = False
+
+    def apply(self, inner: Shape) -> Shape:
+        return Shape(
+            name=f"{self.name}_{inner.name}",
+            cpp_type=self.render.format(inner=inner.cpp_type),
+            depth=inner.depth + 1,
+            is_reference=self.is_reference,
+            is_array=self.is_array,
+            is_const=self.is_const,
+        )
+
+    def applicable(self, inner: Shape) -> bool:
+        if self.is_const:
+            # const applies to the object, not to pointers or references; the
+            # pointer-to-const shape comes from pointer(const(T)).
+            return not inner.is_reference and not inner.is_const
+        if self.is_reference:
+            return not inner.is_reference and not inner.is_array
+        if self.is_array:
+            return not inner.is_reference and not inner.is_array
+        if self.name in {"pointer", "array_pointer"}:
+            return not inner.is_reference and not inner.is_array
+        if self.name in {
+            "optional",
+            "unique_ptr",
+            "shared_ptr",
+            "unique_array",
+            "shared_array",
+        }:
+            return not inner.is_reference and not inner.is_array
+        return False
+
+
+CONSTRUCTORS = (
+    Constructor("const", "const {inner}", is_const=True),
+    Constructor("lvalue_reference", "{inner} &", is_reference=True),
+    Constructor("rvalue_reference", "{inner} &&", is_reference=True),
+    Constructor("pointer", "{inner} *"),
+    Constructor("optional", "std::optional<{inner}>"),
+    Constructor("unique_ptr", "std::unique_ptr<{inner}>"),
+    Constructor("shared_ptr", "std::shared_ptr<{inner}>"),
+    Constructor("unique_array", "std::unique_ptr<{inner}[]>"),
+    Constructor("shared_array", "std::shared_ptr<{inner}[]>"),
+    Constructor(
+        "array_lvalue_reference", "{inner} (&)[2]", is_reference=True,
+        is_array=True,
+    ),
+    Constructor("array_pointer", "{inner} (*)[2]", is_array=True),
 )
+
+SHAPE_DEPTH = 2
+
+
+def enumerate_shapes(depth: int = SHAPE_DEPTH) -> tuple[Shape, ...]:
+    shapes = {BASE.name: BASE}
+    frontier = [BASE]
+    for _ in range(depth):
+        next_frontier = []
+        for inner in frontier:
+            for constructor in CONSTRUCTORS:
+                if not constructor.applicable(inner):
+                    continue
+                shape = constructor.apply(inner)
+                if shape.name in shapes:
+                    continue
+                shapes[shape.name] = shape
+                next_frontier.append(shape)
+        frontier = next_frontier
+    # A bare array or a top-level const is not a request type. Reference and
+    # pointer forms of arrays are included.
+    return tuple(
+        sorted(
+            (
+                shape
+                for shape in shapes.values()
+                if shape.depth == 0 or not shape.is_const
+            ),
+            key=lambda shape: shape.name,
+        )
+    )
+
+
+SHAPES = enumerate_shapes()
+
 
 ARRAY_FORMS = frozenset(
     {"array", "bounded_array", "unique_array_handle", "shared_array_handle"}
