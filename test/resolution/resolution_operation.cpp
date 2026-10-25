@@ -192,21 +192,16 @@ TEST(resolution_operation_test,
       retained>;
   using construction = detail::converted_construction<selected>;
 
-  static_assert(
-      std::is_same_v<typename detail::conversion_cache_types<borrowed>::type,
-                     type_list<std::shared_ptr<int>>>);
-  static_assert(
-      std::is_same_v<typename detail::conversion_cache_types<alternative>::type,
-                     type_list<std::shared_ptr<int>>>);
-  static_assert(
-      std::is_same_v<typename detail::conversion_cache_types<wrapped>::type,
-                     type_list<std::shared_ptr<int>>>);
-  static_assert(
-      std::is_same_v<typename detail::conversion_cache_types<selected>::type,
-                     type_list<std::shared_ptr<int>>>);
-  static_assert(std::is_same_v<
-                typename detail::conversion_cache_types<construction>::type,
-                type_list<std::shared_ptr<int>>>);
+  static_assert(std::is_same_v<detail::conversion_cache_types_t<borrowed>,
+                               type_list<std::shared_ptr<int>>>);
+  static_assert(std::is_same_v<detail::conversion_cache_types_t<alternative>,
+                               type_list<std::shared_ptr<int>>>);
+  static_assert(std::is_same_v<detail::conversion_cache_types_t<wrapped>,
+                               type_list<std::shared_ptr<int>>>);
+  static_assert(std::is_same_v<detail::conversion_cache_types_t<selected>,
+                               type_list<std::shared_ptr<int>>>);
+  static_assert(std::is_same_v<detail::conversion_cache_types_t<construction>,
+                               type_list<std::shared_ptr<int>>>);
 }
 
 TEST(resolution_operation_test,

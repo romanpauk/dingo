@@ -39,9 +39,12 @@ decltype(auto) materialized_reference(MaterializedSource &&source) {
 template <typename Conversion> struct type_conversion;
 
 template <typename Route> struct conversion_walk;
-template <typename Conversion> struct conversion_route;
+template <typename Conversion> struct conversion_descriptor;
 template <typename Conversion>
-using conversion_route_t = typename conversion_route<Conversion>::type;
+using conversion_route_t = typename conversion_descriptor<Conversion>::steps;
+template <typename Conversion>
+using conversion_cache_types_t =
+    typename conversion_descriptor<Conversion>::cache_types;
 
 template <typename Target, typename Source, typename RequiredAccess,
           typename Argument>
@@ -416,55 +419,86 @@ struct conversion_alternative_step<Target, Source, type_list<Branches...>> {
   }
 };
 
-template <typename Conversion> struct conversion_route {
-  using type = type_list<conversion_leaf_step<Conversion>>;
+template <typename Branches> struct alternative_conversion_cache_types;
+
+template <typename... Branches>
+struct alternative_conversion_cache_types<type_list<Branches...>> {
+  using type =
+      type_list_unique_t<type_list_cat_t<typename conversion_descriptor<
+          typename Branches::conversion>::cache_types...>>;
+};
+
+template <typename Conversion> struct conversion_descriptor {
+  using steps = type_list<conversion_leaf_step<Conversion>>;
+  using cache_types = type_list<>;
 };
 
 template <typename Target, typename Source, typename Conversion>
-struct conversion_route<
+struct conversion_descriptor<
     dereference_type_conversion<Target, Source, Conversion>> {
-  using type = type_list_cat_t<type_list<conversion_dereference_step>,
-                               conversion_route_t<Conversion>>;
+  using steps = type_list_cat_t<type_list<conversion_dereference_step>,
+                                conversion_route_t<Conversion>>;
+  using cache_types = conversion_cache_types_t<Conversion>;
 };
 
 template <typename Target, typename Source, typename Conversion>
-struct conversion_route<borrowed_type_conversion<Target, Source, Conversion>> {
-  using type = type_list_cat_t<type_list<conversion_borrow_step>,
-                               conversion_route_t<Conversion>>;
+struct conversion_descriptor<
+    borrowed_type_conversion<Target, Source, Conversion>> {
+  using steps = type_list_cat_t<type_list<conversion_borrow_step>,
+                                conversion_route_t<Conversion>>;
+  using cache_types = conversion_cache_types_t<Conversion>;
 };
 
 template <typename Target, typename Source, typename Conversion, bool Unwrap>
-struct conversion_route<
+struct conversion_descriptor<
     wrapper_type_conversion<Target, Source, Conversion, Unwrap>> {
   using inner = conversion_route_t<Conversion>;
-  using type = std::conditional_t<
+  using steps = std::conditional_t<
       Unwrap, type_list<conversion_optional_wrap_step<Target, inner>>,
       type_list_cat_t<inner, type_list<conversion_wrap_step<Target>>>>;
+  using cache_types = conversion_cache_types_t<Conversion>;
 };
 
 template <typename Target, typename Source, typename Selected,
           typename Conversion>
-struct conversion_route<
+struct conversion_descriptor<
     target_alternative_type_conversion<Target, Source, Selected, Conversion>> {
-  using type = type_list_cat_t<
+  using steps = type_list_cat_t<
       conversion_route_t<Conversion>,
       type_list<conversion_target_alternative_step<Target, Selected>>>;
+  using cache_types = conversion_cache_types_t<Conversion>;
 };
 
 template <typename Conversion>
-struct conversion_route<converted_construction<Conversion>> {
-  using type = conversion_route_t<Conversion>;
+struct conversion_descriptor<converted_construction<Conversion>> {
+  using steps = conversion_route_t<Conversion>;
+  using cache_types = conversion_cache_types_t<Conversion>;
 };
 
 template <typename Target, typename Source, typename Conversion>
-struct conversion_route<retained_type_conversion<Target, Source, Conversion>> {
-  using type = type_list_cat_t<conversion_route_t<Conversion>,
-                               type_list<conversion_retain_step<Target>>>;
+struct conversion_descriptor<
+    retained_type_conversion<Target, Source, Conversion>> {
+private:
+  using retained_type =
+      std::remove_cv_t<std::conditional_t<std::is_pointer_v<Target>,
+                                          std::remove_pointer_t<Target>,
+                                          std::remove_reference_t<Target>>>;
+
+public:
+  using steps = type_list_cat_t<conversion_route_t<Conversion>,
+                                type_list<conversion_retain_step<Target>>>;
+  using cache_types =
+      type_list_unique_t<type_list_cat_t<type_list<retained_type>,
+                                         conversion_cache_types_t<Conversion>>>;
 };
 
 template <typename Target, typename Source, typename Branches>
-struct conversion_route<alternative_type_conversion<Target, Source, Branches>> {
-  using type = type_list<conversion_alternative_step<Target, Source, Branches>>;
+struct conversion_descriptor<
+    alternative_type_conversion<Target, Source, Branches>> {
+  using steps =
+      type_list<conversion_alternative_step<Target, Source, Branches>>;
+  using cache_types =
+      typename alternative_conversion_cache_types<Branches>::type;
 };
 
 template <typename Conversion>
@@ -576,64 +610,6 @@ struct type_conversion<alternative_type_conversion<Target, Source, Branches>> {
   }
 };
 
-template <typename Conversion> struct conversion_cache_types {
-  using type = type_list<>;
-};
-
-template <typename Target, typename Source, typename Conversion>
-struct conversion_cache_types<
-    borrowed_type_conversion<Target, Source, Conversion>>
-    : conversion_cache_types<Conversion> {};
-
-template <typename Target, typename Source, typename Conversion>
-struct conversion_cache_types<
-    dereference_type_conversion<Target, Source, Conversion>>
-    : conversion_cache_types<Conversion> {};
-
-template <typename Target, typename Source, typename Conversion,
-          bool UnwrapSource>
-struct conversion_cache_types<
-    wrapper_type_conversion<Target, Source, Conversion, UnwrapSource>>
-    : conversion_cache_types<Conversion> {};
-
-template <typename Target, typename Source, typename Selected,
-          typename Conversion>
-struct conversion_cache_types<
-    target_alternative_type_conversion<Target, Source, Selected, Conversion>>
-    : conversion_cache_types<Conversion> {};
-
-template <typename Conversion>
-struct conversion_cache_types<converted_construction<Conversion>>
-    : conversion_cache_types<Conversion> {};
-
-template <typename Target, typename Source, typename Conversion>
-struct conversion_cache_types<
-    retained_type_conversion<Target, Source, Conversion>> {
-private:
-  using retained_type =
-      std::remove_cv_t<std::conditional_t<std::is_pointer_v<Target>,
-                                          std::remove_pointer_t<Target>,
-                                          std::remove_reference_t<Target>>>;
-
-public:
-  using type = type_list_unique_t<
-      type_list_cat_t<type_list<retained_type>,
-                      typename conversion_cache_types<Conversion>::type>>;
-};
-
-template <typename Branches> struct alternative_conversion_cache_types;
-
-template <typename... Branches>
-struct alternative_conversion_cache_types<type_list<Branches...>> {
-  using type = type_list_unique_t<type_list_cat_t<
-      typename conversion_cache_types<typename Branches::conversion>::type...>>;
-};
-
-template <typename Target, typename Source, typename Branches>
-struct conversion_cache_types<
-    alternative_type_conversion<Target, Source, Branches>>
-    : alternative_conversion_cache_types<Branches> {};
-
 struct empty_conversion_context {};
 
 template <typename Target, typename Conversion, typename Source>
@@ -641,9 +617,8 @@ Target convert_type(Source &&source, Conversion) {
   using source_type = Source &&;
   static_assert(Conversion::available,
                 "requested type conversion is unavailable");
-  static_assert(
-      type_list_size_v<typename conversion_cache_types<Conversion>::type> == 0,
-      "conversion outside resolution cannot retain its result");
+  static_assert(type_list_size_v<conversion_cache_types_t<Conversion>> == 0,
+                "conversion outside resolution cannot retain its result");
 
   empty_conversion_context state;
   return type_conversion<Conversion>::apply(
@@ -677,7 +652,7 @@ public:
   using conversion_type = Conversion;
   using conversion_steps = conversion_route_t<Conversion>;
   using required_access = typename Conversion::required_access;
-  using cache_types = typename conversion_cache_types<Conversion>::type;
+  using cache_types = conversion_cache_types_t<Conversion>;
   static constexpr conversion_kind kind = Conversion::kind;
 
   template <typename Storage>

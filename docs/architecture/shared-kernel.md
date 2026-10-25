@@ -75,11 +75,10 @@ infrastructure described below. It changes no public API and no behavior.
   all use the same executor. A selected binding exposes a `resolution_route` for
   one resolution and a `resolution_candidates` for its request list; both the
   runtime index dispatch and the compile-time static selection resolve through
-  the same route types. Each resolution exposes its `conversion_steps`, built by
-  `conversion_route` from the nested conversion type, and `conversion_walk`
-  applies that sequence as the single conversion executor. Leaf conversions stay
-  the primitives; wrapper, alternative, retention, and source steps only compose
-  them.
+  the same route types. Each resolution exposes a `conversion_descriptor` with
+  its step list and retained cache types, and `conversion_walk` applies the
+  steps as the single conversion executor. Leaf conversions stay the primitives;
+  wrapper, alternative, retention, and source steps only compose them.
 - Behavior coverage follows the same catalog. `behavior_cells.py` declares each
   form once (storage, factory, external instance) plus one expectation entry per
   scope, then derives the runtime and static product from the route ledger.
