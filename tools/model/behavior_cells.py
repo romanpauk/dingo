@@ -330,6 +330,8 @@ class InterfaceCase:
     constructions: int
     request_class: str
     containers: tuple[str, ...] = CONTAINERS
+    other_request: str = ""
+    other_relation: str = ""
 
 
 INTERFACE_CASES = (
@@ -399,6 +401,45 @@ INTERFACE_CASES = (
         constructions=2,
         request_class="handle",
     ),
+    InterfaceCase(
+        name="shared_second_ref",
+        scope="shared",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory="make_shared_tracked",
+        interfaces=("tracked_interface", "tracked_interface2"),
+        request="tracked_interface &",
+        relation="&first == &second",
+        constructions=1,
+        request_class="reference",
+        other_request="tracked_interface2 &",
+        other_relation="first.value() == other.value()",
+    ),
+    InterfaceCase(
+        name="shared_second_handle",
+        scope="shared",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory="make_shared_tracked",
+        interfaces=("tracked_interface", "tracked_interface2"),
+        request="std::shared_ptr<tracked_interface2>",
+        relation="first == second",
+        constructions=1,
+        request_class="handle",
+        other_request="std::shared_ptr<tracked_interface>",
+        other_relation="first->value() == other->value()",
+    ),
+    InterfaceCase(
+        name="unique_second_handle",
+        scope="unique",
+        storage="dingo::storage<std::unique_ptr<tracked>>",
+        factory="make_unique_tracked",
+        interfaces=("tracked_interface", "tracked_interface2"),
+        request="std::unique_ptr<tracked_interface2>",
+        relation="first->value() != second->value()",
+        constructions=3,
+        request_class="handle",
+        other_request="std::unique_ptr<tracked_interface>",
+        other_relation="first->value() != other->value()",
+    ),
 )
 
 
@@ -435,6 +476,8 @@ def _interface_rows() -> list[dict[str, object]]:
                     "array_element": "",
                     "move_out": False,
                     "delete_result": "",
+                    "other_request": case.other_request,
+                    "other_relation": case.other_relation,
                     "interface": True,
                 }
             )
@@ -486,8 +529,8 @@ def _registration(
         )
     # A cyclical shared handle constructs its leaf in place, so its factory is
     # the leaf constructor rather than a handle factory.
-    interface_args = "".join(
-        f", dingo::interfaces<{interface}>" for interface in interfaces
+    interface_args = (
+        f", dingo::interfaces<{', '.join(interfaces)}>" if interfaces else ""
     )
     use_factory = factory_name is not None and not (
         scope == "shared_cyclical" and factory_name == "make_shared_tracked"
@@ -556,6 +599,8 @@ def build_rows() -> list[dict[str, object]]:
                         "array_element": expectation.array_element,
                         "move_out": expectation.move_out,
                         "delete_result": expectation.delete_result,
+                        "other_request": "",
+                        "other_relation": "",
                     }
                 )
                 for case, extra in extras:
@@ -585,6 +630,8 @@ def build_rows() -> list[dict[str, object]]:
                             "array_element": extra.array_element,
                             "move_out": extra.move_out,
                             "delete_result": extra.delete_result,
+                            "other_request": "",
+                            "other_relation": "",
                         }
                     )
     rows.extend(_interface_rows())
@@ -658,6 +705,11 @@ def validate() -> None:
         if case.scope not in SCOPES:
             raise ValueError(
                 f"interface case {case.name} has unknown scope {case.scope!r}"
+            )
+        if bool(case.other_request) != bool(case.other_relation):
+            raise ValueError(
+                f"interface case {case.name} must declare both the secondary "
+                "request and its relation"
             )
 
 

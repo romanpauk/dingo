@@ -469,10 +469,11 @@ model suites. In priority order:
    without adding a new failure mode.
 5. **Interface and annotated exposure**. Behavior cases now cover shared
    interface references, pointers, shared handles, and unique owning handles
-   through `dingo::interfaces<...>`. The matrix `resolve_interface` product
-   drops its covered reference, pointer, and shared-handle rows (107 to 32),
-   keeping copyable interface values, multiple interfaces, annotated shapes, and
-   container variants; `resolve_unique_wrapper` is fully model-covered and no
+   through `dingo::interfaces<...>`, including multiple interfaces on one
+   binding. The matrix `resolve_interface` product drops its covered reference,
+   pointer, shared-handle, and multiple-interface shared-handle rows (107 to
+   30), keeping copyable interface values and the second-interface exposure for
+   container variety; `resolve_unique_wrapper` is fully model-covered and no
    longer produces an executable. The route model still needs an interface
    dimension before the remaining interface rows can move.
 6. **Keys, collections, local bindings.** Add model axes only if the generated

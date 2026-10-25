@@ -88,6 +88,7 @@ FEATURE_RESTRICTIONS = (
                 ("shared", "interface_ref"),
                 ("shared", "interface_ptr"),
                 ("shared", "interface_ref_ptr_shared_ptr"),
+                ("shared", "multiple_interface_shared_ptr_ref"),
             }
         ),
         covered_cells=frozenset(),
@@ -97,12 +98,14 @@ FEATURE_RESTRICTIONS = (
                 "shared_ptr",
                 "shared_handle",
                 "shared_plain_ref",
+                "shared_second_handle",
             }
         ),
         reason=(
             "behavior interface cases cover the shared reference, pointer, "
-            "shared-handle, and plain-value interface shapes; copyable interface "
-            "values and multiple interfaces keep their matrix rows"
+            "shared-handle, plain-value, and multiple-interface handle shapes; "
+            "copyable values and the second-interface exposure keep their "
+            "matrix rows"
         ),
     ),
     FeatureRestriction(
@@ -183,6 +186,12 @@ MODEL_COVERED_RESOLVED_TYPES = (
         reason="the shared interface handle behavior case covers the shared_ptr route",
     ),
     ResolvedTypeCoverage(
+        resolved_type="multiple_interface_shared_ptr_ref",
+        covered_cells=frozenset(),
+        interface_cases=frozenset({"shared_second_handle"}),
+        reason="the multiple-interface shared handle behavior case covers the wrapper",
+    ),
+    ResolvedTypeCoverage(
         resolved_type="unique_interface_unique_ptr",
         covered_cells=frozenset(),
         interface_cases=frozenset(
@@ -236,6 +245,11 @@ MODEL_COVERED_POLICY_SOURCES = frozenset(
             "resolved_type",
             "unique_interface_unique_ptr",
             "resolve_unique_wrapper",
+        ),
+        (
+            "resolved_type",
+            "multiple_interface_shared_ptr_ref",
+            "resolve_interface",
         ),
     }
 )

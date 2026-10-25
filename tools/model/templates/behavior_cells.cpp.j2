@@ -28,7 +28,12 @@ struct tracked_interface {
   virtual int value() const = 0;
 };
 
-struct tracked : tracked_interface {
+struct tracked_interface2 {
+  virtual ~tracked_interface2() = default;
+  virtual int value() const = 0;
+};
+
+struct tracked : tracked_interface, tracked_interface2 {
   static inline int constructions = 0;
   static inline int copies = 0;
   static inline int moves = 0;
@@ -100,6 +105,13 @@ TEST(behavior_cells, {{ row.name }}) {
   {{ row.static_source }}
   dingo::static_container<source> container;
 {% endif %}
+{% if row.other_request %}
+{% if row.other_request.endswith("&") %}
+  auto &other = container.resolve<{{ row.other_request }}>();
+{% else %}
+  auto other = container.resolve<{{ row.other_request }}>();
+{% endif %}
+{% endif %}
 {% if row.move_out %}
   auto &&first_rvalue = container.resolve<{{ row.request }}>();
   tracked first = std::move(first_rvalue);
@@ -113,6 +125,9 @@ TEST(behavior_cells, {{ row.name }}) {
   auto second = container.resolve<{{ row.request }}>();
 {% endif %}
   EXPECT_TRUE({{ row.relation }});
+{% if row.other_relation %}
+  EXPECT_TRUE({{ row.other_relation }});
+{% endif %}
   EXPECT_EQ(tracked::constructions, {{ row.constructions }});
 {% if row.copies is not none %}
   EXPECT_EQ(tracked::copies, {{ row.copies }});

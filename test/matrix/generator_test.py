@@ -177,7 +177,7 @@ def shared_cyclical_rows() -> tuple[SharedCyclicalRow, ...]:
 
 
 def test_matrix_cardinality_remains_bounded(rows: tuple[MatrixRow, ...]) -> None:
-    assert len(rows) == 1949
+    assert len(rows) == 1947
     assert len({(row.feature.name, row.name) for row in rows}) == len(rows)
 
 
@@ -2152,7 +2152,7 @@ def test_matrix_families_preserve_total_registration_behavior(
         + len(scenario_rows)
         + len(invoke_rows)
         + len(shared_cyclical_rows)
-        == 4919
+        == 4917
     )
 
 
