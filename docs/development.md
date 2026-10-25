@@ -43,6 +43,9 @@ Run a quality target with `cmake --build build -t <target>`.
   non-Windows builds.
 - `includes-check`: checks includes on those generated translation units on
   non-Windows builds.
+- `test-cost`: reports the per-translation-unit compile time and object size of
+  the generated test suites. It is a report, not a gate; see
+  [Test Compile Cost](#test-compile-cost).
 - `check`: runs all verification targets available on the platform.
 
 The development tools are provided by the locked `uv` environment.
@@ -67,11 +70,11 @@ The storage and selection models under [`tools/model/`](../tools/model)
 enumerate the built-in cells independently of the C++ headers. The generator
 writes one translation unit for the full storage scope-by-form product, one for
 every selection policy and source status, one route probe for every supported
-storage cell, and one behavior class for plain bindings in the applicable
-runtime and static containers. Runtime value routes address the source a
-consuming scope already materialized in the context, so value requests construct
-the result with one move instead of copying a context value and moving it out.
-The route ledger classifies every scope/form/category row as supported,
+storage cell, and one behavior class per supported scope/form cell in the
+applicable runtime and static containers. Runtime value routes address the
+source a consuming scope already materialized in the context, so value requests
+construct the result with one move instead of copying a context value and moving
+it out. The route ledger classifies every scope/form/category row as supported,
 unavailable with a reason, or a tracked gap. The route probes check value,
 object, and rvalue availability against that ledger, require every published
 route target to be reachable from both the static and runtime request matchers,
@@ -81,6 +84,15 @@ operation-kind and source-retention sequences. It also generates the committed
 `storage_scope_policy` data. Compile-time assertions compare the generated
 expectation with the library; a missing cell, changed exposure, or stale catalog
 fails the build.
+
+Behavior classes are data-driven too. `behavior_cells.py` owns a registration
+description and an expectation entry per form, derives the scope and container
+product from the route ledger, and requires every supported scope/form cell to
+be either behavior-tested or listed in `BEHAVIOR_GAPS` with a reason. Adding a
+form is one table entry instead of a hand-written test per scope. A behavior
+class asserts the request identity relation, construction count, optional copy
+and move counts, array element identity, leaf address, and the lifetime balance
+`destructions == constructions + copies + moves`.
 
 The generated sources live in the build tree, so consumer builds never run
 Python. The `cells-check` target regenerates them and verifies that they are up
@@ -118,6 +130,27 @@ can be inspected with normal `perf` commands.
 
 This is useful when a registration or resolution change affects compile time and
 the expensive template instantiations need to be identified directly.
+
+## Test Compile Cost
+
+`test-cost` reports how much each generated test translation unit costs:
+
+```bash
+cmake --build build -t test-cost
+```
+
+It reads `build/compile_commands.json`, recompiles every generated test source,
+and prints the slowest units with their object sizes, then writes the full
+report to `build/cost/test-tus.json`. The deterministic values (translation unit
+count and object size) are worth comparing between revisions; wall time is a
+trend because it depends on machine load.
+
+The model suites are split by catalog, so their units are small
+(`storage_cells`, `route_cells`, and `selection_rules` are around one second
+each, and `behavior_cells` is the largest). When one unit grows past a few
+seconds, split it by form or cost class before adding more cases. Compact
+translation units preserve parallel build time without duplicating the shared
+kernel's instantiations.
 
 ## Cost Comparisons
 

@@ -12,15 +12,40 @@ from pathlib import Path
 
 import pytest
 
-from behavior_cells import build_rows, render, validate
+from behavior_cells import (
+    BEHAVIOR_GAPS,
+    build_rows,
+    covered_cells,
+    render,
+    supported_cells,
+    validate,
+)
 from storage_cells import validate_catalog
 
 
 def test_behavior_product_is_complete() -> None:
     validate()
     rows = build_rows()
-    assert len(rows) == 25
+    assert rows
     assert len({row["name"] for row in rows}) == len(rows)
+
+
+def test_every_supported_cell_has_a_behavior_case_or_gap() -> None:
+    accounted = covered_cells() | set(BEHAVIOR_GAPS)
+    assert accounted == supported_cells()
+
+
+def test_behavior_gaps_have_reasons() -> None:
+    for cell, reason in BEHAVIOR_GAPS.items():
+        assert cell in supported_cells()
+        assert reason
+
+
+def test_external_cells_are_runtime_only() -> None:
+    for row in build_rows():
+        if row["scope"] == "external":
+            assert row["container"] == "runtime"
+            assert row["instance"]
 
 
 def test_library_catalog_matches_model() -> None:

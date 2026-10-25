@@ -46,12 +46,20 @@ struct tracked {
   int id;
 };
 
+std::unique_ptr<tracked> make_unique_tracked() {
+  return std::make_unique<tracked>();
+}
+
+std::unique_ptr<tracked[]> make_unique_array_tracked() {
+  return std::unique_ptr<tracked[]>(new tracked[2]);
+}
+
 std::shared_ptr<tracked> make_shared_tracked() {
   return std::make_shared<tracked>();
 }
 
-std::unique_ptr<tracked> make_unique_tracked() {
-  return std::make_unique<tracked>();
+std::shared_ptr<tracked[]> make_shared_array_tracked() {
+  return std::shared_ptr<tracked[]>(new tracked[2]);
 }
 
 std::optional<tracked> make_optional_tracked() {
@@ -73,192 +81,57 @@ tracked *make_pointer_tracked() {
 
 {% for row in rows %}
 TEST(behavior_cells, {{ row.name }}) {
-{% if row.scope == "external" %}
-  tracked external_instance;
+{% if row.instance %}
+  {{ row.instance }};
 {% endif %}
   tracked::reset();
   {
 {% if row.container == "runtime" %}
   dingo::container<> container;
-{% if row.kind == "shared_handle" %}
-  container.register_type<
-      {{ row.scope_type }}, dingo::storage<std::shared_ptr<tracked>>,
-      dingo::factory<dingo::function<&make_shared_tracked>>>();
-{% elif row.kind == "unique_handle" %}
-  container.register_type<
-      {{ row.scope_type }}, dingo::storage<std::unique_ptr<tracked>>,
-      dingo::factory<dingo::function<&make_unique_tracked>>>();
-{% elif row.kind == "shared_optional" or row.kind == "unique_optional" %}
-  container.register_type<
-      {{ row.scope_type }}, dingo::storage<std::optional<tracked>>,
-      dingo::factory<dingo::function<&make_optional_tracked>>>();
-{% elif row.kind == "shared_variant" or row.kind == "unique_variant" %}
-  container.register_type<
-      {{ row.scope_type }}, dingo::storage<variant_t>,
-      dingo::factory<dingo::function<&make_variant_tracked>>>();
-{% elif row.kind == "shared_pointer" %}
-  container.register_type<
-      {{ row.scope_type }}, dingo::storage<tracked *>,
-      dingo::factory<dingo::function<&make_pointer_tracked>>>();
-{% elif row.kind == "shared_bounded_array" or row.kind == "shared_cyclical_bounded_array" %}
-  container.register_type<{{ row.scope_type }},
-                           dingo::storage<tracked[2]>>();
-{% elif row.scope == "external" %}
-  container.register_type<{{ row.scope_type }}, dingo::storage<tracked &>>(
-      external_instance);
+  {{ row.registration }}
 {% else %}
-  container.register_type<{{ row.scope_type }}, dingo::storage<tracked>>();
-{% endif %}
-{% else %}
-{% if row.kind == "shared_handle" %}
-  using source = dingo::bindings<dingo::bind<
-      {{ row.scope_type }}, dingo::storage<std::shared_ptr<tracked>>,
-      dingo::factory<dingo::function<&make_shared_tracked>>>>;
-{% elif row.kind == "unique_handle" %}
-  using source = dingo::bindings<dingo::bind<
-      {{ row.scope_type }}, dingo::storage<std::unique_ptr<tracked>>,
-      dingo::factory<dingo::function<&make_unique_tracked>>>>;
-{% elif row.kind == "shared_optional" or row.kind == "unique_optional" %}
-  using source = dingo::bindings<dingo::bind<
-      {{ row.scope_type }}, dingo::storage<std::optional<tracked>>,
-      dingo::factory<dingo::function<&make_optional_tracked>>>>;
-{% elif row.kind == "shared_variant" or row.kind == "unique_variant" %}
-  using source = dingo::bindings<dingo::bind<
-      {{ row.scope_type }}, dingo::storage<variant_t>,
-      dingo::factory<dingo::function<&make_variant_tracked>>>>;
-{% elif row.kind == "shared_pointer" %}
-  using source = dingo::bindings<dingo::bind<
-      {{ row.scope_type }}, dingo::storage<tracked *>,
-      dingo::factory<dingo::function<&make_pointer_tracked>>>>;
-{% elif row.kind == "shared_bounded_array" or row.kind == "shared_cyclical_bounded_array" %}
-  using source = dingo::bindings<
-      dingo::bind<{{ row.scope_type }}, dingo::storage<tracked[2]>>>;
-{% else %}
-  using source = dingo::bindings<
-      dingo::bind<{{ row.scope_type }}, dingo::storage<tracked>>>;
-{% endif %}
+  {{ row.static_source }}
   dingo::static_container<source> container;
 {% endif %}
-
-{% if row.kind == "shared_handle" %}
-  auto first = container.resolve<std::shared_ptr<tracked>>();
-  auto second = container.resolve<std::shared_ptr<tracked>>();
-  tracked &reference = container.resolve<tracked &>();
+{% if row.request.endswith("&") %}
+  auto &first = container.resolve<{{ row.request }}>();
+  auto &second = container.resolve<{{ row.request }}>();
+{% else %}
+  auto first = container.resolve<{{ row.request }}>();
+  auto second = container.resolve<{{ row.request }}>();
+{% endif %}
+  EXPECT_TRUE({{ row.relation }});
+  EXPECT_EQ(tracked::constructions, {{ row.constructions }});
+{% if row.copies is not none %}
+  EXPECT_EQ(tracked::copies, {{ row.copies }});
+{% endif %}
+{% if row.moves is not none %}
+  EXPECT_EQ(tracked::moves, {{ row.moves }});
+{% endif %}
+{% if row.array_element %}
+  EXPECT_TRUE({{ row.array_element }});
+{% endif %}
+{% if row.leaf == "id" %}
+  tracked &first_reference = container.resolve<tracked &>();
+  tracked &second_reference = container.resolve<tracked &>();
+  EXPECT_EQ(std::addressof(first_reference), std::addressof(second_reference));
+  EXPECT_EQ(first_reference.id, first.id);
+{% elif row.leaf == "pointer" %}
+  tracked &first_reference = container.resolve<tracked &>();
   tracked *pointer = container.resolve<tracked *>();
-  EXPECT_EQ(first, second);
-  EXPECT_EQ(first->id, second->id);
-  EXPECT_EQ(std::addressof(reference), first.get());
+  EXPECT_EQ(std::addressof(first_reference), first.get());
   EXPECT_EQ(pointer, first.get());
-  EXPECT_EQ(tracked::constructions, 1);
-  EXPECT_EQ(tracked::copies, 0);
-  EXPECT_EQ(tracked::moves, 0);
-{% elif row.kind == "unique_handle" %}
-  auto first = container.resolve<std::unique_ptr<tracked>>();
-  auto second = container.resolve<std::unique_ptr<tracked>>();
-  EXPECT_NE(first->id, second->id);
-  EXPECT_EQ(tracked::constructions, 2);
-  EXPECT_EQ(tracked::copies, 0);
-  EXPECT_EQ(tracked::moves, 0);
-{% elif row.kind == "shared_optional" %}
-  tracked first = container.resolve<tracked>();
-  tracked second = container.resolve<tracked>();
-  EXPECT_EQ(first.id, second.id);
-  EXPECT_EQ(tracked::constructions, 1);
-  EXPECT_EQ(tracked::copies, 2);
-  EXPECT_EQ(tracked::moves, 1);
-{% elif row.kind == "unique_optional" %}
-  auto first = container.resolve<std::optional<tracked>>();
-  auto second = container.resolve<std::optional<tracked>>();
-  EXPECT_NE(first->id, second->id);
-  EXPECT_EQ(tracked::constructions, 2);
-  EXPECT_EQ(tracked::copies, 0);
-  EXPECT_EQ(tracked::moves, 2);
-{% elif row.kind == "shared_variant" %}
-  tracked first = container.resolve<tracked>();
-  tracked second = container.resolve<tracked>();
-  EXPECT_EQ(first.id, second.id);
-  EXPECT_EQ(tracked::constructions, 1);
-  EXPECT_EQ(tracked::copies, 2);
-  EXPECT_EQ(tracked::moves, 0);
-{% elif row.kind == "unique_variant" %}
-  variant_t first = container.resolve<variant_t>();
-  variant_t second = container.resolve<variant_t>();
-  EXPECT_NE(std::get<0>(first).id, std::get<0>(second).id);
-  EXPECT_EQ(tracked::constructions, 2);
-  EXPECT_EQ(tracked::copies, 0);
-  EXPECT_EQ(tracked::moves, 2);
-{% elif row.kind == "shared_pointer" %}
-  tracked first = container.resolve<tracked>();
-  tracked second = container.resolve<tracked>();
-  tracked &reference = container.resolve<tracked &>();
-  tracked *pointer = container.resolve<tracked *>();
-  EXPECT_EQ(first.id, pointer_target->id);
-  EXPECT_EQ(second.id, pointer_target->id);
-  EXPECT_EQ(std::addressof(reference), pointer_target);
-  EXPECT_EQ(pointer, pointer_target);
-  EXPECT_EQ(tracked::constructions, 1);
-  EXPECT_EQ(tracked::copies, 2);
-  EXPECT_EQ(tracked::moves, 0);
-{% elif row.kind == "shared_bounded_array" %}
-  tracked *first = container.resolve<tracked *>();
-  tracked *second = container.resolve<tracked *>();
-  EXPECT_EQ(first, second);
-  EXPECT_NE(first[0].id, first[1].id);
-  EXPECT_EQ(tracked::constructions, 2);
-  EXPECT_EQ(tracked::copies, 0);
-  EXPECT_EQ(tracked::moves, 0);
-{% elif row.kind == "shared_cyclical_bounded_array" %}
-  tracked (*first)[2] = container.resolve<tracked (*)[2]>();
-  tracked (*second)[2] = container.resolve<tracked (*)[2]>();
-  EXPECT_EQ(first, second);
-  EXPECT_NE((*first)[0].id, (*first)[1].id);
-  EXPECT_EQ(tracked::constructions, 2);
-  EXPECT_EQ(tracked::copies, 0);
-  EXPECT_EQ(tracked::moves, 0);
-{% elif row.scope == "shared_cyclical" %}
+{% elif row.leaf == "array_pointer" %}
   tracked &first_reference = container.resolve<tracked &>();
-  tracked &second_reference = container.resolve<tracked &>();
-  tracked *pointer = container.resolve<tracked *>();
-  EXPECT_EQ(std::addressof(first_reference),
-            std::addressof(second_reference));
-  EXPECT_EQ(pointer, std::addressof(first_reference));
-  EXPECT_EQ(tracked::constructions, 1);
-  EXPECT_EQ(tracked::copies, 0);
-  EXPECT_EQ(tracked::moves, 0);
-{% else %}
-  tracked first = container.resolve<tracked>();
-  tracked second = container.resolve<tracked>();
-{% if row.scope == "shared" %}
-  EXPECT_EQ(first.id, second.id);
-  EXPECT_EQ(tracked::constructions, 1);
-  EXPECT_EQ(tracked::copies, 2);
-  EXPECT_EQ(tracked::moves, 0);
-
+  EXPECT_EQ(first, std::addressof(first_reference));
+{% elif row.leaf == "external" %}
   tracked &first_reference = container.resolve<tracked &>();
-  tracked &second_reference = container.resolve<tracked &>();
-  EXPECT_EQ(std::addressof(first_reference),
-            std::addressof(second_reference));
-{% elif row.scope == "unique" %}
-  EXPECT_NE(first.id, second.id);
-  EXPECT_EQ(tracked::constructions, 2);
-  EXPECT_EQ(tracked::copies, 0);
-  EXPECT_EQ(tracked::moves, 2);
-{% else %}
-  EXPECT_EQ(first.id, second.id);
-  EXPECT_EQ(tracked::constructions, 0);
-  EXPECT_EQ(tracked::copies, 2);
-  EXPECT_EQ(tracked::moves, 0);
-
-  tracked &first_reference = container.resolve<tracked &>();
-  tracked &second_reference = container.resolve<tracked &>();
-  EXPECT_EQ(std::addressof(first_reference),
-            std::addressof(second_reference));
   EXPECT_EQ(std::addressof(first_reference),
             std::addressof(external_instance));
 {% endif %}
-{% endif %}
   }
-  EXPECT_EQ(tracked::destructions, {{ row.destructions }});
+  EXPECT_EQ(tracked::destructions,
+            tracked::constructions + tracked::copies + tracked::moves);
 }
 
 {% endfor %}

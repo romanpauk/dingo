@@ -285,10 +285,20 @@ set_tests_properties(dingo_model_generator_test PROPERTIES
 
 add_test(NAME dingo_cost_tool_test
     COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q
-        ${PROJECT_SOURCE_DIR}/tools/cost/measure_test.py)
+        ${PROJECT_SOURCE_DIR}/tools/cost/measure_test.py
+        ${PROJECT_SOURCE_DIR}/tools/cost/tu_report_test.py)
 set_tests_properties(dingo_cost_tool_test PROPERTIES
     LABELS "unit;generator"
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/cost)
+
+add_custom_target(test-cost
+    COMMENT "Reporting the compile cost of the generated test translation units"
+    COMMAND ${DINGO_UV_RUN_COMMAND} python
+        ${PROJECT_SOURCE_DIR}/tools/cost/tu_report.py
+        --compile-commands ${PROJECT_BINARY_DIR}/compile_commands.json
+        --filter ${PROJECT_BINARY_DIR}/test/generated
+        --out ${PROJECT_BINARY_DIR}/cost/test-tus.json
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 add_custom_target(cost-record
     COMMENT "Recording the current code-size and compile-cost probe"

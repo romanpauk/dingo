@@ -6,94 +6,403 @@
 # SPDX-License-Identifier: MIT
 #
 
-"""Generate the first behavior classes for the routing model.
+"""Generate behavior classes from the scope/form model.
 
-The fast behavior tier checks identity, copy construction, and repeated
-resolution for the plain shared and unique cells in both container front-ends.
-The cells are representatives chosen by the same scope/form model; more classes
-can be added without changing the runner shape.
+The generator owns the product: every supported scope/form cell from the route
+ledger becomes a behavior class in each applicable container front-end. Per-cell
+expectations are data, so a new form or scope is one table entry plus a
+registration description instead of a hand-written test.
+
+Behavior gaps are cells the ledger publishes but that have no resolvable
+behavior case yet. They carry a reason and are checked by the coverage
+contract, so a supported cell can never silently lose its behavior test.
 """
 
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from route_ledger import supported_categories
 from storage_cells import validate_catalog
 
 
 SCOPES = ("shared", "unique", "external", "shared_cyclical")
 CONTAINERS = ("runtime", "static")
-RUNTIME_ONLY = {"external"}
-DESTRUCTIONS = {
-    ("shared", "runtime"): 3,
-    ("shared", "static"): 3,
-    ("unique", "runtime"): 4,
-    ("unique", "static"): 4,
-    ("external", "runtime"): 2,
-    ("shared_cyclical", "runtime"): 1,
-    ("shared_cyclical", "static"): 1,
+RUNTIME_ONLY_SCOPES = frozenset({"external"})
+
+
+@dataclass(frozen=True)
+class Form:
+    """How one storage form registers and how its leaf is reached."""
+
+    name: str
+    storage: str
+    factory: str | None = None
+    # External storage must receive its instance at registration time.
+    instance: str | None = None
+    instance_storage: str | None = None
+    instance_argument: str | None = None
+
+
+FORMS = (
+    Form(name="plain", storage="dingo::storage<tracked>"),
+    Form(name="alternative", storage="dingo::storage<variant_t>"),
+    Form(name="pointer", storage="dingo::storage<tracked *>"),
+    Form(name="bounded_array", storage="dingo::storage<tracked[2]>"),
+    Form(
+        name="unique_handle",
+        storage="dingo::storage<std::unique_ptr<tracked>>",
+        factory="make_unique_tracked",
+    ),
+    Form(
+        name="unique_array_handle",
+        storage="dingo::storage<std::unique_ptr<tracked[]>>",
+        factory="make_unique_array_tracked",
+    ),
+    Form(
+        name="shared_handle",
+        storage="dingo::storage<std::shared_ptr<tracked>>",
+        factory="make_shared_tracked",
+    ),
+    Form(
+        name="shared_array_handle",
+        storage="dingo::storage<std::shared_ptr<tracked[]>>",
+        factory="make_shared_array_tracked",
+    ),
+    Form(
+        name="optional",
+        storage="dingo::storage<std::optional<tracked>>",
+        factory="make_optional_tracked",
+    ),
+)
+
+EXTERNAL_INSTANCES = {
+    "plain": (
+        "tracked external_instance",
+        "dingo::storage<tracked &>",
+        "external_instance",
+    ),
+    "alternative": (
+        "auto external_instance = make_variant_tracked()",
+        "dingo::storage<variant_t>",
+        "external_instance",
+    ),
+    "pointer": (
+        "auto external_instance = make_pointer_tracked()",
+        "dingo::storage<tracked *>",
+        "external_instance",
+    ),
+    "bounded_array": (
+        "tracked external_instance[2]",
+        "dingo::storage<tracked[2]>",
+        "external_instance",
+    ),
+    "unique_handle": (
+        "auto external_instance = make_unique_tracked()",
+        "dingo::storage<std::unique_ptr<tracked>>",
+        "external_instance",
+    ),
+    "unique_array_handle": (
+        "auto external_instance = make_unique_array_tracked()",
+        "dingo::storage<std::unique_ptr<tracked[]>>",
+        "external_instance",
+    ),
+    "shared_handle": (
+        "auto external_instance = make_shared_tracked()",
+        "dingo::storage<std::shared_ptr<tracked>>",
+        "external_instance",
+    ),
+    "shared_array_handle": (
+        "auto external_instance = make_shared_array_tracked()",
+        "dingo::storage<std::shared_ptr<tracked[]>>",
+        "external_instance",
+    ),
+    "optional": (
+        "auto external_instance = make_optional_tracked()",
+        "dingo::storage<std::optional<tracked>>",
+        "external_instance",
+    ),
 }
+
+
+@dataclass(frozen=True)
+class Expectation:
+    """The resolvable request and its expected identity and lifetime counts."""
+
+    request: str
+    relation: str
+    constructions: int
+    leaf: str = ""
+    copies: int | None = None
+    moves: int | None = None
+    array_element: str = ""
+
+
+EXPECTATIONS = {
+    ("plain", "shared"): Expectation(
+        "tracked", "first.id == second.id", 1, leaf="id", copies=2, moves=0
+    ),
+    ("plain", "unique"): Expectation(
+        "tracked", "first.id != second.id", 2, copies=0, moves=2
+    ),
+    ("plain", "external"): Expectation(
+        "tracked",
+        "first.id == second.id",
+        0,
+        leaf="external",
+        copies=2,
+        moves=0,
+    ),
+    ("plain", "shared_cyclical"): Expectation(
+        "tracked &", "&first == &second", 1, copies=0, moves=0
+    ),
+    ("alternative", "shared"): Expectation(
+        "tracked", "first.id == second.id", 1, leaf="id", copies=2, moves=0
+    ),
+    ("alternative", "unique"): Expectation(
+        "variant_t",
+        "std::get<0>(first).id != std::get<0>(second).id",
+        2,
+        copies=0,
+        moves=2,
+    ),
+    ("alternative", "external"): Expectation(
+        "tracked",
+        "first.id == second.id",
+        0,
+        leaf="id",
+        copies=3,
+        moves=0,
+    ),
+    ("pointer", "shared"): Expectation(
+        "tracked", "first.id == second.id", 1, leaf="id", copies=2, moves=0
+    ),
+    ("pointer", "external"): Expectation(
+        "tracked", "first.id == second.id", 0, leaf="id", copies=2, moves=0
+    ),
+    ("bounded_array", "shared"): Expectation(
+        "tracked *",
+        "first[0].id == second[0].id",
+        2,
+        copies=0,
+        moves=0,
+        array_element="first[0].id != first[1].id",
+    ),
+    ("bounded_array", "external"): Expectation(
+        "tracked *",
+        "first[0].id == second[0].id",
+        0,
+        copies=0,
+        moves=0,
+        array_element="first[0].id != first[1].id",
+    ),
+    ("bounded_array", "shared_cyclical"): Expectation(
+        "tracked (*)[2]",
+        "first == second",
+        2,
+        copies=0,
+        moves=0,
+        array_element="(*first)[0].id != (*first)[1].id",
+    ),
+    ("unique_handle", "unique"): Expectation(
+        "std::unique_ptr<tracked>", "first->id != second->id", 2, copies=0, moves=0
+    ),
+    ("unique_array_handle", "shared"): Expectation(
+        "std::unique_ptr<tracked[]>&", "&first == &second", 2, copies=0, moves=0
+    ),
+    ("unique_array_handle", "unique"): Expectation(
+        "std::unique_ptr<tracked[]>",
+        "first[0].id != second[0].id",
+        4,
+        copies=0,
+        moves=0,
+    ),
+    ("shared_handle", "shared"): Expectation(
+        "std::shared_ptr<tracked>",
+        "first == second",
+        1,
+        leaf="pointer",
+        copies=0,
+        moves=0,
+    ),
+    ("shared_handle", "unique"): Expectation(
+        "std::shared_ptr<tracked>", "first != second", 2, copies=0, moves=0
+    ),
+    ("shared_handle", "external"): Expectation(
+        "std::shared_ptr<tracked>",
+        "first == second",
+        0,
+        leaf="pointer",
+        copies=0,
+        moves=0,
+    ),
+    ("shared_handle", "shared_cyclical"): Expectation(
+        "std::shared_ptr<tracked>",
+        "first == second",
+        1,
+        leaf="pointer",
+        copies=0,
+        moves=0,
+    ),
+    ("shared_array_handle", "shared"): Expectation(
+        "std::shared_ptr<tracked[]>", "first == second", 2, copies=0, moves=0
+    ),
+    ("shared_array_handle", "unique"): Expectation(
+        "std::shared_ptr<tracked[]>", "first != second", 4, copies=0, moves=0
+    ),
+    ("shared_array_handle", "external"): Expectation(
+        "std::shared_ptr<tracked[]>", "first == second", 0, copies=0, moves=0
+    ),
+    ("optional", "shared"): Expectation(
+        "tracked", "first.id == second.id", 1, leaf="id", copies=2, moves=1
+    ),
+    ("optional", "unique"): Expectation(
+        "std::optional<tracked>", "first->id != second->id", 2, copies=0, moves=2
+    ),
+    ("optional", "external"): Expectation(
+        "tracked", "first.id == second.id", 0, leaf="id", copies=3, moves=0
+    ),
+}
+
+# Supported cells the route model publishes but that have no resolvable
+# behavior case yet. Each one must state why, so the contract distinguishes a
+# missing test from a shape the library cannot actually serve.
+BEHAVIOR_GAPS = {
+    ("shared", "unique_handle"): (
+        "the published unique-handle value route is not convertible"
+    ),
+    ("unique", "pointer"): (
+        "the consumed raw pointer has no ownership contract, so the behavior "
+        "case would leak"
+    ),
+    ("unique", "bounded_array"): (
+        "the consumed raw array pointer has no ownership contract, so the "
+        "behavior case would leak"
+    ),
+    ("external", "unique_handle"): (
+        "external storage publishes no resolvable unique-handle route"
+    ),
+    ("external", "unique_array_handle"): (
+        "external storage publishes no resolvable array-handle route"
+    ),
+    ("shared_cyclical", "alternative"): (
+        "the cyclical alternative cell needs the graph scenario family"
+    ),
+    ("shared_cyclical", "pointer"): (
+        "the cyclical pointer cell needs the graph scenario family"
+    ),
+}
+
+
+def _form(name: str) -> Form:
+    return next(form for form in FORMS if form.name == name)
+
+
+def _registration(form: Form, scope: str, container: str) -> tuple[str, str]:
+    storage = form.storage
+    scope_type = f"dingo::scope<dingo::{scope}>"
+    instance = EXTERNAL_INSTANCES.get(form.name)
+    if scope == "external" and instance is not None:
+        instance_storage = instance[1]
+        argument = instance[2]
+        return (
+            f"container.register_type<{scope_type}, {instance_storage}>({argument});",
+            "",
+        )
+    # A cyclical shared handle constructs its leaf in place, so its factory is
+    # the leaf constructor rather than a handle factory.
+    use_factory = form.factory is not None and not (
+        scope == "shared_cyclical" and form.name == "shared_handle"
+    )
+    factory = (
+        f", dingo::factory<dingo::function<&{form.factory}>>" if use_factory else ""
+    )
+    if container == "runtime":
+        return (
+            f"container.register_type<{scope_type}, {storage}{factory}>();",
+            "",
+        )
+    source = f"dingo::bindings<dingo::bind<{scope_type}, {storage}{factory}>>"
+    return "", f"using source = {source};"
 
 
 def build_rows() -> list[dict[str, object]]:
     rows = []
-    for scope in SCOPES:
-        for container in CONTAINERS:
-            if scope in RUNTIME_ONLY and container == "static":
+    for form in FORMS:
+        for scope in SCOPES:
+            if not supported_categories(scope, form.name):
                 continue
-            rows.append(
-                {
-                    "name": f"{scope}_{container}",
-                    "kind": "plain",
-                    "scope": scope,
-                    "scope_type": f"dingo::scope<dingo::{scope}>",
-                    "container": container,
-                    "destructions": DESTRUCTIONS[(scope, container)],
-                }
-            )
-    for scope, container, kind, destructions in (
-        ("shared", "runtime", "shared_handle", 1),
-        ("shared", "static", "shared_handle", 1),
-        ("unique", "runtime", "unique_handle", 2),
-        ("unique", "static", "unique_handle", 2),
-        ("shared", "runtime", "shared_optional", 4),
-        ("shared", "static", "shared_optional", 4),
-        ("unique", "runtime", "unique_optional", 4),
-        ("unique", "static", "unique_optional", 4),
-        ("shared", "runtime", "shared_variant", 3),
-        ("shared", "static", "shared_variant", 3),
-        ("unique", "runtime", "unique_variant", 4),
-        ("unique", "static", "unique_variant", 4),
-        ("shared", "runtime", "shared_pointer", 3),
-        ("shared", "static", "shared_pointer", 3),
-        ("shared", "runtime", "shared_bounded_array", 2),
-        ("shared", "static", "shared_bounded_array", 2),
-        ("shared_cyclical", "runtime", "shared_cyclical_bounded_array", 2),
-        ("shared_cyclical", "static", "shared_cyclical_bounded_array", 2),
-    ):
-        rows.append(
-            {
-                "name": f"{scope}_{kind}_{container}",
-                "kind": kind,
-                "scope": scope,
-                "scope_type": f"dingo::scope<dingo::{scope}>",
-                "container": container,
-                "destructions": destructions,
-            }
-        )
+            expectation = EXPECTATIONS.get((form.name, scope))
+            if expectation is None:
+                if (scope, form.name) not in BEHAVIOR_GAPS:
+                    raise ValueError(
+                        f"unsupported behavior cell {scope}/{form.name} has no "
+                        "expectation and no declared behavior gap"
+                    )
+                continue
+            instance = EXTERNAL_INSTANCES.get(form.name) if scope == "external" else None
+            for container in CONTAINERS:
+                if scope in RUNTIME_ONLY_SCOPES and container == "static":
+                    continue
+                registration, static_source = _registration(form, scope, container)
+                rows.append(
+                    {
+                        "name": f"{scope}_{form.name}_{container}",
+                        "scope": scope,
+                        "form": form.name,
+                        "container": container,
+                        "scope_type": f"dingo::scope<dingo::{scope}>",
+                        "storage": form.storage,
+                        "instance": instance[0] if instance else "",
+                        "registration": registration,
+                        "static_source": static_source,
+                        "request": expectation.request,
+                        "relation": expectation.relation,
+                        "constructions": expectation.constructions,
+                        "copies": expectation.copies,
+                        "moves": expectation.moves,
+                        "leaf": expectation.leaf,
+                        "array_element": expectation.array_element,
+                    }
+                )
     return rows
+
+
+def covered_cells() -> set[tuple[str, str]]:
+    rows = build_rows()
+    return {(str(row["scope"]), str(row["form"])) for row in rows}
+
+
+def supported_cells() -> set[tuple[str, str]]:
+    cells = set()
+    for form in FORMS:
+        for scope in SCOPES:
+            if supported_categories(scope, form.name):
+                cells.add((scope, form.name))
+    return cells
 
 
 def validate() -> None:
     rows = build_rows()
-    expected = len(SCOPES) * len(CONTAINERS) - len(RUNTIME_ONLY) + 18
-    if len(rows) != expected:
-        raise ValueError("behavior product is incomplete")
+    if not rows:
+        raise ValueError("behavior catalog must not be empty")
     if len({row["name"] for row in rows}) != len(rows):
-        raise ValueError("behavior product contains duplicate cells")
+        raise ValueError("behavior catalog contains duplicate cells")
+    expected = supported_cells()
+    accounted = covered_cells() | set(BEHAVIOR_GAPS)
+    missing = expected - accounted
+    stale = accounted - expected
+    if missing:
+        raise ValueError(f"supported cells without a behavior case: {missing}")
+    if stale:
+        raise ValueError(f"behavior cases for unsupported cells: {stale}")
+    for cell, reason in BEHAVIOR_GAPS.items():
+        if not reason:
+            raise ValueError(f"behavior gap {cell} has no reason")
 
 
 def render(output: Path) -> str:

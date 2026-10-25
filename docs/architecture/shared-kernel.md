@@ -53,6 +53,14 @@ infrastructure described below. It changes no public API and no behavior.
   type; unsized shared array handles under `shared_cyclical` are an explicit
   constraint for the same reason. `cells-check` fails when the library catalog
   and the model drift.
+- Behavior coverage follows the same catalog. `behavior_cells.py` declares each
+  form once (storage, factory, external instance) plus one expectation entry per
+  scope, then derives the runtime and static product from the route ledger.
+  Every supported cell is behavior-tested or listed in `BEHAVIOR_GAPS` with a
+  reason, so a new form or scope cannot silently lose execution coverage. The
+  classes assert request identity, construction counts, optional copy and move
+  counts, array element identity, leaf addresses, and the lifetime balance
+  `destructions == constructions + copies + moves`.
 - `include/dingo/storage/scopes.gen.h` owns the built-in `storage_scope_policy`
   specializations and the `shared_cyclical` cell-list table. The per-scope
   headers keep their public tag and storage implementation, but the policy and
@@ -409,6 +417,32 @@ representative, and the generator enforces a coverage invariant:
   not recompile the world.
 
 This is coverage by construction without a combinatorial build.
+
+The implemented model uses that split directly:
+
+- **Structural cells** (storage traits, route availability, access, operation
+  kinds, retention) are compile-time assertions. The full storage product is one
+  translation unit; the full route product is another; both stay around a second
+  to compile.
+- **Behavior cells** are execution cases derived from the same scope/form
+  catalog. Each form declares its registration once and one expectation per
+  scope; the runtime and static containers are generated. Cells the library
+  publishes but cannot serve are listed as explicit behavior gaps with a reason.
+- **The matrix keeps the scenarios that a cell catalog cannot express**:
+  constructor detection, invocation, dependency graphs, collections, keys,
+  annotations, parent containers, caching, transactions, error paths, custom
+  RTTI and allocators. Those are not derivable from a scope/form product.
+
+Compile cost is measured per translation unit with
+[`tools/cost/tu_report.py`](../../tools/cost/tu_report.py) and the `test-cost`
+target. On the development host the model units compile in roughly one second
+each, except the behavior unit, which is the largest and is the first candidate
+for a form-based split. The generated matrix units dominate compile time (one
+matrix shard has exceeded twenty seconds) because they instantiate many distinct
+types per unit, not because of header parsing. Reducing distinct instantiations,
+and sharding by instantiation cost rather than line count, is the effective
+lever; precompiled headers were measured here and did not pay for themselves
+because CMake builds one per test target.
 
 ## Cost Guarantees
 
