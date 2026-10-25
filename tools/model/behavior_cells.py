@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+#
+# This file is part of dingo project <https://github.com/romanpauk/dingo>
+#
+# See LICENSE for license and copyright information
+# SPDX-License-Identifier: MIT
+#
+
+"""Generate the first behavior classes for the routing model.
+
+The fast behavior tier checks identity, copy construction, and repeated
+resolution for the plain shared and unique cells in both container front-ends.
+The cells are representatives chosen by the same scope/form model; more classes
+can be added without changing the runner shape.
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+from jinja2 import Environment, FileSystemLoader, StrictUndefined
+
+from storage_cells import validate_catalog
+
+
+SCOPES = ("shared", "unique")
+CONTAINERS = ("runtime", "static")
+
+
+def build_rows() -> list[dict[str, str]]:
+    return [
+        {
+            "name": f"{scope}_{container}",
+            "scope": scope,
+            "scope_type": f"dingo::scope<dingo::{scope}>",
+            "container": container,
+        }
+        for scope in SCOPES
+        for container in CONTAINERS
+    ]
+
+
+def validate() -> None:
+    rows = build_rows()
+    if len(rows) != len(SCOPES) * len(CONTAINERS):
+        raise ValueError("behavior product is incomplete")
+    if len({row["name"] for row in rows}) != len(rows):
+        raise ValueError("behavior product contains duplicate cells")
+
+
+def render(output: Path) -> str:
+    validate()
+    environment = Environment(
+        loader=FileSystemLoader(Path(__file__).parent / "templates"),
+        undefined=StrictUndefined,
+        autoescape=False,
+        keep_trailing_newline=True,
+    )
+    template = environment.get_template("behavior_cells.cpp.j2")
+    return template.render(rows=build_rows())
+
+
+def write_text_if_changed(path: Path, content: str) -> None:
+    if path.exists() and path.read_text(encoding="utf-8") == content:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--include",
+        type=Path,
+        help="include directory to validate the library catalogs against",
+    )
+    parser.add_argument("--check", action="store_true")
+    arguments = parser.parse_args()
+
+    if arguments.include is not None:
+        validate_catalog(arguments.include)
+    content = render(arguments.out)
+    if arguments.check:
+        if not arguments.out.exists() or arguments.out.read_text(
+            encoding="utf-8"
+        ) != content:
+            raise SystemExit(f"{arguments.out} is out of date")
+        return
+    write_text_if_changed(arguments.out, content)
+
+
+if __name__ == "__main__":
+    main()
