@@ -48,8 +48,9 @@ hand-curated matrix tags.
   kind coverage.
 - `route_cells.py` instantiates the real storage type and resolution list for
   every supported storage cell, including bounded arrays and array handles. It
-  checks value, object, and rvalue route availability against the ledger,
-  requires every published route target to be reachable from both the static and
+  checks value, object, and rvalue route availability against the ledger and
+  asserts that an unavailable category publishes no route, requires every
+  published route target to be reachable from both the static and
   runtime request matchers, checks that every route's required access is
   satisfied by the scope, checks the operation-kind and source-retention
   sequences derived by `route_derivation.py`, checks the full C++ conversion

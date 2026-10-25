@@ -32,6 +32,31 @@ from route_ledger import (
 from storage_cells import FORMS, SCOPES, validate_catalog
 
 
+# Cells that publish no route at all and whose storage type cannot be named by
+# an absence probe. The ledger still records them as unavailable; the generated
+# probe set cannot instantiate their storage aliases.
+ABSENCE_PROBE_GAPS = {
+    ("shared", "array"): "raw dynamic array storage cannot be instantiated",
+    ("unique", "array"): "raw dynamic array storage cannot be instantiated",
+    ("external", "array"): "raw dynamic array storage cannot be instantiated",
+    ("shared_cyclical", "array"): (
+        "raw dynamic array storage cannot be instantiated"
+    ),
+    ("shared_cyclical", "unique_handle"): (
+        "shared_cyclical cannot instantiate the form's storage type"
+    ),
+    ("shared_cyclical", "unique_array_handle"): (
+        "shared_cyclical cannot instantiate the form's storage type"
+    ),
+    ("shared_cyclical", "shared_array_handle"): (
+        "shared_cyclical cannot instantiate the form's storage type"
+    ),
+    ("shared_cyclical", "optional"): (
+        "shared_cyclical cannot instantiate the form's storage type"
+    ),
+}
+
+
 def build_rows() -> list[dict[str, object]]:
     rows = []
     for scope in SCOPES:
@@ -134,6 +159,14 @@ def validate() -> None:
     keys = {(row["scope_name"], row["form_name"]) for row in rows}
     if len(keys) != len(rows):
         raise ValueError("route catalog contains duplicate cells")
+    for scope in SCOPES:
+        for form in FORMS:
+            key = (scope.name, form.name)
+            categories = supported_categories(*key)
+            if categories and key in ABSENCE_PROBE_GAPS:
+                raise ValueError(f"absence-probe gap is supported: {key}")
+            if not categories and key not in ABSENCE_PROBE_GAPS:
+                raise ValueError(f"unavailable cell has no absence probe: {key}")
 
 
 def render(output: Path) -> str:

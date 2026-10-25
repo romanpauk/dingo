@@ -12,8 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from route_cells import build_rows, render, validate
-from storage_cells import validate_catalog
+from route_cells import ABSENCE_PROBE_GAPS, build_rows, render, validate
+from route_ledger import supported_categories
+from storage_cells import FORMS, SCOPES, validate_catalog
 
 
 def test_route_product_is_complete() -> None:
@@ -22,6 +23,28 @@ def test_route_product_is_complete() -> None:
     keys = {(row["scope_name"], row["form_name"]) for row in rows}
     assert len(keys) == len(rows)
     assert all(row["form_name"] != "array" for row in rows)
+
+
+def test_unavailable_categories_have_absence_assertions(tmp_path: Path) -> None:
+    rows = build_rows()
+    missing = sum(
+        1
+        for row in rows
+        for category in ("value", "object", "rvalue")
+        if not row[category]
+    )
+    content = render(tmp_path / "route_cells.cpp")
+    assert content.count("route unexpectedly available") == missing
+
+
+def test_every_unavailable_cell_has_an_explicit_probe_gap() -> None:
+    expected = {
+        (scope.name, form.name)
+        for scope in SCOPES
+        for form in FORMS
+        if not supported_categories(scope.name, form.name)
+    }
+    assert expected == set(ABSENCE_PROBE_GAPS)
 
 
 def test_library_catalog_matches_model() -> None:

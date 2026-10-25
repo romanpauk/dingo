@@ -48,6 +48,18 @@ static_assert((dingo::type_list_size_v<rvalue_routes> != 0) ==
                   {{ "true" if row.rvalue else "false" }},
               "rvalue route availability changed");
 
+{% if not row.value %}
+static_assert(dingo::type_list_size_v<value_routes> == 0,
+              "value route unexpectedly available");
+{% endif %}
+{% if not row.object %}
+static_assert(dingo::type_list_size_v<object_routes> == 0,
+              "object route unexpectedly available");
+{% endif %}
+{% if not row.rvalue %}
+static_assert(dingo::type_list_size_v<rvalue_routes> == 0,
+              "rvalue route unexpectedly available");
+{% endif %}
 {% if row.value %}
 static_assert(all_targets_match<value_routes>::value,
               "not every value route target is reachable from both matchers");
