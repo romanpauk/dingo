@@ -446,10 +446,12 @@ The implemented model uses that split directly:
   supported shape twice through the behavior registrations, checks stable
   identity and fresh distinctness, releases only pointers whose ownership the
   consuming scope transferred, and asserts the lifetime balance after each
-  block. The shape catalog and the top-level verdict are shared with the matrix,
-  so the executable set is derived rather than maintained separately. This is
-  the foundation for deriving behavior and decorator cases from shapes instead
-  of listing supported requests by hand.
+  block. The catalog runs in two translation units: the runtime container and
+  the static container for every statically bindable cell (`external` is
+  runtime-only). The shape catalog and the top-level verdict are shared with the
+  matrix, so the executable set is derived rather than maintained separately.
+  This is the foundation for deriving behavior and decorator cases from shapes
+  instead of listing supported requests by hand.
 - **The matrix keeps the scenarios that a cell catalog cannot express**:
   constructor detection, invocation, dependency graphs, collections, keys,
   annotations, parent containers, caching, transactions, error paths, custom

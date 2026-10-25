@@ -30,19 +30,26 @@ def test_type_behavior_product_is_complete() -> None:
     assert rows
     assert len({row["name"] for row in rows}) == len(rows)
     for row in rows:
-        assert row["registration"]
+        if row["container"] == "runtime":
+            assert row["registration"]
+            assert not row["static_source"]
+        else:
+            assert row["static_source"]
+            assert not row["registration"]
         assert len(row["shapes"]) == len(SHAPES)
         assert any(not shape["gap"] for shape in row["shapes"])
 
 
 def test_type_behavior_cells_follow_the_route_ledger() -> None:
-    cells = {(row["scope"], row["form"]) for row in build_rows()}
+    cells = {(row["scope"], row["form"], row["container"]) for row in build_rows()}
     expected = {
-        (scope.name, form.name)
+        (scope.name, form.name, container)
         for scope in SCOPES
         for form in FORMS
         if supported_categories(scope.name, form.name)
         and (scope.name, form.name) not in BEHAVIOR_GAPS
+        for container in ("runtime", "static")
+        if not (scope.name == "external" and container == "static")
     }
     assert cells == expected
 
@@ -61,7 +68,7 @@ def test_consuming_scope_lvalue_borrows_are_top_level_gaps() -> None:
 
 def test_consuming_scope_raw_pointers_transfer_ownership() -> None:
     rows = {row["name"]: row for row in build_rows()}
-    pointer = rows["unique_pointer"]
+    pointer = rows["unique_pointer_runtime"]
     delete_kinds = {
         shape["name"]: shape["delete"]
         for shape in pointer["shapes"]
@@ -70,7 +77,7 @@ def test_consuming_scope_raw_pointers_transfer_ownership() -> None:
     assert delete_kinds["pointer_value"] == "single"
     assert delete_kinds["pointer_const_value"] == "single"
 
-    bounded_array = rows["unique_bounded_array"]
+    bounded_array = rows["unique_bounded_array_runtime"]
     delete_kinds = {
         shape["name"]: shape["delete"]
         for shape in bounded_array["shapes"]
@@ -92,11 +99,15 @@ def test_library_catalog_matches_model() -> None:
 
 
 def test_render_is_stable_and_covers_every_cell(tmp_path: Path) -> None:
-    content = render(tmp_path / "type_behavior.cpp")
-    assert content == render(tmp_path / "type_behavior.cpp")
-    for row in build_rows():
-        assert f"TEST(type_behavior, {row['name']})" in content
-    assert "top-level gap:" in content
+    for container, name in (("runtime", "type_behavior.cpp"),
+                            ("static", "type_behavior_static.cpp")):
+        rows = build_rows((container,))
+        content = render(rows)
+        assert content == render(rows)
+        assert f"/{name}" not in content
+        for row in rows:
+            assert f"TEST(type_behavior, {row['name']})" in content
+        assert "top-level gap:" in content
 
 
 if __name__ == "__main__":

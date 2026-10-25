@@ -190,6 +190,8 @@ set(DINGO_TYPE_MATRIX_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/type_matrix.cpp")
 set(DINGO_TYPE_BEHAVIOR_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/type_behavior.cpp")
+set(DINGO_TYPE_BEHAVIOR_STATIC_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/type_behavior_static.cpp")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_MODEL_GENERATOR}"
     "${DINGO_SELECTION_MODEL_GENERATOR}"
@@ -292,6 +294,7 @@ execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python
         ${DINGO_TYPE_BEHAVIOR_GENERATOR}
         --out ${DINGO_TYPE_BEHAVIOR_TEST_SOURCE}
+        --out-static ${DINGO_TYPE_BEHAVIOR_STATIC_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     RESULT_VARIABLE DINGO_TYPE_BEHAVIOR_GENERATOR_RESULT)
@@ -337,6 +340,7 @@ add_custom_target(cells-check
     COMMAND ${DINGO_UV_RUN_COMMAND} python
         ${DINGO_TYPE_BEHAVIOR_GENERATOR}
         --out ${DINGO_TYPE_BEHAVIOR_TEST_SOURCE}
+        --out-static ${DINGO_TYPE_BEHAVIOR_STATIC_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
@@ -348,7 +352,8 @@ add_executable(dingo_model_test
     ${DINGO_BEHAVIOR_MODEL_TEST_SOURCE}
     ${DINGO_INTERFACE_MODEL_TEST_SOURCE}
     ${DINGO_TYPE_MATRIX_TEST_SOURCE}
-    ${DINGO_TYPE_BEHAVIOR_TEST_SOURCE})
+    ${DINGO_TYPE_BEHAVIOR_TEST_SOURCE}
+    ${DINGO_TYPE_BEHAVIOR_STATIC_TEST_SOURCE})
 target_link_libraries(dingo_model_test dingo::dingo gtest_main)
 target_compile_definitions(dingo_model_test PRIVATE
     DINGO_TYPE_MATRIX_REPORT="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.md")

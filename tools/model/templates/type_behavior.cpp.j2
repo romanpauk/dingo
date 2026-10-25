@@ -9,6 +9,7 @@
 
 #include <dingo/container.h>
 #include <dingo/factory/function.h>
+#include <dingo/static_container.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/shared_cyclical.h>
@@ -49,31 +50,31 @@ struct tracked {
 
 using variant_t = std::variant<tracked, int>;
 
-std::unique_ptr<tracked> make_unique_tracked() {
+inline std::unique_ptr<tracked> make_unique_tracked() {
   return std::make_unique<tracked>();
 }
 
-std::unique_ptr<tracked[]> make_unique_array_tracked() {
+inline std::unique_ptr<tracked[]> make_unique_array_tracked() {
   return std::unique_ptr<tracked[]>(new tracked[2]);
 }
 
-std::shared_ptr<tracked> make_shared_tracked() {
+inline std::shared_ptr<tracked> make_shared_tracked() {
   return std::make_shared<tracked>();
 }
 
-std::shared_ptr<tracked[]> make_shared_array_tracked() {
+inline std::shared_ptr<tracked[]> make_shared_array_tracked() {
   return std::shared_ptr<tracked[]>(new tracked[2]);
 }
 
-std::optional<tracked> make_optional_tracked() {
+inline std::optional<tracked> make_optional_tracked() {
   return std::optional<tracked>(std::in_place);
 }
 
-variant_t make_variant_tracked() {
+inline variant_t make_variant_tracked() {
   return variant_t(std::in_place_index<0>);
 }
 
-tracked *make_pointer_tracked() { return new tracked; }
+inline tracked *make_pointer_tracked() { return new tracked; }
 
 template <typename Request, typename... Resolutions>
 constexpr bool request_supported(dingo::type_list<Resolutions...>) {
@@ -208,8 +209,13 @@ TEST(type_behavior, {{ row.name }}) {
 {% endif %}
     tracked::reset();
     {
+{% if row.container == "runtime" %}
       dingo::container<> container;
       {{ row.registration }}
+{% else %}
+      {{ row.static_source }}
+      dingo::static_container<source> container;
+{% endif %}
       probe<{{ shape.type }}, {{ "true" if row.stable else "false" }},
             delete_kind::{{ shape.delete }}>(container);
     }

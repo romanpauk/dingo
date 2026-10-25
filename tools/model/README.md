@@ -53,11 +53,13 @@ hand-curated matrix tags.
   behavior cells, stable scopes are checked for identity, fresh scopes for
   distinctness, owned raw pointers are released according to the transfer
   contract, and every block finishes with the lifetime balance intact. The
-  shape catalog and the top-level verdict come from `type_matrix.py`, so the
-  suite follows the library instead of listing supported requests by hand.
-  Unowned or non-transferred pointers are never released, and the two consuming
-  lvalue-borrow shapes are emitted as explicit top-level gaps rather than
-  silently skipped.
+  runtime suite uses `container<>`; a second translation unit runs the same
+  catalog through `static_container` for every statically bindable cell
+  (`external` is runtime-only). The shape catalog and the top-level verdict come
+  from `type_matrix.py`, so the suite follows the library instead of listing
+  supported requests by hand. Unowned or non-transferred pointers are never
+  released, and the two consuming lvalue-borrow shapes are emitted as explicit
+  top-level gaps rather than silently skipped.
 - `interface_cells.py` instantiates the real interface resolution kernel for
   storage exposed through `dingo::interfaces<...>`. It checks value, object, and
   rvalue availability and exact route counts, requires every published target to

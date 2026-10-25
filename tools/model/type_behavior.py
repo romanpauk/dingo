@@ -11,9 +11,11 @@
 The type matrix says which shapes match. This suite resolves them for real:
 every top-level shape is exercised against the same registration recipe as the
 behavior cells, identity is checked for stable scopes, owned raw pointers are
-released, and every block must finish with the lifetime balance intact.
-Unsupported shapes are discarded by the compile-time support check, so the suite
-follows the library rather than a hand-written list.
+released, and every block must finish with the lifetime balance intact. The
+catalog is emitted twice: once through the runtime container and once through
+`static_container` for every statically bindable cell. Unsupported shapes are
+discarded by the compile-time support check, so the suite follows the library
+rather than a hand-written list.
 """
 
 from __future__ import annotations
@@ -44,6 +46,8 @@ ARRAY_FORMS = frozenset(
         "shared_array_handle",
     }
 )
+CONTAINERS = ("runtime", "static")
+RUNTIME_ONLY_SCOPES = frozenset({"external"})
 
 # A consuming scope produces its instance for one resolution. The route can
 # lend a reference to a longer-lived construction that owns the result, but a
@@ -86,7 +90,9 @@ def _shape_type(shape) -> str:
     return re.sub(r"\bint\b", "tracked", shape.cpp_type)
 
 
-def build_rows() -> list[dict[str, object]]:
+def build_rows(
+    containers: tuple[str, ...] = CONTAINERS,
+) -> list[dict[str, object]]:
     rows = []
     for scope_name in SCOPES:
         for form in FORMS:
@@ -102,41 +108,46 @@ def build_rows() -> list[dict[str, object]]:
                 if external is None:
                     continue
                 instance = external[0]
-            registration, _ = _registration(
-                form.storage, form.factory, scope_name, "runtime"
-            )
-            rows.append(
-                {
-                    "name": f"{scope_name}_{form.name}",
-                    "scope": scope_name,
-                    "form": form.name,
-                    "storage_type": _storage_type(form),
-                    "constructor": (
-                        "tracked"
-                        if form.name in ARRAY_FORMS
-                        else _storage_type(form)
-                    ),
-                    "registration": registration,
-                    "instance": instance,
-                    "stable": scope_name not in CONSUMING_SCOPES,
-                    "shapes": [
-                        {
-                            "name": shape.name,
-                            "type": _shape_type(shape),
-                            "gap": shape_gap(scope_name, shape),
-                            "delete": delete_kind(
-                                scope_name, form.name, shape
-                            ),
-                        }
-                        for shape in SHAPES
-                    ],
-                }
-            )
+            for container in containers:
+                if scope_name in RUNTIME_ONLY_SCOPES and container == "static":
+                    continue
+                registration, static_source = _registration(
+                    form.storage, form.factory, scope_name, container
+                )
+                rows.append(
+                    {
+                        "name": f"{scope_name}_{form.name}_{container}",
+                        "scope": scope_name,
+                        "form": form.name,
+                        "container": container,
+                        "storage_type": _storage_type(form),
+                        "constructor": (
+                            "tracked"
+                            if form.name in ARRAY_FORMS
+                            else _storage_type(form)
+                        ),
+                        "registration": registration,
+                        "static_source": static_source,
+                        "instance": instance,
+                        "stable": scope_name not in CONSUMING_SCOPES,
+                        "shapes": [
+                            {
+                                "name": shape.name,
+                                "type": _shape_type(shape),
+                                "gap": shape_gap(scope_name, shape),
+                                "delete": delete_kind(
+                                    scope_name, form.name, shape
+                                ),
+                            }
+                            for shape in SHAPES
+                        ],
+                    }
+                )
     return rows
 
 
-def validate() -> None:
-    rows = build_rows()
+def validate(containers: tuple[str, ...] = CONTAINERS) -> None:
+    rows = build_rows(containers)
     if not rows:
         raise ValueError("type behavior catalog must not be empty")
     if len({row["name"] for row in rows}) != len(rows):
@@ -144,15 +155,22 @@ def validate() -> None:
     if not SHAPES:
         raise ValueError("shape catalog must not be empty")
     for row in rows:
+        if row["container"] == "static" and not row["static_source"]:
+            raise ValueError(f"static cell {row['name']} needs a source")
+        if row["container"] == "runtime" and not row["registration"]:
+            raise ValueError(f"runtime cell {row['name']} needs a registration")
         if row["scope"] == "external" and not row["instance"]:
             raise ValueError(f"external cell {row['name']} needs an instance")
+        if row["scope"] in RUNTIME_ONLY_SCOPES and row["container"] == "static":
+            raise ValueError(f"cell {row['name']} cannot be static")
         executable = [shape for shape in row["shapes"] if not shape["gap"]]
         if not executable:
             raise ValueError(f"cell {row['name']} has no executable shape")
 
 
-def render(output: Path) -> str:
-    validate()
+def render(
+    rows: list[dict[str, object]],
+) -> str:
     environment = Environment(
         loader=FileSystemLoader(Path(__file__).parent / "templates"),
         undefined=StrictUndefined,
@@ -160,7 +178,7 @@ def render(output: Path) -> str:
         keep_trailing_newline=True,
     )
     template = environment.get_template("type_behavior.cpp.j2")
-    return template.render(rows=build_rows())
+    return template.render(rows=rows)
 
 
 def write_text_if_changed(path: Path, content: str) -> None:
@@ -173,6 +191,7 @@ def write_text_if_changed(path: Path, content: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--out-static", type=Path)
     parser.add_argument(
         "--include",
         type=Path,
@@ -183,14 +202,26 @@ def main() -> None:
 
     if arguments.include is not None:
         validate_catalog(arguments.include)
-    content = render(arguments.out)
+    validate(("runtime",))
+    runtime_content = render(build_rows(("runtime",)))
+    static_content = ""
+    if arguments.out_static is not None:
+        validate(("static",))
+        static_content = render(build_rows(("static",)))
+
+    outputs = [(arguments.out, runtime_content)]
+    if arguments.out_static is not None:
+        outputs.append((arguments.out_static, static_content))
+
     if arguments.check:
-        if not arguments.out.exists() or arguments.out.read_text(
-            encoding="utf-8"
-        ) != content:
-            raise SystemExit(f"{arguments.out} is out of date")
+        for path, content in outputs:
+            if not path.exists() or path.read_text(
+                encoding="utf-8"
+            ) != content:
+                raise SystemExit(f"{path} is out of date")
         return
-    write_text_if_changed(arguments.out, content)
+    for path, content in outputs:
+        write_text_if_changed(path, content)
 
 
 if __name__ == "__main__":
