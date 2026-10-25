@@ -10,6 +10,7 @@
 #include <dingo/static_container.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
+#include <dingo/storage/shared_cyclical.h>
 #include <dingo/storage/unique.h>
 
 #include "support/custom_wrappers.h"
@@ -260,6 +261,126 @@ TEST(request_lift, works_through_the_static_container) {
     auto value = container.resolve<std::shared_ptr<std::optional<tracked>>>();
     ASSERT_TRUE(value);
     ASSERT_TRUE(*value);
+  }
+  tracked::expect_balanced();
+}
+
+} // namespace request_lift_test
+
+namespace request_lift_test {
+
+std::shared_ptr<tracked[]> make_shared_array() {
+  return std::shared_ptr<tracked[]>(new tracked[2]);
+}
+
+std::unique_ptr<tracked[]> make_unique_array() {
+  return std::unique_ptr<tracked[]>(new tracked[2]);
+}
+
+TEST(request_lift, stored_optional_copies_the_empty_state) {
+  tracked::reset();
+  {
+    dingo::container<> shared_container;
+    shared_container.register_type<
+        dingo::scope<dingo::shared>, dingo::storage<std::optional<tracked>>,
+        dingo::factory<dingo::function<&make_empty_optional>>>();
+
+    auto shared = shared_container.resolve<std::optional<tracked>>();
+    EXPECT_FALSE(shared.has_value());
+  }
+  tracked::expect_balanced();
+}
+
+TEST(request_lift, const_shared_handle_is_a_direct_route) {
+  tracked::reset();
+  {
+    dingo::container<> container;
+    container.register_type<dingo::scope<dingo::shared>,
+                            dingo::storage<std::shared_ptr<tracked>>,
+                            dingo::factory<dingo::function<&make_shared>>>();
+
+    auto value = container.resolve<std::shared_ptr<const tracked>>();
+    ASSERT_TRUE(value);
+    EXPECT_EQ(value->id, 1);
+  }
+  tracked::expect_balanced();
+}
+
+TEST(request_lift, const_unique_handle_is_a_consumed_route) {
+  tracked::reset();
+  {
+    dingo::container<> container;
+    container.register_type<dingo::scope<dingo::unique>,
+                            dingo::storage<std::unique_ptr<tracked>>,
+                            dingo::factory<dingo::function<&make_unique>>>();
+
+    auto value = container.resolve<std::unique_ptr<const tracked>>();
+    ASSERT_TRUE(value);
+    EXPECT_EQ(value->id, 1);
+  }
+  tracked::expect_balanced();
+}
+
+TEST(request_lift, const_shared_handle_can_come_from_a_consumed_unique) {
+  tracked::reset();
+  {
+    dingo::container<> container;
+    container.register_type<dingo::scope<dingo::unique>,
+                            dingo::storage<std::unique_ptr<tracked>>,
+                            dingo::factory<dingo::function<&make_unique>>>();
+
+    auto value = container.resolve<std::shared_ptr<const tracked>>();
+    ASSERT_TRUE(value);
+    EXPECT_EQ(value->id, 1);
+  }
+  tracked::expect_balanced();
+}
+
+TEST(request_lift, const_array_handles_are_direct_routes) {
+  tracked::reset();
+  {
+    dingo::container<> container;
+    container.register_type<
+        dingo::scope<dingo::shared>, dingo::storage<std::shared_ptr<tracked[]>>,
+        dingo::factory<dingo::function<&make_shared_array>>>();
+    auto value = container.resolve<std::shared_ptr<const tracked[]>>();
+    ASSERT_TRUE(value);
+    EXPECT_EQ(value[0].id, 1);
+  }
+  tracked::expect_balanced();
+
+  tracked::reset();
+  {
+    dingo::container<> container;
+    container.register_type<
+        dingo::scope<dingo::unique>, dingo::storage<std::unique_ptr<tracked[]>>,
+        dingo::factory<dingo::function<&make_unique_array>>>();
+    auto value = container.resolve<std::unique_ptr<const tracked[]>>();
+    ASSERT_TRUE(value);
+    EXPECT_EQ(value[0].id, 1);
+  }
+  tracked::expect_balanced();
+}
+
+TEST(request_lift, shared_cyclical_bounded_array_serves_the_row_pointer) {
+  tracked::reset();
+  {
+    dingo::container<> container;
+    container.register_type<dingo::scope<dingo::shared_cyclical>,
+                            dingo::storage<tracked[2]>>();
+
+    tracked *row = container.resolve<tracked *>();
+    EXPECT_EQ(row[0].id, 1);
+    EXPECT_EQ(row[1].id, 2);
+
+    const tracked *const_row = container.resolve<const tracked *>();
+    EXPECT_EQ(const_row[0].id, 1);
+
+    tracked(*array)[2] = container.resolve<tracked(*)[2]>();
+    EXPECT_EQ((*array)[0].id, 1);
+
+    tracked(&reference)[2] = container.resolve<tracked(&)[2]>();
+    EXPECT_EQ(reference[1].id, 2);
   }
   tracked::expect_balanced();
 }

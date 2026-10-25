@@ -156,15 +156,19 @@ template <typename T> struct storage_form_traits<T *> {
   };
 
   template <typename U> struct consumed {
-    using rvalue_reference_types =
-        type_list<std::unique_ptr<U> &&, std::shared_ptr<U> &&>;
+    using rvalue_reference_types = type_list_unique_t<
+        type_list<std::unique_ptr<U> &&, std::shared_ptr<U> &&,
+                  std::unique_ptr<const U> &&, std::shared_ptr<const U> &&>>;
   };
 };
 
 // An array is consumed as an owning handle to its rows.
 template <typename T, typename U> struct array_row_handle_promotions {
-  using type = type_list<wrapper_rebind_leaf_t<std::unique_ptr<T[]>, U> &&,
-                         wrapper_rebind_leaf_t<std::shared_ptr<T[]>, U> &&>;
+  using row_type = typename wrapper_rebind_leaf<T, U>::type;
+  using type = type_list_unique_t<
+      type_list<std::unique_ptr<row_type[]> &&, std::shared_ptr<row_type[]> &&,
+                std::unique_ptr<const row_type[]> &&,
+                std::shared_ptr<const row_type[]> &&>>;
 };
 
 // The raw dynamic array form is classified so the catalog and the model agree
@@ -214,9 +218,10 @@ struct storage_form_traits<std::unique_ptr<Array, Deleter>,
   };
 
   template <typename U> struct consumed {
-    using rvalue_reference_types =
-        type_list<wrapper_rebind_leaf_t<std::unique_ptr<Array, Deleter>, U> &&,
-                  wrapper_rebind_leaf_t<std::shared_ptr<Array>, U> &&>;
+    using rvalue_reference_types = type_list_unique_t<type_list<
+        wrapper_rebind_leaf_t<std::unique_ptr<Array, Deleter>, U> &&,
+        wrapper_rebind_leaf_t<std::shared_ptr<Array>, U> &&,
+        std::unique_ptr<const U[]> &&, std::shared_ptr<const U[]> &&>>;
   };
 };
 
@@ -237,9 +242,10 @@ struct storage_form_traits<std::unique_ptr<T, Deleter>,
   };
 
   template <typename U> struct consumed {
-    using rvalue_reference_types =
+    using rvalue_reference_types = type_list_unique_t<
         type_list<wrapper_rebind_leaf_t<std::unique_ptr<T, Deleter>, U> &&,
-                  std::shared_ptr<wrapper_rebind_leaf_t<T, U>> &&>;
+                  std::shared_ptr<wrapper_rebind_leaf_t<T, U>> &&,
+                  std::unique_ptr<const U> &&, std::shared_ptr<const U> &&>>;
   };
 };
 
@@ -254,15 +260,17 @@ struct storage_form_traits<std::shared_ptr<Array>,
     using handle_type = wrapper_rebind_leaf_t<std::shared_ptr<Array>, U>;
 
   public:
-    using value_types = type_list<handle_type>;
+    using value_types =
+        type_list_unique_t<type_list<handle_type, std::shared_ptr<const U[]>>>;
     using lvalue_reference_types = type_list<handle_type &>;
     using pointer_types = typename smart_array_pointer_types<
         handle_type, std::remove_extent_t<Array>, U>::type;
   };
 
   template <typename U> struct consumed {
-    using rvalue_reference_types =
-        type_list<wrapper_rebind_leaf_t<std::shared_ptr<Array>, U> &&>;
+    using rvalue_reference_types = type_list_unique_t<
+        type_list<wrapper_rebind_leaf_t<std::shared_ptr<Array>, U> &&,
+                  std::shared_ptr<const U[]> &&>>;
   };
 };
 
@@ -278,14 +286,16 @@ struct storage_form_traits<std::shared_ptr<T>,
 
   public:
     using value_types = type_list_unique_t<
-        type_list_cat_t<type_list<U>, typename types::copyable_value_types>>;
+        type_list_cat_t<type_list<U, std::shared_ptr<const U>>,
+                        typename types::copyable_value_types>>;
     using lvalue_reference_types = typename types::lvalue_reference_types;
     using pointer_types = typename types::pointer_types;
   };
 
   template <typename U> struct consumed {
-    using rvalue_reference_types =
-        type_list<wrapper_rebind_leaf_t<std::shared_ptr<T>, U> &&>;
+    using rvalue_reference_types = type_list_unique_t<
+        type_list<wrapper_rebind_leaf_t<std::shared_ptr<T>, U> &&,
+                  std::shared_ptr<const U> &&>>;
   };
 };
 
@@ -293,7 +303,8 @@ template <typename T> struct storage_form_traits<std::optional<T>> {
   static constexpr storage_form form = storage_form::optional;
 
   template <typename U> struct borrowed {
-    using value_types = type_list<U>;
+    using value_types = type_list_unique_t<
+        type_list<U, wrapper_rebind_leaf_t<std::optional<T>, U>>>;
     using lvalue_reference_types =
         type_list<U &, exact_lookup<std::optional<T>> &>;
     using pointer_types = type_list<U *, exact_lookup<std::optional<T>> *>;

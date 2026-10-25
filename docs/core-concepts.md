@@ -224,6 +224,13 @@ For example, a unique registration of `std::optional<T>` can satisfy
 owner, and a shared registration of `std::shared_ptr<T>` can satisfy
 `std::optional<std::shared_ptr<T>>` by copying the handle.
 
+A stored optional also resolves as an optional by value, so an empty stored
+optional stays empty rather than being rebuilt from its missing value. A
+const-qualified handle is a direct route: `std::shared_ptr<T>` satisfies
+`std::shared_ptr<const T>`, and a consumed `std::unique_ptr<T>` satisfies
+`std::unique_ptr<const T>` or `std::shared_ptr<const T>`. The array-handle forms
+follow the same rules.
+
 ## Arrays
 
 Dingo supports raw C++ arrays, `std::unique_ptr<T[]>`, and

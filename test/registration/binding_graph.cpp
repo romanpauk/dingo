@@ -452,8 +452,8 @@ TEST(static_execution_traits_test,
 
   static_assert(static_traits::acyclic);
   static_assert(static_traits::max_retained_frame_depth == 0);
-  static_assert(static_traits::max_destructible_slots == 1);
-  static_assert(static_traits::max_temporary_slots == 1);
+  static_assert(static_traits::max_destructible_slots == 2);
+  static_assert(static_traits::max_temporary_slots == 2);
   static_assert(static_traits::max_temporary_size >=
                 sizeof(std::shared_ptr<payload>));
   static_assert(static_traits::max_temporary_align >=

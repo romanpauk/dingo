@@ -42,9 +42,13 @@ template <storage_form Form, typename U> struct shared_cyclical_cell {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
 
-  using value_types =
-      std::conditional_t<(lists & 1u) != 0, type_list<std::shared_ptr<U>>,
-                         type_list<>>;
+  using value_types = std::conditional_t<
+      (lists & 1u) != 0,
+      std::conditional_t<shares_handle,
+                         type_list_unique_t<type_list<
+                             std::shared_ptr<U>, std::shared_ptr<const U>>>,
+                         type_list<std::shared_ptr<U>>>,
+      type_list<>>;
   using lvalue_reference_types = std::conditional_t<
       (lists & 2u) != 0,
       std::conditional_t<shares_handle, type_list<U &, std::shared_ptr<U> &>,
@@ -125,13 +129,19 @@ public:
 
   ~cyclical_storage_instance_impl() { reset(); }
 
-  template <typename Context> Type *resolve(Context &) {
+  template <typename Context> auto resolve(Context &) {
     assert(!resolved_);
     resolved_ = true;
     return get();
   }
 
-  Type *get() { return std::launder(reinterpret_cast<Type *>(&instance_)); }
+  auto get() {
+    if constexpr (std::is_array_v<Type>) {
+      return std::addressof((*get_array())[0]);
+    } else {
+      return get_array();
+    }
+  }
 
   template <typename Context, typename Container>
   auto construct(construction_scope scope, Context &context,
@@ -147,11 +157,15 @@ public:
     resolved_ = false;
     if (constructed_) {
       constructed_ = false;
-      detail::destroy_object_value(*get());
+      detail::destroy_object_value(*get_array());
     }
   }
 
 private:
+  Type *get_array() {
+    return std::launder(reinterpret_cast<Type *>(&instance_));
+  }
+
   dingo::aligned_storage_t<sizeof(Type), alignof(Type)> instance_;
   bool resolved_ = false;
   bool constructed_ = false;
@@ -164,13 +178,19 @@ public:
   cyclical_storage_instance_impl(Args &&...args)
       : Factory(std::forward<Args>(args)...) {}
 
-  template <typename Context> Type *resolve(Context &) {
+  template <typename Context> auto resolve(Context &) {
     assert(!resolved_);
     resolved_ = true;
     return get();
   }
 
-  Type *get() { return std::launder(reinterpret_cast<Type *>(&instance_)); }
+  auto get() {
+    if constexpr (std::is_array_v<Type>) {
+      return std::addressof((*get_array())[0]);
+    } else {
+      return get_array();
+    }
+  }
 
   template <typename Context, typename Container>
   auto construct(construction_scope scope, Context &context,
@@ -184,6 +204,10 @@ public:
   void reset() { resolved_ = false; }
 
 private:
+  Type *get_array() {
+    return std::launder(reinterpret_cast<Type *>(&instance_));
+  }
+
   dingo::aligned_storage_t<sizeof(Type), alignof(Type)> instance_;
   bool resolved_ = false;
 };

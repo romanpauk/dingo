@@ -116,7 +116,7 @@ def test_retention_is_modeled_for_every_supported_route() -> None:
         if row.outcome == "supported":
             assert len(row.retention) == len(row.kinds)
             assert all(value in (0, 1) for value in row.retention)
-    assert category_retention("shared", "shared_handle", "value") == (1, 0)
+    assert category_retention("shared", "shared_handle", "value") == (1, 1, 0)
     assert category_retention("unique", "plain", "value") == (0, 1)
     assert category_retention("shared", "optional", "object") == (1, 0, 1, 0)
     assert category_retention("shared_cyclical", "pointer", "object") == (
@@ -135,6 +135,7 @@ def test_all_supported_routes_have_operation_kinds() -> None:
 def test_non_plain_operation_kinds_are_modeled() -> None:
     assert category_kinds("shared", "shared_handle", "value") == (
         "borrowed",
+        "traits",
         "identity",
     )
     assert category_kinds("shared", "shared_handle", "object") == (
