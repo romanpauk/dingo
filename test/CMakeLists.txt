@@ -502,6 +502,7 @@ add_executable(dingo_unit_test
     type/type_identity_fixture.cpp
     type/type_identity_shared.h
     type/type_list.cpp
+    type/scope_info.cpp
     type/type_name.cpp
     type/type_traits.cpp
 )

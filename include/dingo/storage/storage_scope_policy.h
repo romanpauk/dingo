@@ -473,3 +473,66 @@ public:
 // model. The header only forward-declares the tags, so each scope header can
 // still define its tag in its own public header.
 #include <dingo/storage/scopes.gen.h>
+
+namespace dingo {
+
+// A compact descriptor of a scope's lifetime and access policy. It is derived
+// from storage_scope_policy so a new built-in scope gets it with the generated
+// policy, without another hand-written trait.
+struct scope_info {
+  bool enabled;
+  bool stable;
+  bool consumes;
+  materialization_guard guard;
+  bool retains_unresolved_source;
+  bool allows_cycles;
+};
+
+template <typename Scope>
+inline constexpr scope_info scope_info_of = {
+    storage_scope_policy<Scope>::enabled,
+    storage_scope_policy<Scope>::is_stable,
+    storage_scope_policy<Scope>::consumes,
+    storage_scope_policy<Scope>::guard,
+    storage_scope_policy<Scope>::retains_unresolved_source,
+    storage_scope_policy<Scope>::allows_cycles,
+};
+
+// The shape a storage yields to a route: a consuming scope yields its value
+// (or its row pointer for an array), every other scope yields the borrowed
+// pointer/reference.
+enum class source_category {
+  pointer,
+  lvalue,
+  consume_value,
+  consume_pointer,
+};
+
+template <typename Storage>
+using storage_yielded_type_t = std::conditional_t<
+    storage_scope_policy<typename Storage::tag_type>::consumes &&
+        !std::is_array_v<typename Storage::type>,
+    typename Storage::resolved_type, detail::storage_borrow_source_t<Storage>>;
+
+template <typename Storage>
+inline constexpr source_category source_category_of = [] {
+  using yielded = storage_yielded_type_t<Storage>;
+  if constexpr (storage_scope_policy<typename Storage::tag_type>::consumes) {
+    if constexpr (std::is_pointer_v<yielded>) {
+      return source_category::consume_pointer;
+    } else {
+      return source_category::consume_value;
+    }
+  } else if constexpr (std::is_pointer_v<yielded>) {
+    return source_category::pointer;
+  } else {
+    return source_category::lvalue;
+  }
+}();
+
+template <typename Storage> struct storage_yield_traits {
+  using yielded_type = storage_yielded_type_t<Storage>;
+  static constexpr source_category category = source_category_of<Storage>;
+};
+
+} // namespace dingo

@@ -57,6 +57,10 @@ infrastructure described below. It changes no public API and no behavior.
   element count is not part of the type; unsized shared array handles under
   `shared_cyclical` are an explicit constraint for the same reason.
   `cells-check` fails when the library catalog and the model drift.
+- Scope lifetime and source shape are descriptors now: `scope_info_of` derives
+  consuming/stability/guard/retention from the generated policy, and
+  `storage_yield_traits` derives the yielded type and source category from the
+  storage shape. They are the data inputs for one future materializer.
 - The direct/lift decision and execution are one `request_plan` in
   `include/dingo/static/request_plan.h`. It probes whether the static binding
   serves the wrapper route, exposes a compile-time or runtime-fallback policy,

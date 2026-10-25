@@ -357,7 +357,7 @@ def catalog_names(include_directory: Path) -> tuple[set[str], set[str]]:
             r"storage_scope_policy\s*<\s*([A-Za-z_]\w*)\s*>", text
         ):
             name = match.group(1)
-            if name != "StorageTag":
+            if name not in {"StorageTag", "Scope"}:
                 library_scopes.add(name)
 
     return library_scopes, library_forms
