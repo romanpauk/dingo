@@ -323,22 +323,6 @@ inline constexpr bool materializes_value_source_v = [] {
 }();
 
 template <typename Storage, typename Context, typename Owner, typename Fn>
-decltype(auto) with_tracked_binding_source(construction_scope scope,
-                                           Context &context, Storage &storage,
-                                           Owner &owner, Fn &&fn) {
-  using materialization_traits =
-      storage_materialization_traits<typename Storage::tag_type,
-                                     typename Storage::type>;
-  using leaf_type = leaf_type_t<typename Storage::type>;
-
-  [[maybe_unused]] auto guard =
-      materialization_traits::template make_guard<leaf_type>(context, storage);
-  auto source = materialization_traits::materialize_source(scope, context,
-                                                           storage, owner);
-  return std::forward<Fn>(fn)(std::move(source));
-}
-
-template <typename Storage, typename Context, typename Owner, typename Fn>
 decltype(auto) with_context_lvalue_source(construction_scope scope,
                                           Context &context, Storage &storage,
                                           Owner &owner, Fn &&fn) {

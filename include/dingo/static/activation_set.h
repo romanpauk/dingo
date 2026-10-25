@@ -652,7 +652,7 @@ template <typename T, typename BindingModel, typename State, typename Host,
 decltype(auto) evaluate_static_binding(construction_scope scope, State &state,
                                        Host &host, Context &context) {
   binding_activation<State, Host, BindingModel> activation{state, host, scope};
-  return detail::with_tracked_binding_source(
+  return detail::with_binding_source(
       scope, context, state.template get_storage_for_model<BindingModel>(),
       activation, [&](auto &&source) -> decltype(auto) {
         return detail::resolve_binding_value<T>(
