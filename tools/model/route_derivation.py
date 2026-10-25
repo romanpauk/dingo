@@ -23,30 +23,30 @@ from wrapper_semantics import FORM_WRAPPERS, WrapperSemantics
 
 
 @dataclass(frozen=True)
-class ResolutionStep:
+class ResolutionCandidate:
     kind: str
     retention: bool = False
 
 
-def _step(kind: str, retention: bool = False) -> ResolutionStep:
-    return ResolutionStep(kind, retention)
+def _candidate(kind: str, retention: bool = False) -> ResolutionCandidate:
+    return ResolutionCandidate(kind, retention)
 
 
 
-_PROMOTED_HANDLE = (_step("traits", True),) * 4
+_PROMOTED_HANDLE = (_candidate("traits", True),) * 4
 _SOLE_OWNER_VALUE = (
-    _step("identity"),
-    _step("traits", True),
-    _step("traits", True),
-    _step("traits", True),
+    _candidate("identity"),
+    _candidate("traits", True),
+    _candidate("traits", True),
+    _candidate("traits", True),
 )
 _SHARED_VALUE = (
-    _step("borrowed", True),
-    _step("traits", True),
-    _step("identity"),
+    _candidate("borrowed", True),
+    _candidate("traits", True),
+    _candidate("identity"),
 )
-_SHARED_RVALUE = (_step("identity"), _step("traits", True))
-_ARRAY_SHARED_VALUE = (_step("identity"), _step("traits", True))
+_SHARED_RVALUE = (_candidate("identity"), _candidate("traits", True))
+_ARRAY_SHARED_VALUE = (_candidate("identity"), _candidate("traits", True))
 
 
 @dataclass(frozen=True)
@@ -55,7 +55,7 @@ class Rule:
     kind: str
     source: str | None
     requires: frozenset[str]
-    steps: tuple[ResolutionStep, ...] = ()
+    candidates: tuple[ResolutionCandidate, ...] = ()
 
     def matches(
         self,
@@ -80,9 +80,9 @@ def _rule(
     kind: str,
     source: str | None,
     requires: set[str] | frozenset[str] = frozenset(),
-    steps: tuple[ResolutionStep, ...] = (),
+    candidates: tuple[ResolutionCandidate, ...] = (),
 ) -> Rule:
-    return Rule(category, kind, source, frozenset(requires), steps)
+    return Rule(category, kind, source, frozenset(requires), candidates)
 
 
 # Ordered rules. Specific source/ownership cases come before wildcards; the
@@ -90,63 +90,63 @@ def _rule(
 # asserts check.
 DERIVATION_RULES = (
     # Value requests.
-    _rule("value", "value", "pointer", steps=(_step("dereference"),)),
-    _rule("value", "value", "lvalue", steps=(_step("identity"),)),
+    _rule("value", "value", "pointer", candidates=(_candidate("dereference"),)),
+    _rule("value", "value", "lvalue", candidates=(_candidate("identity"),)),
     _rule(
         "value",
         "value",
         "rvalue",
-        steps=(_step("identity"), _step("wrapper", True)),
+        candidates=(_candidate("identity"), _candidate("wrapper", True)),
     ),
-    _rule("value", "pointer", "rvalue", steps=_PROMOTED_HANDLE),
-    _rule("value", "pointer", "pointer", steps=(_step("dereference"),)),
-    _rule("value", "pointer", "lvalue", steps=(_step("dereference"),)),
-    _rule("value", "array", "rvalue", steps=_PROMOTED_HANDLE),
+    _rule("value", "pointer", "rvalue", candidates=_PROMOTED_HANDLE),
+    _rule("value", "pointer", "pointer", candidates=(_candidate("dereference"),)),
+    _rule("value", "pointer", "lvalue", candidates=(_candidate("dereference"),)),
+    _rule("value", "array", "rvalue", candidates=_PROMOTED_HANDLE),
     _rule("value", "array", "pointer"),
-    _rule("value", "variant", "pointer", steps=(_step("dereference", True),)),
-    _rule("value", "variant", "lvalue", steps=(_step("alternative", True),)),
-    _rule("value", "variant", "rvalue", steps=(_step("alternative", True),)),
+    _rule("value", "variant", "pointer", candidates=(_candidate("dereference", True),)),
+    _rule("value", "variant", "lvalue", candidates=(_candidate("alternative", True),)),
+    _rule("value", "variant", "rvalue", candidates=(_candidate("alternative", True),)),
     _rule(
         "value",
         "handle",
         "lvalue",
         requires={"sharing"},
-        steps=_SHARED_VALUE,
+        candidates=_SHARED_VALUE,
     ),
     _rule(
         "value",
         "handle",
         "lvalue",
         requires={"sole_owner"},
-        steps=(_step("borrowed", True),),
+        candidates=(_candidate("borrowed", True),),
     ),
     _rule(
         "value",
         "handle",
         "lvalue_cyclical",
         requires={"sharing"},
-        steps=_ARRAY_SHARED_VALUE,
+        candidates=_ARRAY_SHARED_VALUE,
     ),
     _rule(
         "value",
         "handle",
         "rvalue",
         requires={"sharing"},
-        steps=_SHARED_RVALUE,
+        candidates=_SHARED_RVALUE,
     ),
     _rule(
         "value",
         "handle",
         "rvalue",
         requires={"sole_owner"},
-        steps=_SOLE_OWNER_VALUE,
+        candidates=_SOLE_OWNER_VALUE,
     ),
     _rule(
         "value",
         "array_handle",
         "lvalue",
         requires={"sharing"},
-        steps=_ARRAY_SHARED_VALUE,
+        candidates=_ARRAY_SHARED_VALUE,
     ),
     _rule("value", "array_handle", "lvalue", requires={"sole_owner"}),
     _rule(
@@ -154,79 +154,79 @@ DERIVATION_RULES = (
         "array_handle",
         "rvalue",
         requires={"sharing"},
-        steps=_ARRAY_SHARED_VALUE,
+        candidates=_ARRAY_SHARED_VALUE,
     ),
     _rule(
         "value",
         "array_handle",
         "rvalue",
         requires={"sole_owner"},
-        steps=_SOLE_OWNER_VALUE,
+        candidates=_SOLE_OWNER_VALUE,
     ),
     _rule(
         "value",
         "optional",
         "lvalue",
-        steps=(_step("borrowed", True), _step("identity")),
+        candidates=(_candidate("borrowed", True), _candidate("identity")),
     ),
-    _rule("value", "optional", "rvalue", steps=(_step("identity"),)),
+    _rule("value", "optional", "rvalue", candidates=(_candidate("identity"),)),
     # Object requests.
-    _rule("object", "value", "lvalue", steps=(_step("address"),)),
-    _rule("object", "value", None, steps=(_step("traits"),)),
+    _rule("object", "value", "lvalue", candidates=(_candidate("address"),)),
+    _rule("object", "value", None, candidates=(_candidate("traits"),)),
     _rule(
         "object",
         "pointer",
         "cyclical_double",
-        steps=(_step("dereference", True), _step("borrowed", True)),
+        candidates=(_candidate("dereference", True), _candidate("borrowed", True)),
     ),
-    _rule("object", "pointer", None, steps=(_step("traits"),)),
+    _rule("object", "pointer", None, candidates=(_candidate("traits"),)),
     _rule(
         "object",
         "array",
         "rvalue",
-        steps=(_step("traits"), _step("array_pointer", True)),
+        candidates=(_candidate("traits"), _candidate("array_pointer", True)),
     ),
     _rule(
         "object",
         "array",
         None,
-        steps=(
-            _step("array_reference", True),
-            _step("traits"),
-            _step("array_pointer", True),
+        candidates=(
+            _candidate("array_reference", True),
+            _candidate("traits"),
+            _candidate("array_pointer", True),
         ),
     ),
     _rule(
         "object",
         "variant",
         "pointer",
-        steps=(_step("dereference", True), _step("borrowed", True)),
+        candidates=(_candidate("dereference", True), _candidate("borrowed", True)),
     ),
     _rule(
         "object",
         "variant",
         "lvalue",
-        steps=(_step("alternative", True), _step("alternative", True)),
+        candidates=(_candidate("alternative", True), _candidate("alternative", True)),
     ),
     _rule("object", "variant", "rvalue"),
     _rule(
         "object",
         "handle",
         "lvalue",
-        steps=(
-            _step("address"),
-            _step("borrowed", True),
-            _step("pointer_access", True),
+        candidates=(
+            _candidate("address"),
+            _candidate("borrowed", True),
+            _candidate("pointer_access", True),
         ),
     ),
     _rule(
         "object",
         "handle",
         "lvalue_cyclical",
-        steps=(
-            _step("address"),
-            _step("borrowed", True),
-            _step("pointer_access", True),
+        candidates=(
+            _candidate("address"),
+            _candidate("borrowed", True),
+            _candidate("pointer_access", True),
         ),
     ),
     _rule("object", "handle", None),
@@ -234,24 +234,24 @@ DERIVATION_RULES = (
         "object",
         "array_handle",
         "lvalue",
-        steps=(_step("address"), _step("pointer_access", True)),
+        candidates=(_candidate("address"), _candidate("pointer_access", True)),
     ),
     _rule(
         "object",
         "array_handle",
         "lvalue_cyclical",
-        steps=(_step("address"), _step("pointer_access", True)),
+        candidates=(_candidate("address"), _candidate("pointer_access", True)),
     ),
     _rule("object", "array_handle", None),
     _rule(
         "object",
         "optional",
         "lvalue",
-        steps=(
-            _step("borrowed", True),
-            _step("traits"),
-            _step("pointer_access", True),
-            _step("address"),
+        candidates=(
+            _candidate("borrowed", True),
+            _candidate("traits"),
+            _candidate("pointer_access", True),
+            _candidate("address"),
         ),
     ),
     _rule("object", "optional", None),
@@ -260,40 +260,40 @@ DERIVATION_RULES = (
         "rvalue",
         "value",
         None,
-        steps=(_step("identity"), _step("wrapper", True)),
+        candidates=(_candidate("identity"), _candidate("wrapper", True)),
     ),
-    _rule("rvalue", "variant", None, steps=(_step("alternative", True),)),
-    _rule("rvalue", "pointer", None, steps=_PROMOTED_HANDLE),
-    _rule("rvalue", "array", None, steps=_PROMOTED_HANDLE),
+    _rule("rvalue", "variant", None, candidates=(_candidate("alternative", True),)),
+    _rule("rvalue", "pointer", None, candidates=_PROMOTED_HANDLE),
+    _rule("rvalue", "array", None, candidates=_PROMOTED_HANDLE),
     _rule(
         "rvalue",
         "handle",
         None,
         requires={"sharing"},
-        steps=_SHARED_RVALUE,
+        candidates=_SHARED_RVALUE,
     ),
     _rule(
         "rvalue",
         "handle",
         None,
         requires={"sole_owner"},
-        steps=_SOLE_OWNER_VALUE,
+        candidates=_SOLE_OWNER_VALUE,
     ),
     _rule(
         "rvalue",
         "array_handle",
         None,
         requires={"sharing"},
-        steps=_SHARED_RVALUE,
+        candidates=_SHARED_RVALUE,
     ),
     _rule(
         "rvalue",
         "array_handle",
         None,
         requires={"sole_owner"},
-        steps=_SOLE_OWNER_VALUE,
+        candidates=_SOLE_OWNER_VALUE,
     ),
-    _rule("rvalue", "optional", None, steps=(_step("identity"),)),
+    _rule("rvalue", "optional", None, candidates=(_candidate("identity"),)),
 )
 
 
@@ -325,15 +325,15 @@ def source_shape(scope_name: str, form_name: str) -> str:
     return "pointer" if scope.returns_pointer else "lvalue"
 
 
-def route_steps(
+def route_candidates(
     scope_name: str, form_name: str, category: str
-) -> tuple[ResolutionStep, ...]:
+) -> tuple[ResolutionCandidate, ...]:
     source = source_shape(scope_name, form_name)
     kind = form_kind(form_name)
     stored = wrapper(form_name)
     for rule in DERIVATION_RULES:
         if rule.matches(category, kind, source, stored):
-            return rule.steps
+            return rule.candidates
     raise KeyError(
         f"no {category} route rule for {scope_name}/{form_name} from {source}"
     )
@@ -343,7 +343,8 @@ def route_kinds(
     scope_name: str, form_name: str, category: str
 ) -> tuple[str, ...]:
     return tuple(
-        step.kind for step in route_steps(scope_name, form_name, category)
+        candidate.kind
+        for candidate in route_candidates(scope_name, form_name, category)
     )
 
 
@@ -351,8 +352,8 @@ def route_retention(
     scope_name: str, form_name: str, category: str
 ) -> tuple[int, ...]:
     return tuple(
-        int(step.retention)
-        for step in route_steps(scope_name, form_name, category)
+        int(candidate.retention)
+        for candidate in route_candidates(scope_name, form_name, category)
     )
 
 

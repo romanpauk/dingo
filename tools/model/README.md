@@ -35,10 +35,11 @@ hand-curated matrix tags.
   declarations for every built-in wrapper and the `test_optional`,
   `test_unique`, and `test_shared` families. A wrapper cannot silently drift
   from its declared semantics.
-- `route_derivation.py` derives the operation-kind and retention sequence for a
-  supported route from an ordered rule list over the form's semantic kind, the
+- `route_derivation.py` derives the published `ResolutionCandidate` sequence for
+  a supported route from an ordered rule list over the form's semantic kind, the
   source shape the scope hands out (pointer, lvalue, rvalue, cyclical row
-  pointer, or cyclical handle), and the stored wrapper properties. Rules do not
+  pointer, or cyclical handle), and the stored wrapper properties. Each candidate
+  carries its operation kind and source-retention flag. Rules do not
   name a storage form, so a custom wrapper with the same kind and properties
   follows the same rule as the built-in wrapper it mirrors. A supported cell
   with no matching rule fails validation instead of losing its kind coverage.
@@ -48,7 +49,8 @@ hand-curated matrix tags.
   requires every published route target to be reachable from both the static and
   runtime request matchers, checks that every route's required access is
   satisfied by the scope, checks the operation-kind and source-retention
-  sequences derived by `route_derivation.py`, and asserts that representative
+  sequences derived by `route_derivation.py`, checks that each published route
+  exposes a non-empty C++ conversion step list, and asserts that representative
   routes do not unexpectedly cache conversions.
 - `wrapper_semantics.py` describes request shapes as a leaf wrapped in zero or
   more wrappers. A wrapper declares its semantics (`owning`, `sharing`,

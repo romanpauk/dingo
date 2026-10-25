@@ -86,6 +86,18 @@ template <std::size_t Index, typename Head, typename... Tail>
 struct route_retention_at<Index, type_list<Head, Tail...>>
     : route_retention_at<Index - 1, type_list<Tail...>> {};
 
+template <std::size_t Index, typename Resolutions> struct route_step_count_at;
+
+template <typename Head, typename... Tail>
+struct route_step_count_at<0, type_list<Head, Tail...>> {
+  static constexpr std::size_t value =
+      type_list_size_v<typename Head::operation::conversion_steps>;
+};
+
+template <std::size_t Index, typename Head, typename... Tail>
+struct route_step_count_at<Index, type_list<Head, Tail...>>
+    : route_step_count_at<Index - 1, type_list<Tail...>> {};
+
 template <typename... Resolutions>
 constexpr bool all_routes_have_no_cache(type_list<Resolutions...>) {
   return (

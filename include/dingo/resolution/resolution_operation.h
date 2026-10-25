@@ -38,6 +38,11 @@ decltype(auto) materialized_reference(MaterializedSource &&source) {
 
 template <typename Conversion> struct type_conversion;
 
+template <typename Route> struct conversion_walk;
+template <typename Conversion> struct conversion_route;
+template <typename Conversion>
+using conversion_route_t = typename conversion_route<Conversion>::type;
+
 template <typename Target, typename Source, typename RequiredAccess,
           typename Argument>
 struct type_conversion<
@@ -113,6 +118,358 @@ struct type_conversion<pointer_access_type_conversion<Target, Source>> {
   }
 };
 
+// A conversion is a small route of steps. The route builder turns the nested
+// conversion type into the steps in execution order; conversion_walk applies
+// them with one continuation. Leaf conversions keep the existing primitives,
+// so the walker is the only code that composes them.
+template <typename Route> struct conversion_walk;
+
+template <> struct conversion_walk<type_list<>> {
+  template <typename Resolver, typename Context, typename Source>
+  static decltype(auto) apply(Resolver &, Context &, Source &&source,
+                              type_descriptor, type_descriptor) {
+    return std::forward<Source>(source);
+  }
+};
+
+template <typename Step, typename... Rest>
+struct conversion_walk<type_list<Step, Rest...>> {
+  template <typename Resolver, typename Context, typename Source>
+  static decltype(auto) apply(Resolver &resolver, Context &context,
+                              Source &&source, type_descriptor requested_type,
+                              type_descriptor registered_type) {
+    using next = conversion_walk<type_list<Rest...>>;
+    constexpr bool terminal = sizeof...(Rest) == 0;
+    return Step::template apply<terminal>(
+        resolver, context, std::forward<Source>(source), requested_type,
+        registered_type, next{});
+  }
+};
+
+template <typename Value> decltype(auto) forward_temporary(Value &value) {
+  if constexpr (std::is_move_constructible_v<Value>) {
+    return std::move(value);
+  } else {
+    return value;
+  }
+}
+
+template <typename Conversion> struct conversion_leaf_step {
+  static constexpr conversion_kind kind = Conversion::kind;
+
+  template <bool Terminal, typename Resolver, typename Context, typename Source,
+            typename Next>
+  static decltype(auto) apply(Resolver &resolver, Context &context,
+                              Source &&source, type_descriptor requested_type,
+                              type_descriptor registered_type, Next) {
+    if constexpr (!Conversion::available) {
+      throw make_type_not_convertible_exception(requested_type,
+                                                registered_type);
+    } else if constexpr (Terminal) {
+      return type_conversion<Conversion>::apply(
+          resolver, context, std::forward<Source>(source), requested_type,
+          registered_type);
+    } else {
+      auto &&value = type_conversion<Conversion>::apply(
+          resolver, context, std::forward<Source>(source), requested_type,
+          registered_type);
+      return Next::apply(resolver, context,
+                         std::forward<decltype(value)>(value), requested_type,
+                         registered_type);
+    }
+  }
+};
+
+struct conversion_dereference_step {
+  static constexpr conversion_kind kind = conversion_kind::dereference;
+
+  template <bool Terminal, typename Resolver, typename Context, typename Source,
+            typename Next>
+  static decltype(auto) apply(Resolver &resolver, Context &context,
+                              Source &&source, type_descriptor requested_type,
+                              type_descriptor registered_type, Next) {
+    if constexpr (Terminal) {
+      return *std::forward<Source>(source);
+    } else {
+      return Next::apply(resolver, context, *std::forward<Source>(source),
+                         requested_type, registered_type);
+    }
+  }
+};
+
+struct conversion_borrow_step {
+  static constexpr conversion_kind kind = conversion_kind::borrowed;
+
+  template <bool Terminal, typename Resolver, typename Context, typename Source,
+            typename Next>
+  static decltype(auto) apply(Resolver &resolver, Context &context,
+                              Source &&source, type_descriptor requested_type,
+                              type_descriptor registered_type, Next) {
+    using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
+    if constexpr (Terminal) {
+      return type_traits<source_type>::borrow(std::forward<Source>(source));
+    } else {
+      return Next::apply(
+          resolver, context,
+          type_traits<source_type>::borrow(std::forward<Source>(source)),
+          requested_type, registered_type);
+    }
+  }
+};
+
+template <typename Target> struct conversion_wrap_step {
+  static constexpr conversion_kind kind = conversion_kind::wrapper;
+
+  template <bool Terminal, typename Resolver, typename Context, typename Source,
+            typename Next>
+  static decltype(auto) apply(Resolver &resolver, Context &context,
+                              Source &&source, type_descriptor requested_type,
+                              type_descriptor registered_type, Next) {
+    using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
+    if constexpr (Terminal) {
+      return type_traits<target_type>::wrap(std::forward<Source>(source));
+    } else {
+      auto wrapped =
+          type_traits<target_type>::wrap(std::forward<Source>(source));
+      return Next::apply(resolver, context, forward_temporary(wrapped),
+                         requested_type, registered_type);
+    }
+  }
+};
+
+template <typename Target> struct conversion_retain_step {
+  static constexpr conversion_kind kind = conversion_kind::retained;
+
+  template <bool Terminal, typename Resolver, typename Context, typename Source,
+            typename Next>
+  static decltype(auto) apply(Resolver &resolver, Context &context,
+                              Source &&source, type_descriptor requested_type,
+                              type_descriptor registered_type, Next) {
+    using retained_type =
+        std::remove_cv_t<std::conditional_t<std::is_pointer_v<Target>,
+                                            std::remove_pointer_t<Target>,
+                                            std::remove_reference_t<Target>>>;
+    auto &retained = resolver.template retain_conversion<retained_type>(
+        context, std::forward<Source>(source));
+    if constexpr (std::is_pointer_v<Target>) {
+      if constexpr (Terminal) {
+        return std::addressof(retained);
+      } else {
+        return Next::apply(resolver, context, std::addressof(retained),
+                           requested_type, registered_type);
+      }
+    } else {
+      if constexpr (Terminal) {
+        return retained;
+      } else {
+        return Next::apply(resolver, context, retained, requested_type,
+                           registered_type);
+      }
+    }
+  }
+};
+
+template <typename Target, typename Selected>
+struct conversion_target_alternative_step {
+  static constexpr conversion_kind kind = conversion_kind::target_alternative;
+
+  template <bool Terminal, typename Resolver, typename Context, typename Source,
+            typename Next>
+  static decltype(auto) apply(Resolver &resolver, Context &context,
+                              Source &&source, type_descriptor requested_type,
+                              type_descriptor registered_type, Next) {
+    using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
+    if constexpr (Terminal) {
+      return alternative_type_traits<target_type>::template wrap<Selected>(
+          std::forward<Source>(source));
+    } else {
+      auto wrapped =
+          alternative_type_traits<target_type>::template wrap<Selected>(
+              std::forward<Source>(source));
+      return Next::apply(resolver, context, forward_temporary(wrapped),
+                         requested_type, registered_type);
+    }
+  }
+};
+
+template <typename Target, typename InnerRoute>
+struct conversion_optional_wrap_step {
+  static constexpr conversion_kind kind = conversion_kind::wrapper;
+
+  template <bool Terminal, typename Resolver, typename Context, typename Source,
+            typename Next>
+  static decltype(auto) apply(Resolver &resolver, Context &context,
+                              Source &&source, type_descriptor requested_type,
+                              type_descriptor registered_type, Next) {
+    using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
+    using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
+    if (type_traits<source_type>::empty(source)) {
+      if constexpr (Terminal) {
+        return type_traits<target_type>::make_empty();
+      } else {
+        auto empty = type_traits<target_type>::make_empty();
+        return Next::apply(resolver, context, forward_temporary(empty),
+                           requested_type, registered_type);
+      }
+    }
+
+    auto *value = type_traits<source_type>::get(source);
+    if constexpr (std::is_lvalue_reference_v<Source>) {
+      auto wrapped =
+          type_traits<target_type>::wrap(conversion_walk<InnerRoute>::apply(
+              resolver, context, *value, requested_type, registered_type));
+      if constexpr (Terminal) {
+        return wrapped;
+      } else {
+        return Next::apply(resolver, context, forward_temporary(wrapped),
+                           requested_type, registered_type);
+      }
+    } else {
+      auto wrapped =
+          type_traits<target_type>::wrap(conversion_walk<InnerRoute>::apply(
+              resolver, context, std::move(*value), requested_type,
+              registered_type));
+      if constexpr (Terminal) {
+        return wrapped;
+      } else {
+        return Next::apply(resolver, context, forward_temporary(wrapped),
+                           requested_type, registered_type);
+      }
+    }
+  }
+};
+
+template <typename Target, typename Source, typename... Branches>
+struct conversion_alternative_walk;
+
+template <typename Target, typename Source>
+struct conversion_alternative_walk<Target, Source> {
+  template <typename Resolver, typename Context, typename ActualSource>
+  static Target apply(Resolver &, Context &, ActualSource &&,
+                      type_descriptor requested_type,
+                      type_descriptor registered_type) {
+    throw make_type_not_convertible_exception(requested_type, registered_type);
+  }
+};
+
+template <typename Target, typename Source, typename Alternative,
+          typename Conversion, typename... Branches>
+struct conversion_alternative_walk<
+    Target, Source, alternative_type_conversion_branch<Alternative, Conversion>,
+    Branches...> {
+  template <typename Resolver, typename Context, typename ActualSource>
+  static decltype(auto)
+  apply(Resolver &resolver, Context &context, ActualSource &&source,
+        type_descriptor requested_type, type_descriptor registered_type) {
+    using source_type = std::remove_cv_t<std::remove_reference_t<ActualSource>>;
+    if constexpr (Conversion::available) {
+      if (auto *value =
+              alternative_type_traits<source_type>::template get<Alternative>(
+                  source)) {
+        if constexpr (std::is_lvalue_reference_v<ActualSource>) {
+          return conversion_walk<conversion_route_t<Conversion>>::apply(
+              resolver, context, *value, requested_type, registered_type);
+        } else {
+          return conversion_walk<conversion_route_t<Conversion>>::apply(
+              resolver, context, std::move(*value), requested_type,
+              registered_type);
+        }
+      }
+    }
+
+    if constexpr ((Branches::conversion::available || ...)) {
+      return conversion_alternative_walk<Target, Source, Branches...>::apply(
+          resolver, context, std::forward<ActualSource>(source), requested_type,
+          registered_type);
+    } else {
+      throw make_type_not_convertible_exception(requested_type,
+                                                registered_type);
+    }
+  }
+};
+
+template <typename Target, typename Source, typename Branches>
+struct conversion_alternative_step;
+
+template <typename Target, typename Source, typename... Branches>
+struct conversion_alternative_step<Target, Source, type_list<Branches...>> {
+  static constexpr conversion_kind kind = conversion_kind::alternative;
+
+  template <bool Terminal, typename Resolver, typename Context,
+            typename SourceType, typename Next>
+  static decltype(auto)
+  apply(Resolver &resolver, Context &context, SourceType &&source,
+        type_descriptor requested_type, type_descriptor registered_type, Next) {
+    if constexpr (Terminal) {
+      return conversion_alternative_walk<Target, Source, Branches...>::apply(
+          resolver, context, std::forward<SourceType>(source), requested_type,
+          registered_type);
+    } else {
+      auto &&value =
+          conversion_alternative_walk<Target, Source, Branches...>::apply(
+              resolver, context, std::forward<SourceType>(source),
+              requested_type, registered_type);
+      return Next::apply(resolver, context,
+                         std::forward<decltype(value)>(value), requested_type,
+                         registered_type);
+    }
+  }
+};
+
+template <typename Conversion> struct conversion_route {
+  using type = type_list<conversion_leaf_step<Conversion>>;
+};
+
+template <typename Target, typename Source, typename Conversion>
+struct conversion_route<
+    dereference_type_conversion<Target, Source, Conversion>> {
+  using type = type_list_cat_t<type_list<conversion_dereference_step>,
+                               conversion_route_t<Conversion>>;
+};
+
+template <typename Target, typename Source, typename Conversion>
+struct conversion_route<borrowed_type_conversion<Target, Source, Conversion>> {
+  using type = type_list_cat_t<type_list<conversion_borrow_step>,
+                               conversion_route_t<Conversion>>;
+};
+
+template <typename Target, typename Source, typename Conversion, bool Unwrap>
+struct conversion_route<
+    wrapper_type_conversion<Target, Source, Conversion, Unwrap>> {
+  using inner = conversion_route_t<Conversion>;
+  using type = std::conditional_t<
+      Unwrap, type_list<conversion_optional_wrap_step<Target, inner>>,
+      type_list_cat_t<inner, type_list<conversion_wrap_step<Target>>>>;
+};
+
+template <typename Target, typename Source, typename Selected,
+          typename Conversion>
+struct conversion_route<
+    target_alternative_type_conversion<Target, Source, Selected, Conversion>> {
+  using type = type_list_cat_t<
+      conversion_route_t<Conversion>,
+      type_list<conversion_target_alternative_step<Target, Selected>>>;
+};
+
+template <typename Conversion>
+struct conversion_route<converted_construction<Conversion>> {
+  using type = conversion_route_t<Conversion>;
+};
+
+template <typename Target, typename Source, typename Conversion>
+struct conversion_route<retained_type_conversion<Target, Source, Conversion>> {
+  using type = type_list_cat_t<conversion_route_t<Conversion>,
+                               type_list<conversion_retain_step<Target>>>;
+};
+
+template <typename Target, typename Source, typename Branches>
+struct conversion_route<alternative_type_conversion<Target, Source, Branches>> {
+  using type = type_list<conversion_alternative_step<Target, Source, Branches>>;
+};
+
+template <typename Conversion>
+using conversion_walk_t = conversion_walk<conversion_route_t<Conversion>>;
+
 template <typename Target, typename Source, typename Conversion>
 struct type_conversion<
     dereference_type_conversion<Target, Source, Conversion>> {
@@ -120,9 +477,10 @@ struct type_conversion<
   static decltype(auto)
   apply(Resolver &resolver, Context &context, ActualSource &&source,
         type_descriptor requested_type, type_descriptor registered_type) {
-    return type_conversion<Conversion>::apply(
-        resolver, context, *std::forward<ActualSource>(source), requested_type,
-        registered_type);
+    return conversion_walk_t<dereference_type_conversion<
+        Target, Source, Conversion>>::apply(resolver, context,
+                                            std::forward<ActualSource>(source),
+                                            requested_type, registered_type);
   }
 };
 
@@ -132,11 +490,10 @@ struct type_conversion<borrowed_type_conversion<Target, Source, Conversion>> {
   static decltype(auto)
   apply(Resolver &resolver, Context &context, ActualSource &&source,
         type_descriptor requested_type, type_descriptor registered_type) {
-    using source_type = std::remove_cv_t<std::remove_reference_t<ActualSource>>;
-    return type_conversion<Conversion>::apply(
-        resolver, context,
-        type_traits<source_type>::borrow(std::forward<ActualSource>(source)),
-        requested_type, registered_type);
+    return conversion_walk_t<borrowed_type_conversion<
+        Target, Source, Conversion>>::apply(resolver, context,
+                                            std::forward<ActualSource>(source),
+                                            requested_type, registered_type);
   }
 };
 
@@ -147,10 +504,12 @@ struct type_conversion<
   static Target apply(Resolver &resolver, Context &context,
                       ActualSource &&source, type_descriptor requested_type,
                       type_descriptor registered_type) {
-    using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
-    return type_traits<target_type>::wrap(type_conversion<Conversion>::apply(
-        resolver, context, std::forward<ActualSource>(source), requested_type,
-        registered_type));
+    return conversion_walk_t<wrapper_type_conversion<
+        Target, Source, Conversion, false>>::apply(resolver, context,
+                                                   std::forward<ActualSource>(
+                                                       source),
+                                                   requested_type,
+                                                   registered_type);
   }
 };
 
@@ -161,21 +520,12 @@ struct type_conversion<
   static Target apply(Resolver &resolver, Context &context,
                       ActualSource &&source, type_descriptor requested_type,
                       type_descriptor registered_type) {
-    using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
-    using source_type = std::remove_cv_t<std::remove_reference_t<ActualSource>>;
-    if (type_traits<source_type>::empty(source)) {
-      return type_traits<target_type>::make_empty();
-    }
-
-    auto *value = type_traits<source_type>::get(source);
-    if constexpr (std::is_lvalue_reference_v<ActualSource>) {
-      return type_traits<target_type>::wrap(type_conversion<Conversion>::apply(
-          resolver, context, *value, requested_type, registered_type));
-    } else {
-      return type_traits<target_type>::wrap(type_conversion<Conversion>::apply(
-          resolver, context, std::move(*value), requested_type,
-          registered_type));
-    }
+    return conversion_walk_t<wrapper_type_conversion<
+        Target, Source, Conversion, true>>::apply(resolver, context,
+                                                  std::forward<ActualSource>(
+                                                      source),
+                                                  requested_type,
+                                                  registered_type);
   }
 };
 
@@ -187,11 +537,12 @@ struct type_conversion<
   static Target apply(Resolver &resolver, Context &context,
                       ActualSource &&source, type_descriptor requested_type,
                       type_descriptor registered_type) {
-    using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
-    return alternative_type_traits<target_type>::template wrap<Selected>(
-        type_conversion<Conversion>::apply(resolver, context,
-                                           std::forward<ActualSource>(source),
-                                           requested_type, registered_type));
+    return conversion_walk_t<target_alternative_type_conversion<
+        Target, Source, Selected, Conversion>>::apply(resolver, context,
+                                                      std::forward<
+                                                          ActualSource>(source),
+                                                      requested_type,
+                                                      registered_type);
   }
 };
 
@@ -205,75 +556,25 @@ struct type_conversion<retained_type_conversion<Target, Source, Conversion>> {
   static Target apply(Resolver &resolver, Context &context,
                       ActualSource &&source, type_descriptor requested_type,
                       type_descriptor registered_type) {
-    using retained_type =
-        std::remove_cv_t<std::conditional_t<std::is_pointer_v<Target>,
-                                            std::remove_pointer_t<Target>,
-                                            std::remove_reference_t<Target>>>;
-    auto &retained = resolver.template retain_conversion<retained_type>(
-        context, type_conversion<Conversion>::apply(
-                     resolver, context, std::forward<ActualSource>(source),
-                     requested_type, registered_type));
-    if constexpr (std::is_pointer_v<Target>) {
-      return std::addressof(retained);
-    } else {
-      return retained;
-    }
+    return conversion_walk_t<retained_type_conversion<
+        Target, Source, Conversion>>::apply(resolver, context,
+                                            std::forward<ActualSource>(source),
+                                            requested_type, registered_type);
   }
 };
 
 template <typename Target, typename Source, typename Branches>
-struct alternative_conversion;
-
-template <typename Target, typename Source>
-struct alternative_conversion<Target, Source, type_list<>> {
-  template <typename Resolver, typename Context, typename ActualSource>
-  static Target apply(Resolver &, Context &, ActualSource &&,
-                      type_descriptor requested_type,
-                      type_descriptor registered_type) {
-    throw make_type_not_convertible_exception(requested_type, registered_type);
-  }
-};
-
-template <typename Target, typename Source, typename Alternative,
-          typename Conversion, typename... Branches>
-struct alternative_conversion<
-    Target, Source,
-    type_list<alternative_type_conversion_branch<Alternative, Conversion>,
-              Branches...>> {
+struct type_conversion<alternative_type_conversion<Target, Source, Branches>> {
   template <typename Resolver, typename Context, typename ActualSource>
   static decltype(auto)
   apply(Resolver &resolver, Context &context, ActualSource &&source,
         type_descriptor requested_type, type_descriptor registered_type) {
-    using source_type = std::remove_cv_t<std::remove_reference_t<ActualSource>>;
-    if constexpr (Conversion::available) {
-      if (auto *value =
-              alternative_type_traits<source_type>::template get<Alternative>(
-                  source)) {
-        if constexpr (std::is_lvalue_reference_v<ActualSource>) {
-          return type_conversion<Conversion>::apply(
-              resolver, context, *value, requested_type, registered_type);
-        } else {
-          return type_conversion<Conversion>::apply(
-              resolver, context, std::move(*value), requested_type,
-              registered_type);
-        }
-      }
-    }
-
-    if constexpr ((Branches::conversion::available || ...)) {
-      return alternative_conversion<Target, Source, type_list<Branches...>>::
-          apply(resolver, context, std::forward<ActualSource>(source),
-                requested_type, registered_type);
-    } else {
-      throw make_type_not_convertible_exception(requested_type,
-                                                registered_type);
-    }
+    return conversion_walk_t<alternative_type_conversion<
+        Target, Source, Branches>>::apply(resolver, context,
+                                          std::forward<ActualSource>(source),
+                                          requested_type, registered_type);
   }
 };
-
-template <typename Target, typename Source, typename Branches>
-struct type_conversion<alternative_type_conversion<Target, Source, Branches>>
-    : alternative_conversion<Target, Source, Branches> {};
 
 template <typename Conversion> struct conversion_cache_types {
   using type = type_list<>;
@@ -374,6 +675,7 @@ public:
   using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
   using source_type = Source;
   using conversion_type = Conversion;
+  using conversion_steps = conversion_route_t<Conversion>;
   using required_access = typename Conversion::required_access;
   using cache_types = typename conversion_cache_types<Conversion>::type;
   static constexpr conversion_kind kind = Conversion::kind;

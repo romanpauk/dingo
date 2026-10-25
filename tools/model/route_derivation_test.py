@@ -17,7 +17,7 @@ from route_derivation import (
     interface_route_counts,
     route_kinds,
     route_retention,
-    route_steps,
+    route_candidates,
     source_shape,
 )
 from storage_cells import FORMS, SCOPES
@@ -27,11 +27,11 @@ def test_every_supported_cell_has_a_route_script() -> None:
     for row in build_rows():
         if row.outcome != "supported":
             continue
-        steps = route_steps(row.scope, row.form, row.category)
-        assert steps
-        assert tuple(step.kind for step in steps) == row.kinds
+        candidates = route_candidates(row.scope, row.form, row.category)
+        assert candidates
+        assert tuple(candidate.kind for candidate in candidates) == row.kinds
         assert tuple(
-            int(step.retention) for step in steps
+            int(candidate.retention) for candidate in candidates
         ) == row.retention
 
 
@@ -125,16 +125,16 @@ def test_every_supported_route_has_an_access() -> None:
 
 def test_unmodeled_cell_forms_fail_loudly() -> None:
     with pytest.raises(KeyError):
-        route_steps("shared", "unknown_form", "value")
+        route_candidates("shared", "unknown_form", "value")
     with pytest.raises(KeyError):
-        route_steps("shared", "plain", "unknown_category")
+        route_candidates("shared", "plain", "unknown_category")
 
 
 def test_route_scripts_cover_every_supported_cell_category() -> None:
     for scope in SCOPES:
         for form in FORMS:
             for category in supported_categories(scope.name, form.name):
-                assert route_steps(scope.name, form.name, category)
+                assert route_candidates(scope.name, form.name, category)
 
 
 def test_interface_route_counts_follow_the_form() -> None:

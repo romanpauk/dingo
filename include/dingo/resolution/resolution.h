@@ -42,6 +42,17 @@ struct is_same_qualification_shape<Source, Target, true, true>
           std::remove_pointer_t<std::remove_cv_t<Source>>,
           std::remove_pointer_t<std::remove_cv_t<Target>>> {};
 
+template <typename Operation, typename = void>
+struct resolution_conversion_steps {
+  using type = type_list<>;
+};
+
+template <typename Operation>
+struct resolution_conversion_steps<
+    Operation, std::void_t<typename Operation::conversion_steps>> {
+  using type = typename Operation::conversion_steps;
+};
+
 template <typename Target, typename Request,
           bool SameShape = std::is_lvalue_reference_v<Target> ==
                                std::is_lvalue_reference_v<Request> &&
@@ -79,6 +90,8 @@ struct resolution {
   using target_type = Target;
   using result_type = std::remove_reference_t<Target>;
   using operation = Operation;
+  using conversion_steps =
+      typename detail::resolution_conversion_steps<Operation>::type;
 
   static constexpr bool serves_reference = ServesReference;
   static constexpr bool serves_value = ServesValue;

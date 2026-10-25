@@ -155,6 +155,25 @@ TEST(resolution_operation_test, rvalue_source_destroys_materialized_value) {
 }
 
 TEST(resolution_operation_test,
+     conversion_routes_expose_steps_in_execution_order) {
+  using retained = detail::retained_type_conversion<
+      std::shared_ptr<int> &, int &,
+      detail::traits_type_conversion<std::shared_ptr<int>, int &>>;
+  using wrapped =
+      detail::wrapper_type_conversion<std::optional<std::shared_ptr<int>>,
+                                      int &, retained, false>;
+  using steps = detail::conversion_route_t<wrapped>;
+
+  static_assert(type_list_size_v<steps> == 3);
+  static_assert(type_list_at_t<steps, 0>::kind ==
+                detail::conversion_kind::traits);
+  static_assert(type_list_at_t<steps, 1>::kind ==
+                detail::conversion_kind::retained);
+  static_assert(type_list_at_t<steps, 2>::kind ==
+                detail::conversion_kind::wrapper);
+}
+
+TEST(resolution_operation_test,
      nested_conversions_publish_retained_cache_types) {
   using retained = detail::retained_type_conversion<
       std::shared_ptr<int> &, int &,
