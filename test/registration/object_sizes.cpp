@@ -9,6 +9,7 @@
 #include <dingo/resolution/conversion_cache.h>
 #include <dingo/runtime/container_runtime.h>
 #include <dingo/runtime/transaction.h>
+#include <dingo/static_container.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/shared_cyclical.h>
@@ -25,6 +26,27 @@ namespace dingo {
 namespace {
 
 struct size_service {};
+
+struct size_binding_a {};
+struct size_binding_b {};
+struct size_binding_c {};
+
+using size_static_empty = static_container<bindings<>>;
+using size_static_one =
+    static_container<bindings<bind<scope<unique>, storage<size_binding_a>>>>;
+using size_static_two =
+    static_container<bindings<bind<scope<unique>, storage<size_binding_a>>,
+                              bind<scope<unique>, storage<size_binding_b>>>>;
+using size_static_three =
+    static_container<bindings<bind<scope<unique>, storage<size_binding_a>>,
+                              bind<scope<unique>, storage<size_binding_b>>,
+                              bind<scope<unique>, storage<size_binding_c>>>>;
+
+// The container object is independent of the binding count; static state lives
+// in the binding slots, not in the container instance.
+static_assert(sizeof(size_static_one) == sizeof(size_static_empty));
+static_assert(sizeof(size_static_two) == sizeof(size_static_one));
+static_assert(sizeof(size_static_three) == sizeof(size_static_two));
 
 struct size_interface {
   virtual ~size_interface() = default;

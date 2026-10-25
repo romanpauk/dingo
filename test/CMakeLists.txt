@@ -230,6 +230,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/type_matrix_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/type_behavior_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/property_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/outcome_baseline_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/wrapper_semantics_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/route_rules_test.py"
     "${PROJECT_SOURCE_DIR}/tools/cost/measure_test.py")
@@ -388,9 +389,20 @@ add_executable(dingo_model_test
 target_link_libraries(dingo_model_test dingo::dingo gtest_main)
 target_include_directories(dingo_model_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_definitions(dingo_model_test PRIVATE
-    DINGO_TYPE_MATRIX_REPORT="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.md")
+    DINGO_TYPE_MATRIX_REPORT="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.md"
+    DINGO_TYPE_MATRIX_JSON="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.json")
 add_test(NAME dingo_model_test COMMAND dingo_model_test)
 set_tests_properties(dingo_model_test PROPERTIES LABELS "unit;generator")
+
+add_test(NAME dingo_model_baseline_test
+    COMMAND ${DINGO_UV_RUN_COMMAND} python
+        ${PROJECT_SOURCE_DIR}/tools/model/outcome_baseline.py check
+        --matrix ${CMAKE_CURRENT_BINARY_DIR}/type-matrix.json
+        --baseline ${PROJECT_SOURCE_DIR}/test/baselines/model.json)
+set_tests_properties(dingo_model_baseline_test PROPERTIES
+    LABELS "unit;generator"
+    DEPENDS dingo_model_test
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/model)
 
 add_test(NAME dingo_model_generator_test
     COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q
@@ -404,6 +416,7 @@ add_test(NAME dingo_model_generator_test
         ${PROJECT_SOURCE_DIR}/tools/model/type_matrix_test.py
         ${PROJECT_SOURCE_DIR}/tools/model/type_behavior_test.py
         ${PROJECT_SOURCE_DIR}/tools/model/property_cells_test.py
+        ${PROJECT_SOURCE_DIR}/tools/model/outcome_baseline_test.py
         ${PROJECT_SOURCE_DIR}/tools/model/wrapper_semantics_test.py
         ${PROJECT_SOURCE_DIR}/tools/model/route_rules_test.py)
 set_tests_properties(dingo_model_generator_test PROPERTIES

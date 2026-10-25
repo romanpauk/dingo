@@ -20,6 +20,10 @@ hand-curated matrix tags.
   not part of the type, so no scope can size, construct, or destroy them.
   Unsized shared array handles under `shared_cyclical` are an explicit
   constraint for the same reason.
+- `outcome_baseline.py` pins the matrix outcomes and behavior expectation
+  counts in `test/baselines/model.json`. `check` fails on any difference;
+  `update --reason ...` rewrites the baseline and records the declared change
+  in `test/baselines/model-changes.json`.
 - `property_cells.py` generates static assertions that compare the C++ wrapper
   properties (`is_owning`, `is_sharing`, `is_nullable`, `is_borrowable`,
   `is_array`, `is_variant`, `can_copy_out`, `can_take`) with the Python wrapper

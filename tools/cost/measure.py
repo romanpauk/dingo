@@ -113,6 +113,23 @@ def compile_once(
     return elapsed
 
 
+def preprocess_bytes(
+    cxx: str, source: Path, include: Path, standard: str, optimization: str
+) -> int:
+    result = run(
+        [
+            cxx,
+            f"-std={standard}",
+            optimization,
+            f"-I{include}",
+            "-E",
+            str(source),
+        ],
+        cwd=source.parent,
+    )
+    return len(result.stdout.encode("utf-8"))
+
+
 def record(arguments: argparse.Namespace) -> int:
     source = arguments.source.resolve()
     include = arguments.include.resolve()
@@ -155,6 +172,15 @@ def record(arguments: argparse.Namespace) -> int:
             "compile_seconds_median": statistics.median(samples),
             "compile_seconds_min": min(samples),
             "trace": trace_summary(trace_path) if trace_path else {},
+            "headers": {
+                "preprocessed_bytes": preprocess_bytes(
+                    arguments.cxx,
+                    source,
+                    include,
+                    arguments.standard,
+                    arguments.optimization,
+                )
+            },
         }
     output.write_text(json.dumps(record_data, indent=2, sort_keys=True) + "\n")
     print(json.dumps(record_data, indent=2, sort_keys=True))
@@ -195,6 +221,16 @@ def compare(arguments: argparse.Namespace) -> int:
             arguments.instantiation_tolerance,
             problems,
         )
+    baseline_headers = baseline.get("headers", {})
+    current_headers = current.get("headers", {})
+    if baseline_headers and current_headers:
+        compare_metric(
+            "preprocessed_bytes",
+            int(baseline_headers.get("preprocessed_bytes", 0)),
+            int(current_headers.get("preprocessed_bytes", 0)),
+            arguments.header_tolerance,
+            problems,
+        )
     print(
         "compile seconds median: "
         f"{baseline.get('compile_seconds_median', 0):.3f} -> "
@@ -225,6 +261,7 @@ def main() -> int:
     compare_parser.add_argument("current", type=Path)
     compare_parser.add_argument("--size-tolerance", type=float, default=0.0)
     compare_parser.add_argument("--instantiation-tolerance", type=float, default=0.0)
+    compare_parser.add_argument("--header-tolerance", type=float, default=0.0)
     compare_parser.set_defaults(handler=compare)
 
     arguments = parser.parse_args()

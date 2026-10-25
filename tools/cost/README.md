@@ -5,6 +5,7 @@
 The hard gate uses deterministic values:
 
 - text, data, and bss size of the compiled object;
+- preprocessed bytes for the same probe;
 - the number of `dingo::` events in Clang's `-ftime-trace` output, when
   requested.
 
@@ -25,6 +26,6 @@ uv run --locked python tools/cost/measure.py compare \
     build/cost/baseline.json build/cost/current.json
 ```
 
-The default tolerances are zero. Pass `--size-tolerance` or
-`--instantiation-tolerance` only when a declared change justifies a budget
-increase.
+The default tolerances are zero. Pass `--size-tolerance`,
+`--header-tolerance`, or `--instantiation-tolerance` only when a declared change
+justifies a budget increase.

@@ -34,7 +34,33 @@
 #define DINGO_TYPE_MATRIX_REPORT "type-matrix.md"
 #endif
 
+#ifndef DINGO_TYPE_MATRIX_JSON
+#define DINGO_TYPE_MATRIX_JSON "type-matrix.json"
+#endif
+
 namespace type_matrix {
+
+inline std::string json_escape(const std::string &value) {
+  std::string result;
+  result.reserve(value.size());
+  for (char character : value) {
+    switch (character) {
+    case '\\':
+      result += "\\\\";
+      break;
+    case '"':
+      result += "\\\"";
+      break;
+    case '\n':
+      result += "\\n";
+      break;
+    default:
+      result += character;
+      break;
+    }
+  }
+  return result;
+}
 
 template <typename Request, typename... Resolutions>
 constexpr bool request_supported(dingo::type_list<Resolutions...>) {
@@ -114,6 +140,8 @@ static constexpr bool {{ shape.name }}_lifted = {{ shape.name }} && !{{ shape.na
 TEST(type_matrix, writes_support_report) {
   std::ofstream out(DINGO_TYPE_MATRIX_REPORT);
   ASSERT_TRUE(out.is_open());
+  std::ofstream json(DINGO_TYPE_MATRIX_JSON);
+  ASSERT_TRUE(json.is_open());
   std::map<std::string, std::pair<int, std::string>> gaps;
   int supported = 0;
   int lifted = 0;
@@ -134,12 +162,15 @@ TEST(type_matrix, writes_support_report) {
       << (lifted_{{ shape.name }} ? "yes" : "no") << " | "
       << (supported_{{ shape.name }} && top_ok_{{ shape.name }} ? "yes" : "no")
       << " | ";
+  std::string reason_{{ shape.name }} = "-";
   if (direct_{{ shape.name }}) {
     out << "-";
   } else if (lifted_{{ shape.name }}) {
-    out << lifted_reason<{{ shape.cpp_type }}>();
+    reason_{{ shape.name }} = lifted_reason<{{ shape.cpp_type }}>();
+    out << reason_{{ shape.name }};
   } else {
-    out << "{{ row.reasons[shape.name] }}";
+    reason_{{ shape.name }} = "{{ row.reasons[shape.name] }}";
+    out << reason_{{ shape.name }};
     auto &entry = gaps["{{ row.reasons[shape.name] }}"];
     ++entry.first;
     if (entry.second.empty()) {
@@ -147,6 +178,14 @@ TEST(type_matrix, writes_support_report) {
     }
   }
   out << " |\n";
+  json << "{\"scope\":\"{{ row.scope }}\",\"form\":\"{{ row.form }}\","
+          "\"shape\":\"{{ shape.name }}\",\"direct\":"
+       << (direct_{{ shape.name }} ? "true" : "false")
+       << ",\"lifted\":" << (lifted_{{ shape.name }} ? "true" : "false")
+       << ",\"top_level\":"
+       << (supported_{{ shape.name }} && top_ok_{{ shape.name }} ? "true"
+                                                                 : "false")
+       << ",\"reason\":\"" << json_escape(reason_{{ shape.name }}) << "\"}\n";
   if (supported_{{ shape.name }}) {
     ++supported;
   }

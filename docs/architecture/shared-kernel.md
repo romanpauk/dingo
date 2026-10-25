@@ -605,8 +605,9 @@ work.
 - Runtime resolution keeps one memoized selection per request type and at most
   one indirect call, as today. The shared selection algebra must not add a
   second lookup or a second cache.
-- Object sizes are checked against a contract: `container<>` stays independent
-  of registration count, and `static_container` grows by its slots only.
+- Object sizes are checked against a contract: `container<>` and
+  `static_container` stay independent of the registration count; static binding
+  state lives outside the container instance.
 - Existing benchmarks and allocation-counting tests remain the gate; the first
   implementation step must not change their results.
 
@@ -618,7 +619,8 @@ step ends with the full quality gate plus the cost comparison.
 
 ### Step 0: Record The Baseline
 
-Status: tool landed; baseline values are not committed yet.
+Status: model outcome baseline committed; cost probes record the current values
+for per-change comparison.
 
 Build a small cost harness that records, for `master`:
 
@@ -627,6 +629,7 @@ Build a small cost harness that records, for `master`:
 - per-header preprocessed size and `includes-compile` time trend;
 - instantiation counts from Clang `-ftime-trace` for a few scaling programs;
 - benchmark results and allocation counts.
+- the matrix/behavior outcome baseline, updated only with a declared reason.
 
 The harness is only useful if it is stable. Gate on deterministic counts and
 sizes; track wall time as a trend, not a hard failure.

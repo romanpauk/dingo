@@ -189,9 +189,15 @@ uv run --locked python tools/cost/measure.py compare \
     build/cost/baseline.json build/cost/current.json
 ```
 
-The hard gate is text/data/bss size and, when present, the number of `dingo::`
-events in the time trace. Wall time is printed as a trend only, because it is
-too noisy to fail a build.
+The hard gate is text/data/bss size, preprocessed header bytes, and, when
+present, the number of `dingo::` events in the time trace. Wall time is printed
+as a trend only, because it is too noisy to fail a build.
+
+The model outcomes have their own differential baseline in
+`test/baselines/model.json`. `ctest` runs
+`tools/model/outcome_baseline.py check` after the model test; an intended change
+is recorded with `update --reason "..."`, which rewrites the baseline and
+appends the declared differences to `test/baselines/model-changes.json`.
 
 `cmake --build build -t cost-record` records the current probe under
 `build/cost/current.json` with the configured compiler. Use the explicit
