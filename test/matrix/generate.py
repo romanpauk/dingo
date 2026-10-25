@@ -637,6 +637,32 @@ def executable_groups(rows: tuple[MatrixRow, ...]) -> dict[str, list[MatrixRow]]
     return grouped
 
 
+# A registration suite is one semantic source group, but compiling every case
+# in one unit makes that unit the build straggler. Splitting at a bounded case
+# count keeps the cases and the runner identical while bounding the per-unit
+# instantiation cost. The runner is batched separately.
+REGISTRATION_SOURCE_CASE_LIMIT = 128
+
+
+def split_source_rows(
+    rows: list[object], limit: int
+) -> list[tuple[int, list[object]]]:
+    """Split one suite into balanced, bounded compilation units."""
+    if limit <= 0:
+        raise ValueError("source case limit must be positive")
+    if len(rows) <= limit:
+        return [(0, rows)]
+    parts = (len(rows) + limit - 1) // limit
+    size = (len(rows) + parts - 1) // parts
+    # Keep cases in their catalog order. Contiguous slices keep a shard's
+    # headers homogeneous; interleaving pulls every shard's includes into every
+    # unit and costs more than the balance it gains.
+    return [
+        (index + 1, rows[offset : offset + size])
+        for index, offset in enumerate(range(0, len(rows), size))
+    ]
+
+
 def source_groups(rows: list[MatrixRow]) -> dict[str, list[MatrixRow]]:
     grouped: dict[str, list[MatrixRow]] = defaultdict(list)
     for row in rows:
@@ -658,35 +684,40 @@ def generate_registration_executables(
     shards: list[SourceShard] = []
     for feature_name, feature_rows in executable_groups(rows).items():
         for source_name, source_rows in sorted(source_groups(feature_rows).items()):
-            cases = tuple(make_case(row) for row in source_rows)
-            shards.append(
-                SourceShard(
-                    executable=executable_name(feature_name),
-                    name=source_name,
-                    source_context={
-                        "cases": cases,
-                        "system_headers": tuple(
-                            sorted(
-                                {
-                                    header
-                                    for case in cases
-                                    for header in case.system_headers
-                                }
-                            )
-                        ),
-                        "headers": tuple(
-                            sorted(
-                                {
-                                    header
-                                    for case in cases
-                                    for header in case.headers
-                                }
-                            )
-                        ),
-                    },
-                    runner_context={"cases": cases},
-                )
+            parts = split_source_rows(
+                list(source_rows), REGISTRATION_SOURCE_CASE_LIMIT
             )
+            for index, part in parts:
+                cases = tuple(make_case(row) for row in part)
+                shard_name = source_name if len(parts) == 1 else f"{source_name}_{index}"
+                shards.append(
+                    SourceShard(
+                        executable=executable_name(feature_name),
+                        name=shard_name,
+                        source_context={
+                            "cases": cases,
+                            "system_headers": tuple(
+                                sorted(
+                                    {
+                                        header
+                                        for case in cases
+                                        for header in case.system_headers
+                                    }
+                                )
+                            ),
+                            "headers": tuple(
+                                sorted(
+                                    {
+                                        header
+                                        for case in cases
+                                        for header in case.headers
+                                    }
+                                )
+                            ),
+                        },
+                        runner_context={"cases": cases},
+                    )
+                )
     return render_case_family_executables(
         out_dir,
         source_template,

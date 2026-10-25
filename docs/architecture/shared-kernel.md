@@ -444,6 +444,42 @@ and sharding by instantiation cost rather than line count, is the effective
 lever; precompiled headers were measured here and did not pay for themselves
 because CMake builds one per test target.
 
+### Matrix Migration Order
+
+Anything that is a function of the scope/form catalog belongs in the generated
+model suites. In priority order:
+
+1. **Lifetime and count rows** (`lifetime_counts`, plain value rows). The
+   behavior classes already assert construction, copy, move, destruction, and
+   the lifetime balance. Remove these matrix rows first; the risk is lowest and
+   the duplication is exact.
+2. **Plain registration rows**: one stored type, direct value/reference/pointer
+   request, no wrapper, key, or feature. These are fully covered by behavior
+   classes and can leave the matrix product.
+3. **Forms already covered behaviorally**: variant, optional, pointer, bounded
+   array, unique/shared handles, array handles. Keep only the type-variety rows
+   (nested wrappers, custom wrappers, interfaces) that the model does not
+   express.
+4. **Container variants** (indexed, indexed DSL, allocator, custom RTTI).
+   Replace the full container cross product with one representative registration
+   recipe per container and feature. Container mechanics are orthogonal to the
+   stored form, so multiplying every form by every container adds instantiations
+   without adding a new failure mode.
+5. **Interface and annotated exposure**. Add an interface dimension to the
+   model, then remove `annotated` and most of `resolve_interface`.
+6. **Keys, collections, local bindings.** Add model axes only if the generated
+   product stays compact; otherwise keep them in the matrix.
+
+Do **not** migrate constructor detection, invocation and dependency
+provisioning, dependency compositions, shared-cyclical graphs, or the imperative
+parent/runtime regression scenarios. They describe behavior that is not a
+function of a scope/form cell.
+
+Each step should land with a coverage manifest: the model declares the cells it
+covers, the matrix declares the registration rows it still owns, and a test
+fails when the union no longer covers the catalog. That makes the removal
+incremental and safe.
+
 ## Cost Guarantees
 
 The design adds no abstraction that survives into the generated code as runtime

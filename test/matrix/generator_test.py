@@ -101,15 +101,18 @@ from family import (
 )
 from generate import (
     MatrixRow,
+    REGISTRATION_SOURCE_CASE_LIMIT,
     RejectionReason,
     assert_dependency_provisioning_coverage,
     assert_axis_used,
     assert_filter_coverage,
     generate,
+    generate_registration_executables,
     generate_rows,
     implemented,
     materialize_row,
     merge_executables,
+    split_source_rows,
 )
 from invoke import InvokeRow, generate_invoke_rows
 from plugins import (
@@ -166,6 +169,52 @@ def shared_cyclical_rows() -> tuple[SharedCyclicalRow, ...]:
 def test_matrix_cardinality_remains_bounded(rows: tuple[MatrixRow, ...]) -> None:
     assert len(rows) == 2159
     assert len({(row.feature.name, row.name) for row in rows}) == len(rows)
+
+
+def test_source_rows_split_is_bounded_and_complete() -> None:
+    rows = list(range(300))
+    parts = split_source_rows(rows, 128)
+    assert [index for index, _ in parts] == [1, 2, 3]
+    assert sum(len(part) for _, part in parts) == len(rows)
+    assert all(len(part) <= 128 for _, part in parts)
+
+
+def test_source_rows_split_keeps_small_groups_whole() -> None:
+    rows = list(range(5))
+    assert split_source_rows(rows, 128) == [(0, rows)]
+
+
+def test_source_rows_split_rejects_invalid_limit() -> None:
+    with pytest.raises(ValueError):
+        split_source_rows([1], 0)
+
+
+def test_registration_sources_are_bounded(tmp_path: Path) -> None:
+    script_dir = Path(__file__).resolve().parent
+    environment = Environment(
+        loader=FileSystemLoader(script_dir / "templates"),
+        undefined=StrictUndefined,
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+    executables = generate_registration_executables(
+        tmp_path,
+        environment.get_template("source.cpp.j2"),
+        environment.get_template("runner.cpp.j2"),
+    )
+    implementation_sources = [
+        source
+        for executable in executables
+        for source in executable.sources
+        if not source.name.startswith("matrix_runner_")
+    ]
+    assert implementation_sources
+    case_counts = [
+        source.read_text(encoding="utf-8").count("\nstruct ")
+        for source in implementation_sources
+    ]
+    assert max(case_counts) <= REGISTRATION_SOURCE_CASE_LIMIT
+    assert sum(case_counts) == len(generate_rows())
 
 
 def test_shared_cyclical_is_an_independent_full_product(
@@ -2645,21 +2694,21 @@ def test_invalid_registration_plan_is_an_error(
         "expected_compiled_rows",
     ),
     (
-        (None, frozenset(), Compiler(), 115, 0, 1602),
+        (None, frozenset(), Compiler(), 121, 0, 1602),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset(),
             Compiler(),
-            243,
+            249,
             0,
             1602,
         ),
-        (64, frozenset(), Compiler(), 139, 0, 1602),
+        (64, frozenset(), Compiler(), 145, 0, 1602),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset({("invoke", 4), ("resolve", 4)}),
             Compiler(),
-            609,
+            615,
             400,
             1602,
         ),
@@ -2667,7 +2716,7 @@ def test_invalid_registration_plan_is_an_error(
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset(),
             Compiler.parse("MSVC", "19.49", "x64"),
-            243,
+            249,
             0,
             1602,
         ),

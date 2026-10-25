@@ -100,6 +100,12 @@ executable. Runner batches contain at most 512 tests. This keeps validation,
 file writing, and executable assembly consistent without recompiling the
 GoogleTest runner headers for every template-heavy implementation shard.
 
+Registration suites additionally split their cases into bounded compilation
+units (`REGISTRATION_SOURCE_CASE_LIMIT`). The case set and the runner are
+unchanged; only the translation unit boundary moves. Contiguous slices are used
+so each unit keeps a homogeneous include set. This bounds the per-unit
+instantiation cost instead of letting one suite become the build straggler.
+
 Axis members declare their required C++ includes through `headers`. Scenario
 headers belong to the feature or feature case that executes them; they are not
 global support code.

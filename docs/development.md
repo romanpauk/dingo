@@ -62,7 +62,9 @@ The hand-written C++ portion is organized by role: `common/` provides matrix
 plumbing, `containers/` and `fixtures/` define axis inputs, `policies/` contains
 generic row behavior, and `scenarios/` contains complete behavioral and
 regression cases. Axis definitions declare the headers needed by each generated
-shard so unrelated scenarios are not compiled together.
+shard so unrelated scenarios are not compiled together. Registration suites
+split their cases into bounded compilation units so one suite cannot dominate
+the build; the case set and runner stay the same.
 
 ## Generated Cell Coverage
 
