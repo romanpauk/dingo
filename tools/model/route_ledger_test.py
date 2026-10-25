@@ -13,10 +13,10 @@ import pytest
 from route_ledger import (
     CATEGORIES,
     GAP_ARRAY_ROUTES,
-    GAP_OPERATION_KIND,
     build_rows,
     category_access,
     category_kinds,
+    category_retention,
     gaps,
     supported_categories,
     validate,
@@ -85,11 +85,44 @@ def test_plain_operation_kinds_are_modeled() -> None:
     )
 
 
-def test_non_plain_operation_kinds_are_tracked_gaps() -> None:
+def test_retention_is_modeled_for_every_supported_route() -> None:
     for row in build_rows():
-        if row.outcome == "supported" and row.form != "plain":
-            assert row.kind_gap == GAP_OPERATION_KIND
-            assert row.kinds == ()
+        if row.outcome == "supported":
+            assert len(row.retention) == len(row.kinds)
+            assert all(value in (0, 1) for value in row.retention)
+    assert category_retention("shared", "shared_handle", "value") == (1, 0)
+    assert category_retention("unique", "plain", "value") == (0, 1)
+    assert category_retention("shared", "optional", "object") == (1, 0, 1, 0)
+    assert category_retention("shared_cyclical", "pointer", "object") == (
+        1,
+        1,
+    )
+
+
+def test_all_supported_routes_have_operation_kinds() -> None:
+    for row in build_rows():
+        if row.outcome == "supported":
+            assert row.kinds
+            assert not row.kind_gap
+
+
+def test_non_plain_operation_kinds_are_modeled() -> None:
+    assert category_kinds("shared", "shared_handle", "value") == (
+        "borrowed",
+        "identity",
+    )
+    assert category_kinds("shared", "shared_handle", "object") == (
+        "address",
+        "borrowed",
+        "pointer_access",
+    )
+    assert category_kinds("unique", "alternative", "value") == (
+        "alternative",
+    )
+    assert category_kinds("shared_cyclical", "pointer", "object") == (
+        "dereference",
+        "borrowed",
+    )
 
 
 if __name__ == "__main__":

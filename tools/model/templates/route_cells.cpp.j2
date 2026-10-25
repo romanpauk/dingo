@@ -73,6 +73,24 @@ template <std::size_t Index, typename Head, typename... Tail>
 struct route_kind_at<Index, dingo::type_list<Head, Tail...>>
     : route_kind_at<Index - 1, dingo::type_list<Tail...>> {};
 
+template <std::size_t Index, typename Resolutions> struct route_retention_at;
+
+template <typename Head, typename... Tail>
+struct route_retention_at<0, dingo::type_list<Head, Tail...>> {
+  static constexpr bool value = Head::operation::requires_source_retention;
+};
+
+template <std::size_t Index, typename Head, typename... Tail>
+struct route_retention_at<Index, dingo::type_list<Head, Tail...>>
+    : route_retention_at<Index - 1, dingo::type_list<Tail...>> {};
+
+template <typename... Resolutions>
+constexpr bool all_routes_have_no_cache(dingo::type_list<Resolutions...>) {
+  return ((dingo::type_list_size_v<
+               typename Resolutions::operation::cache_types> == 0) &&
+          ...);
+}
+
 {% for row in rows %}
 namespace {{ row.scope_name }}_{{ row.form_name }} {
 using scope = {{ row.scope_type }};
@@ -111,6 +129,13 @@ static_assert(route_kind_at<{{ loop.index0 }}, value_routes>::value ==
                   dingo::detail::conversion_kind::{{ kind }},
               "value route operation changed");
 {% endfor %}
+static_assert(all_routes_have_no_cache(value_routes{}),
+              "value route unexpectedly caches a conversion");
+{% for retention in row.value_retention %}
+static_assert(route_retention_at<{{ loop.index0 }}, value_routes>::value ==
+                  {{ "true" if retention else "false" }},
+              "value route retention changed");
+{% endfor %}
 {% endif %}
 {% endif %}
 {% if row.object %}
@@ -127,6 +152,13 @@ static_assert(route_kind_at<{{ loop.index0 }}, object_routes>::value ==
                   dingo::detail::conversion_kind::{{ kind }},
               "object route operation changed");
 {% endfor %}
+static_assert(all_routes_have_no_cache(object_routes{}),
+              "object route unexpectedly caches a conversion");
+{% for retention in row.object_retention %}
+static_assert(route_retention_at<{{ loop.index0 }}, object_routes>::value ==
+                  {{ "true" if retention else "false" }},
+              "object route retention changed");
+{% endfor %}
 {% endif %}
 {% endif %}
 {% if row.rvalue %}
@@ -142,6 +174,13 @@ static_assert(dingo::type_list_size_v<rvalue_routes> ==
 static_assert(route_kind_at<{{ loop.index0 }}, rvalue_routes>::value ==
                   dingo::detail::conversion_kind::{{ kind }},
               "rvalue route operation changed");
+{% endfor %}
+static_assert(all_routes_have_no_cache(rvalue_routes{}),
+              "rvalue route unexpectedly caches a conversion");
+{% for retention in row.rvalue_retention %}
+static_assert(route_retention_at<{{ loop.index0 }}, rvalue_routes>::value ==
+                  {{ "true" if retention else "false" }},
+              "rvalue route retention changed");
 {% endfor %}
 {% endif %}
 {% endif %}

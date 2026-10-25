@@ -34,17 +34,130 @@ ROUTE_FORM_NAMES = (
     "optional",
 )
 GAP_ARRAY_ROUTES = "array-routes"
-GAP_OPERATION_KIND = "operation-kind"
 
-PLAIN_KINDS = {
-    ("shared", "value"): ("dereference",),
-    ("shared", "object"): ("traits",),
-    ("unique", "value"): ("identity", "wrapper"),
-    ("unique", "object"): ("traits",),
-    ("unique", "rvalue"): ("identity", "wrapper"),
-    ("external", "value"): ("identity",),
-    ("external", "object"): ("address",),
-    ("shared_cyclical", "object"): ("traits",),
+OPERATION_KINDS = {
+    ("shared", "plain", "value"): ("dereference",),
+    ("shared", "plain", "object"): ("traits",),
+    ("shared", "alternative", "value"): ("dereference",),
+    ("shared", "alternative", "object"): ("dereference", "borrowed"),
+    ("shared", "pointer", "value"): ("dereference",),
+    ("shared", "pointer", "object"): ("traits",),
+    ("shared", "unique_handle", "value"): ("borrowed",),
+    ("shared", "unique_handle", "object"): (
+        "address",
+        "borrowed",
+        "pointer_access",
+    ),
+    ("shared", "shared_handle", "value"): ("borrowed", "identity"),
+    ("shared", "shared_handle", "object"): (
+        "address",
+        "borrowed",
+        "pointer_access",
+    ),
+    ("shared", "optional", "value"): ("borrowed",),
+    ("shared", "optional", "object"): (
+        "borrowed",
+        "traits",
+        "pointer_access",
+        "address",
+    ),
+    ("unique", "plain", "value"): ("identity", "wrapper"),
+    ("unique", "plain", "object"): ("traits",),
+    ("unique", "plain", "rvalue"): ("identity", "wrapper"),
+    ("unique", "alternative", "value"): ("alternative",),
+    ("unique", "alternative", "rvalue"): ("alternative",),
+    ("unique", "pointer", "value"): ("traits", "traits"),
+    ("unique", "pointer", "object"): ("traits",),
+    ("unique", "pointer", "rvalue"): ("traits", "traits"),
+    ("unique", "unique_handle", "value"): ("identity", "traits"),
+    ("unique", "unique_handle", "rvalue"): ("identity", "traits"),
+    ("unique", "shared_handle", "value"): ("identity",),
+    ("unique", "shared_handle", "rvalue"): ("identity",),
+    ("unique", "optional", "value"): ("identity",),
+    ("unique", "optional", "rvalue"): ("identity",),
+    ("external", "plain", "value"): ("identity",),
+    ("external", "plain", "object"): ("address",),
+    ("external", "alternative", "value"): ("alternative",),
+    ("external", "alternative", "object"): ("alternative", "alternative"),
+    ("external", "pointer", "value"): ("dereference",),
+    ("external", "pointer", "object"): ("traits",),
+    ("external", "unique_handle", "value"): ("borrowed",),
+    ("external", "unique_handle", "object"): (
+        "address",
+        "borrowed",
+        "pointer_access",
+    ),
+    ("external", "shared_handle", "value"): ("borrowed", "identity"),
+    ("external", "shared_handle", "object"): (
+        "address",
+        "borrowed",
+        "pointer_access",
+    ),
+    ("external", "optional", "value"): ("borrowed",),
+    ("external", "optional", "object"): (
+        "borrowed",
+        "traits",
+        "pointer_access",
+        "address",
+    ),
+    ("shared_cyclical", "plain", "object"): ("traits",),
+    ("shared_cyclical", "alternative", "object"): (
+        "dereference",
+        "borrowed",
+    ),
+    ("shared_cyclical", "pointer", "object"): ("dereference", "borrowed"),
+    ("shared_cyclical", "shared_handle", "value"): ("identity",),
+    ("shared_cyclical", "shared_handle", "object"): (
+        "address",
+        "borrowed",
+        "pointer_access",
+    ),
+}
+
+RETENTION = {
+    ("shared", "plain", "value"): (0,),
+    ("shared", "plain", "object"): (0,),
+    ("shared", "alternative", "value"): (1,),
+    ("shared", "alternative", "object"): (1, 1),
+    ("shared", "pointer", "value"): (0,),
+    ("shared", "pointer", "object"): (0,),
+    ("shared", "unique_handle", "value"): (1,),
+    ("shared", "unique_handle", "object"): (0, 1, 1),
+    ("shared", "shared_handle", "value"): (1, 0),
+    ("shared", "shared_handle", "object"): (0, 1, 1),
+    ("shared", "optional", "value"): (1,),
+    ("shared", "optional", "object"): (1, 0, 1, 0),
+    ("unique", "plain", "value"): (0, 1),
+    ("unique", "plain", "object"): (0,),
+    ("unique", "plain", "rvalue"): (0, 1),
+    ("unique", "alternative", "value"): (1,),
+    ("unique", "alternative", "rvalue"): (1,),
+    ("unique", "pointer", "value"): (1, 1),
+    ("unique", "pointer", "object"): (0,),
+    ("unique", "pointer", "rvalue"): (1, 1),
+    ("unique", "unique_handle", "value"): (0, 1),
+    ("unique", "unique_handle", "rvalue"): (0, 1),
+    ("unique", "shared_handle", "value"): (0,),
+    ("unique", "shared_handle", "rvalue"): (0,),
+    ("unique", "optional", "value"): (0,),
+    ("unique", "optional", "rvalue"): (0,),
+    ("external", "plain", "value"): (0,),
+    ("external", "plain", "object"): (0,),
+    ("external", "alternative", "value"): (1,),
+    ("external", "alternative", "object"): (1, 1),
+    ("external", "pointer", "value"): (0,),
+    ("external", "pointer", "object"): (0,),
+    ("external", "unique_handle", "value"): (1,),
+    ("external", "unique_handle", "object"): (0, 1, 1),
+    ("external", "shared_handle", "value"): (1, 0),
+    ("external", "shared_handle", "object"): (0, 1, 1),
+    ("external", "optional", "value"): (1,),
+    ("external", "optional", "object"): (1, 0, 1, 0),
+    ("shared_cyclical", "plain", "object"): (0,),
+    ("shared_cyclical", "alternative", "object"): (1, 1),
+    ("shared_cyclical", "pointer", "object"): (1, 1),
+    ("shared_cyclical", "shared_handle", "value"): (0,),
+    ("shared_cyclical", "shared_handle", "object"): (0, 1, 1),
 }
 
 
@@ -59,6 +172,7 @@ class LedgerRow:
     access: str = ""
     kinds: tuple[str, ...] = ()
     kind_gap: str = ""
+    retention: tuple[int, ...] = ()
 
 
 def _category_outcome(
@@ -108,8 +222,11 @@ def _category_outcome(
             if supported
             else ""
         ),
-        PLAIN_KINDS.get((scope_name, category), ()) if supported and form_name == "plain" else (),
-        GAP_OPERATION_KIND if supported and form_name != "plain" else "",
+        OPERATION_KINDS.get((scope_name, form_name, category), ())
+        if supported
+        else (),
+        "",
+        RETENTION.get((scope_name, form_name, category), ()) if supported else (),
     )
 
 
@@ -146,16 +263,16 @@ def validate() -> None:
             raise ValueError(f"supported row has no access: {row}")
         if row.outcome != "supported" and row.access:
             raise ValueError(f"non-supported row has an access: {row}")
-        if row.outcome == "supported" and row.form == "plain" and not row.kinds:
-            raise ValueError(f"supported plain row has no operation kinds: {row}")
-        if (
-            row.outcome == "supported"
-            and row.form != "plain"
-            and row.kind_gap != GAP_OPERATION_KIND
-        ):
-            raise ValueError(f"supported non-plain row has no kind gap: {row}")
-        if row.outcome != "supported" and (row.kinds or row.kind_gap):
+        if row.outcome == "supported" and not row.kinds:
+            raise ValueError(f"supported row has no operation kinds: {row}")
+        if row.outcome != "supported" and row.kinds:
             raise ValueError(f"non-supported row has operation kinds: {row}")
+        if len(row.retention) != len(row.kinds):
+            raise ValueError(f"retention sequence length mismatch: {row}")
+        if any(value not in (0, 1) for value in row.retention):
+            raise ValueError(f"retention value is not boolean: {row}")
+        if row.kind_gap:
+            raise ValueError(f"operation-kind gap remains: {row}")
 
 
 def supported_categories(scope_name: str, form_name: str) -> set[str]:
@@ -191,6 +308,20 @@ def category_kinds(
             and row.outcome == "supported"
         ):
             return row.kinds
+    raise KeyError((scope_name, form_name, category))
+
+
+def category_retention(
+    scope_name: str, form_name: str, category: str
+) -> tuple[int, ...]:
+    for row in build_rows():
+        if (
+            row.scope == scope_name
+            and row.form == form_name
+            and row.category == category
+            and row.outcome == "supported"
+        ):
+            return row.retention
     raise KeyError((scope_name, form_name, category))
 
 
