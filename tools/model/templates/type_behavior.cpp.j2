@@ -17,6 +17,8 @@
 
 #include <gtest/gtest.h>
 
+#include "support/custom_wrappers.h"
+
 #include <memory>
 #include <optional>
 #include <type_traits>
@@ -137,6 +139,30 @@ template <typename... Ts>
 auto id_of(const std::variant<Ts...> &value)
     -> decltype(id_of(std::get<0>(value))) {
   return id_of(std::get<0>(value));
+}
+
+template <typename T>
+auto id_of(const dingo::test_optional<T> &value)
+    -> decltype(id_of(*value.get())) {
+  return id_of(*value.get());
+}
+
+template <typename T>
+auto id_of(const dingo::test_unique<T> &value)
+    -> decltype(id_of(*value.get())) {
+  return id_of(*value.get());
+}
+
+template <typename T>
+auto id_of(const dingo::test_shared<T> &value)
+    -> decltype(id_of(*value.get())) {
+  return id_of(*value.get());
+}
+
+template <typename T>
+auto id_of(const dingo::test_variant<T> &value)
+    -> decltype(id_of(*value.first_ptr())) {
+  return id_of(*value.first_ptr());
 }
 
 template <typename T>

@@ -16,12 +16,14 @@
 #include <optional>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 namespace dingo {
 
 template <typename T> class test_shared;
 template <typename T> class test_unique;
 template <typename T> class test_optional;
+template <typename T> class test_variant;
 
 namespace test_detail {
 template <typename T, template <typename...> class Template>
@@ -30,6 +32,64 @@ struct is_instance : std::false_type {};
 template <template <typename...> class Template, typename... Args>
 struct is_instance<Template<Args...>, Template> : std::true_type {};
 } // namespace test_detail
+
+// A minimal variant-like wrapper. It exists only to prove that a user
+// alternative family can use alternative_type_traits without a type_traits
+// specialization.
+template <typename T> class test_variant {
+public:
+  test_variant() : value_(std::in_place_index<0>) {}
+
+  test_variant(const test_variant &) = default;
+  test_variant(test_variant &&) noexcept = default;
+  test_variant &operator=(const test_variant &) = default;
+  test_variant &operator=(test_variant &&) noexcept = default;
+
+  template <typename Selected, typename Value>
+  static test_variant wrap(Value &&value) {
+    test_variant result;
+    result.value_.template emplace<Selected>(std::forward<Value>(value));
+    return result;
+  }
+
+  template <typename Selected> Selected *get() {
+    return std::get_if<Selected>(&value_);
+  }
+
+  template <typename Selected> const Selected *get() const {
+    return std::get_if<Selected>(&value_);
+  }
+
+  T *first_ptr() { return std::get_if<0>(&value_); }
+  const T *first_ptr() const { return std::get_if<0>(&value_); }
+
+private:
+  std::variant<T, long> value_;
+};
+
+template <typename T> struct alternative_type_traits<test_variant<T>> {
+  static constexpr bool enabled = true;
+
+  using alternatives = type_list<T, long>;
+
+  template <typename Source>
+  using selected_type = typename alternative_type_traits<
+      std::variant<T, long>>::template selected_type<Source>;
+
+  template <typename Selected, typename Value>
+  static test_variant<T> wrap(Value &&value) {
+    return test_variant<T>::template wrap<Selected>(std::forward<Value>(value));
+  }
+
+  template <typename Selected> static Selected *get(test_variant<T> &value) {
+    return value.template get<Selected>();
+  }
+
+  template <typename Selected>
+  static const Selected *get(const test_variant<T> &value) {
+    return value.template get<Selected>();
+  }
+};
 
 template <typename T> class test_shared {
 public:

@@ -169,21 +169,27 @@ WRAPPER_BY_NAME = {wrapper.name: wrapper for wrapper in WRAPPERS}
 CUSTOM_WRAPPERS = (
     _wrapper(
         "test_optional",
-        "test_optional<{inner}>",
+        "dingo::test_optional<{inner}>",
         "value",
         {"owning", "nullable", "borrowable", "in_place"},
     ),
     _wrapper(
         "test_unique",
-        "test_unique<{inner}>",
+        "dingo::test_unique<{inner}>",
         "handle",
         {"owning", "sole_owner", "nullable", "borrowable"},
     ),
     _wrapper(
         "test_shared",
-        "test_shared<{inner}>",
+        "dingo::test_shared<{inner}>",
         "handle",
         {"owning", "sharing", "nullable", "borrowable"},
+    ),
+    _wrapper(
+        "test_variant",
+        "dingo::test_variant<{inner}>",
+        "variant",
+        {"owning", "in_place", "mapped", "variant"},
     ),
 )
 
@@ -320,4 +326,34 @@ def enumerate_shapes(depth: int = SHAPE_DEPTH) -> tuple[Shape, ...]:
     )
 
 
-SHAPES = enumerate_shapes()
+# The generated suites test each custom family on its own and against the
+# built-in wrapper it mirrors. The full cross-product stays with the built-in
+# grammar so a test-only family does not multiply the whole matrix.
+CUSTOM_WRAPPER_PARTNERS = {
+    "test_optional": "optional",
+    "test_unique": "unique_ptr",
+    "test_shared": "shared_ptr",
+    "test_variant": "variant",
+}
+
+
+def enumerate_custom_shapes() -> tuple[Shape, ...]:
+    shapes = {}
+    for custom in CUSTOM_WRAPPERS:
+        own = BASE.apply(custom)
+        shapes[own.name] = own
+        partner = WRAPPER_BY_NAME[CUSTOM_WRAPPER_PARTNERS[custom.name]]
+        inner = BASE.apply(partner)
+        if custom.applicable(inner):
+            shape = inner.apply(custom)
+            shapes[shape.name] = shape
+        if partner.applicable(own):
+            shape = own.apply(partner)
+            shapes[shape.name] = shape
+    return tuple(sorted(shapes.values(), key=lambda shape: shape.name))
+
+
+CUSTOM_SHAPES = enumerate_custom_shapes()
+SHAPES = tuple(
+    sorted((*enumerate_shapes(), *CUSTOM_SHAPES), key=lambda shape: shape.name)
+)

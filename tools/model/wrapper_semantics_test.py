@@ -43,6 +43,25 @@ def test_shape_catalog_is_derived_from_wrappers() -> None:
     }
 
 
+def test_custom_wrapper_shapes_are_generated() -> None:
+    names = {shape.name for shape in SHAPES}
+    assert {
+        "test_optional_value",
+        "test_optional_optional_value",
+        "optional_test_optional_value",
+        "test_shared_value",
+        "test_shared_shared_ptr_value",
+        "shared_ptr_test_shared_value",
+        "test_unique_value",
+        "test_unique_unique_ptr_value",
+        "unique_ptr_test_unique_value",
+        "test_variant_value",
+        "test_variant_variant_value",
+        "variant_test_variant_value",
+    } <= names
+    assert all(shape.depth <= 2 for shape in SHAPES)
+
+
 def test_shape_properties_come_from_the_wrapper() -> None:
     optional = WRAPPER_BY_NAME["optional"]
     shared = WRAPPER_BY_NAME["shared_ptr"]

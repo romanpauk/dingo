@@ -75,11 +75,7 @@ def build_rows() -> list[PropertyRow]:
         if not wrapper.applicable(BASE):
             continue
         shape = BASE.apply(wrapper)
-        cpp_type = (
-            f"dingo::{shape.cpp_type}"
-            if wrapper in CUSTOM_WRAPPERS
-            else shape.cpp_type
-        )
+        cpp_type = shape.cpp_type
         (
             owning,
             sharing,
