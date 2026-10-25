@@ -64,7 +64,10 @@ infrastructure described below. It changes no public API and no behavior.
   passed as tagged callables, so the arm that is not selected is not
   instantiated. `container::resolve_entry`, the dependency origin overload,
   `static_container` public resolve, and the `static_container` origin overload
-  all use the same executor.
+  all use the same executor. A selected binding exposes a `route_plan` for one
+  resolution and a `route_plan_list` for its request list; both the runtime
+  index dispatch and the compile-time static selection execute through the same
+  plan types.
 - Behavior coverage follows the same catalog. `behavior_cells.py` declares each
   form once (storage, factory, external instance) plus one expectation entry per
   scope, then derives the runtime and static product from the route ledger.

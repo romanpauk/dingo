@@ -10,6 +10,7 @@
 #include <dingo/base/config.h>
 
 #include <dingo/binding/binding_resolution.h>
+#include <dingo/binding/route_plan.h>
 #include <dingo/binding/runtime_binding_interface.h>
 #include <dingo/runtime/container_runtime.h>
 #include <dingo/runtime/context.h>
@@ -219,23 +220,11 @@ resolved_address resolve_request_address_from_source(
     MaterializedSource &&source, std::size_t resolution_index,
     type_list<Resolutions...>, type_descriptor requested_type,
     type_descriptor registered_type) {
-  resolved_address result{};
-  std::size_t index = 0;
-  // Short-circuiting guarantees that exactly one arm forwards the source.
-  const bool matched =
-      (((resolution_index == index++)
-            ? (result = resolve_address_from_source<Resolutions, Storage>(
-                   scope, resolver, context,
-                   std::forward<MaterializedSource>(
-                       source), // NOLINT(bugprone-use-after-move)
-                   requested_type, registered_type),
-               true)
-            : false) ||
-       ...);
-  (void)index;
-  (void)matched;
-  assert(matched);
-  return result;
+  using plan = route_plan_list<Storage, Resolutions...>;
+  return execute_route_plan_list(plan{}, resolution_index, scope, resolver,
+                                 context,
+                                 std::forward<MaterializedSource>(source),
+                                 requested_type, registered_type);
 }
 
 } // namespace detail
