@@ -263,7 +263,7 @@ template <typename Target> struct conversion_retain_step {
       }
     } else {
       if constexpr (Terminal) {
-        return retained;
+        return Target(retained);
       } else {
         return Next::apply(resolver, context, retained, requested_type,
                            registered_type);
@@ -322,7 +322,7 @@ struct conversion_optional_wrap_step {
           type_traits<target_type>::wrap(conversion_walk<InnerRoute>::apply(
               resolver, context, *value, requested_type, registered_type));
       if constexpr (Terminal) {
-        return wrapped;
+        return Target(forward_temporary(wrapped));
       } else {
         return Next::apply(resolver, context, forward_temporary(wrapped),
                            requested_type, registered_type);
@@ -333,7 +333,7 @@ struct conversion_optional_wrap_step {
               resolver, context, std::move(*value), requested_type,
               registered_type));
       if constexpr (Terminal) {
-        return wrapped;
+        return Target(forward_temporary(wrapped));
       } else {
         return Next::apply(resolver, context, forward_temporary(wrapped),
                            requested_type, registered_type);
@@ -504,109 +504,16 @@ struct conversion_descriptor<
 template <typename Conversion>
 using conversion_walk_t = conversion_walk<conversion_route_t<Conversion>>;
 
-template <typename Target, typename Source, typename Conversion>
-struct type_conversion<
-    dereference_type_conversion<Target, Source, Conversion>> {
+// Leaf conversions keep their direct primitives; every other conversion is
+// executed by the one walker over its descriptor.
+template <typename Conversion> struct type_conversion {
   template <typename Resolver, typename Context, typename ActualSource>
   static decltype(auto)
   apply(Resolver &resolver, Context &context, ActualSource &&source,
         type_descriptor requested_type, type_descriptor registered_type) {
-    return conversion_walk_t<dereference_type_conversion<
-        Target, Source, Conversion>>::apply(resolver, context,
-                                            std::forward<ActualSource>(source),
-                                            requested_type, registered_type);
-  }
-};
-
-template <typename Target, typename Source, typename Conversion>
-struct type_conversion<borrowed_type_conversion<Target, Source, Conversion>> {
-  template <typename Resolver, typename Context, typename ActualSource>
-  static decltype(auto)
-  apply(Resolver &resolver, Context &context, ActualSource &&source,
-        type_descriptor requested_type, type_descriptor registered_type) {
-    return conversion_walk_t<borrowed_type_conversion<
-        Target, Source, Conversion>>::apply(resolver, context,
-                                            std::forward<ActualSource>(source),
-                                            requested_type, registered_type);
-  }
-};
-
-template <typename Target, typename Source, typename Conversion>
-struct type_conversion<
-    wrapper_type_conversion<Target, Source, Conversion, false>> {
-  template <typename Resolver, typename Context, typename ActualSource>
-  static Target apply(Resolver &resolver, Context &context,
-                      ActualSource &&source, type_descriptor requested_type,
-                      type_descriptor registered_type) {
-    return conversion_walk_t<wrapper_type_conversion<
-        Target, Source, Conversion, false>>::apply(resolver, context,
-                                                   std::forward<ActualSource>(
-                                                       source),
-                                                   requested_type,
-                                                   registered_type);
-  }
-};
-
-template <typename Target, typename Source, typename Conversion>
-struct type_conversion<
-    wrapper_type_conversion<Target, Source, Conversion, true>> {
-  template <typename Resolver, typename Context, typename ActualSource>
-  static Target apply(Resolver &resolver, Context &context,
-                      ActualSource &&source, type_descriptor requested_type,
-                      type_descriptor registered_type) {
-    return conversion_walk_t<wrapper_type_conversion<
-        Target, Source, Conversion, true>>::apply(resolver, context,
-                                                  std::forward<ActualSource>(
-                                                      source),
-                                                  requested_type,
-                                                  registered_type);
-  }
-};
-
-template <typename Target, typename Source, typename Selected,
-          typename Conversion>
-struct type_conversion<
-    target_alternative_type_conversion<Target, Source, Selected, Conversion>> {
-  template <typename Resolver, typename Context, typename ActualSource>
-  static Target apply(Resolver &resolver, Context &context,
-                      ActualSource &&source, type_descriptor requested_type,
-                      type_descriptor registered_type) {
-    return conversion_walk_t<target_alternative_type_conversion<
-        Target, Source, Selected, Conversion>>::apply(resolver, context,
-                                                      std::forward<
-                                                          ActualSource>(source),
-                                                      requested_type,
-                                                      registered_type);
-  }
-};
-
-template <typename Conversion>
-struct type_conversion<converted_construction<Conversion>>
-    : type_conversion<Conversion> {};
-
-template <typename Target, typename Source, typename Conversion>
-struct type_conversion<retained_type_conversion<Target, Source, Conversion>> {
-  template <typename Resolver, typename Context, typename ActualSource>
-  static Target apply(Resolver &resolver, Context &context,
-                      ActualSource &&source, type_descriptor requested_type,
-                      type_descriptor registered_type) {
-    return conversion_walk_t<retained_type_conversion<
-        Target, Source, Conversion>>::apply(resolver, context,
-                                            std::forward<ActualSource>(source),
-                                            requested_type, registered_type);
-  }
-};
-
-template <typename Target, typename Source, typename Branches>
-struct type_conversion<alternative_type_conversion<Target, Source, Branches>> {
-  template <typename Resolver, typename Context, typename ActualSource>
-  static decltype(auto)
-  apply(Resolver &resolver, Context &context, ActualSource &&source,
-        type_descriptor requested_type, type_descriptor registered_type) {
-    return conversion_walk_t<alternative_type_conversion<
-        Target, Source, Branches>>::apply(resolver, context,
-                                          std::forward<ActualSource>(source),
-                                          requested_type, registered_type);
+    return conversion_walk_t<Conversion>::apply(
+        resolver, context, std::forward<ActualSource>(source), requested_type,
+        registered_type);
   }
 };
 
