@@ -177,7 +177,7 @@ def shared_cyclical_rows() -> tuple[SharedCyclicalRow, ...]:
 
 
 def test_matrix_cardinality_remains_bounded(rows: tuple[MatrixRow, ...]) -> None:
-    assert len(rows) == 2039
+    assert len(rows) == 1949
     assert len({(row.feature.name, row.name) for row in rows}) == len(rows)
 
 
@@ -237,8 +237,19 @@ def _model_behavior_cells() -> set[tuple[str, str]]:
     return behavior_cells.covered_cells()
 
 
+def _model_interface_cases() -> set[str]:
+    model_dir = Path(__file__).resolve().parents[2] / "tools" / "model"
+    sys.path.insert(0, str(model_dir))
+    try:
+        import behavior_cells
+    finally:
+        sys.path.remove(str(model_dir))
+    return {case.name for case in behavior_cells.INTERFACE_CASES}
+
+
 def test_model_restrictions_name_real_features_and_cells() -> None:
     covered = _model_behavior_cells()
+    interface_cases = _model_interface_cases()
     feature_names = {feature.name for feature in FEATURES}
     for restriction in FEATURE_RESTRICTIONS:
         assert restriction.feature in feature_names
@@ -249,16 +260,27 @@ def test_model_restrictions_name_real_features_and_cells() -> None:
             f"{restriction.feature} claims model cells without a behavior case: "
             f"{sorted(missing)}"
         )
+        missing_interfaces = restriction.interface_cases - interface_cases
+        assert not missing_interfaces, (
+            f"{restriction.feature} claims interface cases without a behavior "
+            f"case: {sorted(missing_interfaces)}"
+        )
 
 
 def test_model_covered_resolved_types_are_behavior_cells() -> None:
     covered = _model_behavior_cells()
+    interface_cases = _model_interface_cases()
     for coverage in MODEL_COVERED_RESOLVED_TYPES:
         assert coverage.reason
         missing = coverage.covered_cells - covered
         assert not missing, (
             f"{coverage.resolved_type} claims model cells without a behavior "
             f"case: {sorted(missing)}"
+        )
+        missing_interfaces = coverage.interface_cases - interface_cases
+        assert not missing_interfaces, (
+            f"{coverage.resolved_type} claims interface cases without a "
+            f"behavior case: {sorted(missing_interfaces)}"
         )
 
 
@@ -2130,7 +2152,7 @@ def test_matrix_families_preserve_total_registration_behavior(
         + len(scenario_rows)
         + len(invoke_rows)
         + len(shared_cyclical_rows)
-        == 5009
+        == 4919
     )
 
 
@@ -2766,21 +2788,21 @@ def test_invalid_registration_plan_is_an_error(
         "expected_compiled_rows",
     ),
     (
-        (None, frozenset(), Compiler(), 120, 0, 1602),
+        (None, frozenset(), Compiler(), 119, 0, 1602),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset(),
             Compiler(),
-            248,
+            247,
             0,
             1602,
         ),
-        (64, frozenset(), Compiler(), 144, 0, 1602),
+        (64, frozenset(), Compiler(), 143, 0, 1602),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset({("invoke", 4), ("resolve", 4)}),
             Compiler(),
-            614,
+            613,
             400,
             1602,
         ),
@@ -2788,7 +2810,7 @@ def test_invalid_registration_plan_is_an_error(
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset(),
             Compiler.parse("MSVC", "19.49", "x64"),
-            248,
+            247,
             0,
             1602,
         ),
@@ -2831,7 +2853,7 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
     )
     runner_sources = tuple(out_dir.glob("matrix_runner_*.cpp"))
     assert len(implementation_sources) == expected_implementation_sources
-    assert len(runner_sources) == 56
+    assert len(runner_sources) == 55
     coverage_report = out_dir / MATRIX_REPORT
     matrix_exclusions = compiler_exclusions(compiler)
     selected_composition_rows = project_dependency_composition_rows(

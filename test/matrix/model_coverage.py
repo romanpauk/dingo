@@ -27,6 +27,8 @@ class FeatureRestriction:
     drop: frozenset[tuple[str, str]]
     covered_cells: frozenset[tuple[str, str]]
     reason: str
+    # Interface behavior cases that justify dropping interface rows.
+    interface_cases: frozenset[str] = frozenset()
 
 
 FEATURE_RESTRICTIONS = (
@@ -79,6 +81,45 @@ FEATURE_RESTRICTIONS = (
             "keep their matrix rows"
         ),
     ),
+    FeatureRestriction(
+        feature="resolve_interface",
+        drop=frozenset(
+            {
+                ("shared", "interface_ref"),
+                ("shared", "interface_ptr"),
+                ("shared", "interface_ref_ptr_shared_ptr"),
+            }
+        ),
+        covered_cells=frozenset(),
+        interface_cases=frozenset(
+            {
+                "shared_ref",
+                "shared_ptr",
+                "shared_handle",
+                "shared_plain_ref",
+            }
+        ),
+        reason=(
+            "behavior interface cases cover the shared reference, pointer, "
+            "shared-handle, and plain-value interface shapes; copyable interface "
+            "values and multiple interfaces keep their matrix rows"
+        ),
+    ),
+    FeatureRestriction(
+        feature="resolve_unique_wrapper",
+        drop=frozenset({("unique", "unique_interface_unique_ptr")}),
+        covered_cells=frozenset(),
+        interface_cases=frozenset(
+            {
+                "unique_handle",
+                "unique_shared_handle",
+            }
+        ),
+        reason=(
+            "behavior interface cases cover the unique interface unique_ptr and "
+            "shared_ptr owning handles"
+        ),
+    ),
 )
 
 RESTRICTIONS_BY_FEATURE = {
@@ -87,7 +128,9 @@ RESTRICTIONS_BY_FEATURE = {
 
 # Features whose supported rows are now entirely owned by the model, so the
 # matrix no longer generates a case for them.
-FULLY_MODEL_COVERED_FEATURES = frozenset({"lifetime_counts"})
+FULLY_MODEL_COVERED_FEATURES = frozenset(
+    {"lifetime_counts", "resolve_unique_wrapper"}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +138,7 @@ class ResolvedTypeCoverage:
     resolved_type: str
     covered_cells: frozenset[tuple[str, str]]
     reason: str
+    interface_cases: frozenset[str] = frozenset()
 
 
 # A resolved type that only the restricted rows used would otherwise fail the
@@ -115,6 +159,36 @@ MODEL_COVERED_RESOLVED_TYPES = (
         resolved_type="value_rvalue",
         covered_cells=frozenset({("unique", "plain")}),
         reason="the unique plain behavior class resolves and moves the rvalue route",
+    ),
+    ResolvedTypeCoverage(
+        resolved_type="interface_ref",
+        covered_cells=frozenset(),
+        interface_cases=frozenset(
+            {"shared_ref", "shared_ptr", "shared_plain_ref"}
+        ),
+        reason="the interface behavior cases resolve interface references",
+    ),
+    ResolvedTypeCoverage(
+        resolved_type="interface_ptr",
+        covered_cells=frozenset(),
+        interface_cases=frozenset(
+            {"shared_ref", "shared_ptr", "shared_plain_ref"}
+        ),
+        reason="the interface behavior cases resolve interface pointers",
+    ),
+    ResolvedTypeCoverage(
+        resolved_type="interface_ref_ptr_shared_ptr",
+        covered_cells=frozenset(),
+        interface_cases=frozenset({"shared_handle"}),
+        reason="the shared interface handle behavior case covers the shared_ptr route",
+    ),
+    ResolvedTypeCoverage(
+        resolved_type="unique_interface_unique_ptr",
+        covered_cells=frozenset(),
+        interface_cases=frozenset(
+            {"unique_handle", "unique_shared_handle"}
+        ),
+        reason="the unique interface handle behavior cases cover the owning handles",
     ),
 )
 
@@ -151,5 +225,17 @@ MODEL_COVERED_POLICY_SOURCES = frozenset(
         ),
         ("lifetime", "unique", "unique_value_type", "concrete", "value_rvalue"),
         ("resolved_type", "variant_value", "variant"),
+        ("resolved_type", "interface_ref", "resolve_interface"),
+        ("resolved_type", "interface_ptr", "resolve_interface"),
+        (
+            "resolved_type",
+            "interface_ref_ptr_shared_ptr",
+            "resolve_interface",
+        ),
+        (
+            "resolved_type",
+            "unique_interface_unique_ptr",
+            "resolve_unique_wrapper",
+        ),
     }
 )
