@@ -18,78 +18,11 @@
 
 #include <gtest/gtest.h>
 
+#include "support/model_probe.h"
+
 namespace route_cells {
 
-template <typename Request, typename Resolutions>
-struct static_request_supported;
-
-template <typename Request>
-struct static_request_supported<Request, dingo::type_list<>>
-    : std::false_type {};
-
-template <typename Request, typename Head, typename... Tail>
-struct static_request_supported<Request,
-                                dingo::type_list<Head, Tail...>>
-    : std::bool_constant<
-          dingo::detail::is_resolution_request_for_v<Head, Request> ||
-          static_request_supported<Request,
-                                   dingo::type_list<Tail...>>::value> {};
-
-template <typename Request, typename... Resolutions>
-constexpr bool runtime_request_supported(dingo::type_list<Resolutions...>) {
-  return (dingo::detail::matches_resolution_request<Resolutions>(
-              dingo::describe_type<Request>()) ||
-          ...);
-}
-
-template <typename Resolutions> struct all_targets_match;
-
-template <> struct all_targets_match<dingo::type_list<>> : std::true_type {};
-
-template <typename Head, typename... Tail>
-struct all_targets_match<dingo::type_list<Head, Tail...>>
-    : std::bool_constant<
-          static_request_supported<typename Head::target_type,
-                                   dingo::type_list<Head, Tail...>>::value &&
-          runtime_request_supported<typename Head::target_type>(
-              dingo::type_list<Head, Tail...>{}) &&
-          all_targets_match<dingo::type_list<Tail...>>::value> {};
-
-template <typename Supplied, typename... Resolutions>
-constexpr bool all_routes_accept_access(dingo::type_list<Resolutions...>) {
-  return (dingo::detail::access_satisfies<
-              Supplied, typename Resolutions::operation::required_access>::value &&
-          ...);
-}
-
-template <std::size_t Index, typename Resolutions> struct route_kind_at;
-
-template <typename Head, typename... Tail>
-struct route_kind_at<0, dingo::type_list<Head, Tail...>> {
-  static constexpr auto value = Head::operation::kind;
-};
-
-template <std::size_t Index, typename Head, typename... Tail>
-struct route_kind_at<Index, dingo::type_list<Head, Tail...>>
-    : route_kind_at<Index - 1, dingo::type_list<Tail...>> {};
-
-template <std::size_t Index, typename Resolutions> struct route_retention_at;
-
-template <typename Head, typename... Tail>
-struct route_retention_at<0, dingo::type_list<Head, Tail...>> {
-  static constexpr bool value = Head::operation::requires_source_retention;
-};
-
-template <std::size_t Index, typename Head, typename... Tail>
-struct route_retention_at<Index, dingo::type_list<Head, Tail...>>
-    : route_retention_at<Index - 1, dingo::type_list<Tail...>> {};
-
-template <typename... Resolutions>
-constexpr bool all_routes_have_no_cache(dingo::type_list<Resolutions...>) {
-  return ((dingo::type_list_size_v<
-               typename Resolutions::operation::cache_types> == 0) &&
-          ...);
-}
+using namespace dingo::model::probe;
 
 {% for row in rows %}
 namespace {{ row.scope_name }}_{{ row.form_name }} {

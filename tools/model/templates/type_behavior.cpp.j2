@@ -18,6 +18,7 @@
 #include <gtest/gtest.h>
 
 #include "support/custom_wrappers.h"
+#include "support/model_probe.h"
 
 #include <memory>
 #include <optional>
@@ -26,6 +27,8 @@
 #include <variant>
 
 namespace type_behavior {
+
+using namespace dingo::model::probe;
 
 struct tracked {
   static inline int constructions = 0;
@@ -77,40 +80,6 @@ inline variant_t make_variant_tracked() {
 }
 
 inline tracked *make_pointer_tracked() { return new tracked; }
-
-template <typename Request, typename... Resolutions>
-constexpr bool request_supported(dingo::type_list<Resolutions...>) {
-  return (dingo::detail::matches_resolution_request<Resolutions>(
-              dingo::describe_type<Request>()) ||
-          ...);
-}
-
-template <typename Request, typename Storage>
-constexpr bool direct_supported() {
-  // A binding exposes its leaf and its stored wrapper as interfaces. Ask both
-  // route lists so a leaf request and a stored-wrapper request are both seen.
-  return request_supported<Request>(
-             typename dingo::detail::binding_resolutions<tracked, Storage>::type{}) ||
-         request_supported<Request>(
-             typename dingo::detail::binding_resolutions<typename Storage::type,
-                                                         Storage>::type{});
-}
-
-template <typename Request, typename Storage>
-constexpr bool request_supported_impl() {
-  if constexpr (dingo::detail::request_lift<Request>::enabled) {
-    using lift = dingo::detail::request_lift<Request>;
-    return direct_supported<Request, Storage>() ||
-           request_supported_impl<typename lift::inner_type, Storage>();
-  } else {
-    return direct_supported<Request, Storage>();
-  }
-}
-
-template <typename Request, typename Storage>
-constexpr bool request_supported() {
-  return request_supported_impl<Request, Storage>();
-}
 
 template <typename T> auto id_of(const T &value) -> decltype(value.id) {
   return value.id;
@@ -240,7 +209,7 @@ TEST(type_behavior, {{ row.name }}) {
 {% if shape.gap %}
   // top-level gap: {{ shape.gap }}
 {% else %}
-  if constexpr (request_supported<{{ shape.type }}, storage>()) {
+  if constexpr (lifted_request_supported<{{ shape.type }}, storage, tracked>()) {
 {% if row.instance %}
     {{ row.instance }};
 {% endif %}

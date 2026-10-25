@@ -22,6 +22,7 @@
 #include <gtest/gtest.h>
 
 #include "support/custom_wrappers.h"
+#include "support/model_probe.h"
 
 #include <fstream>
 #include <map>
@@ -39,6 +40,8 @@
 #endif
 
 namespace type_matrix {
+
+using namespace dingo::model::probe;
 
 inline std::string json_escape(const std::string &value) {
   std::string result;
@@ -60,40 +63,6 @@ inline std::string json_escape(const std::string &value) {
     }
   }
   return result;
-}
-
-template <typename Request, typename... Resolutions>
-constexpr bool request_supported(dingo::type_list<Resolutions...>) {
-  return (dingo::detail::matches_resolution_request<Resolutions>(
-              dingo::describe_type<Request>()) ||
-          ...);
-}
-
-template <typename Request, typename Storage>
-constexpr bool direct_supported() {
-  // A binding exposes its leaf and its stored wrapper as interfaces. Ask both
-  // route lists so a leaf request and a stored-wrapper request are both seen.
-  return request_supported<Request>(
-             typename dingo::detail::binding_resolutions<int, Storage>::type{}) ||
-         request_supported<Request>(
-             typename dingo::detail::binding_resolutions<typename Storage::type,
-                                                         Storage>::type{});
-}
-
-template <typename Request, typename Storage>
-constexpr bool request_supported_impl() {
-  if constexpr (dingo::detail::request_lift<Request>::enabled) {
-    using lift = dingo::detail::request_lift<Request>;
-    return direct_supported<Request, Storage>() ||
-           request_supported_impl<typename lift::inner_type, Storage>();
-  } else {
-    return direct_supported<Request, Storage>();
-  }
-}
-
-template <typename Request, typename Storage>
-constexpr bool request_supported() {
-  return request_supported_impl<Request, Storage>();
 }
 
 template <typename Request> std::string lifted_reason() {
@@ -130,8 +99,8 @@ using object_routes = typename dingo::detail::
 using rvalue_routes = typename dingo::detail::
     binding_rvalue_reference_resolutions<int, storage>::type;
 {% for shape in shapes %}
-static constexpr bool {{ shape.name }}_direct = direct_supported<{{ shape.cpp_type }}, storage>();
-static constexpr bool {{ shape.name }} = request_supported<{{ shape.cpp_type }}, storage>();
+static constexpr bool {{ shape.name }}_direct = direct_request_supported<{{ shape.cpp_type }}, storage, int>();
+static constexpr bool {{ shape.name }} = lifted_request_supported<{{ shape.cpp_type }}, storage, int>();
 static constexpr bool {{ shape.name }}_lifted = {{ shape.name }} && !{{ shape.name }}_direct;
 {% endfor %}
 } // namespace {{ row.cell }}
