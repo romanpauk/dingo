@@ -82,6 +82,9 @@ static_assert(route_step_kind_at<{{ route_index }}, {{ loop.index0 }}, value_rou
                   dingo::detail::conversion_kind::{{ kind }},
               "value route step changed");
 {% endfor %}
+static_assert(route_target_shape_at<{{ route_index }}, value_routes>::value ==
+                  target_shape::{{ row.value_targets[route_index] }},
+              "value route target shape changed");
 {% endfor %}
 static_assert(all_routes_have_no_cache(value_routes{}),
               "value route unexpectedly caches a conversion");
@@ -114,6 +117,9 @@ static_assert(route_step_kind_at<{{ route_index }}, {{ loop.index0 }}, object_ro
                   dingo::detail::conversion_kind::{{ kind }},
               "object route step changed");
 {% endfor %}
+static_assert(route_target_shape_at<{{ route_index }}, object_routes>::value ==
+                  target_shape::{{ row.object_targets[route_index] }},
+              "object route target shape changed");
 {% endfor %}
 static_assert(all_routes_have_no_cache(object_routes{}),
               "object route unexpectedly caches a conversion");
@@ -146,6 +152,9 @@ static_assert(route_step_kind_at<{{ route_index }}, {{ loop.index0 }}, rvalue_ro
                   dingo::detail::conversion_kind::{{ kind }},
               "rvalue route step changed");
 {% endfor %}
+static_assert(route_target_shape_at<{{ route_index }}, rvalue_routes>::value ==
+                  target_shape::{{ row.rvalue_targets[route_index] }},
+              "rvalue route target shape changed");
 {% endfor %}
 static_assert(all_routes_have_no_cache(rvalue_routes{}),
               "rvalue route unexpectedly caches a conversion");

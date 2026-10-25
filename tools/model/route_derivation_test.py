@@ -14,12 +14,14 @@ from route_ledger import build_rows, supported_categories
 from route_derivation import (
     DERIVATION_RULES,
     STEP_RULES,
+    TARGET_SHAPES,
     form_kind,
     interface_route_counts,
     route_kinds,
     route_retention,
     route_candidates,
     route_candidate_steps,
+    route_candidate_targets,
     source_shape,
 )
 from storage_cells import FORMS, SCOPES
@@ -45,6 +47,40 @@ def test_candidate_steps_cover_every_supported_candidate() -> None:
         assert len(steps) == len(row.kinds)
         assert all(steps)
         assert steps == row.steps
+
+
+def test_candidate_targets_cover_every_supported_candidate() -> None:
+    for row in build_rows():
+        if row.outcome != "supported":
+            continue
+        targets = route_candidate_targets(row.scope, row.form, row.category)
+        assert len(targets) == len(row.kinds)
+        assert set(targets) <= TARGET_SHAPES
+        assert targets == row.targets
+
+
+def test_target_shapes_follow_category_and_form() -> None:
+    assert route_candidate_targets("shared", "plain", "value") == ("value",)
+    assert route_candidate_targets("shared", "shared_handle", "object") == (
+        "wrapper_pointer",
+        "lvalue_reference",
+        "pointer",
+    )
+    assert route_candidate_targets("shared", "optional", "object") == (
+        "lvalue_reference",
+        "lvalue_reference",
+        "pointer",
+        "wrapper_pointer",
+    )
+    assert route_candidate_targets("unique", "plain", "rvalue") == (
+        "rvalue_reference",
+        "rvalue_reference",
+    )
+    assert route_candidate_targets("shared", "bounded_array", "object") == (
+        "lvalue_reference",
+        "pointer",
+        "array_pointer",
+    )
 
 
 def test_step_rules_are_unique_and_use_known_kinds() -> None:

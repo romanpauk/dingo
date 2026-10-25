@@ -26,6 +26,7 @@ from route_ledger import (
     category_kinds,
     category_retention,
     category_steps,
+    category_targets,
     supported_categories,
     validate as validate_ledger,
 )
@@ -126,6 +127,11 @@ def build_rows() -> list[dict[str, object]]:
                         if "value" in categories
                         else ()
                     ),
+                    "value_targets": (
+                        category_targets(scope.name, form.name, "value")
+                        if "value" in categories
+                        else ()
+                    ),
                     "object_retention": (
                         category_retention(scope.name, form.name, "object")
                         if "object" in categories
@@ -136,6 +142,11 @@ def build_rows() -> list[dict[str, object]]:
                         if "object" in categories
                         else ()
                     ),
+                    "object_targets": (
+                        category_targets(scope.name, form.name, "object")
+                        if "object" in categories
+                        else ()
+                    ),
                     "rvalue_retention": (
                         category_retention(scope.name, form.name, "rvalue")
                         if "rvalue" in categories
@@ -143,6 +154,11 @@ def build_rows() -> list[dict[str, object]]:
                     ),
                     "rvalue_steps": (
                         category_steps(scope.name, form.name, "rvalue")
+                        if "rvalue" in categories
+                        else ()
+                    ),
+                    "rvalue_targets": (
+                        category_targets(scope.name, form.name, "rvalue")
                         if "rvalue" in categories
                         else ()
                     ),

@@ -24,6 +24,43 @@ namespace probe {
 // interface probes. Keeping them here makes the C++ side of the model one
 // implementation instead of one copy per generated suite.
 
+enum class target_shape {
+  value,
+  lvalue_reference,
+  rvalue_reference,
+  pointer,
+  array,
+  array_pointer,
+  wrapper,
+  wrapper_pointer,
+};
+
+template <typename T> struct target_shape_of {
+  using type = std::remove_cv_t<std::remove_reference_t<T>>;
+  static constexpr target_shape value = [] {
+    if constexpr (std::is_lvalue_reference_v<T>) {
+      return target_shape::lvalue_reference;
+    } else if constexpr (std::is_rvalue_reference_v<T>) {
+      return target_shape::rvalue_reference;
+    } else if constexpr (std::is_array_v<type>) {
+      return target_shape::array;
+    } else if constexpr (std::is_pointer_v<type>) {
+      using pointee = std::remove_cv_t<std::remove_pointer_t<type>>;
+      if constexpr (std::is_array_v<pointee>) {
+        return target_shape::array_pointer;
+      } else if constexpr (dingo::type_traits<pointee>::enabled) {
+        return target_shape::wrapper_pointer;
+      } else {
+        return target_shape::pointer;
+      }
+    } else if constexpr (dingo::type_traits<type>::enabled) {
+      return target_shape::wrapper;
+    } else {
+      return target_shape::value;
+    }
+  }();
+};
+
 template <typename Request, typename Resolutions>
 struct static_request_supported;
 
@@ -97,6 +134,18 @@ struct route_step_count_at<0, type_list<Head, Tail...>> {
 template <std::size_t Index, typename Head, typename... Tail>
 struct route_step_count_at<Index, type_list<Head, Tail...>>
     : route_step_count_at<Index - 1, type_list<Tail...>> {};
+
+template <std::size_t Index, typename Resolutions> struct route_target_shape_at;
+
+template <typename Head, typename... Tail>
+struct route_target_shape_at<0, type_list<Head, Tail...>> {
+  static constexpr auto value =
+      target_shape_of<typename Head::target_type>::value;
+};
+
+template <std::size_t Index, typename Head, typename... Tail>
+struct route_target_shape_at<Index, type_list<Head, Tail...>>
+    : route_target_shape_at<Index - 1, type_list<Tail...>> {};
 
 template <std::size_t Index, typename Steps> struct conversion_step_kind_at;
 

@@ -37,6 +37,17 @@ def test_unavailable_categories_have_absence_assertions(tmp_path: Path) -> None:
     assert content.count("route unexpectedly available") == missing
 
 
+def test_render_asserts_every_candidate_target_shape(tmp_path: Path) -> None:
+    rows = build_rows()
+    expected = sum(
+        len(row[f"{category}_targets"])
+        for row in rows
+        for category in ("value", "object", "rvalue")
+    )
+    content = render(tmp_path / "route_cells.cpp")
+    assert content.count("route target shape changed") == expected
+
+
 def test_every_unavailable_cell_has_an_explicit_probe_gap() -> None:
     expected = {
         (scope.name, form.name)

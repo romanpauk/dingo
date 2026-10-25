@@ -41,11 +41,12 @@ hand-curated matrix tags.
   pointer, or cyclical handle), and the stored wrapper properties. Each candidate
   carries its operation kind and source-retention flag. A second rule layer
   derives each candidate's internal conversion step kinds in execution order,
-  so dereference, borrow, and wrapper candidates expose their composed leaf.
-  Rules do not name a storage form, so a custom wrapper with the same kind and
-  properties follows the same rule as the built-in wrapper it mirrors. A
-  supported cell with no matching rule fails validation instead of losing its
-  kind coverage.
+  so dereference, borrow, and wrapper candidates expose their composed leaf. A
+  target-shape rule derives whether the candidate resolves a value, reference,
+  pointer, array, or wrapper. Rules do not name a storage form, so a custom
+  wrapper with the same kind and properties follows the same rule as the
+  built-in wrapper it mirrors. A supported cell with no matching rule fails
+  validation instead of losing its kind coverage.
 - `route_cells.py` instantiates the real storage type and resolution list for
   every supported storage cell, including bounded arrays and array handles. It
   checks value, object, and rvalue route availability against the ledger and
@@ -54,8 +55,8 @@ hand-curated matrix tags.
   runtime request matchers, checks that every route's required access is
   satisfied by the scope, checks the operation-kind and source-retention
   sequences derived by `route_derivation.py`, checks the full C++ conversion
-  step kind sequence for every published route, and asserts that representative
-  routes do not unexpectedly cache conversions.
+  step kind sequence and target shape for every published route, and asserts
+  that representative routes do not unexpectedly cache conversions.
 - `wrapper_semantics.py` describes request shapes as a leaf wrapped in zero or
   more wrappers. A wrapper declares its semantics (`owning`, `sharing`,
   `nullable`, `borrowable`, `array`, `variant`, `in_place`), its C++ spelling,

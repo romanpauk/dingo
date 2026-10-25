@@ -23,6 +23,7 @@ from dataclasses import dataclass
 
 from route_derivation import (
     route_candidate_steps,
+    route_candidate_targets,
     route_kinds,
     route_retention,
 )
@@ -73,6 +74,7 @@ class LedgerRow:
     kind_gap: str = ""
     retention: tuple[int, ...] = ()
     steps: tuple[tuple[str, ...], ...] = ()
+    targets: tuple[str, ...] = ()
 
 
 def _category_outcome(
@@ -145,6 +147,9 @@ def _category_outcome(
         route_candidate_steps(scope_name, form_name, category)
         if supported
         else (),
+        route_candidate_targets(scope_name, form_name, category)
+        if supported
+        else (),
     )
 
 
@@ -193,6 +198,8 @@ def validate() -> None:
             raise ValueError(f"step sequence length mismatch: {row}")
         if any(not steps for steps in row.steps):
             raise ValueError(f"candidate has no conversion steps: {row}")
+        if len(row.targets) != len(row.kinds):
+            raise ValueError(f"target shape length mismatch: {row}")
         if row.kind_gap:
             raise ValueError(f"operation-kind gap remains: {row}")
 
@@ -258,6 +265,20 @@ def category_steps(
             and row.outcome == "supported"
         ):
             return row.steps
+    raise KeyError((scope_name, form_name, category))
+
+
+def category_targets(
+    scope_name: str, form_name: str, category: str
+) -> tuple[str, ...]:
+    for row in build_rows():
+        if (
+            row.scope == scope_name
+            and row.form == form_name
+            and row.category == category
+            and row.outcome == "supported"
+        ):
+            return row.targets
     raise KeyError((scope_name, form_name, category))
 
 

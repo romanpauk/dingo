@@ -393,6 +393,76 @@ def route_candidate_steps(
     )
 
 
+TARGET_SHAPES = frozenset(
+    {
+        "value",
+        "lvalue_reference",
+        "rvalue_reference",
+        "pointer",
+        "array",
+        "array_pointer",
+        "wrapper",
+        "wrapper_pointer",
+    }
+)
+
+
+def _candidate_target_shape(
+    category: str,
+    candidate: str,
+    form: str,
+    source: str,
+    position: int,
+) -> str:
+    if category == "value":
+        if candidate in {"dereference", "borrowed", "alternative"}:
+            return "value"
+        if candidate == "wrapper":
+            return "wrapper"
+        if form == "value":
+            return "value"
+        return "wrapper"
+    if category == "rvalue":
+        return "rvalue_reference"
+    if candidate == "pointer_access":
+        return "pointer"
+    if candidate == "array_reference":
+        return "lvalue_reference"
+    if candidate == "array_pointer":
+        return "array_pointer"
+    if candidate == "address":
+        return "pointer" if form == "value" else "wrapper_pointer"
+    if candidate == "borrowed":
+        if form in {"handle", "optional"}:
+            return "lvalue_reference"
+        return "pointer"
+    if candidate == "dereference":
+        return "lvalue_reference"
+    if candidate == "alternative":
+        # An object alternative publishes the value route first and the
+        # address route second.
+        return "lvalue_reference" if position == 0 else "pointer"
+    if candidate == "traits":
+        if form in {"pointer", "array"} or source == "pointer":
+            return "pointer"
+        return "lvalue_reference"
+    raise KeyError(
+        f"no {category} target rule for {candidate} from {form}/{source}"
+    )
+
+
+def route_candidate_targets(
+    scope_name: str, form_name: str, category: str
+) -> tuple[str, ...]:
+    source = source_shape(scope_name, form_name)
+    form = form_kind(form_name)
+    candidates = route_candidates(scope_name, form_name, category)
+    return tuple(
+        _candidate_target_shape(category, candidate.kind, form, source, index)
+        for index, candidate in enumerate(candidates)
+    )
+
+
 def source_shape(scope_name: str, form_name: str) -> str:
     """How one cell hands its stored shape to a conversion."""
     scope = SCOPE_BY_NAME[scope_name]
