@@ -237,3 +237,30 @@ def route_retention(
         int(step.retention)
         for step in route_steps(scope_name, form_name, category)
     )
+
+
+def interface_route_counts(
+    scope_name: str, form_name: str, *, copyable_value: bool = False
+) -> dict[str, int]:
+    """Route counts for storage exposed through a base interface.
+
+    The interface route model is smaller than the leaf model: a base interface
+    adds an upcast to the same wrapper routes. A shared handle publishes the
+    interface wrapper and its const copy, and exposes the interface reference
+    and pointer through the wrapper. A unique handle consumes into its owning
+    handles. A plain value keeps only the object route to the interface.
+    """
+    if scope_name == "shared" and form_name == "shared_handle":
+        return {
+            "value": 2 + int(copyable_value),
+            "object": 4,
+            "rvalue": 0,
+        }
+    if scope_name == "unique" and form_name == "unique_handle":
+        return {"value": 4, "object": 0, "rvalue": 4}
+    if scope_name in {"shared", "external"} and form_name == "plain":
+        return {"value": 0, "object": 1, "rvalue": 0}
+    raise KeyError(
+        f"no interface route script for {scope_name}/{form_name}"
+    )
+

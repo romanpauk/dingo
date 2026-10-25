@@ -76,7 +76,9 @@ hand-curated matrix tags.
   storage exposed through `dingo::interfaces<...>`. It checks value, object, and
   rvalue availability and exact route counts, requires every published target to
   be reachable from both request matchers, and checks that the scope access
-  satisfies every interface route. Single- and multiple-interface bindings are
+  satisfies every interface route. The counts come from
+  `route_recipes.interface_route_counts`, keyed by the exposed form and whether
+  the interface is a copyable value. Single- and multiple-interface bindings are
   covered.
 - `behavior_cells.py` generates one behavior class per supported scope/form
   cell in the applicable runtime and static containers. Form registration and

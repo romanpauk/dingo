@@ -12,6 +12,7 @@ import pytest
 
 from route_ledger import build_rows, supported_categories
 from route_recipes import (
+    interface_route_counts,
     route_kinds,
     route_retention,
     route_steps,
@@ -102,6 +103,29 @@ def test_route_scripts_cover_every_supported_cell_category() -> None:
         for form in FORMS:
             for category in supported_categories(scope.name, form.name):
                 assert route_steps(scope.name, form.name, category)
+
+
+def test_interface_route_counts_follow_the_form() -> None:
+    assert interface_route_counts("shared", "shared_handle") == {
+        "value": 2,
+        "object": 4,
+        "rvalue": 0,
+    }
+    assert interface_route_counts(
+        "shared", "shared_handle", copyable_value=True
+    ) == {"value": 3, "object": 4, "rvalue": 0}
+    assert interface_route_counts("unique", "unique_handle") == {
+        "value": 4,
+        "object": 0,
+        "rvalue": 4,
+    }
+    assert interface_route_counts("shared", "plain") == {
+        "value": 0,
+        "object": 1,
+        "rvalue": 0,
+    }
+    with pytest.raises(KeyError):
+        interface_route_counts("shared", "optional")
 
 
 if __name__ == "__main__":

@@ -23,6 +23,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from route_recipes import interface_route_counts
 from storage_cells import validate_catalog
 
 
@@ -33,12 +34,38 @@ class InterfaceRoute:
     storage: str
     constructor: str
     interface: str
-    value: bool
-    value_count: int
-    object: bool
-    object_count: int
-    rvalue: bool
-    rvalue_count: int
+    form: str
+    copyable_value: bool = False
+
+    @property
+    def counts(self) -> dict[str, int]:
+        return interface_route_counts(
+            self.scope, self.form, copyable_value=self.copyable_value
+        )
+
+    @property
+    def value_count(self) -> int:
+        return self.counts["value"]
+
+    @property
+    def object_count(self) -> int:
+        return self.counts["object"]
+
+    @property
+    def rvalue_count(self) -> int:
+        return self.counts["rvalue"]
+
+    @property
+    def value(self) -> bool:
+        return self.value_count != 0
+
+    @property
+    def object(self) -> bool:
+        return self.object_count != 0
+
+    @property
+    def rvalue(self) -> bool:
+        return self.rvalue_count != 0
 
     @property
     def access(self) -> str:
@@ -52,12 +79,7 @@ INTERFACE_ROUTES = (
         storage="std::shared_ptr<implementation_type>",
         constructor="implementation_type",
         interface="interface_type",
-        value=True,
-        value_count=2,
-        object=True,
-        object_count=4,
-        rvalue=False,
-        rvalue_count=0,
+        form="shared_handle",
     ),
     InterfaceRoute(
         name="shared_shared_ptr_second",
@@ -65,12 +87,7 @@ INTERFACE_ROUTES = (
         storage="std::shared_ptr<implementation_type>",
         constructor="implementation_type",
         interface="interface_type2",
-        value=True,
-        value_count=2,
-        object=True,
-        object_count=4,
-        rvalue=False,
-        rvalue_count=0,
+        form="shared_handle",
     ),
     InterfaceRoute(
         name="shared_copyable_value",
@@ -78,12 +95,8 @@ INTERFACE_ROUTES = (
         storage="std::shared_ptr<copyable_implementation>",
         constructor="copyable_implementation",
         interface="copyable_interface",
-        value=True,
-        value_count=3,
-        object=True,
-        object_count=4,
-        rvalue=False,
-        rvalue_count=0,
+        form="shared_handle",
+        copyable_value=True,
     ),
     InterfaceRoute(
         name="shared_value",
@@ -91,12 +104,7 @@ INTERFACE_ROUTES = (
         storage="implementation_type",
         constructor="implementation_type",
         interface="interface_type",
-        value=False,
-        value_count=0,
-        object=True,
-        object_count=1,
-        rvalue=False,
-        rvalue_count=0,
+        form="plain",
     ),
     InterfaceRoute(
         name="unique_unique_ptr",
@@ -104,12 +112,7 @@ INTERFACE_ROUTES = (
         storage="std::unique_ptr<implementation_type>",
         constructor="implementation_type",
         interface="interface_type",
-        value=True,
-        value_count=4,
-        object=False,
-        object_count=0,
-        rvalue=True,
-        rvalue_count=4,
+        form="unique_handle",
     ),
     InterfaceRoute(
         name="unique_unique_ptr_second",
@@ -117,12 +120,7 @@ INTERFACE_ROUTES = (
         storage="std::unique_ptr<implementation_type>",
         constructor="implementation_type",
         interface="interface_type2",
-        value=True,
-        value_count=4,
-        object=False,
-        object_count=0,
-        rvalue=True,
-        rvalue_count=4,
+        form="unique_handle",
     ),
 )
 
@@ -136,11 +134,16 @@ def validate() -> None:
     for route in INTERFACE_ROUTES:
         if route.scope not in {"shared", "unique"}:
             raise ValueError(f"interface route {route.name} uses {route.scope}")
-        if (route.value_count != 0) != route.value:
+        counts = route.counts
+        if set(counts) != {"value", "object", "rvalue"}:
+            raise ValueError(f"interface route {route.name} has no full counts")
+        if any(count < 0 for count in counts.values()):
+            raise ValueError(f"interface route {route.name} has a negative count")
+        if route.value != (route.value_count != 0):
             raise ValueError(f"interface route {route.name} has inconsistent value")
-        if (route.object_count != 0) != route.object:
+        if route.object != (route.object_count != 0):
             raise ValueError(f"interface route {route.name} has inconsistent object")
-        if (route.rvalue_count != 0) != route.rvalue:
+        if route.rvalue != (route.rvalue_count != 0):
             raise ValueError(f"interface route {route.name} has inconsistent rvalue")
 
 

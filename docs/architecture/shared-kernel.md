@@ -50,11 +50,12 @@ infrastructure described below. It changes no public API and no behavior.
   source-retention sequences derived by `route_recipes.py` match. The recipes
   are keyed by form and source shape, so a new scope reuses them and a new form
   adds one script instead of a row per cell. Representative routes also assert
-  that no conversion cache is published unexpectedly. Raw dynamic arrays are
-  declared unavailable because the element count is not part of the type;
-  unsized shared array handles under `shared_cyclical` are an explicit
-  constraint for the same reason. `cells-check` fails when the library catalog
-  and the model drift.
+  that no conversion cache is published unexpectedly. Interface probes derive
+  their value/object/rvalue counts from the same model by form and copyable
+  interface value. Raw dynamic arrays are declared unavailable because the
+  element count is not part of the type; unsized shared array handles under
+  `shared_cyclical` are an explicit constraint for the same reason.
+  `cells-check` fails when the library catalog and the model drift.
 - Behavior coverage follows the same catalog. `behavior_cells.py` declares each
   form once (storage, factory, external instance) plus one expectation entry per
   scope, then derives the runtime and static product from the route ledger.
