@@ -52,9 +52,10 @@ hand-curated matrix tags.
   pointers, optional, unique/shared handles, owning array handles, arrays, and
   variants; a user wrapper is another declaration with the same fields. The
   test-only families (`test_optional`, `test_unique`, `test_shared`, and
-  `test_variant`) add one cross-wrapper pair each, so the generated matrix and
-  behavior suites cover the custom wrapper path without multiplying the full
-  built-in cross-product.
+  `test_variant`) add one cross-wrapper pair each. Their built-in partner is
+  derived by shape signature (kind plus owning/sharing/sole-owner/nullable/
+  borrowable/array/variant properties), so a new family does not need a
+  hand-written partner map.
 - `route_rules.py` derives a request route from the wrapper semantics and the
   scope/form exposure. The rules are `access`, `borrow`, `move`, `copy_out`,
   `take`, `wrap`, `share`, `adopt`, `decay`, `select_alternative`,

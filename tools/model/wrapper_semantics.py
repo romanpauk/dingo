@@ -326,15 +326,39 @@ def enumerate_shapes(depth: int = SHAPE_DEPTH) -> tuple[Shape, ...]:
     )
 
 
-# The generated suites test each custom family on its own and against the
-# built-in wrapper it mirrors. The full cross-product stays with the built-in
-# grammar so a test-only family does not multiply the whole matrix.
-CUSTOM_WRAPPER_PARTNERS = {
-    "test_optional": "optional",
-    "test_unique": "unique_ptr",
-    "test_shared": "shared_ptr",
-    "test_variant": "variant",
-}
+# Properties that identify the shape a wrapper represents. Construction
+# details such as in_place/mapped do not distinguish a custom family from the
+# built-in wrapper it mirrors.
+SHAPE_PROPERTIES = frozenset(
+    {
+        "owning",
+        "sharing",
+        "sole_owner",
+        "nullable",
+        "borrowable",
+        "array_handle",
+        "variant",
+    }
+)
+
+
+def wrapper_signature(wrapper: WrapperSemantics) -> tuple[str, frozenset[str]]:
+    return (
+        wrapper.kind,
+        frozenset(property_name for property_name in wrapper.properties if property_name in SHAPE_PROPERTIES),
+    )
+
+
+def partner_for(custom: WrapperSemantics) -> WrapperSemantics | None:
+    """Find the built-in wrapper with the same shape signature."""
+    signature = wrapper_signature(custom)
+    candidates = [
+        wrapper for wrapper in WRAPPERS if wrapper_signature(wrapper) == signature
+    ]
+    if len(candidates) > 1:
+        names = ", ".join(wrapper.name for wrapper in candidates)
+        raise ValueError(f"ambiguous built-in partner for {custom.name}: {names}")
+    return candidates[0] if candidates else None
 
 
 def enumerate_custom_shapes() -> tuple[Shape, ...]:
@@ -342,7 +366,9 @@ def enumerate_custom_shapes() -> tuple[Shape, ...]:
     for custom in CUSTOM_WRAPPERS:
         own = BASE.apply(custom)
         shapes[own.name] = own
-        partner = WRAPPER_BY_NAME[CUSTOM_WRAPPER_PARTNERS[custom.name]]
+        partner = partner_for(custom)
+        if partner is None:
+            continue
         inner = BASE.apply(partner)
         if custom.applicable(inner):
             shape = inner.apply(custom)

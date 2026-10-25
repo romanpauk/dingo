@@ -12,10 +12,13 @@ import pytest
 
 from wrapper_semantics import (
     BASE,
+    CUSTOM_WRAPPERS,
     SHAPES,
     WRAPPER_BY_NAME,
     form_family,
     form_wrapper,
+    partner_for,
+    wrapper_signature,
 )
 
 
@@ -60,6 +63,31 @@ def test_custom_wrapper_shapes_are_generated() -> None:
         "variant_test_variant_value",
     } <= names
     assert all(shape.depth <= 2 for shape in SHAPES)
+
+
+def test_custom_partners_are_derived_from_the_signature() -> None:
+    expected = {
+        "test_optional": "optional",
+        "test_unique": "unique_ptr",
+        "test_shared": "shared_ptr",
+        "test_variant": "variant",
+    }
+    for custom in CUSTOM_WRAPPERS:
+        partner = partner_for(custom)
+        assert partner is not None
+        assert partner.name == expected[custom.name]
+        assert wrapper_signature(partner) == wrapper_signature(custom)
+        assert partner.kind == custom.kind
+
+
+def test_custom_shapes_follow_the_derived_partner() -> None:
+    names = {shape.name for shape in SHAPES}
+    for custom in CUSTOM_WRAPPERS:
+        partner = partner_for(custom)
+        assert f"{custom.name}_value" in names
+        if partner is not None:
+            assert f"{custom.name}_{partner.name}_value" in names
+            assert f"{partner.name}_{custom.name}_value" in names
 
 
 def test_shape_properties_come_from_the_wrapper() -> None:
