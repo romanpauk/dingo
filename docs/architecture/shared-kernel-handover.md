@@ -48,7 +48,19 @@ Runtime lookup is split:
 - The static and runtime traversals still share the status/ambiguity rules, not
   the traversal itself.
 
-Container operations are shared where they are off the per-link path:
+The singular resolution consumer is shared:
+
+- `binding/container_selection.h` (`container_selection<Self>`) owns the source
+  order for a singular request: the compile-time static source, the runtime
+  selection, their combination, and the hand-off to the miss rule.
+- `container_with_static_bindings` and `static_container_impl` both derive from
+  it and expose capability flags and non-template source accessors. The
+  inherited entry replaces the two old resolve bodies, so the engine costs no
+  template level per dependency link.
+- Collections and `construct` are still mode-specific and are the next
+  reduction.
+
+Off-chain operations are shared too:
 
 - `detail::container_invoke` in `factory/invoke.h` owns callable dispatch for
   both containers.
@@ -58,6 +70,8 @@ Container operations are shared where they are off the per-link path:
 
 ## Recent Commits
 
+- `d3f48c6` Move the static-only resolve onto the shared selection consumer
+- `43585b7` Move singular resolution to a shared selection consumer
 - `73201c3` Add a runtime-only cost probe
 - `204a236` Format the shared-kernel handover
 - `3b0a0a1` Share the container miss rule
@@ -93,38 +107,39 @@ Current status:
 - `check`: passes
 - Generated behavior source and `test/baselines/model.json`: unchanged
 
-Current probe record: `build/cost/miss2.json`
+Current probe record: `build/cost/engine-final.json`
 
 ```text
-text:                234248
-object:              591448
-preprocessed bytes:  2572066
+text:                232102
+object:              589224
+preprocessed bytes:  2575597
 ```
 
-Relative to the lookup-split record (`build/cost/split1.json`):
+Relative to the pre-engine record (`build/cost/miss2.json`):
 
 ```text
-text:                +146
-object:              +144
-preprocessed bytes:  +4870
+text:                -2146
+object:              -2224
+preprocessed bytes:  +3531
 ```
 
-The growth is the new header boundaries, the shared `invoke` and miss helpers,
-and their explicit capability policies. Text growth is flat within measurement
-noise. Do not treat wall time from three runs as meaningful.
+The runtime-only probe (`build/cost/engine-final-runtime.json`) records 147523
+text, 383488 object, and 2533139 preprocessed bytes, which is -2027 text and
+-408 object against the pre-engine record. The shared consumer removes the
+duplicated resolve bodies; the preprocessed growth is the new header and the
+generic mode branches. Do not treat wall time from three runs as meaningful.
 
 ## Next Work
 
-### 1. Share the collection rule, then the singular engine
+### 1. Share the collection rule, then construct
 
-- Share collection construct/count/append behind a mode policy. It is off the
-  singular per-link path, so it is depth-safe and removes the last non-chain
-  duplication.
-- Then replace the two singular resolve consumers with one selection component.
-  The static-only path tops out at 45 links on GCC, so a per-link wrapper is not
-  affordable; the component must replace the existing entry. The M9.2-derived
-  target shape and six slices are in the untracked plan under "Container
-  unification (M9.2 reference)".
+- The singular selection consumer landed (`container_selection`); both
+  containers use it and the static-only depth budget is unchanged.
+- Next, share collection construct/count/append behind the same mode flags and
+  source accessors, so the engine's collection branch no longer delegates to
+  per-container bodies.
+- Then fold `construct` / auto-construction into the same consumer; it is the
+  last mode-specific resolve path.
 - Then extract `registration_store`.
 
 ### 2. Runtime cost probe
@@ -151,12 +166,11 @@ Do not merge these blindly.
 
 ### 4. Container mode policies
 
-`container_with_static_bindings` still serves static, runtime, and mixed modes
-through `void` parameters and `if constexpr`, and `static_container` keeps a
-separate resolve/construct consumer. The M9.2 reference is a source protocol
-plus one selection engine over capability flags. The static-only depth canary
-(45 links on GCC) is the gate: the engine must replace the static consumer, not
-wrap it.
+The source protocol and the singular selection engine are in place. What remains
+mode-specific is collection resolution and `construct`; they still use `void`
+parameters and `if constexpr` in their containers. The static-only depth canary
+(45 links on GCC) is unchanged, which confirms the engine replaced the static
+consumer rather than wrapping it.
 
 ### 5. Route-list algebra
 
@@ -205,6 +219,8 @@ priority than the registry split.
 - `include/dingo/binding/binding_selection.h` — shared selection status
 - `include/dingo/runtime/lookup_store.h` — runtime lookup selection
 - `include/dingo/runtime/registry.h` — runtime execution and registration
+- `include/dingo/binding/container_selection.h` — shared singular selection
+  consumer
 - `include/dingo/binding/container_miss.h` — miss rule and capability policies
 - `include/dingo/factory/invoke.h` — shared container callable dispatch
 - `tools/cost/probes/runtime.cpp` — runtime-only cost probe
