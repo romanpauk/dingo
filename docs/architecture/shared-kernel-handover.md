@@ -57,8 +57,11 @@ The singular resolution consumer is shared:
   it and expose capability flags and non-template source accessors. The
   inherited entry replaces the two old resolve bodies, so the engine costs no
   template level per dependency link.
-- Collections and `construct` are still mode-specific and are the next
-  reduction.
+- The static-key collection rule is in the engine too: the source count, the
+  explicit-empty lookup, the parent fallback, and the compile-time empty
+  collection report are one branch for mixed and static-only containers.
+- `construct` is still mode-specific, as are the runtime-only and runtime-key
+  collection paths; they are the next reductions.
 
 Off-chain operations are shared too:
 
@@ -70,6 +73,7 @@ Off-chain operations are shared too:
 
 ## Recent Commits
 
+- `094ac84` Share the static-key collection rule
 - `d3f48c6` Move the static-only resolve onto the shared selection consumer
 - `43585b7` Move singular resolution to a shared selection consumer
 - `73201c3` Add a runtime-only cost probe
@@ -107,39 +111,38 @@ Current status:
 - `check`: passes
 - Generated behavior source and `test/baselines/model.json`: unchanged
 
-Current probe record: `build/cost/engine-final.json`
+Current probe record: `build/cost/collections.json`
 
 ```text
-text:                232102
-object:              589224
-preprocessed bytes:  2575597
+text:                232228
+object:              589752
+preprocessed bytes:  2577366
 ```
 
 Relative to the pre-engine record (`build/cost/miss2.json`):
 
 ```text
-text:                -2146
-object:              -2224
-preprocessed bytes:  +3531
+text:                -2020
+object:              -1696
+preprocessed bytes:  +5300
 ```
 
-The runtime-only probe (`build/cost/engine-final-runtime.json`) records 147523
-text, 383488 object, and 2533139 preprocessed bytes, which is -2027 text and
--408 object against the pre-engine record. The shared consumer removes the
-duplicated resolve bodies; the preprocessed growth is the new header and the
-generic mode branches. Do not treat wall time from three runs as meaningful.
+The runtime-only probe (`build/cost/collections-runtime.json`) records 147523
+text, 383488 object, and 2535009 preprocessed bytes, which is -2027 text and
+-408 object against the pre-engine record. The shared consumer and collection
+rule remove the duplicated bodies; the preprocessed growth is the new header and
+the generic mode branches. Wall time is not meaningful.
 
 ## Next Work
 
-### 1. Share the collection rule, then construct
+### 1. Fold construct into the selection consumer
 
-- The singular selection consumer landed (`container_selection`); both
-  containers use it and the static-only depth budget is unchanged.
-- Next, share collection construct/count/append behind the same mode flags and
-  source accessors, so the engine's collection branch no longer delegates to
-  per-container bodies.
-- Then fold `construct` / auto-construction into the same consumer; it is the
-  last mode-specific resolve path.
+- The singular selection consumer and the static-key collection rule landed;
+  both containers use them and the static-only depth budget is unchanged.
+- Next, fold `construct` / auto-construction into the same consumer. It is the
+  last mode-specific resolve path and the riskiest one: rvalue conversion,
+  normalized requests, factories, and the static compile-time diagnostics.
+- The runtime-only and runtime-key collection paths can then be folded in.
 - Then extract `registration_store`.
 
 ### 2. Runtime cost probe
