@@ -452,6 +452,16 @@ add_custom_target(cost-record
         --out ${PROJECT_BINARY_DIR}/cost/current.json
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
+add_custom_target(cost-record-runtime
+    COMMENT "Recording the runtime-only code-size and compile-cost probe"
+    COMMAND ${DINGO_UV_RUN_COMMAND} python
+        ${PROJECT_SOURCE_DIR}/tools/cost/measure.py
+        record
+        --include ${PROJECT_SOURCE_DIR}/include
+        --source ${PROJECT_SOURCE_DIR}/tools/cost/probes/runtime.cpp
+        --out ${PROJECT_BINARY_DIR}/cost/current-runtime.json
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
 add_test(NAME dingo_matrix_generator_test
     COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q
         ${CMAKE_CURRENT_SOURCE_DIR}/matrix/generator_test.py)

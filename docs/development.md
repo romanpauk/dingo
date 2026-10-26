@@ -193,6 +193,17 @@ The hard gate is text/data/bss size, preprocessed header bytes, and, when
 present, the number of `dingo::` events in the time trace. Wall time is printed
 as a trend only, because it is too noisy to fail a build.
 
+`test/lit/codegen-static-probes.cpp` compiles both static and runtime paths. For
+a runtime-only signal, record
+[`tools/cost/probes/runtime.cpp`](../tools/cost/probes/runtime.cpp):
+
+```bash
+cmake --build build -t cost-record-runtime
+```
+
+It writes `build/cost/current-runtime.json` with the same fields and is meant to
+be compared between revisions, not against the static probe.
+
 The model has its own differential baseline in `test/baselines/model.json`. It
 pins the matrix outcomes and the actual behavior runtime outcomes, including
 construction/copy/move/destruction counts and the result or exception class.
