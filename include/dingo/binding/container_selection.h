@@ -17,6 +17,7 @@
 
 #include <dingo/base/config.h>
 #include <dingo/base/construction_scope.h>
+#include <dingo/binding/binding_collection.h>
 #include <dingo/binding/binding_resolution_policy.h>
 #include <dingo/binding/binding_selection.h>
 #include <dingo/type/collection_traits.h>
@@ -86,9 +87,65 @@ public:
           return self().template construct_collection_request<R>(
               scope, context, std::move(key));
         }
-      } else {
-        return self().template resolve_collection_request<Request, R>(
-            scope, context, origin, std::move(key));
+      } else if constexpr (Self::has_runtime_source) {
+        if constexpr (Self::runtime_only) {
+          if constexpr (detail::is_no_lookup_key_v<LookupKey>) {
+            auto selected =
+                self()
+                    .runtime_source()
+                    .template select_binding<typename Request::value_type,
+                                             typename Request::exact_type>(key);
+            if (selected.status == binding_status::ambiguous) {
+              throw make_type_ambiguous_exception<
+                  typename Request::lookup_type>(context);
+            }
+            if (selected.status == binding_status::found) {
+              return self()
+                  .runtime_source()
+                  .template resolve_binding<typename Request::interface_type,
+                                            R>(selected, scope, context);
+            }
+          }
+          if (self().template count_collection<R>(key) == 0) {
+            return self()
+                .template resolve_missing<
+                    Request, R, false,
+                    Self::template parent_serves_v<resolve_type, LookupKey>>(
+                    scope, context, origin, std::move(key));
+          }
+          if constexpr (detail::default_collection_append_v<R>) {
+            return self().template construct_collection_request<R>(
+                scope, context, std::move(key));
+          } else {
+            return origin.template unresolved<Request, false, LookupKey, R>(
+                scope, context, key);
+          }
+        } else {
+          if constexpr (Self::has_parent) {
+            if (self().parent() &&
+                self().template count_collection<R>(key) == 0) {
+              return self().template resolve_parent<Request>(scope, context,
+                                                             origin, key);
+            }
+          }
+          auto selected =
+              self()
+                  .runtime_source()
+                  .template select_binding<typename Request::value_type,
+                                           typename Request::exact_type>(key);
+          return detail::resolve_selection<R, lookup_type>(
+              selected, context,
+              [&]() -> R {
+                return self()
+                    .runtime_source()
+                    .template resolve_binding<typename Request::interface_type,
+                                              R>(selected, scope, context);
+              },
+              [&]() -> R {
+                return origin.template unresolved<Request, false, LookupKey, R>(
+                    scope, context, key);
+              });
+        }
       }
     } else if constexpr (Self::has_static_source && !Self::runtime_only &&
                          (!Self::has_runtime_source ||

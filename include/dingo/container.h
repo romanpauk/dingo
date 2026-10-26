@@ -210,6 +210,7 @@ private:
   using runtime_selection = typename runtime_registry_type::runtime_selection;
 
   static constexpr bool runtime_only = runtime_only_v;
+  static constexpr bool has_parent = has_parent_v;
   static constexpr bool has_static_source = has_static_v;
   static constexpr bool has_runtime_source = true;
   static constexpr bool static_binding_uses_result = true;
@@ -222,6 +223,7 @@ private:
 
   runtime_registry_type &runtime_source() { return runtime_registry_; }
   static_registry_type &static_source() { return statics(); }
+  parent_container_type *parent() { return parent_; }
 
   template <typename Request, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
@@ -918,77 +920,6 @@ public:
   }
 
 private:
-  template <typename Request, typename R, bool MayAutoConstruct,
-            typename Origin, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-  R resolve_collection(construction_scope scope, runtime_context_type &context,
-                       Origin &origin, LookupKey key) {
-    if constexpr (runtime_only_v) {
-      if constexpr (detail::is_no_lookup_key_v<LookupKey>) {
-        auto selected = runtime_registry_.template select_binding<
-            typename Request::value_type, typename Request::exact_type>(key);
-        if (selected.status == detail::binding_status::ambiguous) {
-          throw detail::make_type_ambiguous_exception<
-              typename Request::lookup_type>(context);
-        }
-        if (selected.status == detail::binding_status::found) {
-          return runtime_registry_
-              .template resolve_binding<typename Request::interface_type, R>(
-                  selected, scope, context);
-        }
-      }
-      if (count_collection<R>(key) == 0) {
-        return resolve_missing<
-            Request, R, false,
-            parent_serves<typename collection_traits<R>::resolve_type,
-                          LookupKey>()>(scope, context, origin, std::move(key));
-      }
-      // Collections are constructed in the active resolve context.  Routing
-      // no-key collections through scalar registry resolution would bypass
-      // registered collection factories and re-enter missing-binding fallback.
-      if constexpr (detail::default_collection_append_v<R>) {
-        return construct_collection<R>(scope, context,
-                                       detail::binding_collection_append{},
-                                       std::move(key));
-      } else {
-        return origin.template unresolved<Request, false, LookupKey, R>(
-            scope, context, key);
-      }
-    } else {
-      if constexpr (has_parent_v) {
-        if (parent_ &&
-            runtime_registry_.template count_collection<R>(key) == 0) {
-          return resolve_parent<Request>(scope, context, origin, key);
-        }
-      }
-      auto selected = runtime_registry_.template select_binding<
-          typename Request::value_type, typename Request::exact_type>(key);
-      return detail::resolve_selection<R, typename Request::lookup_type>(
-          selected, context,
-          [&]() -> R {
-            return runtime_registry_
-                .template resolve_binding<typename Request::interface_type, R>(
-                    selected, scope, context);
-          },
-          [&]() -> R {
-            return origin.template unresolved<Request, false, LookupKey, R>(
-                scope, context, key);
-          });
-    }
-  }
-
-  // A runtime-key or runtime-only collection keeps its own body in the
-  // container; the shared static-key rule lives in the engine.
-  template <typename Request, typename R, typename Origin, typename LookupKey>
-  R resolve_collection_request(construction_scope scope,
-                               runtime_context_type &context, Origin &origin,
-                               LookupKey key) {
-    return resolve_collection<
-        Request, R, may_auto_construct_v<typename Request::user_type>>(
-        scope, context, origin, std::move(key));
-  }
-
   template <typename R, typename LookupKey>
   std::size_t collection_count(LookupKey key) {
     return count_collection<R>(std::move(key));
