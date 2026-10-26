@@ -859,17 +859,12 @@ private:
 public:
   template <typename Signature = void, typename Callable>
   auto invoke(Callable &&callable) {
-    using callable_type = std::remove_cv_t<std::remove_reference_t<Callable>>;
-    using dispatch_signature =
-        detail::callable_dispatch_signature_t<Signature, callable_type>;
-
-    return execute_transaction(
-        runtime_registry_.runtime(), [&](runtime_context_type &context) {
-          auto type_guard = context.template track_type<callable_type>();
-          return detail::callable_invoke<dispatch_signature>::construct(
-              std::forward<Callable>(callable), ephemeral_scope, context,
-              *this);
-        });
+    return execute_transaction(runtime_registry_.runtime(),
+                               [&](runtime_context_type &context) {
+                                 return detail::container_invoke<Signature>(
+                                     context, *this, ephemeral_scope,
+                                     std::forward<Callable>(callable));
+                               });
   }
 
   template <typename Request, typename IdType>

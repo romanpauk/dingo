@@ -487,14 +487,9 @@ private:
 public:
   template <typename Signature = void, typename Callable>
   auto invoke(Callable &&callable) {
-    using callable_type = std::remove_cv_t<std::remove_reference_t<Callable>>;
-    using dispatch_signature =
-        callable_dispatch_signature_t<Signature, callable_type>;
-
     context_type context;
-    auto type_guard = context.template track_type<callable_type>();
-    return callable_invoke<dispatch_signature>::construct(
-        std::forward<Callable>(callable), ephemeral_scope, context, *this);
+    return detail::container_invoke<Signature>(
+        context, *this, ephemeral_scope, std::forward<Callable>(callable));
   }
 
 private:
