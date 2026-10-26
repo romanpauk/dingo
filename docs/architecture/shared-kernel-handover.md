@@ -44,9 +44,8 @@ Runtime lookup is split:
 - `runtime/selection.h` owns lookup selection: the index types, routes,
   `select_binding`, `binding_status`, entry traits, and collection candidate
   iteration.
-- `runtime/registry.h` keeps execution, registration commit and rollback, and
-  data ownership; `runtime/registration_store.h` now owns the runtime key
-  validation.
+- `runtime/registration_store.h` owns the runtime key validation, lookup commit,
+  and rollback; `runtime/registry.h` is execution and data ownership.
 - The static and runtime traversals still share the status/ambiguity rules, not
   the traversal itself.
 
@@ -143,6 +142,7 @@ Off-chain operations are shared too:
 
 ## Recent Commits
 
+- `add623a` Move registration commit and rollback into registration_store
 - `9dfe57b` Extract the registration key validation into registration_store
 - `5683810` Move the runtime collection branches into the engine
 - `db7cbbb` Fold the static binding activation into its policy
@@ -229,7 +229,8 @@ the generic mode branches. Wall time is not meaningful.
 - The runtime/mixed outer construct flow is runtime-specific: runtime binding
   checks, transactions, normalized requests, factories. It has no static twin;
   folding it is a mode-branch cleanup, not a dedup.
-- Then extract `registration_store`.
+- The registration split is complete: `registration_store` owns validation,
+  commit, and rollback; `registry_store` is execution-only.
 
 ### 2. Runtime cost probe
 
@@ -315,7 +316,8 @@ priority than the registry split.
 - `include/dingo/binding/binding_selection.h` — shared selection status
 - `include/dingo/runtime/selection.h` — `lookup_selection`
 - `include/dingo/runtime/registry.h` — runtime execution and commit
-- `include/dingo/runtime/registration_store.h` — registration key validation
+- `include/dingo/runtime/registration_store.h` — registration validation,
+  commit, and rollback
 - `include/dingo/binding/container_selection.h` — shared singular selection
   consumer
 - `include/dingo/binding/container_miss.h` — miss rule and capability policies
