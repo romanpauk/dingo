@@ -1,7 +1,7 @@
 # Shared-Kernel Handover
 
-Status: `feature/shared-kernel` tip `779ce91`.
-The working plan stays untracked in `docs/architecture/shared-kernel-next-steps.md`.
+Status: `feature/shared-kernel` tip `779ce91`. The working plan stays untracked
+in `docs/architecture/shared-kernel-next-steps.md`.
 
 ## Goal
 
@@ -15,7 +15,8 @@ The execution path is shared:
 
 - `detail::binding_core` owns source materialization, route application,
   conversion retention, and address/value shaping.
-- `static_binding_policy` supplies inline storage and the source-lifetime ladder.
+- `static_binding_policy` supplies inline storage and the source-lifetime
+  ladder.
 - `runtime_binding::kernel_policy` supplies erased storage and rollback.
 - `binding_core` has no static/runtime branch; it calls the policy.
 - The direct static value path also uses the core.
@@ -41,10 +42,10 @@ Runtime lookup work is staged:
 
 - `runtime/lookup_store.h` now owns `runtime_lookup_binding_view`,
   `runtime_lookup_value`, and `runtime_bindings_state`.
-- Selection routes, collection iteration, and registration validation still
-  live in `runtime/registry.h`.
-- Selection status and the runtime accumulator are shared; full traversal is
-  not unified.
+- Selection routes, collection iteration, and registration validation still live
+  in `runtime/registry.h`.
+- Selection status and the runtime accumulator are shared; full traversal is not
+  unified.
 
 ## Recent Commits
 
@@ -168,8 +169,8 @@ priority than the registry split.
 
 - **Template depth**: the dependency chain is 48 links and the limit is 900.
   Adding one template layer per link can exceed it. The mode-agnostic core only
-  fits because the source-lifetime ladder moved into the static policy.
-  Do not raise the limit as a fix.
+  fits because the source-lifetime ladder moved into the static policy. Do not
+  raise the limit as a fix.
 - **Static zero-overhead**: no vtable, no erased request, no runtime cache
   members on the static path. The static policy must stay compile-time.
 - **Lookup unification**: static candidate is a type, runtime candidate is a
@@ -182,21 +183,25 @@ priority than the registry split.
 - **Unsupported combinations**: keep gaps explicit in `INTERFACE_GAPS`,
   `ANNOTATION_GAPS`, `ABSENCE_PROBE_GAPS`, and `BEHAVIOR_GAPS`. Do not silently
   drop a shape.
-- **Cost comparison**: the current zero-tolerance header gate can flag tiny
-  byte changes. Record the number and explain it; do not hide it.
+- **Cost comparison**: the current zero-tolerance header gate can flag tiny byte
+  changes. Record the number and explain it; do not hide it.
 - **Untracked plan**: `docs/architecture/shared-kernel-next-steps.md` must stay
   untracked.
 
 ## File Map
 
 - `include/dingo/binding/binding_core.h` — shared typed execution kernel
-- `include/dingo/static/activation_set.h` — static policy, source-lifetime ladder
+- `include/dingo/static/activation_set.h` — static policy, source-lifetime
+  ladder
 - `include/dingo/runtime/runtime_binding.h` — runtime adapter and kernel policy
 - `include/dingo/binding/binding_selection.h` — shared selection status
 - `include/dingo/runtime/lookup_store.h` — runtime lookup storage
-- `include/dingo/runtime/registry.h` — selection/registration (split in progress)
-- `include/dingo/resolution/resolution_operation.h` — conversion descriptor/walker
+- `include/dingo/runtime/registry.h` — selection/registration (split in
+  progress)
+- `include/dingo/resolution/resolution_operation.h` — conversion
+  descriptor/walker
 - `include/dingo/base/type_list.h` — non-recursive type-list indexing
 - `tools/model/route_derivation.py` — route candidate rules
 - `test/support/model_probe.h` — generated-probe accessors
-- `tools/model/templates/route_cells.cpp.j2` — candidate/absence/step/target asserts
+- `tools/model/templates/route_cells.cpp.j2` — candidate/absence/step/target
+  asserts
