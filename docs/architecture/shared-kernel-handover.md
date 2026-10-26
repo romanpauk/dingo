@@ -44,8 +44,9 @@ Runtime lookup is split:
 - `runtime/selection.h` owns lookup selection: the index types, routes,
   `select_binding`, `binding_status`, entry traits, and collection candidate
   iteration.
-- `runtime/registry.h` keeps execution, registration validation and commit,
-  rollback, and data ownership.
+- `runtime/registry.h` keeps execution, registration commit and rollback, and
+  data ownership; `runtime/registration_store.h` now owns the runtime key
+  validation.
 - The static and runtime traversals still share the status/ambiguity rules, not
   the traversal itself.
 
@@ -142,6 +143,7 @@ Off-chain operations are shared too:
 
 ## Recent Commits
 
+- `9dfe57b` Extract the registration key validation into registration_store
 - `5683810` Move the runtime collection branches into the engine
 - `db7cbbb` Fold the static binding activation into its policy
 - `8863db0` Read binding storage through a shared slot
@@ -312,7 +314,8 @@ priority than the registry split.
 - `include/dingo/runtime/registration.h` — `runtime_registration` forwarding
 - `include/dingo/binding/binding_selection.h` — shared selection status
 - `include/dingo/runtime/selection.h` — `lookup_selection`
-- `include/dingo/runtime/registry.h` — runtime execution and registration
+- `include/dingo/runtime/registry.h` — runtime execution and commit
+- `include/dingo/runtime/registration_store.h` — registration key validation
 - `include/dingo/binding/container_selection.h` — shared singular selection
   consumer
 - `include/dingo/binding/container_miss.h` — miss rule and capability policies
