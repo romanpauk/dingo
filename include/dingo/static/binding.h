@@ -88,73 +88,6 @@ public:
   auto &local_scope() { return static_cast<local_scope_slot &>(*this).scope; }
 };
 
-template <typename State, typename Host, typename BindingModel>
-struct static_binding_activation {
-  State &state;
-  Host &host;
-  construction_scope scope;
-
-  template <typename Request, typename Context>
-  decltype(auto) resolve_request(construction_scope construction,
-                                 Context &context) {
-    using local_bindings = typename BindingModel::bindings_type;
-    if constexpr (std::is_void_v<local_bindings>) {
-      return host.template resolve<typename Request::user_type,
-                                   Request::removes_rvalue_references>(
-          construction, context, detail::no_lookup_key());
-    } else {
-      return state.template resolve_local_binding<Request, local_bindings,
-                                                  BindingModel>(construction,
-                                                                host, context);
-    }
-  }
-
-  template <typename Request, typename Context, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  decltype(auto) resolve_request(construction_scope construction,
-                                 Context &context, LookupKey key) {
-    using local_bindings = typename BindingModel::bindings_type;
-    if constexpr (std::is_void_v<local_bindings>) {
-      return host.template resolve<typename Request::user_type,
-                                   Request::removes_rvalue_references>(
-          construction, context, std::move(key));
-    } else {
-      return state.template resolve_local_binding<Request, local_bindings,
-                                                  BindingModel, LookupKey>(
-          construction, host, context, std::move(key));
-    }
-  }
-
-  template <typename T, bool RemoveRvalueReferences, typename Context>
-  decltype(auto) resolve(construction_scope construction, Context &context) {
-    return resolve_request<request_type<T, RemoveRvalueReferences>>(
-        construction, context);
-  }
-
-  template <typename T, bool RemoveRvalueReferences, typename Context,
-            typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  decltype(auto) resolve(construction_scope construction, Context &context,
-                         LookupKey key) {
-    return resolve_request<request_type<T, RemoveRvalueReferences>>(
-        construction, context, std::move(key));
-  }
-
-  template <typename T, typename Context>
-  decltype(auto) resolve(Context &context) {
-    return state.template resolve_binding_type<T, BindingModel>(scope, host,
-                                                                context);
-  }
-
-  template <typename T, typename Context, typename Source>
-  decltype(auto) retain_conversion(Context &context, Source &&source) {
-    return detail::retain_binding_conversion<T>(
-        scope, state.template get_storage_for_model<BindingModel>(),
-        state.template get_conversion_cache_for_model<BindingModel>(), context,
-        std::forward<Source>(source));
-  }
-};
-
 template <typename Request, typename Resolutions>
 struct matching_binding_resolution;
 
@@ -409,8 +342,66 @@ struct static_binding_policy {
                                std::forward<Fn>(fn));
   }
 
-  static_binding_activation<State, Host, BindingModel> activation() const {
-    return {state, host, scope};
+  static_binding_policy &activation() { return *this; }
+
+  template <typename Request, typename Context>
+  decltype(auto) resolve_request(construction_scope construction,
+                                 Context &context) {
+    using local_bindings = typename BindingModel::bindings_type;
+    if constexpr (std::is_void_v<local_bindings>) {
+      return host.template resolve<typename Request::user_type,
+                                   Request::removes_rvalue_references>(
+          construction, context, detail::no_lookup_key());
+    } else {
+      return state.template resolve_local_binding<Request, local_bindings,
+                                                  BindingModel>(construction,
+                                                                host, context);
+    }
+  }
+
+  template <typename Request, typename Context, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  decltype(auto) resolve_request(construction_scope construction,
+                                 Context &context, LookupKey key) {
+    using local_bindings = typename BindingModel::bindings_type;
+    if constexpr (std::is_void_v<local_bindings>) {
+      return host.template resolve<typename Request::user_type,
+                                   Request::removes_rvalue_references>(
+          construction, context, std::move(key));
+    } else {
+      return state.template resolve_local_binding<Request, local_bindings,
+                                                  BindingModel, LookupKey>(
+          construction, host, context, std::move(key));
+    }
+  }
+
+  template <typename T, bool RemoveRvalueReferences, typename Context>
+  decltype(auto) resolve(construction_scope construction, Context &context) {
+    return resolve_request<request_type<T, RemoveRvalueReferences>>(
+        construction, context);
+  }
+
+  template <typename T, bool RemoveRvalueReferences, typename Context,
+            typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  decltype(auto) resolve(construction_scope construction, Context &context,
+                         LookupKey key) {
+    return resolve_request<request_type<T, RemoveRvalueReferences>>(
+        construction, context, std::move(key));
+  }
+
+  template <typename T, typename Context>
+  decltype(auto) resolve(Context &context) {
+    return state.template resolve_binding_type<T, BindingModel>(scope, host,
+                                                                context);
+  }
+
+  template <typename T, typename Context, typename Source>
+  decltype(auto) retain_conversion(Context &context, Source &&source) {
+    return detail::retain_binding_conversion<T>(
+        scope, state.template get_storage_for_model<BindingModel>(),
+        state.template get_conversion_cache_for_model<BindingModel>(), context,
+        std::forward<Source>(source));
   }
 
   static constexpr type_descriptor registered_type() {
