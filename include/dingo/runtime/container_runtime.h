@@ -14,6 +14,7 @@
 
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 
 namespace dingo {
@@ -38,7 +39,7 @@ public:
       : arena_(DINGO_RUNTIME_ARENA_BLOCK_SIZE, allocator) {}
 
   ~container_runtime() {
-    assert(active_transaction_ == nullptr);
+    assert(active_transaction() == nullptr);
     store_.destroy(arena_);
   }
 
@@ -66,10 +67,31 @@ public:
 
   void commit(checkpoint) {}
 
+  // Set once the first resolve succeeds. Registrations that would replace a
+  // lookup are refused from then on.
+  bool sealed() const noexcept { return (state_ & sealed_bit) != 0; }
+
+  void seal() noexcept { state_ |= sealed_bit; }
+
 private:
+  using transaction_type = runtime_transaction<Allocator>;
+
+  // The sealed flag lives in the low bit of the word that holds the active
+  // transaction, which is at least pointer-aligned, so sealing costs no space.
+  static constexpr std::uintptr_t sealed_bit = 1;
+
+  transaction_type *active_transaction() const noexcept {
+    return reinterpret_cast<transaction_type *>(state_ & ~sealed_bit);
+  }
+
+  void active_transaction(transaction_type *transaction) noexcept {
+    state_ =
+        reinterpret_cast<std::uintptr_t>(transaction) | (state_ & sealed_bit);
+  }
+
   arena_type arena_;
   store_type store_;
-  runtime_transaction<Allocator> *active_transaction_ = nullptr;
+  std::uintptr_t state_ = 0;
 };
 
 } // namespace dingo

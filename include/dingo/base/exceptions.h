@@ -55,6 +55,10 @@ struct lookup_already_registered_exception : exception {
   using exception::exception;
 };
 
+struct container_sealed_exception : exception {
+  using exception::exception;
+};
+
 struct type_index_out_of_range_exception : exception {
   using exception::exception;
 };
@@ -252,10 +256,10 @@ make_lookup_already_registered_exception(const LookupKey &key) {
 
 template <typename Interface, typename Storage, typename LookupKey,
           typename BackendKey>
-lookup_already_registered_exception
-make_lookup_already_registered_exception(const LookupKey &key,
-                                         const BackendKey &) {
-  std::string message = "lookup already registered: interface ";
+std::string make_lookup_registration_message(const char *prefix,
+                                             const LookupKey &key,
+                                             const BackendKey &) {
+  std::string message = prefix;
   append_text(message, describe_type<Interface>(), ", storage ",
               describe_type<Storage>());
   if constexpr (std::is_same_v<std::decay_t<BackendKey>, none_t>) {
@@ -264,7 +268,29 @@ make_lookup_already_registered_exception(const LookupKey &key,
     append_text(message, ", key type ",
                 describe_type<std::decay_t<BackendKey>>());
   }
-  return lookup_already_registered_exception(std::move(message));
+  return message;
+}
+
+template <typename Interface, typename Storage, typename LookupKey,
+          typename BackendKey>
+lookup_already_registered_exception
+make_lookup_already_registered_exception(const LookupKey &key,
+                                         const BackendKey &backend_key) {
+  return lookup_already_registered_exception(
+      make_lookup_registration_message<Interface, Storage>(
+          "lookup already registered: interface ", key, backend_key));
+}
+
+template <typename Interface, typename Storage, typename LookupKey,
+          typename BackendKey>
+container_sealed_exception
+make_container_sealed_exception(const LookupKey &key,
+                                const BackendKey &backend_key) {
+  return container_sealed_exception(
+      make_lookup_registration_message<Interface, Storage>(
+          "container sealed by resolve, lookup can not be replaced: "
+          "interface ",
+          key, backend_key));
 }
 
 template <typename Key>

@@ -496,6 +496,41 @@ See:
 
 - [test/matrix/README.md](../test/matrix/README.md)
 
+## Replacing Registrations
+
+Registering a type whose singular lookup is already taken throws
+`lookup_already_registered_exception`. A container can instead let the newest
+registration win until it is first used, which suits tests that start from the
+application's registrations and swap a few services for fakes:
+
+```c++
+struct test_traits : dynamic_container_traits {
+  using duplicate_registration_policy = replace_until_resolved;
+};
+
+container<test_traits> container;
+container.register_type<scope<shared>, storage<EmailNotifier>,
+                        interfaces<INotifier>>();
+container.register_type<scope<shared>, storage<BillingService>>();
+
+// Redirects the INotifier lookup, BillingService is constructed with
+// FakeNotifier.
+container.register_type<scope<shared>, storage<FakeNotifier>,
+                        interfaces<INotifier>>();
+
+container.resolve<BillingService &>();
+
+// The first successful resolve sealed the container, replacing now throws
+// container_sealed_exception. Registering new types is still allowed.
+```
+
+Replacement works per lookup: the replaced binding stays owned by the container
+and only the lookup that was taken is redirected. Collections are not affected,
+registering into them always appends. The container is sealed by its first
+resolve that succeeds, a resolve that throws leaves it unsealed. Resolving
+through a child container seals the parent only when the parent takes part in
+the resolution. The default, `reject_duplicates`, keeps the throwing behavior.
+
 ## Moving Containers
 
 Runtime-only containers, `container<>` and `runtime_container`, are movable but

@@ -150,14 +150,22 @@ namespace detail {
 #pragma warning(disable : 4702)
 #endif
 
-template <typename Transaction> class transaction_commit_guard {
+// Commits a resolve transaction. The outermost successful resolve of a runtime
+// seals it.
+template <typename Transaction, typename Runtime>
+class transaction_commit_guard {
 public:
-  explicit transaction_commit_guard(Transaction &transaction) noexcept
-      : transaction_(std::addressof(transaction)) {}
+  transaction_commit_guard(Transaction &transaction, Runtime &runtime) noexcept
+      : transaction_(std::addressof(transaction)),
+        runtime_(std::addressof(runtime)) {}
 
   ~transaction_commit_guard() noexcept {
     if (transaction_ != nullptr) {
+      const bool outermost = transaction_->outermost();
       transaction_->commit();
+      if (outermost) {
+        runtime_->seal();
+      }
     }
   }
 
@@ -165,6 +173,7 @@ public:
 
 private:
   Transaction *transaction_;
+  Runtime *runtime_;
 };
 
 } // namespace detail
@@ -176,7 +185,7 @@ DINGO_NOINLINE decltype(auto) execute_transaction(Runtime &runtime, Fn &&fn) {
   inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
   runtime_transaction<allocator_type> transaction(runtime, scratch);
   context_type context(scratch, transaction);
-  detail::transaction_commit_guard commit(transaction);
+  detail::transaction_commit_guard commit(transaction, runtime);
 
   try {
     if constexpr (std::is_void_v<std::invoke_result_t<Fn, context_type &>>) {
@@ -200,7 +209,7 @@ auto execute_transaction(Runtime &runtime, runtime_context<Allocator> &context,
   inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
   runtime_transaction<Allocator> transaction(runtime, scratch);
   auto scope = context.use_transaction(transaction);
-  detail::transaction_commit_guard commit(transaction);
+  detail::transaction_commit_guard commit(transaction, runtime);
 
   try {
     if constexpr (std::is_void_v<result_type>) {

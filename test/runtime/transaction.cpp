@@ -650,5 +650,58 @@ TEST(runtime_transaction_test,
   EXPECT_EQ(events, (std::vector<int>{9}));
 }
 
+TEST(runtime_transaction_test, runtime_is_unsealed_until_sealed) {
+  arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
+  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  EXPECT_FALSE(runtime.sealed());
+
+  runtime_transaction transaction(runtime, scratch);
+  EXPECT_FALSE(transaction.sealed());
+  runtime.seal();
+  EXPECT_TRUE(runtime.sealed());
+  EXPECT_TRUE(transaction.sealed());
+}
+
+TEST(runtime_transaction_test, sealing_keeps_the_transaction_chain_intact) {
+  std::vector<int> events;
+  arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
+  {
+    container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+
+    runtime_transaction outer(runtime, scratch);
+    EXPECT_TRUE(outer.outermost());
+    runtime.seal();
+    {
+      // The sealed flag shares a word with the active transaction. A nested
+      // transaction must still see the outer one as its parent.
+      runtime_transaction inner(runtime, scratch);
+      EXPECT_FALSE(inner.outermost());
+      inner.construct_persistent<runtime_arena_tracker>(&events, 1);
+      inner.commit();
+    }
+    runtime.seal();
+    outer.construct_persistent<runtime_arena_tracker>(&events, 2);
+    outer.commit();
+    EXPECT_TRUE(runtime.sealed());
+
+    // The runtime accepts a new outermost transaction after the chain unwound.
+    runtime_transaction next(runtime, scratch);
+    EXPECT_TRUE(next.outermost());
+    next.commit();
+  }
+  EXPECT_EQ(events, (std::vector<int>{2, 1}));
+}
+
+TEST(runtime_transaction_test, seal_survives_transaction_rollback) {
+  arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
+  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime.seal();
+  {
+    runtime_transaction transaction(runtime, scratch);
+    EXPECT_TRUE(transaction.outermost());
+  }
+  EXPECT_TRUE(runtime.sealed());
+}
+
 } // namespace
 } // namespace dingo
