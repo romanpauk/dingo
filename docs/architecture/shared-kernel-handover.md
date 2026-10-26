@@ -64,8 +64,11 @@ The singular resolution consumer is shared:
 - The static-binding half of `construct` is shared in `static/construction.h`:
   exact binding, normalized binding wrapped into the request, the
   rvalue-conversion diagnostic, and the factory fallback.
-- The runtime/mixed outer construct flow and the runtime-only/runtime-key
-  collection paths are still mode-specific; they are the next reductions.
+- The collection rule is in the engine for every mode: static-key, runtime-only,
+  and runtime-key collections. The container exposes only the count, construct,
+  and explicit-empty hooks.
+- The runtime/mixed outer construct flow is the remaining mode-specific path;
+  the static-binding construct rule is already shared.
 
 The module files now use role-parallel names:
 
@@ -139,6 +142,8 @@ Off-chain operations are shared too:
 
 ## Recent Commits
 
+- `5683810` Move the runtime collection branches into the engine
+- `db7cbbb` Fold the static binding activation into its policy
 - `8863db0` Read binding storage through a shared slot
 - `4df7286` Record the static storage split in the handover
 - `495273a` Extract the static storage and let the activation set own local
@@ -214,14 +219,14 @@ the generic mode branches. Wall time is not meaningful.
 
 ## Next Work
 
-### 1. Finish construct and the runtime collection paths
+### 1. Finish construct, then extract `registration_store`
 
-- The singular selection consumer, the static-key collection rule, and the
+- The singular selection consumer, the collection rule for all modes, and the
   static-binding construct rule landed; both containers use them and the
   static-only depth budget is unchanged.
-- Next, fold the runtime/mixed outer construct flow into the same consumer:
-  runtime-binding checks, transactions, normalized requests, and factories.
-- Then fold the runtime-only and runtime-key collection paths.
+- The runtime/mixed outer construct flow is runtime-specific: runtime binding
+  checks, transactions, normalized requests, factories. It has no static twin;
+  folding it is a mode-branch cleanup, not a dedup.
 - Then extract `registration_store`.
 
 ### 2. Runtime cost probe
