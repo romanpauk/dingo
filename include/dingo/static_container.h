@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <dingo/binding/container_miss.h>
 #include <dingo/container.h>
 #include <dingo/container_api.h>
 #include <dingo/factory/invoke.h>
@@ -111,6 +112,12 @@ private:
   using context_type = static_context<context_static_bindings_type>;
   using index_entries_ = detail::normalize_lookup_definitions_t<
       detail::container_lookup_definition_type_t<ContainerTraits>>;
+
+  template <typename Policy, bool MayAutoConstruct, bool StaticError,
+            typename Request, typename LookupKey, typename R,
+            typename FriendContainer, typename FriendContext>
+  friend R resolve_missing_request(FriendContainer &, construction_scope,
+                                   FriendContext &, LookupKey);
 
   template <typename Request, typename Key>
   using selection_t =
@@ -579,24 +586,10 @@ public:
             bool StaticError = false, typename Context,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R unresolved(construction_scope scope, Context &context, LookupKey key) {
-    (void)MayAutoConstruct;
-    if constexpr (collection_traits<R>::is_collection) {
-      (void)scope;
-      (void)context;
-      (void)key;
-      using resolve_type = typename collection_traits<R>::resolve_type;
-      throw make_collection_type_not_found_exception<R, resolve_type>();
-    } else {
-      (void)scope;
-      (void)context;
-      (void)key;
-      if constexpr (StaticError) {
-        static_assert(container_dependent_false_v<Request, LookupKey>,
-                      "static_container cannot resolve an unbound type");
-      } else {
-        throw make_type_not_found_exception<typename Request::lookup_type>();
-      }
-    }
+    return detail::resolve_missing_request<detail::static_miss_policy,
+                                           MayAutoConstruct, StaticError,
+                                           Request, LookupKey, R>(
+        *this, scope, context, std::move(key));
   }
 
 private:

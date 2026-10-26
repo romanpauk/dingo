@@ -15,6 +15,7 @@
 #include <dingo/binding/binding_model.h>
 #include <dingo/binding/binding_resolution_policy.h>
 #include <dingo/binding/binding_selection.h>
+#include <dingo/binding/container_miss.h>
 #include <dingo/container_api.h>
 #include <dingo/container_base.h>
 #include <dingo/factory/callable.h>
@@ -172,6 +173,11 @@ class detail::container_with_static_bindings<static_bindings<Registrations...>,
   template <typename> friend class runtime_context;
   template <typename, typename, typename>
   friend class detail::container_with_static_bindings;
+  template <typename Policy, bool MayAutoConstruct, bool StaticError,
+            typename Request, typename LookupKey, typename R,
+            typename FriendContainer, typename FriendContext>
+  friend R resolve_missing_request(FriendContainer &, construction_scope,
+                                   FriendContext &, LookupKey);
 
 public:
   using static_bindings_type = static_bindings<Registrations...>;
@@ -1158,41 +1164,10 @@ public:
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R unresolved(construction_scope scope, runtime_context_type &context,
                LookupKey key) {
-    (void)StaticError;
-    using Type = typename Request::value_type;
-    using user_type = typename Request::user_type;
-
-    if constexpr (collection_traits<R>::is_collection) {
-      if constexpr (detail::default_collection_append_v<R>) {
-        return construct_collection<R>(scope, context,
-                                       detail::binding_collection_append{},
-                                       std::move(key));
-      } else if constexpr (runtime_only_v) {
-        throw detail::make_type_not_found_exception<
-            typename Request::lookup_type>(context, key);
-      } else {
-        using resolve_type = typename collection_traits<R>::resolve_type;
-        throw detail::make_collection_type_not_found_exception<R,
-                                                               resolve_type>();
-      }
-    } else if constexpr (MayAutoConstruct &&
-                         is_auto_constructible<
-                             std::decay_t<user_type>>::value) {
-      if constexpr (constructor<Type>::kind ==
-                    detail::constructor_kind::concrete) {
-        static_assert(is_complete<Type>::value,
-                      "auto-construction requires a complete type");
-        using type_detection = detail::constructor_shape;
-        return context.template construct<typename Request::interface_type,
-                                          type_detection>(scope, *this);
-      } else {
-        throw detail::make_type_not_found_exception<
-            typename Request::lookup_type>(context, key);
-      }
-    } else {
-      throw detail::make_type_not_found_exception<
-          typename Request::lookup_type>(context, key);
-    }
+    return detail::resolve_missing_request<
+        detail::runtime_miss_policy<runtime_only_v>, MayAutoConstruct,
+        StaticError, Request, LookupKey, R>(*this, scope, context,
+                                            std::move(key));
   }
 
 private:
