@@ -60,8 +60,11 @@ The singular resolution consumer is shared:
 - The static-key collection rule is in the engine too: the source count, the
   explicit-empty lookup, the parent fallback, and the compile-time empty
   collection report are one branch for mixed and static-only containers.
-- `construct` is still mode-specific, as are the runtime-only and runtime-key
-  collection paths; they are the next reductions.
+- The static-binding half of `construct` is shared in `static/construction.h`:
+  exact binding, normalized binding wrapped into the request, the
+  rvalue-conversion diagnostic, and the factory fallback.
+- The runtime/mixed outer construct flow and the runtime-only/runtime-key
+  collection paths are still mode-specific; they are the next reductions.
 
 Off-chain operations are shared too:
 
@@ -73,6 +76,7 @@ Off-chain operations are shared too:
 
 ## Recent Commits
 
+- `86ecb23` Share the static-binding construct rule
 - `094ac84` Share the static-key collection rule
 - `d3f48c6` Move the static-only resolve onto the shared selection consumer
 - `43585b7` Move singular resolution to a shared selection consumer
@@ -135,14 +139,14 @@ the generic mode branches. Wall time is not meaningful.
 
 ## Next Work
 
-### 1. Fold construct into the selection consumer
+### 1. Finish construct and the runtime collection paths
 
-- The singular selection consumer and the static-key collection rule landed;
-  both containers use them and the static-only depth budget is unchanged.
-- Next, fold `construct` / auto-construction into the same consumer. It is the
-  last mode-specific resolve path and the riskiest one: rvalue conversion,
-  normalized requests, factories, and the static compile-time diagnostics.
-- The runtime-only and runtime-key collection paths can then be folded in.
+- The singular selection consumer, the static-key collection rule, and the
+  static-binding construct rule landed; both containers use them and the
+  static-only depth budget is unchanged.
+- Next, fold the runtime/mixed outer construct flow into the same consumer:
+  runtime-binding checks, transactions, normalized requests, and factories.
+- Then fold the runtime-only and runtime-key collection paths.
 - Then extract `registration_store`.
 
 ### 2. Runtime cost probe
@@ -225,6 +229,7 @@ priority than the registry split.
 - `include/dingo/binding/container_selection.h` — shared singular selection
   consumer
 - `include/dingo/binding/container_miss.h` — miss rule and capability policies
+- `include/dingo/static/construction.h` — shared static-binding construct rule
 - `include/dingo/factory/invoke.h` — shared container callable dispatch
 - `tools/cost/probes/runtime.cpp` — runtime-only cost probe
 - `test/container/dependency_chain.cpp` — mixed/static depth budgets
