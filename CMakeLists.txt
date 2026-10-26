@@ -135,6 +135,7 @@ if(DINGO_DEVELOPMENT_MODE)
         runtime_container.h
         runtime/container_traits.h
         runtime/registration.h
+        runtime/registration_store.h
         runtime/lookup_index.h
         runtime/selection.h
         runtime/storage.h
