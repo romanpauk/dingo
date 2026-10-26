@@ -106,6 +106,7 @@ if(DINGO_DEVELOPMENT_MODE)
         static/bindings.h
         static/registration.h
         static/selection.h
+        static/storage.h
         static/container_traits.h
         base/exceptions.h
         factory/callable.h

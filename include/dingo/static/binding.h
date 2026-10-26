@@ -21,6 +21,7 @@
 #include <dingo/factory/factory_traits.h>
 #include <dingo/resolution/cache.h>
 #include <dingo/static/graph.h>
+#include <dingo/static/storage.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/collection_traits.h>
 #include <dingo/type/key.h>
@@ -40,14 +41,6 @@ namespace detail {
 
 template <typename... Registrations> class basic_static_activation_set;
 
-template <typename Registration>
-struct binding_storage_slot
-    : detail::binding_storage_holder<
-          typename detail::binding_model<Registration>::storage_type> {
-  using binding_model = detail::binding_model<Registration>;
-  using storage_type = typename binding_model::storage_type;
-};
-
 template <typename BindingModel>
 struct binding_factory_is_default_constructible
     : std::bool_constant<std::is_default_constructible_v<
@@ -62,102 +55,6 @@ struct no_dependency_context {
   template <typename T, typename Container> T resolve(Container &) = delete;
 };
 
-template <typename Request, typename StorageType>
-inline constexpr bool stored_request_identity_v = [] {
-  using stored_type = std::remove_cv_t<
-      std::remove_reference_t<typename StorageType::stored_type>>;
-  return std::is_same_v<Request, stored_type> ||
-         std::is_same_v<Request, stored_type &> ||
-         std::is_same_v<Request, const stored_type &> ||
-         std::is_same_v<Request, stored_type *> ||
-         std::is_same_v<Request, const stored_type *>;
-}();
-
-template <typename BindingModel, bool StoredInterfaces, typename... Interfaces>
-struct binding_cache_types_impl;
-
-template <typename BindingModel, typename... Interfaces>
-struct binding_cache_types_impl<BindingModel, false, Interfaces...> {
-private:
-  using storage_type = typename BindingModel::storage_type;
-
-  template <typename Interface>
-  using interface_cache_types = binding_conversion_cache_types_t<
-      typename annotated_traits<Interface>::type, storage_type>;
-
-public:
-  using type =
-      type_list_unique_t<type_list_cat_t<interface_cache_types<Interfaces>...>>;
-};
-
-template <typename BindingModel, typename... Interfaces>
-struct binding_cache_types_impl<BindingModel, true, Interfaces...> {
-  using type = type_list<>;
-};
-
-template <typename BindingModel, typename Interfaces>
-struct binding_cache_types;
-
-template <typename BindingModel>
-inline constexpr bool binding_has_cacheless_conversion_shape_v = [] {
-  using conversions = typename BindingModel::conversions_type;
-  return conversions::is_stable &&
-         std::is_same_v<typename conversions::value_types,
-                        type_list<runtime_type>> &&
-         std::is_same_v<typename conversions::lvalue_reference_types,
-                        type_list<runtime_type &>> &&
-         std::is_same_v<typename conversions::rvalue_reference_types,
-                        type_list<>> &&
-         std::is_same_v<typename conversions::pointer_types,
-                        type_list<runtime_type *>>;
-}();
-
-template <typename BindingModel>
-inline constexpr bool binding_uses_default_conversions_v = std::is_same_v<
-    typename BindingModel::conversions_type,
-    detail::conversions<typename BindingModel::storage_tag,
-                        typename BindingModel::registered_storage_type,
-                        runtime_type>>;
-
-template <typename Request, typename BindingModel>
-inline constexpr bool binding_has_cacheless_default_leaf_v =
-    binding_uses_default_conversions_v<BindingModel> &&
-    BindingModel::conversions_type::is_stable &&
-    std::is_same_v<std::remove_cv_t<Request>,
-                   std::remove_cv_t<typename BindingModel::stored_leaf_type>>;
-
-template <typename BindingModel, typename... Interfaces>
-struct binding_cache_types<BindingModel, type_list<Interfaces...>>
-    // Exact stored requests and stable default leaf requests cannot retain an
-    // adapted value, so enumerating every resolution route cannot add a slot.
-    : binding_cache_types_impl<
-          BindingModel,
-          (binding_has_cacheless_conversion_shape_v<BindingModel> &&
-           (stored_request_identity_v<
-                typename annotated_traits<Interfaces>::type,
-                typename BindingModel::storage_type> &&
-            ...)) ||
-              (binding_has_cacheless_default_leaf_v<
-                   typename annotated_traits<Interfaces>::type, BindingModel> &&
-               ...),
-          Interfaces...> {};
-
-template <typename BindingModel>
-using binding_cache_types_t =
-    typename binding_cache_types<BindingModel,
-                                 typename BindingModel::interface_types>::type;
-
-// The cache types are only enumerated for stable conversions; naming them in
-// the primary template would instantiate them for every binding.
-template <typename BindingModel,
-          bool Stable =
-              cache::is_stable_storage_v<typename BindingModel::storage_type>>
-inline constexpr bool has_binding_conversion_cache_v = false;
-
-template <typename BindingModel>
-inline constexpr bool has_binding_conversion_cache_v<BindingModel, true> =
-    type_list_size_v<binding_cache_types_t<BindingModel>> != 0;
-
 template <typename Registration,
           typename BindingsType =
               typename detail::binding_model<Registration>::bindings_type>
@@ -169,62 +66,15 @@ struct local_binding_scope_slot<Registration,
   basic_static_activation_set<LocalRegistrations...> scope;
 };
 
-template <typename Registration, bool Enabled = has_binding_conversion_cache_v<
-                                     detail::binding_model<Registration>>>
-struct binding_conversion_cache_slot;
-
-template <typename Registration, bool Enabled> struct registration_cache_types {
-  using binding_model = detail::binding_model<Registration>;
-  using type = binding_cache_types_t<binding_model>;
-};
-
-template <typename Registration>
-struct registration_cache_types<Registration, false> {
-  using type = type_list<>;
-};
-
-template <typename Registration, bool Enabled>
-using registration_conversion_cache_base = binding_cache_slot<
-    Enabled, typename registration_cache_types<Registration, Enabled>::type>;
-
-template <typename Registration, bool Enabled>
-struct binding_conversion_cache_slot
-    : registration_conversion_cache_base<Registration, Enabled> {
-  using binding_model = detail::binding_model<Registration>;
-  using conversions_type = typename binding_model::storage_type::conversions;
-  using base_type = registration_conversion_cache_base<Registration, Enabled>;
-
-  using base_type::construct_conversion;
-};
-
+// The local activation sets a registration declares. They are kept by the
+// activation set rather than the storage, so the storage does not depend on
+// the activation-set definition.
 template <typename... Registrations>
-class static_storage : private binding_conversion_cache_slot<Registrations>...,
-                       private binding_storage_slot<Registrations>...,
-                       private local_binding_scope_slot<Registrations>... {
-  template <typename Registration>
-  using storage_slot = binding_storage_slot<Registration>;
-
-  template <typename Registration>
-  using conversion_cache_slot = binding_conversion_cache_slot<Registration>;
-
+class local_scope_storage : private local_binding_scope_slot<Registrations>... {
   template <typename Registration>
   using local_scope_slot = local_binding_scope_slot<Registration>;
 
 public:
-  template <typename Registration> auto &get_storage() {
-    return static_cast<storage_slot<Registration> &>(*this).storage();
-  }
-
-  template <typename BindingModel> auto &get_storage_for_model() {
-    return get_storage<typename BindingModel::registration_type>();
-  }
-
-  template <typename BindingModel> auto &get_conversion_cache_for_model() {
-    return static_cast<
-        conversion_cache_slot<typename BindingModel::registration_type> &>(
-        *this);
-  }
-
   template <typename BindingModel> auto &get_local_scope_for_model() {
     return static_cast<
                local_scope_slot<typename BindingModel::registration_type> &>(
@@ -834,16 +684,19 @@ template <typename... Registrations>
 class basic_static_activation_set
     : public basic_static_activation_set_base<
           basic_static_activation_set<Registrations...>>,
-      private static_storage<Registrations...> {
+      private static_storage<Registrations...>,
+      private local_scope_storage<Registrations...> {
 public:
   using static_storage<Registrations...>::get_conversion_cache_for_model;
-  using static_storage<Registrations...>::get_local_scope_for_model;
   using static_storage<Registrations...>::get_storage;
   using static_storage<Registrations...>::get_storage_for_model;
+  using local_scope_storage<Registrations...>::get_local_scope_for_model;
 };
 
+// The state the static registry owns: the storage plus the local activation
+// sets a registration declares.
 template <typename... Registrations>
-using static_storage_state = static_storage<Registrations...>;
+using static_registry_state = basic_static_activation_set<Registrations...>;
 
 template <typename StorageState>
 class basic_static_activation_set_view

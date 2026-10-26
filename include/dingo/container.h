@@ -119,7 +119,7 @@ class detail::runtime_container_impl<static_bindings<Registrations...>,
           (sizeof...(Registrations) != 0),
           detail::static_registry<
               static_bindings<Registrations...>,
-              detail::static_storage_state<Registrations...>>,
+              detail::static_registry_state<Registrations...>>,
           none_t> {
   template <typename> friend class runtime_context;
   template <typename> friend class detail::container_selection;
@@ -135,7 +135,7 @@ public:
   using static_bindings_type = static_bindings<Registrations...>;
   using static_registry_type =
       detail::static_registry<static_bindings_type,
-                              detail::static_storage_state<Registrations...>>;
+                              detail::static_registry_state<Registrations...>>;
 
 private:
   using self_type =
