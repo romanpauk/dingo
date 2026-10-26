@@ -106,15 +106,13 @@ struct static_container_runtime_configuration<Self, void> {
 // registry, and registration-local containers use the merging configuration.
 template <typename ParentContainer, typename RuntimeConfig,
           typename... Registrations>
-class detail::container_with_static_bindings<static_bindings<Registrations...>,
-                                             ParentContainer, RuntimeConfig>
-    : public detail::runtime_registration_api<
-          detail::container_with_static_bindings<
-              static_bindings<Registrations...>, ParentContainer,
-              RuntimeConfig>>,
-      public detail::container_api<detail::container_with_static_bindings<
+class detail::runtime_container_impl<static_bindings<Registrations...>,
+                                     ParentContainer, RuntimeConfig>
+    : public detail::runtime_registration_api<detail::runtime_container_impl<
           static_bindings<Registrations...>, ParentContainer, RuntimeConfig>>,
-      public detail::container_selection<detail::container_with_static_bindings<
+      public detail::container_api<detail::runtime_container_impl<
+          static_bindings<Registrations...>, ParentContainer, RuntimeConfig>>,
+      public detail::container_selection<detail::runtime_container_impl<
           static_bindings<Registrations...>, ParentContainer, RuntimeConfig>>,
       // Empty bindings leave an empty base, so the object does not grow.
       private std::conditional_t<
@@ -126,7 +124,7 @@ class detail::container_with_static_bindings<static_bindings<Registrations...>,
   template <typename> friend class runtime_context;
   template <typename> friend class detail::container_selection;
   template <typename, typename, typename>
-  friend class detail::container_with_static_bindings;
+  friend class detail::runtime_container_impl;
   template <typename Policy, bool MayAutoConstruct, bool StaticError,
             typename Request, typename LookupKey, typename R,
             typename FriendContainer, typename FriendContext>
@@ -141,8 +139,8 @@ public:
 
 private:
   using self_type =
-      detail::container_with_static_bindings<static_bindings_type,
-                                             ParentContainer, RuntimeConfig>;
+      detail::runtime_container_impl<static_bindings_type, ParentContainer,
+                                     RuntimeConfig>;
   using selection_type = detail::container_selection<self_type>;
   using runtime_configuration =
       detail::static_container_runtime_configuration<self_type, RuntimeConfig>;
@@ -500,18 +498,18 @@ private:
 public:
   template <bool OwnsRuntimeData = runtime_configuration::owns_runtime_data,
             std::enable_if_t<OwnsRuntimeData, int> = 0>
-  container_with_static_bindings()
+  runtime_container_impl()
       : runtime_registry_(detail::runtime_data_owner, this) {}
 
   template <bool OwnsRuntimeData = runtime_configuration::owns_runtime_data,
             std::enable_if_t<OwnsRuntimeData, int> = 0>
-  explicit container_with_static_bindings(allocator_type alloc)
+  explicit runtime_container_impl(allocator_type alloc)
       : runtime_registry_(detail::runtime_data_owner, this, alloc) {}
 
   template <bool RuntimeOnly = runtime_only_v,
             std::enable_if_t<RuntimeOnly, int> = 0>
-  container_with_static_bindings(parent_container_type *parent,
-                                 const allocator_type &alloc = allocator_type())
+  runtime_container_impl(parent_container_type *parent,
+                         const allocator_type &alloc = allocator_type())
       : runtime_registry_(detail::runtime_data_owner, this, alloc),
         parent_(parent) {}
 
@@ -520,8 +518,8 @@ public:
             std::enable_if_t<!std::is_void_v<Parent> && OwnsRuntimeData &&
                                  !runtime_only_v,
                              int> = 0>
-  explicit container_with_static_bindings(
-      Parent *parent, allocator_type alloc = allocator_type())
+  explicit runtime_container_impl(Parent *parent,
+                                  allocator_type alloc = allocator_type())
       : runtime_registry_(detail::runtime_data_owner, this, alloc),
         parent_(detail::container_implementation_of(parent)) {}
 
@@ -529,16 +527,16 @@ public:
       typename Parent = ParentContainer,
       bool OwnsRuntimeData = runtime_configuration::owns_runtime_data,
       std::enable_if_t<!std::is_void_v<Parent> && !OwnsRuntimeData, int> = 0>
-  explicit container_with_static_bindings(
-      Parent *parent, allocator_type alloc = allocator_type())
+  explicit runtime_container_impl(Parent *parent,
+                                  allocator_type alloc = allocator_type())
       : runtime_registry_(parent, alloc), parent_(parent) {}
 
   // Compile-time bindings keep their instances inline, resolved instances
   // reference each other by address, and runtime bindings point back at the
   // container, so it cannot move. runtime_container moves by owning it through
   // a handle.
-  container_with_static_bindings(const self_type &) = delete;
-  container_with_static_bindings(self_type &&) = delete;
+  runtime_container_impl(const self_type &) = delete;
+  runtime_container_impl(self_type &&) = delete;
   self_type &operator=(const self_type &) = delete;
   self_type &operator=(self_type &&) = delete;
 

@@ -30,7 +30,7 @@ template <typename ContainerTraits = dynamic_container_traits,
           typename ParentContainer = void>
 class runtime_container {
 public:
-  using implementation_type = detail::container_with_static_bindings<
+  using implementation_type = detail::runtime_container_impl<
       static_bindings<>, ParentContainer,
       detail::static_container_runtime_config<ContainerTraits, Allocator, void,
                                               void, true>>;
@@ -251,7 +251,7 @@ struct container_base_from_parameter<
 template <typename Param>
 struct container_base_from_parameter<
     Param, std::enable_if_t<is_static_bindings_v<Param>>> {
-  using type = container_with_static_bindings<Param>;
+  using type = runtime_container_impl<Param>;
 };
 
 template <typename Param>
@@ -263,7 +263,7 @@ struct container_base_from_parameter<
                 "container<bindings<...>> requires a valid compile-time "
                 "bindings source");
 
-  using type = container_with_static_bindings<static_bindings_type>;
+  using type = runtime_container_impl<static_bindings_type>;
 };
 
 template <typename Param, typename Parent, typename Enable>
@@ -276,7 +276,7 @@ struct container_base_from_static_parent {
 template <typename Param, typename Parent>
 struct container_base_from_static_parent<
     Param, Parent, std::enable_if_t<is_static_bindings_v<Param>>> {
-  using type = container_with_static_bindings<Param, Parent>;
+  using type = runtime_container_impl<Param, Parent>;
 };
 
 template <typename Param, typename Parent>
@@ -288,7 +288,7 @@ struct container_base_from_static_parent<
                 "container<bindings<...>, Parent> requires a valid "
                 "compile-time bindings source");
 
-  using type = container_with_static_bindings<static_bindings_type, Parent>;
+  using type = runtime_container_impl<static_bindings_type, Parent>;
 };
 
 } // namespace dingo::detail

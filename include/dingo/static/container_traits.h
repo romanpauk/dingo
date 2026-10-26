@@ -30,7 +30,7 @@ namespace detail {
 
 template <typename StaticBindings, typename ParentContainer = void,
           typename RuntimeConfig = void>
-class container_with_static_bindings;
+class runtime_container_impl;
 
 template <typename T> struct is_static_bindings : std::false_type {};
 

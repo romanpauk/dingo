@@ -57,7 +57,7 @@ template <typename Derived> class runtime_registration_api;
 
 template <typename StaticRegistry, typename ParentContainer,
           typename RuntimeConfig>
-class container_with_static_bindings;
+class runtime_container_impl;
 
 template <typename Self> class container_selection;
 
@@ -891,7 +891,7 @@ class DINGO_EMPTY_BASES runtime_registry
   template <typename, typename, typename, typename>
   friend class runtime_binding_state;
   template <typename, typename, typename>
-  friend class detail::container_with_static_bindings;
+  friend class detail::runtime_container_impl;
   template <typename ContainerTraitsT, typename AllocatorT,
             typename ParentRegistryT, typename ResolveRootT,
             bool OwnsRuntimeDataT>
@@ -917,8 +917,8 @@ class DINGO_EMPTY_BASES runtime_registry
   template <typename Bindings, typename Parent>
   using registration_container_type = std::conditional_t<
       std::is_void_v<Bindings>, runtime_registration_container_type<Parent>,
-      detail::container_with_static_bindings<
-          Bindings, Parent, registration_runtime_config<Parent>>>;
+      detail::runtime_container_impl<Bindings, Parent,
+                                     registration_runtime_config<Parent>>>;
 
 public:
   using container_traits_type = ContainerTraits;

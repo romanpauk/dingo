@@ -53,10 +53,10 @@ The singular resolution consumer is shared:
 - `binding/container_selection.h` (`container_selection<Self>`) owns the source
   order for a singular request: the compile-time static source, the runtime
   selection, their combination, and the hand-off to the miss rule.
-- `container_with_static_bindings` and `static_container_impl` both derive from
-  it and expose capability flags and non-template source accessors. The
-  inherited entry replaces the two old resolve bodies, so the engine costs no
-  template level per dependency link.
+- `runtime_container_impl` and `static_container_impl` both derive from it and
+  expose capability flags and non-template source accessors. The inherited entry
+  replaces the two old resolve bodies, so the engine costs no template level per
+  dependency link.
 - The static-key collection rule is in the engine too: the source count, the
   explicit-empty lookup, the parent fallback, and the compile-time empty
   collection report are one branch for mixed and static-only containers.
