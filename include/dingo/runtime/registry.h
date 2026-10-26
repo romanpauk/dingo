@@ -24,6 +24,7 @@
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>
 #include <dingo/runtime/lookup_index.h>
+#include <dingo/runtime/lookup_store.h>
 #include <dingo/runtime/registration_api.h>
 #include <dingo/runtime/runtime_binding.h>
 #include <dingo/runtime/transaction.h>
@@ -72,37 +73,6 @@ struct static_container_runtime_config {
 
   static constexpr bool owns_runtime_data = OwnsRuntimeData;
   static constexpr bool merge_parent_collections = MergeParentCollections;
-};
-
-template <typename BindingInterface> struct runtime_lookup_binding_view {
-  BindingInterface *binding = nullptr;
-};
-
-template <typename BindingInterface> class runtime_lookup_value {
-public:
-  using binding_view_type = runtime_lookup_binding_view<BindingInterface>;
-
-  explicit runtime_lookup_value(binding_view_type view) : view_(view) {}
-
-  runtime_lookup_value(runtime_lookup_value &&) noexcept = default;
-  runtime_lookup_value &operator=(runtime_lookup_value &&) noexcept = default;
-  runtime_lookup_value(const runtime_lookup_value &) = delete;
-  runtime_lookup_value &operator=(const runtime_lookup_value &) = delete;
-
-  BindingInterface &binding() { return *view_.binding; }
-
-private:
-  binding_view_type view_;
-};
-
-template <typename LookupEntries, typename BindingInterface, typename Allocator>
-struct runtime_bindings_state {
-  using value_type = runtime_lookup_value<BindingInterface>;
-
-  explicit runtime_bindings_state(Allocator &allocator)
-      : lookup_indexes(allocator) {}
-
-  lookup_index<LookupEntries, value_type, Allocator> lookup_indexes;
 };
 
 template <typename BindingsState> struct runtime_scope_state {
