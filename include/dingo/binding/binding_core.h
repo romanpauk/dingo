@@ -36,13 +36,8 @@ public:
                  describe_type<Request>(), this->registered_type())
           .address;
     };
-    if constexpr (Policy::direct_source_lifetime) {
-      return with_source_lifetime<operation, Request>(
-          this->scope, context, storage, activation, std::move(materialize));
-    } else {
-      return this->template with_source<operation, Request>(
-          this->scope, context, storage, activation, std::move(materialize));
-    }
+    return this->template with_source<operation, Request>(
+        this->scope, context, storage, activation, std::move(materialize));
   }
 
   template <typename Request, typename Resolution, typename Context,
@@ -56,13 +51,8 @@ public:
           activation, context, std::forward<decltype(source)>(source),
           std::forward<Fn>(fn));
     };
-    if constexpr (Policy::direct_source_lifetime) {
-      return with_source_lifetime<operation, Request>(
-          this->scope, context, storage, activation, std::move(consume));
-    } else {
-      return this->template with_source<operation, Request>(
-          this->scope, context, storage, activation, std::move(consume));
-    }
+    return this->template with_source<operation, Request>(
+        this->scope, context, storage, activation, std::move(consume));
   }
 
   template <typename T, typename Context>
@@ -73,13 +63,8 @@ public:
       return resolve_binding_value<T>(activation, context,
                                       std::forward<decltype(source)>(source));
     };
-    if constexpr (Policy::direct_value_source) {
-      return with_binding_source(this->scope, context, storage, activation,
-                                 std::move(resolve));
-    } else {
-      return this->with_value_source(this->scope, context, storage, activation,
-                                     std::move(resolve));
-    }
+    return this->with_value_source(this->scope, context, storage, activation,
+                                   std::move(resolve));
   }
 
   template <typename... Resolutions, typename Context>

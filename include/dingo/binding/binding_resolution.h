@@ -329,47 +329,6 @@ template <typename Context>
 inline constexpr bool context_supports_retained_frame_v =
     context_supports_retained_frame<Context>::value;
 
-template <typename Operation, typename Request, typename Storage,
-          typename Context, typename Owner, typename Fn>
-decltype(auto) with_source_lifetime(construction_scope scope, Context &context,
-                                    Storage &storage, Owner &owner, Fn &&fn) {
-  constexpr bool context_lvalue =
-      (std::is_lvalue_reference_v<Request> || std::is_pointer_v<Request>) &&
-      source_category_of<Storage> == source_category::consume_value;
-  constexpr bool retained_source = Operation::requires_source_retention &&
-                                   context_supports_retained_frame_v<Context>;
-  if constexpr (context_lvalue) {
-    return with_context_lvalue_source(scope, context, storage, owner,
-                                      std::forward<Fn>(fn));
-  } else if constexpr (is_runtime_context_v<Context>) {
-    return with_runtime_binding_source(scope, context, storage, owner,
-                                       std::forward<Fn>(fn));
-  } else if constexpr (!context_supports_construct<Context>::value) {
-    if constexpr (retained_source) {
-      return with_retained_binding_source(scope, context, storage, owner,
-                                          std::forward<Fn>(fn));
-    } else {
-      return with_binding_source(scope, context, storage, owner,
-                                 std::forward<Fn>(fn));
-    }
-  } else {
-    using materialization_traits =
-        storage_materialization_traits<typename Storage::tag_type,
-                                       typename Storage::type>;
-    if constexpr (has_context_materialize_source<
-                      materialization_traits, Context, Storage, Owner>::value) {
-      return with_runtime_binding_source(scope, context, storage, owner,
-                                         std::forward<Fn>(fn));
-    } else if constexpr (retained_source) {
-      return with_retained_binding_source(scope, context, storage, owner,
-                                          std::forward<Fn>(fn));
-    } else {
-      return with_binding_source(scope, context, storage, owner,
-                                 std::forward<Fn>(fn));
-    }
-  }
-}
-
 template <typename Storage, typename Context, typename Owner, typename Fn>
 decltype(auto) with_context_lvalue_source(construction_scope scope,
                                           Context &context, Storage &storage,
