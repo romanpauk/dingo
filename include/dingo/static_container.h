@@ -10,7 +10,7 @@
 #include <dingo/binding/container_miss.h>
 #include <dingo/binding/container_selection.h>
 #include <dingo/container.h>
-#include <dingo/container_api.h>
+#include <dingo/container_collections.h>
 #include <dingo/factory/invoke.h>
 #include <dingo/lookup/container_lookup_definition.h>
 #include <dingo/static/binding.h>
@@ -96,7 +96,7 @@ class static_container_impl<static_bindings<Registrations...>, ParentContainer,
                             ContainerTraits>
     : private static_container_dependency_diagnostics_base<
           static_bindings<Registrations...>, !std::is_void_v<ParentContainer>>,
-      public container_api<static_container_impl<
+      public container_collections<static_container_impl<
           static_bindings<Registrations...>, ParentContainer, ContainerTraits>>,
       public container_selection<
           static_container_impl<static_bindings<Registrations...>,
@@ -494,18 +494,18 @@ private:
   }
 
 public:
-  using container_api<
+  using container_collections<
       static_container_impl<static_bindings<Registrations...>, ParentContainer,
                             ContainerTraits>>::append_collection;
-  using container_api<
+  using container_collections<
       static_container_impl<static_bindings<Registrations...>, ParentContainer,
                             ContainerTraits>>::construct_collection;
-  using container_api<
+  using container_collections<
       static_container_impl<static_bindings<Registrations...>, ParentContainer,
                             ContainerTraits>>::count_collection;
 
 private:
-  friend class container_api<static_container_impl<
+  friend class container_collections<static_container_impl<
       static_bindings<Registrations...>, ParentContainer, ContainerTraits>>;
 
   template <typename T, typename LookupKey>

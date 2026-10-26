@@ -21,7 +21,7 @@
 namespace dingo {
 namespace detail {
 
-template <typename Derived> class runtime_registration_api {
+template <typename Derived> class runtime_registration {
   Derived &self() { return static_cast<Derived &>(*this); }
 
 public:

@@ -17,8 +17,8 @@
 #include <dingo/binding/binding_selection.h>
 #include <dingo/binding/container_miss.h>
 #include <dingo/binding/container_selection.h>
-#include <dingo/container_api.h>
 #include <dingo/container_base.h>
+#include <dingo/container_collections.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/invoke.h>
 #include <dingo/lookup/container_lookup_definition.h>
@@ -108,9 +108,9 @@ template <typename ParentContainer, typename RuntimeConfig,
           typename... Registrations>
 class detail::runtime_container_impl<static_bindings<Registrations...>,
                                      ParentContainer, RuntimeConfig>
-    : public detail::runtime_registration_api<detail::runtime_container_impl<
+    : public detail::runtime_registration<detail::runtime_container_impl<
           static_bindings<Registrations...>, ParentContainer, RuntimeConfig>>,
-      public detail::container_api<detail::runtime_container_impl<
+      public detail::container_collections<detail::runtime_container_impl<
           static_bindings<Registrations...>, ParentContainer, RuntimeConfig>>,
       public detail::container_selection<detail::runtime_container_impl<
           static_bindings<Registrations...>, ParentContainer, RuntimeConfig>>,
@@ -173,9 +173,9 @@ private:
   static constexpr bool has_parent_v = !std::is_void_v<parent_container_type>;
 
   static_assert(
-      detail::static_requirements<has_static_v, static_bindings_type,
-                                  typename runtime_base::container_traits_type,
-                                  RuntimeConfig>::value);
+      detail::static_registration_requirements<
+          has_static_v, static_bindings_type,
+          typename runtime_base::container_traits_type, RuntimeConfig>::value);
 
   template <typename T, typename Key>
   using static_selection_t =
@@ -770,12 +770,12 @@ public:
     }
   }
 
-  using detail::container_api<self_type>::append_collection;
-  using detail::container_api<self_type>::construct_collection;
-  using detail::container_api<self_type>::count_collection;
+  using detail::container_collections<self_type>::append_collection;
+  using detail::container_collections<self_type>::construct_collection;
+  using detail::container_collections<self_type>::count_collection;
 
 private:
-  friend class detail::container_api<self_type>;
+  friend class detail::container_collections<self_type>;
 
   template <typename T, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
@@ -1078,7 +1078,7 @@ public:
   }
 
 private:
-  friend class detail::runtime_registration_api<self_type>;
+  friend class detail::runtime_registration<self_type>;
 
   runtime_registry_type &binding_store() { return runtime_registry_; }
 

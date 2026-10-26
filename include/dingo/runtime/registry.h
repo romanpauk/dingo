@@ -53,7 +53,7 @@
 namespace dingo {
 namespace detail {
 
-template <typename Derived> class runtime_registration_api;
+template <typename Derived> class runtime_registration;
 
 template <typename StaticRegistry, typename ParentContainer,
           typename RuntimeConfig>
@@ -217,14 +217,14 @@ constexpr bool has_lookup() {
 
 // The part of a runtime registry that depends only on the container traits and
 // the allocator: execution over a selected binding, registration commit and
-// the rollback of both. Lookup selection lives in lookup_store, which this
+// the rollback of both. Lookup selection lives in lookup_selection, which this
 // store extends; runtime_registry derives from it, so the machinery is
 // instantiated once per traits/allocator pair instead of once per registry
 // specialization. Data ownership stays in runtime_registry, which hands the
 // active lookup state to the store.
 template <typename ContainerTraits, typename Allocator>
-class registry_store : protected lookup_store<ContainerTraits, Allocator> {
-  using lookup_base = lookup_store<ContainerTraits, Allocator>;
+class registry_store : protected lookup_selection<ContainerTraits, Allocator> {
+  using lookup_base = lookup_selection<ContainerTraits, Allocator>;
 
 protected:
   using store_type = registry_store;
@@ -880,14 +880,14 @@ template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
           typename ResolveRoot, bool OwnsRuntimeData = true>
 class DINGO_EMPTY_BASES runtime_registry
     : public allocator_base<Allocator>,
-      public detail::runtime_registration_api<
+      public detail::runtime_registration<
           runtime_registry<ContainerTraits, Allocator, ParentRegistry,
                            ResolveRoot, OwnsRuntimeData>>,
       protected detail::registry_store<ContainerTraits, Allocator> {
   template <typename> friend class runtime_context;
   template <typename> friend class detail::container_selection;
   template <typename> friend class detail::context_resolution;
-  template <typename> friend class detail::runtime_registration_api;
+  template <typename> friend class detail::runtime_registration;
   template <typename, typename, typename, typename>
   friend class runtime_binding_state;
   template <typename, typename, typename>

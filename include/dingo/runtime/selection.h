@@ -71,7 +71,7 @@ struct runtime_bindings_state {
 // it, and the selection of singular and collection candidates. It owns no
 // data; it reads the lookup state its registry hands it, so registration and
 // execution stay with the registry.
-template <typename ContainerTraits, typename Allocator> class lookup_store {
+template <typename ContainerTraits, typename Allocator> class lookup_selection {
 protected:
   using allocator_type = Allocator;
   using rtti_type = typename ContainerTraits::rtti_type;

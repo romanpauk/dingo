@@ -111,7 +111,7 @@ Off-chain operations are shared too:
 - `3b0a0a1` Share the container miss rule
 - `0dfde92` Share the container invoke operation
 - `d303c83` Guard the static-only dependency chain
-- `dc78f48` Extract runtime lookup selection into lookup_store
+- `dc78f48` Extract runtime lookup selection into lookup_selection
 - `c66fde5` Add shared-kernel handover
 - `779ce91` Extract runtime lookup storage types
 - `e93d5c6` Share selection status across static and runtime lookup

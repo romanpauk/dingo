@@ -34,7 +34,7 @@ using collection_insert_invocable =
 //   construct_collection_by_key<T>(fn, key)
 //   append_collection<T>(scope, results, context, fn, key)
 //   count_collection<T>(key)
-template <typename Derived> class container_api {
+template <typename Derived> class container_collections {
 public:
   template <typename T> T construct_collection() {
     return derived().template construct_collection_by_key<T>(no_lookup_key());
@@ -90,8 +90,8 @@ public:
   }
 
 protected:
-  container_api() = default;
-  ~container_api() = default;
+  container_collections() = default;
+  ~container_collections() = default;
 
 private:
   Derived &derived() { return static_cast<Derived &>(*this); }

@@ -25,9 +25,10 @@ infrastructure described below. It changes no public API and no behavior.
 - `context/context_base.h` owns the dependency-resolution mixin used by both
   `runtime_context` and `static_context`; selected-key requests no longer have
   two copies.
-- `container_api.h` owns the public collection spellings once. The runtime and
-  static containers provide only the internal `construct_collection_by_key`
-  path, the keyed `append_collection`, and the keyed `count_collection`.
+- `container_collections.h` owns the public collection spellings once. The
+  runtime and static containers provide only the internal
+  `construct_collection_by_key` path, the keyed `append_collection`, and the
+  keyed `count_collection`.
 - `static/binding.h` uses the shared resolution-address kernel for the last-mile
   conversion, the same kernel the runtime binding uses.
 - `binding/binding_resolution.h` now owns the storage holder, conversion-cache

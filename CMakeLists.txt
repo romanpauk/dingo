@@ -92,7 +92,7 @@ if(DINGO_DEVELOPMENT_MODE)
         static/graph.h
         static/registry.h
         container.h
-        container_api.h
+        container_collections.h
         type/auto_constructible.h
         binding/binding_model.h
         binding/binding_resolution.h

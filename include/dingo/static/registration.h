@@ -26,14 +26,14 @@ namespace detail {
 
 template <bool Enabled, typename Bindings, typename ContainerTraits,
           typename RuntimeConfig>
-struct static_requirements {
+struct static_registration_requirements {
   static constexpr bool value = true;
 };
 
 template <typename... Registrations, typename ContainerTraits,
           typename RuntimeConfig>
-struct static_requirements<true, static_bindings<Registrations...>,
-                           ContainerTraits, RuntimeConfig> {
+struct static_registration_requirements<true, static_bindings<Registrations...>,
+                                        ContainerTraits, RuntimeConfig> {
   using bindings_type = static_bindings<Registrations...>;
   using index_entries = normalize_lookup_definitions_t<
       container_lookup_definition_type_t<ContainerTraits>>;
