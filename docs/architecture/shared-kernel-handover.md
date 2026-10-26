@@ -58,6 +58,7 @@ Container operations are shared where they are off the per-link path:
 
 ## Recent Commits
 
+- `73201c3` Add a runtime-only cost probe
 - `204a236` Format the shared-kernel handover
 - `3b0a0a1` Share the container miss rule
 - `0dfde92` Share the container invoke operation
@@ -126,17 +127,16 @@ noise. Do not treat wall time from three runs as meaningful.
   unification (M9.2 reference)".
 - Then extract `registration_store`.
 
-### 2. Add a runtime-specific cost probe
+### 2. Runtime cost probe
 
-The current probe mixes static and runtime functions. Add a runtime container
-probe that records:
+`tools/cost/probes/runtime.cpp` and the `cost-record-runtime` target now record
+a runtime-only translation unit (`build/cost/current-runtime.json`): text, data,
+bss, preprocessed bytes, and wall time. `test/registration/object_sizes.cpp`
+already bounds the runtime binding, state, container, and lookup sizes.
 
-- `runtime_binding` / `runtime_binding_state` object size
-- representative runtime container size
-- dispatch symbol/text size
-- instantiation count from `-ftime-trace`
-
-Without it, runtime layer changes are only measured indirectly.
+Still open: a stable instantiation count for the representative runtime requests
+from `-ftime-trace`, so a runtime layer change can be compared by instantiation
+as well as by bytes.
 
 ### 3. Decide runtime state ownership
 
@@ -207,6 +207,7 @@ priority than the registry split.
 - `include/dingo/runtime/registry.h` — runtime execution and registration
 - `include/dingo/binding/container_miss.h` — miss rule and capability policies
 - `include/dingo/factory/invoke.h` — shared container callable dispatch
+- `tools/cost/probes/runtime.cpp` — runtime-only cost probe
 - `test/container/dependency_chain.cpp` — mixed/static depth budgets
 - `include/dingo/resolution/resolution_operation.h` — conversion
   descriptor/walker
