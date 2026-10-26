@@ -59,6 +59,8 @@ template <typename StaticRegistry, typename ParentContainer,
           typename RuntimeConfig>
 class container_with_static_bindings;
 
+template <typename Self> class container_selection;
+
 struct runtime_data_owner_t {};
 inline constexpr runtime_data_owner_t runtime_data_owner{};
 
@@ -883,6 +885,7 @@ class DINGO_EMPTY_BASES runtime_registry
                            ResolveRoot, OwnsRuntimeData>>,
       protected detail::registry_store<ContainerTraits, Allocator> {
   template <typename> friend class runtime_context;
+  template <typename> friend class detail::container_selection;
   template <typename> friend class detail::context_resolution;
   template <typename> friend class detail::runtime_registration_api;
   template <typename, typename, typename, typename>
