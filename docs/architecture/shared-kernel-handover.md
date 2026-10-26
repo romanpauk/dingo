@@ -75,7 +75,7 @@ runtime/                      static/
   registry.h                    registry.h
   selection.h                   selection.h
   binding.h                     binding.h
-  storage.h                     bindings.h
+  storage.h                     storage.h
   registration.h                registration.h
   transaction.h                 graph.h
   lookup_index.h                construction.h
@@ -250,7 +250,8 @@ priority than the registry split.
 ## File Map
 
 - `include/dingo/binding/binding_core.h` — shared typed execution kernel
-- `include/dingo/static/binding.h` — static binding, activation, and storage
+- `include/dingo/static/binding.h` — static binding, activation, and resolver
+- `include/dingo/static/storage.h` — `static_storage` slots and state
 - `include/dingo/static/bindings.h` — static binding types and dependency rules
 - `include/dingo/static/selection.h` — `static_selection`, type-level
 - `include/dingo/static/registry.h` — static registry
