@@ -123,12 +123,15 @@ struct binding_conversion_cache_base<false, ConversionTypes> {
 
 // One storage owner for both binding backends. Static slots default-construct
 // it; runtime state constructs it with the registration argument.
-template <typename Storage> class binding_storage_holder {
+// The slot of one binding: the storage object both backends place in their
+// owner. The static owner aggregates slots inline; the runtime owner wraps one
+// in its state. The slot exposes the storage the execution core reads.
+template <typename Storage> class binding_slot {
 public:
-  binding_storage_holder() = default;
+  binding_slot() = default;
 
   template <typename... Args>
-  explicit binding_storage_holder(Args &&...args)
+  explicit binding_slot(Args &&...args)
       : storage_(std::forward<Args>(args)...) {}
 
   Storage &storage() noexcept { return storage_; }

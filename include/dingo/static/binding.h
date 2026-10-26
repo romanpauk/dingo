@@ -348,9 +348,9 @@ struct static_binding_policy {
   Host &host;
   construction_scope scope;
 
-  auto &storage() {
-    return state.template get_storage_for_model<BindingModel>();
-  }
+  auto &slot() { return state.template get_slot_for_model<BindingModel>(); }
+
+  auto &storage() { return slot().storage(); }
 
   template <typename Operation, typename Request, typename Context,
             typename StorageType, typename Activation, typename Fn>
@@ -688,6 +688,7 @@ class basic_static_activation_set
       private local_scope_storage<Registrations...> {
 public:
   using static_storage<Registrations...>::get_conversion_cache_for_model;
+  using static_storage<Registrations...>::get_slot_for_model;
   using static_storage<Registrations...>::get_storage;
   using static_storage<Registrations...>::get_storage_for_model;
   using local_scope_storage<Registrations...>::get_local_scope_for_model;
@@ -708,6 +709,10 @@ public:
 
   template <typename Registration> auto &get_storage() {
     return state_->template get_storage<Registration>();
+  }
+
+  template <typename BindingModel> auto &get_slot_for_model() {
+    return state_->template get_slot_for_model<BindingModel>();
   }
 
   template <typename BindingModel> auto &get_storage_for_model() {

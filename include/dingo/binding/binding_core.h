@@ -28,7 +28,7 @@ public:
   void *resolve_address(Context &context) {
     using operation = typename Resolution::operation;
     auto activation = this->activation();
-    auto &storage = this->storage();
+    auto &storage = this->slot().storage();
     auto materialize = [&](auto &&source) -> void * {
       return resolution_route<storage_type, Resolution>::apply(
                  this->scope, activation, context,
@@ -45,7 +45,7 @@ public:
   decltype(auto) consume_request(Context &context, Fn &&fn) {
     using operation = typename Resolution::operation;
     auto activation = this->activation();
-    auto &storage = this->storage();
+    auto &storage = this->slot().storage();
     auto consume = [&](auto &&source) -> decltype(auto) {
       return apply_consumed_resolution<Request, Resolution, storage_type>(
           activation, context, std::forward<decltype(source)>(source),
@@ -58,7 +58,7 @@ public:
   template <typename T, typename Context>
   decltype(auto) resolve_value(Context &context) {
     auto activation = this->activation();
-    auto &storage = this->storage();
+    auto &storage = this->slot().storage();
     auto resolve = [&](auto &&source) -> decltype(auto) {
       return resolve_binding_value<T>(activation, context,
                                       std::forward<decltype(source)>(source));

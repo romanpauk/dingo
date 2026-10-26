@@ -25,7 +25,7 @@ namespace detail {
 
 template <typename Registration>
 struct binding_storage_slot
-    : detail::binding_storage_holder<
+    : detail::binding_slot<
           typename detail::binding_model<Registration>::storage_type> {
   using binding_model = detail::binding_model<Registration>;
   using storage_type = typename binding_model::storage_type;
@@ -169,8 +169,13 @@ public:
     return static_cast<storage_slot<Registration> &>(*this).storage();
   }
 
+  template <typename BindingModel> auto &get_slot_for_model() {
+    return static_cast<
+        storage_slot<typename BindingModel::registration_type> &>(*this);
+  }
+
   template <typename BindingModel> auto &get_storage_for_model() {
-    return get_storage<typename BindingModel::registration_type>();
+    return get_slot_for_model<BindingModel>().storage();
   }
 
   template <typename BindingModel> auto &get_conversion_cache_for_model() {

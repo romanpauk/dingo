@@ -44,8 +44,8 @@ template <typename Owner, typename InstanceContainer, typename Storage,
           typename RegistrationParent = typename Owner::parent_container_type>
 class runtime_binding_state
     : private detail::cache::state<detail::cache::is_stable_storage_v<Storage>>,
-      private detail::binding_storage_holder<Storage> {
-  using storage_holder = detail::binding_storage_holder<Storage>;
+      private detail::binding_slot<Storage> {
+  using storage_holder = detail::binding_slot<Storage>;
 
 public:
   using owner_type = Owner;
@@ -302,7 +302,9 @@ private:
     using storage_type = Storage;
     static constexpr bool direct_source_lifetime = false;
 
-    auto &storage() { return binding.get_storage(); }
+    auto &slot() { return binding.state(); }
+
+    auto &storage() { return slot().storage(); }
 
     kernel_policy &activation() { return *this; }
 
