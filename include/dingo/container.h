@@ -33,6 +33,7 @@
 #include <dingo/runtime/registration_api.h>
 #include <dingo/runtime/runtime_binding.h>
 #include <dingo/static/activation_set.h>
+#include <dingo/static/construction.h>
 #include <dingo/static/container_traits.h>
 #include <dingo/static/graph.h>
 #include <dingo/static/registry.h>
@@ -347,35 +348,21 @@ private:
   template <typename Request, typename R = typename Request::result_type>
   DINGO_ALWAYS_INLINE R construct_static(construction_scope scope,
                                          runtime_context_type &context) {
-    using user_type = typename Request::user_type;
     using interface_type = typename Request::interface_type;
     using request_value_type = typename Request::value_type;
     using no_key = detail::no_lookup_key_t;
-    constexpr bool has_exact_static_binding =
-        is_static_binding_available_v<interface_type, no_key>;
-    constexpr bool has_normalized_static_binding =
-        is_static_binding_available_v<request_value_type, no_key>;
-    if constexpr (has_exact_static_binding) {
-      using binding =
-          typename static_selection_t<interface_type, no_key>::binding_type;
-      if constexpr (detail::binding_supports_request_v<user_type, binding>) {
-        return resolve_static<Request, no_key>(scope, context);
-      }
-    }
-
-    if constexpr (has_normalized_static_binding &&
-                  construct_normalized_request_v<user_type>) {
-      using normalized_selection =
-          static_selection_t<request_value_type, no_key>;
-      return detail::construct_static_binding_value<user_type,
-                                                    normalized_selection>(
-          [&]() {
-            return resolve_static<request_type<request_value_type>, no_key>(
-                scope, context);
-          });
-    } else {
-      return resolve_static<Request, no_key>(scope, context);
-    }
+    using exact_selection = static_selection_t<interface_type, no_key>;
+    using normalized_selection = static_selection_t<request_value_type, no_key>;
+    return detail::construct_from_static_source<
+        Request, R, runtime_context_type, false, exact_selection,
+        normalized_selection>(
+        scope, context,
+        [&](auto) { return resolve_static<Request, no_key>(scope, context); },
+        [&](auto) {
+          return resolve_static<request_type<request_value_type>, no_key>(
+              scope, context);
+        },
+        [&](auto) { return resolve_static<Request, no_key>(scope, context); });
   }
 
   template <typename T, typename LookupKey, typename Fn,

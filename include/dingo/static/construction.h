@@ -1,0 +1,69 @@
+//
+// This file is part of dingo project <https://github.com/romanpauk/dingo>
+//
+// See LICENSE for license and copyright information
+// SPDX-License-Identifier: MIT
+//
+
+#pragma once
+
+// The construct rule over a static source: the exact binding, the normalized
+// binding wrapped into the request, or the caller's factory. The runtime and
+// mixed containers enter it only after their runtime-binding checks; the
+// static container enters it for every default-factory construction. Keeping
+// the choice here makes the static-binding half of `construct` one rule.
+
+#include <dingo/base/config.h>
+#include <dingo/base/construction_scope.h>
+#include <dingo/binding/binding_resolution.h>
+#include <dingo/binding/binding_selection.h>
+#include <dingo/static/activation_set.h>
+#include <dingo/static/resolution.h>
+#include <dingo/type/key.h>
+
+#include <type_traits>
+#include <utility>
+
+namespace dingo {
+namespace detail {
+
+template <typename Request, typename R, typename Context, bool DiagnoseRvalue,
+          typename ExactSelection, typename NormalizedSelection,
+          typename ExactResolve, typename NormalizedResolve, typename Fallback>
+DINGO_ALWAYS_INLINE R construct_from_static_source(
+    construction_scope scope, Context &context, ExactResolve &&exact_resolve,
+    NormalizedResolve &&normalized_resolve, Fallback &&fallback) {
+  (void)scope;
+  using user_type = typename Request::user_type;
+
+  constexpr bool has_exact =
+      ExactSelection::status != binding_status::not_found;
+  constexpr bool has_normalized =
+      NormalizedSelection::status != binding_status::not_found;
+
+  if constexpr (has_exact) {
+    using binding = typename ExactSelection::binding_type;
+    if constexpr (binding_supports_request_v<user_type, binding>) {
+      return std::forward<ExactResolve>(exact_resolve)(0);
+    }
+  }
+
+  if constexpr (has_exact || has_normalized) {
+    if constexpr (DiagnoseRvalue &&
+                  rvalue_request_requires_explicit_conversion_v<user_type>) {
+      throw_missing_rvalue_conversion<user_type>(has_normalized, context);
+    } else if constexpr (construct_normalized_request_v<user_type>) {
+      return construct_static_binding_value<user_type, NormalizedSelection>(
+          [&]() -> decltype(auto) {
+            return std::forward<NormalizedResolve>(normalized_resolve)(0);
+          });
+    } else {
+      return std::forward<ExactResolve>(exact_resolve)(0);
+    }
+  } else {
+    return std::forward<Fallback>(fallback)(0);
+  }
+}
+
+} // namespace detail
+} // namespace dingo

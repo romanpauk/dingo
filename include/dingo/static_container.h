@@ -14,6 +14,7 @@
 #include <dingo/factory/invoke.h>
 #include <dingo/lookup/container_lookup_definition.h>
 #include <dingo/static/activation_set.h>
+#include <dingo/static/construction.h>
 #include <dingo/static/container_traits.h>
 #include <dingo/static/context.h>
 #include <dingo/static/resolution.h>
@@ -444,44 +445,26 @@ private:
             typename R = typename Request::result_type>
   R construct_request(Factory factory = Factory()) {
     using user_type = typename Request::user_type;
-    using request_value_type = typename Request::value_type;
     using interface_type = typename Request::interface_type;
+    using request_value_type = typename Request::value_type;
     if constexpr (std::is_same_v<Factory, constructor<request_value_type>>) {
-      using selection = typename static_bindings_type::template selection<
+      using exact_selection = typename static_bindings_type::template selection<
           binding_dependency_interface_t<interface_type>,
           binding_dependency_key_t<interface_type>>;
       using normalized_selection =
           typename static_bindings_type::template selection<
               request_value_type, detail::no_lookup_key_t>;
-      constexpr bool has_exact_binding =
-          selection::status != binding_status::not_found;
-      constexpr bool has_normalized_binding =
-          normalized_selection::status != binding_status::not_found;
-      if constexpr (has_exact_binding) {
-        using binding = typename selection::binding_type;
-        if constexpr (binding_supports_request_v<user_type, binding>) {
-          return resolve<user_type>();
-        }
-      }
-
-      if constexpr (has_exact_binding || has_normalized_binding) {
-        if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
-                          user_type>) {
-          context_type context;
-          ::dingo::throw_missing_rvalue_conversion<user_type>(
-              has_normalized_binding, context);
-        } else if constexpr (construct_normalized_request_v<user_type>) {
-          return construct_static_binding_value<user_type,
-                                                normalized_selection>(
-              [&]() { return resolve<request_value_type>(); });
-        } else {
-          return resolve<user_type>();
-        }
-      } else {
-        context_type context;
-        auto type_guard = context.template track_type<request_value_type>();
-        return factory.template construct<R>(ephemeral_scope, context, *this);
-      }
+      context_type context;
+      return detail::construct_from_static_source<Request, R, context_type,
+                                                  true, exact_selection,
+                                                  normalized_selection>(
+          ephemeral_scope, context, [&](auto) { return resolve<user_type>(); },
+          [&](auto) { return resolve<request_value_type>(); },
+          [&](auto) {
+            auto type_guard = context.template track_type<request_value_type>();
+            return factory.template construct<R>(ephemeral_scope, context,
+                                                 *this);
+          });
     } else {
       context_type context;
       auto type_guard = context.template track_type<request_value_type>();
