@@ -85,6 +85,13 @@ struct binding_conversion_cache_base<true, ConversionTypes> {
         context, std::forward<Args>(args)...);
   }
 
+  template <typename T, typename Owner, typename Context, typename... Args>
+  T &construct_conversion_for(Owner &owner, construction_scope scope,
+                              Context &context, Args &&...args) {
+    return construct_conversion_with<T>(owner, scope, context,
+                                        std::forward<Args>(args)...);
+  }
+
   void reset_conversions() { conversions_.reset(); }
 
 protected:
@@ -102,6 +109,12 @@ struct binding_conversion_cache_base<false, ConversionTypes> {
   template <typename T, typename Owner, typename Context, typename... Args>
   T &construct_conversion_with(Owner &, construction_scope scope,
                                Context &context, Args &&...args) {
+    return construct_conversion<T>(scope, context, std::forward<Args>(args)...);
+  }
+
+  template <typename T, typename Owner, typename Context, typename... Args>
+  T &construct_conversion_for(Owner &, construction_scope scope,
+                              Context &context, Args &&...args) {
     return construct_conversion<T>(scope, context, std::forward<Args>(args)...);
   }
 
@@ -129,27 +142,8 @@ private:
 // with the owner that tracks the lifetime; a non-cached slot constructs in the
 // context. The two callers differ only in the owner they pass.
 template <bool Enabled, typename ConversionTypes>
-class binding_cache_slot
-    : public binding_conversion_cache_base<Enabled, ConversionTypes> {
-  using base_type = binding_conversion_cache_base<Enabled, ConversionTypes>;
-
-public:
-  using base_type::construct_conversion;
-  using base_type::construct_conversion_with;
-  using base_type::reset_conversions;
-
-  template <typename T, typename Owner, typename Context, typename... Args>
-  T &construct_conversion_for(Owner &owner, construction_scope scope,
-                              Context &context, Args &&...args) {
-    if constexpr (Enabled) {
-      return base_type::template construct_conversion_with<T>(
-          owner, scope, context, std::forward<Args>(args)...);
-    } else {
-      return base_type::template construct_conversion<T>(
-          scope, context, std::forward<Args>(args)...);
-    }
-  }
-};
+using binding_cache_slot =
+    binding_conversion_cache_base<Enabled, ConversionTypes>;
 
 template <typename Context> struct retained_frame_scope {
   explicit retained_frame_scope(Context &context) : context_(context) {
@@ -165,19 +159,6 @@ private:
   Context &context_;
   typename Context::frame_type frame_;
 };
-
-template <typename RTTI> struct binding_request {
-  instance_request<RTTI> request;
-  const void *cache_key;
-};
-
-template <typename T, typename RTTI>
-constexpr binding_request<RTTI>
-make_binding_request(const void *cache_key = nullptr) {
-  return {{RTTI::template get_type_index<request_lookup_type_t<T>>(),
-           describe_type<T>()},
-          cache_key};
-}
 
 template <typename T> T convert_resolved_binding(resolved_address result) {
   using result_type = std::remove_reference_t<T>;
@@ -580,9 +561,8 @@ resolve_address_from_source(construction_scope scope, Resolver &resolver,
 template <typename T, typename RTTI, typename Binding, typename Context>
 T resolve_binding_request(construction_scope scope, Binding &binding,
                           Context &context, const void *cache_key = nullptr) {
-  auto request = detail::make_binding_request<T, RTTI>(cache_key);
-  auto result =
-      binding.resolve_request(scope, context, request.request, cache_key);
+  auto request = make_instance_request<T, RTTI>();
+  auto result = binding.resolve_request(scope, context, request, cache_key);
   return detail::convert_resolved_binding<T>(result);
 }
 

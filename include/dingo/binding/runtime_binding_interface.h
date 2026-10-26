@@ -56,6 +56,12 @@ template <typename T> struct request_lookup_type<T &&> {
 template <typename T>
 using request_lookup_type_t = typename request_lookup_type<T>::type;
 
+template <typename T, typename RTTI>
+constexpr instance_request<RTTI> make_instance_request() {
+  return {RTTI::template get_type_index<request_lookup_type_t<T>>(),
+          describe_type<T>()};
+}
+
 struct resolved_address {
   void *address;
   enum class access_kind {

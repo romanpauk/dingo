@@ -35,29 +35,18 @@ struct runtime_resolution_requires_container<
 template <typename Container>
 inline constexpr bool runtime_resolution_requires_container_v =
     runtime_resolution_requires_container<Container>::value;
-
-template <bool Stable>
-class runtime_binding_base : private cache::state<Stable> {
-protected:
-  cache::entry *binding_cache_slot() noexcept { return cache_state::slot(); }
-
-private:
-  using cache_state = cache::state<Stable>;
-};
-
 } // namespace detail
 
 template <typename Owner, typename InstanceContainer, typename Storage,
           typename RegistrationParent = typename Owner::parent_container_type>
-class runtime_binding_state : private detail::runtime_binding_base<
-                                  detail::cache::is_stable_storage_v<Storage>>,
-                              private detail::binding_storage_holder<Storage> {
+class runtime_binding_state
+    : private detail::cache::state<detail::cache::is_stable_storage_v<Storage>>,
+      private detail::binding_storage_holder<Storage> {
   using storage_holder = detail::binding_storage_holder<Storage>;
 
 public:
   using owner_type = Owner;
   using container_type = InstanceContainer;
-  using instance_container_type = InstanceContainer;
   using resolution_container_type = InstanceContainer;
   using registration_parent_type = RegistrationParent;
   using allocator_type = typename Owner::allocator_type;
@@ -82,7 +71,8 @@ public:
   allocator_type &get_allocator() { return owner().get_allocator(); }
   Storage &storage() { return storage_holder::storage(); }
   detail::cache::entry *cache_slot() noexcept {
-    return state_base::binding_cache_slot();
+    return detail::cache::state<
+        detail::cache::is_stable_storage_v<Storage>>::slot();
   }
   InstanceContainer &container() {
     if (!instance_container_) {
@@ -109,11 +99,6 @@ public:
     return *instance_container_;
   }
 
-  template <bool TrackRollback = true>
-  InstanceContainer &resolution_container(runtime_context_type &context) {
-    return container<TrackRollback>(context);
-  }
-
   template <bool TrackRollback = true, typename Fn>
   decltype(auto) with_resolution_container(runtime_context_type &context,
                                            Fn &&fn) {
@@ -130,9 +115,6 @@ public:
   }
 
 private:
-  using state_base =
-      detail::runtime_binding_base<detail::cache::is_stable_storage_v<Storage>>;
-
   owner_type &owner() {
     assert(owner_ != nullptr);
     return *owner_;
@@ -163,23 +145,13 @@ using runtime_binding_state_t =
 
 } // namespace detail
 
-template <typename T> struct runtime_binding_state_traits {
-  using state_type = T;
+namespace detail {
+template <typename T> T &state_ref(T &state) { return state; }
 
-  static T &ref(T &state) { return state; }
-};
+template <typename T> T &state_ref(std::shared_ptr<T> &state) { return *state; }
 
-template <typename T> struct runtime_binding_state_traits<std::shared_ptr<T>> {
-  using state_type = T;
-
-  static T &ref(std::shared_ptr<T> &state) { return *state; }
-};
-
-template <typename T> struct runtime_binding_state_traits<T *> {
-  using state_type = T;
-
-  static T &ref(T *state) { return *state; }
-};
+template <typename T> T &state_ref(T *state) { return *state; }
+} // namespace detail
 
 namespace detail {
 template <typename Storage> using registered_type_t = typename Storage::type;
@@ -233,8 +205,8 @@ public:
   using storage_type = Storage;
   using runtime_context_type =
       runtime_context<typename Container::allocator_type>;
-  using state_traits = runtime_binding_state_traits<State>;
-  using state_type = typename state_traits::state_type;
+  using state_type = std::remove_reference_t<decltype(detail::state_ref(
+      std::declval<State &>()))>;
   using container_type = typename state_type::container_type;
   using interface_type = Type;
   using rtti_type = typename Container::rtti_type;
@@ -263,35 +235,10 @@ private:
         state().runtime(), scope, context, std::forward<Args>(args)...);
   }
 
-  struct binding_activation {
-    runtime_binding &binding;
-    construction_scope scope;
-
-    template <typename T, typename Context, typename Source>
-    decltype(auto) construct_conversion(construction_scope construction,
-                                        Context &context, Source &&source) {
-      return binding.template construct_conversion<T>(
-          construction, context, std::forward<Source>(source));
-    }
-
-    template <typename T, typename Context, typename Source>
-    decltype(auto) retain_conversion(Context &context, Source &&source) {
-      return binding.template retain_conversion<T>(
-          scope, context, std::forward<Source>(source));
-    }
-  };
-
   State state_;
 
-  state_type &state() { return state_traits::ref(state_); }
+  state_type &state() { return detail::state_ref(state_); }
   auto &get_storage() { return state().storage(); }
-  template <bool TrackRollback = true, typename Fn>
-  decltype(auto) with_resolution_container(runtime_context_type &context,
-                                           Fn &&fn) {
-    return state().template with_resolution_container<TrackRollback>(
-        context, std::forward<Fn>(fn));
-  }
-
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4702)
@@ -316,7 +263,7 @@ private:
                   },
             this);
         auto materialize = [&]() -> decltype(auto) {
-          return with_resolution_container<true>(
+          return state().template with_resolution_container<true>(
               context, [&](auto &container) -> decltype(auto) {
                 return detail::with_runtime_binding_source(
                     persistent_scope, context, get_storage(), container,
@@ -338,7 +285,7 @@ private:
         }
       }
     }
-    return with_resolution_container(
+    return state().with_resolution_container(
         context, [&](auto &container) -> decltype(auto) {
           return detail::with_runtime_binding_source(
               scope, context, get_storage(), container, std::forward<Fn>(fn));
@@ -357,7 +304,20 @@ private:
 
     auto &storage() { return binding.get_storage(); }
 
-    binding_activation activation() const { return {binding, scope}; }
+    kernel_policy &activation() { return *this; }
+
+    template <typename T, typename Context, typename Source>
+    decltype(auto) construct_conversion(construction_scope construction,
+                                        Context &context, Source &&source) {
+      return binding.template construct_conversion<T>(
+          construction, context, std::forward<Source>(source));
+    }
+
+    template <typename T, typename Context, typename Source>
+    decltype(auto) retain_conversion(Context &context, Source &&source) {
+      return binding.template retain_conversion<T>(
+          scope, context, std::forward<Source>(source));
+    }
 
     template <typename Context, typename Fn>
     decltype(auto) with_source(construction_scope source_scope,
@@ -414,10 +374,9 @@ public:
   template <typename T, typename Context, typename Source>
   decltype(auto) retain_conversion(construction_scope scope, Context &context,
                                    Source &&source) {
-    binding_activation activation{*this, scope};
-    return detail::retain_binding_conversion<T>(scope, get_storage(),
-                                                activation, context,
-                                                std::forward<Source>(source));
+    kernel_policy policy{*this, scope};
+    return detail::retain_binding_conversion<T>(
+        scope, get_storage(), policy, context, std::forward<Source>(source));
   }
 
 #ifdef _MSC_VER
