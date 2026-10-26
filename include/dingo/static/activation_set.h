@@ -10,6 +10,7 @@
 #include <dingo/base/exceptions.h>
 #include <dingo/base/type_descriptor.h>
 #include <dingo/binding/binding_collection.h>
+#include <dingo/binding/binding_core.h>
 #include <dingo/binding/binding_model.h>
 #include <dingo/binding/binding_resolution.h>
 #include <dingo/binding/resolution_route.h>
@@ -487,16 +488,44 @@ constexpr bool static_request_served_v = [] {
   }
 }();
 
+template <typename State, typename Host, typename BindingModel>
+struct static_binding_policy {
+  using storage_type = typename BindingModel::storage_type;
+
+  State &state;
+  Host &host;
+  construction_scope scope;
+
+  static constexpr bool direct_source_lifetime = true;
+
+  auto &storage() {
+    return state.template get_storage_for_model<BindingModel>();
+  }
+
+  binding_activation<State, Host, BindingModel> activation() const {
+    return {state, host, scope};
+  }
+
+  static constexpr type_descriptor registered_type() {
+    return detail::binding_registered_type<
+        typename BindingModel::storage_type>();
+  }
+};
+
 template <typename State, typename Host, typename InterfaceBinding>
-struct static_binding_resolver {
+struct static_binding_resolver
+    : binding_core<static_binding_policy<
+          State, Host, typename InterfaceBinding::binding_model_type>> {
   using binding_model_type = typename InterfaceBinding::binding_model_type;
   using interface_type = typename InterfaceBinding::interface_type;
   using raw_interface_type = typename annotated_traits<interface_type>::type;
   using storage_type = typename binding_model_type::storage_type;
 
-  State &state;
-  Host &host;
-  construction_scope scope;
+  using policy_type = static_binding_policy<State, Host, binding_model_type>;
+  using core_type = binding_core<policy_type>;
+
+  static_binding_resolver(State &state, Host &host, construction_scope scope)
+      : core_type(policy_type{state, host, scope}) {}
 
   static constexpr type_descriptor registered_type() {
     return detail::binding_registered_type<storage_type>();
@@ -513,14 +542,15 @@ struct static_binding_resolver {
     if constexpr (!std::is_void_v<matched_resolution> &&
                   !std::is_reference_v<Request> &&
                   !std::is_pointer_v<Request>) {
-      return consume_request<Request, matched_resolution>(
+      return this->template consume_request<Request, matched_resolution>(
           context, [](auto &&instance) -> Request {
             return Request(std::forward<decltype(instance)>(instance));
           });
     } else {
       void *ptr = nullptr;
       if constexpr (!std::is_void_v<matched_resolution>) {
-        ptr = resolve_request_address<Request, matched_resolution>(context);
+        ptr = this->template resolve_address<Request, matched_resolution>(
+            context);
       } else {
         throw detail::make_type_not_convertible_exception(
             describe_type<Request>(), registered_type(), context);
@@ -539,50 +569,12 @@ struct static_binding_resolver {
         typename binding_supports_request<Request, InterfaceBinding>::type;
 
     if constexpr (!std::is_void_v<matched_resolution>) {
-      return consume_request<Request, matched_resolution>(context,
-                                                          std::forward<Fn>(fn));
+      return this->template consume_request<Request, matched_resolution>(
+          context, std::forward<Fn>(fn));
     } else {
       throw detail::make_type_not_convertible_exception(
           describe_type<Request>(), registered_type(), context);
     }
-  }
-
-  // The address is deduced: a deduced return type is instantiated at the call
-  // and does not add a level to the template depth of a dependency chain.
-  template <typename Request, typename Resolution, typename Context>
-  decltype(auto) resolve_request_address(Context &context) {
-    using operation = typename Resolution::operation;
-
-    binding_activation<State, Host, binding_model_type> activation{state, host,
-                                                                   scope};
-    auto &&storage = state.template get_storage_for_model<binding_model_type>();
-    auto materialize = [&](auto &&source) -> void * {
-      return detail::resolution_route<storage_type, Resolution>::apply(
-                 scope, activation, context,
-                 std::forward<decltype(source)>(source),
-                 describe_type<Request>(), registered_type())
-          .address;
-    };
-
-    return detail::with_source_lifetime<operation, Request>(
-        scope, context, storage, activation, std::move(materialize));
-  }
-
-  template <typename Request, typename Resolution, typename Context,
-            typename Fn>
-  decltype(auto) consume_request(Context &context, Fn &&fn) {
-    binding_activation<State, Host, binding_model_type> activation{state, host,
-                                                                   scope};
-    auto &&storage = state.template get_storage_for_model<binding_model_type>();
-    auto consume = [&](auto &&source) -> decltype(auto) {
-      return detail::apply_consumed_resolution<Request, Resolution,
-                                               storage_type>(
-          activation, context, std::forward<decltype(source)>(source),
-          std::forward<Fn>(fn));
-    };
-    using operation = typename Resolution::operation;
-    return detail::with_source_lifetime<operation, Request>(
-        scope, context, storage, activation, std::move(consume));
   }
 };
 

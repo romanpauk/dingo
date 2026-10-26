@@ -9,6 +9,7 @@
 
 #include <dingo/base/config.h>
 
+#include <dingo/binding/binding_core.h>
 #include <dingo/binding/binding_resolution.h>
 #include <dingo/binding/resolution_route.h>
 #include <dingo/binding/runtime_binding_interface.h>
@@ -360,6 +361,24 @@ private:
 #pragma warning(pop)
 #endif
 
+  struct kernel_policy {
+    runtime_binding &binding;
+    construction_scope scope;
+
+    using storage_type = Storage;
+    static constexpr bool direct_source_lifetime = false;
+
+    auto &storage() { return binding.get_storage(); }
+
+    binding_activation activation() const { return {binding, scope}; }
+
+    template <typename Context, typename Fn>
+    decltype(auto) with_source(construction_scope source_scope,
+                               Context &context, Fn &&fn) {
+      return binding.with_source(source_scope, context, std::forward<Fn>(fn));
+    }
+  };
+
   void reset_conversion_artifacts() {
     conversion_cache_base::reset_conversions();
   }
@@ -441,15 +460,11 @@ public:
                 .what());
       }
 
-      binding_activation activation{binding, scope};
-      auto result = binding.with_source(
-          scope, context, [&](auto &&source) -> resolved_address {
-            return detail::resolve_request_address_from_source<Storage>(
-                scope, activation, context,
-                std::forward<decltype(source)>(source), resolution_index,
-                request_resolutions{}, request.requested_type,
-                registered_type());
-          });
+      kernel_policy policy{binding, scope};
+      detail::binding_core<kernel_policy> core{policy};
+      auto result =
+          core.resolve_candidates(request_resolutions{}, resolution_index,
+                                  request.requested_type, context);
       // Request caching is intentionally stricter than conversion caching and
       // is published with transaction rollback tracking.
       if constexpr (Storage::conversions::is_stable) {
