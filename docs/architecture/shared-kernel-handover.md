@@ -84,9 +84,35 @@ runtime/                      static/
 
 `static/bindings.h` is the compile-time binding source and its dependency rules;
 the runtime side normalizes its bindings at registration instead.
-`static/binding.h` still owns the storage slots because the activation set
-inherits the storage it fills; splitting a `static/storage.h` needs a
-composition change, not a file move.
+`static/storage.h` owns the storage and conversion-cache slots. The activation
+set is the registry state: it composes the storage and the local activation sets
+a registration declares, and the registry owns the activation set, so the
+storage no longer depends on the activation-set definition.
+
+The storage slot is a shared concept: `binding/binding_resolution.h` defines
+`binding_slot<Storage>`, both `binding_storage_slot` (static) and
+`runtime_binding_state` (runtime) derive from it, and `binding_core` reads the
+storage through `Policy::slot()`. What remains different is the owner and the
+source lifetime: the static owner is `static_storage` inside the activation set,
+the runtime owner is the registry's arena and scope table, and the
+source-lifetime ladder is still per-mode.
+
+The container classes are paired:
+
+- `container` (combined), `runtime_container` and `static_container` (facades);
+- `runtime_container_impl` and `static_container_impl` (implementations);
+- `container_base` (parameter dispatch), `container_collections` (collection
+  spellings), `container_selection` (shared source order).
+
+The module classes are named by role:
+
+- runtime: `runtime_registry`, `lookup_selection`, `runtime_storage`,
+  `runtime_binding`, `runtime_registration`;
+- static: `static_registry`, `static_bindings`, `static_selection`,
+  `static_storage`, `static_binding_resolver`,
+  `static_registration_requirements`;
+- shared: `binding_slot`, `container_invoke`, `resolve_missing_request`,
+  `construct_from_static_source`.
 
 Off-chain operations are shared too:
 
@@ -98,6 +124,10 @@ Off-chain operations are shared too:
 
 ## Recent Commits
 
+- `8863db0` Read binding storage through a shared slot
+- `4df7286` Record the static storage split in the handover
+- `495273a` Extract the static storage and let the activation set own local
+  scopes
 - `ecbe0d2` Name the runtime storage, selection, and registration classes by
   role
 - `4347641` Name the detail container components after their roles
