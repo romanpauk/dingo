@@ -1,7 +1,7 @@
 # Shared-Kernel Handover
 
-Status: `feature/shared-kernel` tip `779ce91`. The working plan stays untracked
-in `docs/architecture/shared-kernel-next-steps.md`.
+Status: `feature/shared-kernel`. The working plan stays untracked in
+`docs/architecture/shared-kernel-next-steps.md`.
 
 ## Goal
 
@@ -38,17 +38,32 @@ The model is richer than the C++ descriptor:
 - `type_list_at` uses C++26 pack indexing, then `__type_pack_element`, then the
   portable inheritance selection.
 
-Runtime lookup work is staged:
+Runtime lookup is split:
 
-- `runtime/lookup_store.h` now owns `runtime_lookup_binding_view`,
-  `runtime_lookup_value`, and `runtime_bindings_state`.
-- Selection routes, collection iteration, and registration validation still live
-  in `runtime/registry.h`.
-- Selection status and the runtime accumulator are shared; full traversal is not
-  unified.
+- `runtime/lookup_store.h` owns lookup selection: the index types, routes,
+  `select_binding`, `binding_status`, entry traits, and collection candidate
+  iteration.
+- `runtime/registry.h` keeps execution, registration validation and commit,
+  rollback, and data ownership.
+- The static and runtime traversals still share the status/ambiguity rules, not
+  the traversal itself.
+
+Container operations are shared where they are off the per-link path:
+
+- `detail::container_invoke` in `factory/invoke.h` owns callable dispatch for
+  both containers.
+- `binding/container_miss.h` owns the miss rule, with runtime/mixed and static
+  capability policies.
+- `test/container/dependency_chain.cpp` pins both template-depth budgets.
 
 ## Recent Commits
 
+- `204a236` Format the shared-kernel handover
+- `3b0a0a1` Share the container miss rule
+- `0dfde92` Share the container invoke operation
+- `d303c83` Guard the static-only dependency chain
+- `dc78f48` Extract runtime lookup selection into lookup_store
+- `c66fde5` Add shared-kernel handover
 - `779ce91` Extract runtime lookup storage types
 - `e93d5c6` Share selection status across static and runtime lookup
 - `dadb23e` Make the binding core mode-agnostic
@@ -56,9 +71,6 @@ Runtime lookup work is staged:
 - `d0d861c` Thin runtime binding layers
 - `144a22c` Route static value evaluation through binding_core
 - `192a8b9` Share binding execution through binding_core
-- `3d21e09` Dispatch composite conversions through one template
-- `8aa843a` Unify conversion route and cache metadata
-- `f0ca627` Unify route candidate metadata and probe accessors
 
 ## Verification
 
@@ -80,48 +92,39 @@ Current status:
 - `check`: passes
 - Generated behavior source and `test/baselines/model.json`: unchanged
 
-Current probe record: `build/cost/split1.json`
+Current probe record: `build/cost/miss2.json`
 
 ```text
-text:                234102
-object:              591304
-preprocessed bytes:  2567196
+text:                234248
+object:              591448
+preprocessed bytes:  2572066
 ```
 
-Relative to the pre-kernel dispatch record:
+Relative to the lookup-split record (`build/cost/split1.json`):
 
 ```text
-text:                +1521
-object:              +19448
-preprocessed bytes:  +2033
+text:                +146
+object:              +144
+preprocessed bytes:  +4870
 ```
 
-The runtime additions are not worse than the previous runtime slice; remaining
-text growth is in the static core path. Do not treat wall time from three runs
-as meaningful.
+The growth is the new header boundaries, the shared `invoke` and miss helpers,
+and their explicit capability policies. Text growth is flat within measurement
+noise. Do not treat wall time from three runs as meaningful.
 
 ## Next Work
 
-### 1. Finish the lookup split
+### 1. Share the collection rule, then the singular engine
 
-Move from `registry_store` into `lookup_store`:
-
-- `lookup_index_route`
-- `runtime_lookup_entry_traits`
-- `runtime_lookup_entries_for_interface`
-- `select_binding`
-- `select_binding_at_interface`
-- `select_lookup`
-- `make_selection`
-- collection candidate iteration
-
-Keep in `registry_store`:
-
-- execution (`resolve_binding`, cache lookup)
-- registration validation and commit
-- rollback
-
-Then extract `registration_store`.
+- Share collection construct/count/append behind a mode policy. It is off the
+  singular per-link path, so it is depth-safe and removes the last non-chain
+  duplication.
+- Then replace the two singular resolve consumers with one selection component.
+  The static-only path tops out at 45 links on GCC, so a per-link wrapper is not
+  affordable; the component must replace the existing entry. The M9.2-derived
+  target shape and six slices are in the untracked plan under "Container
+  unification (M9.2 reference)".
+- Then extract `registration_store`.
 
 ### 2. Add a runtime-specific cost probe
 
@@ -149,8 +152,11 @@ Do not merge these blindly.
 ### 4. Container mode policies
 
 `container_with_static_bindings` still serves static, runtime, and mixed modes
-through `void` parameters and `if constexpr`. Extract the mode-specific bodies
-behind a thin facade after the registry split.
+through `void` parameters and `if constexpr`, and `static_container` keeps a
+separate resolve/construct consumer. The M9.2 reference is a source protocol
+plus one selection engine over capability flags. The static-only depth canary
+(45 links on GCC) is the gate: the engine must replace the static consumer, not
+wrap it.
 
 ### 5. Route-list algebra
 
@@ -167,10 +173,12 @@ priority than the registry split.
 
 ## Constraints and Gotchas
 
-- **Template depth**: the dependency chain is 48 links and the limit is 900.
-  Adding one template layer per link can exceed it. The mode-agnostic core only
-  fits because the source-lifetime ladder moved into the static policy. Do not
-  raise the limit as a fix.
+- **Template depth**: measured and pinned in `dependency_chain_test`. The mixed
+  `container<bindings<...>>` resolves 48 links on GCC and 100 on Clang; the
+  static `static_container` resolves 45 on GCC (46 fails) and 100 on Clang. The
+  limit is 900. A shared per-link function template is not affordable on the
+  static side; replace the existing entry or free a layer first. Do not raise
+  the limit as a fix.
 - **Static zero-overhead**: no vtable, no erased request, no runtime cache
   members on the static path. The static policy must stay compile-time.
 - **Lookup unification**: static candidate is a type, runtime candidate is a
@@ -195,9 +203,11 @@ priority than the registry split.
   ladder
 - `include/dingo/runtime/runtime_binding.h` — runtime adapter and kernel policy
 - `include/dingo/binding/binding_selection.h` — shared selection status
-- `include/dingo/runtime/lookup_store.h` — runtime lookup storage
-- `include/dingo/runtime/registry.h` — selection/registration (split in
-  progress)
+- `include/dingo/runtime/lookup_store.h` — runtime lookup selection
+- `include/dingo/runtime/registry.h` — runtime execution and registration
+- `include/dingo/binding/container_miss.h` — miss rule and capability policies
+- `include/dingo/factory/invoke.h` — shared container callable dispatch
+- `test/container/dependency_chain.cpp` — mixed/static depth budgets
 - `include/dingo/resolution/resolution_operation.h` — conversion
   descriptor/walker
 - `include/dingo/base/type_list.h` — non-recursive type-list indexing
