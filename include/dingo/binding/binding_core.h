@@ -25,7 +25,7 @@ public:
   explicit binding_core(Policy policy) : Policy(std::move(policy)) {}
 
   template <typename Request, typename Resolution, typename Context>
-  DINGO_ALWAYS_INLINE void *resolve_address(Context &context) {
+  void *resolve_address(Context &context) {
     using operation = typename Resolution::operation;
     auto activation = this->activation();
     auto &storage = this->storage();
@@ -47,8 +47,7 @@ public:
 
   template <typename Request, typename Resolution, typename Context,
             typename Fn>
-  DINGO_ALWAYS_INLINE decltype(auto) consume_request(Context &context,
-                                                     Fn &&fn) {
+  decltype(auto) consume_request(Context &context, Fn &&fn) {
     using operation = typename Resolution::operation;
     auto activation = this->activation();
     auto &storage = this->storage();
@@ -66,8 +65,25 @@ public:
     }
   }
 
+  template <typename T, typename Context>
+  decltype(auto) resolve_value(Context &context) {
+    auto activation = this->activation();
+    auto &storage = this->storage();
+    auto resolve = [&](auto &&source) -> decltype(auto) {
+      return resolve_binding_value<T>(activation, context,
+                                      std::forward<decltype(source)>(source));
+    };
+    if constexpr (Policy::direct_value_source) {
+      return with_binding_source(this->scope, context, storage, activation,
+                                 std::move(resolve));
+    } else {
+      return this->with_value_source(this->scope, context, storage, activation,
+                                     std::move(resolve));
+    }
+  }
+
   template <typename... Resolutions, typename Context>
-  DINGO_ALWAYS_INLINE resolved_address
+  resolved_address
   resolve_candidates(type_list<Resolutions...>, std::size_t index,
                      type_descriptor requested_type, Context &context) {
     using candidates_type = resolution_candidates<storage_type, Resolutions...>;

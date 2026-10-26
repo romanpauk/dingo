@@ -497,6 +497,7 @@ struct static_binding_policy {
   construction_scope scope;
 
   static constexpr bool direct_source_lifetime = true;
+  static constexpr bool direct_value_source = true;
 
   auto &storage() {
     return state.template get_storage_for_model<BindingModel>();
@@ -582,13 +583,9 @@ template <typename T, typename BindingModel, typename State, typename Host,
           typename Context>
 decltype(auto) evaluate_static_binding(construction_scope scope, State &state,
                                        Host &host, Context &context) {
-  binding_activation<State, Host, BindingModel> activation{state, host, scope};
-  return detail::with_binding_source(
-      scope, context, state.template get_storage_for_model<BindingModel>(),
-      activation, [&](auto &&source) -> decltype(auto) {
-        return detail::resolve_binding_value<T>(
-            activation, context, std::forward<decltype(source)>(source));
-      });
+  static_binding_policy<State, Host, BindingModel> policy{state, host, scope};
+  binding_core<decltype(policy)> core{policy};
+  return core.template resolve_value<T>(context);
 }
 
 template <typename InterfaceBinding, typename State, typename Host>

@@ -214,19 +214,6 @@ std::size_t resolution_request_index(type_list<Resolutions...>,
   return result;
 }
 
-template <typename Storage, typename Resolver, typename Context,
-          typename MaterializedSource, typename... Resolutions>
-resolved_address resolve_request_address_from_source(
-    construction_scope scope, Resolver &resolver, Context &context,
-    MaterializedSource &&source, std::size_t resolution_index,
-    type_list<Resolutions...>, type_descriptor requested_type,
-    type_descriptor registered_type) {
-  using candidates = resolution_candidates<Storage, Resolutions...>;
-  return resolve_candidate(candidates{}, resolution_index, scope, resolver,
-                           context, std::forward<MaterializedSource>(source),
-                           requested_type, registered_type);
-}
-
 } // namespace detail
 
 // TODO: the container here is just for RTTI, but it is needed to get the
