@@ -98,6 +98,10 @@ Off-chain operations are shared too:
 
 ## Recent Commits
 
+- `ecbe0d2` Name the runtime storage, selection, and registration classes by
+  role
+- `4347641` Name the detail container components after their roles
+- `9b03b73` Name the runtime container implementation after its static twin
 - `8335dc2` Split the static bindings and registry by role
 - `f7036f7` Extract the static selection into static/selection.h
 - `1bc6516` Move the static requirements to static/registration.h
@@ -248,14 +252,14 @@ priority than the registry split.
 - `include/dingo/binding/binding_core.h` — shared typed execution kernel
 - `include/dingo/static/binding.h` — static binding, activation, and storage
 - `include/dingo/static/bindings.h` — static binding types and dependency rules
-- `include/dingo/static/selection.h` — static type-level selection
+- `include/dingo/static/selection.h` — `static_selection`, type-level
 - `include/dingo/static/registry.h` — static registry
-- `include/dingo/static/registration.h` — static compile-time requirements
+- `include/dingo/static/registration.h` — `static_registration_requirements`
 - `include/dingo/runtime/binding.h` — runtime adapter and kernel policy
-- `include/dingo/runtime/storage.h` — runtime arena and object store
-- `include/dingo/runtime/registration.h` — runtime registration forwarding
+- `include/dingo/runtime/storage.h` — `runtime_storage` arena and object store
+- `include/dingo/runtime/registration.h` — `runtime_registration` forwarding
 - `include/dingo/binding/binding_selection.h` — shared selection status
-- `include/dingo/runtime/selection.h` — runtime lookup selection
+- `include/dingo/runtime/selection.h` — `lookup_selection`
 - `include/dingo/runtime/registry.h` — runtime execution and registration
 - `include/dingo/binding/container_selection.h` — shared singular selection
   consumer
