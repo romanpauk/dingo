@@ -103,6 +103,7 @@ if(DINGO_DEVELOPMENT_MODE)
         type/key.h
         base/none.h
         static/binding.h
+        static/bindings.h
         static/registration.h
         static/selection.h
         static/container_traits.h

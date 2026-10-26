@@ -10,7 +10,7 @@
 #include <dingo/base/type_list.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/resolution/resolution_operation.h>
-#include <dingo/static/registry.h>
+#include <dingo/static/bindings.h>
 #include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>
 

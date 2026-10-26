@@ -17,7 +17,6 @@
 #include <dingo/static/construction.h>
 #include <dingo/static/container_traits.h>
 #include <dingo/static/context.h>
-#include <dingo/static/resolution.h>
 #include <dingo/static/resolution_policy.h>
 #include <dingo/type/dependency_traits.h>
 

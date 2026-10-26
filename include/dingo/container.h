@@ -38,7 +38,6 @@
 #include <dingo/static/graph.h>
 #include <dingo/static/registration.h>
 #include <dingo/static/registry.h>
-#include <dingo/static/resolution.h>
 #include <dingo/static/resolution_policy.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/annotated.h>
