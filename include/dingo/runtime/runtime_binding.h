@@ -76,7 +76,7 @@ public:
   }
   InstanceContainer &container() {
     if (!instance_container_) {
-      instance_container_ = construct_container<InstanceContainer>();
+      instance_container_ = construct_container<InstanceContainer>(nullptr);
     }
     return *instance_container_;
   }
@@ -85,7 +85,7 @@ public:
   InstanceContainer &container(runtime_context_type &context) {
     if (!instance_container_) {
       assert(instance_container_ == nullptr);
-      auto *created = construct_container<InstanceContainer>(context);
+      auto *created = construct_container<InstanceContainer>(&context);
       if constexpr (TrackRollback) {
         context.on_rollback(
             +[](void *self, void *) noexcept {
@@ -120,12 +120,11 @@ private:
     return *owner_;
   }
 
-  template <typename T> T *construct_container(runtime_context_type &context) {
-    return std::addressof(context.template construct<T>(
-        persistent_scope, parent(), get_allocator()));
-  }
-
-  template <typename T> T *construct_container() {
+  template <typename T> T *construct_container(runtime_context_type *context) {
+    if (context != nullptr) {
+      return std::addressof(context->template construct<T>(
+          persistent_scope, parent(), get_allocator()));
+    }
     return std::addressof(
         runtime().template construct<T>(parent(), get_allocator()));
   }
@@ -209,18 +208,16 @@ public:
       std::declval<State &>()))>;
   using container_type = typename state_type::container_type;
   using interface_type = Type;
-  using rtti_type = typename Container::rtti_type;
-  using type_index = typename rtti_type::type_index;
-  using request_type = instance_request<rtti_type>;
+  using request_type = instance_request<typename Container::rtti_type>;
   using interface_base =
-      runtime_binding_interface<rtti_type, runtime_context_type>;
+      runtime_binding_interface<typename Container::rtti_type,
+                                runtime_context_type>;
   using cache_types = detail::runtime_binding_cache_types_t<Type, Storage>;
-  using resolutions = detail::binding_resolutions<Type, Storage>;
-  using request_resolutions = typename resolutions::type;
-  static constexpr bool has_conversion_cache =
-      detail::has_runtime_binding_cache_v<cache_types>;
+  using request_resolutions =
+      typename detail::binding_resolutions<Type, Storage>::type;
   static constexpr bool uses_cached_conversions =
-      Storage::conversions::is_stable && has_conversion_cache;
+      Storage::conversions::is_stable &&
+      detail::has_runtime_binding_cache_v<cache_types>;
   using materialization_traits =
       storage_materialization_traits<typename Storage::tag_type,
                                      typename Storage::type>;
