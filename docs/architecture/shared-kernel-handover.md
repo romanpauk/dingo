@@ -66,6 +66,28 @@ The singular resolution consumer is shared:
 - The runtime/mixed outer construct flow and the runtime-only/runtime-key
   collection paths are still mode-specific; they are the next reductions.
 
+The module files now use role-parallel names:
+
+```text
+runtime/                      static/
+  container_traits.h            container_traits.h
+  context.h                     context.h
+  registry.h                    registry.h
+  selection.h                   selection.h
+  binding.h                     binding.h
+  storage.h                     bindings.h
+  registration.h                registration.h
+  transaction.h                 graph.h
+  lookup_index.h                construction.h
+                                resolution_policy.h
+```
+
+`static/bindings.h` is the compile-time binding source and its dependency rules;
+the runtime side normalizes its bindings at registration instead.
+`static/binding.h` still owns the storage slots because the activation set
+inherits the storage it fills; splitting a `static/storage.h` needs a
+composition change, not a file move.
+
 Off-chain operations are shared too:
 
 - `detail::container_invoke` in `factory/invoke.h` owns callable dispatch for
@@ -76,6 +98,10 @@ Off-chain operations are shared too:
 
 ## Recent Commits
 
+- `8335dc2` Split the static bindings and registry by role
+- `f7036f7` Extract the static selection into static/selection.h
+- `1bc6516` Move the static requirements to static/registration.h
+- `dfa7bf4` Align the runtime and static module file names
 - `86ecb23` Share the static-binding construct rule
 - `094ac84` Share the static-key collection rule
 - `d3f48c6` Move the static-only resolve onto the shared selection consumer
@@ -220,8 +246,14 @@ priority than the registry split.
 ## File Map
 
 - `include/dingo/binding/binding_core.h` — shared typed execution kernel
-- `include/dingo/static/binding.h` — static policy, source-lifetime ladder
+- `include/dingo/static/binding.h` — static binding, activation, and storage
+- `include/dingo/static/bindings.h` — static binding types and dependency rules
+- `include/dingo/static/selection.h` — static type-level selection
+- `include/dingo/static/registry.h` — static registry
+- `include/dingo/static/registration.h` — static compile-time requirements
 - `include/dingo/runtime/binding.h` — runtime adapter and kernel policy
+- `include/dingo/runtime/storage.h` — runtime arena and object store
+- `include/dingo/runtime/registration.h` — runtime registration forwarding
 - `include/dingo/binding/binding_selection.h` — shared selection status
 - `include/dingo/runtime/selection.h` — runtime lookup selection
 - `include/dingo/runtime/registry.h` — runtime execution and registration
