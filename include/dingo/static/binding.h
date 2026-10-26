@@ -39,7 +39,7 @@
 namespace dingo {
 namespace detail {
 
-template <typename... Registrations> class basic_static_activation_set;
+template <typename... Registrations> class static_registry_state;
 
 template <typename BindingModel>
 struct binding_factory_is_default_constructible
@@ -58,33 +58,38 @@ struct no_dependency_context {
 template <typename Registration,
           typename BindingsType =
               typename detail::binding_model<Registration>::bindings_type>
-struct local_binding_scope_slot {};
+struct static_local_scope_slot {};
 
 template <typename Registration, typename... LocalRegistrations>
-struct local_binding_scope_slot<Registration,
-                                static_bindings<LocalRegistrations...>> {
-  basic_static_activation_set<LocalRegistrations...> scope;
+struct static_local_scope_slot<Registration,
+                               static_bindings<LocalRegistrations...>> {
+  static_registry_state<LocalRegistrations...> scope;
 };
 
-// The local activation sets a registration declares. They are kept by the
-// activation set rather than the storage, so the storage does not depend on
-// the activation-set definition.
-template <typename... Registrations>
-class local_scope_storage : private local_binding_scope_slot<Registrations>... {
-  template <typename Registration>
-  using local_scope_slot = local_binding_scope_slot<Registration>;
+// The state of one static binding: its storage slot, its conversion cache, and
+// the local registry state a registration declares. It is the static partner of
+// runtime_binding_state.
+template <typename Registration>
+class static_binding_state
+    : public static_binding_slot<Registration>,
+      private binding_conversion_cache_slot<Registration>,
+      private static_local_scope_slot<Registration> {
+  using storage_slot = static_binding_slot<Registration>;
+  using conversion_cache_slot = binding_conversion_cache_slot<Registration>;
+  using local_scope_slot = static_local_scope_slot<Registration>;
 
 public:
-  template <typename BindingModel> auto &get_local_scope_for_model() {
-    return static_cast<
-               local_scope_slot<typename BindingModel::registration_type> &>(
-               *this)
-        .scope;
+  using storage_slot::storage;
+
+  auto &conversion_cache() {
+    return static_cast<conversion_cache_slot &>(*this);
   }
+
+  auto &local_scope() { return static_cast<local_scope_slot &>(*this).scope; }
 };
 
 template <typename State, typename Host, typename BindingModel>
-struct binding_activation {
+struct static_binding_activation {
   State &state;
   Host &host;
   construction_scope scope;
@@ -404,7 +409,7 @@ struct static_binding_policy {
                                std::forward<Fn>(fn));
   }
 
-  binding_activation<State, Host, BindingModel> activation() const {
+  static_binding_activation<State, Host, BindingModel> activation() const {
     return {state, host, scope};
   }
 
@@ -589,7 +594,7 @@ T construct_static_collection_default_impl(construction_scope scope,
   }
 }
 
-template <typename Derived> class basic_static_activation_set_base {
+template <typename Derived> class static_registry_state_base {
 public:
   template <typename T, typename BindingModel, typename Host, typename Context>
   decltype(auto) resolve_binding_type(construction_scope scope, Host &host,
@@ -681,31 +686,45 @@ private:
 };
 
 template <typename... Registrations>
-class basic_static_activation_set
-    : public basic_static_activation_set_base<
-          basic_static_activation_set<Registrations...>>,
-      private static_storage<Registrations...>,
-      private local_scope_storage<Registrations...> {
+class static_registry_state : public static_registry_state_base<
+                                  static_registry_state<Registrations...>>,
+                              private static_binding_state<Registrations>... {
+  template <typename Registration>
+  using binding_state = static_binding_state<Registration>;
+
 public:
-  using static_storage<Registrations...>::get_conversion_cache_for_model;
-  using static_storage<Registrations...>::get_slot_for_model;
-  using static_storage<Registrations...>::get_storage;
-  using static_storage<Registrations...>::get_storage_for_model;
-  using local_scope_storage<Registrations...>::get_local_scope_for_model;
+  template <typename BindingModel> auto &get_binding_state_for_model() {
+    return static_cast<
+        binding_state<typename BindingModel::registration_type> &>(*this);
+  }
+
+  template <typename BindingModel> auto &get_slot_for_model() {
+    return get_binding_state_for_model<BindingModel>();
+  }
+
+  template <typename BindingModel> auto &get_storage_for_model() {
+    return get_binding_state_for_model<BindingModel>().storage();
+  }
+
+  template <typename BindingModel> auto &get_conversion_cache_for_model() {
+    return get_binding_state_for_model<BindingModel>().conversion_cache();
+  }
+
+  template <typename BindingModel> auto &get_local_scope_for_model() {
+    return get_binding_state_for_model<BindingModel>().local_scope();
+  }
+
+  template <typename Registration> auto &get_storage() {
+    return static_cast<binding_state<Registration> &>(*this).storage();
+  }
 };
 
-// The state the static registry owns: the storage plus the local activation
-// sets a registration declares.
-template <typename... Registrations>
-using static_registry_state = basic_static_activation_set<Registrations...>;
-
 template <typename StorageState>
-class basic_static_activation_set_view
-    : public basic_static_activation_set_base<
-          basic_static_activation_set_view<StorageState>> {
+class static_registry_state_view
+    : public static_registry_state_base<
+          static_registry_state_view<StorageState>> {
 public:
-  explicit basic_static_activation_set_view(StorageState &state)
-      : state_(&state) {}
+  explicit static_registry_state_view(StorageState &state) : state_(&state) {}
 
   template <typename Registration> auto &get_storage() {
     return state_->template get_storage<Registration>();

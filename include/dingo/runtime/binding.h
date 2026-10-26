@@ -295,7 +295,7 @@ private:
 #pragma warning(pop)
 #endif
 
-  struct kernel_policy {
+  struct runtime_binding_policy {
     runtime_binding &binding;
     construction_scope scope;
 
@@ -306,7 +306,7 @@ private:
 
     auto &storage() { return slot().storage(); }
 
-    kernel_policy &activation() { return *this; }
+    runtime_binding_policy &activation() { return *this; }
 
     template <typename T, typename Context, typename Source>
     decltype(auto) construct_conversion(construction_scope construction,
@@ -376,7 +376,7 @@ public:
   template <typename T, typename Context, typename Source>
   decltype(auto) retain_conversion(construction_scope scope, Context &context,
                                    Source &&source) {
-    kernel_policy policy{*this, scope};
+    runtime_binding_policy policy{*this, scope};
     return detail::retain_binding_conversion<T>(
         scope, get_storage(), policy, context, std::forward<Source>(source));
   }
@@ -408,8 +408,8 @@ public:
                 .what());
       }
 
-      kernel_policy policy{binding, scope};
-      detail::binding_core<kernel_policy> core{policy};
+      runtime_binding_policy policy{binding, scope};
+      detail::binding_core<runtime_binding_policy> core{policy};
       auto result =
           core.resolve_candidates(request_resolutions{}, resolution_index,
                                   request.requested_type, context);

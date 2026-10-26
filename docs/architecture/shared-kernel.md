@@ -255,10 +255,10 @@ type-list selection | | Rollback | transaction callbacks | not applicable | |
 Child container | arena-constructed | inline static container | | Dispatch |
 erased thunk | direct template call |
 
-This removes `static_binding_resolver`, `binding_activation`, and the separate
-static materialization/caching ladder. It does not put a vtable or an erased
-request on the static path: `runtime_binding` is an adapter around the shared
-core, not the core itself.
+This removes `static_binding_resolver`, `static_binding_activation`, and the
+separate static materialization/caching ladder. It does not put a vtable or an
+erased request on the static path: `runtime_binding` is an adapter around the
+shared core, not the core itself.
 
 The typed static request and the erased runtime request meet at one typed kernel
 call. A small request adapter supplies the few operations the kernel needs

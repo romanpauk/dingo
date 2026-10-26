@@ -87,12 +87,12 @@ template <typename BindingsState> struct runtime_scope_state {
 };
 
 template <typename Allocator, typename BindingsState>
-struct runtime_registry_data {
+struct runtime_registry_state {
   using scope_state_type = runtime_scope_state<BindingsState>;
   using scope_pointer_allocator = typename std::allocator_traits<
       Allocator>::template rebind_alloc<scope_state_type *>;
 
-  explicit runtime_registry_data(Allocator &allocator)
+  explicit runtime_registry_state(Allocator &allocator)
       : runtime(allocator), bindings(allocator),
         scope_states(scope_pointer_allocator(allocator)) {}
 
@@ -121,12 +121,12 @@ struct runtime_registry_data {
   std::vector<scope_state_type *, scope_pointer_allocator> scope_states;
 };
 
-template <typename Data, bool OwnsData> class runtime_data_holder;
+template <typename Data, bool OwnsData> class runtime_state_holder;
 
-template <typename Data> class runtime_data_holder<Data, true> {
+template <typename Data> class runtime_state_holder<Data, true> {
 public:
   template <typename Allocator>
-  explicit runtime_data_holder(Allocator &allocator) : data_(allocator) {}
+  explicit runtime_state_holder(Allocator &allocator) : data_(allocator) {}
 
   Data &get() noexcept { return data_; }
 
@@ -136,12 +136,12 @@ private:
   Data data_;
 };
 
-template <typename Data> class runtime_data_holder<Data, false> {
+template <typename Data> class runtime_state_holder<Data, false> {
 public:
   static constexpr std::size_t invalid_scope =
       std::numeric_limits<std::size_t>::max();
 
-  runtime_data_holder() = default;
+  runtime_state_holder() = default;
 
   std::size_t scope_id() const noexcept { return scope_id_; }
   void scope_id(std::size_t value) noexcept { scope_id_ = value; }
@@ -272,7 +272,7 @@ protected:
 
 public:
   using runtime_data_type =
-      detail::runtime_registry_data<allocator_type, runtime_bindings_state>;
+      detail::runtime_registry_state<allocator_type, runtime_bindings_state>;
 
 protected:
   using runtime_scope_state = typename runtime_data_type::scope_state_type;
@@ -1519,7 +1519,8 @@ private:
 
   parent_container_type *parent_ = nullptr;
 
-  detail::runtime_data_holder<runtime_data_type, OwnsRuntimeData> runtime_data_;
+  detail::runtime_state_holder<runtime_data_type, OwnsRuntimeData>
+      runtime_data_;
 };
 
 } // namespace dingo

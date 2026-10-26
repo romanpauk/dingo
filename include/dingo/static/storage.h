@@ -7,9 +7,9 @@
 
 #pragma once
 
-// The static storage: one storage slot and one conversion-cache slot per
-// registration, plus the storage state the static registry owns. The activation
-// set and the binding resolver live in binding.h.
+// The static storage primitives: one storage slot and one conversion-cache slot
+// per registration. static_binding_state in binding.h composes them with the
+// local registry state; static_registry_state aggregates the binding states.
 
 #include <dingo/base/type_list.h>
 #include <dingo/binding/binding_model.h>
@@ -24,7 +24,7 @@ namespace dingo {
 namespace detail {
 
 template <typename Registration>
-struct binding_storage_slot
+struct static_binding_slot
     : detail::binding_slot<
           typename detail::binding_model<Registration>::storage_type> {
   using binding_model = detail::binding_model<Registration>;
@@ -154,39 +154,6 @@ struct binding_conversion_cache_slot
 
   using base_type::construct_conversion;
 };
-
-template <typename... Registrations>
-class static_storage : private binding_conversion_cache_slot<Registrations>...,
-                       private binding_storage_slot<Registrations>... {
-  template <typename Registration>
-  using storage_slot = binding_storage_slot<Registration>;
-
-  template <typename Registration>
-  using conversion_cache_slot = binding_conversion_cache_slot<Registration>;
-
-public:
-  template <typename Registration> auto &get_storage() {
-    return static_cast<storage_slot<Registration> &>(*this).storage();
-  }
-
-  template <typename BindingModel> auto &get_slot_for_model() {
-    return static_cast<
-        storage_slot<typename BindingModel::registration_type> &>(*this);
-  }
-
-  template <typename BindingModel> auto &get_storage_for_model() {
-    return get_slot_for_model<BindingModel>().storage();
-  }
-
-  template <typename BindingModel> auto &get_conversion_cache_for_model() {
-    return static_cast<
-        conversion_cache_slot<typename BindingModel::registration_type> &>(
-        *this);
-  }
-};
-
-template <typename... Registrations>
-using static_storage_state = static_storage<Registrations...>;
 
 } // namespace detail
 } // namespace dingo

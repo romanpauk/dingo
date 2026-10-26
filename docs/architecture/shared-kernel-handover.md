@@ -17,7 +17,8 @@ The execution path is shared:
   conversion retention, and address/value shaping.
 - `static_binding_policy` supplies inline storage and the source-lifetime
   ladder.
-- `runtime_binding::kernel_policy` supplies erased storage and rollback.
+- `runtime_binding::runtime_binding_policy` supplies erased storage and
+  rollback.
 - `binding_core` has no static/runtime branch; it calls the policy.
 - The direct static value path also uses the core.
 
@@ -90,7 +91,7 @@ a registration declares, and the registry owns the activation set, so the
 storage no longer depends on the activation-set definition.
 
 The storage slot is a shared concept: `binding/binding_resolution.h` defines
-`binding_slot<Storage>`, both `binding_storage_slot` (static) and
+`binding_slot<Storage>`, both `static_binding_slot` (static) and
 `runtime_binding_state` (runtime) derive from it, and `binding_core` reads the
 storage through `Policy::slot()`. What remains different is the owner and the
 source lifetime: the static owner is `static_storage` inside the activation set,

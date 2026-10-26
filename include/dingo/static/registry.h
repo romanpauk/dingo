@@ -22,7 +22,7 @@ class static_registry<static_bindings<Registrations...>, State> {
   using bindings_type = static_bindings<Registrations...>;
   using self_type = static_registry<bindings_type, State>;
 
-  using scope_type = basic_static_activation_set_view<State>;
+  using scope_type = static_registry_state_view<State>;
 
   template <typename Request, typename LookupKey>
   using selection_t =
