@@ -28,8 +28,8 @@ infrastructure described below. It changes no public API and no behavior.
 - `container_api.h` owns the public collection spellings once. The runtime and
   static containers provide only the internal `construct_collection_by_key`
   path, the keyed `append_collection`, and the keyed `count_collection`.
-- `static/activation_set.h` uses the shared resolution-address kernel for the
-  last-mile conversion, the same kernel the runtime binding uses.
+- `static/binding.h` uses the shared resolution-address kernel for the last-mile
+  conversion, the same kernel the runtime binding uses.
 - `binding/binding_resolution.h` now owns the storage holder, conversion-cache
   type computation, cache-slot construction policy, and registered-type
   descriptor used by both binding backends, in addition to the materialization
@@ -134,7 +134,7 @@ Implemented twice:
   the lookup indexes for runtime bindings;
 - selection, ambiguity, local precedence, parent fallback, collection merging,
   and auto-construction in `container.h`, `static_container.h`,
-  `runtime/registry.h`, and `static/activation_set.h`;
+  `runtime/registry.h`, and `static/binding.h`;
 - the binding instance and its resolver: `runtime_binding` plus
   `static_binding_resolver`;
 - conversion-cache selection: per interface at runtime, per registration
@@ -660,9 +660,9 @@ removal.
 
 Introduce the candidate-set vocabulary and move the selection rules from
 `container.h`, `static_container.h`, `runtime/registry.h`, and
-`static/activation_set.h` into `binding/binding_selection.h`. Keep the existing
-binding implementations. This is a pure behavior-preserving refactor and should
-remove more code than it adds.
+`static/binding.h` into `binding/binding_selection.h`. Keep the existing binding
+implementations. This is a pure behavior-preserving refactor and should remove
+more code than it adds.
 
 ### Step 2: Unify The Binding Kernel
 

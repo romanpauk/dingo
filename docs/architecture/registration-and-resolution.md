@@ -143,8 +143,7 @@ container cannot be rolled back.
 ## Factory Path
 
 The factory implementation in
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
-owns:
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h) owns:
 
 - a storage object
 - a lightweight child-container view for constructor injection
@@ -226,6 +225,6 @@ These files are useful while reading this flow:
 - [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
-- [include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
+- [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)
 - [include/dingo/binding/runtime_binding_interface.h](../../include/dingo/binding/runtime_binding_interface.h)
 - [include/dingo/factory/constructor_detection.h](../../include/dingo/factory/constructor_detection.h)

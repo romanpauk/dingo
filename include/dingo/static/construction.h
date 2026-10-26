@@ -17,7 +17,7 @@
 #include <dingo/base/construction_scope.h>
 #include <dingo/binding/binding_resolution.h>
 #include <dingo/binding/binding_selection.h>
-#include <dingo/static/activation_set.h>
+#include <dingo/static/binding.h>
 #include <dingo/static/resolution.h>
 #include <dingo/type/key.h>
 

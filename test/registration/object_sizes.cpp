@@ -7,7 +7,7 @@
 
 #include <dingo/container.h>
 #include <dingo/resolution/conversion_cache.h>
-#include <dingo/runtime/container_runtime.h>
+#include <dingo/runtime/storage.h>
 #include <dingo/runtime/transaction.h>
 #include <dingo/static_container.h>
 #include <dingo/storage/external.h>

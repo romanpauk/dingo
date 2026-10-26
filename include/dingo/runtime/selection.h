@@ -7,6 +7,10 @@
 
 #pragma once
 
+// The runtime lookup selection: the index types the traits name, the route of
+// a request to the entry that serves it, and the selection of singular and
+// collection candidates. Registration and execution stay in registry.h.
+
 // The part of a runtime registry that selects lookup candidates: the lookup
 // index types of its traits, the route of a request to the entry that serves
 // it, the selection of singular and collection candidates, and the values the

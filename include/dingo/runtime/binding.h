@@ -7,14 +7,17 @@
 
 #pragma once
 
+// The runtime binding: the storage adapter and kernel policy of one binding,
+// the state a request walks from, and the rollback wrapper.
+
 #include <dingo/base/config.h>
 
 #include <dingo/binding/binding_core.h>
 #include <dingo/binding/binding_resolution.h>
 #include <dingo/binding/resolution_route.h>
 #include <dingo/binding/runtime_binding_interface.h>
-#include <dingo/runtime/container_runtime.h>
 #include <dingo/runtime/context.h>
+#include <dingo/runtime/storage.h>
 #include <dingo/type/rebind_type.h>
 
 #include <cassert>

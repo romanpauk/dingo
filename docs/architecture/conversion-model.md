@@ -183,8 +183,7 @@ again.
 ## Conversion Cache
 
 Shared and external resolution can preserve conversion objects through
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
-and
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h) and
 [include/dingo/resolution/conversion_cache.h](../../include/dingo/resolution/conversion_cache.h).
 
 That cache matters when a conversion object must outlive a single expression,

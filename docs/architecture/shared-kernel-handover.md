@@ -40,7 +40,7 @@ The model is richer than the C++ descriptor:
 
 Runtime lookup is split:
 
-- `runtime/lookup_store.h` owns lookup selection: the index types, routes,
+- `runtime/selection.h` owns lookup selection: the index types, routes,
   `select_binding`, `binding_status`, entry traits, and collection candidate
   iteration.
 - `runtime/registry.h` keeps execution, registration validation and commit,
@@ -220,11 +220,10 @@ priority than the registry split.
 ## File Map
 
 - `include/dingo/binding/binding_core.h` — shared typed execution kernel
-- `include/dingo/static/activation_set.h` — static policy, source-lifetime
-  ladder
-- `include/dingo/runtime/runtime_binding.h` — runtime adapter and kernel policy
+- `include/dingo/static/binding.h` — static policy, source-lifetime ladder
+- `include/dingo/runtime/binding.h` — runtime adapter and kernel policy
 - `include/dingo/binding/binding_selection.h` — shared selection status
-- `include/dingo/runtime/lookup_store.h` — runtime lookup selection
+- `include/dingo/runtime/selection.h` — runtime lookup selection
 - `include/dingo/runtime/registry.h` — runtime execution and registration
 - `include/dingo/binding/container_selection.h` — shared singular selection
   consumer

@@ -13,7 +13,7 @@
 #include <dingo/container_api.h>
 #include <dingo/factory/invoke.h>
 #include <dingo/lookup/container_lookup_definition.h>
-#include <dingo/static/activation_set.h>
+#include <dingo/static/binding.h>
 #include <dingo/static/construction.h>
 #include <dingo/static/container_traits.h>
 #include <dingo/static/context.h>

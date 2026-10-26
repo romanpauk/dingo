@@ -95,9 +95,8 @@ are normalized internally through the static registry path under
 
 ### Factory And Storage
 
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
-wraps a storage object and the child container used to resolve constructor
-dependencies.
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h) wraps a
+storage object and the child container used to resolve constructor dependencies.
 
 The factory owns the conversion-facing interface:
 
@@ -117,8 +116,8 @@ own lifetime policy:
 
 ### Resolution And Conversion Path
 
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
-now owns the conversion-facing resolution flow. It is responsible for:
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h) now
+owns the conversion-facing resolution flow. It is responsible for:
 
 - asking storage to `resolve(...)` its native source shape
 - applying guard and closure scope through `storage_materialization_traits`
@@ -179,5 +178,5 @@ For the core path in source order, start here:
 - [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
-- [include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
+- [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)
 - [include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)

@@ -28,11 +28,11 @@
 #include <dingo/registration/type_registration.h>
 #include <dingo/rtti/static_provider.h>
 #include <dingo/rtti/typeid_provider.h>
+#include <dingo/runtime/binding.h>
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>
-#include <dingo/runtime/registration_api.h>
-#include <dingo/runtime/runtime_binding.h>
-#include <dingo/static/activation_set.h>
+#include <dingo/runtime/registration.h>
+#include <dingo/static/binding.h>
 #include <dingo/static/construction.h>
 #include <dingo/static/container_traits.h>
 #include <dingo/static/graph.h>

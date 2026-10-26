@@ -7,6 +7,9 @@
 
 #pragma once
 
+// The runtime storage: the arena and object store that keep the objects
+// registrations construct and the checkpoints a transaction rolls back to.
+
 #include <dingo/base/config.h>
 
 #include <dingo/memory/arena_allocator.h>

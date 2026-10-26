@@ -20,13 +20,13 @@
 #include <dingo/lookup/operations.h>
 #include <dingo/memory/allocator.h>
 #include <dingo/registration/requirements.h>
-#include <dingo/runtime/container_runtime.h>
+#include <dingo/runtime/binding.h>
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>
 #include <dingo/runtime/lookup_index.h>
-#include <dingo/runtime/lookup_store.h>
-#include <dingo/runtime/registration_api.h>
-#include <dingo/runtime/runtime_binding.h>
+#include <dingo/runtime/registration.h>
+#include <dingo/runtime/selection.h>
+#include <dingo/runtime/storage.h>
 #include <dingo/runtime/transaction.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/annotated.h>

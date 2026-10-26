@@ -7,8 +7,8 @@
 
 #include <dingo/container.h>
 #include <dingo/memory/arena_allocator.h>
-#include <dingo/runtime/container_runtime.h>
 #include <dingo/runtime/context.h>
+#include <dingo/runtime/storage.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>

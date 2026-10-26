@@ -7,6 +7,9 @@
 
 #pragma once
 
+// The static binding implementation: activation sets, storage slots, the
+// binding resolver, and the static registry that owns them.
+
 #include <dingo/base/exceptions.h>
 #include <dingo/base/type_descriptor.h>
 #include <dingo/binding/binding_collection.h>

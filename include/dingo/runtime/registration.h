@@ -7,6 +7,9 @@
 
 #pragma once
 
+// The runtime registration API: the register_type forwarding every runtime
+// container exposes.
+
 #include <dingo/base/none.h>
 #include <dingo/binding/binding_collection.h>
 #include <dingo/factory/callable.h>

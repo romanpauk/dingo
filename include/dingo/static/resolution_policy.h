@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/static/activation_set.h>
+#include <dingo/static/binding.h>
 #include <dingo/type/request_lift.h>
 
 #include <type_traits>
