@@ -55,9 +55,42 @@ public:
             LookupKey key) {
     using lookup_type = typename Request::lookup_type;
     if constexpr (collection_traits<R>::is_collection) {
-      return self().template resolve_collection_request<Request, R>(
-          scope, context, origin, std::move(key));
-    } else if constexpr (Self::has_static_source &&
+      using resolve_type = typename collection_traits<R>::resolve_type;
+      if constexpr (!Self::runtime_only &&
+                    (!Self::has_runtime_source ||
+                     detail::is_static_lookup_key_definition_v<LookupKey>)) {
+        if constexpr (!Self::has_runtime_source) {
+          constexpr std::size_t count =
+              Self::template static_collection_count<R, LookupKey>();
+          if constexpr (Self::template parent_serves_v<resolve_type,
+                                                       LookupKey> &&
+                        count == 0) {
+            return self()
+                .template resolve_missing<
+                    Request, R, false,
+                    Self::template parent_serves_v<resolve_type, LookupKey>>(
+                    scope, context, origin, std::move(key));
+          } else {
+            return self().template construct_static_collection<R, LookupKey>(
+                scope, context);
+          }
+        } else {
+          const std::size_t count = self().template collection_count<R>(key);
+          if (count == 0 && !self().template collection_allows_empty<R>(key)) {
+            return self()
+                .template resolve_missing<
+                    Request, R, false,
+                    Self::template parent_serves_v<resolve_type, LookupKey>>(
+                    scope, context, origin, std::move(key));
+          }
+          return self().template construct_collection_request<R>(
+              scope, context, std::move(key));
+        }
+      } else {
+        return self().template resolve_collection_request<Request, R>(
+            scope, context, origin, std::move(key));
+      }
+    } else if constexpr (Self::has_static_source && !Self::runtime_only &&
                          (!Self::has_runtime_source ||
                           detail::is_static_lookup_key_definition_v<
                               LookupKey>)) {

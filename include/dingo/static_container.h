@@ -135,6 +135,7 @@ private:
   static constexpr binding_status resolve_status_v =
       selection_t<typename Request::lookup_type, Key>::status;
 
+  static constexpr bool runtime_only = false;
   static constexpr bool has_static_source = true;
   static constexpr bool has_runtime_source = false;
   static constexpr bool static_binding_uses_result = false;
@@ -591,19 +592,15 @@ public:
   }
 
 private:
-  // A collection request keeps its own body in the container; the engine only
-  // decides that it is a collection and hands it here.
-  template <typename Request, typename R, typename Context, typename Origin,
-            typename LookupKey>
-  R resolve_collection_request(construction_scope scope, Context &context,
-                               Origin &origin, LookupKey key) {
-    if constexpr (has_parent_v && collection_count_v<R, LookupKey> == 0) {
-      return resolve_missing<Request, R>(scope, context, origin,
-                                         std::move(key));
-    } else {
-      return static_registry_.template construct_collection<R, LookupKey>(
-          scope, *this, context);
-    }
+  template <typename R, typename LookupKey>
+  static constexpr std::size_t static_collection_count() {
+    return static_registry_type::template count_collection<R, LookupKey>();
+  }
+
+  template <typename R, typename LookupKey, typename Context>
+  R construct_static_collection(construction_scope scope, Context &context) {
+    return static_registry_.template construct_collection<R, LookupKey>(
+        scope, *this, context);
   }
 
 private:

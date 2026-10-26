@@ -261,6 +261,7 @@ private:
 
   using runtime_selection = typename runtime_registry_type::runtime_selection;
 
+  static constexpr bool runtime_only = runtime_only_v;
   static constexpr bool has_static_source = has_static_v;
   static constexpr bool has_runtime_source = true;
   static constexpr bool static_binding_uses_result = true;
@@ -1020,14 +1021,6 @@ private:
         return origin.template unresolved<Request, false, LookupKey, R>(
             scope, context, key);
       }
-    } else if constexpr (detail::is_static_lookup_key_definition_v<LookupKey>) {
-      if (count_collection<R>(key) == 0 &&
-          !runtime_registry_.template has_explicit_collection_lookup<R>(key)) {
-        return resolve_missing<Request, R, false, has_parent_v>(
-            scope, context, origin, std::move(key));
-      }
-      return construct_collection<R>(
-          scope, context, detail::binding_collection_append{}, std::move(key));
     } else {
       if constexpr (has_parent_v) {
         if (parent_ &&
@@ -1051,8 +1044,8 @@ private:
     }
   }
 
-  // A collection request keeps its own body in the container; the engine only
-  // decides that it is a collection and hands it here.
+  // A runtime-key or runtime-only collection keeps its own body in the
+  // container; the shared static-key rule lives in the engine.
   template <typename Request, typename R, typename Origin, typename LookupKey>
   R resolve_collection_request(construction_scope scope,
                                runtime_context_type &context, Origin &origin,
@@ -1060,6 +1053,23 @@ private:
     return resolve_collection<
         Request, R, may_auto_construct_v<typename Request::user_type>>(
         scope, context, origin, std::move(key));
+  }
+
+  template <typename R, typename LookupKey>
+  std::size_t collection_count(LookupKey key) {
+    return count_collection<R>(std::move(key));
+  }
+
+  template <typename R, typename LookupKey>
+  bool collection_allows_empty(LookupKey key) {
+    return runtime_registry_.template has_explicit_collection_lookup<R>(key);
+  }
+
+  template <typename R, typename LookupKey>
+  R construct_collection_request(construction_scope scope,
+                                 runtime_context_type &context, LookupKey key) {
+    return construct_collection<R>(
+        scope, context, detail::binding_collection_append{}, std::move(key));
   }
 
   template <typename Request, typename R, typename Origin, typename LookupKey>
