@@ -58,7 +58,9 @@ public:
       return self().template resolve_collection_request<Request, R>(
           scope, context, origin, std::move(key));
     } else if constexpr (Self::has_static_source &&
-                         detail::is_static_lookup_key_definition_v<LookupKey>) {
+                         (!Self::has_runtime_source ||
+                          detail::is_static_lookup_key_definition_v<
+                              LookupKey>)) {
       constexpr auto static_status =
           Self::template static_status_v<lookup_type, LookupKey>;
       if constexpr (!Self::has_runtime_source) {
