@@ -198,10 +198,9 @@ struct binding_conversion_cache_slot
 };
 
 template <typename... Registrations>
-class static_binding_storage
-    : private binding_conversion_cache_slot<Registrations>...,
-      private binding_storage_slot<Registrations>...,
-      private local_binding_scope_slot<Registrations>... {
+class static_storage : private binding_conversion_cache_slot<Registrations>...,
+                       private binding_storage_slot<Registrations>...,
+                       private local_binding_scope_slot<Registrations>... {
   template <typename Registration>
   using storage_slot = binding_storage_slot<Registration>;
 
@@ -835,17 +834,16 @@ template <typename... Registrations>
 class basic_static_activation_set
     : public basic_static_activation_set_base<
           basic_static_activation_set<Registrations...>>,
-      private static_binding_storage<Registrations...> {
+      private static_storage<Registrations...> {
 public:
-  using static_binding_storage<
-      Registrations...>::get_conversion_cache_for_model;
-  using static_binding_storage<Registrations...>::get_local_scope_for_model;
-  using static_binding_storage<Registrations...>::get_storage;
-  using static_binding_storage<Registrations...>::get_storage_for_model;
+  using static_storage<Registrations...>::get_conversion_cache_for_model;
+  using static_storage<Registrations...>::get_local_scope_for_model;
+  using static_storage<Registrations...>::get_storage;
+  using static_storage<Registrations...>::get_storage_for_model;
 };
 
 template <typename... Registrations>
-using static_storage_state = static_binding_storage<Registrations...>;
+using static_storage_state = static_storage<Registrations...>;
 
 template <typename StorageState>
 class basic_static_activation_set_view

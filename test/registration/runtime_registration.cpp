@@ -470,7 +470,7 @@ TEST(type_registration_test,
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
   {
     {
-      container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+      runtime_storage<std::allocator<char>> runtime(std::allocator<char>{});
       runtime_transaction transaction(runtime, scratch);
       {
         runtime_context context(scratch, transaction);
@@ -497,7 +497,7 @@ TEST(type_registration_test,
 
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
   {
-    container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+    runtime_storage<std::allocator<char>> runtime(std::allocator<char>{});
     runtime_transaction transaction(runtime, scratch);
     {
       dingo::container<> container;
@@ -532,7 +532,7 @@ TEST(type_registration_test,
   };
 
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_storage<std::allocator<char>> runtime(std::allocator<char>{});
   runtime_transaction transaction(runtime, scratch);
   dingo::container<> container;
   runtime_context context(scratch, transaction);
@@ -551,7 +551,7 @@ TEST(type_registration_test, runtime_context_explicit_scopes_are_independent) {
   std::vector<int> events;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
   {
-    container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+    runtime_storage<std::allocator<char>> runtime(std::allocator<char>{});
     runtime_transaction transaction(runtime, scratch);
     {
       runtime_context context(scratch, transaction);
@@ -572,7 +572,7 @@ TEST(type_registration_test,
      runtime_context_scratch_destructor_runs_once_on_commit) {
   runtime_scoped_source_dependency::destructions = 0;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_storage<std::allocator<char>> runtime(std::allocator<char>{});
   runtime_transaction transaction(runtime, scratch);
   {
     runtime_context context(scratch, transaction);
@@ -587,7 +587,7 @@ TEST(type_registration_test,
      runtime_context_scratch_destructor_runs_once_on_rollback) {
   runtime_scoped_source_dependency::destructions = 0;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_storage<std::allocator<char>> runtime(std::allocator<char>{});
   {
     runtime_transaction transaction(runtime, scratch);
     {
@@ -604,7 +604,7 @@ TEST(type_registration_test,
      runtime_context_ephemeral_store_preserves_pending_transaction_actions) {
   std::vector<int> events;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_storage<std::allocator<char>> runtime(std::allocator<char>{});
   {
     runtime_transaction transaction(runtime, scratch);
     {
@@ -767,15 +767,15 @@ TEST(type_registration_test,
     using parent_container_type = counting_runtime_binding_container;
 
     explicit owner(parent_container_type *parent)
-        : allocator(parent->get_allocator()),
-          runtime_storage(parent->get_allocator()), parent_storage(parent) {}
+        : allocator(parent->get_allocator()), storage_(parent->get_allocator()),
+          parent_storage(parent) {}
 
-    container_runtime<allocator_type> &runtime() { return runtime_storage; }
+    runtime_storage<allocator_type> &runtime() { return storage_; }
     parent_container_type *parent() { return parent_storage; }
     allocator_type &get_allocator() { return allocator; }
 
     allocator_type allocator;
-    container_runtime<allocator_type> runtime_storage;
+    runtime_storage<allocator_type> storage_;
     parent_container_type *parent_storage;
   } state_owner(&parent);
 

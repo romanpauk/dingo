@@ -498,7 +498,7 @@ add_executable(dingo_unit_test
     registration/static_parent_container.cpp
     registration/type_registration.cpp
     resolution/cache.cpp
-    runtime/container_runtime.cpp
+    runtime/storage.cpp
     runtime/transaction.cpp
     resolution/resolution_operation.cpp
     container/construct_common.h

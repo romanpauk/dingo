@@ -35,11 +35,11 @@ struct object_store_destroy_observer {
   int *observed_;
 };
 
-TEST(container_runtime_test,
-     container_runtime_destroys_constructed_objects_in_reverse_order) {
+TEST(runtime_storage_test,
+     runtime_storage_destroys_constructed_objects_in_reverse_order) {
   std::vector<int> events;
   {
-    container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+    runtime_storage<std::allocator<char>> runtime(std::allocator<char>{});
     runtime.construct<runtime_arena_tracker>(&events, 1);
     runtime.construct<runtime_arena_tracker>(&events, 2);
   }
@@ -47,11 +47,11 @@ TEST(container_runtime_test,
   ASSERT_EQ(events, (std::vector<int>{2, 1}));
 }
 
-TEST(container_runtime_test,
-     container_runtime_rollback_destroys_objects_after_checkpoint) {
+TEST(runtime_storage_test,
+     runtime_storage_rollback_destroys_objects_after_checkpoint) {
   std::vector<int> events;
   {
-    container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+    runtime_storage<std::allocator<char>> runtime(std::allocator<char>{});
     runtime.construct<runtime_arena_tracker>(&events, 1);
     auto checkpoint = runtime.mark();
     runtime.construct<runtime_arena_tracker>(&events, 2);
@@ -64,10 +64,10 @@ TEST(container_runtime_test,
   ASSERT_EQ(events, (std::vector<int>{3, 2, 1}));
 }
 
-TEST(container_runtime_test,
-     container_runtime_rollback_destroys_before_rewinding_arena) {
+TEST(runtime_storage_test,
+     runtime_storage_rollback_destroys_before_rewinding_arena) {
   std::vector<int> events;
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_storage<std::allocator<char>> runtime(std::allocator<char>{});
 
   auto checkpoint = runtime.mark();
   int *observed = std::addressof(runtime.construct<int>(42));
@@ -78,11 +78,11 @@ TEST(container_runtime_test,
   ASSERT_EQ(events, (std::vector<int>{42}));
 }
 
-TEST(container_runtime_test,
-     container_runtime_rollback_preserves_reverse_order_across_linked_nodes) {
+TEST(runtime_storage_test,
+     runtime_storage_rollback_preserves_reverse_order_across_linked_nodes) {
   std::vector<int> events;
   {
-    container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+    runtime_storage<std::allocator<char>> runtime(std::allocator<char>{});
     runtime.construct<runtime_arena_tracker>(&events, 0);
     auto checkpoint = runtime.mark();
     for (int value = 1; value != 40; ++value) {
@@ -99,11 +99,11 @@ TEST(container_runtime_test,
   ASSERT_EQ(events.back(), 0);
 }
 
-TEST(container_runtime_test,
-     container_runtime_rollback_checkpoint_leaves_valid_linked_tail) {
+TEST(runtime_storage_test,
+     runtime_storage_rollback_checkpoint_leaves_valid_linked_tail) {
   std::vector<int> events;
   {
-    container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+    runtime_storage<std::allocator<char>> runtime(std::allocator<char>{});
     for (int value = 1; value != 33; ++value) {
       runtime.construct<runtime_arena_tracker>(&events, value);
     }

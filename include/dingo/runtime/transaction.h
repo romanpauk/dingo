@@ -26,7 +26,7 @@ namespace dingo {
 #endif
 
 template <typename Allocator> class runtime_transaction {
-  using runtime_type = container_runtime<Allocator>;
+  using runtime_type = runtime_storage<Allocator>;
 
   struct action_link {
     action_link(action_link *previous_node,

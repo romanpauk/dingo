@@ -53,7 +53,7 @@ public:
   using resolution_container_type = InstanceContainer;
   using registration_parent_type = RegistrationParent;
   using allocator_type = typename Owner::allocator_type;
-  using runtime_type = container_runtime<allocator_type>;
+  using runtime_type = runtime_storage<allocator_type>;
   using runtime_context_type = runtime_context<allocator_type>;
   using parent_container_type = registration_parent_type;
 

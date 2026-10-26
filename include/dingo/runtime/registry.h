@@ -116,7 +116,7 @@ struct runtime_registry_data {
     return scope_states[scope - 1];
   }
 
-  container_runtime<Allocator> runtime;
+  runtime_storage<Allocator> runtime;
   BindingsState bindings;
   std::vector<scope_state_type *, scope_pointer_allocator> scope_states;
 };
@@ -902,7 +902,7 @@ class DINGO_EMPTY_BASES runtime_registry
                        OwnsRuntimeData>;
   using resolve_root_type = ResolveRoot;
   using container_type = resolve_root_type;
-  using runtime_type = container_runtime<Allocator>;
+  using runtime_type = runtime_storage<Allocator>;
   using typename store_type::runtime_binding_interface_type;
   using typename store_type::runtime_context_type;
   using typename store_type::runtime_selection;
@@ -999,7 +999,7 @@ public:
   }
 
 protected:
-  container_runtime<allocator_type> &runtime() {
+  runtime_storage<allocator_type> &runtime() {
     return shared_runtime_data().runtime;
   }
 

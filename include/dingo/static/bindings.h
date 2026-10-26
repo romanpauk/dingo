@@ -505,12 +505,12 @@ private:
                          interface_bindings>;
 
   template <typename Interface, typename LookupKey>
-  using exact_selection_t = detail::binding_selection_t<
+  using exact_selection_t = detail::static_selection_t<
       detail::binding_exact_dependency_interface_t<Interface>,
       binding_lookup_key_t<Interface, LookupKey>, interface_bindings>;
 
   template <typename Interface, typename LookupKey>
-  using normalized_selection_t = detail::binding_selection_t<
+  using normalized_selection_t = detail::static_selection_t<
       detail::binding_dependency_interface_t<Interface>,
       binding_lookup_key_t<Interface, LookupKey>, interface_bindings>;
 

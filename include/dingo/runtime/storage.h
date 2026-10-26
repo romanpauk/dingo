@@ -23,7 +23,7 @@ namespace dingo {
 
 template <typename Allocator> class runtime_transaction;
 
-template <typename Allocator> class container_runtime {
+template <typename Allocator> class runtime_storage {
   using arena_type = arena<Allocator>;
   using store_type = detail::object_store<arena_type>;
 
@@ -37,16 +37,16 @@ public:
     typename store_type::checkpoint objects;
   };
 
-  explicit container_runtime(const Allocator &allocator)
+  explicit runtime_storage(const Allocator &allocator)
       : arena_(DINGO_RUNTIME_ARENA_BLOCK_SIZE, allocator) {}
 
-  ~container_runtime() {
+  ~runtime_storage() {
     assert(active_transaction_ == nullptr);
     store_.destroy(arena_);
   }
 
-  container_runtime(const container_runtime &) = delete;
-  container_runtime &operator=(const container_runtime &) = delete;
+  runtime_storage(const runtime_storage &) = delete;
+  runtime_storage &operator=(const runtime_storage &) = delete;
 
   template <typename T, typename... Args> T &construct(Args &&...args) {
     return store_.template construct<T>(arena_, std::forward<Args>(args)...);

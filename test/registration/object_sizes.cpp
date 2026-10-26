@@ -237,7 +237,7 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
     expect_size_at_most<size_probe_registry::runtime_scope_state>(
         "runtime scope state", 56);
     expect_size_at_most<
-        container_runtime<typename size_registry_type::allocator_type>>(
+        runtime_storage<typename size_registry_type::allocator_type>>(
         "container runtime", 32);
     expect_size_at_most<detail::object_store<arena<>>>("object store", 8);
     expect_size_at_most<runtime_transaction<std::allocator<char>>>(
