@@ -17,7 +17,7 @@ The execution path is shared:
   conversion retention, and address/value shaping.
 - `static_binding_policy` supplies inline storage and the source-lifetime
   ladder.
-- `runtime_binding::runtime_binding_policy` supplies erased storage and
+- `runtime_binding` and its `runtime_binding_policy` supply erased storage and
   rollback.
 - `binding_core` has no static/runtime branch; it calls the policy.
 - The direct static value path also uses the core.
@@ -90,13 +90,25 @@ set is the registry state: it composes the storage and the local activation sets
 a registration declares, and the registry owns the activation set, so the
 storage no longer depends on the activation-set definition.
 
-The storage slot is a shared concept: `binding/binding_resolution.h` defines
-`binding_slot<Storage>`, both `static_binding_slot` (static) and
-`runtime_binding_state` (runtime) derive from it, and `binding_core` reads the
-storage through `Policy::slot()`. What remains different is the owner and the
-source lifetime: the static owner is `static_storage` inside the activation set,
-the runtime owner is the registry's arena and scope table, and the
-source-lifetime ladder is still per-mode.
+The state model is parallel:
+
+```text
+static_registry_state        runtime_registry_state
+  static_binding_state         runtime_binding_state
+    binding_slot                 binding_slot
+    conversion cache             conversion cache
+    static_local_scope_slot      runtime_scope_state
+static_registry              runtime_registry
+static_registry_state_view   (the runtime registry is already a view over its
+                              state)
+```
+
+`binding/binding_resolution.h` defines `binding_slot<Storage>`; both
+`static_binding_state` and `runtime_binding_state` contain one. `binding_core`
+reads the storage through `Policy::slot()`. What remains different is the
+storage policy (inline typed slots vs the arena) and the dispatch (the static
+resolver is created on demand; the runtime binding is a stored erased object).
+The source-lifetime ladder is still per-mode.
 
 The container classes are paired:
 
@@ -109,8 +121,10 @@ The module classes are named by role:
 
 - runtime: `runtime_registry`, `lookup_selection`, `runtime_storage`,
   `runtime_binding`, `runtime_registration`;
-- static: `static_registry`, `static_bindings`, `static_selection`,
-  `static_storage`, `static_binding_resolver`,
+- static: `static_registry`, `static_registry_state`, `static_binding_state`,
+  `static_binding_slot`, `static_bindings`, `static_selection`,
+  `static_local_scope_slot`, `static_binding_resolver`,
+  `static_binding_activation`, `static_binding_policy`,
   `static_registration_requirements`;
 - shared: `binding_slot`, `container_invoke`, `resolve_missing_request`,
   `construct_from_static_source`.
@@ -282,12 +296,13 @@ priority than the registry split.
 
 - `include/dingo/binding/binding_core.h` — shared typed execution kernel
 - `include/dingo/static/binding.h` — static binding, activation, and resolver
-- `include/dingo/static/storage.h` — `static_storage` slots and state
+- `include/dingo/static/storage.h` — `static_binding_slot` and cache primitives
 - `include/dingo/static/bindings.h` — static binding types and dependency rules
 - `include/dingo/static/selection.h` — `static_selection`, type-level
 - `include/dingo/static/registry.h` — static registry
 - `include/dingo/static/registration.h` — `static_registration_requirements`
-- `include/dingo/runtime/binding.h` — runtime adapter and kernel policy
+- `include/dingo/runtime/binding.h` — runtime binding and
+  `runtime_binding_policy`
 - `include/dingo/runtime/storage.h` — `runtime_storage` arena and object store
 - `include/dingo/runtime/registration.h` — `runtime_registration` forwarding
 - `include/dingo/binding/binding_selection.h` — shared selection status
