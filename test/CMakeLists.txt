@@ -578,7 +578,9 @@ if(NOT DINGO_COLLECTION_MODEL_GENERATOR_RESULT EQUAL 0)
         "${DINGO_COLLECTION_MODEL_GENERATOR_RESULT}")
 endif()
 file(GLOB_RECURSE DINGO_COLLECTION_SOURCES CONFIGURE_DEPENDS
-    "${DINGO_RESOLVE_DIR}/resolution/static/global/collection/*.cpp")
+    "${DINGO_RESOLVE_DIR}/resolution/static/global/collection.cpp")
+file(GLOB_RECURSE DINGO_MIXED_COLLECTION_SOURCES CONFIGURE_DEPENDS
+    "${DINGO_RESOLVE_DIR}/resolution/mixed/global/collection.cpp")
 
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
@@ -848,6 +850,7 @@ add_test(NAME dingo_model_test COMMAND dingo_model_test)
 set_tests_properties(dingo_model_test PROPERTIES LABELS "unit;generator")
 
 add_executable(dingo_resolution_runtime_test
+    ${DINGO_MIXED_COLLECTION_SOURCES}
     ${DINGO_RUNTIME_REQUEST_SOURCES}
     ${DINGO_CONSTRUCT_SOURCES}
     ${DINGO_INVOKE_SHAPE_SOURCES}

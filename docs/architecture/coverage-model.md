@@ -149,6 +149,18 @@ pointer and functor forms; explicit and overloaded signature selection;
 move-only and reference returns; and a missing dependency that must throw. An
 overloaded callable without an explicit signature is a declared gap.
 
+## Collections
+
+A collection is several bindings assembled into one value, so the mechanism has
+three degrees of freedom: registration mode (static, or static plus runtime
+merged), keyed or unkeyed, and collection shape (vector, or a map built with an
+insert policy). `resolution/<mode>/global/collection.cpp` covers all of them in
+five cases per mode. Element storage and request form are row probes, not
+dimensions here.
+
+The mixed cases are the interesting ones: one element is registered statically
+and one at runtime, and the assembled collection must contain both.
+
 ## Producers
 
 The producer family answers "does the capability survive a change of factory" at

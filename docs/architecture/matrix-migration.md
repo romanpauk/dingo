@@ -17,24 +17,25 @@ only) | `classification/.../wrapper` + `resolution/.../nested` | |
 `constructor_detection` | partial (shape slice) |
 `classification/constructor/<backend>/<mode>/<shape>` | | `construct` | covered
 (row claims + 18 shape classes) | `resolution/runtime/<cell>/construct.cpp` and
-`resolution/runtime/global/construct/<shape>` | | `construct_collection` | not
-covered | `resolution/.../construct/collection` | | `local_bindings` | not
-covered | `resolution/.../local` | | `nested_container` | not covered |
-`resolution/.../container` | | `factory_override` | covered (producer classes) |
-`resolution/runtime/global/producer/<cell>` | | `explicit_dependencies` | not
-covered | `resolution/.../dependencies` | | `mixed_external_dependency` | not
-covered | `resolution/.../mixed` | | `mixed_singular_ambiguity` | not covered |
-`resolution/.../mixed` | | `custom_allocator` | not covered |
-`resolution/.../config/allocator` | | `custom_rtti` | not covered |
-`resolution/.../config/rtti` | | `resolve_collection` | not covered |
-`registration/.../collection` | | `resolve_keyed_collection` | not covered |
-`registration/.../collection` | | `resolve_indexed` | not covered |
-`registration/.../indexed` | | `construct_invoke` / invoke family | covered (19
-shape classes) | `resolution/runtime/global/invoke/<shape>` | | `scenario`
-family | not covered | `resolution/.../scenario` | | `shared_cyclical` family |
-not covered | `resolution/.../cyclical` | | dependency-composition families |
-not covered | `resolution/.../composition` | | conversion parity | not covered |
-`classification/conversion` |
+`resolution/runtime/global/construct/<shape>` | | `construct_collection` |
+covered (vector + map insert) | `resolution/<mode>/global/collection` | |
+`local_bindings` | not covered | `resolution/.../local` | | `nested_container` |
+not covered | `resolution/.../container` | | `factory_override` | covered
+(producer classes) | `resolution/runtime/global/producer/<cell>` | |
+`explicit_dependencies` | not covered | `resolution/.../dependencies` | |
+`mixed_external_dependency` | not covered | `resolution/.../mixed` | |
+`mixed_singular_ambiguity` | not covered | `resolution/.../mixed` | |
+`custom_allocator` | not covered | `resolution/.../config/allocator` | |
+`custom_rtti` | not covered | `resolution/.../config/rtti` | |
+`resolve_collection` | covered (static + mixed) |
+`resolution/<mode>/global/collection` | | `resolve_keyed_collection` | covered
+(static + mixed) | `resolution/<mode>/global/collection` | | `resolve_indexed` |
+not covered | `registration/.../indexed` | | `construct_invoke` / invoke family
+| covered (19 shape classes) | `resolution/runtime/global/invoke/<shape>` | |
+`scenario` family | not covered | `resolution/.../scenario` | |
+`shared_cyclical` family | not covered | `resolution/.../cyclical` | |
+dependency-composition families | not covered | `resolution/.../composition` | |
+conversion parity | not covered | `classification/conversion` |
 
 ## Removed matrix features
 

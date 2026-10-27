@@ -8,20 +8,34 @@
 
 from __future__ import annotations
 
-from tools.model.emit.families.collection import SHARDS, render
+from tools.model.emit.families.collection import build_shards, render
+
+CASES = {
+    "interface_vector",
+    "keyed_vector",
+    "construct_vector",
+    "construct_map",
+    "keyed_construct_vector",
+}
 
 
 def test_collection_shards_are_hierarchical() -> None:
-    assert {shard.kind for shard in SHARDS} == {"interface", "keyed"}
-    for shard in SHARDS:
-        assert shard.path == (
-            f"resolution/static/global/collection/{shard.kind}.cpp"
-        )
+    shards = build_shards()
+    assert {shard.mode for shard in shards} == {"static", "mixed"}
+    for shard in shards:
+        assert shard.path == f"resolution/{shard.mode}/global/collection.cpp"
+        assert {case.name for case in shard.cases} == CASES
         content = render(shard)
         assert content == render(shard)
-        assert f"TEST({shard.suite}, resolve)" in content
-        assert f"TEST({shard.suite}, construct)" in content
+        for case in shard.cases:
+            assert f"TEST({shard.suite}, {case.name})" in content
+            assert f'RecordProperty("path", "{shard.case_path}/{case.name}")' in content
 
 
-if __name__ == "__main__":
-    raise SystemExit(0)
+def test_mixed_shards_register_at_runtime() -> None:
+    for shard in build_shards():
+        for case in shard.cases:
+            if shard.mode == "mixed":
+                assert "container.register_type<" in case.setup
+            else:
+                assert not case.setup

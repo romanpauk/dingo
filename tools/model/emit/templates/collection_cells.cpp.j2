@@ -13,68 +13,36 @@
 
 #include <gtest/gtest.h>
 
+#include <map>
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace {{ shard.namespace }} {
 
-struct tag_a {};
 struct key_a {};
 
 struct interface_type {
   virtual ~interface_type() = default;
-  virtual int value() const = 0;
+  virtual int id() const = 0;
 };
 struct implementation_a : interface_type {
-  int value() const override { return 1; }
+  int id() const override { return 0; }
 };
 struct implementation_b : interface_type {
-  int value() const override { return 2; }
+  int id() const override { return 1; }
 };
 
-{% if shard.kind == "interface" %}
-using source = dingo::bindings<
-    dingo::bind<dingo::scope<dingo::shared>,
-               dingo::storage<std::shared_ptr<implementation_a>>,
-               dingo::interfaces<interface_type>>,
-    dingo::bind<dingo::scope<dingo::shared>,
-               dingo::storage<std::shared_ptr<implementation_b>>,
-               dingo::interfaces<interface_type>>>;
-{% else %}
-using source = dingo::bindings<
-    dingo::bind<dingo::scope<dingo::shared>,
-               dingo::storage<std::shared_ptr<implementation_a>>,
-               dingo::interfaces<interface_type>, dingo::key_type<key_a>>,
-    dingo::bind<dingo::scope<dingo::shared>,
-               dingo::storage<std::shared_ptr<implementation_b>>,
-               dingo::interfaces<interface_type>, dingo::key_type<key_a>>>;
+{% for case in shard.cases %}
+TEST({{ shard.suite }}, {{ case.name }}) {
+  RecordProperty("path", {{ (shard.case_path ~ "/" ~ case.name) | cppstr }});
+  {{ case.source }}
+  {{ case.container }}
+{% if case.setup %}
+  {{ case.setup }}
 {% endif %}
-
-TEST({{ shard.suite }}, resolve) {
-  RecordProperty("path", "{{ shard.case_path }}/resolve");
-  dingo::static_container<source> container;
-{% if shard.kind == "interface" %}
-  auto values = container.resolve<std::vector<std::shared_ptr<interface_type>>>();
-{% else %}
-  auto values = container.resolve<std::vector<std::shared_ptr<interface_type>>>(
-      dingo::key_type<key_a>{});
-{% endif %}
-  ASSERT_EQ(values.size(), 2u);
-  EXPECT_EQ(values[0]->value() + values[1]->value(), 3);
+  {{ case.body }}
 }
 
-TEST({{ shard.suite }}, construct) {
-  RecordProperty("path", "{{ shard.case_path }}/construct");
-  dingo::static_container<source> container;
-{% if shard.kind == "interface" %}
-  auto values =
-      container.construct_collection<std::vector<std::shared_ptr<interface_type>>>();
-{% else %}
-  auto values = container.construct_collection<
-      std::vector<std::shared_ptr<interface_type>>>(dingo::key_type<key_a>{});
-{% endif %}
-  ASSERT_EQ(values.size(), 2u);
-  EXPECT_EQ(values[0]->value() + values[1]->value(), 3);
-}
-
+{% endfor %}
 } // namespace {{ shard.namespace }}
