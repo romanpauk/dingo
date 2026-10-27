@@ -161,6 +161,23 @@ dimensions here.
 The mixed cases are the interesting ones: one element is registered statically
 and one at runtime, and the assembled collection must contain both.
 
+## Configurations
+
+A configuration swaps a container trait under the same rows, so it has no
+degrees of freedom beyond the trait and the row it is proved on:
+
+```text
+resolution/runtime/allocator/global/resolve.cpp
+resolution/runtime/rtti/global/resolve.cpp
+resolution/runtime/indexed/global/<key>/resolve.cpp
+```
+
+The allocator case asserts that bookkeeping allocation happened and that the row
+still resolves; the RTTI case asserts the configured `rtti_type` and the same
+row; the indexed cases assert lookup by key.
+`test/support/model_configuration.h` owns the traits so the probes do not depend
+on the matrix headers.
+
 ## Producers
 
 The producer family answers "does the capability survive a change of factory" at
