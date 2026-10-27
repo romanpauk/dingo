@@ -178,6 +178,9 @@ variant_t make_variant_{{ leaf }}() {
 
 {% for row in rows %}
 TEST({{ suite }}, {{ row.name }}) {
+  RecordProperty(
+      "path", "resolution/{{ row.container }}/{{ row.scope }}/{{ row.form }}/"
+              "behavior/{{ 'move_only' if move_only else 'copyable' }}");
 {% if row.instance %}
   {{ row.instance }};
 {% endif %}

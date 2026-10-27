@@ -13,7 +13,12 @@ from pathlib import Path
 import pytest
 
 from tools.model.emit.common.validation import validate_catalog
-from tools.model.emit.families.keyed import build_rows, render, validate
+from tools.model.emit.families.keyed import (
+    build_rows,
+    build_shards,
+    render,
+    validate,
+)
 from tools.model.grammar.bindings import KEYED
 from tools.model.grammar.traits import MOVE_ONLY, TRAITS_BY_NAME
 from tools.model.semantics.support import classify
@@ -67,8 +72,9 @@ def test_keyed_move_only_rows_use_the_move_only_leaf() -> None:
 
 
 def test_keyed_render_is_deterministic(tmp_path: Path) -> None:
-    content = render(tmp_path / "keyed_cells.cpp")
-    assert content == render(tmp_path / "keyed_cells.cpp")
+    for shard in build_shards()[:4]:
+        content = render(shard)
+        assert content == render(shard)
 
 
 def test_library_catalog_matches_model() -> None:

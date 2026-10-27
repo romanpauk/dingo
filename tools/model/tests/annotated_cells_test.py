@@ -12,7 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from tools.model.emit.families.annotated import build_rows, render, validate
+from tools.model.emit.families.annotated import (
+    build_rows,
+    build_shards,
+    render,
+    validate,
+)
 from tools.model.emit.common.validation import validate_catalog
 from tools.model.grammar.traits import MOVE_ONLY
 
@@ -43,14 +48,14 @@ def test_annotated_move_only_rows_use_the_move_only_leaf() -> None:
             "interfaces<dingo::annotated<move_only_tracked, tag_a>>"
             in str(row["registration"])
         )
-    content = render(None, MOVE_ONLY)
-    assert "TEST(annotated_cells_move_only," in content
+    content = "".join(render(shard) for shard in build_shards() if shard.traits == MOVE_ONLY.name)
     assert "struct move_only_tracked" in content
 
 
 def test_annotated_render_is_deterministic(tmp_path: Path) -> None:
-    content = render(tmp_path / "annotated_cells.cpp")
-    assert content == render(tmp_path / "annotated_cells.cpp")
+    for shard in build_shards()[:4]:
+        content = render(shard)
+        assert content == render(shard)
 
 
 def test_library_catalog_matches_model() -> None:

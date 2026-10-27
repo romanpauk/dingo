@@ -17,18 +17,20 @@ addressable; they do not pin identity or copy/move counts.
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import hashlib
 import re
 from pathlib import Path
 
 from tools.model.domain.cases import iter_cases, request_forms
 from tools.model.emit.common.recipe import external_instance, registration
-from tools.model.emit.common.runner import emit, render_template, trait_context
+from tools.model.emit.common.runner import emit, render_template
+from tools.model.emit.hierarchy import CasePath
 from tools.model.emit.common.validation import validate_catalog
 from tools.model.grammar import cpp
 from tools.model.grammar.expr import Expr
 from tools.model.grammar.storage import const_leaf, has_const
-from tools.model.grammar.traits import COPYABLE, MOVE_ONLY, LeafTraits
+from tools.model.grammar.traits import COPYABLE, MOVE_ONLY, TRAITS, LeafTraits
 from tools.model.semantics.support import to_shape
 from tools.model.semantics.support import classify
 
@@ -188,14 +190,29 @@ def build_rows(
         seen.add(key)
         instance, registration_line = _registration(case, traits)
         digest = hashlib.sha1(case.request.render().encode()).hexdigest()[:8]
+        name = (
+            f"keyed_{case.scope}_{case.storage_name}_"
+            f"{_slug(case.request)}_{digest}"
+        )
+        path = CasePath(
+            phase="resolution",
+            container="runtime",
+            scope=case.scope,
+            storage=case.storage_name,
+            category="keyed",
+            traits=traits.name,
+            binding="keyed",
+            request=f"{_slug(case.request)}_{digest}",
+        )
         rows.append(
             {
-                "name": (
-                    f"keyed_{case.scope}_{case.storage_name}_"
-                    f"{_slug(case.request)}_{digest}"
-                ),
+                "name": name,
+                "path": path.path,
+                "suite": path.suite,
+                "traits": traits.name,
                 "scope": case.scope,
                 "storage": case.storage_path.expr.render(),
+                "storage_name": case.storage_name,
                 "instance": instance,
                 "registration": registration_line,
                 "request": case.request.with_leaf(traits.cpp).render(),
@@ -206,13 +223,13 @@ def build_rows(
     return rows
 
 
-def validate(traits: LeafTraits = COPYABLE) -> None:
-    rows = build_rows(traits)
+def validate() -> None:
+    rows = [row for traits in TRAITS for row in build_rows(traits)]
     if not rows:
         raise ValueError("keyed catalog must not be empty")
-    names = [row["name"] for row in rows]
-    if len(names) != len(set(names)):
-        raise ValueError("keyed catalog contains duplicate names")
+    paths = [row["path"] for row in rows]
+    if len(paths) != len(set(paths)):
+        raise ValueError("keyed catalog contains duplicate paths")
     for row in rows:
         if not row["registration"]:
             raise ValueError(f"{row['name']} has no registration")
@@ -220,19 +237,66 @@ def validate(traits: LeafTraits = COPYABLE) -> None:
             raise ValueError(f"{row['name']} has no request")
 
 
-def render(output: Path, traits: LeafTraits = COPYABLE) -> str:
-    validate(traits)
+@dataclass(frozen=True)
+class KeyedShard:
+    scope: str
+    storage: str
+    traits: str
+    path: str
+    suite: str
+    namespace: str
+    move_only: bool
+    leaf: str
+    rows: tuple[dict[str, object], ...]
+
+
+def build_shards() -> list[KeyedShard]:
+    grouped: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+    for traits in TRAITS:
+        for row in build_rows(traits):
+            key = (str(row["scope"]), str(row["storage_name"]), traits.name)
+            grouped.setdefault(key, []).append(row)
+    shards = []
+    for (scope, storage, traits_name), rows in sorted(grouped.items()):
+        prefix = CasePath(
+            phase="resolution",
+            container="runtime",
+            scope=scope,
+            storage=storage,
+            category="keyed",
+            traits=traits_name,
+        )
+        traits = next(item for item in TRAITS if item.name == traits_name)
+        shards.append(
+            KeyedShard(
+                scope=scope,
+                storage=storage,
+                traits=traits_name,
+                path=f"{prefix.file[:-4]}/{traits_name}.cpp",
+                suite=f"{prefix.suite}_{traits_name}",
+                namespace=f"{prefix.suite}_{traits_name}",
+                move_only=not traits.copyable,
+                leaf=traits.cpp,
+                rows=tuple(rows),
+            )
+        )
+    return shards
+
+
+def render(shard: KeyedShard) -> str:
     return render_template(
         "keyed_cells.cpp.j2",
-        rows=build_rows(traits),
-        **trait_context(traits, "keyed_cells"),
+        rows=shard.rows,
+        namespace=shard.namespace,
+        suite=shard.suite,
+        leaf=shard.leaf,
+        move_only=shard.move_only,
     )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--out-move-only", type=Path)
+    parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument(
         "--include",
         type=Path,
@@ -243,12 +307,9 @@ def main() -> None:
 
     if arguments.include is not None:
         validate_catalog(arguments.include)
-    for traits, out in (
-        (COPYABLE, arguments.out),
-        (MOVE_ONLY, arguments.out_move_only),
-    ):
-        if out is not None:
-            emit(out, render(out, traits), check=arguments.check)
+    validate()
+    for shard in build_shards():
+        emit(arguments.out_dir / shard.path, render(shard), check=arguments.check)
 
 
 if __name__ == "__main__":

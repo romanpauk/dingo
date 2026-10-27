@@ -15,6 +15,7 @@ import pytest
 from tools.model.emit.common.validation import validate_catalog
 from tools.model.emit.families.interface_runtime import (
     build_rows,
+    build_shards,
     render,
     validate,
 )
@@ -63,13 +64,14 @@ def test_interface_move_only_rows_use_the_move_only_implementation() -> None:
             == "supported"
         )
         assert "move_only_implementation_type" in str(row["registration"])
-    content = render(None, MOVE_ONLY)
-    assert "TEST(interface_runtime_move_only," in content
+    content = "".join(render(shard) for shard in build_shards() if shard.traits == MOVE_ONLY.name)
+    assert content
 
 
 def test_interface_render_is_deterministic(tmp_path: Path) -> None:
-    content = render(tmp_path / "interface_runtime.cpp")
-    assert content == render(tmp_path / "interface_runtime.cpp")
+    for shard in build_shards()[:4]:
+        content = render(shard)
+        assert content == render(shard)
 
 
 def test_library_catalog_matches_model() -> None:

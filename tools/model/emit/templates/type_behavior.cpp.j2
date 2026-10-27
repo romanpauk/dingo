@@ -215,6 +215,9 @@ void probe(Container &container) {
 
 {% for row in rows %}
 TEST({{ suite }}, {{ row.name }}) {
+  RecordProperty(
+      "path", "resolution/{{ row.container }}/{{ row.scope }}/{{ row.form }}/"
+              "type_behavior/{{ 'move_only' if move_only else 'copyable' }}");
   using storage = dingo::detail::storage<
       dingo::{{ row.scope }}, {{ row.storage_type }}, {{ row.storage_type }},
       dingo::constructor<{{ row.constructor }}>,

@@ -64,6 +64,7 @@ inline const {{ leaf }} *make_pointer_const_{{ leaf }}() {
 
 {% for row in rows %}
 TEST({{ suite }}, {{ row.name }}) {
+  RecordProperty("path", {{ row.path | cppstr }});
 {% if row.instance %}
   {{ row.instance }};
 {% endif %}
