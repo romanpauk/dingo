@@ -22,7 +22,7 @@ Current model snapshot (both leaf traits):
 - cases (copyable domain): 132,060
 - supported: 2,041 (copyable 1,092, move-only 949)
 - compile-tested: 2,041
-- runtime-tested: 1,955
+- runtime-tested (key-mapped): 1,955
 - compile gap: 0
 - undeclared runtime gap: 0
 - declared runtime gap: 86 (43 per trait)
@@ -34,6 +34,16 @@ Supported by binding (copyable / move-only):
 - annotated: 99 / 78
 - interface: 42 / 42
 - annotated interface: 34 / 34
+
+The runtime-tested count is a key mapping, not an execution log. The request
+based families (`behavior_cells`, `annotated`, `keyed`, `const`, and the
+interface families) call `resolve` per row. The concrete shape matrix guards
+each probe with `lifted_request_supported`; when the model overclaims a shape
+the block compiles out, but `report/coverage.py` still maps the key. Comparing
+the supported concrete keys with `build/test/type-matrix.json` shows 253 of 487
+copyable keys (354 of 730 copyable cases, 313 of 651 move-only cases) have no
+library route. The next coverage step is to either tighten `derive_route` for
+those nested shapes or have `type_behavior` log the probes it actually executes.
 
 Declared runtime gaps (per trait):
 
