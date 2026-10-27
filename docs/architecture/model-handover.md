@@ -13,7 +13,7 @@ The tree is green:
 - `dingo_model_test`: 279 tests passed (behavior/type behavior, per cell)
 - `dingo_classification_test`: 62 tests
 - `dingo_resolution_static_asserts_test`: 40 tests
-- `dingo_resolution_runtime_test`: 678 tests
+- `dingo_resolution_runtime_test`: 681 tests
 - `dingo_registration_test`: 158 tests
 - `dingo_registration_runtime_test`: 6 tests
 - `cells-check`: passes

@@ -28,6 +28,7 @@ from dataclasses import dataclass
 class CasePath:
     phase: str
     container: str
+    configuration: str = ""
     scope: str = ""
     storage: str = ""
     category: str = ""
@@ -42,6 +43,7 @@ class CasePath:
             for part in (
                 self.phase,
                 self.container,
+                self.configuration,
                 self.scope,
                 self.storage,
                 self.category,
