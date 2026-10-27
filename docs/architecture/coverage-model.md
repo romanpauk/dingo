@@ -171,6 +171,29 @@ pointer and functor forms; explicit and overloaded signature selection;
 move-only and reference returns; and a missing dependency that must throw. An
 overloaded callable without an explicit signature is a declared gap.
 
+## Detection axes
+
+Constructor detection has two independent axes and one dependent one:
+
+```text
+classification/constructor/<backend>/<mode>/<shape>.cpp
+```
+
+- backend: the compiler's own path, or the MSVC signature recovery;
+- mode: `shape` reports arity and kind, `signature` also recovers the parameter
+  `type_list` that injection later uses;
+- shape: the type being classified.
+
+The signature list is the part worth asserting separately: shape detection
+chooses the arity first, so a recovery that returns a different set of types
+than the constructor takes would inject the wrong arguments while every runtime
+test still passed. Signature recovery also normalizes an rvalue-reference
+parameter to the value type, because the injected prvalue binds to `T &&`.
+
+The MSVC backend only exists under `_MSC_VER`. Its files are generated and
+guarded, with a `GTEST_SKIP` naming the platform elsewhere, so the test set runs
+on MSVC and the shape of the coverage is still pinned by the generator tests.
+
 ## Collections
 
 A collection is several bindings assembled into one value, so the mechanism has

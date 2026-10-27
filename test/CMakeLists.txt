@@ -819,7 +819,7 @@ endif()
 file(GLOB_RECURSE DINGO_ROUTE_SOURCES CONFIGURE_DEPENDS
     "${DINGO_RESOLVE_DIR}/resolution/static_asserts/*/*/route.cpp")
 file(GLOB_RECURSE DINGO_CLASSIFICATION_SOURCES CONFIGURE_DEPENDS
-    "${DINGO_CLASSIFICATION_DIR}/classification/constructor/*.cpp"
+    "${DINGO_CLASSIFICATION_DIR}/classification/constructor/*/*/*.cpp"
     "${DINGO_CLASSIFICATION_DIR}/classification/*/*/storage.cpp"
     "${DINGO_CLASSIFICATION_DIR}/classification/global/wrapper/*.cpp"
     "${DINGO_CLASSIFICATION_DIR}/classification/global/selection/*.cpp")

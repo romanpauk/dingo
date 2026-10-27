@@ -8,36 +8,50 @@
 
 from __future__ import annotations
 
-import json
-
-from tools.model.emit.detection_constructor import SHAPES, manifest, render
-
-
-def test_detection_shapes_have_unique_paths() -> None:
-    paths = [f"classification/constructor/{shape.name}" for shape in SHAPES]
-    assert len(paths) == len(set(paths))
-    assert SHAPES
+from tools.model.emit.detection_constructor import (
+    BACKENDS,
+    MODES,
+    SHAPES,
+    build_shards,
+    render,
+)
 
 
-def test_detection_render_is_deterministic() -> None:
-    for shape in SHAPES:
-        content = render(shape)
-        assert content == render(shape)
-        assert (
-            f'detected constructor arity == {shape.arity}' not in content
+def test_detection_is_backend_by_mode_by_shape() -> None:
+    shards = build_shards()
+    assert len(shards) == len(BACKENDS) * len(MODES) * len(SHAPES)
+    assert len({shard.path for shard in shards}) == len(shards)
+    for shard in shards:
+        assert shard.path == (
+            f"classification/constructor/{shard.backend}/{shard.mode}/"
+            f"{shard.shape}.cpp"
         )
-        assert f"== {shape.arity}" in content
-        assert f'RecordProperty("path", "classification/constructor/{shape.name}")' in content
+        assert shard.case_path == (
+            f"classification/constructor/{shard.backend}/{shard.mode}/"
+            f"{shard.shape}"
+        )
 
 
-def test_detection_manifest_round_trips() -> None:
-    payload = json.loads(manifest())
-    assert len(payload["shapes"]) == len(SHAPES)
-    for shape, entry in zip(SHAPES, payload["shapes"]):
-        assert entry["name"] == shape.name
-        assert entry["arity"] == shape.arity
-        assert entry["path"] == f"classification/constructor/{shape.name}"
+def test_signature_mode_asserts_the_recovered_list() -> None:
+    for shard in build_shards():
+        content = render(shard)
+        assert content == render(shard)
+        assert f"TEST({shard.suite}, {shard.shape})" in content
+        assert f"== {shard.arity}" in content
+        if shard.mode == "signature" and shard.arguments:
+            assert "std::is_same_v<typename detection::arguments" in content
+            assert shard.arguments in content
+        else:
+            assert "std::is_same_v<typename detection::arguments" not in content
 
 
-if __name__ == "__main__":
-    raise SystemExit(0)
+def test_msvc_backend_is_guarded() -> None:
+    for shard in build_shards():
+        content = render(shard)
+        if shard.backend == "msvc":
+            assert "#if defined(_MSC_VER)" in content
+            assert "constructor_detection_msvc" in content
+            assert "GTEST_SKIP" in content
+        else:
+            assert "constructor_detection_msvc" not in content
+            assert "GTEST_SKIP" not in content

@@ -15,23 +15,61 @@
 #include <array>
 #include <cstddef>
 
-namespace detection_compile_constructor_{{ shape.name }} {
+namespace {{ shard.namespace }} {
 
-{{ shape.declaration }}
+{{ shard.declaration }}
 
-using probe_type = {{ shape.type }};
+using probe_type = {{ shard.type }};
+
+{% if shard.backend == "msvc" %}
+#if defined(_MSC_VER)
+using detection =
+    dingo::detail::constructor_detection_msvc<probe_type,
+                                              dingo::detail::constructor_{{ shard.mode }}>;
 
 static_assert(
-    dingo::constructor<probe_type>::arity == {{ shape.arity }},
+    detection::arity == {{ shard.arity }},
     "detected constructor arity disagrees with the model");
 static_assert(
-    dingo::constructor<probe_type>::kind ==
-        dingo::detail::constructor_kind::{{ shape.kind }},
+    detection::kind == dingo::detail::constructor_kind::{{ shard.kind }},
     "detected constructor kind disagrees with the model");
+{% if shard.mode == "signature" and shard.arguments %}
+static_assert(
+    std::is_same_v<typename detection::arguments, {{ shard.arguments }}>,
+    "recovered constructor signature disagrees with the model");
+{% endif %}
 
-TEST(detection_compile_constructor_{{ shape.name }}, detected) {
-  RecordProperty("path", "classification/constructor/{{ shape.name }}");
+TEST({{ shard.suite }}, {{ shard.shape }}) {
+  RecordProperty("path", {{ shard.case_path | cppstr }});
   SUCCEED();
 }
+#else
+TEST({{ shard.suite }}, {{ shard.shape }}) {
+  RecordProperty("path", {{ shard.case_path | cppstr }});
+  GTEST_SKIP() << "the msvc backend is only available to msvc";
+}
+#endif
+{% else %}
+using detection =
+    dingo::constructor_detection<probe_type,
+                                 dingo::detail::constructor_{{ shard.mode }}>;
 
-} // namespace detection_compile_constructor_{{ shape.name }}
+static_assert(
+    detection::arity == {{ shard.arity }},
+    "detected constructor arity disagrees with the model");
+static_assert(
+    detection::kind == dingo::detail::constructor_kind::{{ shard.kind }},
+    "detected constructor kind disagrees with the model");
+{% if shard.mode == "signature" and shard.arguments %}
+static_assert(
+    std::is_same_v<typename detection::arguments, {{ shard.arguments }}>,
+    "recovered constructor signature disagrees with the model");
+{% endif %}
+
+TEST({{ shard.suite }}, {{ shard.shape }}) {
+  RecordProperty("path", {{ shard.case_path | cppstr }});
+  SUCCEED();
+}
+{% endif %}
+
+} // namespace {{ shard.namespace }}

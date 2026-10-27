@@ -11,7 +11,8 @@ The tree is green:
 
 - `pytest tools/model/tests test/matrix/generator_test.py`: 330 passed
 - `dingo_model_test`: 279 tests passed (behavior/type behavior, per cell)
-- `dingo_classification_test`: 62 tests
+- `dingo_classification_test`: 113 tests (83 on this platform, 30 MSVC backend
+  cases skipped)
 - `dingo_resolution_static_asserts_test`: 40 tests
 - `dingo_resolution_static_test`: 7 tests
 - `dingo_resolution_runtime_test`: 4,763 tests (resolve rows, `construct` and
