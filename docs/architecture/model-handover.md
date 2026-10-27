@@ -10,7 +10,8 @@ per-storage request-derivation refactor.
 The tree is green:
 
 - `pytest tools/model/tests test/matrix/generator_test.py`: 280 passed
-- `dingo_model_test`: 553 tests passed, including the trait matrix
+- `dingo_model_test`: 600 tests passed, including the trait matrix and move-only
+  type behavior
 - `cells-check`: passes
 - `ctest`: 77/77 passed
 - `format-check` and full `check`: pass
@@ -141,11 +142,17 @@ combinations. The earlier global-list model overclaimed many of them.
 
 Current generated test counts:
 
-| suite | tests | | --- | ---: | | `keyed_cells` | 141 | | `annotated_cells` |
-99 | | `behavior_cells` | 93 | | `const_cells` | 52 | | `type_behavior` | 47 | |
-`storage_cells` | 41 | | `interface_runtime` | 34 | | `route_cells` | 33 | |
-`interface_cells` | 7 | | `annotation_cells` | 3 | | `type_matrix`,
-`selection_rules`, `property_cells` | 1 each |
+- `keyed_cells`: 141
+- `annotated_cells`: 99
+- `behavior_cells`: 93
+- `const_cells`: 52
+- `type_behavior`: 94 (47 copyable + 47 move-only)
+- `storage_cells`: 41
+- `interface_runtime`: 34
+- `route_cells`: 33
+- `interface_cells`: 7
+- `annotation_cells`: 3
+- `type_matrix`, `trait_matrix`, `selection_rules`, `property_cells`: 1 each
 
 Generated files are under `build/test/generated/model/` and are compiled into
 `dingo_model_test`.
@@ -164,7 +171,7 @@ Generated files are under `build/test/generated/model/` and are compiled into
 
 ### 1. Copyable / move-only leaf traits
 
-The compile-time half is done:
+Done:
 
 - `grammar/traits.py` declares `LeafTraits` with `copyable`/`movable`.
 - `Case` carries `traits`; `iter_cases(..., traits)` stamps the domain.
@@ -172,22 +179,27 @@ The compile-time half is done:
   rule `copy`.
 - `emit/traits.py` asserts the trait delta against the real resolution kernel
   for every supported cell and shape.
+- `emit/behavior.py` runs the shape matrix for both leaves in both containers
+  (`type_behavior` 47 copyable + 47 move-only tests).
+- `Shape.with_leaf()` now rebases the `int` base leaf, so the type-behavior
+  guards run real leaf-typed requests instead of compiling out.
 
 Remaining work:
 
 1. Make the coverage keys trait-aware:
    `(scope, storage, binding, request, traits)` in `report/coverage.py`.
-2. Select a trait-appropriate primary route in every runtime family. The current
-   `derive_expectation(form, scope)` assumes a copyable leaf; for a move-only
-   leaf it must choose the first supported ledger route (usually a borrow or
-   move) and expect zero copies.
-3. Render each runtime family once per trait, with the fixture definition and
-   tuple names parameterized. The templates currently spell `tracked` directly.
+2. Select a trait-appropriate primary route in the request-based runtime
+   families (`behavior_cells`, `annotated`, `keyed`, `const`,
+   `interface_runtime`). The current `derive_expectation(form, scope)` assumes a
+   copyable leaf; for a move-only leaf it must choose the first supported ledger
+   route (usually a borrow or move) and expect zero copies.
+3. Render those families once per trait, with the fixture definition and tuple
+   names parameterized; the templates currently spell `tracked` directly.
 4. Regenerate baselines and docs and extend the coverage report with the trait
    column.
 
-The matrix is deliberately separate for now, so the copyable path counts above
-stay stable while the runtime families are rebuilt.
+The compile-time and shape-runtime layers are done; the path-domain coverage
+counts above stay copyable-only until the request-based families follow.
 
 ### 2. Annotated interfaces
 
@@ -239,11 +251,6 @@ Reducing them requires new scenario families, not more generated cases.
   `test/matrix` or keep them clearly isolated.
 - `type_matrix.cpp` is the compile-time bottleneck. If it grows, split it into
   multiple translation units.
-- `Shape.with_leaf()` does not replace the `int` base leaf, so
-  `emit/behavior.py` currently probes `int`-typed requests against a `tracked`
-  storage and most `if constexpr` blocks compile out. The trait matrix uses
-  `cpp.rebase_leaf()` instead. Fix `Shape.with_leaf()` and re-check the
-  type-behavior guards.
 
 ## Commands
 

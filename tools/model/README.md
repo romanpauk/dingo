@@ -133,7 +133,10 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   contract, and every block finishes with the lifetime balance intact. The
   runtime suite uses `container<>`; a second translation unit runs the same
   catalog through `static_container` for every statically bindable cell
-  (`external` is runtime-only). The shape catalog and the top-level verdict come
+  (`external` is runtime-only). Both are emitted once per leaf trait: the
+  copyable and move-only fixtures share the shape catalog, and the
+  copy-requiring shapes compile out for the move-only leaf. The shape catalog
+  and the top-level verdict come
   from `emit/matrix.py`, so the suite follows the library instead of listing
   supported requests by hand. Unowned or non-transferred pointers are never
   released, and the two consuming lvalue-borrow shapes are emitted as explicit
@@ -202,8 +205,9 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   shape; the leaf's special members decide whether a copying route exists.
   Every storage cell and request shape is classified once per trait, and
   `emit/traits.py` asserts the move-only answer is exactly the copyable answer
-  minus the routes that copy the leaf. The runtime families still run the
-  copyable leaf until each selects a trait-appropriate primary route.
+  minus the routes that copy the leaf. `emit/behavior.py` runs the same shape
+  matrix for both leaves; the other runtime families still run the copyable
+  leaf until each selects a trait-appropriate primary route.
 - `grammar/storage.py` projects stored expressions from `grammar.storage_types()` and
   filters them by scope. A path is storable when its expression fits the scope;
   const is a normal grammar constructor, not a separate table. The result is a

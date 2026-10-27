@@ -109,6 +109,19 @@ def test_shape_properties_come_from_the_wrapper() -> None:
     assert reference.is_lvalue_reference
 
 
+def test_shape_leaf_rebasing_replaces_the_concrete_base() -> None:
+    optional = BASE.apply(WRAPPER_BY_NAME["optional"])
+    variant = BASE.apply(WRAPPER_BY_NAME["variant"])
+    reference = optional.apply(WRAPPER_BY_NAME["lvalue_reference"])
+
+    assert BASE.with_leaf("tracked") == "tracked"
+    assert optional.with_leaf("tracked") == "std::optional<tracked>"
+    assert reference.with_leaf("tracked") == "std::optional<tracked> &"
+    assert variant.with_leaf("tracked") == "std::variant<tracked, long>"
+    assert "int" not in optional.with_leaf("tracked")
+    assert "long" in variant.with_leaf("tracked")
+
+
 def test_wrapper_applicability_rejects_invalid_compositions() -> None:
     reference = BASE.apply(WRAPPER_BY_NAME["lvalue_reference"])
     array_reference = BASE.apply(WRAPPER_BY_NAME["array_lvalue_reference"])

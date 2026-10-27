@@ -224,6 +224,10 @@ set(DINGO_TYPE_BEHAVIOR_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/type_behavior.cpp")
 set(DINGO_TYPE_BEHAVIOR_STATIC_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/type_behavior_static.cpp")
+set(DINGO_TYPE_BEHAVIOR_MOVE_ONLY_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/type_behavior_move_only.cpp")
+set(DINGO_TYPE_BEHAVIOR_STATIC_MOVE_ONLY_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/type_behavior_static_move_only.cpp")
 set(DINGO_PROPERTY_MODEL_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/property_cells.cpp")
 set(DINGO_ANNOTATED_MODEL_TEST_SOURCE
@@ -424,6 +428,9 @@ execute_process(
         ${DINGO_TYPE_BEHAVIOR_GENERATOR}
         --out ${DINGO_TYPE_BEHAVIOR_TEST_SOURCE}
         --out-static ${DINGO_TYPE_BEHAVIOR_STATIC_TEST_SOURCE}
+        --out-move-only ${DINGO_TYPE_BEHAVIOR_MOVE_ONLY_TEST_SOURCE}
+        --out-static-move-only
+            ${DINGO_TYPE_BEHAVIOR_STATIC_MOVE_ONLY_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     RESULT_VARIABLE DINGO_TYPE_BEHAVIOR_GENERATOR_RESULT)
@@ -544,6 +551,9 @@ add_custom_target(cells-check
         ${DINGO_TYPE_BEHAVIOR_GENERATOR}
         --out ${DINGO_TYPE_BEHAVIOR_TEST_SOURCE}
         --out-static ${DINGO_TYPE_BEHAVIOR_STATIC_TEST_SOURCE}
+        --out-move-only ${DINGO_TYPE_BEHAVIOR_MOVE_ONLY_TEST_SOURCE}
+        --out-static-move-only
+            ${DINGO_TYPE_BEHAVIOR_STATIC_MOVE_ONLY_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
@@ -583,6 +593,8 @@ add_executable(dingo_model_test
     ${DINGO_BINDING_MATRIX_TEST_SOURCE}
     ${DINGO_TYPE_BEHAVIOR_TEST_SOURCE}
     ${DINGO_TYPE_BEHAVIOR_STATIC_TEST_SOURCE}
+    ${DINGO_TYPE_BEHAVIOR_MOVE_ONLY_TEST_SOURCE}
+    ${DINGO_TYPE_BEHAVIOR_STATIC_MOVE_ONLY_TEST_SOURCE}
     ${DINGO_ANNOTATED_MODEL_TEST_SOURCE}
     ${DINGO_CONST_MODEL_TEST_SOURCE}
     ${DINGO_KEYED_MODEL_TEST_SOURCE}

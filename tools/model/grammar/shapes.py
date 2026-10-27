@@ -258,7 +258,7 @@ class Shape:
 
     def with_leaf(self, leaf: str) -> str:
         """Render the shape with a different leaf type spelling."""
-        return cpp.with_leaf(self.cpp, leaf).render()
+        return cpp.rebase_leaf(self.cpp, leaf).render()
 
 
 BASE = Shape("value", cpp.leaf("int"))

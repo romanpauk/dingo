@@ -31,6 +31,7 @@ from tools.model.semantics.cells import iter_supported_cells
 from tools.model.emit.common.recipe import external_instance, registration
 from tools.model.emit.common.validation import validate_catalog
 from tools.model.emit.matrix import SHAPES, CONSUMING_SCOPES, top_level_safe
+from tools.model.grammar.traits import COPYABLE, MOVE_ONLY, LeafTraits
 
 
 CONTAINERS = ("runtime", "static")
@@ -66,16 +67,17 @@ def delete_kind(scope: str, form: str, shape) -> str:
     return "none"
 
 
-def _storage_type(form) -> str:
-    return form.cpp("tracked").render()
+def _storage_type(form, traits: LeafTraits = COPYABLE) -> str:
+    return form.cpp(traits.cpp).render()
 
 
-def _shape_type(shape) -> str:
-    return shape.with_leaf("tracked")
+def _shape_type(shape, traits: LeafTraits = COPYABLE) -> str:
+    return shape.with_leaf(traits.cpp)
 
 
 def build_rows(
     containers: tuple[str, ...] = CONTAINERS,
+    traits: LeafTraits = COPYABLE,
 ) -> list[dict[str, object]]:
     rows = []
     for scope, form in iter_supported_cells():
@@ -86,7 +88,7 @@ def build_rows(
             continue
         instance = None
         if scope_name == "external":
-            instance = external_instance(form)
+            instance = external_instance(form, traits.cpp)
             if instance is None:
                 continue
         for container in containers:
@@ -96,6 +98,7 @@ def build_rows(
                 form,
                 scope_name,
                 container,
+                leaf=traits.cpp,
                 external_argument=(
                     instance.argument if instance is not None else ""
                 ),
@@ -106,11 +109,11 @@ def build_rows(
                     "scope": scope_name,
                     "form": form.name,
                     "container": container,
-                    "storage_type": _storage_type(form),
+                    "storage_type": _storage_type(form, traits),
                     "constructor": (
-                        "tracked"
+                        traits.cpp
                         if form.name in ARRAY_STORAGE_FORMS
-                        else _storage_type(form)
+                        else _storage_type(form, traits)
                     ),
                     "registration": registration_line,
                     "static_source": static_source,
@@ -119,7 +122,7 @@ def build_rows(
                     "shapes": [
                         {
                             "name": shape.name,
-                            "type": _shape_type(shape),
+                            "type": _shape_type(shape, traits),
                             "gap": shape_gap(scope_name, shape),
                             "delete": delete_kind(
                                 scope_name, form.name, shape
@@ -132,8 +135,11 @@ def build_rows(
     return rows
 
 
-def validate(containers: tuple[str, ...] = CONTAINERS) -> None:
-    rows = build_rows(containers)
+def validate(
+    containers: tuple[str, ...] = CONTAINERS,
+    traits: LeafTraits = COPYABLE,
+) -> None:
+    rows = build_rows(containers, traits)
     if not rows:
         raise ValueError("type behavior catalog must not be empty")
     if len({row["name"] for row in rows}) != len(rows):
@@ -156,14 +162,25 @@ def validate(containers: tuple[str, ...] = CONTAINERS) -> None:
 
 def render(
     rows: list[dict[str, object]],
+    traits: LeafTraits = COPYABLE,
 ) -> str:
-    return render_template("type_behavior.cpp.j2", rows=rows)
+    suffix = "" if traits.copyable else f"_{traits.name}"
+    return render_template(
+        "type_behavior.cpp.j2",
+        rows=rows,
+        leaf=traits.cpp,
+        move_only=not traits.copyable,
+        namespace=f"type_behavior{suffix}",
+        suite=f"type_behavior{suffix}",
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--out-static", type=Path)
+    parser.add_argument("--out-move-only", type=Path)
+    parser.add_argument("--out-static-move-only", type=Path)
     parser.add_argument(
         "--include",
         type=Path,
@@ -174,16 +191,24 @@ def main() -> None:
 
     if arguments.include is not None:
         validate_catalog(arguments.include)
-    validate(("runtime",))
-    runtime_content = render(build_rows(("runtime",)))
-    static_content = ""
-    if arguments.out_static is not None:
-        validate(("static",))
-        static_content = render(build_rows(("static",)))
 
-    outputs = [(arguments.out, runtime_content)]
-    if arguments.out_static is not None:
-        outputs.append((arguments.out_static, static_content))
+    outputs = []
+    for traits, out, out_static in (
+        (COPYABLE, arguments.out, arguments.out_static),
+        (MOVE_ONLY, arguments.out_move_only, arguments.out_static_move_only),
+    ):
+        if out is None:
+            continue
+        validate(("runtime",), traits)
+        outputs.append((out, render(build_rows(("runtime",), traits), traits)))
+        if out_static is not None:
+            validate(("static",), traits)
+            outputs.append(
+                (
+                    out_static,
+                    render(build_rows(("static",), traits), traits),
+                )
+            )
 
     for path, content in outputs:
         emit(path, content, check=arguments.check)

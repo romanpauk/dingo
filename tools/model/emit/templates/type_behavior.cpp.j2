@@ -26,21 +26,25 @@
 #include <utility>
 #include <variant>
 
-namespace type_behavior {
+namespace {{ namespace }} {
 
 using namespace dingo::model::probe;
 
-struct tracked {
+struct {{ leaf }} {
   static inline int constructions = 0;
   static inline int copies = 0;
   static inline int moves = 0;
   static inline int destructions = 0;
   static inline int next_id = 0;
 
-  tracked() : id(++next_id) { ++constructions; }
-  tracked(const tracked &other) : id(other.id) { ++copies; }
-  tracked(tracked &&other) noexcept : id(other.id) { ++moves; }
-  ~tracked() { ++destructions; }
+  {{ leaf }}() : id(++next_id) { ++constructions; }
+{% if move_only %}
+  {{ leaf }}(const {{ leaf }} &) = delete;
+{% else %}
+  {{ leaf }}(const {{ leaf }} &other) : id(other.id) { ++copies; }
+{% endif %}
+  {{ leaf }}({{ leaf }} &&other) noexcept : id(other.id) { ++moves; }
+  ~{{ leaf }}() { ++destructions; }
 
   static void reset() {
     constructions = 0;
@@ -53,33 +57,33 @@ struct tracked {
   int id;
 };
 
-using variant_t = std::variant<tracked, long>;
+using variant_t = std::variant<{{ leaf }}, long>;
 
-inline std::unique_ptr<tracked> make_unique_tracked() {
-  return std::make_unique<tracked>();
+inline std::unique_ptr<{{ leaf }}> make_unique_{{ leaf }}() {
+  return std::make_unique<{{ leaf }}>();
 }
 
-inline std::unique_ptr<tracked[]> make_unique_array_tracked() {
-  return std::unique_ptr<tracked[]>(new tracked[2]);
+inline std::unique_ptr<{{ leaf }}[]> make_unique_array_{{ leaf }}() {
+  return std::unique_ptr<{{ leaf }}[]>(new {{ leaf }}[2]);
 }
 
-inline std::shared_ptr<tracked> make_shared_tracked() {
-  return std::make_shared<tracked>();
+inline std::shared_ptr<{{ leaf }}> make_shared_{{ leaf }}() {
+  return std::make_shared<{{ leaf }}>();
 }
 
-inline std::shared_ptr<tracked[]> make_shared_array_tracked() {
-  return std::shared_ptr<tracked[]>(new tracked[2]);
+inline std::shared_ptr<{{ leaf }}[]> make_shared_array_{{ leaf }}() {
+  return std::shared_ptr<{{ leaf }}[]>(new {{ leaf }}[2]);
 }
 
-inline std::optional<tracked> make_optional_tracked() {
-  return std::optional<tracked>(std::in_place);
+inline std::optional<{{ leaf }}> make_optional_{{ leaf }}() {
+  return std::optional<{{ leaf }}>(std::in_place);
 }
 
-inline variant_t make_variant_tracked() {
+inline variant_t make_variant_{{ leaf }}() {
   return variant_t(std::in_place_index<0>);
 }
 
-inline tracked *make_pointer_tracked() { return new tracked; }
+inline {{ leaf }} *make_pointer_{{ leaf }}() { return new {{ leaf }}; }
 
 template <typename T> auto id_of(const T &value) -> decltype(value.id) {
   return value.id;
@@ -165,10 +169,21 @@ template <delete_kind Delete, typename T> void release(T *value) {
 
 template <typename Request, bool Stable, delete_kind Delete, typename Container>
 void probe(Container &container) {
-  if constexpr (std::is_rvalue_reference_v<Request>) {
+  if constexpr (std::is_rvalue_reference_v<Request> &&
+                std::is_const_v<std::remove_reference_t<Request>>) {
+    // A const rvalue request is a lift artefact: the library cannot produce a
+    // const object to bind it to, so there is no runtime probe.
+    (void)container;
+  } else if constexpr (std::is_rvalue_reference_v<Request>) {
     auto &&value = container.template resolve<Request>();
-    auto moved = std::move(value);
-    (void)moved;
+    if constexpr (std::is_constructible_v<
+                      std::remove_cv_t<std::remove_reference_t<Request>>,
+                      Request>) {
+      auto moved = std::move(value);
+      (void)moved;
+    } else {
+      (void)value;
+    }
   } else if constexpr (std::is_lvalue_reference_v<Request>) {
     auto &first = container.template resolve<Request>();
     auto &second = container.template resolve<Request>();
@@ -199,21 +214,21 @@ void probe(Container &container) {
 }
 
 {% for row in rows %}
-TEST(type_behavior, {{ row.name }}) {
+TEST({{ suite }}, {{ row.name }}) {
   using storage = dingo::detail::storage<
       dingo::{{ row.scope }}, {{ row.storage_type }}, {{ row.storage_type }},
       dingo::constructor<{{ row.constructor }}>,
       dingo::detail::conversions<dingo::{{ row.scope }}, {{ row.storage_type }},
-                                tracked>>;
+                                {{ leaf }}>>;
 {% for shape in row.shapes %}
 {% if shape.gap %}
   // top-level gap: {{ shape.gap }}
 {% else %}
-  if constexpr (lifted_request_supported<{{ shape.type }}, storage, tracked>()) {
+  if constexpr (lifted_request_supported<{{ shape.type }}, storage, {{ leaf }}>()) {
 {% if row.instance %}
     {{ row.instance }};
 {% endif %}
-    tracked::reset();
+    {{ leaf }}::reset();
     {
 {% if row.container == "runtime" %}
       dingo::container<> container;
@@ -225,12 +240,12 @@ TEST(type_behavior, {{ row.name }}) {
       probe<{{ shape.type }}, {{ "true" if row.stable else "false" }},
             delete_kind::{{ shape.delete }}>(container);
     }
-    EXPECT_EQ(tracked::destructions,
-              tracked::constructions + tracked::copies + tracked::moves);
+    EXPECT_EQ({{ leaf }}::destructions,
+              {{ leaf }}::constructions + {{ leaf }}::copies + {{ leaf }}::moves);
   }
 {% endif %}
 {% endfor %}
 }
 
 {% endfor %}
-} // namespace type_behavior
+} // namespace {{ namespace }}

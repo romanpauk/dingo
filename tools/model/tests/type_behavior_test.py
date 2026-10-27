@@ -23,6 +23,7 @@ from tools.model.emit.behavior import (
     validate,
 )
 from tools.model.emit.matrix import SHAPES
+from tools.model.grammar.traits import MOVE_ONLY
 
 
 def test_type_behavior_product_is_complete() -> None:
@@ -93,6 +94,33 @@ def test_consuming_scope_raw_pointers_transfer_ownership() -> None:
     pointer_shape = next(shape for shape in SHAPES if shape.is_pointer)
     assert delete_kind("shared", "pointer", pointer_shape) == "none"
     assert delete_kind("external", "pointer", pointer_shape) == "none"
+
+
+def test_move_only_rows_use_the_move_only_leaf() -> None:
+    rows = build_rows(("runtime",), MOVE_ONLY)
+    assert rows
+    plain = next(
+        row
+        for row in rows
+        if row["scope"] == "shared" and row["form"] == "plain"
+    )
+    assert plain["storage_type"] == "move_only_type"
+    assert plain["constructor"] == "move_only_type"
+    content = render(rows, MOVE_ONLY)
+    assert "TEST(type_behavior_move_only," in content
+    assert "struct move_only_type" in content
+    assert "move_only_type(const move_only_type &) = delete;" in content
+    assert "std::optional<move_only_type>" in content
+
+
+def test_trait_rows_keep_the_same_cells() -> None:
+    from tools.model.grammar.traits import COPYABLE
+
+    copyable = build_rows(("runtime",), COPYABLE)
+    move_only = build_rows(("runtime",), MOVE_ONLY)
+    assert [(row["scope"], row["form"], row["container"]) for row in copyable] == [
+        (row["scope"], row["form"], row["container"]) for row in move_only
+    ]
 
 
 def test_library_catalog_matches_model() -> None:
