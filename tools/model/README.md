@@ -122,6 +122,13 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   must lose exactly the routes that copy the leaf (value copies, const
   pointees promoted from a value, inline wrappers that contain the leaf).
   Borrows, moves, adopted pointers/arrays, and owning-handle copies stay.
+- `emit/resolve.py` generates the storage-driven runtime probe. One shard per
+  `(scope, form)` cell registers each storage once per binding and calls
+  `resolve` for every supported case. The generated tests record the outcome
+  instead of asserting; `report/resolves.py` turns `build/test/resolve-gaps.md`
+  into covered calls, overclaims, declared gaps, and stale declarations. It is
+  a report target (`resolve-check`), not part of `check`, while the model is
+  being tightened.
 - `emit/binding_matrix.py` emits compile-time `dingo::bindings<dingo::bind<...>>`
   instantiations for every supported annotated, annotated-interface, keyed, and
   interface case, for both leaf traits. It
@@ -229,6 +236,9 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   exercise. Its path-extended shapes are
   merged into the type matrix. The full design is in
   [Type Path Coverage](../../docs/architecture/type-path-coverage.md).
+- `report/resolves.py` compares the per-storage resolve outcomes with the
+  generated manifest. An overclaim is a call the model expects that threw; a
+  stale declaration is a declared exception that resolved.
 - `report/coverage.py` compares the supported path set with the compile-time
   type, trait, and binding matrices and the runtime shape, behavior, annotated,
   keyed, interface, and const probes. Every coverage key carries the leaf

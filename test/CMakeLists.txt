@@ -172,6 +172,8 @@ set(DINGO_KEYED_MODEL_GENERATOR
     "tools.model.emit.families.keyed")
 set(DINGO_INTERFACE_RUNTIME_MODEL_GENERATOR
     "tools.model.emit.families.interface_runtime")
+set(DINGO_RESOLVE_GENERATOR
+    "tools.model.emit.resolve")
 set(DINGO_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/storage_cells.cpp.j2")
 set(DINGO_SCOPES_TEMPLATE
@@ -200,6 +202,12 @@ set(DINGO_KEYED_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/keyed_cells.cpp.j2")
 set(DINGO_INTERFACE_RUNTIME_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/interface_runtime.cpp.j2")
+set(DINGO_RESOLVE_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/resolve_cells.cpp.j2")
+set(DINGO_RESOLVE_DIR
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/resolve")
+set(DINGO_RESOLVE_MANIFEST
+    "${DINGO_RESOLVE_DIR}/manifest.json")
 set(DINGO_SCOPES_HEADER
     "${PROJECT_SOURCE_DIR}/include/dingo/storage/scopes.gen.h")
 set(DINGO_SELECTION_MODEL_TEMPLATE
@@ -269,6 +277,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/emit/families/route.py"
     "${PROJECT_SOURCE_DIR}/tools/model/emit/families/storage.py"
     "${PROJECT_SOURCE_DIR}/tools/model/emit/matrix.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/resolve.py"
     "${PROJECT_SOURCE_DIR}/tools/model/emit/selection.py"
     "${PROJECT_SOURCE_DIR}/tools/model/emit/traits.py"
     "${PROJECT_SOURCE_DIR}/tools/model/grammar/__init__.py"
@@ -287,6 +296,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/report/baseline.py"
     "${PROJECT_SOURCE_DIR}/tools/model/report/coverage.py"
     "${PROJECT_SOURCE_DIR}/tools/model/report/paths.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/report/resolves.py"
     "${PROJECT_SOURCE_DIR}/tools/model/semantics/__init__.py"
     "${PROJECT_SOURCE_DIR}/tools/model/semantics/capabilities.py"
     "${PROJECT_SOURCE_DIR}/tools/model/semantics/cells.py"
@@ -320,6 +330,8 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/tests/storage_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/type_behavior_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/type_matrix_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/resolve_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/resolve_report_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/trait_matrix_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/wrapper_semantics_test.py"
     "${DINGO_MODEL_TEMPLATE}"
@@ -330,6 +342,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_INTERFACE_MODEL_TEMPLATE}"
     "${DINGO_TYPE_MATRIX_TEMPLATE}"
     "${DINGO_TRAIT_MATRIX_TEMPLATE}"
+    "${DINGO_RESOLVE_TEMPLATE}"
     "${DINGO_TYPE_BEHAVIOR_TEMPLATE}"
     "${DINGO_PROPERTY_MODEL_TEMPLATE}"
     "${DINGO_ANNOTATED_MODEL_TEMPLATE}"
@@ -519,6 +532,23 @@ if(NOT DINGO_INTERFACE_RUNTIME_MODEL_GENERATOR_RESULT EQUAL 0)
         "${DINGO_INTERFACE_RUNTIME_MODEL_GENERATOR_RESULT}")
 endif()
 
+file(MAKE_DIRECTORY ${DINGO_RESOLVE_DIR})
+execute_process(
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_RESOLVE_GENERATOR}
+        --out-dir ${DINGO_RESOLVE_DIR}
+        --manifest ${DINGO_RESOLVE_MANIFEST}
+        --include ${PROJECT_SOURCE_DIR}/include
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE DINGO_RESOLVE_GENERATOR_RESULT)
+if(NOT DINGO_RESOLVE_GENERATOR_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to generate per-storage resolve probes: "
+        "${DINGO_RESOLVE_GENERATOR_RESULT}")
+endif()
+file(GLOB DINGO_RESOLVE_SOURCES CONFIGURE_DEPENDS
+    "${DINGO_RESOLVE_DIR}/*.cpp")
+
 add_custom_target(cells-check
     COMMENT "Verifying generated cell coverage"
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
@@ -600,6 +630,12 @@ add_custom_target(cells-check
         --out-move-only ${DINGO_INTERFACE_RUNTIME_MOVE_ONLY_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_RESOLVE_GENERATOR}
+        --out-dir ${DINGO_RESOLVE_DIR}
+        --manifest ${DINGO_RESOLVE_MANIFEST}
+        --include ${PROJECT_SOURCE_DIR}/include
+        --check
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 add_executable(dingo_model_test
@@ -638,6 +674,26 @@ set_source_files_properties(${DINGO_BEHAVIOR_MOVE_ONLY_MODEL_TEST_SOURCE} PROPER
     "DINGO_BEHAVIOR_REPORT=\"${CMAKE_CURRENT_BINARY_DIR}/behavior-outcomes-move-only.jsonl\"")
 add_test(NAME dingo_model_test COMMAND dingo_model_test)
 set_tests_properties(dingo_model_test PROPERTIES LABELS "unit;generator")
+
+add_executable(dingo_resolve_probe EXCLUDE_FROM_ALL ${DINGO_RESOLVE_SOURCES})
+target_link_libraries(dingo_resolve_probe PRIVATE dingo::dingo gtest_main)
+foreach(resolve_source ${DINGO_RESOLVE_SOURCES})
+    get_filename_component(resolve_name "${resolve_source}" NAME_WE)
+    set_source_files_properties(${resolve_source} PROPERTIES
+        COMPILE_DEFINITIONS
+        "DINGO_RESOLVE_REPORT=\"${CMAKE_CURRENT_BINARY_DIR}/resolve-${resolve_name}.jsonl\"")
+endforeach()
+add_custom_target(resolve-check
+    COMMENT "Running the per-storage resolve probes and writing the gap report"
+    COMMAND $<TARGET_FILE:dingo_resolve_probe>
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        tools.model.report.resolves
+        --manifest ${DINGO_RESOLVE_MANIFEST}
+        --outcomes-dir ${CMAKE_CURRENT_BINARY_DIR}
+        --out ${CMAKE_CURRENT_BINARY_DIR}/resolve-gaps.md
+        --json ${CMAKE_CURRENT_BINARY_DIR}/resolve-gaps.json
+    DEPENDS dingo_resolve_probe
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 add_test(NAME dingo_model_baseline_test
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m

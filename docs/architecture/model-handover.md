@@ -9,10 +9,12 @@ per-storage request-derivation refactor.
 
 The tree is green:
 
-- `pytest tools/model/tests test/matrix/generator_test.py`: 293 passed
+- `pytest tools/model/tests test/matrix/generator_test.py`: 299 passed
 - `dingo_model_test`: 1013 tests passed, including both leaf traits
 - `cells-check`: passes
 - `ctest`: 77/77 passed
+- `resolve-check`: 274 tests, report written to `build/test/resolve-gaps.md`
+  (2,009 calls, 772 overclaims)
 - `format-check` and full `check`: pass
 
 Current model snapshot (both leaf traits):
@@ -137,6 +139,9 @@ combinations. The earlier global-list model overclaimed many of them.
 ### Emit
 
 - `emit/matrix.py` — concrete compile-time shape matrix.
+- `emit/resolve.py` — storage-driven runtime probe. One shard per
+  `(scope, form)` cell registers each storage once per binding and calls
+  `resolve` for every supported case. Outcomes are recorded, not asserted.
 - `emit/traits.py` — copyable/move-only compile-time matrix. It builds each
   supported cell for both leaves and asserts the library's move-only route set
   is the copyable set minus the routes that copy the leaf. The copy boundary is
@@ -157,6 +162,8 @@ combinations. The earlier global-list model overclaimed many of them.
 ### Report
 
 - `report/paths.py` — Markdown/JSON coverage report.
+- `report/resolves.py` — per-storage resolve outcome report. It splits covered
+  calls, model overclaims, declared gaps, and stale declarations.
 - `report/coverage.py` — supported vs tested vs declared gaps.
 - `report/baseline.py` — pinned matrix/behavior outcomes.
 
@@ -194,6 +201,29 @@ Generated files are under `build/test/generated/model/` and are compiled into
   declared gaps. Do not make a missing case disappear without a reason.
 
 ## Work status
+
+### 0. Storage-driven resolve probe (in progress)
+
+`cmake --build build -t resolve-check` builds 30 shards (274 tests) and writes
+`build/test/resolve-gaps.md`. Current result:
+
+- 2,009 expected calls, 1,061 covered;
+- 772 overclaims (all concrete);
+- 28 declared failures and 148 stale declarations.
+
+The overclaims are concentrated in `bounded_array` (370), `shared_handle` (96),
+`shared_array_handle` (84), `pointer` (60), and the handle/optional forms. By
+access they are 704 value, 36 rvalue, 24 pointer, 8 lvalue. This is the work
+queue for tightening the model:
+
+1. `declared_runtime_gap` labels nested-handle access as "top-level handle
+   access"; those 28 are real failures, not declared gaps.
+2. Remove the stale handle-access declarations (144 resolve today).
+3. Fix the bounded-array request grammar: requests always use extent 2, so
+   `T[3]` and `T[2][3]` storages are probed with the wrong request.
+4. Tighten value wrapping for handles and kind-changing inline wrappers.
+5. Once the overclaims reach zero, make the resolve probe the runtime oracle and
+   retire the type-behavior key mapping.
 
 ### 1. Copyable / move-only leaf traits
 
@@ -308,6 +338,7 @@ Other generators through the dispatcher:
 ```bash
 python -m tools.model matrix --out ...
 python -m tools.model trait-matrix --out ...
+python -m tools.model resolve --out-dir ... --manifest ...
 python -m tools.model binding-matrix --out ...
 python -m tools.model keyed --out ...
 python -m tools.model interface-runtime --out ...
@@ -319,6 +350,7 @@ Quality:
 
 ```bash
 cmake --build build -t cells-check
+cmake --build build -t resolve-check
 ctest --test-dir build --output-on-failure -j8
 cmake --build build -t format
 cmake --build build -t check

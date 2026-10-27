@@ -21,6 +21,7 @@ import sys
 COMMANDS = {
     "paths": "tools.model.report.paths",
     "baseline": "tools.model.report.baseline",
+    "resolve-report": "tools.model.report.resolves",
     "storage": "tools.model.emit.families.storage",
     "selection": "tools.model.emit.selection",
     "route": "tools.model.emit.families.route",
@@ -29,6 +30,7 @@ COMMANDS = {
     "interface-runtime": "tools.model.emit.families.interface_runtime",
     "matrix": "tools.model.emit.matrix",
     "trait-matrix": "tools.model.emit.traits",
+    "resolve": "tools.model.emit.resolve",
     "binding-matrix": "tools.model.emit.binding_matrix",
     "type-behavior": "tools.model.emit.behavior",
     "property": "tools.model.emit.families.property",

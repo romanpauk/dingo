@@ -43,6 +43,9 @@ Run a quality target with `cmake --build build -t <target>`.
   non-Windows builds.
 - `includes-check`: checks includes on those generated translation units on
   non-Windows builds.
+- `resolve-check`: builds the per-storage resolve probes, runs them, and writes
+  `build/test/resolve-gaps.md`. It is a report, not a gate; see
+  [Generated Matrix Tests](#generated-matrix-tests).
 - `test-cost`: reports the per-translation-unit compile time and object size of
   the generated test suites. It is a report, not a gate; see
   [Test Compile Cost](#test-compile-cost).
@@ -131,6 +134,16 @@ The generated sources live in the build tree, so consumer builds never run
 Python. The `cells-check` target regenerates them and verifies that they are up
 to date, and the model's pytest suite checks the catalog against the library
 declarations in `include/dingo/storage` and `include/dingo/binding`.
+
+`resolve-check` is the storage-driven runtime probe. It generates one
+translation unit per `(scope, form)` cell, registers each storage once per
+binding, and calls `resolve` for every supported case. The probe records the
+outcome instead of asserting, and the report splits covered calls, model
+overclaims, declared gaps, and stale declarations. Build it with:
+
+```bash
+cmake --build build -t resolve-check
+```
 
 ```bash
 cmake --build build -t cells-check
