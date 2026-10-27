@@ -142,6 +142,14 @@ resolution/runtime/global/construct/<shape>/<traits>.cpp
 with one canonical storage per shape (shared/plain for references, pointers and
 values; unique/plain for rvalue and move-only; the handle form for handles).
 
+`construct` tries every dependency type a constructor parameter can have, one
+test per type: value, lvalue, const lvalue, rvalue, pointer, const pointer,
+shared handle (by value, by reference, by const reference), unique handle,
+optional by reference, variant by value and by reference, array reference, and
+annotated reference. Two value forms are declared gaps: `std::optional<T>` by
+value is ambiguous in the argument adaptor, and `std::array<T, N>` is treated as
+an aggregate that needs `T` registered.
+
 `invoke` uses the same split at `resolution/runtime/global/invoke/<shape>`: no
 arguments; lvalue, const-lvalue, value, rvalue, pointer, const-pointer and
 shared-handle arguments; two arguments; `void` return; `std::function`, function

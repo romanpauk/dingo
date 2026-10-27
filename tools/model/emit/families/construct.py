@@ -33,9 +33,15 @@ from tools.model.emit.hierarchy import CasePath
 from tools.model.grammar.catalog import FORM_BY_NAME
 
 GAPS = {
-    "optional_parameter": (
-        "constructor parameter of type std::optional<...> is ambiguous in the "
-        "constructor argument adaptor; resolve and invoke accept the same row"
+    "optional_value": (
+        "a constructor parameter of type std::optional<T> by value is "
+        "ambiguous in the constructor argument adaptor; the reference form "
+        "works, and resolve and invoke accept the same row"
+    ),
+    "std_array_value": (
+        "a constructor parameter of type std::array<T, N> is treated as an "
+        "aggregate and needs T itself registered; the raw array reference form "
+        "works"
     ),
 }
 
@@ -197,6 +203,111 @@ struct constructed_unique_handle {
 """,
             setup=_UNIQUE_HANDLE,
             call="container.template construct<constructed_unique_handle>()",
+            expected="7",
+        ),
+        ConstructShape(
+            shape="shared_handle_reference",
+            traits="copyable",
+            structs="""
+struct constructed_shared_handle_reference {
+  explicit constructed_shared_handle_reference(std::shared_ptr<dependency> &dep)
+      : value(dep->value) {}
+  int value;
+};
+""",
+            setup=_SHARED_HANDLE,
+            call="container.template construct<constructed_shared_handle_reference>()",
+            expected="7",
+        ),
+        ConstructShape(
+            shape="shared_handle_const_reference",
+            traits="copyable",
+            structs="""
+struct constructed_shared_handle_const_reference {
+  explicit constructed_shared_handle_const_reference(
+      const std::shared_ptr<dependency> &dep)
+      : value(dep->value) {}
+  int value;
+};
+""",
+            setup=_SHARED_HANDLE,
+            call=(
+                "container.template construct<"
+                "constructed_shared_handle_const_reference>()"
+            ),
+            expected="7",
+        ),
+        ConstructShape(
+            shape="optional_reference",
+            traits="copyable",
+            structs="""
+struct constructed_optional_reference {
+  explicit constructed_optional_reference(std::optional<dependency> &dep)
+      : value(dep->value) {}
+  int value;
+};
+""",
+            setup=(
+                "container.register_type<dingo::scope<dingo::shared>,\n"
+                "    dingo::storage<std::optional<dependency>>,\n"
+                "    dingo::factory<dingo::function<&make_optional_dependency>>>();"
+            ),
+            call="container.template construct<constructed_optional_reference>()",
+            expected="7",
+        ),
+        ConstructShape(
+            shape="variant_reference",
+            traits="copyable",
+            structs="""
+struct constructed_variant_reference {
+  explicit constructed_variant_reference(std::variant<dependency, long> &dep)
+      : value(std::get<0>(dep).value) {}
+  int value;
+};
+""",
+            setup=_SHARED_VARIANT,
+            call="container.template construct<constructed_variant_reference>()",
+            expected="7",
+        ),
+        ConstructShape(
+            shape="array_reference",
+            traits="copyable",
+            structs="""
+struct constructed_array_reference {
+  explicit constructed_array_reference(dependency (&dep)[2])
+      : value(dep[0].value) {}
+  int value;
+};
+""",
+            setup=(
+                "container.register_type<dingo::scope<dingo::shared>,\n"
+                "                          dingo::storage<dependency[2]>>();"
+            ),
+            call="container.template construct<constructed_array_reference>()",
+            expected="7",
+        ),
+        ConstructShape(
+            shape="annotated_reference",
+            traits="copyable",
+            structs="""
+struct annotation_tag {};
+
+struct constructed_annotated_reference {
+  explicit constructed_annotated_reference(
+      dingo::annotated<dependency &, annotation_tag> dep)
+      : value(static_cast<dependency &>(dep).value) {}
+  int value;
+};
+""",
+            setup=(
+                "container.register_type<\n"
+                "      dingo::scope<dingo::shared>, dingo::storage<dependency>,\n"
+                "      dingo::interfaces<dingo::annotated<dependency,"
+                " annotation_tag>>>();"
+            ),
+            call=(
+                "container.template construct<constructed_annotated_reference>()"
+            ),
             expected="7",
         ),
         ConstructShape(

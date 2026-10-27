@@ -36,8 +36,29 @@ def test_construct_shapes_are_operator_classes() -> None:
 
 
 def test_construct_gaps_are_declared_with_a_reason() -> None:
-    assert set(GAPS) == {"optional_parameter"}
+    assert set(GAPS) == {"optional_value", "std_array_value"}
     assert all(reason for reason in GAPS.values())
+
+
+def test_construct_tries_every_argument_type() -> None:
+    shapes = {shard.shape for shard in build_shards()}
+    assert {
+        "value",
+        "lvalue_reference",
+        "const_lvalue_reference",
+        "rvalue_reference",
+        "pointer",
+        "const_pointer",
+        "shared_handle",
+        "shared_handle_reference",
+        "shared_handle_const_reference",
+        "unique_handle",
+        "optional_reference",
+        "variant",
+        "variant_reference",
+        "array_reference",
+        "annotated_reference",
+    } <= shapes
 
 
 if __name__ == "__main__":

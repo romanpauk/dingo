@@ -13,10 +13,12 @@
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
+#include <dingo/type/annotated.h>
 
 #include <gtest/gtest.h>
 
 #include <memory>
+#include <optional>
 #include <variant>
 
 namespace {{ shard.namespace }} {
@@ -38,6 +40,9 @@ inline std::shared_ptr<dependency> make_shared_dependency() {
 }
 inline std::unique_ptr<dependency> make_unique_dependency() {
   return std::make_unique<dependency>();
+}
+inline std::optional<dependency> make_optional_dependency() {
+  return std::optional<dependency>(std::in_place);
 }
 {{ shard.structs }}
 TEST({{ shard.suite }}, {{ shard.shape }}) {
