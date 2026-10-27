@@ -161,6 +161,15 @@ dimensions here.
 The mixed cases are the interesting ones: one element is registered statically
 and one at runtime, and the assembled collection must contain both.
 
+## Lookup scope
+
+Local bindings and nested containers are the same rule set — where a binding is
+found — so they share one family at `resolution/runtime/global/lookup/<case>`
+with five cases: a local binding is visible to its registration; it shadows a
+root binding of the same type; a child inherits an unshadowed parent binding; a
+child shadows a parent binding without changing the parent; a grandchild
+inherits through the chain.
+
 ## Configurations
 
 A configuration swaps a container trait under the same rows, so it has no
