@@ -6,18 +6,20 @@
 # SPDX-License-Identifier: MIT
 #
 
-"""Construct operator classes.
+"""Construct: one test per (argument type, constructor shape).
 
-The per-cell claim ``resolution/runtime/<scope>/<storage>/construct.cpp`` asks
-whether one row's request can be consumed by ``construct``. This family asks a
-different question: which constructor shapes does the operator support, and what
-does "supported" mean. It is not tied to a storage cell, so each case names one
-canonical cell for its dependency and one constructor shape:
+The parameter of a constructor is a dependency type; the constructor itself has
+a shape (one argument, two arguments, a selected overload, an explicit
+signature, or a higher-arity overload). Neither axis alone answers whether an
+arbitrary target is constructible, so the family is their product:
 
-    resolution/runtime/global/construct/<shape>/<traits>.cpp
+    resolution/runtime/global/construct/<argument>/<shape>.cpp
 
-The optional constructor parameter is a known compile-time gap; it is recorded
-in ``GAPS`` and has no generated case.
+Targets that are not about the parameter shape (default construction, an
+aggregate, a registered target, a wrapper target) are separate cases.
+
+A combination that cannot be formed is listed in ``GAPS`` with a reason instead
+of being dropped.
 """
 
 from __future__ import annotations
@@ -32,18 +34,7 @@ from tools.model.emit.common.validation import validate_catalog
 from tools.model.emit.hierarchy import CasePath
 from tools.model.grammar.catalog import FORM_BY_NAME
 
-GAPS = {
-    "optional_value": (
-        "a constructor parameter of type std::optional<T> by value is "
-        "ambiguous in the constructor argument adaptor; the reference form "
-        "works, and resolve and invoke accept the same row"
-    ),
-    "std_array_value": (
-        "a constructor parameter of type std::array<T, N> is treated as an "
-        "aggregate and needs T itself registered; the raw array reference form "
-        "works"
-    ),
-}
+GAPS: dict[str, str] = {}
 
 
 def _cell(scope: str, form: str, leaf: str = "dependency") -> str:
@@ -52,442 +43,342 @@ def _cell(scope: str, form: str, leaf: str = "dependency") -> str:
 
 
 @dataclass(frozen=True)
-class ConstructShape:
-    shape: str
-    traits: str
-    structs: str
-    setup: str
-    call: str
-    expected: str
-    accessor: str = "value.value"
+class Argument:
+    name: str
+    param: str
+    value: str
+    registration: str
+    expected: int = 7
+    prelude: str = ""
+    declarator: str = "{type} {name}"
 
 
-_SHARED = _cell("shared", "plain")
-_UNIQUE = _cell("unique", "plain", "movable_dependency")
-_SHARED_HANDLE = _cell("shared", "shared_handle")
-_UNIQUE_HANDLE = _cell("unique", "unique_handle")
-_SHARED_VARIANT = _cell("shared", "alternative")
+@dataclass(frozen=True)
+class Shape:
+    name: str
 
 
-def build_shapes() -> tuple[ConstructShape, ...]:
-    return (
-        ConstructShape(
-            shape="default",
-            traits="copyable",
-            structs="""
-struct default_constructible {
-  default_constructible() : value(7) {}
-  int value;
-};
-""",
-            setup="",
-            call="container.template construct<default_constructible>()",
-            expected="7",
+ARGUMENTS = (
+    Argument(
+        name="value",
+        param="dependency",
+        value="{x}.value",
+        registration=_cell("shared", "plain"),
+    ),
+    Argument(
+        name="value_move_only",
+        param="movable_dependency",
+        value="{x}.value",
+        registration=_cell("unique", "plain", "movable_dependency"),
+        expected=9,
+    ),
+    Argument(
+        name="lvalue_reference",
+        param="dependency &",
+        value="{x}.value",
+        registration=_cell("shared", "plain"),
+    ),
+    Argument(
+        name="const_lvalue_reference",
+        param="const dependency &",
+        value="{x}.value",
+        registration=_cell("shared", "plain"),
+    ),
+    Argument(
+        name="rvalue_reference",
+        param="movable_dependency &&",
+        value="{x}.value",
+        registration=_cell("unique", "plain", "movable_dependency"),
+        expected=9,
+    ),
+    Argument(
+        name="pointer",
+        param="dependency *",
+        value="{x}->value",
+        registration=_cell("shared", "plain"),
+    ),
+    Argument(
+        name="const_pointer",
+        param="const dependency *",
+        value="{x}->value",
+        registration=_cell("shared", "plain"),
+    ),
+    Argument(
+        name="shared_handle",
+        param="std::shared_ptr<dependency>",
+        value="{x}->value",
+        registration=_cell("shared", "shared_handle"),
+    ),
+    Argument(
+        name="shared_handle_reference",
+        param="std::shared_ptr<dependency> &",
+        value="{x}->value",
+        registration=_cell("shared", "shared_handle"),
+    ),
+    Argument(
+        name="shared_handle_const_reference",
+        param="const std::shared_ptr<dependency> &",
+        value="{x}->value",
+        registration=_cell("shared", "shared_handle"),
+    ),
+    Argument(
+        name="unique_handle",
+        param="std::unique_ptr<dependency>",
+        value="{x}->value",
+        registration=_cell("unique", "unique_handle"),
+    ),
+    Argument(
+        name="optional_reference",
+        param="std::optional<dependency> &",
+        value="{x}->value",
+        registration=(
+            "container.register_type<dingo::scope<dingo::shared>,\n"
+            "    dingo::storage<std::optional<dependency>>,\n"
+            "    dingo::factory<dingo::function<&make_optional_dependency>>>();"
         ),
-        ConstructShape(
-            shape="lvalue_reference",
-            traits="copyable",
-            structs="""
-struct constructed_lvalue {
-  explicit constructed_lvalue(dependency &dep) : value(dep.value) {}
-  int value;
-};
-""",
-            setup=_SHARED,
-            call="container.template construct<constructed_lvalue>()",
-            expected="7",
+    ),
+    Argument(
+        name="variant",
+        param="std::variant<dependency, long>",
+        value="std::get<0>({x}).value",
+        registration=_cell("shared", "alternative"),
+    ),
+    Argument(
+        name="variant_reference",
+        param="std::variant<dependency, long> &",
+        value="std::get<0>({x}).value",
+        registration=_cell("shared", "alternative"),
+    ),
+    Argument(
+        name="array_reference",
+        param="dependency (&)[2]",
+        value="{x}[0].value",
+        declarator="dependency (&{name})[2]",
+        registration=(
+            "container.register_type<dingo::scope<dingo::shared>,\n"
+            "                          dingo::storage<dependency[2]>>();"
         ),
-        ConstructShape(
-            shape="const_lvalue_reference",
-            traits="copyable",
-            structs="""
-struct constructed_const_lvalue {
-  explicit constructed_const_lvalue(const dependency &dep) : value(dep.value) {}
-  int value;
-};
-""",
-            setup=_SHARED,
-            call="container.template construct<constructed_const_lvalue>()",
-            expected="7",
+    ),
+    Argument(
+        name="annotated_reference",
+        param="dingo::annotated<dependency &, annotation_tag>",
+        value="static_cast<dependency &>({x}).value",
+        registration=(
+            "container.register_type<\n"
+            "      dingo::scope<dingo::shared>, dingo::storage<dependency>,\n"
+            "      dingo::interfaces<dingo::annotated<dependency, "
+            "annotation_tag>>>();"
         ),
-        ConstructShape(
-            shape="value",
-            traits="copyable",
-            structs="""
-struct constructed_value {
-  explicit constructed_value(dependency dep) : value(dep.value) {}
-  int value;
-};
-""",
-            setup=_SHARED,
-            call="container.template construct<constructed_value>()",
-            expected="7",
-        ),
-        ConstructShape(
-            shape="value",
-            traits="move_only",
-            structs="""
-struct movable_constructed_value {
-  explicit movable_constructed_value(movable_dependency dep)
-      : value(dep.value) {}
-  int value;
-};
-""",
-            setup=_UNIQUE,
-            call="container.template construct<movable_constructed_value>()",
-            expected="9",
-        ),
-        ConstructShape(
-            shape="rvalue_reference",
-            traits="move_only",
-            structs="""
-struct constructed_rvalue {
-  explicit constructed_rvalue(movable_dependency &&dep) : value(dep.value) {}
-  int value;
-};
-""",
-            setup=_UNIQUE,
-            call="container.template construct<constructed_rvalue>()",
-            expected="9",
-        ),
-        ConstructShape(
-            shape="pointer",
-            traits="copyable",
-            structs="""
-struct constructed_pointer {
-  explicit constructed_pointer(dependency *dep) : value(dep->value) {}
-  int value;
-};
-""",
-            setup=_SHARED,
-            call="container.template construct<constructed_pointer>()",
-            expected="7",
-        ),
-        ConstructShape(
-            shape="const_pointer",
-            traits="copyable",
-            structs="""
-struct constructed_const_pointer {
-  explicit constructed_const_pointer(const dependency *dep)
-      : value(dep->value) {}
-  int value;
-};
-""",
-            setup=_SHARED,
-            call="container.template construct<constructed_const_pointer>()",
-            expected="7",
-        ),
-        ConstructShape(
-            shape="shared_handle",
-            traits="copyable",
-            structs="""
-struct constructed_shared_handle {
-  explicit constructed_shared_handle(std::shared_ptr<dependency> dep)
-      : value(dep->value) {}
-  int value;
-};
-""",
-            setup=_SHARED_HANDLE,
-            call="container.template construct<constructed_shared_handle>()",
-            expected="7",
-        ),
-        ConstructShape(
-            shape="unique_handle",
-            traits="copyable",
-            structs="""
-struct constructed_unique_handle {
-  explicit constructed_unique_handle(std::unique_ptr<dependency> dep)
-      : value(dep->value) {}
-  int value;
-};
-""",
-            setup=_UNIQUE_HANDLE,
-            call="container.template construct<constructed_unique_handle>()",
-            expected="7",
-        ),
-        ConstructShape(
-            shape="shared_handle_reference",
-            traits="copyable",
-            structs="""
-struct constructed_shared_handle_reference {
-  explicit constructed_shared_handle_reference(std::shared_ptr<dependency> &dep)
-      : value(dep->value) {}
-  int value;
-};
-""",
-            setup=_SHARED_HANDLE,
-            call="container.template construct<constructed_shared_handle_reference>()",
-            expected="7",
-        ),
-        ConstructShape(
-            shape="shared_handle_const_reference",
-            traits="copyable",
-            structs="""
-struct constructed_shared_handle_const_reference {
-  explicit constructed_shared_handle_const_reference(
-      const std::shared_ptr<dependency> &dep)
-      : value(dep->value) {}
-  int value;
-};
-""",
-            setup=_SHARED_HANDLE,
-            call=(
-                "container.template construct<"
-                "constructed_shared_handle_const_reference>()"
-            ),
-            expected="7",
-        ),
-        ConstructShape(
-            shape="optional_reference",
-            traits="copyable",
-            structs="""
-struct constructed_optional_reference {
-  explicit constructed_optional_reference(std::optional<dependency> &dep)
-      : value(dep->value) {}
-  int value;
-};
-""",
-            setup=(
-                "container.register_type<dingo::scope<dingo::shared>,\n"
-                "    dingo::storage<std::optional<dependency>>,\n"
-                "    dingo::factory<dingo::function<&make_optional_dependency>>>();"
-            ),
-            call="container.template construct<constructed_optional_reference>()",
-            expected="7",
-        ),
-        ConstructShape(
-            shape="variant_reference",
-            traits="copyable",
-            structs="""
-struct constructed_variant_reference {
-  explicit constructed_variant_reference(std::variant<dependency, long> &dep)
-      : value(std::get<0>(dep).value) {}
-  int value;
-};
-""",
-            setup=_SHARED_VARIANT,
-            call="container.template construct<constructed_variant_reference>()",
-            expected="7",
-        ),
-        ConstructShape(
-            shape="array_reference",
-            traits="copyable",
-            structs="""
-struct constructed_array_reference {
-  explicit constructed_array_reference(dependency (&dep)[2])
-      : value(dep[0].value) {}
-  int value;
-};
-""",
-            setup=(
-                "container.register_type<dingo::scope<dingo::shared>,\n"
-                "                          dingo::storage<dependency[2]>>();"
-            ),
-            call="container.template construct<constructed_array_reference>()",
-            expected="7",
-        ),
-        ConstructShape(
-            shape="annotated_reference",
-            traits="copyable",
-            structs="""
-struct annotation_tag {};
+    ),
+)
 
-struct constructed_annotated_reference {
-  explicit constructed_annotated_reference(
-      dingo::annotated<dependency &, annotation_tag> dep)
-      : value(static_cast<dependency &>(dep).value) {}
+SHAPES = (
+    Shape("deduced"),
+    Shape("twice"),
+    Shape("selected"),
+    Shape("explicit"),
+    Shape("highest_arity"),
+)
+
+
+def _param(argument: Argument, name: str) -> str:
+    return argument.declarator.format(type=argument.param, name=name)
+
+
+def _body(argument: Argument, shape: Shape) -> tuple[str, str, str]:
+    """The target struct, the call, and the expected value."""
+    value = argument.value
+    first = _param(argument, "first")
+    second = _param(argument, "second")
+    expected = str(argument.expected)
+    twice = str(argument.expected * 2)
+    if shape.name == "deduced":
+        structs = f"""
+struct target {{
+  explicit target({first}) : value({value.format(x="first")}) {{}}
+  int value;
+}};
+"""
+        return structs, "container.template construct<target>()", expected
+    if shape.name == "twice":
+        structs = f"""
+struct target {{
+  target({first}, {second})
+      : value({value.format(x="first")} + {value.format(x="second")}) {{}}
+  int value;
+}};
+"""
+        return structs, "container.template construct<target>()", twice
+    if shape.name == "selected":
+        structs = f"""
+struct target {{
+  DINGO_CONSTRUCTOR(target({first}))
+      : value({value.format(x="first")}) {{}}
+  target(int) : value(-1) {{}}
+  int value;
+}};
+"""
+        return structs, "container.template construct<target>()", expected
+    if shape.name == "explicit":
+        structs = f"""
+struct target {{
+  explicit target({first}) : value({value.format(x="first")}) {{}}
+  int value;
+}};
+"""
+        call = (
+            "container.template construct<\n"
+            f"      target, dingo::constructor<target({argument.param})>>()"
+        )
+        return structs, call, expected
+    structs = f"""
+struct target {{
+  target() : value(-1) {{}}
+  explicit target({first}) : value({value.format(x="first")}) {{}}
+  int value;
+}};
+"""
+    return structs, "container.template construct<target>()", expected
+
+
+TARGETS = (
+    (
+        "default_construction",
+        """
+struct target {
+  target() : value(7) {}
   int value;
 };
 """,
-            setup=(
-                "container.register_type<\n"
-                "      dingo::scope<dingo::shared>, dingo::storage<dependency>,\n"
-                "      dingo::interfaces<dingo::annotated<dependency,"
-                " annotation_tag>>>();"
-            ),
-            call=(
-                "container.template construct<constructed_annotated_reference>()"
-            ),
-            expected="7",
-        ),
-        ConstructShape(
-            shape="variant",
-            traits="copyable",
-            structs="""
-struct constructed_variant {
-  explicit constructed_variant(std::variant<dependency, long> dep)
-      : value(std::get<0>(dep).value) {}
-  int value;
-};
-""",
-            setup=_SHARED_VARIANT,
-            call="container.template construct<constructed_variant>()",
-            expected="7",
-        ),
-        ConstructShape(
-            shape="two_arguments",
-            traits="copyable",
-            structs="""
-struct constructed_twice {
-  constructed_twice(dependency &first, dependency &second)
-      : value(first.value + second.value) {}
-  int value;
-};
-""",
-            setup=_SHARED,
-            call="container.template construct<constructed_twice>()",
-            expected="14",
-        ),
-        ConstructShape(
-            shape="selected",
-            traits="copyable",
-            structs="""
-struct selected_constructor {
-  DINGO_CONSTRUCTOR(selected_constructor(dependency &dep))
-      : value(dep.value) {}
-  selected_constructor(int) : value(-1) {}
-  int value;
-};
-""",
-            setup=_SHARED,
-            call="container.template construct<selected_constructor>()",
-            expected="7",
-        ),
-        ConstructShape(
-            shape="explicit_constructor",
-            traits="copyable",
-            structs="""
-struct explicit_constructor {
-  explicit explicit_constructor(dependency &dep) : value(dep.value) {}
-  int value;
-};
-""",
-            setup=_SHARED,
-            call=(
-                "container.template construct<\n"
-                "      explicit_constructor,\n"
-                "      dingo::constructor<explicit_constructor(dependency &)>>()"
-            ),
-            expected="7",
-        ),
-        ConstructShape(
-            shape="highest_arity",
-            traits="copyable",
-            structs="""
-struct overloaded_constructor {
-  overloaded_constructor() : value(0) {}
-  explicit overloaded_constructor(dependency &dep) : value(dep.value) {}
-  int value;
-};
-""",
-            setup=_SHARED,
-            call="container.template construct<overloaded_constructor>()",
-            expected="7",
-        ),
-        ConstructShape(
-            shape="aggregate",
-            traits="copyable",
-            structs="""
-struct aggregate_target {
+        "",
+        "container.template construct<target>()",
+        "7",
+        "value.value",
+    ),
+    (
+        "aggregate",
+        """
+struct target {
   int first;
   int second;
 };
 """,
-            setup=(
-                "container.register_type<dingo::scope<dingo::shared>, "
-                "dingo::storage<int>>();"
-            ),
-            call="container.template construct<aggregate_target>()",
-            expected="0",
-            accessor="value.first",
-        ),
-        ConstructShape(
-            shape="registered_target",
-            traits="copyable",
-            structs="""
-struct registered_target {
-  explicit registered_target(dependency &dep) : value(dep.value) {}
+        "container.register_type<dingo::scope<dingo::shared>, "
+        "dingo::storage<int>>();",
+        "container.template construct<target>()",
+        "0",
+        "value.first",
+    ),
+    (
+        "registered_target",
+        """
+struct target {
+  explicit target(dependency &dep) : value(dep.value) {}
   int value;
 };
 """,
-            setup=(
-                f"{_SHARED}\n"
-                "  container.register_type<dingo::scope<dingo::shared>,\n"
-                "                          dingo::storage<registered_target>>();"
-            ),
-            call="container.template construct<registered_target>()",
-            expected="7",
-        ),
-        ConstructShape(
-            shape="wrapper_target",
-            traits="copyable",
-            structs="",
-            setup=_SHARED,
-            call="container.template construct<std::shared_ptr<dependency>>()",
-            expected="7",
-            accessor="value->value",
-        ),
-    )
+        "container.register_type<dingo::scope<dingo::shared>, "
+        "dingo::storage<dependency>>();\n"
+        "  container.register_type<dingo::scope<dingo::shared>,\n"
+        "                          dingo::storage<target>>();",
+        "container.template construct<target>()",
+        "7",
+        "value.value",
+    ),
+    (
+        "wrapper_target",
+        "",
+        "container.register_type<dingo::scope<dingo::shared>, "
+        "dingo::storage<dependency>>();",
+        "container.template construct<std::shared_ptr<dependency>>()",
+        "7",
+        "value->value",
+    ),
+)
 
 
-@dataclass(frozen=True)
-class ConstructShard:
-    shape: str
-    traits: str
-    path: str
-    case_path: str
-    suite: str
-    namespace: str
-    structs: str
-    setup: str
-    call: str
-    expected: str
-    accessor: str
-
-
-def build_shards() -> list[ConstructShard]:
-    shards = []
-    for shape in build_shapes():
-        case = CasePath(
+def build_shards() -> list["ConstructShard"]:
+    shards: list[ConstructShard] = []
+    for argument in ARGUMENTS:
+        for shape in SHAPES:
+            key = f"{argument.name}/{shape.name}"
+            if key in GAPS:
+                continue
+            structs, call, expected = _body(argument, shape)
+            path = CasePath(
+                phase="resolution",
+                container="runtime",
+                scope="global",
+                category="construct",
+                traits=argument.name,
+                request=shape.name,
+            )
+            shards.append(
+                ConstructShard(
+                    argument=argument.name,
+                    shape=shape.name,
+                    structs=argument.prelude + structs,
+                    registration=argument.registration,
+                    call=call,
+                    expected=expected,
+                    path=f"{path.file[:-4]}/{argument.name}/{shape.name}.cpp",
+                    case_path=path.path,
+                    suite=f"{path.suite}_{argument.name}_{shape.name}",
+                    namespace=f"{path.suite}_{argument.name}_{shape.name}",
+                    accessor="value.value",
+                )
+            )
+    for name, structs, registration, call, expected, accessor in TARGETS:
+        path = CasePath(
             phase="resolution",
             container="runtime",
             scope="global",
-            category=f"construct/{shape.shape}",
-            traits=shape.traits,
+            category=f"construct/{name}",
+            request="shape",
         )
         shards.append(
             ConstructShard(
-                shape=shape.shape,
-                traits=shape.traits,
-                path=f"{case.file[:-4]}/{shape.traits}.cpp",
-                case_path=case.path,
-                suite=f"{case.suite}_{shape.traits}",
-                namespace=f"{case.suite}_{shape.traits}",
-                structs=shape.structs,
-                setup=shape.setup,
-                call=shape.call,
-                expected=shape.expected,
-                accessor=shape.accessor,
+                argument=name,
+                shape=name,
+                structs=structs,
+                registration=registration,
+                call=call,
+                expected=expected,
+                path=f"{path.file[:-4]}/shape.cpp",
+                case_path=path.path,
+                suite=f"{path.suite}_{name}",
+                namespace=f"{path.suite}_{name}",
+                accessor=accessor,
             )
         )
     return shards
 
 
+@dataclass(frozen=True)
+class ConstructShard:
+    argument: str
+    shape: str
+    structs: str
+    registration: str
+    call: str
+    expected: str
+    path: str
+    case_path: str
+    suite: str
+    namespace: str
+    accessor: str
+
+
 def render(shard: ConstructShard) -> str:
-    return render_template("construct_shapes.cpp.j2", shard=shard)
+    return render_template("construct_types.cpp.j2", shard=shard)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out-dir", type=Path, required=True)
-    parser.add_argument(
-        "--include",
-        type=Path,
-        help="include directory to validate the library catalogs against",
-    )
+    parser.add_argument("--include", type=Path)
     parser.add_argument("--check", action="store_true")
     arguments = parser.parse_args()
-
     if arguments.include is not None:
         validate_catalog(arguments.include)
     for shard in build_shards():

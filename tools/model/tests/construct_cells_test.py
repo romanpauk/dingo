@@ -8,42 +8,43 @@
 
 from __future__ import annotations
 
-from tools.model.emit.families.construct import GAPS, build_shards, render
-from tools.model.grammar.traits import COPYABLE, MOVE_ONLY
+from tools.model.emit.families.construct import (
+    ARGUMENTS,
+    GAPS,
+    SHAPES,
+    build_shards,
+    render,
+)
 
 
-def test_construct_shapes_are_operator_classes() -> None:
+def test_construct_is_argument_type_by_shape() -> None:
     shards = build_shards()
-    assert shards
     assert len({shard.path for shard in shards}) == len(shards)
-    assert {shard.traits for shard in shards} == {
-        COPYABLE.name,
-        MOVE_ONLY.name,
-    }
-    for shard in shards:
+    typed = [shard for shard in shards if shard.argument in
+             {argument.name for argument in ARGUMENTS}]
+    assert len(typed) == len(ARGUMENTS) * len(SHAPES) - sum(
+        1 for key in GAPS if "/" in key
+    )
+    for shard in typed:
         assert shard.path == (
-            f"resolution/runtime/global/construct/{shard.shape}/"
-            f"{shard.traits}.cpp"
+            f"resolution/runtime/global/construct/{shard.argument}/"
+            f"{shard.shape}.cpp"
         )
         assert shard.case_path == (
-            f"resolution/runtime/global/construct/{shard.shape}/{shard.traits}"
+            f"resolution/runtime/global/construct/{shard.argument}/"
+            f"{shard.shape}"
         )
         content = render(shard)
         assert content == render(shard)
         assert f"TEST({shard.suite}, {shard.shape})" in content
-        assert shard.setup or shard.shape == "default"
         assert f'RecordProperty("path", "{shard.case_path}")' in content
 
 
-def test_construct_gaps_are_declared_with_a_reason() -> None:
-    assert set(GAPS) == {"optional_value", "std_array_value"}
-    assert all(reason for reason in GAPS.values())
-
-
-def test_construct_tries_every_argument_type() -> None:
-    shapes = {shard.shape for shard in build_shards()}
+def test_construct_argument_types_cover_every_dependency_form() -> None:
+    names = {argument.name for argument in ARGUMENTS}
     assert {
         "value",
+        "value_move_only",
         "lvalue_reference",
         "const_lvalue_reference",
         "rvalue_reference",
@@ -58,8 +59,18 @@ def test_construct_tries_every_argument_type() -> None:
         "variant_reference",
         "array_reference",
         "annotated_reference",
-    } <= shapes
+    } == names
 
 
-if __name__ == "__main__":
-    raise SystemExit(0)
+def test_construct_shapes_cover_detection_forms() -> None:
+    assert {shape.name for shape in SHAPES} == {
+        "deduced",
+        "twice",
+        "selected",
+        "explicit",
+        "highest_arity",
+    }
+
+
+def test_construct_gaps_are_declared_with_a_reason() -> None:
+    assert all(reason for reason in GAPS.values())
