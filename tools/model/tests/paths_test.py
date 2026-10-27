@@ -432,6 +432,8 @@ def test_report_is_deterministic() -> None:
     assert "## By request family" in content
     assert "## By storage" in content
     assert "## Unmodeled examples" in content
+    assert "## Outcomes by leaf trait" in content
+    assert "## Unsupported / unavailable rules by leaf trait" in content
     assert first["totals"]["supported"] > 0
 
 

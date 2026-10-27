@@ -29,6 +29,7 @@ from tools.model.grammar.storage import STORAGE_PATHS
 from tools.model.semantics.extended_shapes import extended_shapes
 from tools.model.semantics.support import classify, classify_case, to_shape
 from tools.model.grammar.expr import Expr, family
+from tools.model.grammar.traits import TRAITS
 
 OUTCOMES = ("supported", "unavailable", "unsupported", "unmodeled")
 
@@ -73,6 +74,19 @@ def build_report(
     unmodeled: dict[str, list[str]] = defaultdict(list)
     totals: Counter[str] = Counter()
 
+    by_trait_outcome: dict[str, Counter[str]] = {
+        traits.name: Counter() for traits in TRAITS
+    }
+    by_trait_rule: dict[str, Counter[str]] = {
+        traits.name: Counter() for traits in TRAITS
+    }
+    for traits in TRAITS:
+        for case in iter_cases(forms, traits):
+            verdict = classify_case(case)
+            by_trait_outcome[traits.name][verdict.outcome] += 1
+            if verdict.outcome in {"unsupported", "unavailable"}:
+                by_trait_rule[traits.name][verdict.rule or "exposure"] += 1
+
     for case in cases:
         verdict = classify_case(case)
         name = family(case.request)
@@ -99,6 +113,12 @@ def build_report(
         "binding_applicability": binding_applicability(),
         "coverage": coverage_report(examples),
         "by_rule": dict(by_rule.most_common()),
+        "by_trait_outcome": {
+            name: dict(values) for name, values in by_trait_outcome.items()
+        },
+        "by_trait_rule": {
+            name: dict(values.most_common()) for name, values in by_trait_rule.items()
+        },
         "unmodeled_examples": {key: value for key, value in sorted(unmodeled.items())},
         "extended_shapes": [
             {"name": shape.name, "type": shape.cpp_type}
@@ -246,6 +266,34 @@ def render(report: dict[str, object]) -> str:
     ]
     for rule, value in report["by_rule"].items():
         lines.append(f"| {rule} | {value} |")
+    lines += [
+        "",
+        "## Outcomes by leaf trait",
+        "",
+        "| trait | supported | unavailable | unsupported | unmodeled |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for traits in TRAITS:
+        values = report["by_trait_outcome"][traits.name]
+        lines.append(f"| {traits.name} | {_row(values)} |")
+    lines += [
+        "",
+        "## Unsupported / unavailable rules by leaf trait",
+        "",
+        "| rule | copyable | move_only |",
+        "| --- | ---: | ---: |",
+    ]
+    rules = report["by_trait_rule"]
+    names = sorted(
+        set(rules["copyable"]) | set(rules["move_only"]),
+        key=lambda name: (-(rules["copyable"].get(name, 0)
+                           + rules["move_only"].get(name, 0)), name),
+    )
+    for name in names:
+        lines.append(
+            f"| {name} | {rules['copyable'].get(name, 0)} "
+            f"| {rules['move_only'].get(name, 0)} |"
+        )
     lines += ["", "## Unmodeled examples", ""]
     for name, values in report["unmodeled_examples"].items():
         for value in values:

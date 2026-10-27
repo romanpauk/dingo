@@ -179,13 +179,15 @@ or move), or the value is adopted from a pointer/array. A const pointee promoted
 from a value also copies, while a const pointee on a stored or adopted handle
 does not. `emit/traits.py` builds every supported cell for both leaves and
 asserts the move-only route set is the copyable set minus the copying routes.
-`emit/behavior.py` runs the same shape matrix once per trait: the shape leaf is
-rebased, the copy-requiring guards compile out for the move-only fixture, and
-both the runtime and static containers are exercised. The request-based runtime
-families (`behavior_cells`, `annotated_cells`, `keyed_cells`, `const_cells`, and
-`interface_runtime`) also emit a move-only variant. Their move-only expectation
-selects the first non-copying route, so the expected copy count is zero. The
-path report still classifies the copyable domain.
+`build/paths.md` includes per-trait outcome and rule tables next to the copyable
+aggregate tables. `emit/behavior.py` runs the same shape matrix once per trait:
+the shape leaf is rebased, the copy-requiring guards compile out for the
+move-only fixture, and both the runtime and static containers are exercised. The
+request-based runtime families (`behavior_cells`, `annotated_cells`,
+`keyed_cells`, `const_cells`, and `interface_runtime`) also emit a move-only
+variant. Their move-only expectation selects the first non-copying route, so the
+expected copy count is zero. The path report still classifies the copyable
+domain.
 
 The 110 path-extended shapes are mostly access forms around composed objects:
 `optional<T> &`, `shared_ptr<T> *`, `variant<const T, long> &`, and arrays of
