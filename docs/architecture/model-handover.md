@@ -205,7 +205,8 @@ Generated files are under `build/test/generated/model/` and are compiled into
 ### 0. Storage-driven resolve probe (in progress)
 
 `cmake --build build -t resolve-check` builds 30 shards (274 tests) and writes
-`build/test/resolve-gaps.md`. Current result:
+`build/test/resolve-gaps.md`. The probe fixtures are `copyable`/`movable`; the
+behavior families keep the lifetime-counting `tracked` fixture. Current result:
 
 - 2,009 expected calls, 1,061 covered;
 - 772 overclaims (all concrete);

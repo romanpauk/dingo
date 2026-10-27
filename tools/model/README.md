@@ -124,7 +124,9 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   Borrows, moves, adopted pointers/arrays, and owning-handle copies stay.
 - `emit/resolve.py` generates the storage-driven runtime probe. One shard per
   `(scope, form)` cell registers each storage once per binding and calls
-  `resolve` for every supported case. The generated tests record the outcome
+  `resolve` for every supported case. Its fixtures are named for the trait
+  (`copyable`/`movable`); the behavior suites keep `tracked` because they count
+  lifetime operations. The generated tests record the outcome
   instead of asserting; `report/resolves.py` turns `build/test/resolve-gaps.md`
   into covered calls, overclaims, declared gaps, and stale declarations. It is
   a report target (`resolve-check`), not part of `check`, while the model is

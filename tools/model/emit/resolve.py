@@ -110,6 +110,11 @@ def _project(request: Expr, binding) -> Expr:
     return request
 
 
+def _fixture(traits: LeafTraits) -> str:
+    """The resolve probe's fixture name, named for the trait."""
+    return "copyable" if traits.copyable else "movable"
+
+
 def _request_type(binding, request: Expr, leaf: str) -> str:
     if binding.kind in {"interface", "annotated_interface"}:
         return binding.request_type(request).render()
@@ -135,6 +140,7 @@ def _test_rows(
     binding,
     traits: LeafTraits,
 ) -> tuple[ResolveCall, ...]:
+    fixture = _fixture(traits)
     calls = []
     for request in object_requests(path):
         projected = _project(request, binding)
@@ -155,7 +161,7 @@ def _test_rows(
             shape.access if shape is not None else "",
         )
         declared = reason is not None
-        request_type = _request_type(binding, projected, traits.cpp)
+        request_type = _request_type(binding, projected, fixture)
         digest = hashlib.sha1(
             projected.render().encode()
         ).hexdigest()[:8]
@@ -166,7 +172,7 @@ def _test_rows(
                     f"{_slug(projected)}_{traits.name}_{digest}"
                 ),
                 request=request_type,
-                expression=_resolve_expression(binding, projected, traits.cpp),
+                expression=_resolve_expression(binding, projected, fixture),
                 declared=declared,
                 declared_reason=reason or "",
             )
@@ -194,7 +200,7 @@ def _registration(
     ):
         return "", ""
     const = _is_const(path)
-    leaf = traits.cpp
+    leaf = _fixture(traits)
     storage = path.storage(leaf)
     factory = (
         path.const_factory(leaf) if const else path.factory(leaf)

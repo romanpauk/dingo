@@ -36,97 +36,97 @@ struct interface_type {
   virtual int value() const = 0;
 };
 
-struct tracked : interface_type {
-  tracked() = default;
-  tracked(const tracked &) = default;
-  tracked(tracked &&) noexcept = default;
+struct copyable : interface_type {
+  copyable() = default;
+  copyable(const copyable &) = default;
+  copyable(copyable &&) noexcept = default;
   int id = 0;
   int value() const override { return id; }
 };
 
-struct move_only_tracked : interface_type {
-  move_only_tracked() = default;
-  move_only_tracked(const move_only_tracked &) = delete;
-  move_only_tracked(move_only_tracked &&) noexcept = default;
+struct movable : interface_type {
+  movable() = default;
+  movable(const movable &) = delete;
+  movable(movable &&) noexcept = default;
   int id = 0;
   int value() const override { return id; }
 };
 
-inline std::shared_ptr<tracked> make_shared_tracked() {
-  return std::make_shared<tracked>();
+inline std::shared_ptr<copyable> make_shared_copyable() {
+  return std::make_shared<copyable>();
 }
-inline std::unique_ptr<tracked> make_unique_tracked() {
-  return std::make_unique<tracked>();
+inline std::unique_ptr<copyable> make_unique_copyable() {
+  return std::make_unique<copyable>();
 }
-inline std::optional<tracked> make_optional_tracked() {
-  return std::optional<tracked>(std::in_place);
+inline std::optional<copyable> make_optional_copyable() {
+  return std::optional<copyable>(std::in_place);
 }
-inline std::variant<tracked, long> make_variant_tracked() {
-  return std::variant<tracked, long>(std::in_place_index<0>);
+inline std::variant<copyable, long> make_variant_copyable() {
+  return std::variant<copyable, long>(std::in_place_index<0>);
 }
-inline tracked *make_pointer_tracked() { return new tracked; }
-inline std::unique_ptr<tracked[]> make_unique_array_tracked() {
-  return std::unique_ptr<tracked[]>(new tracked[2]);
+inline copyable *make_pointer_copyable() { return new copyable; }
+inline std::unique_ptr<copyable[]> make_unique_array_copyable() {
+  return std::unique_ptr<copyable[]>(new copyable[2]);
 }
-inline std::shared_ptr<tracked[]> make_shared_array_tracked() {
-  return std::shared_ptr<tracked[]>(new tracked[2]);
+inline std::shared_ptr<copyable[]> make_shared_array_copyable() {
+  return std::shared_ptr<copyable[]>(new copyable[2]);
 }
-inline std::shared_ptr<const tracked> make_shared_const_tracked() {
-  return std::shared_ptr<const tracked>(new tracked());
+inline std::shared_ptr<const copyable> make_shared_const_copyable() {
+  return std::shared_ptr<const copyable>(new copyable());
 }
-inline std::unique_ptr<const tracked> make_unique_const_tracked() {
-  return std::unique_ptr<const tracked>(new tracked());
+inline std::unique_ptr<const copyable> make_unique_const_copyable() {
+  return std::unique_ptr<const copyable>(new copyable());
 }
-inline std::optional<const tracked> make_optional_const_tracked() {
-  return std::optional<const tracked>(std::in_place);
+inline std::optional<const copyable> make_optional_const_copyable() {
+  return std::optional<const copyable>(std::in_place);
 }
-inline const tracked *make_pointer_const_tracked() { return new tracked; }
-inline std::variant<const tracked, long> make_variant_const_tracked() {
-  return std::variant<const tracked, long>(std::in_place_index<0>);
+inline const copyable *make_pointer_const_copyable() { return new copyable; }
+inline std::variant<const copyable, long> make_variant_const_copyable() {
+  return std::variant<const copyable, long>(std::in_place_index<0>);
 }
 
-inline std::shared_ptr<move_only_tracked> make_shared_move_only_tracked() {
-  return std::make_shared<move_only_tracked>();
+inline std::shared_ptr<movable> make_shared_movable() {
+  return std::make_shared<movable>();
 }
-inline std::unique_ptr<move_only_tracked> make_unique_move_only_tracked() {
-  return std::make_unique<move_only_tracked>();
+inline std::unique_ptr<movable> make_unique_movable() {
+  return std::make_unique<movable>();
 }
-inline std::optional<move_only_tracked> make_optional_move_only_tracked() {
-  return std::optional<move_only_tracked>(std::in_place);
+inline std::optional<movable> make_optional_movable() {
+  return std::optional<movable>(std::in_place);
 }
-inline std::variant<move_only_tracked, long>
-make_variant_move_only_tracked() {
-  return std::variant<move_only_tracked, long>(std::in_place_index<0>);
+inline std::variant<movable, long>
+make_variant_movable() {
+  return std::variant<movable, long>(std::in_place_index<0>);
 }
-inline move_only_tracked *make_pointer_move_only_tracked() {
-  return new move_only_tracked;
+inline movable *make_pointer_movable() {
+  return new movable;
 }
-inline std::unique_ptr<move_only_tracked[]>
-make_unique_array_move_only_tracked() {
-  return std::unique_ptr<move_only_tracked[]>(new move_only_tracked[2]);
+inline std::unique_ptr<movable[]>
+make_unique_array_movable() {
+  return std::unique_ptr<movable[]>(new movable[2]);
 }
-inline std::shared_ptr<move_only_tracked[]>
-make_shared_array_move_only_tracked() {
-  return std::shared_ptr<move_only_tracked[]>(new move_only_tracked[2]);
+inline std::shared_ptr<movable[]>
+make_shared_array_movable() {
+  return std::shared_ptr<movable[]>(new movable[2]);
 }
-inline std::shared_ptr<const move_only_tracked>
-make_shared_const_move_only_tracked() {
-  return std::shared_ptr<const move_only_tracked>(new move_only_tracked());
+inline std::shared_ptr<const movable>
+make_shared_const_movable() {
+  return std::shared_ptr<const movable>(new movable());
 }
-inline std::unique_ptr<const move_only_tracked>
-make_unique_const_move_only_tracked() {
-  return std::unique_ptr<const move_only_tracked>(new move_only_tracked());
+inline std::unique_ptr<const movable>
+make_unique_const_movable() {
+  return std::unique_ptr<const movable>(new movable());
 }
-inline std::optional<const move_only_tracked>
-make_optional_const_move_only_tracked() {
-  return std::optional<const move_only_tracked>(std::in_place);
+inline std::optional<const movable>
+make_optional_const_movable() {
+  return std::optional<const movable>(std::in_place);
 }
-inline const move_only_tracked *make_pointer_const_move_only_tracked() {
-  return new move_only_tracked;
+inline const movable *make_pointer_const_movable() {
+  return new movable;
 }
-inline std::variant<const move_only_tracked, long>
-make_variant_const_move_only_tracked() {
-  return std::variant<const move_only_tracked, long>(std::in_place_index<0>);
+inline std::variant<const movable, long>
+make_variant_const_movable() {
+  return std::variant<const movable, long>(std::in_place_index<0>);
 }
 
 inline std::string resolve_json_escape(const std::string &value) {
