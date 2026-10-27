@@ -103,6 +103,21 @@ which owns the built-in `storage_scope_policy` data. Compile-time assertions
 compare the generated expectation with the library; a missing cell, changed
 exposure, or stale catalog fails the build.
 
+The model is also mapped as a type-path grammar. `type_expr.py` defines the
+leaf, qualifier, array, wrapper, variant, and annotation constructors;
+`domain.py` enumerates a bounded path domain; `support.py` classifies every path
+as supported, unavailable, unsupported, or unmodeled; and `paths.py` writes the
+coverage report. Generate it with:
+
+```bash
+uv run --locked python -m tools.model.report.paths \
+    --out build/paths.md --json build/paths.json
+```
+
+The report is the map for extending coverage: unmodeled families are model gaps,
+unsupported families are route/library constraints. The full design is in
+[Type Path Coverage](architecture/type-path-coverage.md).
+
 Behavior classes are data-driven too. `behavior_cells.py` owns a registration
 description and an expectation entry per form, derives the scope and container
 product from the route ledger, and requires every supported scope/form cell to
@@ -207,8 +222,8 @@ be compared between revisions, not against the static probe.
 The model has its own differential baseline in `test/baselines/model.json`. It
 pins the matrix outcomes and the actual behavior runtime outcomes, including
 construction/copy/move/destruction counts and the result or exception class.
-`ctest` runs `tools/model/outcome_baseline.py check` after the model test; an
-intended change is recorded with `update --reason "..."`, which rewrites the
+`ctest` runs `python -m tools.model.report.baseline check` after the model test;
+an intended change is recorded with `update --reason "..."`, which rewrites the
 baseline and appends the declared differences to
 `test/baselines/model-changes.json`.
 

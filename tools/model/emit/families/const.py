@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+#
+# This file is part of dingo project <https://github.com/romanpauk/dingo>
+#
+# See LICENSE for license and copyright information
+# SPDX-License-Identifier: MIT
+#
+
+"""Generate runtime probes for every supported const storage case.
+
+The storage and request projections both come from `grammar/enumerate.py`. This family
+does not carry a request list of its own: it walks the same case set the report
+classifies, keeps the const-qualified storage cases that classify as supported,
+and emits one probe per case. The registration is derived from the storage
+form, so adding a const-capable form to the grammar adds probes here.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import re
+from pathlib import Path
+
+from tools.model.grammar.bindings import CONCRETE
+from tools.model.domain.cases import iter_cases, request_forms
+from tools.model.emit.common.recipe import external_instance, registration
+from tools.model.emit.common.runner import emit, render_template
+from tools.model.grammar.storage import const_leaf, has_const
+from tools.model.emit.common.validation import validate_catalog
+from tools.model.semantics.support import classify
+from tools.model.grammar.expr import Expr
+
+STORAGE_SCOPES = frozenset({"shared", "external"})
+
+
+def _registration(path):
+    form = path.form
+    leaf = "tracked"
+    scope_type = path.scope.name
+    if path.scope.name == "external":
+        instance = external_instance(form, leaf, const=True)
+        if instance is None:
+            raise ValueError(f"{form.name} has no derived const instance")
+        line, _ = registration(
+            form,
+            scope_type,
+            "runtime",
+            leaf=leaf,
+            const=True,
+            storage=path.storage(leaf),
+            external_argument=instance.argument,
+        )
+        return instance.declaration, line
+    line, _ = registration(
+        form,
+        scope_type,
+        "runtime",
+        leaf=leaf,
+        const=True,
+        storage=path.storage(leaf),
+        factory=path.const_factory(leaf),
+    )
+    return "", line
+
+
+def _binding(request: Expr) -> str:
+    if request.op == "lvalue_reference":
+        return "reference"
+    if request.op == "rvalue_reference":
+        return "rvalue"
+    return "value"
+
+
+def _slug(expr: Expr) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", expr.render().lower()).strip("_")
+
+
+def build_rows() -> list[dict[str, object]]:
+    rows = []
+    seen = set()
+    for case in iter_cases(request_forms()):
+        if case.binding.kind != CONCRETE.kind:
+            continue
+        if case.scope not in STORAGE_SCOPES:
+            continue
+        storage = case.storage_path.expr
+        if not const_leaf(storage) and not (
+            storage.op == "variant" and has_const(storage)
+        ):
+            continue
+        verdict = classify(
+            case.scope, case.storage_name, case.binding, case.request
+        )
+        if verdict.outcome != "supported":
+            continue
+        key = (case.scope, case.storage_name, case.request)
+        if key in seen:
+            continue
+        seen.add(key)
+        instance, registration = _registration(case.storage_path)
+        rows.append(
+            {
+                "name": (
+                    f"const_{case.scope}_{case.storage_name}_"
+                    f"{_slug(case.request)}_"
+                    f"{hashlib.sha1(case.request.render().encode()).hexdigest()[:8]}"
+                ),
+                "scope": case.scope,
+                "storage": storage.render(),
+                "instance": instance,
+                "registration": registration,
+                "request": case.request.with_leaf("tracked").render(),
+                "bind": _binding(case.request),
+                "coverage": key,
+            }
+        )
+    return rows
+
+
+def validate() -> None:
+    rows = build_rows()
+    if not rows:
+        raise ValueError("const storage catalog must not be empty")
+    names = [row["name"] for row in rows]
+    if len(names) != len(set(names)):
+        raise ValueError("const storage catalog contains duplicate names")
+    for row in rows:
+        if not row["registration"]:
+            raise ValueError(f"{row['name']} has no registration")
+        if not row["request"]:
+            raise ValueError(f"{row['name']} has no request")
+
+
+def render(output: Path) -> str:
+    validate()
+    return render_template("const_cells.cpp.j2", rows=build_rows())
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--include",
+        type=Path,
+        help="include directory to validate the library catalogs against",
+    )
+    parser.add_argument("--check", action="store_true")
+    arguments = parser.parse_args()
+
+    if arguments.include is not None:
+        validate_catalog(arguments.include)
+    emit(arguments.out, render(arguments.out), check=arguments.check)
+
+
+if __name__ == "__main__":
+    main()

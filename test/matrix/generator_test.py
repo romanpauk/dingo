@@ -17,7 +17,15 @@ from pathlib import Path
 import pytest
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, Template
 
-from data import CATALOG, CONTAINERS, FEATURES, STORED_TYPES, validate_catalog
+from data import (
+    CATALOG,
+    CONTAINERS,
+    EXPOSED_TYPES,
+    FEATURES,
+    RESOLVED_TYPES,
+    STORED_TYPES,
+    validate_catalog,
+)
 from model_coverage import (
     FEATURE_RESTRICTIONS,
     FULLY_MODEL_COVERED_FEATURES,
@@ -231,25 +239,119 @@ def test_registration_sources_are_bounded(tmp_path: Path) -> None:
 
 
 def _model_behavior_cells() -> set[tuple[str, str]]:
-    model_dir = Path(__file__).resolve().parents[2] / "tools" / "model"
-    sys.path.insert(0, str(model_dir))
+    root = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(root))
     try:
-        import behavior_cells
+        from tools.model.emit.families import behavior as behavior_cells
     finally:
-        sys.path.remove(str(model_dir))
+        sys.path.remove(str(root))
     return behavior_cells.covered_cells()
 
 
 def _model_interface_cases() -> set[str]:
-    model_dir = Path(__file__).resolve().parents[2] / "tools" / "model"
-    sys.path.insert(0, str(model_dir))
+    root = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(root))
     try:
-        import behavior_cells
+        from tools.model.emit.families import behavior as behavior_cells
     finally:
-        sys.path.remove(str(model_dir))
+        sys.path.remove(str(root))
     return {case.name for case in behavior_cells.INTERFACE_CASES} | {
         recipe.name for recipe in behavior_cells.ANNOTATION_RECIPES
     }
+
+
+def _model_concrete_requests() -> dict[str, object]:
+    root = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(root))
+    try:
+        from tools.model.legacy import request
+    finally:
+        sys.path.remove(str(root))
+    return dict(request.concrete_requests())
+
+
+def _model_qualified_requests() -> dict[str, object]:
+    root = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(root))
+    try:
+        from tools.model.legacy import request
+    finally:
+        sys.path.remove(str(root))
+    return dict(request.qualified_requests())
+
+
+def _model_interface_requests() -> dict[str, object]:
+    root = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(root))
+    try:
+        from tools.model.legacy import request
+    finally:
+        sys.path.remove(str(root))
+    return dict(request.interface_requests())
+
+
+def test_interface_resolved_types_are_derived_from_the_request_algebra() -> None:
+    derived = _model_interface_requests()
+    declared = {
+        row.name: row for row in RESOLVED_TYPES if row.name in derived
+    }
+    assert set(declared) == set(derived)
+    for name, facts in derived.items():
+        row = declared[name]
+        assert row.provides == facts.provides
+        assert row.requires == facts.requires
+        assert row.dependency_forms == facts.dependency_forms
+        assert row.supported_modes == facts.supported_modes
+
+
+def test_qualified_resolved_types_are_derived_from_the_request_algebra() -> None:
+    derived = _model_qualified_requests()
+    declared = {
+        row.name: row for row in RESOLVED_TYPES if row.name in derived
+    }
+    assert set(declared) == set(derived)
+    for name, facts in derived.items():
+        row = declared[name]
+        assert row.provides == facts.provides
+        assert row.requires == facts.requires
+        assert row.dependency_forms == facts.dependency_forms
+        assert row.supported_modes == facts.supported_modes
+
+
+def _model_binding_cases() -> dict[str, object]:
+    root = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(root))
+    try:
+        from tools.model.legacy import binding
+    finally:
+        sys.path.remove(str(root))
+    return {case.name: binding.exposed(case.name) for case in binding.CASES}
+
+
+def test_standard_exposed_types_are_derived_from_the_binding_algebra() -> None:
+    derived = _model_binding_cases()
+    declared = {
+        row.name: row for row in EXPOSED_TYPES if row.name in derived
+    }
+    assert set(declared) == set(derived)
+    for name, row in derived.items():
+        assert row == declared[name]
+
+
+def test_concrete_resolved_types_are_derived_from_the_request_algebra() -> None:
+    derived = _model_concrete_requests()
+    concrete = {
+        row.name: row
+        for row in RESOLVED_TYPES
+        if "concrete" in row.supported_exposed_types
+    }
+    assert set(concrete) == set(derived)
+    for name, facts in derived.items():
+        row = concrete[name]
+        assert row.provides == facts.provides
+        assert row.requires == facts.requires
+        assert row.dependency_forms == facts.dependency_forms
+        assert row.supported_modes == facts.supported_modes
 
 
 def test_model_restrictions_name_real_features_and_cells() -> None:

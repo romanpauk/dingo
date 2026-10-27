@@ -8,482 +8,168 @@
 
 from __future__ import annotations
 
+import sys
 from dataclasses import replace
+from pathlib import Path
 
 from schema import (
     ResolvedType,
 )
 
 
+ROOT_DIR = Path(__file__).resolve().parents[3]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from tools.model.legacy.request import (  # noqa: E402
+    concrete_requests,
+    interface_requests,
+    qualified_requests,
+)
+
+
+_CONCRETE = dict(concrete_requests())
+_QUALIFIED = dict(qualified_requests())
+_INTERFACE = dict(interface_requests())
+
+
+def _derived(name: str, exposed: set[str] | None = None) -> ResolvedType:
+    """A concrete request whose resolved facts come from the request algebra."""
+    facts = _CONCRETE[name]
+    return ResolvedType(
+        name=name,
+        supported_exposed_types=frozenset(exposed or {"concrete"}),
+        provides=facts.provides,
+        requires=facts.requires,
+        dependency_forms=facts.dependency_forms,
+        supported_modes=facts.supported_modes,
+    )
+
+
+def _qualified(name: str, exposed: set[str]) -> ResolvedType:
+    """A request whose facts come from an annotated/keyed qualifier."""
+    facts = _QUALIFIED[name]
+    return ResolvedType(
+        name=name,
+        supported_exposed_types=frozenset(exposed),
+        provides=facts.provides,
+        requires=facts.requires,
+        dependency_forms=facts.dependency_forms,
+        supported_modes=facts.supported_modes,
+    )
+
+
+def _interface(name: str, exposed: set[str]) -> ResolvedType:
+    """A request whose facts come from an interface exposure policy."""
+    facts = _INTERFACE[name]
+    return ResolvedType(
+        name=name,
+        supported_exposed_types=frozenset(exposed),
+        provides=facts.provides,
+        requires=facts.requires,
+        dependency_forms=facts.dependency_forms,
+        supported_modes=facts.supported_modes,
+    )
+
+
+def _row(
+    name: str,
+    exposed: set[str],
+    provides: set[str],
+    *,
+    requires: set[str] | None = None,
+    dependency_forms: set[str] | None = None,
+    modes: set[str] | None = None,
+) -> ResolvedType:
+    """One selected resolved row whose facts are feature policy, not algebra."""
+    optional: dict[str, object] = {}
+    if modes is not None:
+        optional["supported_modes"] = frozenset(modes)
+    return ResolvedType(
+        name=name,
+        supported_exposed_types=frozenset(exposed),
+        provides=frozenset(provides),
+        requires=frozenset(requires or ()),
+        dependency_forms=frozenset(dependency_forms or ()),
+        **optional,
+    )
+
+
 RESOLVED_TYPES = (
-    ResolvedType(
-        name="value_ref_ptr",
-        supported_exposed_types=frozenset({"concrete", "interface_type"}),
-        provides=frozenset(
-            {
-                "resolved_concrete",
-                "constructable_dependency",
-                "invokable_dependency",
-            }
-        ),
-        dependency_forms=frozenset({"lvalue_reference", "pointer"}),
-        requires=frozenset({"stable_concrete_storage", "direct_value_resolution"}),
-    ),
-    ResolvedType(
-        name="value",
-        supported_exposed_types=frozenset({"concrete"}),
-        provides=frozenset({"resolved_concrete", "resolved_concrete_value"}),
-        dependency_forms=frozenset({"value"}),
-        requires=frozenset({"direct_value_resolution"}),
-    ),
-    ResolvedType(
-        name="value_rvalue",
-        supported_exposed_types=frozenset({"concrete"}),
-        provides=frozenset({"resolved_concrete"}),
-        dependency_forms=frozenset({"rvalue_reference"}),
-        requires=frozenset({"unique_storage", "stored_value"}),
-    ),
-    ResolvedType(
-        name="dependent_type_ref",
-        supported_exposed_types=frozenset({"mixed_external_dependency"}),
-        provides=frozenset({"resolved_mixed_external_dependency"}),
-    ),
-    ResolvedType(
-        name="explicit_dependencies_value",
-        supported_exposed_types=frozenset({"explicit_dependencies"}),
-        provides=frozenset({"resolved_explicit_dependencies"}),
-    ),
-    ResolvedType(
-        name="mixed_singular_conflict_ref",
-        supported_exposed_types=frozenset({"mixed_singular_conflict"}),
-        provides=frozenset({"resolved_mixed_singular_conflict"}),
-        requires=frozenset({"stable_concrete_storage", "direct_value_resolution"}),
-    ),
-    ResolvedType(
-        name="const_value_ref",
-        supported_exposed_types=frozenset({"concrete"}),
-        provides=frozenset({"resolved_concrete", "resolved_const_concrete"}),
-        dependency_forms=frozenset({"const_lvalue_reference"}),
-        requires=frozenset({"stable_concrete_storage", "direct_value_resolution"}),
-    ),
-    ResolvedType(
-        name="const_value_ptr",
-        supported_exposed_types=frozenset({"concrete"}),
-        provides=frozenset({"resolved_concrete", "resolved_const_concrete"}),
-        dependency_forms=frozenset({"const_pointer"}),
-        requires=frozenset({"stable_concrete_storage", "direct_value_resolution"}),
-    ),
-    ResolvedType(
-        name="interface_value",
-        supported_exposed_types=frozenset({"copyable_interface_type"}),
-        provides=frozenset({"resolved_interface", "resolved_interface_value"}),
-    ),
-    ResolvedType(
-        name="interface_ref_ptr_shared_ptr",
-        supported_exposed_types=frozenset({"interface_type"}),
-        provides=frozenset({"resolved_interface", "resolved_shared_interface"}),
-        requires=frozenset({"shared_storage"}),
-    ),
-    ResolvedType(
-        name="interface_ref",
-        supported_exposed_types=frozenset({"interface_type", "multiple_interfaces"}),
-        provides=frozenset({"resolved_interface"}),
-        requires=frozenset({"shared_storage"}),
-    ),
-    ResolvedType(
-        name="interface_ptr",
-        supported_exposed_types=frozenset({"interface_type", "multiple_interfaces"}),
-        provides=frozenset({"resolved_interface"}),
-        requires=frozenset({"shared_storage"}),
-    ),
-    ResolvedType(
-        name="second_interface_ref",
-        supported_exposed_types=frozenset({"multiple_interfaces"}),
-        provides=frozenset({"resolved_interface"}),
-        requires=frozenset({"shared_storage"}),
-    ),
-    ResolvedType(
-        name="multiple_interface_shared_ptr_ref",
-        supported_exposed_types=frozenset({"multiple_interfaces"}),
-        provides=frozenset({"resolved_interface"}),
-        requires=frozenset(
-            {"runtime_reference_conversion_container", "shared_storage"}
-        ),
-        supported_modes=frozenset({"runtime"}),
-    ),
-    ResolvedType(
-        name="unique_interface_unique_ptr",
-        supported_exposed_types=frozenset({"unique_interface_type"}),
-        provides=frozenset({"resolved_unique_wrapper"}),
-        requires=frozenset({"unique_storage"}),
-    ),
-    ResolvedType(
-        name="value_unique_ptr",
-        supported_exposed_types=frozenset({"concrete"}),
-        provides=frozenset({"resolved_wrapper"}),
-        dependency_forms=frozenset({"unique_pointer"}),
-        requires=frozenset({"unique_storage", "stored_unique_ptr"}),
-    ),
-    ResolvedType(
-        name="interface_unique_ptr",
-        supported_exposed_types=frozenset({"unique_interface_type"}),
-        provides=frozenset({"resolved_wrapper"}),
-        requires=frozenset({"unique_storage", "stored_unique_ptr"}),
-    ),
-    ResolvedType(
-        name="value_shared_ptr",
-        supported_exposed_types=frozenset({"concrete"}),
-        provides=frozenset({"resolved_wrapper"}),
-        dependency_forms=frozenset({"shared_pointer"}),
-        requires=frozenset({"shared_storage", "stored_shared_ptr"}),
-    ),
-    ResolvedType(
-        name="value_shared_ptr_ref",
-        supported_exposed_types=frozenset({"concrete"}),
-        provides=frozenset({"resolved_wrapper"}),
-        dependency_forms=frozenset(
-            {"shared_pointer_lvalue_reference"}
-        ),
-        requires=frozenset({"shared_storage", "stored_shared_ptr"}),
-    ),
-    ResolvedType(
-        name="value_optional",
-        supported_exposed_types=frozenset({"concrete"}),
-        provides=frozenset({"resolved_wrapper"}),
-        dependency_forms=frozenset({"optional"}),
-        requires=frozenset({"unique_storage", "stored_optional"}),
-    ),
-    ResolvedType(
-        name="value_optional_ref",
-        supported_exposed_types=frozenset({"concrete"}),
-        provides=frozenset({"resolved_wrapper"}),
-        dependency_forms=frozenset({"optional_lvalue_reference"}),
-        requires=frozenset({"shared_storage", "stored_optional"}),
-    ),
-    ResolvedType(
-        name="interface_shared_ptr",
-        supported_exposed_types=frozenset({"interface_type"}),
-        provides=frozenset({"resolved_wrapper"}),
-        requires=frozenset({"shared_storage", "stored_shared_ptr"}),
-    ),
-    ResolvedType(
-        name="custom_shared_concrete",
-        supported_exposed_types=frozenset({"custom_concrete"}),
-        provides=frozenset({"resolved_custom_wrapper"}),
-        requires=frozenset({"stable_concrete_storage", "stored_custom_shared"}),
-    ),
-    ResolvedType(
-        name="custom_shared_interface",
-        supported_exposed_types=frozenset({"custom_interface"}),
-        provides=frozenset({"resolved_custom_wrapper"}),
-        requires=frozenset({"shared_storage", "stored_custom_shared"}),
-    ),
-    ResolvedType(
-        name="custom_unique_interface",
-        supported_exposed_types=frozenset({"custom_unique_interface"}),
-        provides=frozenset({"resolved_custom_wrapper"}),
-        requires=frozenset({"unique_storage", "stored_custom_unique"}),
-    ),
-    ResolvedType(
-        name="custom_optional_ref",
-        supported_exposed_types=frozenset({"custom_concrete"}),
-        provides=frozenset({"resolved_custom_wrapper"}),
-        requires=frozenset({"stable_concrete_storage", "stored_custom_optional"}),
-    ),
-    ResolvedType(
-        name="custom_optional_value",
-        supported_exposed_types=frozenset({"custom_concrete"}),
-        provides=frozenset({"resolved_custom_wrapper"}),
-        requires=frozenset({"unique_storage", "stored_custom_optional"}),
-    ),
-    ResolvedType(
-        name="element_vector",
-        supported_exposed_types=frozenset({"element_collection"}),
-        provides=frozenset({"resolved_collection", "constructable_collection"}),
-        supported_modes=frozenset({"static", "mixed"}),
-    ),
-    ResolvedType(
-        name="element_map_custom_insert",
-        supported_exposed_types=frozenset({"element_collection"}),
-        provides=frozenset({"constructable_collection"}),
-        supported_modes=frozenset({"static", "mixed"}),
-    ),
-    ResolvedType(
-        name="element_keyed_shared_ptr_ref",
-        supported_exposed_types=frozenset({"element_keyed"}),
-        provides=frozenset({"resolved_keyed"}),
-    ),
-    ResolvedType(
-        name="keyed_value_dependency",
-        supported_exposed_types=frozenset({"keyed_concrete"}),
-        provides=frozenset({"constructable_dependency"}),
-        dependency_forms=frozenset({"selected_lvalue_reference"}),
-        requires=frozenset({"direct_value_resolution", "stable_concrete_storage"}),
-    ),
-    ResolvedType(
-        name="keyed_value",
-        supported_exposed_types=frozenset({"keyed_concrete"}),
-        provides=frozenset({"resolved_keyed"}),
-        requires=frozenset({"direct_value_resolution"}),
-    ),
-    ResolvedType(
-        name="keyed_value_ref",
-        supported_exposed_types=frozenset({"keyed_concrete"}),
-        provides=frozenset({"resolved_keyed"}),
-        requires=frozenset({"direct_value_resolution", "stable_concrete_storage"}),
-    ),
-    ResolvedType(
-        name="keyed_interface_ref",
-        supported_exposed_types=frozenset({"keyed_interface"}),
-        provides=frozenset({"resolved_keyed"}),
-        requires=frozenset({"shared_storage"}),
-    ),
-    ResolvedType(
-        name="element_keyed_vector",
-        supported_exposed_types=frozenset({"element_keyed_collection"}),
-        provides=frozenset({"resolved_keyed_collection"}),
-        supported_modes=frozenset({"static", "mixed"}),
-    ),
-    ResolvedType(
-        name="keyed_collection_dependency",
-        supported_exposed_types=frozenset({"element_keyed_collection"}),
-        provides=frozenset({"constructable_dependency"}),
-        dependency_forms=frozenset({"selected_value"}),
-        supported_modes=frozenset({"static", "mixed"}),
-    ),
-    ResolvedType(
-        name="element_indexed_shared_ptr",
-        supported_exposed_types=frozenset({"element_indexed"}),
-        provides=frozenset({"resolved_indexed"}),
-        supported_modes=frozenset({"runtime"}),
-    ),
-    ResolvedType(
-        name="raw_array_ptr",
-        supported_exposed_types=frozenset({"array_concrete"}),
-        provides=frozenset({"resolved_array"}),
-        requires=frozenset({"array_1d"}),
-    ),
-    ResolvedType(
-        name="raw_array_ref",
-        supported_exposed_types=frozenset({"array_concrete"}),
-        provides=frozenset({"resolved_array"}),
-        dependency_forms=frozenset({"array_lvalue_reference"}),
-        requires=frozenset({"array_1d"}),
-    ),
-    ResolvedType(
-        name="raw_array_ptr_to_array",
-        supported_exposed_types=frozenset({"array_concrete"}),
-        provides=frozenset({"resolved_array"}),
-        requires=frozenset({"array_1d"}),
-    ),
-    ResolvedType(
-        name="raw_nd_array_ref",
-        supported_exposed_types=frozenset({"array_concrete"}),
-        provides=frozenset({"resolved_array"}),
-        requires=frozenset({"array_2d"}),
-    ),
-    ResolvedType(
-        name="unique_array",
-        supported_exposed_types=frozenset({"array_concrete"}),
-        provides=frozenset({"resolved_array"}),
-        requires=frozenset({"unique_storage", "array_smart_unique"}),
-    ),
-    ResolvedType(
-        name="shared_array",
-        supported_exposed_types=frozenset({"array_concrete"}),
-        provides=frozenset({"resolved_array"}),
-        requires=frozenset({"shared_storage", "array_smart_shared"}),
-    ),
-    ResolvedType(
-        name="shared_unique_value_ref",
-        supported_exposed_types=frozenset({"nested_wrapper"}),
-        provides=frozenset({"resolved_nested_wrapper"}),
-        requires=frozenset({"stored_shared_unique"}),
-    ),
-    ResolvedType(
-        name="shared_unique_array_value_ref",
-        supported_exposed_types=frozenset({"nested_wrapper"}),
-        provides=frozenset({"resolved_nested_wrapper"}),
-        requires=frozenset({"stored_shared_unique_array"}),
-    ),
-    ResolvedType(
-        name="unique_shared_value",
-        supported_exposed_types=frozenset({"nested_wrapper"}),
-        provides=frozenset({"resolved_nested_wrapper"}),
-        requires=frozenset({"stored_unique_shared"}),
-    ),
-    ResolvedType(
-        name="variant_unique_value",
-        supported_exposed_types=frozenset({"variant_unique_wrapper"}),
-        provides=frozenset({"resolved_nested_wrapper"}),
-        requires=frozenset({"stored_variant_unique"}),
-    ),
-    ResolvedType(
-        name="variant_shared_value",
-        supported_exposed_types=frozenset({"variant_shared_wrapper"}),
-        provides=frozenset({"resolved_nested_wrapper"}),
-        requires=frozenset({"stored_variant_shared"}),
-    ),
-    ResolvedType(
-        name="variant_shared_unique_value",
-        supported_exposed_types=frozenset({"variant_shared_unique_wrapper"}),
-        provides=frozenset({"resolved_nested_wrapper"}),
-        requires=frozenset({"stored_variant_shared_unique"}),
-    ),
-    ResolvedType(
-        name="unique_variant_value",
-        supported_exposed_types=frozenset({"nested_wrapper"}),
-        provides=frozenset({"resolved_nested_wrapper"}),
-        requires=frozenset({"stored_unique_variant"}),
-    ),
-    ResolvedType(
-        name="shared_variant_value_ref",
-        supported_exposed_types=frozenset({"nested_wrapper"}),
-        provides=frozenset({"resolved_nested_wrapper"}),
-        requires=frozenset({"stored_shared_variant"}),
-    ),
-    ResolvedType(
-        name="array_variant_value_ref",
-        supported_exposed_types=frozenset({"nested_wrapper"}),
-        provides=frozenset({"resolved_nested_wrapper"}),
-        requires=frozenset({"stored_array_variant"}),
-    ),
-    ResolvedType(
-        name="leaf_access",
-        supported_exposed_types=frozenset({"nested_wrapper"}),
-        provides=frozenset({"resolved_nested_wrapper"}),
-        requires=frozenset({"stored_leaf_access"}),
-    ),
-    ResolvedType(
-        name="leaf_copy",
-        supported_exposed_types=frozenset({"nested_wrapper"}),
-        provides=frozenset({"resolved_nested_wrapper"}),
-        requires=frozenset({"stored_leaf_copy"}),
-    ),
-    ResolvedType(
-        name="leaf_access_move_only",
-        supported_exposed_types=frozenset({"nested_wrapper"}),
-        provides=frozenset({"resolved_nested_wrapper"}),
-        requires=frozenset(
-            {"stored_leaf_access_move_only", "runtime_refusal_container"}
-        ),
-    ),
-    ResolvedType(
-        name="leaf_refusal",
-        supported_exposed_types=frozenset({"nested_wrapper"}),
-        provides=frozenset({"resolved_nested_wrapper"}),
-        requires=frozenset(
-            {"stored_leaf_refusal", "runtime_refusal_container"}
-        ),
-    ),
-    ResolvedType(
-        name="variant_value",
-        supported_exposed_types=frozenset({"variant_concrete"}),
-        provides=frozenset({"resolved_variant"}),
-        dependency_forms=frozenset({"variant"}),
-    ),
-    ResolvedType(
-        name="variant_alternative_value",
-        supported_exposed_types=frozenset({"variant_concrete"}),
-        provides=frozenset({"resolved_variant", "resolved_variant_alternative"}),
-    ),
-    ResolvedType(
-        name="variant_alternative_ref",
-        supported_exposed_types=frozenset({"variant_concrete"}),
-        provides=frozenset({"resolved_variant", "resolved_variant_alternative"}),
-        requires=frozenset({"stable_concrete_storage"}),
-    ),
-    ResolvedType(
-        name="variant_alternative_ptr",
-        supported_exposed_types=frozenset({"variant_concrete"}),
-        provides=frozenset({"resolved_variant", "resolved_variant_alternative"}),
-        requires=frozenset({"stable_concrete_storage"}),
-    ),
-    ResolvedType(
-        name="annotated_value_ref",
-        supported_exposed_types=frozenset({"annotated_concrete"}),
-        provides=frozenset({"resolved_annotated"}),
-        dependency_forms=frozenset({"annotated_lvalue_reference"}),
-        requires=frozenset({"stable_concrete_storage"}),
-    ),
-    ResolvedType(
-        name="annotated_interface_ref",
-        supported_exposed_types=frozenset({"annotated_interface"}),
-        provides=frozenset({"resolved_annotated"}),
-        dependency_forms=frozenset({"annotated_lvalue_reference"}),
-        requires=frozenset({"shared_storage"}),
-    ),
-    ResolvedType(
-        name="annotated_interface_ptr",
-        supported_exposed_types=frozenset({"annotated_interface"}),
-        provides=frozenset({"resolved_annotated"}),
-        dependency_forms=frozenset({"annotated_pointer"}),
-        requires=frozenset({"shared_storage"}),
-    ),
-    ResolvedType(
-        name="annotated_interface_shared_ptr",
-        supported_exposed_types=frozenset({"annotated_interface"}),
-        provides=frozenset({"resolved_annotated"}),
-        dependency_forms=frozenset({"annotated_shared_pointer"}),
-        requires=frozenset({"shared_storage", "stored_shared_ptr"}),
-    ),
-    ResolvedType(
-        name="annotated_interface_shared_ptr_ref",
-        supported_exposed_types=frozenset({"annotated_interface"}),
-        provides=frozenset({"resolved_annotated"}),
-        dependency_forms=frozenset(
-            {"annotated_shared_pointer_lvalue_reference"}
-        ),
-        requires=frozenset({"shared_storage", "stored_shared_ptr"}),
-    ),
-    ResolvedType(
-        name="local_value_ref",
-        supported_exposed_types=frozenset({"local_value"}),
-        provides=frozenset({"resolved_concrete"}),
-    ),
-    ResolvedType(
-        name="local_override_value_ref",
-        supported_exposed_types=frozenset({"local_override_value"}),
-        provides=frozenset({"resolved_concrete"}),
-    ),
-    ResolvedType(
-        name="local_collection_value_ref",
-        supported_exposed_types=frozenset(
-            {"local_collection_value", "local_collection_runtime_host_value"}
-        ),
-        provides=frozenset({"resolved_concrete"}),
-    ),
-    ResolvedType(
-        name="factory_function_value_ref",
-        supported_exposed_types=frozenset({"factory_function_value"}),
-        provides=frozenset({"resolved_concrete"}),
-    ),
-    ResolvedType(
-        name="factory_function_dependency_value_ref",
-        supported_exposed_types=frozenset({"factory_function_dependency_value"}),
-        provides=frozenset({"resolved_concrete"}),
-    ),
-    ResolvedType(
-        name="factory_constructor_value_ref",
-        supported_exposed_types=frozenset({"factory_constructor_value"}),
-        provides=frozenset({"resolved_concrete"}),
-    ),
-    ResolvedType(
-        name="factory_detected_constructor_value_ref",
-        supported_exposed_types=frozenset({"factory_detected_constructor_value"}),
-        provides=frozenset({"resolved_concrete"}),
-    ),
-    ResolvedType(
-        name="factory_typedef_constructor_value_ref",
-        supported_exposed_types=frozenset({"factory_typedef_constructor_value"}),
-        provides=frozenset({"resolved_concrete"}),
-    ),
-    ResolvedType(
-        name="factory_callable_value_ref",
-        supported_exposed_types=frozenset({"factory_callable_value"}),
-        provides=frozenset({"resolved_concrete"}),
-        supported_modes=frozenset({"runtime", "mixed"}),
-    ),
+    _derived("value_ref_ptr", {"concrete", "interface_type"}),
+    _derived("value"),
+    _derived("value_rvalue"),
+    _row("dependent_type_ref", {"mixed_external_dependency"}, {"resolved_mixed_external_dependency"}),
+    _row("explicit_dependencies_value", {"explicit_dependencies"}, {"resolved_explicit_dependencies"}),
+    _row("mixed_singular_conflict_ref", {"mixed_singular_conflict"}, {"resolved_mixed_singular_conflict"}, requires={"direct_value_resolution", "stable_concrete_storage"}),
+    _derived("const_value_ref"),
+    _derived("const_value_ptr"),
+    _interface("interface_value", {"copyable_interface_type"}),
+    _interface("interface_ref_ptr_shared_ptr", {"interface_type"}),
+    _interface("interface_ref", {"interface_type", "multiple_interfaces"}),
+    _interface("interface_ptr", {"interface_type", "multiple_interfaces"}),
+    _interface("second_interface_ref", {"multiple_interfaces"}),
+    _interface("multiple_interface_shared_ptr_ref", {"multiple_interfaces"}),
+    _interface("unique_interface_unique_ptr", {"unique_interface_type"}),
+    _derived("value_unique_ptr"),
+    _interface("interface_unique_ptr", {"unique_interface_type"}),
+    _derived("value_shared_ptr"),
+    _derived("value_shared_ptr_ref"),
+    _derived("value_optional"),
+    _derived("value_optional_ref"),
+    _interface("interface_shared_ptr", {"interface_type"}),
+    _row("custom_shared_concrete", {"custom_concrete"}, {"resolved_custom_wrapper"}, requires={"stable_concrete_storage", "stored_custom_shared"}),
+    _row("custom_shared_interface", {"custom_interface"}, {"resolved_custom_wrapper"}, requires={"shared_storage", "stored_custom_shared"}),
+    _row("custom_unique_interface", {"custom_unique_interface"}, {"resolved_custom_wrapper"}, requires={"stored_custom_unique", "unique_storage"}),
+    _row("custom_optional_ref", {"custom_concrete"}, {"resolved_custom_wrapper"}, requires={"stable_concrete_storage", "stored_custom_optional"}),
+    _row("custom_optional_value", {"custom_concrete"}, {"resolved_custom_wrapper"}, requires={"stored_custom_optional", "unique_storage"}),
+    _row("element_vector", {"element_collection"}, {"constructable_collection", "resolved_collection"}, modes={"mixed", "static"}),
+    _row("element_map_custom_insert", {"element_collection"}, {"constructable_collection"}, modes={"mixed", "static"}),
+    _row("element_keyed_shared_ptr_ref", {"element_keyed"}, {"resolved_keyed"}),
+    _qualified("keyed_value_dependency", {"keyed_concrete"}),
+    _qualified("keyed_value", {"keyed_concrete"}),
+    _qualified("keyed_value_ref", {"keyed_concrete"}),
+    _qualified("keyed_interface_ref", {"keyed_interface"}),
+    _row("element_keyed_vector", {"element_keyed_collection"}, {"resolved_keyed_collection"}, modes={"mixed", "static"}),
+    _row("keyed_collection_dependency", {"element_keyed_collection"}, {"constructable_dependency"}, dependency_forms={"selected_value"}, modes={"mixed", "static"}),
+    _row("element_indexed_shared_ptr", {"element_indexed"}, {"resolved_indexed"}, modes={"runtime"}),
+    _row("raw_array_ptr", {"array_concrete"}, {"resolved_array"}, requires={"array_1d"}),
+    _row("raw_array_ref", {"array_concrete"}, {"resolved_array"}, requires={"array_1d"}, dependency_forms={"array_lvalue_reference"}),
+    _row("raw_array_ptr_to_array", {"array_concrete"}, {"resolved_array"}, requires={"array_1d"}),
+    _row("raw_nd_array_ref", {"array_concrete"}, {"resolved_array"}, requires={"array_2d"}),
+    _row("unique_array", {"array_concrete"}, {"resolved_array"}, requires={"array_smart_unique", "unique_storage"}),
+    _row("shared_array", {"array_concrete"}, {"resolved_array"}, requires={"array_smart_shared", "shared_storage"}),
+    _row("shared_unique_value_ref", {"nested_wrapper"}, {"resolved_nested_wrapper"}, requires={"stored_shared_unique"}),
+    _row("shared_unique_array_value_ref", {"nested_wrapper"}, {"resolved_nested_wrapper"}, requires={"stored_shared_unique_array"}),
+    _row("unique_shared_value", {"nested_wrapper"}, {"resolved_nested_wrapper"}, requires={"stored_unique_shared"}),
+    _row("variant_unique_value", {"variant_unique_wrapper"}, {"resolved_nested_wrapper"}, requires={"stored_variant_unique"}),
+    _row("variant_shared_value", {"variant_shared_wrapper"}, {"resolved_nested_wrapper"}, requires={"stored_variant_shared"}),
+    _row("variant_shared_unique_value", {"variant_shared_unique_wrapper"}, {"resolved_nested_wrapper"}, requires={"stored_variant_shared_unique"}),
+    _row("unique_variant_value", {"nested_wrapper"}, {"resolved_nested_wrapper"}, requires={"stored_unique_variant"}),
+    _row("shared_variant_value_ref", {"nested_wrapper"}, {"resolved_nested_wrapper"}, requires={"stored_shared_variant"}),
+    _row("array_variant_value_ref", {"nested_wrapper"}, {"resolved_nested_wrapper"}, requires={"stored_array_variant"}),
+    _row("leaf_access", {"nested_wrapper"}, {"resolved_nested_wrapper"}, requires={"stored_leaf_access"}),
+    _row("leaf_copy", {"nested_wrapper"}, {"resolved_nested_wrapper"}, requires={"stored_leaf_copy"}),
+    _row("leaf_access_move_only", {"nested_wrapper"}, {"resolved_nested_wrapper"}, requires={"runtime_refusal_container", "stored_leaf_access_move_only"}),
+    _row("leaf_refusal", {"nested_wrapper"}, {"resolved_nested_wrapper"}, requires={"runtime_refusal_container", "stored_leaf_refusal"}),
+    _row("variant_value", {"variant_concrete"}, {"resolved_variant"}, dependency_forms={"variant"}),
+    _row("variant_alternative_value", {"variant_concrete"}, {"resolved_variant", "resolved_variant_alternative"}),
+    _row("variant_alternative_ref", {"variant_concrete"}, {"resolved_variant", "resolved_variant_alternative"}, requires={"stable_concrete_storage"}),
+    _row("variant_alternative_ptr", {"variant_concrete"}, {"resolved_variant", "resolved_variant_alternative"}, requires={"stable_concrete_storage"}),
+    _qualified("annotated_value_ref", {"annotated_concrete"}),
+    _qualified("annotated_interface_ref", {"annotated_interface"}),
+    _qualified("annotated_interface_ptr", {"annotated_interface"}),
+    _qualified("annotated_interface_shared_ptr", {"annotated_interface"}),
+    _qualified("annotated_interface_shared_ptr_ref", {"annotated_interface"}),
+    _row("local_value_ref", {"local_value"}, {"resolved_concrete"}),
+    _row("local_override_value_ref", {"local_override_value"}, {"resolved_concrete"}),
+    _row("local_collection_value_ref", {"local_collection_runtime_host_value", "local_collection_value"}, {"resolved_concrete"}),
+    _row("factory_function_value_ref", {"factory_function_value"}, {"resolved_concrete"}),
+    _row("factory_function_dependency_value_ref", {"factory_function_dependency_value"}, {"resolved_concrete"}),
+    _row("factory_constructor_value_ref", {"factory_constructor_value"}, {"resolved_concrete"}),
+    _row("factory_detected_constructor_value_ref", {"factory_detected_constructor_value"}, {"resolved_concrete"}),
+    _row("factory_typedef_constructor_value_ref", {"factory_typedef_constructor_value"}, {"resolved_concrete"}),
+    _row("factory_callable_value_ref", {"factory_callable_value"}, {"resolved_concrete"}, modes={"mixed", "runtime"}),
 )
 
 

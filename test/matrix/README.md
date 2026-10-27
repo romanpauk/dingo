@@ -9,6 +9,13 @@ recipes as the primary model. Recipes are an output of axis selection.
 - `axes/` is the Python package containing one declarative catalog per matrix
   dimension. `data.py` assembles and validates the registration catalogs;
   family-local generators validate their own catalogs before generation.
+  `axes/stored_types.py` takes the C++ spelling of the standard wrapper forms
+  from `tools/model/catalog.py`, so the matrix and the model do not keep two
+  copies of the same `std::unique_ptr`/`std::shared_ptr`/`std::optional`
+  spellings. `axes/exposed_types.py` and `axes/resolved_types.py` take the
+  standard binding and concrete-request rows from `tools/model/binding.py` and
+  `tools/model/request.py`; the matrix keeps only its feature tags, fixtures,
+  and the cases outside those algebras.
 - `axes/dependency_forms.py` defines independent dependency carrier and
   decoration axes, derives their supported product, and declares exhaustive
   provisioning recipes used across matrix families.

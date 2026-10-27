@@ -145,41 +145,61 @@ endif()
 include(${DINGO_MATRIX_TEST_CMAKE})
 
 set(DINGO_MODEL_GENERATOR
-    "${PROJECT_SOURCE_DIR}/tools/model/storage_cells.py")
+    "tools.model.emit.families.storage")
 set(DINGO_SELECTION_MODEL_GENERATOR
-    "${PROJECT_SOURCE_DIR}/tools/model/selection_rules.py")
+    "tools.model.emit.selection")
 set(DINGO_ROUTE_MODEL_GENERATOR
-    "${PROJECT_SOURCE_DIR}/tools/model/route_cells.py")
+    "tools.model.emit.families.route")
 set(DINGO_BEHAVIOR_MODEL_GENERATOR
-    "${PROJECT_SOURCE_DIR}/tools/model/behavior_cells.py")
+    "tools.model.emit.families.behavior")
 set(DINGO_INTERFACE_MODEL_GENERATOR
-    "${PROJECT_SOURCE_DIR}/tools/model/interface_cells.py")
+    "tools.model.emit.families.interface")
 set(DINGO_TYPE_MATRIX_GENERATOR
-    "${PROJECT_SOURCE_DIR}/tools/model/type_matrix.py")
+    "tools.model.emit.matrix")
+set(DINGO_BINDING_MATRIX_GENERATOR
+    "tools.model.emit.binding_matrix")
 set(DINGO_TYPE_BEHAVIOR_GENERATOR
-    "${PROJECT_SOURCE_DIR}/tools/model/type_behavior.py")
+    "tools.model.emit.behavior")
 set(DINGO_PROPERTY_MODEL_GENERATOR
-    "${PROJECT_SOURCE_DIR}/tools/model/property_cells.py")
+    "tools.model.emit.families.property")
+set(DINGO_ANNOTATED_MODEL_GENERATOR
+    "tools.model.emit.families.annotated")
+set(DINGO_CONST_MODEL_GENERATOR
+    "tools.model.emit.families.const")
+set(DINGO_KEYED_MODEL_GENERATOR
+    "tools.model.emit.families.keyed")
+set(DINGO_INTERFACE_RUNTIME_MODEL_GENERATOR
+    "tools.model.emit.families.interface_runtime")
 set(DINGO_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/templates/storage_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/storage_cells.cpp.j2")
 set(DINGO_SCOPES_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/templates/scopes.gen.h.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/scopes.gen.h.j2")
 set(DINGO_ROUTE_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/templates/route_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/route_cells.cpp.j2")
 set(DINGO_BEHAVIOR_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/templates/behavior_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/behavior_cells.cpp.j2")
 set(DINGO_INTERFACE_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/templates/interface_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/interface_cells.cpp.j2")
 set(DINGO_TYPE_MATRIX_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/templates/type_matrix.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/type_matrix.cpp.j2")
+set(DINGO_BINDING_MATRIX_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/binding_matrix.cpp.j2")
 set(DINGO_TYPE_BEHAVIOR_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/templates/type_behavior.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/type_behavior.cpp.j2")
 set(DINGO_PROPERTY_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/templates/property_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/property_cells.cpp.j2")
+set(DINGO_ANNOTATED_MODEL_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/annotated_cells.cpp.j2")
+set(DINGO_CONST_MODEL_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/const_cells.cpp.j2")
+set(DINGO_KEYED_MODEL_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/keyed_cells.cpp.j2")
+set(DINGO_INTERFACE_RUNTIME_MODEL_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/interface_runtime.cpp.j2")
 set(DINGO_SCOPES_HEADER
     "${PROJECT_SOURCE_DIR}/include/dingo/storage/scopes.gen.h")
 set(DINGO_SELECTION_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/templates/selection_rules.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/selection_rules.cpp.j2")
 set(DINGO_MODEL_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/storage_cells.cpp")
 set(DINGO_SELECTION_MODEL_TEST_SOURCE
@@ -192,19 +212,93 @@ set(DINGO_INTERFACE_MODEL_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/interface_cells.cpp")
 set(DINGO_TYPE_MATRIX_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/type_matrix.cpp")
+set(DINGO_BINDING_MATRIX_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/binding_matrix.cpp")
 set(DINGO_TYPE_BEHAVIOR_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/type_behavior.cpp")
 set(DINGO_TYPE_BEHAVIOR_STATIC_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/type_behavior_static.cpp")
 set(DINGO_PROPERTY_MODEL_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/property_cells.cpp")
+set(DINGO_ANNOTATED_MODEL_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/annotated_cells.cpp")
+set(DINGO_CONST_MODEL_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/const_cells.cpp")
+set(DINGO_KEYED_MODEL_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/keyed_cells.cpp")
+set(DINGO_INTERFACE_RUNTIME_MODEL_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/interface_runtime.cpp")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    "${DINGO_MODEL_GENERATOR}"
-    "${DINGO_SELECTION_MODEL_GENERATOR}"
-    "${DINGO_ROUTE_MODEL_GENERATOR}"
-    "${DINGO_BEHAVIOR_MODEL_GENERATOR}"
-    "${DINGO_INTERFACE_MODEL_GENERATOR}"
-    "${DINGO_TYPE_MATRIX_GENERATOR}"
+    "${PROJECT_SOURCE_DIR}/tools/model/__init__.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/__main__.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/domain/__init__.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/domain/cases.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/domain/requests.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/__init__.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/behavior.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/common/__init__.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/common/recipe.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/common/runner.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/common/validation.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/__init__.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/annotated.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/behavior.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/const.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/interface.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/property.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/route.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/storage.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/matrix.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/selection.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/grammar/__init__.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/grammar/bindings.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/grammar/catalog.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/grammar/cpp.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/grammar/enumerate.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/grammar/expr.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/grammar/shapes.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/grammar/storage.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/legacy/__init__.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/legacy/binding.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/legacy/request.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/report/__init__.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/report/baseline.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/report/coverage.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/report/paths.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/semantics/__init__.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/semantics/capabilities.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/semantics/cells.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/semantics/extended_shapes.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/semantics/forms.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/semantics/gaps.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/semantics/routes/__init__.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/semantics/routes/derivation.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/semantics/routes/ledger.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/semantics/routes/rules.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/semantics/support.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/__init__.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/annotated_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/architecture_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/behavior_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/conftest.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/const_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/grammar_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/keyed_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/interface_runtime_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/binding_matrix_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/interface_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/outcome_baseline_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/paths_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/property_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/route_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/route_derivation_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/route_ledger_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/route_rules_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/selection_rules_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/storage_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/type_behavior_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/type_matrix_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/wrapper_semantics_test.py"
     "${DINGO_MODEL_TEMPLATE}"
     "${DINGO_SCOPES_TEMPLATE}"
     "${DINGO_SELECTION_MODEL_TEMPLATE}"
@@ -212,30 +306,14 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_BEHAVIOR_MODEL_TEMPLATE}"
     "${DINGO_INTERFACE_MODEL_TEMPLATE}"
     "${DINGO_TYPE_MATRIX_TEMPLATE}"
-    "${DINGO_TYPE_BEHAVIOR_GENERATOR}"
     "${DINGO_TYPE_BEHAVIOR_TEMPLATE}"
-    "${DINGO_PROPERTY_MODEL_GENERATOR}"
     "${DINGO_PROPERTY_MODEL_TEMPLATE}"
-    "${PROJECT_SOURCE_DIR}/tools/model/wrapper_semantics.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/route_rules.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/route_derivation.py"
+    "${DINGO_ANNOTATED_MODEL_TEMPLATE}"
+    "${DINGO_CONST_MODEL_TEMPLATE}"
     "${DINGO_SCOPES_HEADER}"
-    "${PROJECT_SOURCE_DIR}/tools/model/storage_cells_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/selection_rules_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/route_cells_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/route_ledger_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/route_derivation_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/behavior_cells_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/interface_cells_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/type_matrix_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/type_behavior_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/property_cells_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/outcome_baseline_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/wrapper_semantics_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/route_rules_test.py"
     "${PROJECT_SOURCE_DIR}/tools/cost/measure_test.py")
 execute_process(
-    COMMAND ${DINGO_UV_RUN_COMMAND} python
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_MODEL_GENERATOR}
         --out ${DINGO_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
@@ -247,7 +325,7 @@ if(NOT DINGO_MODEL_GENERATOR_RESULT EQUAL 0)
         "${DINGO_MODEL_GENERATOR_RESULT}")
 endif()
 execute_process(
-    COMMAND ${DINGO_UV_RUN_COMMAND} python
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_SELECTION_MODEL_GENERATOR}
         --out ${DINGO_SELECTION_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
@@ -259,7 +337,7 @@ if(NOT DINGO_SELECTION_MODEL_GENERATOR_RESULT EQUAL 0)
         "${DINGO_SELECTION_MODEL_GENERATOR_RESULT}")
 endif()
 execute_process(
-    COMMAND ${DINGO_UV_RUN_COMMAND} python
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_ROUTE_MODEL_GENERATOR}
         --out ${DINGO_ROUTE_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
@@ -271,7 +349,7 @@ if(NOT DINGO_ROUTE_MODEL_GENERATOR_RESULT EQUAL 0)
         "${DINGO_ROUTE_MODEL_GENERATOR_RESULT}")
 endif()
 execute_process(
-    COMMAND ${DINGO_UV_RUN_COMMAND} python
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_BEHAVIOR_MODEL_GENERATOR}
         --out ${DINGO_BEHAVIOR_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
@@ -283,7 +361,7 @@ if(NOT DINGO_BEHAVIOR_MODEL_GENERATOR_RESULT EQUAL 0)
         "${DINGO_BEHAVIOR_MODEL_GENERATOR_RESULT}")
 endif()
 execute_process(
-    COMMAND ${DINGO_UV_RUN_COMMAND} python
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_INTERFACE_MODEL_GENERATOR}
         --out ${DINGO_INTERFACE_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
@@ -295,7 +373,7 @@ if(NOT DINGO_INTERFACE_MODEL_GENERATOR_RESULT EQUAL 0)
         "${DINGO_INTERFACE_MODEL_GENERATOR_RESULT}")
 endif()
 execute_process(
-    COMMAND ${DINGO_UV_RUN_COMMAND} python
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_TYPE_MATRIX_GENERATOR}
         --out ${DINGO_TYPE_MATRIX_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
@@ -306,8 +384,21 @@ if(NOT DINGO_TYPE_MATRIX_GENERATOR_RESULT EQUAL 0)
         "Failed to generate the type matrix: "
         "${DINGO_TYPE_MATRIX_GENERATOR_RESULT}")
 endif()
+
 execute_process(
-    COMMAND ${DINGO_UV_RUN_COMMAND} python
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_BINDING_MATRIX_GENERATOR}
+        --out ${DINGO_BINDING_MATRIX_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE DINGO_BINDING_MATRIX_GENERATOR_RESULT)
+if(NOT DINGO_BINDING_MATRIX_GENERATOR_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to generate the binding matrix: "
+        "${DINGO_BINDING_MATRIX_GENERATOR_RESULT}")
+endif()
+execute_process(
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_TYPE_BEHAVIOR_GENERATOR}
         --out ${DINGO_TYPE_BEHAVIOR_TEST_SOURCE}
         --out-static ${DINGO_TYPE_BEHAVIOR_STATIC_TEST_SOURCE}
@@ -321,9 +412,10 @@ if(NOT DINGO_TYPE_BEHAVIOR_GENERATOR_RESULT EQUAL 0)
 endif()
 
 execute_process(
-    COMMAND ${DINGO_UV_RUN_COMMAND} python
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_PROPERTY_MODEL_GENERATOR}
         --out ${DINGO_PROPERTY_MODEL_TEST_SOURCE}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     RESULT_VARIABLE DINGO_PROPERTY_MODEL_GENERATOR_RESULT)
 if(NOT DINGO_PROPERTY_MODEL_GENERATOR_RESULT EQUAL 0)
     message(FATAL_ERROR
@@ -331,48 +423,125 @@ if(NOT DINGO_PROPERTY_MODEL_GENERATOR_RESULT EQUAL 0)
         "${DINGO_PROPERTY_MODEL_GENERATOR_RESULT}")
 endif()
 
+execute_process(
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_ANNOTATED_MODEL_GENERATOR}
+        --out ${DINGO_ANNOTATED_MODEL_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE DINGO_ANNOTATED_MODEL_GENERATOR_RESULT)
+if(NOT DINGO_ANNOTATED_MODEL_GENERATOR_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to generate annotated coverage: "
+        "${DINGO_ANNOTATED_MODEL_GENERATOR_RESULT}")
+endif()
+
+execute_process(
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_CONST_MODEL_GENERATOR}
+        --out ${DINGO_CONST_MODEL_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE DINGO_CONST_MODEL_GENERATOR_RESULT)
+if(NOT DINGO_CONST_MODEL_GENERATOR_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to generate const coverage: "
+        "${DINGO_CONST_MODEL_GENERATOR_RESULT}")
+endif()
+
+execute_process(
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_KEYED_MODEL_GENERATOR}
+        --out ${DINGO_KEYED_MODEL_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE DINGO_KEYED_MODEL_GENERATOR_RESULT)
+if(NOT DINGO_KEYED_MODEL_GENERATOR_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to generate keyed coverage: "
+        "${DINGO_KEYED_MODEL_GENERATOR_RESULT}")
+endif()
+
+execute_process(
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_INTERFACE_RUNTIME_MODEL_GENERATOR}
+        --out ${DINGO_INTERFACE_RUNTIME_MODEL_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE DINGO_INTERFACE_RUNTIME_MODEL_GENERATOR_RESULT)
+if(NOT DINGO_INTERFACE_RUNTIME_MODEL_GENERATOR_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to generate interface runtime coverage: "
+        "${DINGO_INTERFACE_RUNTIME_MODEL_GENERATOR_RESULT}")
+endif()
+
 add_custom_target(cells-check
     COMMENT "Verifying generated cell coverage"
-    COMMAND ${DINGO_UV_RUN_COMMAND} python
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_MODEL_GENERATOR}
         --out ${DINGO_MODEL_TEST_SOURCE}
         --header ${DINGO_SCOPES_HEADER}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
-    COMMAND ${DINGO_UV_RUN_COMMAND} python
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_SELECTION_MODEL_GENERATOR}
         --out ${DINGO_SELECTION_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
-    COMMAND ${DINGO_UV_RUN_COMMAND} python
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_ROUTE_MODEL_GENERATOR}
         --out ${DINGO_ROUTE_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
-    COMMAND ${DINGO_UV_RUN_COMMAND} python
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_BEHAVIOR_MODEL_GENERATOR}
         --out ${DINGO_BEHAVIOR_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
-    COMMAND ${DINGO_UV_RUN_COMMAND} python
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_INTERFACE_MODEL_GENERATOR}
         --out ${DINGO_INTERFACE_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
-    COMMAND ${DINGO_UV_RUN_COMMAND} python
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_TYPE_MATRIX_GENERATOR}
         --out ${DINGO_TYPE_MATRIX_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
-    COMMAND ${DINGO_UV_RUN_COMMAND} python
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_BINDING_MATRIX_GENERATOR}
+        --out ${DINGO_BINDING_MATRIX_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+        --check
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_TYPE_BEHAVIOR_GENERATOR}
         --out ${DINGO_TYPE_BEHAVIOR_TEST_SOURCE}
         --out-static ${DINGO_TYPE_BEHAVIOR_STATIC_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
-    COMMAND ${DINGO_UV_RUN_COMMAND} python
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_PROPERTY_MODEL_GENERATOR}
         --out ${DINGO_PROPERTY_MODEL_TEST_SOURCE}
+        --check
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_ANNOTATED_MODEL_GENERATOR}
+        --out ${DINGO_ANNOTATED_MODEL_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+        --check
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_CONST_MODEL_GENERATOR}
+        --out ${DINGO_CONST_MODEL_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+        --check
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_KEYED_MODEL_GENERATOR}
+        --out ${DINGO_KEYED_MODEL_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+        --check
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_INTERFACE_RUNTIME_MODEL_GENERATOR}
+        --out ${DINGO_INTERFACE_RUNTIME_MODEL_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
         --check
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
@@ -383,8 +552,13 @@ add_executable(dingo_model_test
     ${DINGO_BEHAVIOR_MODEL_TEST_SOURCE}
     ${DINGO_INTERFACE_MODEL_TEST_SOURCE}
     ${DINGO_TYPE_MATRIX_TEST_SOURCE}
+    ${DINGO_BINDING_MATRIX_TEST_SOURCE}
     ${DINGO_TYPE_BEHAVIOR_TEST_SOURCE}
     ${DINGO_TYPE_BEHAVIOR_STATIC_TEST_SOURCE}
+    ${DINGO_ANNOTATED_MODEL_TEST_SOURCE}
+    ${DINGO_CONST_MODEL_TEST_SOURCE}
+    ${DINGO_KEYED_MODEL_TEST_SOURCE}
+    ${DINGO_INTERFACE_RUNTIME_MODEL_TEST_SOURCE}
     ${DINGO_PROPERTY_MODEL_TEST_SOURCE})
 target_link_libraries(dingo_model_test dingo::dingo gtest_main)
 target_include_directories(dingo_model_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -396,34 +570,22 @@ add_test(NAME dingo_model_test COMMAND dingo_model_test)
 set_tests_properties(dingo_model_test PROPERTIES LABELS "unit;generator")
 
 add_test(NAME dingo_model_baseline_test
-    COMMAND ${DINGO_UV_RUN_COMMAND} python
-        ${PROJECT_SOURCE_DIR}/tools/model/outcome_baseline.py check
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        tools.model.report.baseline check
         --matrix ${CMAKE_CURRENT_BINARY_DIR}/type-matrix.json
         --behavior ${CMAKE_CURRENT_BINARY_DIR}/behavior-outcomes.jsonl
         --baseline ${PROJECT_SOURCE_DIR}/test/baselines/model.json)
 set_tests_properties(dingo_model_baseline_test PROPERTIES
     LABELS "unit;generator"
     DEPENDS dingo_model_test
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/model)
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 add_test(NAME dingo_model_generator_test
     COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q
-        ${PROJECT_SOURCE_DIR}/tools/model/storage_cells_test.py
-        ${PROJECT_SOURCE_DIR}/tools/model/selection_rules_test.py
-        ${PROJECT_SOURCE_DIR}/tools/model/route_cells_test.py
-        ${PROJECT_SOURCE_DIR}/tools/model/route_ledger_test.py
-        ${PROJECT_SOURCE_DIR}/tools/model/route_derivation_test.py
-        ${PROJECT_SOURCE_DIR}/tools/model/behavior_cells_test.py
-        ${PROJECT_SOURCE_DIR}/tools/model/interface_cells_test.py
-        ${PROJECT_SOURCE_DIR}/tools/model/type_matrix_test.py
-        ${PROJECT_SOURCE_DIR}/tools/model/type_behavior_test.py
-        ${PROJECT_SOURCE_DIR}/tools/model/property_cells_test.py
-        ${PROJECT_SOURCE_DIR}/tools/model/outcome_baseline_test.py
-        ${PROJECT_SOURCE_DIR}/tools/model/wrapper_semantics_test.py
-        ${PROJECT_SOURCE_DIR}/tools/model/route_rules_test.py)
+        ${PROJECT_SOURCE_DIR}/tools/model/tests)
 set_tests_properties(dingo_model_generator_test PROPERTIES
     LABELS "unit;generator"
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/model)
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 add_test(NAME dingo_cost_tool_test
     COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q

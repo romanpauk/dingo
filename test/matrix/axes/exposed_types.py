@@ -8,6 +8,9 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 from schema import (
     ExposedType,
     MixedRegistrationPlacement,
@@ -15,14 +18,68 @@ from schema import (
 )
 
 
+ROOT_DIR = Path(__file__).resolve().parents[3]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from tools.model.legacy.binding import exposed as _binding  # noqa: E402
+
+
+LOCAL_BINDINGS = (
+    "dingo::bindings<dingo::bind<dingo::scope<dingo::shared>, "
+    "dingo::storage<local_dependency_type>>>"
+)
+LOCAL_COLLECTION_STORAGE = "dingo::storage<std::shared_ptr<element_type<1>>>"
+LOCAL_COLLECTION_DEPENDENCIES = (
+    "dingo::dependencies<std::vector<std::shared_ptr<element_interface>>>"
+)
+LOCAL_COLLECTION_BINDINGS = (
+    "dingo::bindings<dingo::bind<dingo::scope<dingo::shared>, "
+    "dingo::storage<std::shared_ptr<element_type<0>>>, "
+    "dingo::interfaces<element_interface>>>"
+)
+COLLECTION_PREFIX = (
+    "container.template register_type_collection<"
+    "dingo::scope<dingo::unique>, "
+    "dingo::storage<std::vector<std::shared_ptr<"
+    "element_interface>>>>();",
+)
+KEYED_COLLECTION_PREFIX = (
+    "container.template register_type_collection<"
+    "dingo::scope<dingo::unique>, "
+    "dingo::storage<std::vector<std::shared_ptr<"
+    "element_interface>>>>(dingo::key_type<key_a>{});",
+)
+
+
+def _simple(
+    name: str,
+    kind: str,
+    stored_kind: str,
+    provides: set[str],
+    registrations=None,
+    *,
+    runtime_prefix: tuple[str, ...] = (),
+    mixed_runtime_prefix: tuple[str, ...] = (),
+    mixed: bool = True,
+) -> ExposedType:
+    """A one-kind exposure whose recipe is already regular."""
+    return ExposedType(
+        name=name,
+        kind=kind,
+        supported_stored_kinds=frozenset({stored_kind}),
+        provides=frozenset(provides),
+        registrations=(
+            registrations if registrations is not None else (RegistrationSpec(),)
+        ),
+        runtime_prefix=runtime_prefix,
+        mixed_runtime_prefix=mixed_runtime_prefix,
+        mixed=mixed,
+    )
+
+
 EXPOSED_TYPES = (
-    ExposedType(
-        name="concrete",
-        kind="concrete",
-        supported_stored_kinds=frozenset({"value_type"}),
-        provides=frozenset({"concrete_binding"}),
-        registrations=(RegistrationSpec(),),
-    ),
+    _binding("concrete"),
     ExposedType(
         name="mixed_external_dependency",
         kind="mixed_external_dependency",
@@ -75,383 +132,142 @@ EXPOSED_TYPES = (
             ),
         ),
     ),
-    ExposedType(
-        name="interface_type",
-        kind="interface",
-        supported_stored_kinds=frozenset({"implementation_type"}),
-        provides=frozenset({"concrete_binding", "interface_binding"}),
-        registrations=(
-            RegistrationSpec(storage="dingo::storage<value_type>"),
-            RegistrationSpec(
-                interfaces="dingo::interfaces<interface_type>",
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
-            ),
-        ),
-    ),
-    ExposedType(
-        name="multiple_interfaces",
-        kind="interface",
-        supported_stored_kinds=frozenset({"implementation_type"}),
-        provides=frozenset({"concrete_binding", "interface_binding"}),
-        registrations=(
-            RegistrationSpec(storage="dingo::storage<value_type>"),
-            RegistrationSpec(
-                interfaces="dingo::interfaces<interface_type, second_interface_type>"
-            ),
-        ),
-    ),
-    ExposedType(
-        name="copyable_interface_type",
-        kind="interface",
-        supported_stored_kinds=frozenset({"implementation_type"}),
-        provides=frozenset({"concrete_binding", "interface_binding"}),
-        registrations=(
-            RegistrationSpec(storage="dingo::storage<value_type>"),
-            RegistrationSpec(
-                interfaces="dingo::interfaces<copyable_interface_type>",
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
-            ),
-        ),
-    ),
-    ExposedType(
-        name="custom_concrete",
-        kind="custom_concrete",
-        supported_stored_kinds=frozenset({"custom_value_type"}),
-        provides=frozenset({"custom_wrapper_binding"}),
-        registrations=(RegistrationSpec(),),
-    ),
-    ExposedType(
-        name="custom_interface",
-        kind="custom_interface",
-        supported_stored_kinds=frozenset({"custom_interface_type"}),
-        provides=frozenset({"custom_wrapper_binding"}),
-        registrations=(
-            RegistrationSpec(interfaces="dingo::interfaces<interface_type>"),
-        ),
-    ),
-    ExposedType(
-        name="custom_unique_interface",
-        kind="custom_interface",
-        supported_stored_kinds=frozenset({"custom_unique_interface_type"}),
-        provides=frozenset({"custom_wrapper_binding"}),
-        registrations=(
-            RegistrationSpec(interfaces="dingo::interfaces<unique_interface_type>"),
-        ),
-    ),
-    ExposedType(
-        name="keyed_concrete",
-        kind="keyed",
-        supported_stored_kinds=frozenset({"value_type"}),
-        provides=frozenset({"keyed_binding"}),
-        registrations=(RegistrationSpec(key="dingo::key_type<key_a>"),),
-    ),
-    ExposedType(
-        name="keyed_interface",
-        kind="keyed",
-        supported_stored_kinds=frozenset({"implementation_type"}),
-        provides=frozenset({"keyed_binding", "interface_binding"}),
-        registrations=(
-            RegistrationSpec(storage="dingo::storage<value_type>"),
-            RegistrationSpec(
-                interfaces="dingo::interfaces<interface_type>",
-                key="dingo::key_type<key_a>",
-            ),
-        ),
-    ),
-    ExposedType(
-        name="annotated_concrete",
-        kind="annotated",
-        supported_stored_kinds=frozenset({"value_type"}),
-        provides=frozenset({"annotated_binding"}),
-        registrations=(
-            RegistrationSpec(
-                interfaces="dingo::interfaces<dingo::annotated<value_type, tag_a>>"
-            ),
-        ),
-    ),
-    ExposedType(
-        name="annotated_interface",
-        kind="annotated",
-        supported_stored_kinds=frozenset({"implementation_type"}),
-        provides=frozenset({"annotated_binding", "interface_binding"}),
-        registrations=(
-            RegistrationSpec(storage="dingo::storage<value_type>"),
-            RegistrationSpec(
-                interfaces="dingo::interfaces<dingo::annotated<interface_type, tag_a>>",
-            ),
-        ),
-    ),
-    ExposedType(
-        name="array_concrete",
-        kind="array",
-        supported_stored_kinds=frozenset({"array_type"}),
-        provides=frozenset({"array_binding"}),
-        registrations=(RegistrationSpec(),),
-    ),
-    ExposedType(
-        name="variant_concrete",
-        kind="variant",
-        supported_stored_kinds=frozenset({"variant_type"}),
-        provides=frozenset({"variant_binding"}),
-        registrations=(
+    _binding("interface_type"),
+    _binding("multiple_interfaces"),
+    _binding("copyable_interface_type"),
+    _binding("custom_concrete"),
+    _binding("custom_interface"),
+    _binding("custom_unique_interface"),
+    _binding("keyed_concrete"),
+    _binding("keyed_interface"),
+    _binding("annotated_concrete"),
+    _binding("annotated_interface"),
+    _simple("array_concrete", "array", "array_type", {"array_binding"}),
+    _simple(
+        "variant_concrete",
+        "variant",
+        "variant_type",
+        {"variant_binding"},
+        (
             RegistrationSpec(storage="dingo::storage<value_type>"),
             RegistrationSpec(),
         ),
     ),
-    ExposedType(
-        name="nested_wrapper",
-        kind="nested_wrapper",
-        supported_stored_kinds=frozenset({"nested_wrapper_type"}),
-        provides=frozenset({"nested_wrapper_binding"}),
-        registrations=(RegistrationSpec(),),
-    ),
-    ExposedType(
-        name="variant_unique_wrapper",
-        kind="nested_wrapper",
-        supported_stored_kinds=frozenset({"variant_unique_wrapper_type"}),
-        provides=frozenset({"nested_wrapper_binding"}),
-        registrations=(RegistrationSpec(),),
-    ),
-    ExposedType(
-        name="variant_shared_wrapper",
-        kind="nested_wrapper",
-        supported_stored_kinds=frozenset({"variant_shared_wrapper_type"}),
-        provides=frozenset({"nested_wrapper_binding"}),
-        registrations=(RegistrationSpec(),),
-    ),
-    ExposedType(
-        name="variant_shared_unique_wrapper",
-        kind="nested_wrapper",
-        supported_stored_kinds=frozenset({"variant_shared_unique_wrapper_type"}),
-        provides=frozenset({"nested_wrapper_binding"}),
-        registrations=(RegistrationSpec(),),
-    ),
-    ExposedType(
-        name="local_value",
-        kind="local_value_type",
-        supported_stored_kinds=frozenset({"local_value_type"}),
-        provides=frozenset({"local_bindings"}),
-        registrations=(
+    _simple("nested_wrapper", "nested_wrapper", "nested_wrapper_type", {"nested_wrapper_binding"}),
+    _simple("variant_unique_wrapper", "nested_wrapper", "variant_unique_wrapper_type", {"nested_wrapper_binding"}),
+    _simple("variant_shared_wrapper", "nested_wrapper", "variant_shared_wrapper_type", {"nested_wrapper_binding"}),
+    _simple("variant_shared_unique_wrapper", "nested_wrapper", "variant_shared_unique_wrapper_type", {"nested_wrapper_binding"}),
+    _simple(
+        "local_value",
+        "local_value_type",
+        "local_value_type",
+        {"local_bindings"},
+        (
             RegistrationSpec(storage="dingo::storage<value_type>"),
-            RegistrationSpec(
-                local_bindings=(
-                    "dingo::bindings<dingo::bind<dingo::scope<dingo::shared>, "
-                    "dingo::storage<local_dependency_type>>>"
-                )
-            ),
+            RegistrationSpec(local_bindings=LOCAL_BINDINGS),
         ),
     ),
-    ExposedType(
-        name="local_override_value",
-        kind="local_override_value_type",
-        supported_stored_kinds=frozenset({"local_override_value_type"}),
-        provides=frozenset({"local_bindings"}),
-        registrations=(
+    _simple(
+        "local_override_value",
+        "local_override_value_type",
+        "local_override_value_type",
+        {"local_bindings"},
+        (
             RegistrationSpec(
                 storage="dingo::storage<local_dependency_type>",
                 factory="dingo::factory<dingo::constructor<local_dependency_type()>>",
             ),
-            RegistrationSpec(
-                local_bindings=(
-                    "dingo::bindings<dingo::bind<dingo::scope<dingo::shared>, "
-                    "dingo::storage<local_dependency_type>>>"
-                )
-            ),
+            RegistrationSpec(local_bindings=LOCAL_BINDINGS),
         ),
     ),
-    ExposedType(
-        name="local_collection_value",
-        kind="local_collection_value_type",
-        supported_stored_kinds=frozenset({"local_collection_value_type"}),
-        provides=frozenset({"local_bindings"}),
-        registrations=(
+    _simple(
+        "local_collection_value",
+        "local_collection_value_type",
+        "local_collection_value_type",
+        {"local_bindings"},
+        (
             RegistrationSpec(
-                storage="dingo::storage<std::shared_ptr<element_type<1>>>",
+                storage=LOCAL_COLLECTION_STORAGE,
                 interfaces="dingo::interfaces<element_interface>",
             ),
             RegistrationSpec(
-                dependencies="dingo::dependencies<std::vector<std::shared_ptr<element_interface>>>",
-                local_bindings=(
-                    "dingo::bindings<dingo::bind<dingo::scope<dingo::shared>, "
-                    "dingo::storage<std::shared_ptr<element_type<0>>>, "
-                    "dingo::interfaces<element_interface>>>"
-                )
+                dependencies=LOCAL_COLLECTION_DEPENDENCIES,
+                local_bindings=LOCAL_COLLECTION_BINDINGS,
             ),
         ),
     ),
-    ExposedType(
-        name="local_collection_runtime_host_value",
-        kind="local_collection_value_type",
-        supported_stored_kinds=frozenset({"local_collection_value_type"}),
-        provides=frozenset({"local_bindings"}),
-        registrations=(
+    _simple(
+        "local_collection_runtime_host_value",
+        "local_collection_value_type",
+        "local_collection_value_type",
+        {"local_bindings"},
+        (
             RegistrationSpec(
-                storage="dingo::storage<std::shared_ptr<element_type<1>>>",
+                storage=LOCAL_COLLECTION_STORAGE,
                 interfaces="dingo::interfaces<element_interface>",
                 mixed_placement=MixedRegistrationPlacement.RUNTIME,
             ),
             RegistrationSpec(
-                dependencies="dingo::dependencies<std::vector<std::shared_ptr<element_interface>>>",
-                local_bindings=(
-                    "dingo::bindings<dingo::bind<dingo::scope<dingo::shared>, "
-                    "dingo::storage<std::shared_ptr<element_type<0>>>, "
-                    "dingo::interfaces<element_interface>>>"
-                ),
+                dependencies=LOCAL_COLLECTION_DEPENDENCIES,
+                local_bindings=LOCAL_COLLECTION_BINDINGS,
             ),
         ),
     ),
-    ExposedType(
-        name="factory_function_value",
-        kind="factory_function_value_type",
-        supported_stored_kinds=frozenset({"factory_function_value_type"}),
-        provides=frozenset({"factory_override"}),
-        registrations=(),
+    _simple("factory_function_value", "factory_function_value_type", "factory_function_value_type", {"factory_override"}, ()),
+    _simple("factory_function_dependency_value", "factory_function_dependency_value_type", "factory_function_dependency_value_type", {"factory_override"}, ()),
+    _simple("factory_constructor_value", "factory_constructor_value_type", "factory_constructor_value_type", {"factory_override"}, ()),
+    _simple("factory_detected_constructor_value", "factory_detected_constructor_value_type", "factory_detected_constructor_value_type", {"factory_override"}, ()),
+    _simple("factory_typedef_constructor_value", "factory_typedef_constructor_value_type", "factory_typedef_constructor_value_type", {"factory_override"}, ()),
+    _simple("factory_callable_value", "factory_callable_value_type", "factory_callable_value_type", {"factory_override"}, ()),
+    _simple(
+        "unique_interface_type",
+        "interface",
+        "unique_implementation_type",
+        {"interface_binding"},
+        (RegistrationSpec(interfaces="dingo::interfaces<unique_interface_type>"),),
     ),
-    ExposedType(
-        name="factory_function_dependency_value",
-        kind="factory_function_dependency_value_type",
-        supported_stored_kinds=frozenset(
-            {"factory_function_dependency_value_type"}
+    _simple(
+        "element_collection",
+        "collection",
+        "element_type",
+        {"collection_binding"},
+        (
+            RegistrationSpec(storage="dingo::storage<std::shared_ptr<element_type<0>>>", interfaces="dingo::interfaces<element_interface>"),
+            RegistrationSpec(storage="dingo::storage<std::shared_ptr<element_type<1>>>", interfaces="dingo::interfaces<element_interface>", mixed_placement=MixedRegistrationPlacement.RUNTIME),
         ),
-        provides=frozenset({"factory_override"}),
-        registrations=(),
+        runtime_prefix=COLLECTION_PREFIX,
+        mixed_runtime_prefix=COLLECTION_PREFIX,
     ),
-    ExposedType(
-        name="factory_constructor_value",
-        kind="factory_constructor_value_type",
-        supported_stored_kinds=frozenset({"factory_constructor_value_type"}),
-        provides=frozenset({"factory_override"}),
-        registrations=(),
-    ),
-    ExposedType(
-        name="factory_detected_constructor_value",
-        kind="factory_detected_constructor_value_type",
-        supported_stored_kinds=frozenset({"factory_detected_constructor_value_type"}),
-        provides=frozenset({"factory_override"}),
-        registrations=(),
-    ),
-    ExposedType(
-        name="factory_typedef_constructor_value",
-        kind="factory_typedef_constructor_value_type",
-        supported_stored_kinds=frozenset({"factory_typedef_constructor_value_type"}),
-        provides=frozenset({"factory_override"}),
-        registrations=(),
-    ),
-    ExposedType(
-        name="factory_callable_value",
-        kind="factory_callable_value_type",
-        supported_stored_kinds=frozenset({"factory_callable_value_type"}),
-        provides=frozenset({"factory_override"}),
-        registrations=(),
-    ),
-    ExposedType(
-        name="unique_interface_type",
-        kind="interface",
-        supported_stored_kinds=frozenset({"unique_implementation_type"}),
-        provides=frozenset({"interface_binding"}),
-        registrations=(
-            RegistrationSpec(interfaces="dingo::interfaces<unique_interface_type>"),
+    _simple(
+        "element_keyed",
+        "keyed",
+        "element_type",
+        {"keyed_binding"},
+        (
+            RegistrationSpec(storage="dingo::storage<std::shared_ptr<element_type<0>>>", interfaces="dingo::interfaces<element_interface>", key="dingo::key_type<key_a>"),
+            RegistrationSpec(storage="dingo::storage<std::shared_ptr<element_type<1>>>", interfaces="dingo::interfaces<element_interface>", key="dingo::key_type<key_b>", mixed_placement=MixedRegistrationPlacement.RUNTIME),
         ),
     ),
-    ExposedType(
-        name="element_collection",
-        kind="collection",
-        supported_stored_kinds=frozenset({"element_type"}),
-        provides=frozenset({"collection_binding"}),
-        registrations=(
-            RegistrationSpec(
-                storage="dingo::storage<std::shared_ptr<element_type<0>>>",
-                interfaces="dingo::interfaces<element_interface>",
-            ),
-            RegistrationSpec(
-                storage="dingo::storage<std::shared_ptr<element_type<1>>>",
-                interfaces="dingo::interfaces<element_interface>",
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
-            ),
+    _simple(
+        "element_keyed_collection",
+        "keyed_collection",
+        "element_type",
+        {"keyed_collection_binding"},
+        (
+            RegistrationSpec(storage="dingo::storage<std::shared_ptr<element_type<0>>>", interfaces="dingo::interfaces<element_interface>", key="dingo::key_type<key_a>"),
+            RegistrationSpec(storage="dingo::storage<std::shared_ptr<element_type<1>>>", interfaces="dingo::interfaces<element_interface>", key="dingo::key_type<key_a>", mixed_placement=MixedRegistrationPlacement.RUNTIME),
         ),
-        runtime_prefix=(
-            "container.template register_type_collection<"
-            "dingo::scope<dingo::unique>, "
-            "dingo::storage<std::vector<std::shared_ptr<"
-            "element_interface>>>>();",
-        ),
-        mixed_runtime_prefix=(
-            "container.template register_type_collection<"
-            "dingo::scope<dingo::unique>, "
-            "dingo::storage<std::vector<std::shared_ptr<"
-            "element_interface>>>>();",
-        ),
+        runtime_prefix=KEYED_COLLECTION_PREFIX,
+        mixed_runtime_prefix=KEYED_COLLECTION_PREFIX,
     ),
-    ExposedType(
-        name="element_keyed",
-        kind="keyed",
-        supported_stored_kinds=frozenset({"element_type"}),
-        provides=frozenset({"keyed_binding"}),
-        registrations=(
-            RegistrationSpec(
-                storage="dingo::storage<std::shared_ptr<element_type<0>>>",
-                interfaces="dingo::interfaces<element_interface>",
-                key="dingo::key_type<key_a>",
-            ),
-            RegistrationSpec(
-                storage="dingo::storage<std::shared_ptr<element_type<1>>>",
-                interfaces="dingo::interfaces<element_interface>",
-                key="dingo::key_type<key_b>",
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
-            ),
-        ),
-    ),
-    ExposedType(
-        name="element_keyed_collection",
-        kind="keyed_collection",
-        supported_stored_kinds=frozenset({"element_type"}),
-        provides=frozenset({"keyed_collection_binding"}),
-        registrations=(
-            RegistrationSpec(
-                storage="dingo::storage<std::shared_ptr<element_type<0>>>",
-                interfaces="dingo::interfaces<element_interface>",
-                key="dingo::key_type<key_a>",
-            ),
-            RegistrationSpec(
-                storage="dingo::storage<std::shared_ptr<element_type<1>>>",
-                interfaces="dingo::interfaces<element_interface>",
-                key="dingo::key_type<key_a>",
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
-            ),
-        ),
-        runtime_prefix=(
-            "container.template register_type_collection<"
-            "dingo::scope<dingo::unique>, "
-            "dingo::storage<std::vector<std::shared_ptr<"
-            "element_interface>>>>(dingo::key_type<key_a>{});",
-        ),
-        mixed_runtime_prefix=(
-            "container.template register_type_collection<"
-            "dingo::scope<dingo::unique>, "
-            "dingo::storage<std::vector<std::shared_ptr<"
-            "element_interface>>>>(dingo::key_type<key_a>{});",
-        ),
-    ),
-    ExposedType(
-        name="element_indexed",
-        kind="indexed",
-        supported_stored_kinds=frozenset({"element_type"}),
-        provides=frozenset({"indexed_binding"}),
-        registrations=(
-            RegistrationSpec(
-                storage="dingo::storage<std::shared_ptr<element_type<0>>>",
-                interfaces="dingo::interfaces<element_interface>",
-                indexed_key="std::size_t{0}",
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
-                include_in_static=False,
-            ),
-            RegistrationSpec(
-                storage="dingo::storage<std::shared_ptr<element_type<1>>>",
-                interfaces="dingo::interfaces<element_interface>",
-                indexed_key="std::size_t{1}",
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
-                include_in_static=False,
-            ),
+    _simple(
+        "element_indexed",
+        "indexed",
+        "element_type",
+        {"indexed_binding"},
+        (
+            RegistrationSpec(storage="dingo::storage<std::shared_ptr<element_type<0>>>", interfaces="dingo::interfaces<element_interface>", indexed_key="std::size_t{0}", mixed_placement=MixedRegistrationPlacement.RUNTIME, include_in_static=False),
+            RegistrationSpec(storage="dingo::storage<std::shared_ptr<element_type<1>>>", interfaces="dingo::interfaces<element_interface>", indexed_key="std::size_t{1}", mixed_placement=MixedRegistrationPlacement.RUNTIME, include_in_static=False),
         ),
         mixed=False,
     ),
