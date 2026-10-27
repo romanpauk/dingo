@@ -500,6 +500,119 @@ def route_candidate_targets(
     )
 
 
+def _value_copies_leaf(shape: Shape, stored) -> bool:
+    """Whether copying the value object in ``shape`` copies the leaf.
+
+    A handle copy or move never copies the pointee, and an access form yields
+    an address rather than an object. A handle that is not the stored wrapper
+    is promoted from the source value, so the leaf is copied into it. An inline
+    wrapper (optional, variant, array) copies whatever it contains, so the
+    question recurses through it.
+    """
+    outer = shape.outer
+    if outer is None:
+        return True
+    if outer.is_access:
+        return False
+    if outer.has("sharing") or outer.has("sole_owner"):
+        if stored is not None and stored.name == outer.name:
+            return False
+        return _value_copies_leaf(shape.inner, stored)
+    return _value_copies_leaf(shape.inner, stored)
+
+
+def _has_const(shape: Shape | None) -> bool:
+    node = shape
+    while node is not None:
+        if node.outer is not None and node.outer.name == "const":
+            return True
+        node = node.inner
+    return False
+
+
+def _value_const_copies(shape: Shape, stored, adopts_source: bool) -> bool:
+    """Whether a const element on the value path forces a copy.
+
+    A const leaf (or const inline wrapper that contains it) cannot be moved
+    from an rvalue: ``const T`` is constructed through its copy constructor. A
+    promoted handle with a const pointee constructs that pointee from the
+    source, so it also copies when the source is a value. A pointer, handle, or
+    array source is adopted instead, so it never copies the pointee. A stored
+    shared handle is different again: converting it to a const-pointee handle
+    copies the handle, not the leaf.
+    """
+    node = shape
+    while node is not None and node.outer is not None:
+        outer = node.outer
+        if outer.is_access:
+            return False
+        if outer.has("sharing") or outer.has("sole_owner"):
+            if (
+                stored is not None
+                and stored.name == outer.name
+                and outer.has("sharing")
+            ):
+                return False
+            return _has_const(node.inner) and not adopts_source
+        if outer.name == "const":
+            return _value_copies_leaf(node.inner, stored)
+        node = node.inner
+    return False
+
+
+def leaf_copy_required(scope_name: str, form_name: str, shape: Shape) -> bool:
+    """Whether serving ``shape`` copies the stored leaf.
+
+    A value request either moves the source, borrows it, or copies it. A
+    consuming scope hands out an rvalue, so an owning result is moved. A value
+    request that is itself the stored handle copies or moves the handle, not
+    the leaf. Every other value request copies the leaf (or an inline wrapper
+    that contains it).
+
+    This is the trait boundary: a move-only leaf supports the non-copying
+    routes and rejects the copying ones.
+    """
+    if shape.access != "value":
+        return False
+    source = source_shape(scope_name, form_name)
+    form = FORM_BY_NAME[form_name]
+    stored = form.wrapper
+    adopts_source = form.kind in {"pointer", "handle", "array", "array_handle"}
+    outer = shape.outer
+    if outer is not None and (
+        outer.has("sharing") or outer.has("sole_owner")
+    ):
+        if (
+            stored is not None
+            and stored.name == outer.name
+            and outer.has("sharing")
+        ):
+            # Converting a stored shared handle to another pointee qualifier
+            # copies the handle, not the leaf.
+            return False
+        if (
+            stored is not None
+            and stored.name == outer.name
+            and shape.name == _stored_shape(form_name).name
+        ):
+            # The request is the stored sole-owner handle. Moving it does not
+            # touch the pointee.
+            return False
+        # A promoted handle constructs its pointee from the source value. A
+        # const pointee can only be constructed by copying, and an adopted
+        # pointer/handle/array already points at the pointee.
+        if _has_const(shape.inner):
+            return not adopts_source
+        return source != "rvalue"
+    if not _value_copies_leaf(shape, stored):
+        return False
+    if source == "rvalue" and not _value_const_copies(
+        shape, stored, adopts_source
+    ):
+        return False
+    return True
+
+
 def source_shape(scope_name: str, form_name: str) -> str:
     """How one cell hands its stored shape to a conversion."""
     scope = SCOPE_BY_NAME[scope_name]

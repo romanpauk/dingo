@@ -28,6 +28,7 @@ COMMANDS = {
     "interface": "tools.model.emit.families.interface",
     "interface-runtime": "tools.model.emit.families.interface_runtime",
     "matrix": "tools.model.emit.matrix",
+    "trait-matrix": "tools.model.emit.traits",
     "binding-matrix": "tools.model.emit.binding_matrix",
     "type-behavior": "tools.model.emit.behavior",
     "property": "tools.model.emit.families.property",

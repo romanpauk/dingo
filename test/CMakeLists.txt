@@ -156,6 +156,8 @@ set(DINGO_INTERFACE_MODEL_GENERATOR
     "tools.model.emit.families.interface")
 set(DINGO_TYPE_MATRIX_GENERATOR
     "tools.model.emit.matrix")
+set(DINGO_TRAIT_MATRIX_GENERATOR
+    "tools.model.emit.traits")
 set(DINGO_BINDING_MATRIX_GENERATOR
     "tools.model.emit.binding_matrix")
 set(DINGO_TYPE_BEHAVIOR_GENERATOR
@@ -182,6 +184,8 @@ set(DINGO_INTERFACE_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/interface_cells.cpp.j2")
 set(DINGO_TYPE_MATRIX_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/type_matrix.cpp.j2")
+set(DINGO_TRAIT_MATRIX_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/trait_matrix.cpp.j2")
 set(DINGO_BINDING_MATRIX_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/binding_matrix.cpp.j2")
 set(DINGO_TYPE_BEHAVIOR_TEMPLATE
@@ -212,6 +216,8 @@ set(DINGO_INTERFACE_MODEL_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/interface_cells.cpp")
 set(DINGO_TYPE_MATRIX_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/type_matrix.cpp")
+set(DINGO_TRAIT_MATRIX_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/trait_matrix.cpp")
 set(DINGO_BINDING_MATRIX_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/binding_matrix.cpp")
 set(DINGO_TYPE_BEHAVIOR_TEST_SOURCE
@@ -250,6 +256,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/emit/families/storage.py"
     "${PROJECT_SOURCE_DIR}/tools/model/emit/matrix.py"
     "${PROJECT_SOURCE_DIR}/tools/model/emit/selection.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/traits.py"
     "${PROJECT_SOURCE_DIR}/tools/model/grammar/__init__.py"
     "${PROJECT_SOURCE_DIR}/tools/model/grammar/bindings.py"
     "${PROJECT_SOURCE_DIR}/tools/model/grammar/catalog.py"
@@ -258,6 +265,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/grammar/expr.py"
     "${PROJECT_SOURCE_DIR}/tools/model/grammar/shapes.py"
     "${PROJECT_SOURCE_DIR}/tools/model/grammar/storage.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/grammar/traits.py"
     "${PROJECT_SOURCE_DIR}/tools/model/legacy/__init__.py"
     "${PROJECT_SOURCE_DIR}/tools/model/legacy/binding.py"
     "${PROJECT_SOURCE_DIR}/tools/model/legacy/request.py"
@@ -298,6 +306,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/tests/storage_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/type_behavior_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/type_matrix_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/trait_matrix_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/wrapper_semantics_test.py"
     "${DINGO_MODEL_TEMPLATE}"
     "${DINGO_SCOPES_TEMPLATE}"
@@ -306,6 +315,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_BEHAVIOR_MODEL_TEMPLATE}"
     "${DINGO_INTERFACE_MODEL_TEMPLATE}"
     "${DINGO_TYPE_MATRIX_TEMPLATE}"
+    "${DINGO_TRAIT_MATRIX_TEMPLATE}"
     "${DINGO_TYPE_BEHAVIOR_TEMPLATE}"
     "${DINGO_PROPERTY_MODEL_TEMPLATE}"
     "${DINGO_ANNOTATED_MODEL_TEMPLATE}"
@@ -383,6 +393,18 @@ if(NOT DINGO_TYPE_MATRIX_GENERATOR_RESULT EQUAL 0)
     message(FATAL_ERROR
         "Failed to generate the type matrix: "
         "${DINGO_TYPE_MATRIX_GENERATOR_RESULT}")
+endif()
+execute_process(
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_TRAIT_MATRIX_GENERATOR}
+        --out ${DINGO_TRAIT_MATRIX_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE DINGO_TRAIT_MATRIX_GENERATOR_RESULT)
+if(NOT DINGO_TRAIT_MATRIX_GENERATOR_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to generate the leaf trait matrix: "
+        "${DINGO_TRAIT_MATRIX_GENERATOR_RESULT}")
 endif()
 
 execute_process(
@@ -509,6 +531,11 @@ add_custom_target(cells-check
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_TRAIT_MATRIX_GENERATOR}
+        --out ${DINGO_TRAIT_MATRIX_TEST_SOURCE}
+        --include ${PROJECT_SOURCE_DIR}/include
+        --check
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_BINDING_MATRIX_GENERATOR}
         --out ${DINGO_BINDING_MATRIX_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
@@ -552,6 +579,7 @@ add_executable(dingo_model_test
     ${DINGO_BEHAVIOR_MODEL_TEST_SOURCE}
     ${DINGO_INTERFACE_MODEL_TEST_SOURCE}
     ${DINGO_TYPE_MATRIX_TEST_SOURCE}
+    ${DINGO_TRAIT_MATRIX_TEST_SOURCE}
     ${DINGO_BINDING_MATRIX_TEST_SOURCE}
     ${DINGO_TYPE_BEHAVIOR_TEST_SOURCE}
     ${DINGO_TYPE_BEHAVIOR_STATIC_TEST_SOURCE}

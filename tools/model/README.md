@@ -116,6 +116,12 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   A shape that is not a direct target is reported as `lifted` when its value is
   resolvable: value wrappers copy or move their value, and owning handles only
   lift from a consumed value. The report groups misses by rule.
+- `emit/traits.py` builds every supported storage cell for a copyable and a
+  move-only leaf and asks the resolution kernel whether each shape is
+  published. The move-only route set must be a subset of the copyable one and
+  must lose exactly the routes that copy the leaf (value copies, const
+  pointees promoted from a value, inline wrappers that contain the leaf).
+  Borrows, moves, adopted pointers/arrays, and owning-handle copies stay.
 - `emit/binding_matrix.py` emits compile-time `dingo::bindings<dingo::bind<...>>`
   instantiations for every supported annotated, keyed, and interface case. It
   checks the registration composition (scope, storage spelling, annotation,
@@ -192,6 +198,12 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   paths. Constructor names come from `type_expr.CONSTRUCTORS`; `tests/grammar_test.py`
   fails when a registered constructor is not consumed by the request
   projection, storage forms, wrapper semantics, shape mapping, or bindings.
+- `grammar/traits.py` declares the leaf copy/move traits. A path describes a
+  shape; the leaf's special members decide whether a copying route exists.
+  Every storage cell and request shape is classified once per trait, and
+  `emit/traits.py` asserts the move-only answer is exactly the copyable answer
+  minus the routes that copy the leaf. The runtime families still run the
+  copyable leaf until each selects a trait-appropriate primary route.
 - `grammar/storage.py` projects stored expressions from `grammar.storage_types()` and
   filters them by scope. A path is storable when its expression fits the scope;
   const is a normal grammar constructor, not a separate table. The result is a

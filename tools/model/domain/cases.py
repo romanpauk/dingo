@@ -35,6 +35,7 @@ from tools.model.grammar.enumerate import (
 )
 from tools.model.grammar.storage import STORAGE_PATHS, StoragePath
 from tools.model.grammar.expr import Expr
+from tools.model.grammar.traits import DEFAULT_TRAITS, LeafTraits
 
 
 def request_forms(
@@ -50,6 +51,7 @@ class Case:
     storage_path: StoragePath
     binding: Binding
     request: Expr
+    traits: LeafTraits = DEFAULT_TRAITS
 
     @property
     def scope(self) -> str:
@@ -65,11 +67,14 @@ class Case:
 
 
 @lru_cache(maxsize=None)
-def iter_cases(request: tuple[Expr, ...] | None = None) -> tuple[Case, ...]:
+def iter_cases(
+    request: tuple[Expr, ...] | None = None,
+    traits: LeafTraits = DEFAULT_TRAITS,
+) -> tuple[Case, ...]:
     cases = []
     for storage in STORAGE_PATHS:
         for binding, expr in projected_requests(storage):
-            cases.append(Case(storage, binding, expr))
+            cases.append(Case(storage, binding, expr, traits))
     return tuple(cases)
 
 

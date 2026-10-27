@@ -22,7 +22,9 @@ from functools import lru_cache
 from tools.model.grammar.catalog import CONSUMING_SCOPES
 from tools.model.domain.cases import Case
 from tools.model.semantics.routes.ledger import build_rows
+from tools.model.semantics.routes.derivation import leaf_copy_required
 from tools.model.semantics.routes.rules import derive_route
+from tools.model.grammar.traits import DEFAULT_TRAITS, LeafTraits
 from tools.model.grammar.expr import (
     Expr,
     INDIRECTION_OPS,
@@ -446,7 +448,13 @@ def _keyed_capability(
 
 
 @lru_cache(maxsize=None)
-def classify(scope: str, storage_name: str, binding, request_key: Expr) -> Verdict:
+def classify(
+    scope: str,
+    storage_name: str,
+    binding,
+    request_key: Expr,
+    traits: LeafTraits = DEFAULT_TRAITS,
+) -> Verdict:
     if request_key.op == "const":
         return Verdict(
             "unsupported",
@@ -657,11 +665,23 @@ def classify(scope: str, storage_name: str, binding, request_key: Expr) -> Verdi
     failure = derive_route(scope, form.name, shape)
     if failure is not None:
         return Verdict("unsupported", failure.rule, failure.detail)
+    if not traits.copyable and leaf_copy_required(scope, form.name, shape):
+        return Verdict(
+            "unsupported",
+            "copy",
+            "a move-only leaf cannot be copied out of this storage",
+        )
     return Verdict("supported")
 
 
 def classify_case(case: Case) -> Verdict:
-    return classify(case.scope, case.storage_name, case.binding, case.request)
+    return classify(
+        case.scope,
+        case.storage_name,
+        case.binding,
+        case.request,
+        case.traits,
+    )
 
 
 def iter_verdicts(cases):

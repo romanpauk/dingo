@@ -9,25 +9,22 @@ per-storage request-derivation refactor.
 
 The tree is green:
 
-- `pytest tools/model/tests test/matrix/generator_test.py`: 271 passed
-- `dingo_model_test`: 553 tests passed
+- `pytest tools/model/tests test/matrix/generator_test.py`: 280 passed
+- `dingo_model_test`: 553 tests passed, including the trait matrix
 - `cells-check`: passes
 - `ctest`: 77/77 passed
 - `format-check` and full `check`: pass
 
 Current model snapshot:
 
-| metric | value |
-| --- | ---: |
-| storage paths | 105 |
-| derived request paths | 10,032 |
-| cases | 105,648 |
-| supported | 1,080 |
-| compile-tested | 1,080 |
-| runtime-tested | 1,037 |
-| compile gap | 0 |
-| undeclared runtime gap | 0 |
-| declared runtime gap | 43 |
+| metric | value | | --- | ---: | | storage paths | 105 | | derived request
+paths | 10,032 | | cases | 105,648 | | supported | 1,080 | | compile-tested |
+1,080 | | runtime-tested | 1,037 | | compile gap | 0 | | undeclared runtime gap
+| 0 | | declared runtime gap | 43 |
+
+The trait matrix adds one compile-time probe per supported cell and shape for
+both a copyable and a move-only leaf. It is separate from the path-domain
+coverage counts above until the runtime families become trait-aware.
 
 Supported by binding:
 
@@ -41,8 +38,8 @@ Declared runtime gaps:
 - 35 concrete top-level handle / cyclical / consuming-borrow forms
 - 8 consuming-scope interface forms
 
-The declared gaps are listed with reasons in
-`build/paths.md` (`### Declared runtime gaps`).
+The declared gaps are listed with reasons in `build/paths.md`
+(`### Declared runtime gaps`).
 
 ## Architecture
 
@@ -74,6 +71,8 @@ grammar -> domain -> semantics -> emit -> report
 - `grammar/shapes.py` — wrapper semantics and request shapes.
 - `grammar/catalog.py` — scopes, storage forms, `FormConstructor`, `Factory`.
 - `grammar/storage.py` — `StoragePath`, `storable`, const helpers.
+- `grammar/traits.py` — `LeafTraits`, `COPYABLE`, `MOVE_ONLY`; the leaf
+  copy/move dimension used by the trait matrix.
 - `grammar/bindings.py` — `Binding` and binding projections.
 
 ### Domain
@@ -86,8 +85,8 @@ seed = {T, stored expression}
   -> concrete / annotated / keyed / interface projections
 ```
 
-`domain/cases.py` builds cases from each `StoragePath` and its projections.
-This replaced the old global `request_forms() x storage` product.
+`domain/cases.py` builds cases from each `StoragePath` and its projections. This
+replaced the old global `request_forms() x storage` product.
 
 Important: `DEPTH = 2` is the current coverage bound. It is conservative.
 Experiments showed:
@@ -109,13 +108,16 @@ combinations. The earlier global-list model overclaimed many of them.
   - annotated wrapper matching and const matching
 - `semantics/capabilities.py` — derived exposed binding kinds per scope/form.
 - `semantics/cells.py` — supported scope/form cell product.
-- `semantics/gaps.py` — explicit gap registry and
-  `declared_runtime_gap(...)`.
+- `semantics/gaps.py` — explicit gap registry and `declared_runtime_gap(...)`.
 - `semantics/extended_shapes.py` — shapes outside the base shape catalog.
 
 ### Emit
 
 - `emit/matrix.py` — concrete compile-time shape matrix.
+- `emit/traits.py` — copyable/move-only compile-time matrix. It builds each
+  supported cell for both leaves and asserts the library's move-only route set
+  is the copyable set minus the routes that copy the leaf. The copy boundary is
+  derived by `semantics/routes/derivation.py:leaf_copy_required`.
 - `emit/binding_matrix.py` — compile-time `dingo::bindings<dingo::bind<...>>`
   probes for annotated/keyed/interface cases.
 - `emit/families/`:
@@ -139,19 +141,11 @@ combinations. The earlier global-list model overclaimed many of them.
 
 Current generated test counts:
 
-| suite | tests |
-| --- | ---: |
-| `keyed_cells` | 141 |
-| `annotated_cells` | 99 |
-| `behavior_cells` | 93 |
-| `const_cells` | 52 |
-| `type_behavior` | 47 |
-| `storage_cells` | 41 |
-| `interface_runtime` | 34 |
-| `route_cells` | 33 |
-| `interface_cells` | 7 |
-| `annotation_cells` | 3 |
-| `type_matrix`, `selection_rules`, `property_cells` | 1 each |
+| suite | tests | | --- | ---: | | `keyed_cells` | 141 | | `annotated_cells` |
+99 | | `behavior_cells` | 93 | | `const_cells` | 52 | | `type_behavior` | 47 | |
+`storage_cells` | 41 | | `interface_runtime` | 34 | | `route_cells` | 33 | |
+`interface_cells` | 7 | | `annotation_cells` | 3 | | `type_matrix`,
+`selection_rules`, `property_cells` | 1 each |
 
 Generated files are under `build/test/generated/model/` and are compiled into
 `dingo_model_test`.
@@ -170,30 +164,30 @@ Generated files are under `build/test/generated/model/` and are compiled into
 
 ### 1. Copyable / move-only leaf traits
 
-Not implemented yet. The current generated C++ uses a single copyable
-`tracked` fixture. The next agent should add:
+The compile-time half is done:
 
-```python
-@dataclass(frozen=True)
-class LeafTraits:
-    name: str          # copyable_type / move_only_type
-    copyable: bool
-    movable: bool
-```
+- `grammar/traits.py` declares `LeafTraits` with `copyable`/`movable`.
+- `Case` carries `traits`; `iter_cases(..., traits)` stamps the domain.
+- `classify(..., traits)` rejects the routes that copy a move-only leaf with
+  rule `copy`.
+- `emit/traits.py` asserts the trait delta against the real resolution kernel
+  for every supported cell and shape.
 
-Then:
+Remaining work:
 
-1. `Case` gains `traits`; coverage keys become
-   `(scope, storage, binding, request, traits)`.
-2. Support rules distinguish copy-out, copy-from-const, move, borrow, and
-   pointer requests.
-3. Every generated runtime family defines both fixtures and emits both rows.
-4. Factories become trait-specific, e.g.
-   `make_shared_copyable_type` and `make_shared_move_only_type`.
-5. Baselines and docs are regenerated.
+1. Make the coverage keys trait-aware:
+   `(scope, storage, binding, request, traits)` in `report/coverage.py`.
+2. Select a trait-appropriate primary route in every runtime family. The current
+   `derive_expectation(form, scope)` assumes a copyable leaf; for a move-only
+   leaf it must choose the first supported ledger route (usually a borrow or
+   move) and expect zero copies.
+3. Render each runtime family once per trait, with the fixture definition and
+   tuple names parameterized. The templates currently spell `tracked` directly.
+4. Regenerate baselines and docs and extend the coverage report with the trait
+   column.
 
-This roughly doubles the domain and generated C++ volume. Decide whether to
-duplicate all runtime families or add a trait compile matrix first.
+The matrix is deliberately separate for now, so the copyable path counts above
+stay stable while the runtime families are rebuilt.
 
 ### 2. Annotated interfaces
 
@@ -222,15 +216,15 @@ Current `DEPTH = 2` is conservative. Before raising it:
 - probe the new derived requests;
 - update supported counts and baselines.
 
-Do not simply remove the bound; depth 4 produces ~29k supported paths and a
-very large C++ surface.
+Do not simply remove the bound; depth 4 produces ~29k supported paths and a very
+large C++ surface.
 
 ### 4. Remaining declared gaps
 
 The 43 declared gaps are real exceptions, not missing tests:
 
-- 35 concrete: top-level handle access, cyclical pointer access,
-  consuming-scope lvalue borrows.
+- 35 concrete: top-level handle access, cyclical pointer access, consuming-scope
+  lvalue borrows.
 - 8 interface: consuming-scope interface registration.
 
 Reducing them requires new scenario families, not more generated cases.
@@ -239,12 +233,17 @@ Reducing them requires new scenario families, not more generated cases.
 
 - `behavior.py` still contains scenario-level C++ strings; move them through
   `CppType` / registration plans.
-- `semantics/support.py` has unused `ANNOTATED_INNER_OPS` and
-  `_leaf_interface`; remove them.
+- `semantics/support.py` has unused `ANNOTATED_INNER_OPS` and `_leaf_interface`;
+  remove them.
 - `legacy/binding.py` and `legacy/request.py` are test/matrix-only. Migrate
   `test/matrix` or keep them clearly isolated.
 - `type_matrix.cpp` is the compile-time bottleneck. If it grows, split it into
   multiple translation units.
+- `Shape.with_leaf()` does not replace the `int` base leaf, so
+  `emit/behavior.py` currently probes `int`-typed requests against a `tracked`
+  storage and most `if constexpr` blocks compile out. The trait matrix uses
+  `cpp.rebase_leaf()` instead. Fix `Shape.with_leaf()` and re-check the
+  type-behavior guards.
 
 ## Commands
 
@@ -271,6 +270,7 @@ Other generators through the dispatcher:
 
 ```bash
 python -m tools.model matrix --out ...
+python -m tools.model trait-matrix --out ...
 python -m tools.model binding-matrix --out ...
 python -m tools.model keyed --out ...
 python -m tools.model interface-runtime --out ...
@@ -300,10 +300,10 @@ python -m tools.model.report.baseline update \
 
 ## Git state
 
-The refactor is uncommitted. Old flat `tools/model/*.py` files appear as
-deletions, and new package files are untracked. Stage/commit with rename
-detection before continuing. Remove `tools/model/**/__pycache__` before
-committing.
+The layered package refactor is committed
+(`Split the model generator into layered packages`). The leaf-trait slice is the
+next commit: `grammar/traits.py`, `emit/traits.py`,
+`emit/templates/trait_matrix.cpp.j2`, the associated test, and the CMake wiring.
 
 See also:
 

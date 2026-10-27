@@ -167,6 +167,17 @@ const handle cannot be wrapped into a second handle, and a variant request must
 keep the stored alternative's constness. The runtime probes are generated from
 that same supported case set; there is no request candidate list in the emitter.
 
+Copyability is a second axis of the same conversion model. `grammar/traits.py`
+declares a copyable and a move-only leaf, and `semantics/routes/derivation.py`
+answers whether a route copies the leaf. A value request copies it unless the
+scope hands out an rvalue (move), the request is an owning handle (a handle copy
+or move), or the value is adopted from a pointer/array. A const pointee promoted
+from a value also copies, while a const pointee on a stored or adopted handle
+does not. `emit/traits.py` builds every supported cell for both leaves and
+asserts the move-only route set is the copyable set minus the copying routes.
+The runtime families still run the copyable leaf; the trait matrix is their
+compile-time contract until they select a trait-appropriate primary route.
+
 The 475 path-extended shapes are mostly access forms around composed objects:
 `optional<T> &`, `shared_ptr<T> *`, `variant<const T, long> &`, and arrays of
 wrapped pointers. They are merged into the type matrix, so the compile-time

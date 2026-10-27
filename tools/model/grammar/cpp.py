@@ -111,39 +111,48 @@ def interfaces(*types: CppType) -> CppType:
     return template("dingo::interfaces", *types)
 
 
-def with_leaf(value: CppType, name: str) -> CppType:
-    """Replace the `T` placeholder leaf, preserving fixed alternatives."""
+def with_leaf(value: CppType, name: str, placeholder: str = "T") -> CppType:
+    """Replace the placeholder leaf, preserving fixed alternatives."""
     kind = value.kind
     if kind is CppKind.LEAF:
-        return leaf(name if value.name == "T" else value.name)
+        return leaf(name if value.name == placeholder else value.name)
     if kind is CppKind.TEXT:
         return value
     if kind is CppKind.CONST:
-        return const(with_leaf(value.inner, name))
+        return const(with_leaf(value.inner, name, placeholder))
     if kind is CppKind.POINTER:
-        return pointer(with_leaf(value.inner, name))
+        return pointer(with_leaf(value.inner, name, placeholder))
     if kind is CppKind.REFERENCE:
-        return reference(with_leaf(value.inner, name))
+        return reference(with_leaf(value.inner, name, placeholder))
     if kind is CppKind.RVALUE_REFERENCE:
-        return rvalue_reference(with_leaf(value.inner, name))
+        return rvalue_reference(with_leaf(value.inner, name, placeholder))
     if kind is CppKind.ARRAY:
-        return array(with_leaf(value.inner, name), value.extent)
+        return array(with_leaf(value.inner, name, placeholder), value.extent)
     if kind is CppKind.RAW_ARRAY:
-        return raw_array(with_leaf(value.inner, name))
+        return raw_array(with_leaf(value.inner, name, placeholder))
     if kind is CppKind.ARRAY_REFERENCE:
-        return array_reference(with_leaf(value.inner, name), value.extent)
+        return array_reference(
+            with_leaf(value.inner, name, placeholder), value.extent
+        )
     if kind is CppKind.ARRAY_POINTER:
-        return array_pointer(with_leaf(value.inner, name), value.extent)
+        return array_pointer(
+            with_leaf(value.inner, name, placeholder), value.extent
+        )
     if kind is CppKind.UNIQUE_ARRAY:
-        return unique_array(with_leaf(value.inner, name))
+        return unique_array(with_leaf(value.inner, name, placeholder))
     if kind is CppKind.SHARED_ARRAY:
-        return shared_array(with_leaf(value.inner, name))
+        return shared_array(with_leaf(value.inner, name, placeholder))
     if kind is CppKind.TEMPLATE:
         return template(
             value.name,
-            *(with_leaf(item, name) for item in value.args),
+            *(with_leaf(item, name, placeholder) for item in value.args),
         )
     raise ValueError(f"unknown C++ type kind {kind!r}")
+
+
+def rebase_leaf(value: CppType, name: str) -> CppType:
+    """Replace the concrete base leaf (``int``) of a shape spelling."""
+    return with_leaf(value, name, placeholder="int")
 
 
 def declaration(value: CppType, name: str) -> str:
