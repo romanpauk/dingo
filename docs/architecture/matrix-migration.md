@@ -76,6 +76,12 @@ The matrix still owns the backend (`portable`/`msvc`), detection-mode
 4. Delete `test/matrix`, its axes, fixtures, scenarios, and the `legacy/`
    request/binding algebra once no feature remains.
 
+## Factorization
+
+See [Coverage Model](coverage-model.md). Operator families are factored over
+dependency categories; a matrix feature is removed when its operator classes are
+covered, not when its row count is reproduced.
+
 ## Test structure
 
 The matrix features fall into four structural shapes. Each one maps to a
