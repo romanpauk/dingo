@@ -259,6 +259,7 @@ TEST({{ suite }}, {{ row.name }}) {
 }
 
 {% endfor %}
+{% if emit_annotation_tests %}
 TEST(annotation_cells{{ name_suffix }}, refuses_unannotated_request) {
   dingo::container<> container;
   container.register_type<dingo::scope<dingo::shared>, dingo::storage<{{ leaf }}>,
@@ -292,4 +293,5 @@ TEST(annotation_cells{{ name_suffix }}, rejects_duplicate_annotated_registration
       dingo::lookup_already_registered_exception);
 }
 
+{% endif %}
 } // namespace {{ namespace }}

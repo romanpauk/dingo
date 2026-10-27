@@ -39,11 +39,12 @@ from tools.model.semantics.cells import iter_supported_cells
 from tools.model.semantics.gaps import cell_gaps, name_gaps, validate as validate_gaps
 from tools.model.emit.common.recipe import external_instance, registration
 from tools.model.semantics.routes.ledger import supported_categories
-from tools.model.emit.common.runner import emit, render_template, trait_context
+from tools.model.emit.common.runner import emit, render_template
+from tools.model.emit.hierarchy import CasePath
 from tools.model.emit.common.validation import validate_catalog
 from tools.model.grammar import cpp
 from tools.model.grammar.shapes import WRAPPER_BY_NAME
-from tools.model.grammar.traits import COPYABLE, MOVE_ONLY, LeafTraits
+from tools.model.grammar.traits import COPYABLE, MOVE_ONLY, TRAITS, LeafTraits
 
 
 SCOPES = tuple(scope.name for scope in CATALOG_SCOPES)
@@ -1127,21 +1128,86 @@ def validate(traits: LeafTraits = COPYABLE) -> None:
         )
 
 
-def render(output: Path, traits: LeafTraits = COPYABLE) -> str:
-    validate(traits)
-    context = trait_context(traits, "behavior_cells")
-    context["name_suffix"] = "" if traits.copyable else f"_{traits.name}"
+@dataclass(frozen=True)
+class BehaviorShard:
+    container: str
+    scope: str
+    form: str
+    traits: str
+    path: str
+    suite: str
+    namespace: str
+    leaf: str
+    move_only: bool
+    name_suffix: str
+    emit_annotation_tests: bool
+    rows: tuple[dict[str, object], ...]
+
+
+def build_shards() -> list[BehaviorShard]:
+    grouped: dict[tuple[str, str, str, str], list[dict[str, object]]] = {}
+    for traits in TRAITS:
+        for row in build_rows(traits):
+            key = (
+                str(row["container"]),
+                str(row["scope"]),
+                str(row["form"]),
+                traits.name,
+            )
+            grouped.setdefault(key, []).append(row)
+    shards = []
+    annotation_emitted: set[str] = set()
+    for (container, scope, form, traits_name), rows in sorted(grouped.items()):
+        prefix = CasePath(
+            phase="resolution",
+            container=container,
+            scope=scope,
+            storage=form,
+            category="behavior",
+            traits=traits_name,
+        )
+        traits = next(item for item in TRAITS if item.name == traits_name)
+        suite = f"{prefix.suite}_{traits_name}"
+        shards.append(
+            BehaviorShard(
+                container=container,
+                scope=scope,
+                form=form,
+                traits=traits_name,
+                path=f"{prefix.file[:-4]}/{traits_name}.cpp",
+                suite=suite,
+                namespace=suite,
+                leaf=traits.cpp,
+                move_only=not traits.copyable,
+                name_suffix="" if traits.copyable else f"_{traits.name}",
+                emit_annotation_tests=(
+                    traits_name not in annotation_emitted
+                    and container == "runtime"
+                ),
+                rows=tuple(rows),
+            )
+        )
+        if shards[-1].emit_annotation_tests:
+            annotation_emitted.add(traits_name)
+    return shards
+
+
+def render(shard: BehaviorShard) -> str:
     return render_template(
         "behavior_cells.cpp.j2",
-        rows=build_rows(traits),
-        **context,
+        rows=shard.rows,
+        namespace=shard.namespace,
+        suite=shard.suite,
+        leaf=shard.leaf,
+        move_only=shard.move_only,
+        name_suffix=shard.name_suffix,
+        emit_annotation_tests=shard.emit_annotation_tests,
     )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--out-move-only", type=Path)
+    parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument(
         "--include",
         type=Path,
@@ -1152,12 +1218,14 @@ def main() -> None:
 
     if arguments.include is not None:
         validate_catalog(arguments.include)
-    for traits, out in (
-        (COPYABLE, arguments.out),
-        (MOVE_ONLY, arguments.out_move_only),
-    ):
-        if out is not None:
-            emit(out, render(out, traits), check=arguments.check)
+    validate(COPYABLE)
+    validate(MOVE_ONLY)
+    for shard in build_shards():
+        emit(
+            arguments.out_dir / shard.path,
+            render(shard),
+            check=arguments.check,
+        )
 
 
 if __name__ == "__main__":

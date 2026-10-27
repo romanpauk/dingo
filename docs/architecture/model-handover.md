@@ -10,7 +10,7 @@ per-storage request-derivation refactor.
 The tree is green:
 
 - `pytest tools/model/tests test/matrix/generator_test.py`: 303 passed
-- `dingo_model_test`: 279 tests passed (behavior/type behavior)
+- `dingo_model_test`: 279 tests passed (behavior/type behavior, per cell)
 - `dingo_classification_test`: 62 tests
 - `dingo_resolution_static_asserts_test`: 40 tests
 - `dingo_resolution_runtime_test`: 650 tests

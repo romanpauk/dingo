@@ -21,9 +21,11 @@ rather than a hand-written list.
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from pathlib import Path
 
 from tools.model.emit.common.runner import emit, render_template
+from tools.model.emit.hierarchy import CasePath
 
 from tools.model.emit.families.behavior import BEHAVIOR_GAPS, FORMS, SCOPES
 from tools.model.grammar.catalog import ARRAY_STORAGE_FORMS, RUNTIME_ONLY_SCOPES
@@ -31,7 +33,7 @@ from tools.model.semantics.cells import iter_supported_cells
 from tools.model.emit.common.recipe import external_instance, registration
 from tools.model.emit.common.validation import validate_catalog
 from tools.model.emit.matrix import SHAPES, CONSUMING_SCOPES, top_level_safe
-from tools.model.grammar.traits import COPYABLE, MOVE_ONLY, LeafTraits
+from tools.model.grammar.traits import COPYABLE, MOVE_ONLY, TRAITS, LeafTraits
 
 
 CONTAINERS = ("runtime", "static")
@@ -160,27 +162,64 @@ def validate(
             raise ValueError(f"cell {row['name']} has no executable shape")
 
 
-def render(
-    rows: list[dict[str, object]],
-    traits: LeafTraits = COPYABLE,
-) -> str:
-    suffix = "" if traits.copyable else f"_{traits.name}"
+@dataclass(frozen=True)
+class TypeBehaviorShard:
+    container: str
+    scope: str
+    form: str
+    traits: str
+    path: str
+    suite: str
+    namespace: str
+    leaf: str
+    move_only: bool
+    row: dict[str, object]
+
+
+def build_shards() -> list[TypeBehaviorShard]:
+    shards = []
+    for traits in TRAITS:
+        for row in build_rows(CONTAINERS, traits):
+            prefix = CasePath(
+                phase="resolution",
+                container=str(row["container"]),
+                scope=str(row["scope"]),
+                storage=str(row["form"]),
+                category="type_behavior",
+                traits=traits.name,
+            )
+            suite = f"{prefix.suite}_{traits.name}"
+            shards.append(
+                TypeBehaviorShard(
+                    container=str(row["container"]),
+                    scope=str(row["scope"]),
+                    form=str(row["form"]),
+                    traits=traits.name,
+                    path=f"{prefix.file[:-4]}/{traits.name}.cpp",
+                    suite=suite,
+                    namespace=suite,
+                    leaf=traits.cpp,
+                    move_only=not traits.copyable,
+                    row=row,
+                )
+            )
+    return shards
+
+
+def render(shard: TypeBehaviorShard) -> str:
     return render_template(
         "type_behavior.cpp.j2",
-        rows=rows,
-        leaf=traits.cpp,
-        move_only=not traits.copyable,
-        namespace=f"type_behavior{suffix}",
-        suite=f"type_behavior{suffix}",
+        rows=[shard.row],
+        leaf=shard.leaf,
+        move_only=shard.move_only,
+        namespace=shard.namespace,
+        suite=shard.suite,
     )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--out-static", type=Path)
-    parser.add_argument("--out-move-only", type=Path)
-    parser.add_argument("--out-static-move-only", type=Path)
+    parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument(
         "--include",
         type=Path,
@@ -191,27 +230,14 @@ def main() -> None:
 
     if arguments.include is not None:
         validate_catalog(arguments.include)
-
-    outputs = []
-    for traits, out, out_static in (
-        (COPYABLE, arguments.out, arguments.out_static),
-        (MOVE_ONLY, arguments.out_move_only, arguments.out_static_move_only),
-    ):
-        if out is None:
-            continue
-        validate(("runtime",), traits)
-        outputs.append((out, render(build_rows(("runtime",), traits), traits)))
-        if out_static is not None:
-            validate(("static",), traits)
-            outputs.append(
-                (
-                    out_static,
-                    render(build_rows(("static",), traits), traits),
-                )
-            )
-
-    for path, content in outputs:
-        emit(path, content, check=arguments.check)
+    validate(("runtime",))
+    validate(("static",))
+    for shard in build_shards():
+        emit(
+            arguments.out_dir / shard.path,
+            render(shard),
+            check=arguments.check,
+        )
 
 
 if __name__ == "__main__":

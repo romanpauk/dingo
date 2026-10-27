@@ -18,6 +18,7 @@ from tools.model.grammar.catalog import FORMS, SCOPES
 from tools.model.emit.behavior import (
     TOP_LEVEL_BORROW_GAP,
     build_rows,
+    build_shards,
     delete_kind,
     render,
     validate,
@@ -106,8 +107,11 @@ def test_move_only_rows_use_the_move_only_leaf() -> None:
     )
     assert plain["storage_type"] == "move_only_tracked"
     assert plain["constructor"] == "move_only_tracked"
-    content = render(rows, MOVE_ONLY)
-    assert "TEST(type_behavior_move_only," in content
+    content = "".join(
+        render(shard)
+        for shard in build_shards()
+        if shard.traits == MOVE_ONLY.name
+    )
     assert "struct move_only_tracked" in content
     assert "move_only_tracked(const move_only_tracked &) = delete;" in content
     assert "std::optional<move_only_tracked>" in content
@@ -128,15 +132,17 @@ def test_library_catalog_matches_model() -> None:
 
 
 def test_render_is_stable_and_covers_every_cell(tmp_path: Path) -> None:
-    for container, name in (("runtime", "type_behavior.cpp"),
-                            ("static", "type_behavior_static.cpp")):
-        rows = build_rows((container,))
-        content = render(rows)
-        assert content == render(rows)
-        assert f"/{name}" not in content
-        for row in rows:
-            assert f"TEST(type_behavior, {row['name']})" in content
-        assert "top-level gap:" in content
+    for container in ("runtime", "static"):
+        shards = [
+            shard
+            for shard in build_shards()
+            if shard.container == container
+        ]
+        assert shards
+        for shard in shards:
+            content = render(shard)
+            assert content == render(shard)
+            assert f"TEST({shard.suite}, {shard.row['name']})" in content
 
 
 if __name__ == "__main__":

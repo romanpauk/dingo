@@ -226,10 +226,6 @@ set(DINGO_SELECTION_MANIFEST
     "${DINGO_CLASSIFICATION_DIR}/selection-manifest.json")
 set(DINGO_ROUTE_MANIFEST
     "${DINGO_CLASSIFICATION_DIR}/route-manifest.json")
-set(DINGO_BEHAVIOR_MODEL_TEST_SOURCE
-    "${DINGO_RESOLVE_DIR}/resolution/mixed/global/behavior/copyable.cpp")
-set(DINGO_BEHAVIOR_MOVE_ONLY_MODEL_TEST_SOURCE
-    "${DINGO_RESOLVE_DIR}/resolution/mixed/global/behavior/move_only.cpp")
 set(DINGO_INTERFACE_MODEL_TEST_SOURCE
     "${DINGO_RESOLVE_DIR}/resolution/static_asserts/global/interface/interface_cells.cpp")
 set(DINGO_TYPE_MATRIX_TEST_SOURCE
@@ -240,14 +236,6 @@ set(DINGO_REGISTRATION_DIR
     "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(DINGO_BINDING_MATRIX_MANIFEST
     "${DINGO_REGISTRATION_DIR}/registration-manifest.json")
-set(DINGO_TYPE_BEHAVIOR_TEST_SOURCE
-    "${DINGO_RESOLVE_DIR}/resolution/runtime/global/type_behavior/copyable.cpp")
-set(DINGO_TYPE_BEHAVIOR_STATIC_TEST_SOURCE
-    "${DINGO_RESOLVE_DIR}/resolution/static/global/type_behavior/copyable.cpp")
-set(DINGO_TYPE_BEHAVIOR_MOVE_ONLY_TEST_SOURCE
-    "${DINGO_RESOLVE_DIR}/resolution/runtime/global/type_behavior/move_only.cpp")
-set(DINGO_TYPE_BEHAVIOR_STATIC_MOVE_ONLY_TEST_SOURCE
-    "${DINGO_RESOLVE_DIR}/resolution/static/global/type_behavior/move_only.cpp")
 set(DINGO_PROPERTY_MANIFEST
     "${DINGO_CLASSIFICATION_DIR}/property-manifest.json")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
@@ -389,8 +377,7 @@ endif()
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_BEHAVIOR_MODEL_GENERATOR}
-        --out ${DINGO_BEHAVIOR_MODEL_TEST_SOURCE}
-        --out-move-only ${DINGO_BEHAVIOR_MOVE_ONLY_MODEL_TEST_SOURCE}
+        --out-dir ${DINGO_RESOLVE_DIR}
         --include ${PROJECT_SOURCE_DIR}/include
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     RESULT_VARIABLE DINGO_BEHAVIOR_MODEL_GENERATOR_RESULT)
@@ -455,11 +442,7 @@ file(GLOB_RECURSE DINGO_REGISTRATION_SOURCES CONFIGURE_DEPENDS
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_TYPE_BEHAVIOR_GENERATOR}
-        --out ${DINGO_TYPE_BEHAVIOR_TEST_SOURCE}
-        --out-static ${DINGO_TYPE_BEHAVIOR_STATIC_TEST_SOURCE}
-        --out-move-only ${DINGO_TYPE_BEHAVIOR_MOVE_ONLY_TEST_SOURCE}
-        --out-static-move-only
-            ${DINGO_TYPE_BEHAVIOR_STATIC_MOVE_ONLY_TEST_SOURCE}
+        --out-dir ${DINGO_RESOLVE_DIR}
         --include ${PROJECT_SOURCE_DIR}/include
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     RESULT_VARIABLE DINGO_TYPE_BEHAVIOR_GENERATOR_RESULT)
@@ -601,8 +584,7 @@ add_custom_target(cells-check
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_BEHAVIOR_MODEL_GENERATOR}
-        --out ${DINGO_BEHAVIOR_MODEL_TEST_SOURCE}
-        --out-move-only ${DINGO_BEHAVIOR_MOVE_ONLY_MODEL_TEST_SOURCE}
+        --out-dir ${DINGO_RESOLVE_DIR}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
@@ -628,11 +610,7 @@ add_custom_target(cells-check
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_TYPE_BEHAVIOR_GENERATOR}
-        --out ${DINGO_TYPE_BEHAVIOR_TEST_SOURCE}
-        --out-static ${DINGO_TYPE_BEHAVIOR_STATIC_TEST_SOURCE}
-        --out-move-only ${DINGO_TYPE_BEHAVIOR_MOVE_ONLY_TEST_SOURCE}
-        --out-static-move-only
-            ${DINGO_TYPE_BEHAVIOR_STATIC_MOVE_ONLY_TEST_SOURCE}
+        --out-dir ${DINGO_RESOLVE_DIR}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
@@ -674,23 +652,30 @@ add_custom_target(cells-check
         --check
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
+file(GLOB_RECURSE DINGO_TYPE_BEHAVIOR_SOURCES CONFIGURE_DEPENDS
+    "${DINGO_RESOLVE_DIR}/resolution/*/*/*/type_behavior/*.cpp")
+file(GLOB_RECURSE DINGO_BEHAVIOR_SOURCES CONFIGURE_DEPENDS
+    "${DINGO_RESOLVE_DIR}/resolution/*/*/*/behavior/*.cpp")
 add_executable(dingo_model_test
-    ${DINGO_BEHAVIOR_MODEL_TEST_SOURCE}
-    ${DINGO_BEHAVIOR_MOVE_ONLY_MODEL_TEST_SOURCE}
-    ${DINGO_TYPE_BEHAVIOR_TEST_SOURCE}
-    ${DINGO_TYPE_BEHAVIOR_STATIC_TEST_SOURCE}
-    ${DINGO_TYPE_BEHAVIOR_MOVE_ONLY_TEST_SOURCE}
-    ${DINGO_TYPE_BEHAVIOR_STATIC_MOVE_ONLY_TEST_SOURCE}
+    ${DINGO_BEHAVIOR_SOURCES}
+    ${DINGO_TYPE_BEHAVIOR_SOURCES}
 )
 target_link_libraries(dingo_model_test dingo::dingo gtest_main)
 target_include_directories(dingo_model_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 # The type matrix moved to the resolution/static-asserts phase.
-set_source_files_properties(${DINGO_BEHAVIOR_MODEL_TEST_SOURCE} PROPERTIES
-    COMPILE_DEFINITIONS
-    "DINGO_BEHAVIOR_REPORT=\"${CMAKE_CURRENT_BINARY_DIR}/behavior-outcomes.jsonl\"")
-set_source_files_properties(${DINGO_BEHAVIOR_MOVE_ONLY_MODEL_TEST_SOURCE} PROPERTIES
-    COMPILE_DEFINITIONS
-    "DINGO_BEHAVIOR_REPORT=\"${CMAKE_CURRENT_BINARY_DIR}/behavior-outcomes-move-only.jsonl\"")
+set(DINGO_BEHAVIOR_REPORT_ARGS "")
+foreach(behavior_source ${DINGO_BEHAVIOR_SOURCES})
+    file(RELATIVE_PATH behavior_relative
+        "${DINGO_RESOLVE_DIR}" "${behavior_source}")
+    string(REPLACE "/" "_" behavior_name "${behavior_relative}")
+    string(REPLACE ".cpp" "" behavior_name "${behavior_name}")
+    set(behavior_report
+        "${CMAKE_CURRENT_BINARY_DIR}/behavior-outcomes-${behavior_name}.jsonl")
+    set_source_files_properties(${behavior_source} PROPERTIES
+        COMPILE_DEFINITIONS
+        "DINGO_BEHAVIOR_REPORT=\"${behavior_report}\"")
+    list(APPEND DINGO_BEHAVIOR_REPORT_ARGS --behavior ${behavior_report})
+endforeach()
 add_test(NAME dingo_model_test COMMAND dingo_model_test)
 set_tests_properties(dingo_model_test PROPERTIES LABELS "unit;generator")
 
@@ -761,9 +746,7 @@ add_test(NAME dingo_model_baseline_test
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         tools.model.report.baseline check
         --matrix ${CMAKE_CURRENT_BINARY_DIR}/type-matrix.json
-        --behavior ${CMAKE_CURRENT_BINARY_DIR}/behavior-outcomes.jsonl
-        --behavior
-            ${CMAKE_CURRENT_BINARY_DIR}/behavior-outcomes-move-only.jsonl
+        ${DINGO_BEHAVIOR_REPORT_ARGS}
         --baseline ${PROJECT_SOURCE_DIR}/test/baselines/model.json)
 set_tests_properties(dingo_model_baseline_test PROPERTIES
     LABELS "unit;generator"

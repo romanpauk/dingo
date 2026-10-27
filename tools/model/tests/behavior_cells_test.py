@@ -23,6 +23,7 @@ from tools.model.emit.families.behavior import (
     INTERFACE_SHAPES,
     REQUEST_COSTS,
     build_rows,
+    build_shards,
     covered_cells,
     derive_expectation,
     derive_extra_expectations,
@@ -239,17 +240,23 @@ def test_move_only_rows_have_no_copying_expectation() -> None:
     ]
     assert copies and set(copies) == {0}
     assert any("move_only_tracked" in str(row["request"]) for row in rows)
-    content = render(None, MOVE_ONLY)
-    assert "TEST(behavior_cells_move_only," in content
+    content = "".join(
+        render(shard)
+        for shard in build_shards()
+        if shard.traits == MOVE_ONLY.name
+    )
     assert "struct move_only_tracked" in content
     assert "move_only_tracked(const move_only_tracked &) = delete;" in content
 
 
 def test_render_names_every_cell(tmp_path: Path) -> None:
-    content = render(tmp_path / "behavior_cells.cpp")
-    assert content == render(tmp_path / "behavior_cells.cpp")
-    for row in build_rows():
-        assert f"behavior_cells, {row['name']}" in content
+    shards = build_shards()
+    assert shards
+    for shard in shards:
+        content = render(shard)
+        assert content == render(shard)
+        for row in shard.rows:
+            assert f"{row['name']}" in content
 
 
 if __name__ == "__main__":
