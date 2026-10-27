@@ -13,7 +13,14 @@ from tools.model.emit.families.factory import SHARDS, render
 
 def test_factory_shards_are_hierarchical() -> None:
     assert SHARDS
-    assert {shard.kind for shard in SHARDS} == {"function", "callable"}
+    assert {shard.kind for shard in SHARDS} == {
+        "function",
+        "callable",
+        "constructor",
+        "detected",
+        "typedef",
+        "overloaded_callable",
+    }
     for shard in SHARDS:
         assert shard.path == (
             f"registration/runtime/shared/plain/factory/{shard.kind}.cpp"

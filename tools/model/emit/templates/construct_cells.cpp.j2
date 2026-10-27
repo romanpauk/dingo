@@ -41,6 +41,15 @@ struct movable_constructed {
   explicit movable_constructed(movable_dependency &dep) : value(dep.value) {}
   int value;
 };
+struct constructed_value {
+  explicit constructed_value(dependency dep) : value(dep.value) {}
+  int value;
+};
+struct movable_constructed_value {
+  explicit movable_constructed_value(movable_dependency dep)
+      : value(dep.value) {}
+  int value;
+};
 
 inline std::shared_ptr<dependency> make_shared_dependency() {
   return std::make_shared<dependency>();

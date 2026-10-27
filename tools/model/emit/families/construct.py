@@ -49,7 +49,9 @@ def _fixture(traits: LeafTraits) -> str:
     return "dependency" if traits.copyable else "movable_dependency"
 
 
-def _constructed(traits: LeafTraits) -> str:
+def _constructed(traits: LeafTraits, by_value: bool) -> str:
+    if by_value:
+        return "constructed_value" if traits.copyable else "movable_constructed_value"
     return "constructed" if traits.copyable else "movable_constructed"
 
 
@@ -110,8 +112,14 @@ def build_shards() -> list[ConstructShard]:
         for scope, form in iter_supported_cells():
             if form.kind in SKIP_KINDS:
                 continue
-            if scope.name in {"unique", "shared_cyclical"}:
+            if scope.name == "shared_cyclical":
                 continue
+            if scope.name == "unique" and form.kind not in {
+                "value",
+                "variant",
+            }:
+                continue
+
             path = _canonical_path(scope.name, form)
             if path is None:
                 continue
@@ -141,7 +149,9 @@ def build_shards() -> list[ConstructShard]:
                     instance=instance,
                     registration=line,
                     dependency=_fixture(traits),
-                    constructed=_constructed(traits),
+                    constructed=_constructed(
+                        traits, scope.name in {"unique", "shared_cyclical"}
+                    ),
                     expected=7 if traits.copyable else 9,
                 )
             )

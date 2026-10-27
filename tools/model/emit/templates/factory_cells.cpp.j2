@@ -9,7 +9,9 @@
 
 #include <dingo/container.h>
 #include <dingo/factory/callable.h>
+#include <dingo/factory/constructor.h>
 #include <dingo/factory/function.h>
+#include <dingo/registration/constructor.h>
 #include <dingo/storage/shared.h>
 
 #include <gtest/gtest.h>
@@ -34,32 +36,63 @@ struct callable_value {
   int value;
 };
 
-{% if shard.kind == "function" %}
-TEST({{ shard.suite }}, function) {
+struct constructor_value {
+  explicit constructor_value(dependency &dep) : value(dep.value + 6) {}
+  int value;
+};
+
+struct detected_value {
+  explicit detected_value(dependency &dep) : value(dep.value + 24) {}
+  int value;
+};
+
+struct typedef_value {
+  DINGO_CONSTRUCTOR(typedef_value(dependency &dep)) : value(dep.value + 30) {}
+  int value;
+};
+
+struct overloaded_callable {
+  callable_value operator()(dependency &dep) const {
+    return callable_value(dep.value + 18);
+  }
+};
+
+TEST({{ shard.suite }}, {{ shard.kind }}) {
   RecordProperty("path", {{ shard.case_path | cppstr }});
   dingo::container<> container;
   container.register_type<dingo::scope<dingo::shared>,
                           dingo::storage<dependency>>();
+{% if shard.kind == "function" %}
   container.register_type<
       dingo::scope<dingo::shared>, dingo::storage<factory_value>,
       dingo::factory<dingo::function<&factory_value::create>>>();
-  auto value = container.resolve<factory_value>();
-  EXPECT_EQ(value.value, 8);
-}
-{% else %}
-TEST({{ shard.suite }}, callable) {
-  RecordProperty("path", {{ shard.case_path | cppstr }});
-  dingo::container<> container;
-  container.register_type<dingo::scope<dingo::shared>,
-                          dingo::storage<dependency>>();
+  EXPECT_EQ(container.resolve<factory_value>().value, 8);
+{% elif shard.kind == "callable" %}
   container.register_type<dingo::scope<dingo::shared>,
                           dingo::storage<callable_value>>(
       dingo::callable([](dependency &dep) {
         return callable_value(dep.value + 5);
       }));
-  auto value = container.resolve<callable_value>();
-  EXPECT_EQ(value.value, 12);
-}
+  EXPECT_EQ(container.resolve<callable_value>().value, 12);
+{% elif shard.kind == "constructor" %}
+  container.register_type<
+      dingo::scope<dingo::shared>, dingo::storage<constructor_value>,
+      dingo::factory<dingo::constructor<constructor_value(dependency &)>>>();
+  EXPECT_EQ(container.resolve<constructor_value>().value, 13);
+{% elif shard.kind == "detected" %}
+  container.register_type<dingo::scope<dingo::shared>,
+                          dingo::storage<detected_value>>();
+  EXPECT_EQ(container.resolve<detected_value>().value, 31);
+{% elif shard.kind == "typedef" %}
+  container.register_type<dingo::scope<dingo::shared>,
+                          dingo::storage<typedef_value>>();
+  EXPECT_EQ(container.resolve<typedef_value>().value, 37);
+{% else %}
+  container.register_type<dingo::scope<dingo::shared>,
+                          dingo::storage<callable_value>>(
+      dingo::callable(overloaded_callable{}));
+  EXPECT_EQ(container.resolve<callable_value>().value, 25);
 {% endif %}
+}
 
 } // namespace {{ shard.namespace }}

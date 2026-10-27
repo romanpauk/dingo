@@ -33,57 +33,40 @@ class FactoryShard:
     case_path: str
 
 
-SHARDS = (
+SHARDS = tuple(
     FactoryShard(
-        kind="function",
+        kind=kind,
         path=CasePath(
             phase="registration",
             container="runtime",
             scope="shared",
             storage="plain",
-            category="factory/function",
+            category=f"factory/{kind}",
         ).file,
         suite=CasePath(
             phase="registration",
             container="runtime",
             scope="shared",
             storage="plain",
-            category="factory/function",
+            category=f"factory/{kind}",
         ).suite,
         namespace=CasePath(
             phase="registration",
             container="runtime",
             scope="shared",
             storage="plain",
-            category="factory/function",
+            category=f"factory/{kind}",
         ).suite,
-        case_path="registration/runtime/shared/plain/factory/function",
-    ),
-    FactoryShard(
-        kind="callable",
-        path=CasePath(
-            phase="registration",
-            container="runtime",
-            scope="shared",
-            storage="plain",
-            category="factory/callable",
-        ).file,
-        suite=CasePath(
-            phase="registration",
-            container="runtime",
-            scope="shared",
-            storage="plain",
-            category="factory/callable",
-        ).suite,
-        namespace=CasePath(
-            phase="registration",
-            container="runtime",
-            scope="shared",
-            storage="plain",
-            category="factory/callable",
-        ).suite,
-        case_path="registration/runtime/shared/plain/factory/callable",
-    ),
+        case_path=f"registration/runtime/shared/plain/factory/{kind}",
+    )
+    for kind in (
+        "function",
+        "callable",
+        "constructor",
+        "detected",
+        "typedef",
+        "overloaded_callable",
+    )
 )
 
 
