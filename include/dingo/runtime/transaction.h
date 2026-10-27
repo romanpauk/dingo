@@ -111,8 +111,11 @@ template <typename Allocator> class runtime_transaction {
 
 public:
   runtime_transaction(runtime_type &runtime, arena<> &scratch)
-      : parent_(runtime.active_transaction_), runtime_(std::addressof(runtime)),
-        checkpoint_(runtime.mark()) {
+      : parent_(runtime.active_transaction()),
+        runtime_(std::addressof(runtime)), checkpoint_(runtime.mark()) {
+    static_assert(alignof(runtime_transaction) > 1,
+                  "container_runtime stores its sealed flag in the low bit of "
+                  "the active transaction pointer");
     if (parent_ == nullptr) {
       new (std::addressof(actions_.state)) action_state(scratch);
     } else {
@@ -122,7 +125,7 @@ public:
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdangling-pointer"
 #endif
-    runtime.active_transaction_ = this;
+    runtime.active_transaction(this);
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
@@ -202,6 +205,10 @@ public:
     runtime_->add_destructor(instance, dtor);
   }
 
+  bool sealed() const noexcept { return runtime_->sealed(); }
+
+  bool outermost() const noexcept { return parent_ == nullptr; }
+
   DINGO_NOINLINE void commit() noexcept {
     if (runtime_ == nullptr) {
       return;
@@ -251,14 +258,14 @@ private:
   }
 
   void finish_runtime(bool commit) {
-    assert(runtime_->active_transaction_ == this);
+    assert(runtime_->active_transaction() == this);
     if (commit) {
       runtime_->commit(checkpoint_);
     } else {
       runtime_->rollback(checkpoint_);
     }
-    assert(runtime_->active_transaction_ == this);
-    runtime_->active_transaction_ = parent_;
+    assert(runtime_->active_transaction() == this);
+    runtime_->active_transaction(parent_);
   }
 
   void finish_actions(bool committing) noexcept {

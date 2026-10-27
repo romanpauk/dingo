@@ -286,6 +286,12 @@ protected:
   using runtime_bindings_state = detail::runtime_bindings_state<
       lookup_index_entries, runtime_binding_interface_type, allocator_type>;
 
+  static constexpr bool replaces_until_resolved = std::is_same_v<
+      detail::container_duplicate_registration_policy_t<ContainerTraits>,
+      replace_until_resolved>;
+
+  enum class lookup_commit { inserted, replaced, rejected, sealed };
+
 public:
   using runtime_data_type =
       detail::runtime_registry_data<allocator_type, runtime_bindings_state>;
@@ -958,24 +964,46 @@ protected:
   }
 
   template <typename TypeInterface, typename TypeStorage, typename LookupKey,
+            typename KeyArg>
+  static void check_lookup_commit(lookup_commit result,
+                                  const LookupKey &lookup_key,
+                                  const KeyArg &key_arg) {
+    if (result == lookup_commit::rejected) {
+      throw detail::make_lookup_already_registered_exception<
+          TypeInterface, typename TypeStorage::type>(lookup_key, key_arg);
+    }
+    if (result == lookup_commit::sealed) {
+      throw detail::make_container_sealed_exception<TypeInterface,
+                                                    typename TypeStorage::type>(
+          lookup_key, key_arg);
+    }
+  }
+
+  template <typename TypeInterface, typename TypeStorage, typename LookupKey,
             typename LookupEntry, typename ValueFactory, typename KeyArg>
-  auto insert_lookup(runtime_bindings_state &state, ValueFactory &value_factory,
+  void insert_lookup(runtime_bindings_state &state, ValueFactory &value_factory,
+                     runtime_transaction_type &transaction,
                      const LookupKey &lookup_key, const KeyArg &key_arg) {
     auto &index = state.lookup_indexes.template get<LookupEntry>();
 
     if constexpr (std::is_same_v<
                       typename lookup_entry_cardinality<LookupEntry>::type,
                       ::dingo::one>) {
-      auto [handle, inserted] = index.try_emplace(
-          key_arg, value_factory.template make<TypeInterface>());
-      if (!inserted) {
-        throw detail::make_lookup_already_registered_exception<
-            TypeInterface, typename TypeStorage::type>(lookup_key, key_arg);
+      auto value = value_factory.template make<TypeInterface>();
+      auto [handle, inserted] = index.try_emplace(key_arg, std::move(value));
+      if (inserted) {
+        record_lookup_rollback<LookupEntry>(transaction, state, handle,
+                                            key_arg);
+      } else {
+        check_lookup_commit<TypeInterface, TypeStorage>(
+            replace_lookup<LookupEntry>(transaction, state, handle, key_arg,
+                                        std::move(value)),
+            lookup_key, key_arg);
       }
-      return handle;
     } else {
-      return index.emplace(key_arg,
-                           value_factory.template make<TypeInterface>());
+      auto handle =
+          index.emplace(key_arg, value_factory.template make<TypeInterface>());
+      record_lookup_rollback<LookupEntry>(transaction, state, handle, key_arg);
     }
   }
 
@@ -996,9 +1024,8 @@ protected:
                   "unique runtime binding owner can only be inserted into one "
                   "lookup");
     decltype(auto) key_arg = key_resolver(type_list_iterator<Head>{});
-    auto handle = insert_lookup<TypeInterface, TypeStorage, LookupKey, Head>(
-        state, value_factory, lookup_key, key_arg);
-    record_lookup_rollback<Head>(transaction, state, handle, key_arg);
+    insert_lookup<TypeInterface, TypeStorage, LookupKey, Head>(
+        state, value_factory, transaction, lookup_key, key_arg);
     commit_lookup<TypeInterface, TypeStorage, LookupKey>(
         state, value_factory, transaction,
         std::forward<KeyResolver>(key_resolver), lookup_key,
@@ -1050,17 +1077,61 @@ protected:
     }
   }
 
-  bool commit_singular_base_lookup(runtime_bindings_state &state,
-                                   runtime_transaction_type &transaction,
-                                   detail::base_lookup_key<rtti_type> key,
-                                   runtime_lookup_value value) {
+  // Redirects an occupied singular lookup to a new binding when the container
+  // traits allow it and no resolve has sealed the container. The replaced
+  // binding stays owned by the container; a rollback points the lookup back.
+  template <typename LookupEntry, typename Handle, typename Key>
+  lookup_commit replace_lookup(runtime_transaction_type &transaction,
+                               runtime_bindings_state &state, Handle handle,
+                               const Key &key, runtime_lookup_value &&value) {
+    if constexpr (!replaces_until_resolved) {
+      (void)transaction;
+      (void)state;
+      (void)handle;
+      (void)key;
+      (void)value;
+      return lookup_commit::rejected;
+    } else {
+      if (transaction.sealed()) {
+        return lookup_commit::sealed;
+      }
+      auto &existing = detail::lookup_iterator_value(handle);
+      auto *previous = std::addressof(existing.binding());
+      auto *replacement = std::addressof(value.binding());
+      transaction.on_rollback([&state, key = std::decay_t<Key>(key), previous,
+                               replacement]() noexcept {
+        restore_lookup_binding<LookupEntry>(state, key, replacement, previous);
+      });
+      existing = std::move(value);
+      return lookup_commit::replaced;
+    }
+  }
+
+  template <typename LookupEntry, typename Key, typename Binding>
+  static void restore_lookup_binding(runtime_bindings_state &state,
+                                     const Key &key, Binding *replacement,
+                                     Binding *previous) noexcept {
+    auto &index = state.lookup_indexes.template get<LookupEntry>();
+    auto it = index.find(key);
+    assert(it != index.end());
+    auto &value = detail::lookup_iterator_value(it);
+    assert(std::addressof(value.binding()) == replacement);
+    (void)replacement;
+    value = runtime_lookup_value(runtime_lookup_binding_view{previous});
+  }
+
+  lookup_commit commit_singular_base_lookup(
+      runtime_bindings_state &state, runtime_transaction_type &transaction,
+      detail::base_lookup_key<rtti_type> key, runtime_lookup_value value) {
     auto &index = state.lookup_indexes.template get<base_lookup_entry>();
     auto [handle, inserted] = index.try_emplace(key, std::move(value));
     if (inserted) {
       record_lookup_rollback<base_lookup_entry>(transaction, state, handle,
                                                 key);
+      return lookup_commit::inserted;
     }
-    return inserted;
+    return replace_lookup<base_lookup_entry>(transaction, state, handle, key,
+                                             std::move(value));
   }
 
   template <typename Owner> struct shared_lookup_value_factory {
@@ -1741,14 +1812,13 @@ private:
           TypeStorage, typename annotated_traits<TypeInterface>::type,
           typename TypeStorage::type>();
       auto key_arg = route::key(lookup_key);
-      if (!this->commit_singular_base_lookup(
+      this->template check_lookup_commit<TypeInterface, TypeStorage>(
+          this->commit_singular_base_lookup(
               state, transaction, key_arg,
               runtime_lookup_value(runtime_lookup_binding_view{
                   static_cast<runtime_binding_interface_type *>(
-                      binding_result)}))) {
-        throw detail::make_lookup_already_registered_exception<
-            TypeInterface, typename TypeStorage::type>(lookup_key, key_arg);
-      }
+                      binding_result)})),
+          lookup_key, key_arg);
     } else {
       direct_lookup_value_factory<SharedOwner, Owner> value_factory{
           std::addressof(binding_owner)};
