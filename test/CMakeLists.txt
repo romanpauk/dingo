@@ -547,7 +547,7 @@ if(NOT DINGO_RESOLVE_GENERATOR_RESULT EQUAL 0)
         "${DINGO_RESOLVE_GENERATOR_RESULT}")
 endif()
 file(GLOB_RECURSE DINGO_RESOLVE_SOURCES CONFIGURE_DEPENDS
-    "${DINGO_RESOLVE_DIR}/runtime/*.cpp")
+    "${DINGO_RESOLVE_DIR}/runtime/*/*/*.cpp")
 
 add_custom_target(cells-check
     COMMENT "Verifying generated cell coverage"

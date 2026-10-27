@@ -54,12 +54,17 @@ from tools.model.semantics.support import classify, to_shape
 
 BINDINGS = (CONCRETE, ANNOTATED, KEYED, INTERFACE, ANNOTATED_INTERFACE)
 CONTAINERS = ("runtime",)
+# One file per category under the storage directory. The resolve probe is the
+# first category; behavior, annotated, keyed, const, and interface tests can
+# move under the same storage path later.
+CATEGORIES = ("resolve",)
 
 
 @dataclass(frozen=True)
 class ResolveCase:
     name: str
     path: str
+    category: str
     scope: str
     storage: str
     form: str
@@ -79,6 +84,7 @@ class Shard:
     scope: str
     storage: str
     form: str
+    category: str
     path: str
     suite: str
     cases: tuple[ResolveCase, ...]
@@ -234,7 +240,7 @@ def _registration(
 
 
 def _cases_for(
-    path: StoragePath, container: str
+    path: StoragePath, container: str, category: str
 ) -> tuple[ResolveCase, ...]:
     cases: list[ResolveCase] = []
     for traits in TRAITS:
@@ -269,8 +275,9 @@ def _cases_for(
                         name=f"{traits.name}_{binding.kind}_{slug}",
                         path=(
                             f"{container}/{path.scope.name}/{path.name}/"
-                            f"{traits.name}/{binding.kind}/{slug}"
+                            f"{category}/{traits.name}/{binding.kind}/{slug}"
                         ),
+                        category=category,
                         scope=path.scope.name,
                         storage=path.name,
                         form=path.form.name,
@@ -281,29 +288,40 @@ def _cases_for(
                         declared_reason=reason or "",
                         instance=instance,
                         registration=line,
-                        suite=f"resolve_runtime_{path.scope.name}_{path.name}",
+                        suite=(
+                            f"{container}_{path.scope.name}_{path.name}_"
+                            f"{category}"
+                        ),
                     )
                 )
     return tuple(cases)
 
 
 def build_shards() -> tuple[Shard, ...]:
-    grouped: dict[tuple[str, str, str], list[ResolveCase]] = defaultdict(list)
+    grouped: dict[
+        tuple[str, str, str, str], list[ResolveCase]
+    ] = defaultdict(list)
     for container in CONTAINERS:
-        for path in STORAGE_PATHS:
-            cases = _cases_for(path, container)
-            if cases:
-                grouped[(container, path.scope.name, path.name)].extend(cases)
+        for category in CATEGORIES:
+            for path in STORAGE_PATHS:
+                cases = _cases_for(path, container, category)
+                if cases:
+                    grouped[
+                        (container, path.scope.name, path.name, category)
+                    ].extend(cases)
     shards = []
-    for (container, scope, storage), cases in sorted(grouped.items()):
-        suite = f"resolve_{container}_{scope}_{storage}"
+    for (container, scope, storage, category), cases in sorted(
+        grouped.items()
+    ):
+        suite = f"{container}_{scope}_{storage}_{category}"
         shards.append(
             Shard(
                 container=container,
                 scope=scope,
                 storage=storage,
                 form=cases[0].form,
-                path=f"{container}/{scope}/{storage}.cpp",
+                category=category,
+                path=f"{container}/{scope}/{storage}/{category}.cpp",
                 suite=suite,
                 cases=tuple(cases),
             )
@@ -323,6 +341,7 @@ def manifest(shards: tuple[Shard, ...]) -> str:
                 "scope": shard.scope,
                 "storage": shard.storage,
                 "form": shard.form,
+                "category": shard.category,
                 "path": shard.path,
                 "suite": shard.suite,
                 "cases": [
@@ -332,6 +351,7 @@ def manifest(shards: tuple[Shard, ...]) -> str:
                         "scope": case.scope,
                         "storage": case.storage,
                         "form": case.form,
+                        "category": case.category,
                         "binding": case.binding,
                         "traits": case.traits,
                         "request": case.request,

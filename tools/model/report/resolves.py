@@ -43,6 +43,9 @@ def read_manifest(path: Path) -> dict[str, dict[str, object]]:
                 "binding": case["binding"],
                 "traits": case["traits"],
                 "form": case.get("form", shard.get("form", "")),
+                "category": case.get(
+                    "category", shard.get("category", "")
+                ),
                 "shard": shard["path"],
             }
     return calls
@@ -116,6 +119,9 @@ def compare(
         "overclaim_by_form": dict(
             Counter(str(row["form"]) for row in overclaims)
         ),
+        "overclaim_by_category": dict(
+            Counter(str(row.get("category", "")) for row in overclaims)
+        ),
         "overclaim_by_binding": dict(
             Counter(str(row["binding"]) for row in overclaims)
         ),
@@ -156,6 +162,12 @@ def render(report: dict[str, object]) -> str:
     ]
     for name, count in sorted(
         report["overclaim_by_form"].items(), key=lambda item: -item[1]
+    ):
+        lines.append(f"- `{name}`: {count}")
+    lines += ["", "## Overclaims by category", ""]
+    for name, count in sorted(
+        report["overclaim_by_category"].items(),
+        key=lambda item: -item[1],
     ):
         lines.append(f"- `{name}`: {count}")
     lines += ["", "## Overclaims by access", ""]

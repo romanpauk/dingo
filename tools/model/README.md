@@ -123,12 +123,13 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   pointees promoted from a value, inline wrappers that contain the leaf).
   Borrows, moves, adopted pointers/arrays, and owning-handle copies stay.
 - `emit/resolve.py` generates the storage-driven runtime probe. On disk the
-  hierarchy is `runtime/<scope>/<storage>.cpp`; one file is one storage path,
+  hierarchy is `runtime/<scope>/<storage>/<category>.cpp`; one file is one
+  storage path and category (`resolve` today),
   one GTest suite is that path, and one test is one `(trait, binding, request)`.
   Each test registers the storage once and calls `resolve` through the
   `probe<Request>` helper. A resolve that throws is recorded and the test is
   skipped. Every case has a path
-  `<container>/<scope>/<storage>/<traits>/<binding>/<request>`; the GTest test
+  `<container>/<scope>/<storage>/<category>/<traits>/<binding>/<request>`; the GTest test
   name is the path tail and `RecordProperty("path", ...)` writes the full path
   into the test output. Its fixtures are named for the trait
   (`copyable`/`movable`); the behavior suites keep `tracked` because they count

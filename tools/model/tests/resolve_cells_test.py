@@ -21,10 +21,12 @@ def test_resolve_shards_follow_the_storage_hierarchy() -> None:
     assert len({shard.path for shard in shards}) == len(shards)
     for shard in shards:
         assert shard.path == (
-            f"{shard.container}/{shard.scope}/{shard.storage}.cpp"
+            f"{shard.container}/{shard.scope}/{shard.storage}/"
+            f"{shard.category}.cpp"
         )
         assert shard.suite == (
-            f"resolve_{shard.container}_{shard.scope}_{shard.storage}"
+            f"{shard.container}_{shard.scope}_{shard.storage}_"
+            f"{shard.category}"
         )
         assert shard.cases
 
@@ -48,6 +50,7 @@ def test_resolve_render_is_one_test_per_case() -> None:
         assert content == render(shard)
         for case in shard.cases:
             assert f"TEST({shard.suite}, {case.name})" in content
+            assert f'RecordProperty("path", "{case.path}")' in content
         assert content.count("GTEST_SKIP()") == len(shard.cases)
 
 
