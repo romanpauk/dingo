@@ -49,20 +49,20 @@ using copyable_storage = dingo::detail::storage<
     {{ row.scope_type }}, {{ row.copyable_storage }}, {{ row.copyable_storage }},
     dingo::constructor<{{ row.copyable_constructor }}>,
     dingo::detail::conversions<{{ row.scope_type }}, {{ row.copyable_storage }},
-                               {{ traits[0].cpp }}>>;
+                               {{ copyable.cpp }}>>;
 using move_only_storage = dingo::detail::storage<
     {{ row.scope_type }}, {{ row.move_only_storage }}, {{ row.move_only_storage }},
     dingo::constructor<{{ row.move_only_constructor }}>,
     dingo::detail::conversions<{{ row.scope_type }}, {{ row.move_only_storage }},
-                               {{ traits[1].cpp }}>>;
+                               {{ move_only.cpp }}>>;
 
 {% for shape in row.shapes %}
 constexpr bool {{ shape.name }}_copyable =
     lifted_request_supported<{{ shape.copyable_type }}, copyable_storage,
-                             {{ traits[0].cpp }}>();
+                             {{ copyable.cpp }}>();
 constexpr bool {{ shape.name }}_move_only =
     lifted_request_supported<{{ shape.move_only_type }}, move_only_storage,
-                             {{ traits[1].cpp }}>();
+                             {{ move_only.cpp }}>();
 static_assert(
     !{{ shape.name }}_move_only || {{ shape.name }}_copyable,
     "{{ row.scope }}/{{ row.form }}/{{ shape.name }}: a move-only leaf must "

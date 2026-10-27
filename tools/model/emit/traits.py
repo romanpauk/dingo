@@ -35,7 +35,7 @@ from tools.model.emit.common.validation import validate_catalog
 from tools.model.emit.matrix import SHAPES
 from tools.model.grammar import cpp
 from tools.model.grammar.catalog import ARRAY_STORAGE_FORMS
-from tools.model.grammar.traits import COPYABLE, MOVE_ONLY, TRAITS
+from tools.model.grammar.traits import COPYABLE, MOVE_ONLY
 from tools.model.semantics.cells import iter_supported_cells
 from tools.model.semantics.routes.derivation import leaf_copy_required
 
@@ -109,7 +109,8 @@ def render(output: Path) -> str:
     return render_template(
         "trait_matrix.cpp.j2",
         rows=build_rows(),
-        traits=TRAITS,
+        copyable=COPYABLE,
+        move_only=MOVE_ONLY,
     )
 
 
