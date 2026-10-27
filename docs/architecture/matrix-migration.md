@@ -75,3 +75,122 @@ The matrix still owns the backend (`portable`/`msvc`), detection-mode
    parity families.
 4. Delete `test/matrix`, its axes, fixtures, scenarios, and the `legacy/`
    request/binding algebra once no feature remains.
+
+## Test structure
+
+The matrix features fall into four structural shapes. Each one maps to a
+category under the shared hierarchy:
+
+```text
+<phase>/<execution>/<container>/<scope>/<storage>/<category>/<traits>/<binding>/<request>
+```
+
+- `container` is omitted for the default container. Other values are `indexed`,
+  `indexed_int`, `indexed_string`, `indexed_dsl`, `allocator`, and `rtti`.
+- `execution` is `classification`, `registration`, `resolution`, or
+  `resolution/static` when the static front-end is the subject.
+
+### Storage-cell behavior
+
+Used by construct, factory, local bindings, nested containers, and the existing
+resolve/behavior families:
+
+```text
+resolution/runtime/<scope>/<storage>/construct/<traits>.cpp
+registration/runtime/<scope>/<storage>/factory/<kind>.cpp
+resolution/runtime/<scope>/<storage>/local/<traits>.cpp
+```
+
+One file per cell and category; one test per case. The test registers the
+storage and asserts identity, value, or counts.
+
+### Container configuration
+
+Used by indexed lookup, allocator, RTTI, and mixed registration:
+
+```text
+resolution/runtime/indexed/<scope>/<storage>/resolve/<traits>.cpp
+resolution/runtime/allocator/<scope>/<storage>/resolve/<traits>.cpp
+resolution/runtime/rtti/<scope>/<storage>/resolve/<traits>.cpp
+registration/mixed/<scope>/<storage>/binding/<traits>.cpp
+```
+
+The configuration is a path level, not a test-name suffix, so the same cell can
+be exercised under multiple container front-ends without collisions.
+
+### Global orchestration
+
+Used by invoke, nested containers, scenarios, shared-cyclical graphs, and
+dependency compositions:
+
+```text
+resolution/runtime/<container>/global/invoke/<form>.cpp
+resolution/runtime/<container>/global/nested/<form>.cpp
+resolution/runtime/<container>/global/scenario/<name>.cpp
+resolution/runtime/<container>/global/cyclical/<graph>.cpp
+resolution/runtime/<container>/global/composition/<profile>.cpp
+```
+
+These cases register more than one binding, so there is no single storage path.
+The suite is the scenario/form; the test is the case.
+
+### Compile-time classification
+
+Used by constructor detection and conversion parity:
+
+```text
+classification/constructor/<backend>/<mode>/<shape>.cpp
+classification/conversion/<form>.cpp
+```
+
+Static assertions only; no container.
+
+## How each feature is tested
+
+| feature | structure | assertion | | --- | --- | --- | | `construct` | storage
+cell | `construct<Constructed>()`, dependency value | | `construct_collection` |
+global / static collection | collection size and element ids | |
+`factory_override` | storage cell | registered factory result value | |
+`resolve_collection` | static collection | collection size and element values |
+| `resolve_keyed_collection` | static collection + key | keyed collection size
+and values | | `resolve_indexed` | runtime/indexed cell | two indexed
+registrations resolve by key | | `local_bindings` | storage cell | dependency
+attached to one registration | | `nested_container` | global nested | child
+resolves from parent/local scope | | `explicit_dependencies` | storage cell |
+constructor metadata selects the dependency | | `mixed_external_dependency` |
+registration/mixed | static anchor + runtime external dependency | |
+`custom_allocator` | runtime/allocator | container bookkeeping uses the
+allocator | | `custom_rtti` | runtime/rtti | lookup works with the custom
+provider | | `invoke` | global invoke | callable result and dependency dispatch
+| | scenarios | global scenario | complete regression behavior | |
+shared-cyclical | global cyclical | two-node cycle resolves through each edge |
+| dependency composition | global composition | recursive composition
+resolves/invokes | | conversion parity | classification | conversion matrix
+parity | | constructor detection | classification | backend/mode/shape parity |
+
+## Migration and removal
+
+The matrix is removed feature by feature. A feature is removable only when:
+
+1. the model family covers every supported row the matrix generated for it;
+2. the rows are pinned by assertions, not just compiled;
+3. the feature is listed in `FULLY_MODEL_COVERED_FEATURES` (or the matrix
+   generator no longer emits it);
+4. the matrix generator test still passes with the feature removed.
+
+Order:
+
+1. Finish `construct` (unique/cyclical) and the remaining factory forms.
+2. Add the runtime/mixed/indexed collection forms and the container
+   configuration level.
+3. Add local bindings and nested containers.
+4. Add explicit/mixed dependencies, allocator, and RTTI.
+5. Add invoke.
+6. Add scenarios, shared-cyclical graphs, and dependency compositions.
+7. Add conversion parity.
+8. Delete `test/matrix`, its axes, fixtures, scenarios, and the `legacy/`
+   algebra.
+
+The matrix generator test and `model_coverage.py` are the parity gate until step
+8\. No feature is deleted from the matrix before its model family exists and the
+generator test passes.
