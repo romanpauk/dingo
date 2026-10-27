@@ -158,28 +158,56 @@ classification/conversion/<form>.cpp
 
 Static assertions only; no container.
 
-## How each feature is tested
+## Remaining features by mechanism
 
-| feature | structure | assertion | | --- | --- | --- | | `construct` | storage
-cell | `construct<Constructed>()`, dependency value | | `construct_collection` |
-global / static collection | collection size and element ids | |
-`factory_override` | storage cell | registered factory result value | |
-`resolve_collection` | static collection | collection size and element values |
-| `resolve_keyed_collection` | static collection + key | keyed collection size
-and values | | `resolve_indexed` | runtime/indexed cell | two indexed
-registrations resolve by key | | `local_bindings` | storage cell | dependency
-attached to one registration | | `nested_container` | global nested | child
-resolves from parent/local scope | | `explicit_dependencies` | storage cell |
-constructor metadata selects the dependency | | `mixed_external_dependency` |
-registration/mixed | static anchor + runtime external dependency | |
-`custom_allocator` | runtime/allocator | container bookkeeping uses the
-allocator | | `custom_rtti` | runtime/rtti | lookup works with the custom
-provider | | `invoke` | global invoke | callable result and dependency dispatch
-| | scenarios | global scenario | complete regression behavior | |
-shared-cyclical | global cyclical | two-node cycle resolves through each edge |
-| dependency composition | global composition | recursive composition
-resolves/invokes | | conversion parity | classification | conversion matrix
-parity | | constructor detection | classification | backend/mode/shape parity |
+The matrix treats every feature as an independent axis and multiplies it by
+storage, scope, request form, and mode. Several features share one mechanism, so
+they belong in one family with the mechanism's own degrees of freedom, and some
+need no family at all because the row probes already execute them.
+
+| group | features | shared mechanism | family | cases | | --- | --- | --- | ---
+| --- | | assembly | `resolve_collection`, `resolve_keyed_collection`,
+`construct_collection`, indexed collections | several bindings assembled into
+one value | `global/collection/<mode>` | ~8 | | scope | `local_bindings`,
+`nested_container` | where a binding is looked up | `global/scope/<case>` | ~5 |
+| trait | `custom_allocator`, `custom_rtti`, `resolve_indexed` (DSL) | a
+container trait swapped under the same rows | `configuration/<trait>` | ~3 | |
+co-residence | `mixed_external_dependency`, `mixed_singular_ambiguity` | static
+and runtime bindings in one container | `global/mixed/<case>` | ~3 | |
+publication | `shared_cyclical` | two-phase publication of a cycle |
+`global/cyclical/<graph>` | ~4 | | selection | `explicit_dependencies` |
+constructor metadata chooses among same-typed dependencies | extension of
+`global/construct` | ~2 | | composition | `dependency_composition` | the
+dependency type is itself composed | mostly the atom request space;
+`global/composition/<depth>` | ~3 | | table | `constructor_detection`,
+conversion parity | compile-time type tables | `classification/...` | tables |
+
+Features that share nothing must not be merged:
+
+- assembly and publication are unrelated: one collects bindings, the other
+  publishes edges before the graph is complete;
+- `explicit_dependencies` selects between dependencies of the *same* type, while
+  `dependency_composition` changes the dependency's *type*; one extends the
+  construct shapes, the other is mostly atom rows;
+- constructor detection and conversion parity share the emission mechanism
+  (tables of static assertions) but not their axes.
+
+Features that need no family:
+
+| feature | why | | --- | --- | | `nested_wrappers`, `resolve_wrapper`,
+`resolve_unique_wrapper` | the row probes already request
+`shared_ptr<shared_ptr<T>>`, `unique_ptr<unique_ptr<T>>`, and deeper nestings |
+| `construct_invoke` | `global/construct` and `global/invoke` shape families | |
+`factory_override` | `global/producer` | | `custom_wrappers` |
+`classification/wrapper` for the properties, plus one row with the custom
+wrapper | | scenarios | each scenario belongs to the family owning its
+mechanism; a regression keeps one named case there |
+
+Granularity follows the mechanism, not the matrix product. A collection case
+varies the collection shape and the registration mode; the element storage and
+request form are the row probes. A cycle case varies the graph shape; the edge
+storage is the row probe. That is roughly 35 runtime cases and two static tables
+for the whole remainder, instead of the matrix's hundreds of rows.
 
 ## Migration and removal
 
@@ -195,15 +223,15 @@ The matrix is removed feature by feature. A feature is removable only when:
 
 Order:
 
-1. Finish `construct` (unique/cyclical) and the remaining factory forms.
-2. Add the runtime/mixed/indexed collection forms and the container
-   configuration level.
-3. Add local bindings and nested containers.
-4. Add explicit/mixed dependencies, allocator, and RTTI.
-5. Add invoke.
-6. Add scenarios, shared-cyclical graphs, and dependency compositions.
-7. Add conversion parity.
-8. Delete `test/matrix`, its axes, fixtures, scenarios, and the `legacy/`
+1. Done: `construct`, `invoke`, and the producer classes.
+2. Collections: runtime, mixed, keyed, and the indexed container trait.
+3. Configuration: allocator, RTTI, and the indexed DSL.
+4. Mixed co-residence and the singular ambiguity.
+5. Cycles: self, two-node, and three-node graphs.
+6. Lookup scope: local bindings, child, grandchild, shadowing.
+7. `explicit_dependencies` as a construct shape, then composition depth.
+8. Classification tables: constructor detection axes and conversion parity.
+9. Delete `test/matrix`, its axes, fixtures, scenarios, and the `legacy/`
    algebra.
 
 The matrix generator test and `model_coverage.py` are the parity gate until step
