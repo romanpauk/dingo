@@ -177,6 +177,7 @@ std::string probe(dingo::container<> &container, Args &&...args) {
 
 {% for case in shard.cases %}
 TEST({{ shard.suite }}, {{ case.name }}) {
+  RecordProperty("path", {{ case.path | cppstr }});
 {% if case.instance %}
   {{ case.instance }};
 {% endif %}
@@ -186,7 +187,7 @@ TEST({{ shard.suite }}, {{ case.name }}) {
       probe<{{ case.request }}>(container{% if case.binding == "keyed" %},
                                 dingo::key_type<key_a>{}{% endif %});
   write_resolve_outcome(
-      {{ case.outcome_name | cppstr }}, {{ case.scope | cppstr }},
+      {{ case.path | cppstr }}, {{ case.scope | cppstr }},
       {{ case.storage | cppstr }}, {{ case.binding | cppstr }},
       {{ case.request | cppstr }}, {{ case.traits | cppstr }},
       {{ "true" if case.declared else "false" }},

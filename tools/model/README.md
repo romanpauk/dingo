@@ -127,8 +127,12 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   one GTest suite is that path, and one test is one `(trait, binding, request)`.
   Each test registers the storage once and calls `resolve` through the
   `probe<Request>` helper. A resolve that throws is recorded and the test is
-  skipped. Its fixtures are named for the trait (`copyable`/`movable`); the
-  behavior suites keep `tracked` because they count lifetime operations. The generated tests record the outcome
+  skipped. Every case has a path
+  `<container>/<scope>/<storage>/<traits>/<binding>/<request>`; the GTest test
+  name is the path tail and `RecordProperty("path", ...)` writes the full path
+  into the test output. Its fixtures are named for the trait
+  (`copyable`/`movable`); the behavior suites keep `tracked` because they count
+  lifetime operations. The generated tests record the outcome
   instead of asserting; `report/resolves.py` turns `build/test/resolve-gaps.md`
   into covered calls, overclaims, declared gaps, and stale declarations. It is
   a report target (`resolve-check`), not part of `check`, while the model is

@@ -32,9 +32,9 @@ def read_manifest(path: Path) -> dict[str, dict[str, object]]:
     calls: dict[str, dict[str, object]] = {}
     for shard in payload["shards"]:
         for case in shard["cases"]:
-            calls[case["outcome"]] = {
+            calls[case["path"]] = {
                 "name": case["name"],
-                "outcome": case["outcome"],
+                "path": case["path"],
                 "request": case["request"],
                 "declared": bool(case["declared"]),
                 "declared_reason": str(case.get("declared_reason", "")),

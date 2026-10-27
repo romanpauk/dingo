@@ -33,7 +33,7 @@ def test_resolve_cases_are_unique_and_cover_both_traits() -> None:
     cases = [case for shard in build_shards() for case in shard.cases]
     assert cases
     assert len({(case.suite, case.name) for case in cases}) == len(cases)
-    assert len({case.outcome_name for case in cases}) == len(cases)
+    assert len({case.path for case in cases}) == len(cases)
     assert {case.traits for case in cases} == {
         COPYABLE.name,
         MOVE_ONLY.name,
@@ -62,6 +62,7 @@ def test_resolve_manifest_round_trips() -> None:
         assert len(entry["cases"]) == len(shard.cases)
         for case, case_entry in zip(shard.cases, entry["cases"]):
             assert case_entry["name"] == case.name
+            assert case_entry["path"] == case.path
             assert case_entry["request"] == case.request
 
 

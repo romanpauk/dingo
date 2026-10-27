@@ -22,7 +22,6 @@ outcome report is what the implementation really resolves.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
 from collections import defaultdict
@@ -60,7 +59,7 @@ CONTAINERS = ("runtime",)
 @dataclass(frozen=True)
 class ResolveCase:
     name: str
-    outcome_name: str
+    path: str
     scope: str
     storage: str
     form: str
@@ -118,7 +117,42 @@ def _request_type(binding, request: Expr, fixture: str) -> str:
 
 
 def _slug(expr: Expr) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", expr.render().lower()).strip("_")
+    op = expr.op
+    if op == "leaf":
+        return expr.name.lower()
+    if op == "const":
+        return "const_" + _slug(expr.inner)
+    if op == "lvalue_reference":
+        return _slug(expr.inner) + "_ref"
+    if op == "rvalue_reference":
+        return _slug(expr.inner) + "_rref"
+    if op == "pointer":
+        return _slug(expr.inner) + "_ptr"
+    if op == "array":
+        return _slug(expr.inner) + f"_array{expr.extent}"
+    if op == "array_reference":
+        return _slug(expr.inner) + f"_array_ref{expr.extent}"
+    if op == "array_pointer":
+        return _slug(expr.inner) + f"_array_ptr{expr.extent}"
+    if op in {
+        "optional",
+        "unique_ptr",
+        "shared_ptr",
+        "unique_array",
+        "shared_array",
+    }:
+        return f"{op}_{_slug(expr.inner)}"
+    if op == "variant":
+        return "variant_" + "_".join(
+            _slug(item) for item in expr.alternatives
+        )
+    if op == "annotated":
+        return f"annotated_{_slug(expr.inner)}_{expr.name}"
+    if op == "keyed":
+        return f"keyed_{expr.name}_{_slug(expr.inner)}"
+    if op == "interface":
+        return f"interface_{expr.name}_{_slug(expr.inner)}"
+    raise ValueError(f"no slug for {op!r}")
 
 
 def _skip_reason(path: StoragePath, binding) -> str | None:
@@ -229,19 +263,13 @@ def _cases_for(
                     path.form.kind,
                     shape.access if shape is not None else "",
                 )
-                digest = hashlib.sha1(
-                    projected.render().encode()
-                ).hexdigest()[:8]
-                slug = _slug(projected)
+                slug = _slug(request)
                 cases.append(
                     ResolveCase(
-                        name=(
-                            f"{traits.name}_{binding.kind}_"
-                            f"{slug}_{digest}"
-                        ),
-                        outcome_name=(
-                            f"{container}_{path.scope.name}_{path.name}_"
-                            f"{traits.name}_{binding.kind}_{slug}_{digest}"
+                        name=f"{traits.name}_{binding.kind}_{slug}",
+                        path=(
+                            f"{container}/{path.scope.name}/{path.name}/"
+                            f"{traits.name}/{binding.kind}/{slug}"
                         ),
                         scope=path.scope.name,
                         storage=path.name,
@@ -300,7 +328,7 @@ def manifest(shards: tuple[Shard, ...]) -> str:
                 "cases": [
                     {
                         "name": case.name,
-                        "outcome": case.outcome_name,
+                        "path": case.path,
                         "scope": case.scope,
                         "storage": case.storage,
                         "form": case.form,
