@@ -14,6 +14,7 @@ import pytest
 
 from tools.model.emit.families.const import build_rows, render, validate
 from tools.model.emit.common.validation import validate_catalog
+from tools.model.grammar.traits import MOVE_ONLY
 
 
 def test_const_catalog_is_non_empty_and_unique() -> None:
@@ -44,6 +45,18 @@ def test_variant_rows_keep_the_fixed_alternative() -> None:
     for row in rows:
         assert "std::variant<const tracked, long>" in str(row["request"])
         assert "tracked, tracked" not in str(row["request"])
+
+
+def test_const_move_only_rows_use_the_move_only_leaf() -> None:
+    rows = build_rows(MOVE_ONLY)
+    assert rows
+    assert len(rows) < len(build_rows())
+    for row in rows:
+        assert "move_only_tracked" in str(row["request"])
+        assert "move_only_tracked" in str(row["registration"])
+    content = render(None, MOVE_ONLY)
+    assert "TEST(const_cells_move_only," in content
+    assert "struct move_only_tracked" in content
 
 
 def test_const_render_is_deterministic(tmp_path: Path) -> None:

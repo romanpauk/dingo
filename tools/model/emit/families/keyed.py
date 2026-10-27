@@ -23,11 +23,12 @@ from pathlib import Path
 
 from tools.model.domain.cases import iter_cases, request_forms
 from tools.model.emit.common.recipe import external_instance, registration
-from tools.model.emit.common.runner import emit, render_template
+from tools.model.emit.common.runner import emit, render_template, trait_context
 from tools.model.emit.common.validation import validate_catalog
 from tools.model.grammar import cpp
 from tools.model.grammar.expr import Expr
 from tools.model.grammar.storage import const_leaf, has_const
+from tools.model.grammar.traits import COPYABLE, MOVE_ONLY, LeafTraits
 from tools.model.semantics.support import to_shape
 from tools.model.semantics.support import classify
 
@@ -41,17 +42,22 @@ def _is_const(case) -> bool:
     )
 
 
-def _registration(case) -> tuple[str, str]:
+def _registration(case, traits: LeafTraits = COPYABLE) -> tuple[str, str]:
     path = case.storage_path
     form = path.form
     const = _is_const(case)
-    storage = path.storage("tracked")
+    storage = path.storage(traits.cpp)
     factory = (
-        path.const_factory("tracked") if const else path.factory("tracked")
+        path.const_factory(traits.cpp)
+        if const
+        else path.factory(traits.cpp)
     )
     if case.scope == "external":
         if form.kind == "array":
-            declaration = cpp.declaration(path.cpp("tracked"), "external_instance") + "{}"
+            declaration = (
+                cpp.declaration(path.cpp(traits.cpp), "external_instance")
+                + "{}"
+            )
             line, _ = registration(
                 form,
                 case.scope,
@@ -61,7 +67,15 @@ def _registration(case) -> tuple[str, str]:
                 external_argument="external_instance",
             )
             return declaration, line
-        instance = external_instance(form, "tracked", const=const)
+        instance = external_instance(
+            form,
+            traits.cpp,
+            const=const,
+            move=(
+                not traits.copyable
+                and path.expr.op != "lvalue_reference"
+            ),
+        )
         if instance is None:
             raise ValueError(f"{form.name} has no external instance")
         line, _ = registration(
@@ -125,10 +139,12 @@ def _slug(expr: Expr) -> str:
     return re.sub(r"[^a-z0-9]+", "_", expr.render().lower()).strip("_")
 
 
-def build_rows() -> list[dict[str, object]]:
+def build_rows(
+    traits: LeafTraits = COPYABLE,
+) -> list[dict[str, object]]:
     rows = []
     seen = set()
-    for case in iter_cases(request_forms()):
+    for case in iter_cases(request_forms(), traits):
         if case.binding.kind != "keyed":
             continue
         if not _direct_leaf_request(case.request):
@@ -158,7 +174,11 @@ def build_rows() -> list[dict[str, object]]:
         ):
             continue
         verdict = classify(
-            case.scope, case.storage_name, case.binding, case.request
+            case.scope,
+            case.storage_name,
+            case.binding,
+            case.request,
+            traits,
         )
         if verdict.outcome != "supported":
             continue
@@ -166,7 +186,7 @@ def build_rows() -> list[dict[str, object]]:
         if key in seen:
             continue
         seen.add(key)
-        instance, registration_line = _registration(case)
+        instance, registration_line = _registration(case, traits)
         digest = hashlib.sha1(case.request.render().encode()).hexdigest()[:8]
         rows.append(
             {
@@ -178,7 +198,7 @@ def build_rows() -> list[dict[str, object]]:
                 "storage": case.storage_path.expr.render(),
                 "instance": instance,
                 "registration": registration_line,
-                "request": case.request.with_leaf("tracked").render(),
+                "request": case.request.with_leaf(traits.cpp).render(),
                 "bind": _binding(case.request),
                 "coverage": key,
             }
@@ -186,8 +206,8 @@ def build_rows() -> list[dict[str, object]]:
     return rows
 
 
-def validate() -> None:
-    rows = build_rows()
+def validate(traits: LeafTraits = COPYABLE) -> None:
+    rows = build_rows(traits)
     if not rows:
         raise ValueError("keyed catalog must not be empty")
     names = [row["name"] for row in rows]
@@ -200,14 +220,19 @@ def validate() -> None:
             raise ValueError(f"{row['name']} has no request")
 
 
-def render(output: Path) -> str:
-    validate()
-    return render_template("keyed_cells.cpp.j2", rows=build_rows())
+def render(output: Path, traits: LeafTraits = COPYABLE) -> str:
+    validate(traits)
+    return render_template(
+        "keyed_cells.cpp.j2",
+        rows=build_rows(traits),
+        **trait_context(traits, "keyed_cells"),
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--out-move-only", type=Path)
     parser.add_argument(
         "--include",
         type=Path,
@@ -218,7 +243,12 @@ def main() -> None:
 
     if arguments.include is not None:
         validate_catalog(arguments.include)
-    emit(arguments.out, render(arguments.out), check=arguments.check)
+    for traits, out in (
+        (COPYABLE, arguments.out),
+        (MOVE_ONLY, arguments.out_move_only),
+    ):
+        if out is not None:
+            emit(out, render(out, traits), check=arguments.check)
 
 
 if __name__ == "__main__":

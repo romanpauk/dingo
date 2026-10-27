@@ -19,6 +19,7 @@ from tools.model.emit.families.interface_runtime import (
     validate,
 )
 from tools.model.grammar.bindings import INTERFACE
+from tools.model.grammar.traits import MOVE_ONLY
 from tools.model.semantics.support import classify
 
 
@@ -35,6 +36,21 @@ def test_interface_rows_are_classified_supported() -> None:
         assert (
             classify(scope, name, INTERFACE, request).outcome == "supported"
         )
+
+
+def test_interface_move_only_rows_use_the_move_only_implementation() -> None:
+    rows = build_rows(MOVE_ONLY)
+    assert rows
+    assert len(rows) <= len(build_rows())
+    for row in rows:
+        scope, name, request = row["coverage"]
+        assert (
+            classify(scope, name, INTERFACE, request, MOVE_ONLY).outcome
+            == "supported"
+        )
+        assert "move_only_implementation_type" in str(row["registration"])
+    content = render(None, MOVE_ONLY)
+    assert "TEST(interface_runtime_move_only," in content
 
 
 def test_interface_render_is_deterministic(tmp_path: Path) -> None:

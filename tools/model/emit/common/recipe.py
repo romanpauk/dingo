@@ -34,6 +34,7 @@ def external_instance(
     leaf: str = "tracked",
     *,
     const: bool = False,
+    move: bool = False,
 ) -> ExternalInstance | None:
     """The caller-owned instance an external registration receives."""
     if const and form.kind == "pointer":
@@ -46,7 +47,13 @@ def external_instance(
         declaration = f"{'const ' if const else ''}{leaf} external_instance"
         if form.kind == "array":
             declaration += "[2]"
-        return ExternalInstance(declaration, "external_instance", 0)
+        # An array instance is handed over by reference; a single movable leaf
+        # is transferred into the registration instead of copied.
+        transfer = move and form.kind != "array"
+        argument = (
+            "std::move(external_instance)" if transfer else "external_instance"
+        )
+        return ExternalInstance(declaration, argument, int(transfer))
 
     factory = form.const_factory(leaf) if const else form.factory(leaf)
     if factory is None:

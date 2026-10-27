@@ -27,7 +27,7 @@
 #define DINGO_BEHAVIOR_REPORT "behavior-outcomes.jsonl"
 #endif
 
-namespace behavior_cells {
+namespace {{ namespace }} {
 
 struct tag_a {};
 struct tag_b {};
@@ -42,17 +42,21 @@ struct tracked_interface2 {
   virtual int value() const = 0;
 };
 
-struct tracked : tracked_interface, tracked_interface2 {
+struct {{ leaf }} : tracked_interface, tracked_interface2 {
   static inline int constructions = 0;
   static inline int copies = 0;
   static inline int moves = 0;
   static inline int destructions = 0;
   static inline int next_id = 0;
 
-  tracked() : id(++next_id) { ++constructions; }
-  tracked(const tracked &other) : id(other.id) { ++copies; }
-  tracked(tracked &&other) noexcept : id(other.id) { ++moves; }
-  ~tracked() { ++destructions; }
+  {{ leaf }}() : id(++next_id) { ++constructions; }
+{% if move_only %}
+  {{ leaf }}(const {{ leaf }} &) = delete;
+{% else %}
+  {{ leaf }}(const {{ leaf }} &other) : id(other.id) { ++copies; }
+{% endif %}
+  {{ leaf }}({{ leaf }} &&other) noexcept : id(other.id) { ++moves; }
+  ~{{ leaf }}() { ++destructions; }
 
   static void reset() {
     constructions = 0;
@@ -105,16 +109,16 @@ inline void write_behavior_outcome(const char *name, const char *scope,
       << behavior_json_escape(container) << "\",\"request\":\""
       << behavior_json_escape(request) << "\",\"result\":\""
       << behavior_json_escape(result) << "\",\"constructions\":"
-      << tracked::constructions << ",\"copies\":" << tracked::copies
-      << ",\"moves\":" << tracked::moves
-      << ",\"destructions\":" << tracked::destructions << "}\n";
+      << {{ leaf }}::constructions << ",\"copies\":" << {{ leaf }}::copies
+      << ",\"moves\":" << {{ leaf }}::moves
+      << ",\"destructions\":" << {{ leaf }}::destructions << "}\n";
 }
 
 template <typename Exception, typename Fn>
 void expect_behavior_exception(const char *name, const char *scope,
                                const char *form, const char *request,
                                const char *exception_name, Fn &&fn) {
-  tracked::reset();
+  {{ leaf }}::reset();
   try {
     fn();
     write_behavior_outcome(name, scope, form, "runtime", request,
@@ -129,20 +133,20 @@ void expect_behavior_exception(const char *name, const char *scope,
   }
 }
 
-std::unique_ptr<tracked> make_unique_tracked() {
-  return std::make_unique<tracked>();
+std::unique_ptr<{{ leaf }}> make_unique_{{ leaf }}() {
+  return std::make_unique<{{ leaf }}>();
 }
 
-std::unique_ptr<tracked[]> make_unique_array_tracked() {
-  return std::unique_ptr<tracked[]>(new tracked[2]);
+std::unique_ptr<{{ leaf }}[]> make_unique_array_{{ leaf }}() {
+  return std::unique_ptr<{{ leaf }}[]>(new {{ leaf }}[2]);
 }
 
-std::shared_ptr<tracked> make_shared_tracked() {
-  return std::make_shared<tracked>();
+std::shared_ptr<{{ leaf }}> make_shared_{{ leaf }}() {
+  return std::make_shared<{{ leaf }}>();
 }
 
 struct copyable_interface {
-  tracked value;
+  {{ leaf }} value;
 };
 
 struct copyable_implementation : copyable_interface {};
@@ -151,33 +155,33 @@ std::shared_ptr<copyable_implementation> make_copyable_implementation() {
   return std::make_shared<copyable_implementation>();
 }
 
-std::shared_ptr<tracked[]> make_shared_array_tracked() {
-  return std::shared_ptr<tracked[]>(new tracked[2]);
+std::shared_ptr<{{ leaf }}[]> make_shared_array_{{ leaf }}() {
+  return std::shared_ptr<{{ leaf }}[]>(new {{ leaf }}[2]);
 }
 
-std::optional<tracked> make_optional_tracked() {
-  return std::optional<tracked>(std::in_place);
+std::optional<{{ leaf }}> make_optional_{{ leaf }}() {
+  return std::optional<{{ leaf }}>(std::in_place);
 }
 
-using variant_t = std::variant<tracked, long>;
+using variant_t = std::variant<{{ leaf }}, long>;
 
-variant_t make_variant_tracked() {
+variant_t make_variant_{{ leaf }}() {
   return variant_t(std::in_place_index<0>);
 }
 
-tracked *pointer_target = nullptr;
+{{ leaf }} *pointer_target = nullptr;
 
-tracked *make_pointer_tracked() {
-  pointer_target = new tracked;
+{{ leaf }} *make_pointer_{{ leaf }}() {
+  pointer_target = new {{ leaf }};
   return pointer_target;
 }
 
 {% for row in rows %}
-TEST(behavior_cells, {{ row.name }}) {
+TEST({{ suite }}, {{ row.name }}) {
 {% if row.instance %}
   {{ row.instance }};
 {% endif %}
-  tracked::reset();
+  {{ leaf }}::reset();
   {
 {% if row.container == "runtime" %}
   dingo::container<> container;
@@ -198,9 +202,9 @@ TEST(behavior_cells, {{ row.name }}) {
   auto &second = container.resolve<{{ row.request }}>();
 {% elif row.move_out %}
   auto &&first_rvalue = container.resolve<{{ row.request }}>();
-  tracked first = std::move(first_rvalue);
+  {{ leaf }} first = std::move(first_rvalue);
   auto &&second_rvalue = container.resolve<{{ row.request }}>();
-  tracked second = std::move(second_rvalue);
+  {{ leaf }} second = std::move(second_rvalue);
 {% elif row.request.endswith("&") %}
   auto &first = container.resolve<{{ row.request }}>();
   auto &second = container.resolve<{{ row.request }}>();
@@ -212,31 +216,31 @@ TEST(behavior_cells, {{ row.name }}) {
 {% if row.other_relation %}
   EXPECT_TRUE({{ row.other_relation }});
 {% endif %}
-  EXPECT_EQ(tracked::constructions, {{ row.constructions }});
+  EXPECT_EQ({{ leaf }}::constructions, {{ row.constructions }});
 {% if row.copies is not none %}
-  EXPECT_EQ(tracked::copies, {{ row.copies }});
+  EXPECT_EQ({{ leaf }}::copies, {{ row.copies }});
 {% endif %}
 {% if row.moves is not none %}
-  EXPECT_EQ(tracked::moves, {{ row.moves }});
+  EXPECT_EQ({{ leaf }}::moves, {{ row.moves }});
 {% endif %}
 {% if row.array_element %}
   EXPECT_TRUE({{ row.array_element }});
 {% endif %}
 {% if row.leaf == "id" %}
-  tracked &first_reference = container.resolve<tracked &>();
-  tracked &second_reference = container.resolve<tracked &>();
+  {{ leaf }} &first_reference = container.resolve<{{ leaf }} &>();
+  {{ leaf }} &second_reference = container.resolve<{{ leaf }} &>();
   EXPECT_EQ(std::addressof(first_reference), std::addressof(second_reference));
   EXPECT_EQ(first_reference.id, first.id);
 {% elif row.leaf == "pointer" %}
-  tracked &first_reference = container.resolve<tracked &>();
-  tracked *pointer = container.resolve<tracked *>();
+  {{ leaf }} &first_reference = container.resolve<{{ leaf }} &>();
+  {{ leaf }} *pointer = container.resolve<{{ leaf }} *>();
   EXPECT_EQ(std::addressof(first_reference), first.get());
   EXPECT_EQ(pointer, first.get());
 {% elif row.leaf == "array_pointer" %}
-  tracked &first_reference = container.resolve<tracked &>();
+  {{ leaf }} &first_reference = container.resolve<{{ leaf }} &>();
   EXPECT_EQ(first, std::addressof(first_reference));
 {% elif row.leaf == "external" %}
-  tracked &first_reference = container.resolve<tracked &>();
+  {{ leaf }} &first_reference = container.resolve<{{ leaf }} &>();
   EXPECT_EQ(std::addressof(first_reference),
             std::addressof(external_instance));
 {% endif %}
@@ -245,44 +249,44 @@ TEST(behavior_cells, {{ row.name }}) {
   {{ row.delete_result }} second;
 {% endif %}
   }
-  EXPECT_EQ(tracked::destructions,
-            tracked::constructions + tracked::copies + tracked::moves);
-  write_behavior_outcome("{{ row.name }}", "{{ row.scope }}", "{{ row.form }}",
+  EXPECT_EQ({{ leaf }}::destructions,
+            {{ leaf }}::constructions + {{ leaf }}::copies + {{ leaf }}::moves);
+  write_behavior_outcome("{{ row.name }}{{ name_suffix }}", "{{ row.scope }}", "{{ row.form }}",
                          "{{ row.container }}", "{{ row.request }}", "ok");
 }
 
 {% endfor %}
-TEST(annotation_cells, refuses_unannotated_request) {
+TEST(annotation_cells{{ name_suffix }}, refuses_unannotated_request) {
   dingo::container<> container;
-  container.register_type<dingo::scope<dingo::shared>, dingo::storage<tracked>,
-                          dingo::interfaces<dingo::annotated<tracked, tag_a>>>();
+  container.register_type<dingo::scope<dingo::shared>, dingo::storage<{{ leaf }}>,
+                          dingo::interfaces<dingo::annotated<{{ leaf }}, tag_a>>>();
   expect_behavior_exception<dingo::type_not_found_exception>(
-      "annotation_refuses_unannotated_request", "annotation",
-      "refuses_unannotated_request", "tracked &",
+      "annotation_refuses_unannotated_request{{ name_suffix }}", "annotation",
+      "refuses_unannotated_request", "{{ leaf }} &",
       "exception:dingo::type_not_found_exception",
-      [&] { (void)container.resolve<tracked &>(); });
+      [&] { (void)container.resolve<{{ leaf }} &>(); });
 }
 
-TEST(annotation_cells, refuses_wrong_tag) {
+TEST(annotation_cells{{ name_suffix }}, refuses_wrong_tag) {
   dingo::container<> container;
-  container.register_type<dingo::scope<dingo::shared>, dingo::storage<tracked>,
-                          dingo::interfaces<dingo::annotated<tracked, tag_a>>>();
+  container.register_type<dingo::scope<dingo::shared>, dingo::storage<{{ leaf }}>,
+                          dingo::interfaces<dingo::annotated<{{ leaf }}, tag_a>>>();
   expect_behavior_exception<dingo::type_not_found_exception>(
-      "annotation_refuses_wrong_tag", "annotation", "refuses_wrong_tag",
-      "dingo::annotated<tracked &, tag_b>",
+      "annotation_refuses_wrong_tag{{ name_suffix }}", "annotation", "refuses_wrong_tag",
+      "dingo::annotated<{{ leaf }} &, tag_b>",
       "exception:dingo::type_not_found_exception",
-      [&] { (void)container.resolve<dingo::annotated<tracked &, tag_b>>(); });
+      [&] { (void)container.resolve<dingo::annotated<{{ leaf }} &, tag_b>>(); });
 }
 
-TEST(annotation_cells, rejects_duplicate_annotated_registration) {
+TEST(annotation_cells{{ name_suffix }}, rejects_duplicate_annotated_registration) {
   dingo::container<> container;
-  container.register_type<dingo::scope<dingo::shared>, dingo::storage<tracked>,
-                          dingo::interfaces<dingo::annotated<tracked, tag_a>>>();
+  container.register_type<dingo::scope<dingo::shared>, dingo::storage<{{ leaf }}>,
+                          dingo::interfaces<dingo::annotated<{{ leaf }}, tag_a>>>();
   EXPECT_THROW(
       (container.register_type<
-          dingo::scope<dingo::shared>, dingo::storage<tracked>,
-          dingo::interfaces<dingo::annotated<tracked, tag_a>>>()),
+          dingo::scope<dingo::shared>, dingo::storage<{{ leaf }}>,
+          dingo::interfaces<dingo::annotated<{{ leaf }}, tag_a>>>()),
       dingo::lookup_already_registered_exception);
 }
 
-} // namespace behavior_cells
+} // namespace {{ namespace }}

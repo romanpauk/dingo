@@ -25,20 +25,20 @@
 
 namespace trait_matrix {
 
-struct copyable_type {
-  copyable_type() = default;
-  copyable_type(const copyable_type &) = default;
-  copyable_type(copyable_type &&) noexcept = default;
-  copyable_type &operator=(const copyable_type &) = default;
-  copyable_type &operator=(copyable_type &&) noexcept = default;
+struct tracked {
+  tracked() = default;
+  tracked(const tracked &) = default;
+  tracked(tracked &&) noexcept = default;
+  tracked &operator=(const tracked &) = default;
+  tracked &operator=(tracked &&) noexcept = default;
 };
 
-struct move_only_type {
-  move_only_type() = default;
-  move_only_type(const move_only_type &) = delete;
-  move_only_type(move_only_type &&) noexcept = default;
-  move_only_type &operator=(const move_only_type &) = delete;
-  move_only_type &operator=(move_only_type &&) noexcept = default;
+struct move_only_tracked {
+  move_only_tracked() = default;
+  move_only_tracked(const move_only_tracked &) = delete;
+  move_only_tracked(move_only_tracked &&) noexcept = default;
+  move_only_tracked &operator=(const move_only_tracked &) = delete;
+  move_only_tracked &operator=(move_only_tracked &&) noexcept = default;
 };
 
 using namespace dingo::model::probe;

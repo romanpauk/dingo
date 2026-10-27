@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from tools.model.domain.cases import iter_cases, request_forms
 from tools.model.emit.matrix import SHAPES
-from tools.model.emit.traits import build_rows, render, validate
+from tools.model.emit.traits import probe_shape, build_rows, render, validate
 from tools.model.grammar.bindings import CONCRETE
 from tools.model.grammar.expr import leaf, lvalue_reference, pointer
 from tools.model.grammar.traits import (
@@ -50,18 +50,20 @@ def test_matrix_is_complete_and_deterministic() -> None:
     for row in first:
         assert row["copyable_storage"]
         assert row["move_only_storage"]
-        assert [shape["name"] for shape in row["shapes"]] == [
-            shape.name for shape in SHAPES
+        names = [shape["name"] for shape in row["shapes"]]
+        assert names == [
+            shape.name for shape in SHAPES if probe_shape(shape)
         ]
+        assert names
 
 
 def test_both_storage_spellings_are_built() -> None:
     row = _row("shared", "plain")
-    assert row["copyable_storage"] == "copyable_type"
-    assert row["move_only_storage"] == "move_only_type"
+    assert row["copyable_storage"] == "tracked"
+    assert row["move_only_storage"] == "move_only_tracked"
     handle = _row("shared", "shared_handle")
-    assert handle["copyable_storage"] == "std::shared_ptr<copyable_type>"
-    assert handle["move_only_storage"] == "std::shared_ptr<move_only_type>"
+    assert handle["copyable_storage"] == "std::shared_ptr<tracked>"
+    assert handle["move_only_storage"] == "std::shared_ptr<move_only_tracked>"
 
 
 def test_value_requests_copy_but_borrows_do_not() -> None:
@@ -133,10 +135,10 @@ def test_cases_carry_traits() -> None:
 def test_rendered_matrix_asserts_both_traits() -> None:
     content = render(None)
     assert "namespace trait_matrix" in content
-    assert "struct copyable_type" in content
-    assert "struct move_only_type" in content
-    assert "copyable_type(const copyable_type &) = delete" not in content
-    assert "move_only_type(const move_only_type &) = delete" in content
+    assert "struct tracked" in content
+    assert "struct move_only_tracked" in content
+    assert "tracked(const tracked &) = delete" not in content
+    assert "move_only_tracked(const move_only_tracked &) = delete" in content
     assert content.count("static_assert") > 0
     assert "copyable_storage" in content
     assert "move_only_storage" in content

@@ -104,13 +104,13 @@ def test_move_only_rows_use_the_move_only_leaf() -> None:
         for row in rows
         if row["scope"] == "shared" and row["form"] == "plain"
     )
-    assert plain["storage_type"] == "move_only_type"
-    assert plain["constructor"] == "move_only_type"
+    assert plain["storage_type"] == "move_only_tracked"
+    assert plain["constructor"] == "move_only_tracked"
     content = render(rows, MOVE_ONLY)
     assert "TEST(type_behavior_move_only," in content
-    assert "struct move_only_type" in content
-    assert "move_only_type(const move_only_type &) = delete;" in content
-    assert "std::optional<move_only_type>" in content
+    assert "struct move_only_tracked" in content
+    assert "move_only_tracked(const move_only_tracked &) = delete;" in content
+    assert "std::optional<move_only_tracked>" in content
 
 
 def test_trait_rows_keep_the_same_cells() -> None:

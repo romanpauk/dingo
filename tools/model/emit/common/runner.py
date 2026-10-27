@@ -28,6 +28,17 @@ def render_template(name: str, **context: object) -> str:
     return environment().get_template(name).render(**context)
 
 
+def trait_context(traits, base: str) -> dict[str, object]:
+    """The template context that renames a family for one leaf trait."""
+    suffix = "" if traits.copyable else f"_{traits.name}"
+    return {
+        "leaf": traits.cpp,
+        "move_only": not traits.copyable,
+        "namespace": f"{base}{suffix}",
+        "suite": f"{base}{suffix}",
+    }
+
+
 def write_text_if_changed(path: Path, content: str) -> None:
     if path.exists() and path.read_text(encoding="utf-8") == content:
         return

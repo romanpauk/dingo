@@ -32,16 +32,18 @@ from tools.model.grammar.catalog import (
     SCOPES as CATALOG_SCOPES,
     RUNTIME_ONLY_SCOPES,
     SCOPE_BY_NAME,
+    FormConstructor,
     StorageForm,
 )
 from tools.model.semantics.cells import iter_supported_cells
 from tools.model.semantics.gaps import cell_gaps, name_gaps, validate as validate_gaps
 from tools.model.emit.common.recipe import external_instance, registration
 from tools.model.semantics.routes.ledger import supported_categories
-from tools.model.emit.common.runner import emit, render_template
+from tools.model.emit.common.runner import emit, render_template, trait_context
 from tools.model.emit.common.validation import validate_catalog
 from tools.model.grammar import cpp
 from tools.model.grammar.shapes import WRAPPER_BY_NAME
+from tools.model.grammar.traits import COPYABLE, MOVE_ONLY, LeafTraits
 
 
 SCOPES = tuple(scope.name for scope in CATALOG_SCOPES)
@@ -98,7 +100,11 @@ def _constructions(scope: str, kind: str) -> int:
     return _elements(kind)
 
 
-def derive_expectation(form: StorageForm, scope: str) -> Expectation:
+def derive_expectation(
+    form: StorageForm,
+    scope: str,
+    traits: LeafTraits = COPYABLE,
+) -> Expectation:
     """Derive the primary behavior request from the selected route shape.
 
     The request class, relation, constructions, and optional leaf checks all
@@ -106,9 +112,14 @@ def derive_expectation(form: StorageForm, scope: str) -> Expectation:
     scope. Construction counts are a form fact: external storage constructs
     nothing, unique storage constructs two resolutions, and the other scopes
     construct one. Array-shaped forms hold two tracked elements.
+
+    A copyable leaf uses the value request; a move-only leaf uses the first
+    non-copying route (a borrow, a raw pointer, or the stored wrapper
+    reference), so the expected copy count is zero.
     """
     kind = form.kind
     wrapper = form.wrapper
+    leaf = cpp.leaf(traits.cpp)
     constructions = _constructions(scope, kind)
     consumes = SCOPE_BY_NAME[scope].consumes
     sharing = wrapper is not None and wrapper.has("sharing")
@@ -116,17 +127,25 @@ def derive_expectation(form: StorageForm, scope: str) -> Expectation:
     if kind == "value":
         if scope == "shared_cyclical":
             return Expectation(
-                "tracked &", "&first == &second", constructions, "reference"
+                f"{traits.cpp} &", "&first == &second", constructions, "reference"
             )
         if consumes:
             return Expectation(
-                "tracked",
+                traits.cpp,
                 "first.id != second.id",
                 constructions,
                 "consume_value",
             )
+        if not traits.copyable:
+            return Expectation(
+                f"{traits.cpp} &",
+                "&first == &second",
+                constructions,
+                "reference",
+                leaf="external" if scope == "external" else "",
+            )
         return Expectation(
-            "tracked",
+            traits.cpp,
             "first.id == second.id",
             constructions,
             "borrow_value",
@@ -137,19 +156,26 @@ def derive_expectation(form: StorageForm, scope: str) -> Expectation:
         if consumes:
             if kind == "variant":
                 return Expectation(
-                    cpp.template("std::variant", TRACKED, cpp.leaf("long")).render(),
+                    cpp.template("std::variant", leaf, cpp.leaf("long")).render(),
                     "std::get<0>(first).id != std::get<0>(second).id",
                     constructions,
                     "consume_value",
                 )
             return Expectation(
-                cpp.template("std::optional", TRACKED).render(),
+                cpp.template("std::optional", leaf).render(),
                 "first->id != second->id",
                 constructions,
                 "consume_value",
             )
+        if not traits.copyable:
+            return Expectation(
+                cpp.reference(form.cpp(traits.cpp)).render(),
+                "&first == &second",
+                constructions,
+                "reference",
+            )
         return Expectation(
-            "tracked",
+            traits.cpp,
             "first.id == second.id",
             constructions,
             "borrow_value",
@@ -159,14 +185,21 @@ def derive_expectation(form: StorageForm, scope: str) -> Expectation:
     if kind == "pointer":
         if consumes:
             return Expectation(
-                cpp.pointer(TRACKED).render(),
+                cpp.pointer(leaf).render(),
                 "first->id != second->id",
                 constructions,
                 "handle",
                 delete_result="delete",
             )
+        if not traits.copyable:
+            return Expectation(
+                cpp.pointer(leaf).render(),
+                "first == second",
+                constructions,
+                "reference",
+            )
         return Expectation(
-            "tracked",
+            traits.cpp,
             "first.id == second.id",
             constructions,
             "borrow_value",
@@ -176,14 +209,14 @@ def derive_expectation(form: StorageForm, scope: str) -> Expectation:
     if kind == "array":
         if scope == "shared_cyclical":
             return Expectation(
-                cpp.array_pointer(TRACKED, 2).render(),
+                cpp.array_pointer(leaf, 2).render(),
                 "first == second",
                 constructions,
                 "array",
                 array_element="(*first)[0].id != (*first)[1].id",
             )
         return Expectation(
-            cpp.pointer(TRACKED).render(),
+            cpp.pointer(leaf).render(),
             "first[0].id != second[0].id"
             if consumes
             else "first[0].id == second[0].id",
@@ -196,14 +229,14 @@ def derive_expectation(form: StorageForm, scope: str) -> Expectation:
     if kind == "handle":
         if sharing:
             return Expectation(
-                cpp.template("std::shared_ptr", TRACKED).render(),
+                cpp.template("std::shared_ptr", leaf).render(),
                 "first == second" if scope != "unique" else "first != second",
                 constructions,
                 "handle",
                 leaf="" if consumes else "pointer",
             )
         return Expectation(
-            cpp.template("std::unique_ptr", TRACKED).render(),
+            cpp.template("std::unique_ptr", leaf).render(),
             "first->id != second->id",
             constructions,
             "handle",
@@ -212,20 +245,20 @@ def derive_expectation(form: StorageForm, scope: str) -> Expectation:
     if kind == "array_handle":
         if sharing:
             return Expectation(
-                cpp.shared_array(TRACKED).render(),
+                cpp.shared_array(leaf).render(),
                 "first == second" if scope != "unique" else "first != second",
                 constructions,
                 "array",
             )
         if consumes:
             return Expectation(
-                cpp.unique_array(TRACKED).render(),
+                cpp.unique_array(leaf).render(),
                 "first[0].id != second[0].id",
                 constructions,
                 "array",
             )
         return Expectation(
-            cpp.reference(cpp.unique_array(TRACKED)).render(),
+            cpp.reference(cpp.unique_array(leaf)).render(),
             "&first == &second",
             constructions,
             "reference",
@@ -237,7 +270,10 @@ def derive_expectation(form: StorageForm, scope: str) -> Expectation:
 # Additional request shapes for a cell that the primary expectation does not
 # exercise: the unique rvalue route and the shared wrapper-value route.
 def derive_extra_expectations(
-    form: StorageForm, scope: str, primary: Expectation
+    form: StorageForm,
+    scope: str,
+    primary: Expectation,
+    traits: LeafTraits = COPYABLE,
 ) -> tuple[tuple[str, Expectation], ...]:
     """Additional route shapes worth executing for a cell.
 
@@ -252,7 +288,7 @@ def derive_extra_expectations(
             (
                 "rvalue",
                 Expectation(
-                    "tracked &&",
+                    f"{traits.cpp} &&",
                     "first.id != second.id",
                     primary.constructions,
                     "consume_rvalue",
@@ -322,6 +358,7 @@ def _interface_shape(
     *,
     twin: bool = False,
     copyable: bool = False,
+    traits: LeafTraits = COPYABLE,
 ) -> InterfaceShape:
     form = next(form for form in FORMS if form.name == form_name)
     wrapper = form.wrapper
@@ -369,23 +406,29 @@ def _interface_shape(
         name=prefix,
         form_name=form_name,
         scope=scope,
-        storage=form.storage("tracked"),
-        factory=form.factory(),
+        storage=form.storage(traits.cpp),
+        factory=form.factory(traits.cpp),
         kind=kind,
         interfaces=interfaces,
         constructions=constructions,
     )
 
 
-def derive_interface_shapes() -> tuple[InterfaceShape, ...]:
-    return (
-        _interface_shape("shared_handle"),
-        _interface_shape("plain"),
-        _interface_shape("unique_handle"),
-        _interface_shape("shared_handle", twin=True),
-        _interface_shape("unique_handle", twin=True),
-        _interface_shape("shared_handle", copyable=True),
-    )
+def derive_interface_shapes(
+    traits: LeafTraits = COPYABLE,
+) -> tuple[InterfaceShape, ...]:
+    shapes = [
+        _interface_shape("shared_handle", traits=traits),
+        _interface_shape("plain", traits=traits),
+        _interface_shape("unique_handle", traits=traits),
+        _interface_shape("shared_handle", twin=True, traits=traits),
+        _interface_shape("unique_handle", twin=True, traits=traits),
+    ]
+    if traits.copyable:
+        shapes.append(
+            _interface_shape("shared_handle", copyable=True, traits=traits)
+        )
+    return tuple(shapes)
 
 
 INTERFACE_SHAPES = derive_interface_shapes()
@@ -428,9 +471,11 @@ def _interface_request(form: str, primary: str, scope: str) -> tuple[str, str, s
     raise ValueError(f"no interface request for form {form}")
 
 
-def derive_interface_cases() -> tuple[InterfaceCase, ...]:
+def derive_interface_cases(
+    traits: LeafTraits = COPYABLE,
+) -> tuple[InterfaceCase, ...]:
     cases = []
-    for shape in INTERFACE_SHAPES:
+    for shape in derive_interface_shapes(traits):
         twin = len(shape.interfaces) > 1
         other_interface = shape.interfaces[0] if twin else ""
         for form in _interface_forms(shape):
@@ -477,9 +522,11 @@ def derive_interface_cases() -> tuple[InterfaceCase, ...]:
 INTERFACE_CASES = derive_interface_cases()
 
 
-def _interface_rows() -> list[dict[str, object]]:
+def _interface_rows(
+    traits: LeafTraits = COPYABLE,
+) -> list[dict[str, object]]:
     rows = []
-    for case in INTERFACE_CASES:
+    for case in derive_interface_cases(traits):
         copies, moves = REQUEST_COSTS[case.request_class]
         for container in case.containers:
             registration, static_source = _registration(
@@ -489,6 +536,7 @@ def _interface_rows() -> list[dict[str, object]]:
                 case.interfaces,
                 storage=case.storage,
                 factory=case.factory,
+                leaf=traits.cpp,
             )
             rows.append(
                 _row(
@@ -560,13 +608,14 @@ def _shared_annotation_shape(
     *,
     leaf: str = "tracked",
     forms: tuple[str, ...] = ("ref",),
+    traits: LeafTraits = COPYABLE,
 ) -> AnnotationShape:
     form = next(form for form in FORMS if form.name == form_name)
     return AnnotationShape(
         name=name,
         scope="shared",
-        storage=form.storage("tracked"),
-        factory=form.factory(),
+        storage=form.storage(traits.cpp),
+        factory=form.factory(traits.cpp),
         leaf=leaf,
         forms=forms,
         form_name=form_name,
@@ -581,13 +630,14 @@ def _external_annotation_shape(
     moves: int = 0,
     *,
     form_name: str = "plain",
+    traits: LeafTraits = COPYABLE,
 ) -> AnnotationShape:
     return AnnotationShape(
         name=name,
         scope="external",
         storage=storage,
         factory=None,
-        leaf="tracked",
+        leaf=traits.cpp,
         forms=("ref",),
         form_name=form_name,
         append_form=False,
@@ -597,18 +647,88 @@ def _external_annotation_shape(
     )
 
 
-def derive_annotation_shapes() -> tuple[AnnotationShape, ...]:
-    return (
-        _shared_annotation_shape("plain", "shared_annotated", forms=("ref", "value")),
-        _shared_annotation_shape("shared_handle", "shared_annotated_shared_ptr"),
-        _shared_annotation_shape("optional", "shared_annotated_optional"),
-        _shared_annotation_shape("pointer", "shared_annotated_pointer"),
-        _shared_annotation_shape("shared_handle", "shared_annotated", leaf="tracked_interface", forms=("interface_ref", "interface_ptr", "interface_handle", "interface_handle_ref")),
-        _external_annotation_shape("external_annotated_value", cpp.storage(cpp.leaf("tracked")).render(), "tracked external_instance", "std::move(external_instance)", moves=1),
-        _external_annotation_shape("external_annotated_ref", cpp.storage(cpp.reference(cpp.leaf("tracked"))).render(), "tracked external_instance", "external_instance"),
-        _external_annotation_shape("external_annotated_ptr", cpp.storage(cpp.pointer(cpp.leaf("tracked"))).render(), "tracked external_instance", "std::addressof(external_instance)", form_name="pointer"),
-        _external_annotation_shape("external_annotated_shared_ptr", cpp.storage(cpp.template("std::shared_ptr", cpp.leaf("tracked"))).render(), "auto external_instance = make_shared_tracked()", "external_instance", form_name="shared_handle"),
-    )
+def derive_annotation_shapes(
+    traits: LeafTraits = COPYABLE,
+) -> tuple[AnnotationShape, ...]:
+    leaf = traits.cpp
+    value_forms = ("ref", "value") if traits.copyable else ("ref",)
+    shapes = [
+        _shared_annotation_shape(
+            "plain",
+            "shared_annotated",
+            leaf=leaf,
+            forms=value_forms,
+            traits=traits,
+        ),
+        _shared_annotation_shape(
+            "shared_handle",
+            "shared_annotated_shared_ptr",
+            leaf=leaf,
+            traits=traits,
+        ),
+        _shared_annotation_shape(
+            "optional",
+            "shared_annotated_optional",
+            leaf=leaf,
+            traits=traits,
+        ),
+        _shared_annotation_shape(
+            "pointer",
+            "shared_annotated_pointer",
+            leaf=leaf,
+            traits=traits,
+        ),
+        _shared_annotation_shape(
+            "shared_handle",
+            "shared_annotated",
+            leaf="tracked_interface",
+            forms=(
+                "interface_ref",
+                "interface_ptr",
+                "interface_handle",
+                "interface_handle_ref",
+            ),
+            traits=traits,
+        ),
+        _external_annotation_shape(
+            "external_annotated_ref",
+            cpp.storage(cpp.reference(cpp.leaf(leaf))).render(),
+            f"{leaf} external_instance",
+            "external_instance",
+            traits=traits,
+        ),
+        _external_annotation_shape(
+            "external_annotated_ptr",
+            cpp.storage(cpp.pointer(cpp.leaf(leaf))).render(),
+            f"{leaf} external_instance",
+            "std::addressof(external_instance)",
+            form_name="pointer",
+            traits=traits,
+        ),
+        _external_annotation_shape(
+            "external_annotated_shared_ptr",
+            cpp.storage(
+                cpp.template("std::shared_ptr", cpp.leaf(leaf))
+            ).render(),
+            f"auto external_instance = make_shared_{leaf}()",
+            "external_instance",
+            form_name="shared_handle",
+            traits=traits,
+        ),
+    ]
+    if traits.copyable:
+        shapes.insert(
+            5,
+            _external_annotation_shape(
+                "external_annotated_value",
+                cpp.storage(cpp.leaf(leaf)).render(),
+                f"{leaf} external_instance",
+                "std::move(external_instance)",
+                moves=1,
+                traits=traits,
+            ),
+        )
+    return tuple(shapes)
 
 
 ANNOTATION_SHAPES = derive_annotation_shapes()
@@ -651,9 +771,11 @@ def _annotation_form(
     )
 
 
-def derive_annotation_recipes() -> tuple[AnnotationRecipe, ...]:
+def derive_annotation_recipes(
+    traits: LeafTraits = COPYABLE,
+) -> tuple[AnnotationRecipe, ...]:
     recipes = []
-    for shape in ANNOTATION_SHAPES:
+    for shape in derive_annotation_shapes(traits):
         for form in shape.forms:
             request, relation, request_class, bind_reference = _annotation_form(
                 shape, form
@@ -683,9 +805,11 @@ def derive_annotation_recipes() -> tuple[AnnotationRecipe, ...]:
 ANNOTATION_RECIPES = derive_annotation_recipes()
 
 
-def _annotation_rows() -> list[dict[str, object]]:
+def _annotation_rows(
+    traits: LeafTraits = COPYABLE,
+) -> list[dict[str, object]]:
     rows = []
-    for recipe in ANNOTATION_RECIPES:
+    for recipe in derive_annotation_recipes(traits):
         copies, moves = REQUEST_COSTS[recipe.request_class]
         moves += recipe.registration_moves
         containers = (
@@ -701,6 +825,7 @@ def _annotation_rows() -> list[dict[str, object]]:
                     interfaces,
                     storage=recipe.storage,
                     external_argument=recipe.external_argument,
+                    leaf=traits.cpp,
                 )
             else:
                 registration, static_source = _registration(
@@ -710,6 +835,7 @@ def _annotation_rows() -> list[dict[str, object]]:
                     interfaces,
                     storage=recipe.storage,
                     factory=recipe.factory,
+                    leaf=traits.cpp,
                 )
             rows.append(
                 _row(
@@ -750,11 +876,13 @@ def _registration(
     storage: str | None = None,
     factory: str | None = None,
     external_argument: str = "",
+    leaf: str = "tracked",
 ) -> tuple[str, str]:
     return registration(
         FORM_BY_NAME[form_name],
         scope,
         container,
+        leaf=leaf,
         interfaces=interfaces,
         storage=storage,
         factory=factory,
@@ -818,17 +946,31 @@ def _row(
     }
 
 
-def build_rows() -> list[dict[str, object]]:
+def build_rows(
+    traits: LeafTraits = COPYABLE,
+) -> list[dict[str, object]]:
     rows = []
     for scope, form in iter_supported_cells(form_major=True):
         scope_name = scope.name
         if (scope_name, form.name) in BEHAVIOR_GAPS:
             continue
-        expectation = derive_expectation(form, scope_name)
-        instance = (
-            external_instance(form) if scope_name == "external" else None
+        expectation = derive_expectation(form, scope_name, traits)
+        external_move = (
+            not traits.copyable
+            and form.external_constructor is not FormConstructor.REFERENCE
+            and form.kind != "array"
         )
-        extras = derive_extra_expectations(form, scope_name, expectation)
+        instance = (
+            external_instance(form, traits.cpp, move=external_move)
+            if scope_name == "external"
+            else None
+        )
+        extras = derive_extra_expectations(
+            form, scope_name, expectation, traits
+        )
+        registration_moves = (
+            instance.moves if instance is not None else form.external_moves
+        )
         for container in CONTAINERS:
             if scope_name in RUNTIME_ONLY_SCOPES and container == "static":
                 continue
@@ -839,15 +981,16 @@ def build_rows() -> list[dict[str, object]]:
                 external_argument=(
                     instance.argument if instance is not None else ""
                 ),
+                leaf=traits.cpp,
             )
             copies, moves = REQUEST_COSTS[expectation.request_class]
             if scope_name == "external":
-                moves += form.external_moves
+                moves += registration_moves
             common = {
                 "scope": scope_name,
                 "form": form.name,
                 "container": container,
-                "storage": form.storage("tracked"),
+                "storage": form.storage(traits.cpp),
                 "instance": instance.declaration if instance else "",
                 "registration": registration_line,
                 "static_source": static_source,
@@ -871,7 +1014,7 @@ def build_rows() -> list[dict[str, object]]:
             for case, extra in extras:
                 extra_copies, extra_moves = REQUEST_COSTS[extra.request_class]
                 if scope_name == "external":
-                    extra_moves += form.external_moves
+                    extra_moves += registration_moves
                 rows.append(
                     _row(
                         f"{scope_name}_{form.name}_{case}_{container}",
@@ -888,13 +1031,13 @@ def build_rows() -> list[dict[str, object]]:
                         **common,
                     )
                 )
-    rows.extend(_interface_rows())
-    rows.extend(_annotation_rows())
+    rows.extend(_interface_rows(traits))
+    rows.extend(_annotation_rows(traits))
     return rows
 
 
-def covered_cells() -> set[tuple[str, str]]:
-    rows = build_rows()
+def covered_cells(traits: LeafTraits = COPYABLE) -> set[tuple[str, str]]:
+    rows = build_rows(traits)
     return {
         (str(row["scope"]), str(row["form"]))
         for row in rows
@@ -927,8 +1070,8 @@ def _check_case(space: str, name: str, request_class: str, scope: str) -> None:
     _require(scope in SCOPES, f"{space} {name} has unknown scope {scope!r}")
 
 
-def validate() -> None:
-    rows = build_rows()
+def validate(traits: LeafTraits = COPYABLE) -> None:
+    rows = build_rows(traits)
     _require(rows, "behavior catalog must not be empty")
     _check_unique("behavior catalog", (row["name"] for row in rows))
     expected = supported_cells()
@@ -948,9 +1091,11 @@ def validate() -> None:
                 continue
             if not supported_categories(scope, form.name):
                 continue
-            expectation = derive_expectation(form, scope)
+            expectation = derive_expectation(form, scope, traits)
             _check_case("behavior cell", f"{scope}/{form.name}", expectation.request_class, scope)
-            for case, extra in derive_extra_expectations(form, scope, expectation):
+            for case, extra in derive_extra_expectations(
+                form, scope, expectation, traits
+            ):
                 _check_case(
                     "behavior cell",
                     f"{scope}/{form.name}/{case}",
@@ -981,14 +1126,21 @@ def validate() -> None:
         )
 
 
-def render(output: Path) -> str:
-    validate()
-    return render_template("behavior_cells.cpp.j2", rows=build_rows())
+def render(output: Path, traits: LeafTraits = COPYABLE) -> str:
+    validate(traits)
+    context = trait_context(traits, "behavior_cells")
+    context["name_suffix"] = "" if traits.copyable else f"_{traits.name}"
+    return render_template(
+        "behavior_cells.cpp.j2",
+        rows=build_rows(traits),
+        **context,
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--out-move-only", type=Path)
     parser.add_argument(
         "--include",
         type=Path,
@@ -999,7 +1151,12 @@ def main() -> None:
 
     if arguments.include is not None:
         validate_catalog(arguments.include)
-    emit(arguments.out, render(arguments.out), check=arguments.check)
+    for traits, out in (
+        (COPYABLE, arguments.out),
+        (MOVE_ONLY, arguments.out_move_only),
+    ):
+        if out is not None:
+            emit(out, render(out, traits), check=arguments.check)
 
 
 if __name__ == "__main__":

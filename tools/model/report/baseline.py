@@ -75,12 +75,16 @@ def read_behavior(path: Path) -> dict[str, dict[str, Any]]:
 
 
 def build_outcomes(
-    matrix: Path, behavior: Path
+    matrix: Path, behavior: Path | list[Path]
 ) -> dict[str, dict[str, dict[str, Any]]]:
-    return {
-        "matrix": read_matrix(matrix),
-        "behavior": read_behavior(behavior),
-    }
+    paths = behavior if isinstance(behavior, list) else [behavior]
+    rows: dict[str, dict[str, Any]] = {}
+    for path in paths:
+        for key, row in read_behavior(path).items():
+            if key in rows:
+                raise ValueError(f"duplicate behavior row {key} in {path}")
+            rows[key] = row
+    return {"matrix": read_matrix(matrix), "behavior": rows}
 
 
 def diff_outcomes(
@@ -143,7 +147,8 @@ def check(arguments: argparse.Namespace) -> int:
     print(
         "If this is intended, run:\n"
         "  python -m tools.model.report.baseline update "
-        f"--matrix {arguments.matrix} --behavior {arguments.behavior} "
+        f"--matrix {arguments.matrix} "
+        "--behavior <path> [--behavior <path> ...] "
         f"--baseline {arguments.baseline} "
         "--changes test/baselines/model-changes.json --reason \"...\"",
         file=sys.stderr,
@@ -181,19 +186,25 @@ def main() -> int:
 
     record_parser = subparsers.add_parser("record")
     record_parser.add_argument("--matrix", type=Path, required=True)
-    record_parser.add_argument("--behavior", type=Path, required=True)
+    record_parser.add_argument(
+        "--behavior", type=Path, action="append", required=True
+    )
     record_parser.add_argument("--out", type=Path, required=True)
     record_parser.set_defaults(handler=record)
 
     check_parser = subparsers.add_parser("check")
     check_parser.add_argument("--matrix", type=Path, required=True)
-    check_parser.add_argument("--behavior", type=Path, required=True)
+    check_parser.add_argument(
+        "--behavior", type=Path, action="append", required=True
+    )
     check_parser.add_argument("--baseline", type=Path, required=True)
     check_parser.set_defaults(handler=check)
 
     update_parser = subparsers.add_parser("update")
     update_parser.add_argument("--matrix", type=Path, required=True)
-    update_parser.add_argument("--behavior", type=Path, required=True)
+    update_parser.add_argument(
+        "--behavior", type=Path, action="append", required=True
+    )
     update_parser.add_argument("--baseline", type=Path, required=True)
     update_parser.add_argument("--changes", type=Path, required=True)
     update_parser.add_argument("--reason", required=True)

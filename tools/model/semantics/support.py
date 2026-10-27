@@ -653,6 +653,22 @@ def classify(
         failure = _const_conversion(form, shape)
         if failure is not None:
             return failure
+    if (
+        not traits.copyable
+        and scope == "external"
+        and path is not None
+        and form.kind in {"optional", "variant"}
+        and (const_leaf(path.expr) or has_const(path.expr))
+    ):
+        # The external registration moves or copies the caller instance into
+        # the storage. A const inline wrapper whose element is move-only is
+        # neither movable nor copyable.
+        return Verdict(
+            "unsupported",
+            "registration",
+            "a const inline wrapper with a move-only element cannot be "
+            "registered externally",
+        )
     row = _LEDGER.get((scope, form.name, _category(shape)))
     if row is None:
         return Verdict(

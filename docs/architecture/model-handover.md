@@ -9,7 +9,7 @@ per-storage request-derivation refactor.
 
 The tree is green:
 
-- `pytest tools/model/tests test/matrix/generator_test.py`: 280 passed
+- `pytest tools/model/tests test/matrix/generator_test.py`: 289 passed
 - `dingo_model_test`: 600 tests passed, including the trait matrix and move-only
   type behavior
 - `cells-check`: passes
@@ -24,8 +24,9 @@ paths | 10,032 | | cases | 105,648 | | supported | 1,080 | | compile-tested |
 | 0 | | declared runtime gap | 43 |
 
 The trait matrix adds one compile-time probe per supported cell and shape for
-both a copyable and a move-only leaf. It is separate from the path-domain
-coverage counts above until the runtime families become trait-aware.
+both a copyable and a move-only leaf. Every generated runtime family now emits a
+move-only variant too. The path-domain counts above still describe the copyable
+domain; the trait-aware coverage keys are the remaining work.
 
 Supported by binding:
 
@@ -140,19 +141,23 @@ combinations. The earlier global-list model overclaimed many of them.
 
 ## Generated C++ suites
 
-Current generated test counts:
+Current generated test counts (copyable + move-only):
 
-- `keyed_cells`: 141
-- `annotated_cells`: 99
-- `behavior_cells`: 93
-- `const_cells`: 52
-- `type_behavior`: 94 (47 copyable + 47 move-only)
+- `keyed_cells`: 141 + 118
+- `annotated_cells`: 99 + 78
+- `behavior_cells`: 93 + 86
+- `const_cells`: 52 + 28
+- `type_behavior`: 47 + 47
 - `storage_cells`: 41
-- `interface_runtime`: 34
+- `interface_runtime`: 34 + 34
 - `route_cells`: 33
 - `interface_cells`: 7
-- `annotation_cells`: 3
+- `annotation_cells`: 3 + 3
 - `type_matrix`, `trait_matrix`, `selection_rules`, `property_cells`: 1 each
+
+The behavior move-only variant writes its outcomes to
+`behavior-outcomes-move-only.jsonl`; the baseline check merges it with the
+copyable file.
 
 Generated files are under `build/test/generated/model/` and are compiled into
 `dingo_model_test`.
@@ -176,30 +181,25 @@ Done:
 - `grammar/traits.py` declares `LeafTraits` with `copyable`/`movable`.
 - `Case` carries `traits`; `iter_cases(..., traits)` stamps the domain.
 - `classify(..., traits)` rejects the routes that copy a move-only leaf with
-  rule `copy`.
+  rule `copy`, plus the const-inline external registration limitation.
 - `emit/traits.py` asserts the trait delta against the real resolution kernel
-  for every supported cell and shape.
-- `emit/behavior.py` runs the shape matrix for both leaves in both containers
-  (`type_behavior` 47 copyable + 47 move-only tests).
+  for every supported cell and shape (const rvalue shapes are excluded because
+  the lift trait overclaims them).
+- `emit/behavior.py` and every request-based runtime family emit a move-only
+  variant: `behavior_cells`, `annotated_cells`, `keyed_cells`, `const_cells`,
+  and `interface_runtime`.
 - `Shape.with_leaf()` now rebases the `int` base leaf, so the type-behavior
   guards run real leaf-typed requests instead of compiling out.
+- Baselines include the move-only behavior outcomes.
 
 Remaining work:
 
 1. Make the coverage keys trait-aware:
-   `(scope, storage, binding, request, traits)` in `report/coverage.py`.
-2. Select a trait-appropriate primary route in the request-based runtime
-   families (`behavior_cells`, `annotated`, `keyed`, `const`,
-   `interface_runtime`). The current `derive_expectation(form, scope)` assumes a
-   copyable leaf; for a move-only leaf it must choose the first supported ledger
-   route (usually a borrow or move) and expect zero copies.
-3. Render those families once per trait, with the fixture definition and tuple
-   names parameterized; the templates currently spell `tracked` directly.
-4. Regenerate baselines and docs and extend the coverage report with the trait
-   column.
-
-The compile-time and shape-runtime layers are done; the path-domain coverage
-counts above stay copyable-only until the request-based families follow.
+   `(scope, storage, binding, request, traits)` in `report/coverage.py`, and
+   count the move-only compile/runtime probes.
+2. Add the trait column and move-only counts to `report/paths.py`.
+3. Decide whether the compile-time lift trait should reject const rvalue
+   requests instead of the trait matrix excluding them.
 
 ### 2. Annotated interfaces
 

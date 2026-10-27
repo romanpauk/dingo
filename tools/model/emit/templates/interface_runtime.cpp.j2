@@ -16,45 +16,52 @@
 
 #include <memory>
 
-namespace interface_runtime {
+namespace {{ namespace }} {
 
 struct interface_type {
   virtual ~interface_type() = default;
   virtual int value() const = 0;
 };
 
-struct implementation_type : interface_type {
+struct {{ leaf }} : interface_type {
+  {{ leaf }}() = default;
+{% if move_only %}
+  {{ leaf }}(const {{ leaf }} &) = delete;
+{% else %}
+  {{ leaf }}(const {{ leaf }} &) = default;
+{% endif %}
+  {{ leaf }}({{ leaf }} &&) noexcept = default;
   int value() const override { return 0; }
 };
 
-inline std::shared_ptr<implementation_type> make_shared_implementation_type() {
-  return std::make_shared<implementation_type>();
+inline std::shared_ptr<{{ leaf }}> make_shared_{{ leaf }}() {
+  return std::make_shared<{{ leaf }}>();
 }
 
-inline std::unique_ptr<implementation_type> make_unique_implementation_type() {
-  return std::make_unique<implementation_type>();
+inline std::unique_ptr<{{ leaf }}> make_unique_{{ leaf }}() {
+  return std::make_unique<{{ leaf }}>();
 }
 
-inline implementation_type *make_pointer_implementation_type() {
-  return new implementation_type();
+inline {{ leaf }} *make_pointer_{{ leaf }}() {
+  return new {{ leaf }}();
 }
 
-inline std::shared_ptr<const implementation_type>
-make_shared_const_implementation_type() {
-  return std::shared_ptr<const implementation_type>(new implementation_type());
+inline std::shared_ptr<const {{ leaf }}>
+make_shared_const_{{ leaf }}() {
+  return std::shared_ptr<const {{ leaf }}>(new {{ leaf }}());
 }
 
-inline std::unique_ptr<const implementation_type>
-make_unique_const_implementation_type() {
-  return std::unique_ptr<const implementation_type>(new implementation_type());
+inline std::unique_ptr<const {{ leaf }}>
+make_unique_const_{{ leaf }}() {
+  return std::unique_ptr<const {{ leaf }}>(new {{ leaf }}());
 }
 
-inline const implementation_type *make_pointer_const_implementation_type() {
-  return new implementation_type();
+inline const {{ leaf }} *make_pointer_const_{{ leaf }}() {
+  return new {{ leaf }}();
 }
 
 {% for row in rows %}
-TEST(interface_runtime, {{ row.name }}) {
+TEST({{ suite }}, {{ row.name }}) {
 {% if row.instance %}
   {{ row.instance }};
 {% endif %}
@@ -72,4 +79,4 @@ TEST(interface_runtime, {{ row.name }}) {
 }
 
 {% endfor %}
-} // namespace interface_runtime
+} // namespace {{ namespace }}

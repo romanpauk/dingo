@@ -205,9 +205,9 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   shape; the leaf's special members decide whether a copying route exists.
   Every storage cell and request shape is classified once per trait, and
   `emit/traits.py` asserts the move-only answer is exactly the copyable answer
-  minus the routes that copy the leaf. `emit/behavior.py` runs the same shape
-  matrix for both leaves; the other runtime families still run the copyable
-  leaf until each selects a trait-appropriate primary route.
+  minus the routes that copy the leaf. Every generated runtime family runs
+  both leaves; the move-only variant selects the first non-copying route and
+  expects zero copies.
 - `grammar/storage.py` projects stored expressions from `grammar.storage_types()` and
   filters them by scope. A path is storable when its expression fits the scope;
   const is a normal grammar constructor, not a separate table. The result is a

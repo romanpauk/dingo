@@ -11,6 +11,17 @@
       "result": "exception:dingo::type_not_found_exception",
       "scope": "annotation"
     },
+    "annotation_refuses_unannotated_request_move_only": {
+      "constructions": 0,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 0,
+      "form": "refuses_unannotated_request",
+      "moves": 0,
+      "request": "move_only_tracked &",
+      "result": "exception:dingo::type_not_found_exception",
+      "scope": "annotation"
+    },
     "annotation_refuses_wrong_tag": {
       "constructions": 0,
       "container": "runtime",
@@ -19,6 +30,17 @@
       "form": "refuses_wrong_tag",
       "moves": 0,
       "request": "dingo::annotated<tracked &, tag_b>",
+      "result": "exception:dingo::type_not_found_exception",
+      "scope": "annotation"
+    },
+    "annotation_refuses_wrong_tag_move_only": {
+      "constructions": 0,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 0,
+      "form": "refuses_wrong_tag",
+      "moves": 0,
+      "request": "dingo::annotated<move_only_tracked &, tag_b>",
       "result": "exception:dingo::type_not_found_exception",
       "scope": "annotation"
     },
@@ -33,6 +55,17 @@
       "result": "ok",
       "scope": "external"
     },
+    "external_alternative_runtime_move_only": {
+      "constructions": 0,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "alternative",
+      "moves": 1,
+      "request": "std::variant<move_only_tracked, long> &",
+      "result": "ok",
+      "scope": "external"
+    },
     "external_annotation_external_annotated_ptr_runtime": {
       "constructions": 0,
       "container": "runtime",
@@ -41,6 +74,17 @@
       "form": "external_annotated_ptr",
       "moves": 0,
       "request": "dingo::annotated<tracked &, tag_a>",
+      "result": "ok",
+      "scope": "external"
+    },
+    "external_annotation_external_annotated_ptr_runtime_move_only": {
+      "constructions": 0,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 0,
+      "form": "external_annotated_ptr",
+      "moves": 0,
+      "request": "dingo::annotated<move_only_tracked &, tag_a>",
       "result": "ok",
       "scope": "external"
     },
@@ -55,6 +99,17 @@
       "result": "ok",
       "scope": "external"
     },
+    "external_annotation_external_annotated_ref_runtime_move_only": {
+      "constructions": 0,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 0,
+      "form": "external_annotated_ref",
+      "moves": 0,
+      "request": "dingo::annotated<move_only_tracked &, tag_a>",
+      "result": "ok",
+      "scope": "external"
+    },
     "external_annotation_external_annotated_shared_ptr_runtime": {
       "constructions": 0,
       "container": "runtime",
@@ -63,6 +118,17 @@
       "form": "external_annotated_shared_ptr",
       "moves": 0,
       "request": "dingo::annotated<tracked &, tag_a>",
+      "result": "ok",
+      "scope": "external"
+    },
+    "external_annotation_external_annotated_shared_ptr_runtime_move_only": {
+      "constructions": 0,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 0,
+      "form": "external_annotated_shared_ptr",
+      "moves": 0,
+      "request": "dingo::annotated<move_only_tracked &, tag_a>",
       "result": "ok",
       "scope": "external"
     },
@@ -88,6 +154,17 @@
       "result": "ok",
       "scope": "external"
     },
+    "external_bounded_array_runtime_move_only": {
+      "constructions": 0,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 0,
+      "form": "bounded_array",
+      "moves": 0,
+      "request": "move_only_tracked *",
+      "result": "ok",
+      "scope": "external"
+    },
     "external_optional_runtime": {
       "constructions": 0,
       "container": "runtime",
@@ -96,6 +173,17 @@
       "form": "optional",
       "moves": 1,
       "request": "tracked",
+      "result": "ok",
+      "scope": "external"
+    },
+    "external_optional_runtime_move_only": {
+      "constructions": 0,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "optional",
+      "moves": 1,
+      "request": "std::optional<move_only_tracked> &",
       "result": "ok",
       "scope": "external"
     },
@@ -110,6 +198,17 @@
       "result": "ok",
       "scope": "external"
     },
+    "external_plain_runtime_move_only": {
+      "constructions": 0,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 0,
+      "form": "plain",
+      "moves": 0,
+      "request": "move_only_tracked &",
+      "result": "ok",
+      "scope": "external"
+    },
     "external_pointer_runtime": {
       "constructions": 0,
       "container": "runtime",
@@ -118,6 +217,17 @@
       "form": "pointer",
       "moves": 0,
       "request": "tracked",
+      "result": "ok",
+      "scope": "external"
+    },
+    "external_pointer_runtime_move_only": {
+      "constructions": 0,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 0,
+      "form": "pointer",
+      "moves": 0,
+      "request": "move_only_tracked *",
       "result": "ok",
       "scope": "external"
     },
@@ -132,6 +242,17 @@
       "result": "ok",
       "scope": "external"
     },
+    "external_shared_array_handle_runtime_move_only": {
+      "constructions": 0,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 0,
+      "form": "shared_array_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<move_only_tracked[]>",
+      "result": "ok",
+      "scope": "external"
+    },
     "external_shared_handle_runtime": {
       "constructions": 0,
       "container": "runtime",
@@ -140,6 +261,17 @@
       "form": "shared_handle",
       "moves": 0,
       "request": "std::shared_ptr<tracked>",
+      "result": "ok",
+      "scope": "external"
+    },
+    "external_shared_handle_runtime_move_only": {
+      "constructions": 0,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 0,
+      "form": "shared_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<move_only_tracked>",
       "result": "ok",
       "scope": "external"
     },
@@ -154,6 +286,17 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_alternative_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "alternative",
+      "moves": 0,
+      "request": "std::variant<move_only_tracked, long> &",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_alternative_static": {
       "constructions": 1,
       "container": "static",
@@ -162,6 +305,17 @@
       "form": "alternative",
       "moves": 0,
       "request": "tracked",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_alternative_static_move_only": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "alternative",
+      "moves": 0,
+      "request": "std::variant<move_only_tracked, long> &",
       "result": "ok",
       "scope": "shared"
     },
@@ -198,7 +352,29 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_annotation_shared_annotated_interface_handle_ref_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_annotated_interface_handle_ref",
+      "moves": 0,
+      "request": "dingo::annotated<std::shared_ptr<tracked_interface> &, tag_a>",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_annotation_shared_annotated_interface_handle_ref_static": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_annotated_interface_handle_ref",
+      "moves": 0,
+      "request": "dingo::annotated<std::shared_ptr<tracked_interface> &, tag_a>",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_annotation_shared_annotated_interface_handle_ref_static_move_only": {
       "constructions": 1,
       "container": "static",
       "copies": 0,
@@ -220,7 +396,29 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_annotation_shared_annotated_interface_handle_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_annotated_interface_handle",
+      "moves": 0,
+      "request": "dingo::annotated<std::shared_ptr<tracked_interface>, tag_a>",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_annotation_shared_annotated_interface_handle_static": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_annotated_interface_handle",
+      "moves": 0,
+      "request": "dingo::annotated<std::shared_ptr<tracked_interface>, tag_a>",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_annotation_shared_annotated_interface_handle_static_move_only": {
       "constructions": 1,
       "container": "static",
       "copies": 0,
@@ -242,7 +440,29 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_annotation_shared_annotated_interface_ptr_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_annotated_interface_ptr",
+      "moves": 0,
+      "request": "dingo::annotated<tracked_interface *, tag_a>",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_annotation_shared_annotated_interface_ptr_static": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_annotated_interface_ptr",
+      "moves": 0,
+      "request": "dingo::annotated<tracked_interface *, tag_a>",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_annotation_shared_annotated_interface_ptr_static_move_only": {
       "constructions": 1,
       "container": "static",
       "copies": 0,
@@ -264,7 +484,29 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_annotation_shared_annotated_interface_ref_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_annotated_interface_ref",
+      "moves": 0,
+      "request": "dingo::annotated<tracked_interface &, tag_a>",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_annotation_shared_annotated_interface_ref_static": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_annotated_interface_ref",
+      "moves": 0,
+      "request": "dingo::annotated<tracked_interface &, tag_a>",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_annotation_shared_annotated_interface_ref_static_move_only": {
       "constructions": 1,
       "container": "static",
       "copies": 0,
@@ -286,6 +528,17 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_annotation_shared_annotated_optional_ref_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_annotated_optional_ref",
+      "moves": 0,
+      "request": "dingo::annotated<move_only_tracked &, tag_a>",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_annotation_shared_annotated_optional_ref_static": {
       "constructions": 1,
       "container": "static",
@@ -294,6 +547,17 @@
       "form": "shared_annotated_optional_ref",
       "moves": 0,
       "request": "dingo::annotated<tracked &, tag_a>",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_annotation_shared_annotated_optional_ref_static_move_only": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_annotated_optional_ref",
+      "moves": 0,
+      "request": "dingo::annotated<move_only_tracked &, tag_a>",
       "result": "ok",
       "scope": "shared"
     },
@@ -308,6 +572,17 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_annotation_shared_annotated_pointer_ref_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_annotated_pointer_ref",
+      "moves": 0,
+      "request": "dingo::annotated<move_only_tracked &, tag_a>",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_annotation_shared_annotated_pointer_ref_static": {
       "constructions": 1,
       "container": "static",
@@ -316,6 +591,17 @@
       "form": "shared_annotated_pointer_ref",
       "moves": 0,
       "request": "dingo::annotated<tracked &, tag_a>",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_annotation_shared_annotated_pointer_ref_static_move_only": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_annotated_pointer_ref",
+      "moves": 0,
+      "request": "dingo::annotated<move_only_tracked &, tag_a>",
       "result": "ok",
       "scope": "shared"
     },
@@ -330,6 +616,17 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_annotation_shared_annotated_ref_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_annotated_ref",
+      "moves": 0,
+      "request": "dingo::annotated<move_only_tracked &, tag_a>",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_annotation_shared_annotated_ref_static": {
       "constructions": 1,
       "container": "static",
@@ -338,6 +635,17 @@
       "form": "shared_annotated_ref",
       "moves": 0,
       "request": "dingo::annotated<tracked &, tag_a>",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_annotation_shared_annotated_ref_static_move_only": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_annotated_ref",
+      "moves": 0,
+      "request": "dingo::annotated<move_only_tracked &, tag_a>",
       "result": "ok",
       "scope": "shared"
     },
@@ -352,6 +660,17 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_annotation_shared_annotated_shared_ptr_ref_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_annotated_shared_ptr_ref",
+      "moves": 0,
+      "request": "dingo::annotated<move_only_tracked &, tag_a>",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_annotation_shared_annotated_shared_ptr_ref_static": {
       "constructions": 1,
       "container": "static",
@@ -360,6 +679,17 @@
       "form": "shared_annotated_shared_ptr_ref",
       "moves": 0,
       "request": "dingo::annotated<tracked &, tag_a>",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_annotation_shared_annotated_shared_ptr_ref_static_move_only": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_annotated_shared_ptr_ref",
+      "moves": 0,
+      "request": "dingo::annotated<move_only_tracked &, tag_a>",
       "result": "ok",
       "scope": "shared"
     },
@@ -396,6 +726,17 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_bounded_array_runtime_move_only": {
+      "constructions": 2,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 2,
+      "form": "bounded_array",
+      "moves": 0,
+      "request": "move_only_tracked *",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_bounded_array_static": {
       "constructions": 2,
       "container": "static",
@@ -404,6 +745,17 @@
       "form": "bounded_array",
       "moves": 0,
       "request": "tracked *",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_bounded_array_static_move_only": {
+      "constructions": 2,
+      "container": "static",
+      "copies": 0,
+      "destructions": 2,
+      "form": "bounded_array",
+      "moves": 0,
+      "request": "move_only_tracked *",
       "result": "ok",
       "scope": "shared"
     },
@@ -418,6 +770,17 @@
       "result": "ok",
       "scope": "shared_cyclical"
     },
+    "shared_cyclical_bounded_array_runtime_move_only": {
+      "constructions": 2,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 2,
+      "form": "bounded_array",
+      "moves": 0,
+      "request": "move_only_tracked (*)[2]",
+      "result": "ok",
+      "scope": "shared_cyclical"
+    },
     "shared_cyclical_bounded_array_static": {
       "constructions": 2,
       "container": "static",
@@ -426,6 +789,17 @@
       "form": "bounded_array",
       "moves": 0,
       "request": "tracked (*)[2]",
+      "result": "ok",
+      "scope": "shared_cyclical"
+    },
+    "shared_cyclical_bounded_array_static_move_only": {
+      "constructions": 2,
+      "container": "static",
+      "copies": 0,
+      "destructions": 2,
+      "form": "bounded_array",
+      "moves": 0,
+      "request": "move_only_tracked (*)[2]",
       "result": "ok",
       "scope": "shared_cyclical"
     },
@@ -440,6 +814,17 @@
       "result": "ok",
       "scope": "shared_cyclical"
     },
+    "shared_cyclical_plain_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "plain",
+      "moves": 0,
+      "request": "move_only_tracked &",
+      "result": "ok",
+      "scope": "shared_cyclical"
+    },
     "shared_cyclical_plain_static": {
       "constructions": 1,
       "container": "static",
@@ -448,6 +833,17 @@
       "form": "plain",
       "moves": 0,
       "request": "tracked &",
+      "result": "ok",
+      "scope": "shared_cyclical"
+    },
+    "shared_cyclical_plain_static_move_only": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "plain",
+      "moves": 0,
+      "request": "move_only_tracked &",
       "result": "ok",
       "scope": "shared_cyclical"
     },
@@ -462,6 +858,17 @@
       "result": "ok",
       "scope": "shared_cyclical"
     },
+    "shared_cyclical_shared_handle_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<move_only_tracked>",
+      "result": "ok",
+      "scope": "shared_cyclical"
+    },
     "shared_cyclical_shared_handle_static": {
       "constructions": 1,
       "container": "static",
@@ -470,6 +877,17 @@
       "form": "shared_handle",
       "moves": 0,
       "request": "std::shared_ptr<tracked>",
+      "result": "ok",
+      "scope": "shared_cyclical"
+    },
+    "shared_cyclical_shared_handle_static_move_only": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<move_only_tracked>",
       "result": "ok",
       "scope": "shared_cyclical"
     },
@@ -506,7 +924,29 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_interface_shared_handle_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<tracked_interface>",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_interface_shared_handle_static": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<tracked_interface>",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_interface_shared_handle_static_move_only": {
       "constructions": 1,
       "container": "static",
       "copies": 0,
@@ -528,7 +968,29 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_interface_shared_plain_ref_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_plain_ref",
+      "moves": 0,
+      "request": "tracked_interface &",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_interface_shared_plain_ref_static": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_plain_ref",
+      "moves": 0,
+      "request": "tracked_interface &",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_interface_shared_plain_ref_static_move_only": {
       "constructions": 1,
       "container": "static",
       "copies": 0,
@@ -550,7 +1012,29 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_interface_shared_ptr_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_ptr",
+      "moves": 0,
+      "request": "tracked_interface *",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_interface_shared_ptr_static": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_ptr",
+      "moves": 0,
+      "request": "tracked_interface *",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_interface_shared_ptr_static_move_only": {
       "constructions": 1,
       "container": "static",
       "copies": 0,
@@ -572,7 +1056,29 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_interface_shared_ref_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_ref",
+      "moves": 0,
+      "request": "tracked_interface &",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_interface_shared_ref_static": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_ref",
+      "moves": 0,
+      "request": "tracked_interface &",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_interface_shared_ref_static_move_only": {
       "constructions": 1,
       "container": "static",
       "copies": 0,
@@ -594,7 +1100,29 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_interface_shared_second_handle_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_second_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<tracked_interface2>",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_interface_shared_second_handle_static": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_second_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<tracked_interface2>",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_interface_shared_second_handle_static_move_only": {
       "constructions": 1,
       "container": "static",
       "copies": 0,
@@ -616,7 +1144,29 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_interface_shared_second_ref_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_second_ref",
+      "moves": 0,
+      "request": "tracked_interface &",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_interface_shared_second_ref_static": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_second_ref",
+      "moves": 0,
+      "request": "tracked_interface &",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_interface_shared_second_ref_static_move_only": {
       "constructions": 1,
       "container": "static",
       "copies": 0,
@@ -638,6 +1188,17 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_optional_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "optional",
+      "moves": 0,
+      "request": "std::optional<move_only_tracked> &",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_optional_static": {
       "constructions": 1,
       "container": "static",
@@ -646,6 +1207,17 @@
       "form": "optional",
       "moves": 0,
       "request": "tracked",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_optional_static_move_only": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "optional",
+      "moves": 0,
+      "request": "std::optional<move_only_tracked> &",
       "result": "ok",
       "scope": "shared"
     },
@@ -660,6 +1232,17 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_plain_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "plain",
+      "moves": 0,
+      "request": "move_only_tracked &",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_plain_static": {
       "constructions": 1,
       "container": "static",
@@ -668,6 +1251,17 @@
       "form": "plain",
       "moves": 0,
       "request": "tracked",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_plain_static_move_only": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "plain",
+      "moves": 0,
+      "request": "move_only_tracked &",
       "result": "ok",
       "scope": "shared"
     },
@@ -682,6 +1276,17 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_pointer_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "pointer",
+      "moves": 0,
+      "request": "move_only_tracked *",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_pointer_static": {
       "constructions": 1,
       "container": "static",
@@ -690,6 +1295,17 @@
       "form": "pointer",
       "moves": 0,
       "request": "tracked",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_pointer_static_move_only": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "pointer",
+      "moves": 0,
+      "request": "move_only_tracked *",
       "result": "ok",
       "scope": "shared"
     },
@@ -704,6 +1320,17 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_shared_array_handle_runtime_move_only": {
+      "constructions": 2,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 2,
+      "form": "shared_array_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<move_only_tracked[]>",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_shared_array_handle_static": {
       "constructions": 2,
       "container": "static",
@@ -712,6 +1339,17 @@
       "form": "shared_array_handle",
       "moves": 0,
       "request": "std::shared_ptr<tracked[]>",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_shared_array_handle_static_move_only": {
+      "constructions": 2,
+      "container": "static",
+      "copies": 0,
+      "destructions": 2,
+      "form": "shared_array_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<move_only_tracked[]>",
       "result": "ok",
       "scope": "shared"
     },
@@ -726,6 +1364,17 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_shared_handle_runtime_move_only": {
+      "constructions": 1,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<move_only_tracked>",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_shared_handle_static": {
       "constructions": 1,
       "container": "static",
@@ -734,6 +1383,17 @@
       "form": "shared_handle",
       "moves": 0,
       "request": "std::shared_ptr<tracked>",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_shared_handle_static_move_only": {
+      "constructions": 1,
+      "container": "static",
+      "copies": 0,
+      "destructions": 1,
+      "form": "shared_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<move_only_tracked>",
       "result": "ok",
       "scope": "shared"
     },
@@ -748,6 +1408,17 @@
       "result": "ok",
       "scope": "shared"
     },
+    "shared_unique_array_handle_runtime_move_only": {
+      "constructions": 2,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 2,
+      "form": "unique_array_handle",
+      "moves": 0,
+      "request": "std::unique_ptr<move_only_tracked[]> &",
+      "result": "ok",
+      "scope": "shared"
+    },
     "shared_unique_array_handle_static": {
       "constructions": 2,
       "container": "static",
@@ -756,6 +1427,17 @@
       "form": "unique_array_handle",
       "moves": 0,
       "request": "std::unique_ptr<tracked[]> &",
+      "result": "ok",
+      "scope": "shared"
+    },
+    "shared_unique_array_handle_static_move_only": {
+      "constructions": 2,
+      "container": "static",
+      "copies": 0,
+      "destructions": 2,
+      "form": "unique_array_handle",
+      "moves": 0,
+      "request": "std::unique_ptr<move_only_tracked[]> &",
       "result": "ok",
       "scope": "shared"
     },
@@ -770,6 +1452,17 @@
       "result": "ok",
       "scope": "unique"
     },
+    "unique_alternative_runtime_move_only": {
+      "constructions": 2,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 4,
+      "form": "alternative",
+      "moves": 2,
+      "request": "std::variant<move_only_tracked, long>",
+      "result": "ok",
+      "scope": "unique"
+    },
     "unique_alternative_static": {
       "constructions": 2,
       "container": "static",
@@ -778,6 +1471,17 @@
       "form": "alternative",
       "moves": 2,
       "request": "std::variant<tracked, long>",
+      "result": "ok",
+      "scope": "unique"
+    },
+    "unique_alternative_static_move_only": {
+      "constructions": 2,
+      "container": "static",
+      "copies": 0,
+      "destructions": 4,
+      "form": "alternative",
+      "moves": 2,
+      "request": "std::variant<move_only_tracked, long>",
       "result": "ok",
       "scope": "unique"
     },
@@ -792,6 +1496,17 @@
       "result": "ok",
       "scope": "unique"
     },
+    "unique_bounded_array_runtime_move_only": {
+      "constructions": 4,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 4,
+      "form": "bounded_array",
+      "moves": 0,
+      "request": "move_only_tracked *",
+      "result": "ok",
+      "scope": "unique"
+    },
     "unique_bounded_array_static": {
       "constructions": 4,
       "container": "static",
@@ -803,7 +1518,29 @@
       "result": "ok",
       "scope": "unique"
     },
+    "unique_bounded_array_static_move_only": {
+      "constructions": 4,
+      "container": "static",
+      "copies": 0,
+      "destructions": 4,
+      "form": "bounded_array",
+      "moves": 0,
+      "request": "move_only_tracked *",
+      "result": "ok",
+      "scope": "unique"
+    },
     "unique_interface_unique_handle_runtime": {
+      "constructions": 2,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 2,
+      "form": "unique_handle",
+      "moves": 0,
+      "request": "std::unique_ptr<tracked_interface>",
+      "result": "ok",
+      "scope": "unique"
+    },
+    "unique_interface_unique_handle_runtime_move_only": {
       "constructions": 2,
       "container": "runtime",
       "copies": 0,
@@ -825,7 +1562,29 @@
       "result": "ok",
       "scope": "unique"
     },
+    "unique_interface_unique_handle_static_move_only": {
+      "constructions": 2,
+      "container": "static",
+      "copies": 0,
+      "destructions": 2,
+      "form": "unique_handle",
+      "moves": 0,
+      "request": "std::unique_ptr<tracked_interface>",
+      "result": "ok",
+      "scope": "unique"
+    },
     "unique_interface_unique_second_handle_runtime": {
+      "constructions": 3,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 3,
+      "form": "unique_second_handle",
+      "moves": 0,
+      "request": "std::unique_ptr<tracked_interface2>",
+      "result": "ok",
+      "scope": "unique"
+    },
+    "unique_interface_unique_second_handle_runtime_move_only": {
       "constructions": 3,
       "container": "runtime",
       "copies": 0,
@@ -847,7 +1606,29 @@
       "result": "ok",
       "scope": "unique"
     },
+    "unique_interface_unique_second_handle_static_move_only": {
+      "constructions": 3,
+      "container": "static",
+      "copies": 0,
+      "destructions": 3,
+      "form": "unique_second_handle",
+      "moves": 0,
+      "request": "std::unique_ptr<tracked_interface2>",
+      "result": "ok",
+      "scope": "unique"
+    },
     "unique_interface_unique_shared_handle_runtime": {
+      "constructions": 2,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 2,
+      "form": "unique_shared_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<tracked_interface>",
+      "result": "ok",
+      "scope": "unique"
+    },
+    "unique_interface_unique_shared_handle_runtime_move_only": {
       "constructions": 2,
       "container": "runtime",
       "copies": 0,
@@ -869,6 +1650,17 @@
       "result": "ok",
       "scope": "unique"
     },
+    "unique_interface_unique_shared_handle_static_move_only": {
+      "constructions": 2,
+      "container": "static",
+      "copies": 0,
+      "destructions": 2,
+      "form": "unique_shared_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<tracked_interface>",
+      "result": "ok",
+      "scope": "unique"
+    },
     "unique_optional_runtime": {
       "constructions": 2,
       "container": "runtime",
@@ -877,6 +1669,17 @@
       "form": "optional",
       "moves": 2,
       "request": "std::optional<tracked>",
+      "result": "ok",
+      "scope": "unique"
+    },
+    "unique_optional_runtime_move_only": {
+      "constructions": 2,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 4,
+      "form": "optional",
+      "moves": 2,
+      "request": "std::optional<move_only_tracked>",
       "result": "ok",
       "scope": "unique"
     },
@@ -891,6 +1694,17 @@
       "result": "ok",
       "scope": "unique"
     },
+    "unique_optional_static_move_only": {
+      "constructions": 2,
+      "container": "static",
+      "copies": 0,
+      "destructions": 4,
+      "form": "optional",
+      "moves": 2,
+      "request": "std::optional<move_only_tracked>",
+      "result": "ok",
+      "scope": "unique"
+    },
     "unique_plain_runtime": {
       "constructions": 2,
       "container": "runtime",
@@ -899,6 +1713,17 @@
       "form": "plain",
       "moves": 2,
       "request": "tracked",
+      "result": "ok",
+      "scope": "unique"
+    },
+    "unique_plain_runtime_move_only": {
+      "constructions": 2,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 4,
+      "form": "plain",
+      "moves": 2,
+      "request": "move_only_tracked",
       "result": "ok",
       "scope": "unique"
     },
@@ -913,6 +1738,17 @@
       "result": "ok",
       "scope": "unique"
     },
+    "unique_plain_rvalue_runtime_move_only": {
+      "constructions": 2,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 6,
+      "form": "plain",
+      "moves": 4,
+      "request": "move_only_tracked &&",
+      "result": "ok",
+      "scope": "unique"
+    },
     "unique_plain_rvalue_static": {
       "constructions": 2,
       "container": "static",
@@ -921,6 +1757,17 @@
       "form": "plain",
       "moves": 4,
       "request": "tracked &&",
+      "result": "ok",
+      "scope": "unique"
+    },
+    "unique_plain_rvalue_static_move_only": {
+      "constructions": 2,
+      "container": "static",
+      "copies": 0,
+      "destructions": 6,
+      "form": "plain",
+      "moves": 4,
+      "request": "move_only_tracked &&",
       "result": "ok",
       "scope": "unique"
     },
@@ -935,6 +1782,17 @@
       "result": "ok",
       "scope": "unique"
     },
+    "unique_plain_static_move_only": {
+      "constructions": 2,
+      "container": "static",
+      "copies": 0,
+      "destructions": 4,
+      "form": "plain",
+      "moves": 2,
+      "request": "move_only_tracked",
+      "result": "ok",
+      "scope": "unique"
+    },
     "unique_pointer_runtime": {
       "constructions": 2,
       "container": "runtime",
@@ -943,6 +1801,17 @@
       "form": "pointer",
       "moves": 0,
       "request": "tracked *",
+      "result": "ok",
+      "scope": "unique"
+    },
+    "unique_pointer_runtime_move_only": {
+      "constructions": 2,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 2,
+      "form": "pointer",
+      "moves": 0,
+      "request": "move_only_tracked *",
       "result": "ok",
       "scope": "unique"
     },
@@ -957,6 +1826,17 @@
       "result": "ok",
       "scope": "unique"
     },
+    "unique_pointer_static_move_only": {
+      "constructions": 2,
+      "container": "static",
+      "copies": 0,
+      "destructions": 2,
+      "form": "pointer",
+      "moves": 0,
+      "request": "move_only_tracked *",
+      "result": "ok",
+      "scope": "unique"
+    },
     "unique_shared_array_handle_runtime": {
       "constructions": 4,
       "container": "runtime",
@@ -965,6 +1845,17 @@
       "form": "shared_array_handle",
       "moves": 0,
       "request": "std::shared_ptr<tracked[]>",
+      "result": "ok",
+      "scope": "unique"
+    },
+    "unique_shared_array_handle_runtime_move_only": {
+      "constructions": 4,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 4,
+      "form": "shared_array_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<move_only_tracked[]>",
       "result": "ok",
       "scope": "unique"
     },
@@ -979,6 +1870,17 @@
       "result": "ok",
       "scope": "unique"
     },
+    "unique_shared_array_handle_static_move_only": {
+      "constructions": 4,
+      "container": "static",
+      "copies": 0,
+      "destructions": 4,
+      "form": "shared_array_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<move_only_tracked[]>",
+      "result": "ok",
+      "scope": "unique"
+    },
     "unique_shared_handle_runtime": {
       "constructions": 2,
       "container": "runtime",
@@ -987,6 +1889,17 @@
       "form": "shared_handle",
       "moves": 0,
       "request": "std::shared_ptr<tracked>",
+      "result": "ok",
+      "scope": "unique"
+    },
+    "unique_shared_handle_runtime_move_only": {
+      "constructions": 2,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 2,
+      "form": "shared_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<move_only_tracked>",
       "result": "ok",
       "scope": "unique"
     },
@@ -1001,6 +1914,17 @@
       "result": "ok",
       "scope": "unique"
     },
+    "unique_shared_handle_static_move_only": {
+      "constructions": 2,
+      "container": "static",
+      "copies": 0,
+      "destructions": 2,
+      "form": "shared_handle",
+      "moves": 0,
+      "request": "std::shared_ptr<move_only_tracked>",
+      "result": "ok",
+      "scope": "unique"
+    },
     "unique_unique_array_handle_runtime": {
       "constructions": 4,
       "container": "runtime",
@@ -1009,6 +1933,17 @@
       "form": "unique_array_handle",
       "moves": 0,
       "request": "std::unique_ptr<tracked[]>",
+      "result": "ok",
+      "scope": "unique"
+    },
+    "unique_unique_array_handle_runtime_move_only": {
+      "constructions": 4,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 4,
+      "form": "unique_array_handle",
+      "moves": 0,
+      "request": "std::unique_ptr<move_only_tracked[]>",
       "result": "ok",
       "scope": "unique"
     },
@@ -1023,6 +1958,17 @@
       "result": "ok",
       "scope": "unique"
     },
+    "unique_unique_array_handle_static_move_only": {
+      "constructions": 4,
+      "container": "static",
+      "copies": 0,
+      "destructions": 4,
+      "form": "unique_array_handle",
+      "moves": 0,
+      "request": "std::unique_ptr<move_only_tracked[]>",
+      "result": "ok",
+      "scope": "unique"
+    },
     "unique_unique_handle_runtime": {
       "constructions": 2,
       "container": "runtime",
@@ -1034,6 +1980,17 @@
       "result": "ok",
       "scope": "unique"
     },
+    "unique_unique_handle_runtime_move_only": {
+      "constructions": 2,
+      "container": "runtime",
+      "copies": 0,
+      "destructions": 2,
+      "form": "unique_handle",
+      "moves": 0,
+      "request": "std::unique_ptr<move_only_tracked>",
+      "result": "ok",
+      "scope": "unique"
+    },
     "unique_unique_handle_static": {
       "constructions": 2,
       "container": "static",
@@ -1042,6 +1999,17 @@
       "form": "unique_handle",
       "moves": 0,
       "request": "std::unique_ptr<tracked>",
+      "result": "ok",
+      "scope": "unique"
+    },
+    "unique_unique_handle_static_move_only": {
+      "constructions": 2,
+      "container": "static",
+      "copies": 0,
+      "destructions": 2,
+      "form": "unique_handle",
+      "moves": 0,
+      "request": "std::unique_ptr<move_only_tracked>",
       "result": "ok",
       "scope": "unique"
     }

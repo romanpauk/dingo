@@ -25,18 +25,19 @@ from pathlib import Path
 from tools.model.grammar.bindings import CONCRETE
 from tools.model.domain.cases import iter_cases, request_forms
 from tools.model.emit.common.recipe import external_instance, registration
-from tools.model.emit.common.runner import emit, render_template
+from tools.model.emit.common.runner import emit, render_template, trait_context
 from tools.model.grammar.storage import const_leaf, has_const
 from tools.model.emit.common.validation import validate_catalog
 from tools.model.semantics.support import classify
 from tools.model.grammar.expr import Expr
+from tools.model.grammar.traits import COPYABLE, MOVE_ONLY, LeafTraits
 
 STORAGE_SCOPES = frozenset({"shared", "external"})
 
 
-def _registration(path):
+def _registration(path, traits: LeafTraits = COPYABLE):
     form = path.form
-    leaf = "tracked"
+    leaf = traits.cpp
     scope_type = path.scope.name
     if path.scope.name == "external":
         instance = external_instance(form, leaf, const=True)
@@ -76,10 +77,12 @@ def _slug(expr: Expr) -> str:
     return re.sub(r"[^a-z0-9]+", "_", expr.render().lower()).strip("_")
 
 
-def build_rows() -> list[dict[str, object]]:
+def build_rows(
+    traits: LeafTraits = COPYABLE,
+) -> list[dict[str, object]]:
     rows = []
     seen = set()
-    for case in iter_cases(request_forms()):
+    for case in iter_cases(request_forms(), traits):
         if case.binding.kind != CONCRETE.kind:
             continue
         if case.scope not in STORAGE_SCOPES:
@@ -90,7 +93,11 @@ def build_rows() -> list[dict[str, object]]:
         ):
             continue
         verdict = classify(
-            case.scope, case.storage_name, case.binding, case.request
+            case.scope,
+            case.storage_name,
+            case.binding,
+            case.request,
+            traits,
         )
         if verdict.outcome != "supported":
             continue
@@ -98,7 +105,7 @@ def build_rows() -> list[dict[str, object]]:
         if key in seen:
             continue
         seen.add(key)
-        instance, registration = _registration(case.storage_path)
+        instance, registration = _registration(case.storage_path, traits)
         rows.append(
             {
                 "name": (
@@ -110,7 +117,7 @@ def build_rows() -> list[dict[str, object]]:
                 "storage": storage.render(),
                 "instance": instance,
                 "registration": registration,
-                "request": case.request.with_leaf("tracked").render(),
+                "request": case.request.with_leaf(traits.cpp).render(),
                 "bind": _binding(case.request),
                 "coverage": key,
             }
@@ -118,8 +125,8 @@ def build_rows() -> list[dict[str, object]]:
     return rows
 
 
-def validate() -> None:
-    rows = build_rows()
+def validate(traits: LeafTraits = COPYABLE) -> None:
+    rows = build_rows(traits)
     if not rows:
         raise ValueError("const storage catalog must not be empty")
     names = [row["name"] for row in rows]
@@ -132,14 +139,19 @@ def validate() -> None:
             raise ValueError(f"{row['name']} has no request")
 
 
-def render(output: Path) -> str:
-    validate()
-    return render_template("const_cells.cpp.j2", rows=build_rows())
+def render(output: Path, traits: LeafTraits = COPYABLE) -> str:
+    validate(traits)
+    return render_template(
+        "const_cells.cpp.j2",
+        rows=build_rows(traits),
+        **trait_context(traits, "const_cells"),
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--out-move-only", type=Path)
     parser.add_argument(
         "--include",
         type=Path,
@@ -150,7 +162,12 @@ def main() -> None:
 
     if arguments.include is not None:
         validate_catalog(arguments.include)
-    emit(arguments.out, render(arguments.out), check=arguments.check)
+    for traits, out in (
+        (COPYABLE, arguments.out),
+        (MOVE_ONLY, arguments.out_move_only),
+    ):
+        if out is not None:
+            emit(out, render(out, traits), check=arguments.check)
 
 
 if __name__ == "__main__":

@@ -573,7 +573,18 @@ def leaf_copy_required(scope_name: str, form_name: str, shape: Shape) -> bool:
     routes and rejects the copying ones.
     """
     if shape.access != "value":
-        return False
+        if shape.access != "rvalue_reference":
+            return False
+        # A const object cannot be moved out of an rvalue: binding it requires
+        # a copy. Handles are still just handles, so recurse through them.
+        form = FORM_BY_NAME[form_name]
+        adopts_source = form.kind in {
+            "pointer",
+            "handle",
+            "array",
+            "array_handle",
+        }
+        return _value_const_copies(shape.inner, form.wrapper, adopts_source)
     source = source_shape(scope_name, form_name)
     form = FORM_BY_NAME[form_name]
     stored = form.wrapper

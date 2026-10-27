@@ -20,70 +20,75 @@
 #include <utility>
 #include <variant>
 
-namespace keyed_cells {
+namespace {{ namespace }} {
 
 struct key_a {};
 
-struct tracked {
-  tracked() = default;
-  tracked(const tracked &other) : id(other.id) {}
-  tracked(tracked &&other) noexcept : id(other.id) {}
-  tracked &operator=(const tracked &) = default;
-  tracked &operator=(tracked &&) noexcept = default;
+struct {{ leaf }} {
+  {{ leaf }}() = default;
+{% if move_only %}
+  {{ leaf }}(const {{ leaf }} &) = delete;
+  {{ leaf }} &operator=(const {{ leaf }} &) = delete;
+{% else %}
+  {{ leaf }}(const {{ leaf }} &other) : id(other.id) {}
+  {{ leaf }} &operator=(const {{ leaf }} &) = default;
+{% endif %}
+  {{ leaf }}({{ leaf }} &&other) noexcept : id(other.id) {}
+  {{ leaf }} &operator=({{ leaf }} &&) noexcept = default;
 
   int id;
 };
 
-using variant_t = std::variant<tracked, long>;
+using variant_t = std::variant<{{ leaf }}, long>;
 
-inline std::shared_ptr<tracked> make_shared_tracked() {
-  return std::make_shared<tracked>();
+inline std::shared_ptr<{{ leaf }}> make_shared_{{ leaf }}() {
+  return std::make_shared<{{ leaf }}>();
 }
 
-inline std::unique_ptr<tracked> make_unique_tracked() {
-  return std::make_unique<tracked>();
+inline std::unique_ptr<{{ leaf }}> make_unique_{{ leaf }}() {
+  return std::make_unique<{{ leaf }}>();
 }
 
-inline std::optional<tracked> make_optional_tracked() {
-  return std::optional<tracked>(std::in_place);
+inline std::optional<{{ leaf }}> make_optional_{{ leaf }}() {
+  return std::optional<{{ leaf }}>(std::in_place);
 }
 
-inline tracked *make_pointer_tracked() { return new tracked(); }
+inline {{ leaf }} *make_pointer_{{ leaf }}() { return new {{ leaf }}(); }
 
-inline variant_t make_variant_tracked() {
+inline variant_t make_variant_{{ leaf }}() {
   return variant_t(std::in_place_index<0>);
 }
 
-inline std::unique_ptr<tracked[]> make_unique_array_tracked() {
-  return std::unique_ptr<tracked[]>(new tracked[2]);
+inline std::unique_ptr<{{ leaf }}[]> make_unique_array_{{ leaf }}() {
+  return std::unique_ptr<{{ leaf }}[]>(new {{ leaf }}[2]);
 }
 
-inline std::shared_ptr<tracked[]> make_shared_array_tracked() {
-  return std::shared_ptr<tracked[]>(new tracked[2]);
+inline std::shared_ptr<{{ leaf }}[]> make_shared_array_{{ leaf }}() {
+  return std::shared_ptr<{{ leaf }}[]>(new {{ leaf }}[2]);
 }
 
-inline std::shared_ptr<const tracked> make_shared_const_tracked() {
-  return std::shared_ptr<const tracked>(new tracked());
+inline std::shared_ptr<const {{ leaf }}> make_shared_const_{{ leaf }}() {
+  return std::shared_ptr<const {{ leaf }}>(new {{ leaf }}());
 }
 
-inline std::unique_ptr<const tracked> make_unique_const_tracked() {
-  return std::unique_ptr<const tracked>(new tracked());
+inline std::unique_ptr<const {{ leaf }}> make_unique_const_{{ leaf }}() {
+  return std::unique_ptr<const {{ leaf }}>(new {{ leaf }}());
 }
 
-inline std::optional<const tracked> make_optional_const_tracked() {
-  return std::optional<const tracked>(std::in_place);
+inline std::optional<const {{ leaf }}> make_optional_const_{{ leaf }}() {
+  return std::optional<const {{ leaf }}>(std::in_place);
 }
 
-inline const tracked *make_pointer_const_tracked() {
-  return new tracked();
+inline const {{ leaf }} *make_pointer_const_{{ leaf }}() {
+  return new {{ leaf }}();
 }
 
-inline std::variant<const tracked, long> make_variant_const_tracked() {
-  return std::variant<const tracked, long>(std::in_place_index<0>);
+inline std::variant<const {{ leaf }}, long> make_variant_const_{{ leaf }}() {
+  return std::variant<const {{ leaf }}, long>(std::in_place_index<0>);
 }
 
 {% for row in rows %}
-TEST(keyed_cells, {{ row.name }}) {
+TEST({{ suite }}, {{ row.name }}) {
 {% if row.instance %}
   {{ row.instance }};
 {% endif %}
@@ -101,4 +106,4 @@ TEST(keyed_cells, {{ row.name }}) {
 }
 
 {% endfor %}
-} // namespace keyed_cells
+} // namespace {{ namespace }}

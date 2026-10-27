@@ -31,6 +31,7 @@ from tools.model.emit.families.behavior import (
     validate,
 )
 from tools.model.emit.common.validation import validate_catalog
+from tools.model.grammar.traits import MOVE_ONLY
 
 
 def _form(name: str):
@@ -212,6 +213,36 @@ def test_external_cells_are_runtime_only() -> None:
 
 def test_library_catalog_matches_model() -> None:
     validate_catalog(Path(__file__).resolve().parents[3] / "include")
+
+
+def test_move_only_expectations_borrow_or_move() -> None:
+    shared_plain = derive_expectation(_form("plain"), "shared", MOVE_ONLY)
+    assert shared_plain.request == "move_only_tracked &"
+    assert shared_plain.request_class == "reference"
+    unique_plain = derive_expectation(_form("plain"), "unique", MOVE_ONLY)
+    assert unique_plain.request == "move_only_tracked"
+    assert unique_plain.request_class == "consume_value"
+    shared_pointer = derive_expectation(_form("pointer"), "shared", MOVE_ONLY)
+    assert shared_pointer.request == "move_only_tracked *"
+    assert shared_pointer.request_class == "reference"
+    shared_optional = derive_expectation(_form("optional"), "shared", MOVE_ONLY)
+    assert shared_optional.request == "std::optional<move_only_tracked> &"
+
+
+def test_move_only_rows_have_no_copying_expectation() -> None:
+    rows = build_rows(MOVE_ONLY)
+    assert rows
+    copies = [
+        row["copies"]
+        for row in rows
+        if not row.get("interface") and not row.get("annotation")
+    ]
+    assert copies and set(copies) == {0}
+    assert any("move_only_tracked" in str(row["request"]) for row in rows)
+    content = render(None, MOVE_ONLY)
+    assert "TEST(behavior_cells_move_only," in content
+    assert "struct move_only_tracked" in content
+    assert "move_only_tracked(const move_only_tracked &) = delete;" in content
 
 
 def test_render_names_every_cell(tmp_path: Path) -> None:

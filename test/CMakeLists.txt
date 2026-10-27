@@ -212,6 +212,8 @@ set(DINGO_ROUTE_MODEL_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/route_cells.cpp")
 set(DINGO_BEHAVIOR_MODEL_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/behavior_cells.cpp")
+set(DINGO_BEHAVIOR_MOVE_ONLY_MODEL_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/behavior_cells_move_only.cpp")
 set(DINGO_INTERFACE_MODEL_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/interface_cells.cpp")
 set(DINGO_TYPE_MATRIX_TEST_SOURCE
@@ -232,12 +234,20 @@ set(DINGO_PROPERTY_MODEL_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/property_cells.cpp")
 set(DINGO_ANNOTATED_MODEL_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/annotated_cells.cpp")
+set(DINGO_ANNOTATED_MOVE_ONLY_MODEL_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/annotated_cells_move_only.cpp")
 set(DINGO_CONST_MODEL_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/const_cells.cpp")
+set(DINGO_CONST_MOVE_ONLY_MODEL_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/const_cells_move_only.cpp")
 set(DINGO_KEYED_MODEL_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/keyed_cells.cpp")
+set(DINGO_KEYED_MOVE_ONLY_MODEL_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/keyed_cells_move_only.cpp")
 set(DINGO_INTERFACE_RUNTIME_MODEL_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/interface_runtime.cpp")
+set(DINGO_INTERFACE_RUNTIME_MOVE_ONLY_MODEL_TEST_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/model/interface_runtime_move_only.cpp")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/__init__.py"
     "${PROJECT_SOURCE_DIR}/tools/model/__main__.py"
@@ -366,6 +376,7 @@ execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_BEHAVIOR_MODEL_GENERATOR}
         --out ${DINGO_BEHAVIOR_MODEL_TEST_SOURCE}
+        --out-move-only ${DINGO_BEHAVIOR_MOVE_ONLY_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     RESULT_VARIABLE DINGO_BEHAVIOR_MODEL_GENERATOR_RESULT)
@@ -456,6 +467,7 @@ execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_ANNOTATED_MODEL_GENERATOR}
         --out ${DINGO_ANNOTATED_MODEL_TEST_SOURCE}
+        --out-move-only ${DINGO_ANNOTATED_MOVE_ONLY_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     RESULT_VARIABLE DINGO_ANNOTATED_MODEL_GENERATOR_RESULT)
@@ -469,6 +481,7 @@ execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_CONST_MODEL_GENERATOR}
         --out ${DINGO_CONST_MODEL_TEST_SOURCE}
+        --out-move-only ${DINGO_CONST_MOVE_ONLY_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     RESULT_VARIABLE DINGO_CONST_MODEL_GENERATOR_RESULT)
@@ -482,6 +495,7 @@ execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_KEYED_MODEL_GENERATOR}
         --out ${DINGO_KEYED_MODEL_TEST_SOURCE}
+        --out-move-only ${DINGO_KEYED_MOVE_ONLY_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     RESULT_VARIABLE DINGO_KEYED_MODEL_GENERATOR_RESULT)
@@ -495,6 +509,7 @@ execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_INTERFACE_RUNTIME_MODEL_GENERATOR}
         --out ${DINGO_INTERFACE_RUNTIME_MODEL_TEST_SOURCE}
+        --out-move-only ${DINGO_INTERFACE_RUNTIME_MOVE_ONLY_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     RESULT_VARIABLE DINGO_INTERFACE_RUNTIME_MODEL_GENERATOR_RESULT)
@@ -525,6 +540,7 @@ add_custom_target(cells-check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_BEHAVIOR_MODEL_GENERATOR}
         --out ${DINGO_BEHAVIOR_MODEL_TEST_SOURCE}
+        --out-move-only ${DINGO_BEHAVIOR_MOVE_ONLY_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
@@ -563,21 +579,25 @@ add_custom_target(cells-check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_ANNOTATED_MODEL_GENERATOR}
         --out ${DINGO_ANNOTATED_MODEL_TEST_SOURCE}
+        --out-move-only ${DINGO_ANNOTATED_MOVE_ONLY_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_CONST_MODEL_GENERATOR}
         --out ${DINGO_CONST_MODEL_TEST_SOURCE}
+        --out-move-only ${DINGO_CONST_MOVE_ONLY_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_KEYED_MODEL_GENERATOR}
         --out ${DINGO_KEYED_MODEL_TEST_SOURCE}
+        --out-move-only ${DINGO_KEYED_MOVE_ONLY_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_INTERFACE_RUNTIME_MODEL_GENERATOR}
         --out ${DINGO_INTERFACE_RUNTIME_MODEL_TEST_SOURCE}
+        --out-move-only ${DINGO_INTERFACE_RUNTIME_MOVE_ONLY_MODEL_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
@@ -587,6 +607,7 @@ add_executable(dingo_model_test
     ${DINGO_SELECTION_MODEL_TEST_SOURCE}
     ${DINGO_ROUTE_MODEL_TEST_SOURCE}
     ${DINGO_BEHAVIOR_MODEL_TEST_SOURCE}
+    ${DINGO_BEHAVIOR_MOVE_ONLY_MODEL_TEST_SOURCE}
     ${DINGO_INTERFACE_MODEL_TEST_SOURCE}
     ${DINGO_TYPE_MATRIX_TEST_SOURCE}
     ${DINGO_TRAIT_MATRIX_TEST_SOURCE}
@@ -596,16 +617,25 @@ add_executable(dingo_model_test
     ${DINGO_TYPE_BEHAVIOR_MOVE_ONLY_TEST_SOURCE}
     ${DINGO_TYPE_BEHAVIOR_STATIC_MOVE_ONLY_TEST_SOURCE}
     ${DINGO_ANNOTATED_MODEL_TEST_SOURCE}
+    ${DINGO_ANNOTATED_MOVE_ONLY_MODEL_TEST_SOURCE}
     ${DINGO_CONST_MODEL_TEST_SOURCE}
+    ${DINGO_CONST_MOVE_ONLY_MODEL_TEST_SOURCE}
     ${DINGO_KEYED_MODEL_TEST_SOURCE}
+    ${DINGO_KEYED_MOVE_ONLY_MODEL_TEST_SOURCE}
     ${DINGO_INTERFACE_RUNTIME_MODEL_TEST_SOURCE}
+    ${DINGO_INTERFACE_RUNTIME_MOVE_ONLY_MODEL_TEST_SOURCE}
     ${DINGO_PROPERTY_MODEL_TEST_SOURCE})
 target_link_libraries(dingo_model_test dingo::dingo gtest_main)
 target_include_directories(dingo_model_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_definitions(dingo_model_test PRIVATE
     DINGO_TYPE_MATRIX_REPORT="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.md"
-    DINGO_TYPE_MATRIX_JSON="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.json"
-    DINGO_BEHAVIOR_REPORT="${CMAKE_CURRENT_BINARY_DIR}/behavior-outcomes.jsonl")
+    DINGO_TYPE_MATRIX_JSON="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.json")
+set_source_files_properties(${DINGO_BEHAVIOR_MODEL_TEST_SOURCE} PROPERTIES
+    COMPILE_DEFINITIONS
+    "DINGO_BEHAVIOR_REPORT=\"${CMAKE_CURRENT_BINARY_DIR}/behavior-outcomes.jsonl\"")
+set_source_files_properties(${DINGO_BEHAVIOR_MOVE_ONLY_MODEL_TEST_SOURCE} PROPERTIES
+    COMPILE_DEFINITIONS
+    "DINGO_BEHAVIOR_REPORT=\"${CMAKE_CURRENT_BINARY_DIR}/behavior-outcomes-move-only.jsonl\"")
 add_test(NAME dingo_model_test COMMAND dingo_model_test)
 set_tests_properties(dingo_model_test PROPERTIES LABELS "unit;generator")
 
@@ -614,6 +644,8 @@ add_test(NAME dingo_model_baseline_test
         tools.model.report.baseline check
         --matrix ${CMAKE_CURRENT_BINARY_DIR}/type-matrix.json
         --behavior ${CMAKE_CURRENT_BINARY_DIR}/behavior-outcomes.jsonl
+        --behavior
+            ${CMAKE_CURRENT_BINARY_DIR}/behavior-outcomes-move-only.jsonl
         --baseline ${PROJECT_SOURCE_DIR}/test/baselines/model.json)
 set_tests_properties(dingo_model_baseline_test PROPERTIES
     LABELS "unit;generator"

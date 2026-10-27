@@ -34,8 +34,8 @@ class LeafTraits:
         return self.name
 
 
-COPYABLE = LeafTraits("copyable", "copyable_type", copyable=True, movable=True)
-MOVE_ONLY = LeafTraits("move_only", "move_only_type", copyable=False, movable=True)
+COPYABLE = LeafTraits("copyable", "tracked", copyable=True, movable=True)
+MOVE_ONLY = LeafTraits("move_only", "move_only_tracked", copyable=False, movable=True)
 
 TRAITS = (COPYABLE, MOVE_ONLY)
 TRAITS_BY_NAME = {traits.name: traits for traits in TRAITS}

@@ -44,8 +44,28 @@ def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
 
 
+def probe_shape(shape) -> bool:
+    """Whether the compile-time lift trait is a trustworthy oracle.
+
+    A const rvalue reference (``const T &&``) is a lift artefact: the compile
+    trait answers for the inner value, while the runtime container cannot
+    materialize a const rvalue of a move-only object. The path model rejects
+    the copying form for a move-only leaf; the runtime families skip the shape
+    instead of probing it. Every other shape is compared directly.
+    """
+    if shape.access != "rvalue_reference":
+        return True
+    inner = shape.inner
+    return not (
+        inner is not None
+        and inner.outer is not None
+        and inner.outer.name == "const"
+    )
+
+
 def build_rows() -> list[dict[str, object]]:
     rows = []
+    shapes = [shape for shape in SHAPES if probe_shape(shape)]
     for scope, form in iter_supported_cells():
         rows.append(
             {
@@ -78,7 +98,7 @@ def build_rows() -> list[dict[str, object]]:
                             scope.name, form.name, shape
                         ),
                     }
-                    for shape in SHAPES
+                    for shape in shapes
                 ],
             }
         )

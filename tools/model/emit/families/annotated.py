@@ -22,10 +22,11 @@ from tools.model.grammar import cpp
 from tools.model.grammar.catalog import FORM_BY_NAME
 from tools.model.domain.cases import iter_cases, request_forms
 from tools.model.emit.common.recipe import external_instance, registration
-from tools.model.emit.common.runner import emit, render_template
+from tools.model.emit.common.runner import emit, render_template, trait_context
 from tools.model.emit.common.validation import validate_catalog
 from tools.model.semantics.support import classify
 from tools.model.grammar.expr import Expr
+from tools.model.grammar.traits import COPYABLE, MOVE_ONLY, LeafTraits
 from tools.model.grammar.storage import const_leaf, has_const
 
 def _const_storage(case) -> bool:
@@ -35,21 +36,25 @@ def _const_storage(case) -> bool:
     )
 
 
-def _storage_and_registration(case) -> tuple[str, str]:
+def _storage_and_registration(
+    case, traits: LeafTraits = COPYABLE
+) -> tuple[str, str]:
     path = case.storage_path
     form = path.form
     const = _const_storage(case)
-    interfaces = (cpp.annotated(cpp.leaf("tracked"), "tag_a").render(),)
+    interfaces = (
+        cpp.annotated(cpp.leaf(traits.cpp), "tag_a").render(),
+    )
     factory = (
-        path.const_factory("tracked")
+        path.const_factory(traits.cpp)
         if const
-        else path.factory("tracked")
+        else path.factory(traits.cpp)
     )
 
     if form.kind == "value" and case.scope == "external":
         inner = case.request.inner
-        storage = cpp.storage(inner.with_leaf("tracked").cpp()).render()
-        instance = "tracked external_instance"
+        storage = cpp.storage(inner.with_leaf(traits.cpp).cpp()).render()
+        instance = f"{traits.cpp} external_instance"
         if inner.op == "pointer":
             argument = "std::addressof(external_instance)"
         elif inner.op == "lvalue_reference":
@@ -66,9 +71,17 @@ def _storage_and_registration(case) -> tuple[str, str]:
         )
         return instance, registration_line
 
-    storage = path.storage("tracked")
+    storage = path.storage(traits.cpp)
     if case.scope == "external":
-        instance_spec = external_instance(form, "tracked", const=const)
+        instance_spec = external_instance(
+            form,
+            traits.cpp,
+            const=const,
+            move=(
+                not traits.copyable
+                and path.expr.op != "lvalue_reference"
+            ),
+        )
         if instance_spec is None:
             raise ValueError(f"{form.name} has no external instance")
         registration_line, _ = registration(
@@ -112,14 +125,20 @@ def _relation(inner: Expr) -> tuple[bool, str]:
     return False, "first.id == second.id"
 
 
-def build_rows() -> list[dict[str, object]]:
+def build_rows(
+    traits: LeafTraits = COPYABLE,
+) -> list[dict[str, object]]:
     seen = set()
     rows = []
-    for case in iter_cases(request_forms()):
+    for case in iter_cases(request_forms(), traits):
         if case.request.op != "annotated":
             continue
         verdict = classify(
-            case.scope, case.storage_name, case.binding, case.request
+            case.scope,
+            case.storage_name,
+            case.binding,
+            case.request,
+            traits,
         )
         if verdict.outcome != "supported":
             continue
@@ -127,7 +146,7 @@ def build_rows() -> list[dict[str, object]]:
         if key in seen:
             continue
         seen.add(key)
-        instance, registration_line = _storage_and_registration(case)
+        instance, registration_line = _storage_and_registration(case, traits)
         bind_reference, relation = _relation(case.request.inner)
         rows.append(
             {
@@ -136,7 +155,7 @@ def build_rows() -> list[dict[str, object]]:
                 "form": case.storage_name,
                 "instance": instance,
                 "registration": registration_line,
-                "request": case.request.with_leaf("tracked").render(),
+                "request": case.request.with_leaf(traits.cpp).render(),
                 "relation": relation,
                 "bind_reference": bind_reference,
                 "coverage": key,
@@ -145,8 +164,8 @@ def build_rows() -> list[dict[str, object]]:
     return rows
 
 
-def validate() -> None:
-    rows = build_rows()
+def validate(traits: LeafTraits = COPYABLE) -> None:
+    rows = build_rows(traits)
     if not rows:
         raise ValueError("annotated catalog must not be empty")
     names = [row["name"] for row in rows]
@@ -159,14 +178,19 @@ def validate() -> None:
             raise ValueError(f"{row['name']} has no request")
 
 
-def render(output: Path) -> str:
-    validate()
-    return render_template("annotated_cells.cpp.j2", rows=build_rows())
+def render(output: Path, traits: LeafTraits = COPYABLE) -> str:
+    validate(traits)
+    return render_template(
+        "annotated_cells.cpp.j2",
+        rows=build_rows(traits),
+        **trait_context(traits, "annotated_cells"),
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--out-move-only", type=Path)
     parser.add_argument(
         "--include",
         type=Path,
@@ -177,7 +201,12 @@ def main() -> None:
 
     if arguments.include is not None:
         validate_catalog(arguments.include)
-    emit(arguments.out, render(arguments.out), check=arguments.check)
+    for traits, out in (
+        (COPYABLE, arguments.out),
+        (MOVE_ONLY, arguments.out_move_only),
+    ):
+        if out is not None:
+            emit(out, render(out, traits), check=arguments.check)
 
 
 if __name__ == "__main__":
