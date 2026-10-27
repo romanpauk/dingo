@@ -133,6 +133,8 @@ def build_rows(
     for case in iter_cases(request_forms(), traits):
         if case.request.op != "annotated":
             continue
+        if case.binding.kind != "annotated":
+            continue
         verdict = classify(
             case.scope,
             case.storage_name,

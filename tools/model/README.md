@@ -123,7 +123,8 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   pointees promoted from a value, inline wrappers that contain the leaf).
   Borrows, moves, adopted pointers/arrays, and owning-handle copies stay.
 - `emit/binding_matrix.py` emits compile-time `dingo::bindings<dingo::bind<...>>`
-  instantiations for every supported annotated, keyed, and interface case. It
+  instantiations for every supported annotated, annotated-interface, keyed, and
+  interface case, for both leaf traits. It
   checks the registration composition (scope, storage spelling, annotation,
   interface list, and lookup key); runtime families check the route.
 - `emit/behavior.py` executes the top-level half of that matrix. Every
@@ -192,9 +193,12 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   compositions; `Expr.cpp()` produces a structured `CppType`, and
   `grammar/cpp.py` renders it for probes.
 - `grammar/bindings.py` is the binding side of a path case. A `Binding` is
-  concrete, annotated, keyed, interface, or collection; it decides which
-  request qualifiers the registration exposes. The first slices cover concrete,
-  annotated, keyed, and interface bindings.
+  concrete, annotated, keyed, interface, annotated-interface, or collection; it
+  decides which request qualifiers the registration exposes. The
+  `annotated_interface` kind composes a tag and an interface list, so
+  `annotated(interface(request, interface_type), tag)` maps to
+  `annotated<...interface_type..., tag>` and registers
+  `interfaces<annotated<interface_type, tag>>`.
 - `grammar/enumerate.py` is the single bounded type enumeration. Given a leaf it produces
   the object universe, the request projection, and the storage projection.
   Composed objects (wrappers and variants) get the same access closure as plain
@@ -236,7 +240,8 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   interface, including const storage. Keyed covers every supported direct-leaf
   request; wrapped conversions are outside the keyed capability rather than
   claimed as supported. Interface runtime covers direct value/reference/pointer
-  and handle requests in stable scopes. Const walks the same classified case set as the report and derives
+  and handle requests in stable scopes, including annotated-interface
+  registrations. Const walks the same classified case set as the report and derives
   each registration from the storage form. The report shows the cases that
   remain outside each harness.
 - `semantics/cells.py` owns the scope/form product and its supported subset. The route

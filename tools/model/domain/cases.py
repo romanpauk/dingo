@@ -99,7 +99,7 @@ def counts() -> dict[str, int]:
         "interface": len(interface_forms_),
         "requests": len(requests),
         "storages": len(STORAGE_PATHS),
-        "bindings": 4,
+        "bindings": 5,
         "scopes": len(SCOPES),
         "slots": slots,
         "cases": len(cases),

@@ -18,7 +18,7 @@ from tools.model.emit.families.interface_runtime import (
     render,
     validate,
 )
-from tools.model.grammar.bindings import INTERFACE
+from tools.model.grammar.bindings import binding_for
 from tools.model.grammar.traits import MOVE_ONLY, TRAITS_BY_NAME
 from tools.model.semantics.support import classify
 
@@ -37,7 +37,7 @@ def test_interface_rows_are_classified_supported() -> None:
             classify(
                 scope,
                 name,
-                INTERFACE,
+                binding_for(request),
                 request,
                 TRAITS_BY_NAME[traits],
             ).outcome
@@ -56,7 +56,7 @@ def test_interface_move_only_rows_use_the_move_only_implementation() -> None:
             classify(
                 scope,
                 name,
-                INTERFACE,
+                binding_for(request),
                 request,
                 TRAITS_BY_NAME[traits],
             ).outcome

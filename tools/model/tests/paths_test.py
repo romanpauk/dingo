@@ -300,6 +300,64 @@ def test_annotated_requests_use_the_annotated_binding() -> None:
     )
 
 
+def test_annotated_interface_requests_use_the_composed_binding() -> None:
+    from tools.model.grammar.bindings import (
+        ANNOTATED_INTERFACE,
+        binding_for,
+    )
+    from tools.model.grammar import cpp
+
+    base = leaf()
+    request = annotated(
+        interface(shared_ptr(base), "interface_type"), "tag_a"
+    )
+    assert ANNOTATED_INTERFACE.exposes(request)
+    assert binding_for(request) == ANNOTATED_INTERFACE
+    assert (
+        ANNOTATED_INTERFACE.request_type(request).render()
+        == "dingo::annotated<std::shared_ptr<interface_type>, tag_a>"
+    )
+    assert [
+        item.render()
+        for item in ANNOTATED_INTERFACE.registration_interfaces(
+            cpp.leaf("implementation_type")
+        )
+    ] == ["dingo::annotated<interface_type, tag_a>"]
+    assert (
+        classify(
+            "shared",
+            "shared_handle",
+            ANNOTATED_INTERFACE,
+            request,
+        ).outcome
+        == "supported"
+    )
+    assert (
+        classify(
+            "shared",
+            "plain",
+            ANNOTATED_INTERFACE,
+            request,
+        ).outcome
+        == "unsupported"
+    )
+    # The composed binding is not interchangeable with either parent.
+    from tools.model.grammar.bindings import ANNOTATED, INTERFACE
+
+    plain_interface = interface(shared_ptr(base), "interface_type")
+    assert not ANNOTATED.exposes(request)
+    assert not INTERFACE.exposes(request)
+    assert (
+        classify(
+            "shared",
+            "shared_handle",
+            ANNOTATED,
+            plain_interface,
+        ).outcome
+        == "unavailable"
+    )
+
+
 def test_keyed_requests_use_the_keyed_binding() -> None:
     base = leaf()
     request = keyed(lvalue_reference(base))

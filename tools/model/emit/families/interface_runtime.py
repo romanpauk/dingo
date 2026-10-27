@@ -98,6 +98,9 @@ def _binding(request: cpp.CppType) -> str:
         return "reference"
     if request.kind is cpp.CppKind.RVALUE_REFERENCE:
         return "rvalue"
+    if request.kind is cpp.CppKind.TEMPLATE and request.name == "dingo::annotated":
+        # The annotation wrapper is transparent to the reference category.
+        return _binding(request.args[0])
     return "value"
 
 
@@ -111,7 +114,7 @@ def build_rows(
     rows = []
     seen = set()
     for case in iter_cases(request_forms(), traits):
-        if case.binding.kind != "interface":
+        if case.binding.kind not in {"interface", "annotated_interface"}:
             continue
         if case.scope in CONSUMING_SCOPES:
             continue

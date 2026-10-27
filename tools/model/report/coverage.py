@@ -32,7 +32,12 @@ from tools.model.semantics.gaps import declared_runtime_gap
 
 def _key(case) -> tuple[str, str, object, str] | None:
     traits = case.traits.name
-    if case.binding.kind in {"annotated", "keyed", "interface"}:
+    if case.binding.kind in {
+        "annotated",
+        "annotated_interface",
+        "keyed",
+        "interface",
+    }:
         return (case.scope, case.storage_name, case.request, traits)
     if case.binding.kind != "concrete":
         return None
@@ -177,7 +182,13 @@ def coverage_report(examples: int = 4) -> dict[str, object]:
         "gap_by_binding": {
             name: gap_by_binding.get(name, 0)
             for name in sorted(
-                {"annotated", "concrete", "interface", "keyed"}
+                {
+                    "annotated",
+                    "annotated_interface",
+                    "concrete",
+                    "interface",
+                    "keyed",
+                }
                 | set(gap_by_binding)
                 | set(runtime_gap_by_binding)
             )
@@ -185,7 +196,13 @@ def coverage_report(examples: int = 4) -> dict[str, object]:
         "runtime_gap_by_binding": {
             name: runtime_gap_by_binding.get(name, 0)
             for name in sorted(
-                {"annotated", "concrete", "interface", "keyed"}
+                {
+                    "annotated",
+                    "annotated_interface",
+                    "concrete",
+                    "interface",
+                    "keyed",
+                }
                 | set(gap_by_binding)
                 | set(runtime_gap_by_binding)
             )

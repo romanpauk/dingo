@@ -75,7 +75,10 @@ def binding_supported(scope: str, storage_name: str, binding: Binding) -> bool:
     path = storage_path(scope, storage_name)
     if path is None:
         return False
-    return binding.kind in exposed_binding_kinds(path.scope, path.form)
+    kinds = exposed_binding_kinds(path.scope, path.form)
+    if binding.kind == "annotated_interface":
+        return {"annotated", "interface"} <= kinds
+    return binding.kind in kinds
 
 
 def binding_gap(

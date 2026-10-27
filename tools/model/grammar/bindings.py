@@ -33,12 +33,19 @@ class Binding:
     def label(self) -> str:
         if self.kind == "annotated":
             return f"annotated:{self.tag}"
+        if self.kind == "annotated_interface":
+            return f"annotated_interface:{self.tag}:{','.join(self.interfaces)}"
         return self.kind
 
     def request_type(self, request: Expr) -> cpp.CppType:
         """The concrete C++ type the caller resolves through this binding."""
         if self.kind == "interface":
             return cpp.with_leaf(request.inner.cpp(), self.interfaces[0])
+        if self.kind == "annotated_interface":
+            target = cpp.with_leaf(
+                request.inner.inner.cpp(), self.interfaces[0]
+            )
+            return cpp.annotated(target, self.tag)
         return request.cpp()
 
     def registration_interfaces(
@@ -48,6 +55,10 @@ class Binding:
             return (cpp.annotated(leaf, self.tag),)
         if self.kind == "interface":
             return (cpp.leaf(self.interfaces[0]),)
+        if self.kind == "annotated_interface":
+            return (
+                cpp.annotated(cpp.leaf(self.interfaces[0]), self.tag),
+            )
         return ()
 
     def registration_key(self) -> cpp.CppType | None:
@@ -57,6 +68,12 @@ class Binding:
 
     def exposes(self, request: Expr) -> bool:
         if request.op == "annotated":
+            if request.inner.op == "interface":
+                return (
+                    self.kind == "annotated_interface"
+                    and self.tag == request.name
+                    and request.inner.name in self.interfaces
+                )
             return self.kind == "annotated" and self.tag == request.name
         if request.op == "keyed":
             return self.kind == "keyed" and self.key == request.name
@@ -69,10 +86,21 @@ CONCRETE = Binding("concrete")
 ANNOTATED = Binding("annotated", tag="tag_a")
 KEYED = Binding("keyed", key="key_a")
 INTERFACE = Binding("interface", interfaces=("interface_type",))
+ANNOTATED_INTERFACE = Binding(
+    "annotated_interface",
+    tag="tag_a",
+    interfaces=("interface_type",),
+)
 
 
 def binding_for(request: Expr) -> Binding:
     if request.op == "annotated":
+        if request.inner.op == "interface":
+            return Binding(
+                "annotated_interface",
+                tag=request.name,
+                interfaces=(request.inner.name,),
+            )
         return Binding("annotated", tag=request.name)
     if request.op == "keyed":
         return Binding("keyed", key=request.name)

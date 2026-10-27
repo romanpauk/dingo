@@ -457,6 +457,37 @@ def _const_rvalue(request: Expr) -> bool:
     )
 
 
+def _interface_target_failure(inner: Expr, binding) -> Verdict | None:
+    if inner.op not in INTERFACE_INNER_OPS:
+        return Verdict(
+            "unmodeled",
+            "interface",
+            "this interface request form is not modeled",
+        )
+    if not _direct_interface_target(inner):
+        return Verdict(
+            "unmodeled",
+            "interface",
+            "nested interface conversion is not modeled",
+        )
+    handle = _interface_handle(inner)
+    if handle is not None and handle.inner.op == "const":
+        direct_shared = inner is handle and handle.op == "shared_ptr"
+        if not direct_shared:
+            return Verdict(
+                "unsupported",
+                "interface",
+                "a const interface handle has no conversion route",
+            )
+    if inner.op == "leaf" and not binding.copyable:
+        return Verdict(
+            "unsupported",
+            "interface",
+            "an interface value request requires a copyable interface",
+        )
+    return None
+
+
 @lru_cache(maxsize=None)
 def classify(
     scope: str,
@@ -483,7 +514,36 @@ def classify(
             "decay",
             "array values are addressable only through a reference or pointer",
         )
-    annotated = request_key.op == "annotated"
+    if (
+        request_key.op == "annotated"
+        and request_key.inner.op == "interface"
+    ):
+        if not binding.exposes(request_key):
+            return Verdict(
+                "unavailable",
+                "annotation",
+                "the binding does not expose this annotated interface",
+            )
+        form = storage_form(storage_name)
+        if form is None:
+            return Verdict(
+                "unmodeled",
+                "storage",
+                f"{storage_name} has no form in the cell model",
+            )
+        if not binding_supported(scope, storage_name, binding):
+            return Verdict(
+                "unavailable",
+                "binding",
+                f"{scope}/{form} does not expose the annotated interface",
+            )
+        failure = _interface_target_failure(request_key.inner.inner, binding)
+        if failure is not None:
+            return failure
+        request_key = request_key.inner.inner
+        annotated = False
+    else:
+        annotated = request_key.op == "annotated"
     if annotated:
         if not binding.exposes(request_key):
             return Verdict(
@@ -567,35 +627,9 @@ def classify(
                 "binding",
                 f"{scope}/{form} does not expose the interface binding",
             )
-        if request_key.inner.op not in INTERFACE_INNER_OPS:
-            return Verdict(
-                "unmodeled",
-                "interface",
-                "this interface request form is not modeled",
-            )
-        if not _direct_interface_target(request_key.inner):
-            return Verdict(
-                "unmodeled",
-                "interface",
-                "nested interface conversion is not modeled",
-            )
-        handle = _interface_handle(request_key.inner)
-        if handle is not None and handle.inner.op == "const":
-            direct_shared = (
-                request_key.inner is handle and handle.op == "shared_ptr"
-            )
-            if not direct_shared:
-                return Verdict(
-                    "unsupported",
-                    "interface",
-                    "a const interface handle has no conversion route",
-                )
-        if request_key.inner.op == "leaf" and not binding.copyable:
-            return Verdict(
-                "unsupported",
-                "interface",
-                "an interface value request requires a copyable interface",
-            )
+        failure = _interface_target_failure(request_key.inner, binding)
+        if failure is not None:
+            return failure
         request_key = request_key.inner
     elif binding.kind == "annotated":
         return Verdict(

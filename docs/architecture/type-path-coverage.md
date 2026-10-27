@@ -81,8 +81,8 @@ correctness requirement. The current snapshot is:
 
 - 42 plain paths, 180 wrapped paths, and 190 variant paths;
 - 412 annotated, 412 keyed, and 412 interface request paths;
-- 10,032 request paths over 105 storage slots;
-- 4 bindings and 4 scopes, for 105,648 cases.
+- 12,540 request paths over 105 storage slots;
+- 5 bindings and 4 scopes, for 132,060 cases.
 
 ## Support classification
 
@@ -126,17 +126,17 @@ generated as a cell row.
 
 ## Current gap
 
-At the time of writing the report classifies 105,648 cases:
+At the time of writing the report classifies 132,060 cases:
 
 - plain: 42, wrapped: 180, variant: 190, annotated: 412, keyed: 412, interface:
-  412;
+  412, annotated interface: 412;
 - 10,032 request paths, 105 storage paths, 4 bindings, 4 scopes;
-- 1,058 supported (copyable leaf);
-- 52,823 unavailable;
-- 32,584 unsupported;
-- 19,161 unmodeled.
+- 1,092 supported (copyable leaf);
+- 76,390 unavailable;
+- 33,416 unsupported;
+- 21,162 unmodeled.
 
-A move-only leaf adds 915 of the same paths; the domain spelling is unchanged
+A move-only leaf adds 949 of the same paths; the domain spelling is unchanged
 because the trait replaces the leaf type, not the request expression.
 
 `unavailable` means the storage does not expose the category or the binding
@@ -149,10 +149,10 @@ when the storage does not expose that binding kind.
 The report compares the supported set with what the generated C++ suites
 exercise:
 
-- 1,973 supported paths over both traits (1,058 copyable, 915 move-only);
-- 1,973 covered by the compile-time type/binding matrices, the trait matrix, and
+- 2,041 supported paths over both traits (1,092 copyable, 949 move-only);
+- 2,041 covered by the compile-time type/binding matrices, the trait matrix, and
   const probes;
-- 1,887 covered by the runtime shape, behavior, annotated, keyed, interface, and
+- 1,955 covered by the runtime shape, behavior, annotated, keyed, interface, and
   const probes;
 - 0 supported paths have no compile-time test;
 - 0 supported paths have an undeclared runtime gap;
@@ -194,7 +194,7 @@ matrix and the runtime behavior suite consume them instead of keeping a separate
 hand-written list.
 
 The type matrix now enumerates **222 shapes** over 32 cells (**7,104 probes**),
-and the binding matrix adds **518** compile-time registration probes (copyable
+and the binding matrix adds **586** compile-time registration probes (copyable
 and move-only). The behavior outcome baseline has **183** rows (95 copyable, 88
 move-only). The matrix baseline records the shape removals from rejecting const
 rvalue requests.

@@ -35,7 +35,9 @@ MOVE_ONLY_LEAF = "move_only_implementation_type"
 
 def _leaf(traits: LeafTraits) -> str:
     return COPYABLE_LEAF if traits.copyable else MOVE_ONLY_LEAF
-BINDINGS = frozenset({"annotated", "keyed", "interface"})
+BINDINGS = frozenset(
+    {"annotated", "annotated_interface", "keyed", "interface"}
+)
 
 
 def _binding_type(case, traits: LeafTraits = COPYABLE) -> str:

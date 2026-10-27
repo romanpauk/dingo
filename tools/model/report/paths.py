@@ -37,11 +37,16 @@ def binding_applicability() -> list[dict[str, object]]:
     """Exposed and non-exposed slots for each qualified binding."""
     slots = len(STORAGE_PATHS)
     rows = []
-    for kind in ("annotated", "keyed", "interface"):
+    for kind in ("annotated", "annotated_interface", "keyed", "interface"):
         exposed = sum(
             1
             for path in STORAGE_PATHS
-            if kind in exposed_binding_kinds(path.scope, path.form)
+            if (
+                {"annotated", "interface"}
+                <= exposed_binding_kinds(path.scope, path.form)
+                if kind == "annotated_interface"
+                else kind in exposed_binding_kinds(path.scope, path.form)
+            )
         )
         rows.append(
             {

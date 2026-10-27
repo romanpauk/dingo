@@ -9,9 +9,8 @@ per-storage request-derivation refactor.
 
 The tree is green:
 
-- `pytest tools/model/tests test/matrix/generator_test.py`: 290 passed
-- `dingo_model_test`: 600 tests passed, including the trait matrix and move-only
-  type behavior
+- `pytest tools/model/tests test/matrix/generator_test.py`: 291 passed
+- `dingo_model_test`: 1013 tests passed, including both leaf traits
 - `cells-check`: passes
 - `ctest`: 77/77 passed
 - `format-check` and full `check`: pass
@@ -19,11 +18,11 @@ The tree is green:
 Current model snapshot (both leaf traits):
 
 - storage paths: 105
-- derived request paths: 10,032
-- cases (copyable domain): 105,648
-- supported: 1,973 (copyable 1,058, move-only 915)
-- compile-tested: 1,973
-- runtime-tested: 1,887
+- derived request paths: 12,540
+- cases (copyable domain): 132,060
+- supported: 2,041 (copyable 1,092, move-only 949)
+- compile-tested: 2,041
+- runtime-tested: 1,955
 - compile gap: 0
 - undeclared runtime gap: 0
 - declared runtime gap: 86 (43 per trait)
@@ -34,6 +33,7 @@ Supported by binding (copyable / move-only):
 - keyed: 139 / 118
 - annotated: 99 / 78
 - interface: 42 / 42
+- annotated interface: 34 / 34
 
 Declared runtime gaps (per trait):
 
@@ -93,7 +93,7 @@ replaced the old global `request_forms() x storage` product.
 Important: `DEPTH = 2` is the current coverage bound. It is conservative.
 Experiments showed:
 
-- depth 2: ~105k cases, 1,058 copyable supported
+- depth 2: ~132k cases, 1,092 copyable supported
 - depth 3: ~857k cases, 4,299 supported
 - depth 4: ~6.8M cases, 29,303 supported
 
@@ -149,7 +149,7 @@ Current generated test counts (copyable + move-only):
 - `const_cells`: 52 + 28
 - `type_behavior`: 47 + 47
 - `storage_cells`: 41
-- `interface_runtime`: 34 + 34
+- `interface_runtime`: 68 + 68
 - `route_cells`: 33
 - `interface_cells`: 7
 - `annotation_cells`: 3 + 3
@@ -172,7 +172,7 @@ Generated files are under `build/test/generated/model/` and are compiled into
 - `coverage.py` splits untested supported cases into undeclared gaps and
   declared gaps. Do not make a missing case disappear without a reason.
 
-## Open work, in priority order
+## Work status
 
 ### 1. Copyable / move-only leaf traits
 
@@ -203,24 +203,16 @@ Remaining work:
    per-family tables; the trait table is aggregated separately. If the model
    needs per-trait rule histograms, iterate both traits there too.
 
-### 2. Annotated interfaces
+### 2. Annotated interfaces (done)
 
-Annotated wrappers now work (`annotated<optional<T>, tag>`,
-`annotated<shared_ptr<T>, tag>`, const variants). Annotated **interfaces** do
-not, because `Binding` is single-kind. The library supports:
-
-```cpp
-interfaces<annotated<interface_type, tag>>
-```
-
-and resolves `annotated<shared_ptr<interface_type>, tag>`. Required:
-
-- compositional `Binding` (annotation + interface list);
-- request grammar generating `annotated(interface(...))`;
-- `Binding.request_type()` mapping that wraps the interface target in
-  `annotated`;
-- registration interfaces `annotated<interface_type, tag>`;
-- runtime and binding-matrix rows for the composition.
+`Binding` has an `annotated_interface` kind carrying both the tag and the
+interface list. The request projection derives
+`annotated(interface(request, interface_type), tag)`, and the binding maps it to
+`annotated<...interface_type..., tag>` for requests and
+`annotated<interface_type, tag>` for registration. Support requires both the
+annotated and interface capabilities to be exposed, and the interface runtime
+family emits the composed rows for both leaf traits. The binding matrix probes
+the composed registration.
 
 ### 3. Raise the per-storage request depth
 

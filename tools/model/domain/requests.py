@@ -17,7 +17,14 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from tools.model.grammar.bindings import ANNOTATED, CONCRETE, INTERFACE, KEYED, Binding
+from tools.model.grammar.bindings import (
+    ANNOTATED,
+    ANNOTATED_INTERFACE,
+    CONCRETE,
+    INTERFACE,
+    KEYED,
+    Binding,
+)
 from tools.model.grammar.expr import (
     Expr,
     annotated,
@@ -90,6 +97,15 @@ def projected_requests(
         projections.append((ANNOTATED, annotated(request, ANNOTATED.tag)))
         projections.append((KEYED, keyed(request, KEYED.key)))
         projections.append((INTERFACE, interface(request, INTERFACE.interfaces[0])))
+        projections.append(
+            (
+                ANNOTATED_INTERFACE,
+                annotated(
+                    interface(request, INTERFACE.interfaces[0]),
+                    ANNOTATED_INTERFACE.tag,
+                ),
+            )
+        )
     return tuple(projections)
 
 
