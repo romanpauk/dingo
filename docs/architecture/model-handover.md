@@ -45,6 +45,17 @@ copyable keys (354 of 730 copyable cases, 313 of 651 move-only cases) have no
 library route. The next coverage step is to either tighten `derive_route` for
 those nested shapes or have `type_behavior` log the probes it actually executes.
 
+A 10-storage runtime probe splits the concrete failures by form: 388 value
+requests, 8 lvalue references, 8 pointers, and 26 rvalue references. An extra
+wrapper of the same kind is **not** inherently unsupported: by value,
+`optional<optional<T>>` and `variant<variant<T,long>,long>` resolve (the stored
+wrapper is copied into the new one). What fails is an access form to the
+wrapper-of-wrapper (`optional<optional<T>>&`, `*`, `&&`), a kind-changing value
+(`optional<variant<T,long>>`, `optional<shared_ptr<T>>` from an optional), or a
+nested handle value (`shared_ptr<shared_ptr<T>>`, `unique_ptr<shared_ptr<T>>`).
+Tighten the value-wrapping and access rules separately; do not reject same-kind
+wrappers wholesale.
+
 Declared runtime gaps (per trait):
 
 - 35 concrete top-level handle / cyclical / consuming-borrow forms
