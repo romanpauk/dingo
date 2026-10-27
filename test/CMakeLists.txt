@@ -174,6 +174,8 @@ set(DINGO_INTERFACE_RUNTIME_MODEL_GENERATOR
     "tools.model.emit.families.interface_runtime")
 set(DINGO_RESOLVE_GENERATOR
     "tools.model.emit.resolve")
+set(DINGO_CONSUMER_MODEL_GENERATOR
+    "tools.model.emit.consumers")
 set(DINGO_FACTORY_MODEL_GENERATOR
     "tools.model.emit.families.factory")
 set(DINGO_CONSTRUCT_MODEL_GENERATOR
@@ -508,7 +510,7 @@ if(NOT DINGO_CONSTRUCT_MODEL_GENERATOR_RESULT EQUAL 0)
         "${DINGO_CONSTRUCT_MODEL_GENERATOR_RESULT}")
 endif()
 file(GLOB_RECURSE DINGO_CONSTRUCT_SOURCES CONFIGURE_DEPENDS
-    "${DINGO_RESOLVE_DIR}/resolution/runtime/*/*/construct/*.cpp")
+    "${DINGO_RESOLVE_DIR}/resolution/runtime/global/construct/*/*.cpp")
 
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
@@ -606,6 +608,24 @@ if(NOT DINGO_RESOLVE_GENERATOR_RESULT EQUAL 0)
 endif()
 file(GLOB_RECURSE DINGO_RESOLVE_SOURCES CONFIGURE_DEPENDS
     "${DINGO_RESOLVE_DIR}/resolution/runtime/*/*/resolve.cpp")
+foreach(consumer construct invoke)
+    execute_process(
+        COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+            ${DINGO_CONSUMER_MODEL_GENERATOR}
+            --out-dir ${DINGO_RESOLVE_DIR}
+            --manifest ${DINGO_RESOLVE_MANIFEST}
+            --consumer ${consumer}
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        RESULT_VARIABLE DINGO_CONSUMER_MODEL_GENERATOR_RESULT)
+    if(NOT DINGO_CONSUMER_MODEL_GENERATOR_RESULT EQUAL 0)
+        message(FATAL_ERROR
+            "Failed to generate ${consumer} claim files: "
+            "${DINGO_CONSUMER_MODEL_GENERATOR_RESULT}")
+    endif()
+endforeach()
+file(GLOB_RECURSE DINGO_CONSUMER_SOURCES CONFIGURE_DEPENDS
+    "${DINGO_RESOLVE_DIR}/resolution/runtime/*/*/construct.cpp"
+    "${DINGO_RESOLVE_DIR}/resolution/runtime/*/*/invoke.cpp")
 file(GLOB_RECURSE DINGO_RUNTIME_REQUEST_SOURCES CONFIGURE_DEPENDS
     "${DINGO_RESOLVE_DIR}/resolution/runtime/*/*/annotated/*.cpp"
     "${DINGO_RESOLVE_DIR}/resolution/runtime/*/*/keyed/*.cpp"
@@ -718,6 +738,18 @@ add_custom_target(cells-check
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_CONSUMER_MODEL_GENERATOR}
+        --out-dir ${DINGO_RESOLVE_DIR}
+        --manifest ${DINGO_RESOLVE_MANIFEST}
+        --consumer construct
+        --check
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_CONSUMER_MODEL_GENERATOR}
+        --out-dir ${DINGO_RESOLVE_DIR}
+        --manifest ${DINGO_RESOLVE_MANIFEST}
+        --consumer invoke
+        --check
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_CLASSIFICATION_CONSTRUCTOR_GENERATOR}
         --out-dir ${DINGO_CLASSIFICATION_DIR}
         --manifest ${DINGO_CLASSIFICATION_CONSTRUCTOR_MANIFEST}
@@ -755,6 +787,7 @@ set_tests_properties(dingo_model_test PROPERTIES LABELS "unit;generator")
 add_executable(dingo_resolution_runtime_test
     ${DINGO_RUNTIME_REQUEST_SOURCES}
     ${DINGO_CONSTRUCT_SOURCES}
+    ${DINGO_CONSUMER_SOURCES}
     ${DINGO_INDEXED_SOURCES})
 target_link_libraries(dingo_resolution_runtime_test dingo::dingo gtest_main)
 target_include_directories(dingo_resolution_runtime_test PRIVATE

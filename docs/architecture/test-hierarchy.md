@@ -19,11 +19,32 @@ The generated tests share one path hierarchy:
   `annotated_interface`, or empty;
 - **request** — the structural request slug (`t`, `t_ref`, `optional_t`, …).
 
+The root of the tree is the capability cell, not the claim. A claim file is a
+sibling of `resolve.cpp` inside the cell, and the claim is the first segment of
+the case path after the cell:
+
+```text
+resolution/runtime/shared/plain/resolve.cpp      # rows: resolve
+resolution/runtime/shared/plain/construct.cpp    # same rows: construct
+resolution/runtime/shared/plain/invoke.cpp       # same rows: invoke
+```
+
+Each of those files is rendered from `resolve-manifest.json`, so the row sets
+are identical by construction. A claim that is not tied to a cell (constructor
+shapes, collections, indexed lookup) lives under `global` instead:
+
+```text
+resolution/runtime/global/construct/lvalue_reference/copyable.cpp
+resolution/static/global/collection/interface.cpp
+resolution/runtime/indexed/global/size_t/resolve.cpp
+```
+
 The case path is the identity used by manifests, baselines, and reports. A
 generated file groups cases up to the category:
 
 ```text
 resolution/runtime/shared/plain/resolve.cpp
+resolution/runtime/global/construct/lvalue_reference/copyable.cpp
 classification/constructor/zero_argument.cpp
 registration/static_asserts/shared/plain/binding.cpp
 ```

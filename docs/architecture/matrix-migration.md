@@ -15,10 +15,11 @@ dropped | | `lifetime_counts` | covered | dropped | | `nested_wrappers` |
 partial | `resolution/.../nested` | | `custom_wrappers` | partial (properties
 only) | `classification/.../wrapper` + `resolution/.../nested` | |
 `constructor_detection` | partial (shape slice) |
-`classification/constructor/<backend>/<mode>/<shape>` | | `construct` | not
-covered | `resolution/.../construct` | | `construct_collection` | not covered |
-`resolution/.../construct/collection` | | `local_bindings` | not covered |
-`resolution/.../local` | | `nested_container` | not covered |
+`classification/constructor/<backend>/<mode>/<shape>` | | `construct` | covered
+(row claims + 18 shape classes) | `resolution/runtime/<cell>/construct.cpp` and
+`resolution/runtime/global/construct/<shape>` | | `construct_collection` | not
+covered | `resolution/.../construct/collection` | | `local_bindings` | not
+covered | `resolution/.../local` | | `nested_container` | not covered |
 `resolution/.../container` | | `factory_override` | not covered |
 `registration/.../factory` | | `explicit_dependencies` | not covered |
 `resolution/.../dependencies` | | `mixed_external_dependency` | not covered |
@@ -28,12 +29,12 @@ covered | `resolution/.../construct` | | `construct_collection` | not covered |
 `resolution/.../config/rtti` | | `resolve_collection` | not covered |
 `registration/.../collection` | | `resolve_keyed_collection` | not covered |
 `registration/.../collection` | | `resolve_indexed` | not covered |
-`registration/.../indexed` | | `construct_invoke` / invoke family | not covered
-| `resolution/.../invoke` | | `scenario` family | not covered |
-`resolution/.../scenario` | | `shared_cyclical` family | not covered |
-`resolution/.../cyclical` | | dependency-composition families | not covered |
-`resolution/.../composition` | | conversion parity | not covered |
-`classification/conversion` |
+`registration/.../indexed` | | `construct_invoke` / invoke family | claim files
+covered; callable shapes remaining | `resolution/runtime/<cell>/invoke.cpp` | |
+`scenario` family | not covered | `resolution/.../scenario` | |
+`shared_cyclical` family | not covered | `resolution/.../cyclical` | |
+dependency-composition families | not covered | `resolution/.../composition` | |
+conversion parity | not covered | `classification/conversion` |
 
 ## Removed matrix features
 
@@ -102,13 +103,19 @@ Used by construct, factory, local bindings, nested containers, and the existing
 resolve/behavior families:
 
 ```text
-resolution/runtime/<scope>/<storage>/construct/<traits>.cpp
+resolution/runtime/<scope>/<storage>/construct.cpp
+resolution/runtime/<scope>/<storage>/invoke.cpp
 registration/runtime/<scope>/<storage>/factory/<kind>.cpp
 resolution/runtime/<scope>/<storage>/local/<traits>.cpp
 ```
 
-One file per cell and category; one test per case. The test registers the
-storage and asserts identity, value, or counts.
+`construct.cpp` and `invoke.cpp` are claims over the same rows as `resolve.cpp`,
+rendered from `resolve-manifest.json`; the claim is the level after the cell in
+the case path. Operator classes that are not tied to a cell live under `global`:
+
+```text
+resolution/runtime/global/construct/<shape>/<traits>.cpp
+```
 
 ### Container configuration
 

@@ -374,6 +374,8 @@ def manifest(shards: tuple[Shard, ...]) -> str:
                         "request": case.request,
                         "declared": case.declared,
                         "declared_reason": case.declared_reason,
+                        "instance": case.instance,
+                        "registration": case.registration,
                     }
                     for case in shard.cases
                 ],

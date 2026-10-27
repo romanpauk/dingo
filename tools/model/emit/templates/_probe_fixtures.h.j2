@@ -1,0 +1,92 @@
+// Probe fixtures shared by every claim file rendered from the resolve
+// manifest, so the rows and their fixtures cannot drift.
+
+struct tag_a {};
+struct key_a {};
+
+struct interface_type {
+  virtual ~interface_type() = default;
+  virtual int value() const = 0;
+};
+
+struct copyable : interface_type {
+  copyable() = default;
+  copyable(const copyable &) = default;
+  copyable(copyable &&) noexcept = default;
+  int id = 0;
+  int value() const override { return id; }
+};
+
+struct movable : interface_type {
+  movable() = default;
+  movable(const movable &) = delete;
+  movable(movable &&) noexcept = default;
+  int id = 0;
+  int value() const override { return id; }
+};
+
+inline std::shared_ptr<copyable> make_shared_copyable() {
+  return std::make_shared<copyable>();
+}
+inline std::unique_ptr<copyable> make_unique_copyable() {
+  return std::make_unique<copyable>();
+}
+inline std::optional<copyable> make_optional_copyable() {
+  return std::optional<copyable>(std::in_place);
+}
+inline std::variant<copyable, long> make_variant_copyable() {
+  return std::variant<copyable, long>(std::in_place_index<0>);
+}
+inline copyable *make_pointer_copyable() { return new copyable; }
+inline std::unique_ptr<copyable[]> make_unique_array_copyable() {
+  return std::unique_ptr<copyable[]>(new copyable[2]);
+}
+inline std::shared_ptr<copyable[]> make_shared_array_copyable() {
+  return std::shared_ptr<copyable[]>(new copyable[2]);
+}
+inline std::shared_ptr<const copyable> make_shared_const_copyable() {
+  return std::shared_ptr<const copyable>(new copyable());
+}
+inline std::unique_ptr<const copyable> make_unique_const_copyable() {
+  return std::unique_ptr<const copyable>(new copyable());
+}
+inline std::optional<const copyable> make_optional_const_copyable() {
+  return std::optional<const copyable>(std::in_place);
+}
+inline const copyable *make_pointer_const_copyable() { return new copyable; }
+inline std::variant<const copyable, long> make_variant_const_copyable() {
+  return std::variant<const copyable, long>(std::in_place_index<0>);
+}
+
+inline std::shared_ptr<movable> make_shared_movable() {
+  return std::make_shared<movable>();
+}
+inline std::unique_ptr<movable> make_unique_movable() {
+  return std::make_unique<movable>();
+}
+inline std::optional<movable> make_optional_movable() {
+  return std::optional<movable>(std::in_place);
+}
+inline std::variant<movable, long> make_variant_movable() {
+  return std::variant<movable, long>(std::in_place_index<0>);
+}
+inline movable *make_pointer_movable() { return new movable; }
+inline std::unique_ptr<movable[]> make_unique_array_movable() {
+  return std::unique_ptr<movable[]>(new movable[2]);
+}
+inline std::shared_ptr<movable[]> make_shared_array_movable() {
+  return std::shared_ptr<movable[]>(new movable[2]);
+}
+inline std::shared_ptr<const movable> make_shared_const_movable() {
+  return std::shared_ptr<const movable>(new movable());
+}
+inline std::unique_ptr<const movable> make_unique_const_movable() {
+  return std::unique_ptr<const movable>(new movable());
+}
+inline std::optional<const movable> make_optional_const_movable() {
+  return std::optional<const movable>(std::in_place);
+}
+inline const movable *make_pointer_const_movable() { return new movable; }
+inline std::variant<const movable, long> make_variant_const_movable() {
+  return std::variant<const movable, long>(std::in_place_index<0>);
+}
