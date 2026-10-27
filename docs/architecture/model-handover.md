@@ -11,10 +11,11 @@ The tree is green:
 
 - `pytest tools/model/tests test/matrix/generator_test.py`: 303 passed
 - `dingo_model_test`: 1013 tests passed, including both leaf traits
-- `dingo_detection_test`: 102 tests
+- `dingo_detection_test`: 62 tests
+- `dingo_resolution_compile_test`: 40 tests
 - `dingo_registration_test`: 158 tests
 - `cells-check`: passes
-- `ctest`: 79/79 passed
+- `ctest`: 80/80 passed
 - `resolve-check`: 274 tests, report written to `build/test/resolve-gaps.md`
   (2,009 calls, 772 overclaims)
 - `format-check` and full `check`: pass
@@ -173,8 +174,10 @@ combinations. The earlier global-list model overclaimed many of them.
 
 Current generated tests are grouped by phase:
 
-- detection: `dingo_detection_test` (102 tests: constructor, wrapper, selection,
-  storage, route, interface, type/trait matrices);
+- detection: `dingo_detection_test` (62 tests: constructor, wrapper, selection,
+  storage);
+- resolution compile: `dingo_resolution_compile_test` (40 tests: route,
+  interface, type/trait matrices);
 - registration: `dingo_registration_test` (158 tests, 47 storage files);
 - resolution: `dingo_model_test` (1,013 tests), `dingo_resolve_probe` (2,009
   resolve cases, skipped on failure).

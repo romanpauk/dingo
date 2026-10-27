@@ -10,7 +10,7 @@
 
 One file per constructor shape:
 
-    detection/compile/constructor/<shape>.cpp
+    detection/constructor/<shape>.cpp
 
 The file contains the type declaration, a static assertion on the detected
 arity, and a presence test. This is the first slice of the detection phase; the
@@ -122,8 +122,8 @@ def manifest() -> str:
         "shapes": [
             {
                 "name": shape.name,
-                "path": f"detection/compile/constructor/{shape.name}",
-                "file": f"detection/compile/constructor/{shape.name}.cpp",
+                "path": f"detection/constructor/{shape.name}",
+                "file": f"detection/constructor/{shape.name}.cpp",
                 "arity": shape.arity,
                 "kind": shape.kind,
             }
@@ -151,7 +151,6 @@ def main() -> None:
         emit(
             arguments.out_dir
             / "detection"
-            / "compile"
             / "constructor"
             / f"{shape.name}.cpp",
             render(shape),

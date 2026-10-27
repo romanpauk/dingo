@@ -154,7 +154,7 @@ def build_shards() -> list[SelectionShard]:
         rows = tuple(row for row in build_rows() if row.policy == policy)
         path = CasePath(
             phase="detection",
-            container="compile",
+            container="",
             scope="global",
             category=f"selection/{policy}",
             request="rules",

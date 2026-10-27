@@ -134,7 +134,7 @@ def build_shards() -> list[PropertyShard]:
         name = row.name.removeprefix("property_")
         path = CasePath(
             phase="detection",
-            container="compile",
+            container="",
             scope="global",
             category=f"wrapper/{name}",
             traits="",

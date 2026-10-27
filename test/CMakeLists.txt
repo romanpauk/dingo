@@ -231,11 +231,11 @@ set(DINGO_BEHAVIOR_MODEL_TEST_SOURCE
 set(DINGO_BEHAVIOR_MOVE_ONLY_MODEL_TEST_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/model/behavior_cells_move_only.cpp")
 set(DINGO_INTERFACE_MODEL_TEST_SOURCE
-    "${DINGO_DETECTION_DIR}/detection/compile/global/interface/interface_cells.cpp")
+    "${DINGO_RESOLVE_DIR}/resolution/compile/global/interface/interface_cells.cpp")
 set(DINGO_TYPE_MATRIX_TEST_SOURCE
-    "${DINGO_DETECTION_DIR}/detection/compile/global/matrix/type_matrix.cpp")
+    "${DINGO_RESOLVE_DIR}/resolution/compile/global/matrix/type_matrix.cpp")
 set(DINGO_TRAIT_MATRIX_TEST_SOURCE
-    "${DINGO_DETECTION_DIR}/detection/compile/global/matrix/trait_matrix.cpp")
+    "${DINGO_RESOLVE_DIR}/resolution/compile/global/matrix/trait_matrix.cpp")
 set(DINGO_REGISTRATION_DIR
     "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(DINGO_BINDING_MATRIX_MANIFEST
@@ -585,12 +585,13 @@ if(NOT DINGO_DETECTION_CONSTRUCTOR_GENERATOR_RESULT EQUAL 0)
         "Failed to generate constructor-detection probes: "
         "${DINGO_DETECTION_CONSTRUCTOR_GENERATOR_RESULT}")
 endif()
+file(GLOB_RECURSE DINGO_ROUTE_SOURCES CONFIGURE_DEPENDS
+    "${DINGO_RESOLVE_DIR}/resolution/compile/*/*/route.cpp")
 file(GLOB_RECURSE DINGO_DETECTION_SOURCES CONFIGURE_DEPENDS
-    "${DINGO_DETECTION_DIR}/detection/compile/constructor/*.cpp"
-    "${DINGO_DETECTION_DIR}/detection/compile/*/*/storage.cpp"
-    "${DINGO_DETECTION_DIR}/detection/compile/*/*/route.cpp"
-    "${DINGO_DETECTION_DIR}/detection/compile/global/wrapper/*.cpp"
-    "${DINGO_DETECTION_DIR}/detection/compile/global/selection/*.cpp")
+    "${DINGO_DETECTION_DIR}/detection/constructor/*.cpp"
+    "${DINGO_DETECTION_DIR}/detection/*/*/storage.cpp"
+    "${DINGO_DETECTION_DIR}/detection/global/wrapper/*.cpp"
+    "${DINGO_DETECTION_DIR}/detection/global/selection/*.cpp")
 
 add_custom_target(cells-check
     COMMENT "Verifying generated cell coverage"
@@ -726,19 +727,28 @@ add_test(NAME dingo_registration_test COMMAND dingo_registration_test)
 set_tests_properties(dingo_registration_test PROPERTIES
     LABELS "unit;generator")
 
-list(APPEND DINGO_DETECTION_SOURCES
-    ${DINGO_INTERFACE_MODEL_TEST_SOURCE}
-    ${DINGO_TYPE_MATRIX_TEST_SOURCE}
-    ${DINGO_TRAIT_MATRIX_TEST_SOURCE})
 add_executable(dingo_detection_test ${DINGO_DETECTION_SOURCES})
 target_link_libraries(dingo_detection_test dingo::dingo gtest_main)
 target_include_directories(dingo_detection_test PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}")
-target_compile_definitions(dingo_detection_test PRIVATE
-    DINGO_TYPE_MATRIX_REPORT="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.md"
-    DINGO_TYPE_MATRIX_JSON="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.json")
 add_test(NAME dingo_detection_test COMMAND dingo_detection_test)
 set_tests_properties(dingo_detection_test PROPERTIES
+    LABELS "unit;generator")
+
+add_executable(dingo_resolution_compile_test
+    ${DINGO_INTERFACE_MODEL_TEST_SOURCE}
+    ${DINGO_TYPE_MATRIX_TEST_SOURCE}
+    ${DINGO_TRAIT_MATRIX_TEST_SOURCE}
+    ${DINGO_ROUTE_SOURCES})
+target_link_libraries(dingo_resolution_compile_test dingo::dingo gtest_main)
+target_include_directories(dingo_resolution_compile_test PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_definitions(dingo_resolution_compile_test PRIVATE
+    DINGO_TYPE_MATRIX_REPORT="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.md"
+    DINGO_TYPE_MATRIX_JSON="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.json")
+add_test(NAME dingo_resolution_compile_test
+    COMMAND dingo_resolution_compile_test)
+set_tests_properties(dingo_resolution_compile_test PROPERTIES
     LABELS "unit;generator")
 
 add_executable(dingo_resolve_probe EXCLUDE_FROM_ALL ${DINGO_RESOLVE_SOURCES})
@@ -774,7 +784,7 @@ add_test(NAME dingo_model_baseline_test
         --baseline ${PROJECT_SOURCE_DIR}/test/baselines/model.json)
 set_tests_properties(dingo_model_baseline_test PROPERTIES
     LABELS "unit;generator"
-    DEPENDS "dingo_model_test;dingo_detection_test"
+    DEPENDS "dingo_model_test;dingo_resolution_compile_test"
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 add_test(NAME dingo_model_generator_test

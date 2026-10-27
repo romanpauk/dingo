@@ -117,7 +117,7 @@ def build_shards() -> list[dict[str, object]]:
     shards = []
     for row in build_rows():
         path = CasePath(
-            phase="detection",
+            phase="resolution",
             container="compile",
             scope=str(row["scope_name"]),
             storage=str(row["form_name"]),

@@ -6,8 +6,10 @@ The generated tests share one path hierarchy:
 <phase>/<container>/<scope>/<storage>/<category>/<traits>/<binding>/<request>
 ```
 
-- **phase** — `detection`, `registration`, or `resolution`;
-- **container** — `compile`, `runtime`, or `static`;
+- **phase** — what is being tested: `detection`, `registration`, or
+  `resolution`;
+- **container** — how it is tested: `compile`, `runtime`, or `static`; the level
+  is omitted when the phase is compile-time by definition;
 - **scope** — `shared`, `unique`, `external`, `shared_cyclical`, or empty;
 - **storage** — a storage path (`plain`, `shared_handle`, …) or empty;
 - **category** — the test family (`constructor`, `route`, `binding`, `resolve`,
@@ -22,7 +24,7 @@ generated file groups cases up to the category:
 
 ```text
 resolution/runtime/shared/plain/resolve.cpp
-detection/compile/constructor/zero_argument.cpp
+detection/constructor/zero_argument.cpp
 registration/compile/shared/plain/binding.cpp
 ```
 
@@ -38,6 +40,16 @@ TEST(resolution_runtime_shared_plain_resolve, copyable_concrete_t_ref) {
 ```
 
 ## Phases
+
+`compile` means a compile-time probe (`static_assert` or type instantiation),
+not a container type. `detection` is compile-time by definition, so it has no
+`compile` level: `detection/constructor/...`, not
+`detection/compile/constructor/...`. `registration/compile/...` means the
+binding composition is checked at compile time; a future
+`registration/runtime/...` would exercise duplicate-registration and key/tag
+behavior. `resolution/compile/...` is compile-time route publication;
+`resolution/runtime/...` and `resolution/static/...` are the runtime and static
+container front-ends.
 
 ### detection
 
@@ -84,22 +96,22 @@ resolution | | `keyed` | keyed resolution | | `const` | const storage resolution
 `resolution/runtime/<scope>/<storage>/const` | | `interface_runtime` |
 `resolution/runtime/<scope>/<storage>/interface` | | `binding_matrix` |
 `registration/compile/<scope>/<storage>/binding` | | `storage_cells` |
-`detection/compile/<scope>/<form>/storage` | | `route_cells` |
-`detection/compile/<scope>/<form>/route` | | `type_matrix` / `trait_matrix` |
-`detection/compile/<scope>/<form>/route` | | `property_cells` |
-`detection/compile/global/wrapper` | | `selection_rules` |
-`detection/compile/global/selection` | | constructor detection matrix |
-`detection/compile/global/constructor/<backend>/<mode>/<shape>` |
+`detection/<scope>/<form>/storage` | | `route_cells` |
+`detection/<scope>/<form>/route` | | `type_matrix` / `trait_matrix` |
+`detection/<scope>/<form>/route` | | `property_cells` |
+`detection/global/wrapper` | | `selection_rules` | `detection/global/selection`
+| | constructor detection matrix |
+`detection/global/constructor/<backend>/<mode>/<shape>` |
 
 ## Migration order
 
 1. Done: the resolve probe lives under `resolution/runtime/…` and its path is
    the outcome and manifest identity.
-2. Done: `detection/compile/constructor/…` is the first detection slice.
+2. Done: `detection/constructor/…` is the first detection slice.
 3. Done: `binding_matrix` lives under `registration/compile/…`, one file per
    storage.
 4. Move `storage_cells`, `selection_rules`, `property_cells`, and the route
-   matrices to `detection/compile/…`.
+   matrices to `detection/…`.
 5. Move the runtime behavior families to the matching `resolution/…` categories.
 6. Retire the standalone translation units once their categories cover the same
    cases and the coverage report is driven by the hierarchy.
