@@ -546,8 +546,8 @@ if(NOT DINGO_RESOLVE_GENERATOR_RESULT EQUAL 0)
         "Failed to generate per-storage resolve probes: "
         "${DINGO_RESOLVE_GENERATOR_RESULT}")
 endif()
-file(GLOB DINGO_RESOLVE_SOURCES CONFIGURE_DEPENDS
-    "${DINGO_RESOLVE_DIR}/*.cpp")
+file(GLOB_RECURSE DINGO_RESOLVE_SOURCES CONFIGURE_DEPENDS
+    "${DINGO_RESOLVE_DIR}/runtime/*.cpp")
 
 add_custom_target(cells-check
     COMMENT "Verifying generated cell coverage"
@@ -678,7 +678,10 @@ set_tests_properties(dingo_model_test PROPERTIES LABELS "unit;generator")
 add_executable(dingo_resolve_probe EXCLUDE_FROM_ALL ${DINGO_RESOLVE_SOURCES})
 target_link_libraries(dingo_resolve_probe PRIVATE dingo::dingo gtest_main)
 foreach(resolve_source ${DINGO_RESOLVE_SOURCES})
-    get_filename_component(resolve_name "${resolve_source}" NAME_WE)
+    file(RELATIVE_PATH resolve_relative
+        "${DINGO_RESOLVE_DIR}" "${resolve_source}")
+    string(REPLACE "/" "_" resolve_name "${resolve_relative}")
+    string(REPLACE ".cpp" "" resolve_name "${resolve_name}")
     set_source_files_properties(${resolve_source} PROPERTIES
         COMPILE_DEFINITIONS
         "DINGO_RESOLVE_REPORT=\"${CMAKE_CURRENT_BINARY_DIR}/resolve-${resolve_name}.jsonl\"")

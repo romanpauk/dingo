@@ -204,9 +204,13 @@ Generated files are under `build/test/generated/model/` and are compiled into
 
 ### 0. Storage-driven resolve probe (in progress)
 
-`cmake --build build -t resolve-check` builds 30 shards (274 tests) and writes
-`build/test/resolve-gaps.md`. The probe fixtures are `copyable`/`movable`; the
-behavior families keep the lifetime-counting `tracked` fixture. Current result:
+`cmake --build build -t resolve-check` builds the hierarchy
+`runtime/<scope>/<storage>.cpp` (63 storage files, 2,009 tests) and writes
+`build/test/resolve-gaps.md`. A file is one storage path, a suite is that
+storage path, and a test is one `(trait, binding, request)`. A resolve that
+throws is recorded and the test is skipped. The probe fixtures are
+`copyable`/`movable`; the behavior families keep the lifetime-counting `tracked`
+fixture. Current result:
 
 - 2,009 expected calls, 1,061 covered;
 - 772 overclaims (all concrete);

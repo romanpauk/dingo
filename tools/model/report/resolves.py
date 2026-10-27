@@ -31,20 +31,20 @@ def read_manifest(path: Path) -> dict[str, dict[str, object]]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     calls: dict[str, dict[str, object]] = {}
     for shard in payload["shards"]:
-        for test in shard["tests"]:
-            for call in test["calls"]:
-                calls[call["name"]] = {
-                    "name": call["name"],
-                    "request": call["request"],
-                    "declared": bool(call["declared"]),
-                    "declared_reason": str(call.get("declared_reason", "")),
-                    "scope": test["scope"],
-                    "storage": test["storage"],
-                    "binding": test["binding"],
-                    "traits": test["traits"],
-                    "form": test["form"],
-                    "shard": shard["name"],
-                }
+        for case in shard["cases"]:
+            calls[case["outcome"]] = {
+                "name": case["name"],
+                "outcome": case["outcome"],
+                "request": case["request"],
+                "declared": bool(case["declared"]),
+                "declared_reason": str(case.get("declared_reason", "")),
+                "scope": case["scope"],
+                "storage": case["storage"],
+                "binding": case["binding"],
+                "traits": case["traits"],
+                "form": case.get("form", shard.get("form", "")),
+                "shard": shard["path"],
+            }
     return calls
 
 

@@ -20,13 +20,14 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
 
 #ifndef DINGO_RESOLVE_REPORT
 #define DINGO_RESOLVE_REPORT "resolve-outcomes.jsonl"
 #endif
 
-namespace resolve_cells {
+namespace resolve_cells_{{ shard.scope }}_{{ shard.storage }} {
 
 struct tag_a {};
 struct key_a {};
@@ -94,38 +95,27 @@ inline std::unique_ptr<movable> make_unique_movable() {
 inline std::optional<movable> make_optional_movable() {
   return std::optional<movable>(std::in_place);
 }
-inline std::variant<movable, long>
-make_variant_movable() {
+inline std::variant<movable, long> make_variant_movable() {
   return std::variant<movable, long>(std::in_place_index<0>);
 }
-inline movable *make_pointer_movable() {
-  return new movable;
-}
-inline std::unique_ptr<movable[]>
-make_unique_array_movable() {
+inline movable *make_pointer_movable() { return new movable; }
+inline std::unique_ptr<movable[]> make_unique_array_movable() {
   return std::unique_ptr<movable[]>(new movable[2]);
 }
-inline std::shared_ptr<movable[]>
-make_shared_array_movable() {
+inline std::shared_ptr<movable[]> make_shared_array_movable() {
   return std::shared_ptr<movable[]>(new movable[2]);
 }
-inline std::shared_ptr<const movable>
-make_shared_const_movable() {
+inline std::shared_ptr<const movable> make_shared_const_movable() {
   return std::shared_ptr<const movable>(new movable());
 }
-inline std::unique_ptr<const movable>
-make_unique_const_movable() {
+inline std::unique_ptr<const movable> make_unique_const_movable() {
   return std::unique_ptr<const movable>(new movable());
 }
-inline std::optional<const movable>
-make_optional_const_movable() {
+inline std::optional<const movable> make_optional_const_movable() {
   return std::optional<const movable>(std::in_place);
 }
-inline const movable *make_pointer_const_movable() {
-  return new movable;
-}
-inline std::variant<const movable, long>
-make_variant_const_movable() {
+inline const movable *make_pointer_const_movable() { return new movable; }
+inline std::variant<const movable, long> make_variant_const_movable() {
   return std::variant<const movable, long>(std::in_place_index<0>);
 }
 
@@ -171,32 +161,40 @@ inline void write_resolve_outcome(const char *name, const char *scope,
       << resolve_json_escape(result) << "\"}\n";
 }
 
-{% for test in shard.tests %}
-TEST(resolve_cells, {{ test.name }}) {
-{% if test.instance %}
-  {{ test.instance }};
+template <typename Request, typename... Args>
+std::string probe(dingo::container<> &container, Args &&...args) {
+  try {
+    auto &&value =
+        container.template resolve<Request>(std::forward<Args>(args)...);
+    (void)value;
+    return {};
+  } catch (const std::exception &error) {
+    return error.what();
+  } catch (...) {
+    return "unknown exception";
+  }
+}
+
+{% for case in shard.cases %}
+TEST({{ shard.suite }}, {{ case.name }}) {
+{% if case.instance %}
+  {{ case.instance }};
 {% endif %}
   dingo::container<> container;
-  {{ test.registration }}
-{% for call in test.calls %}
-  try {
-    auto &&value{{ loop.index }} = {{ call.expression }};
-    (void)value{{ loop.index }};
-    write_resolve_outcome({{ call.name | cppstr }}, {{ test.scope | cppstr }},
-                          {{ test.storage | cppstr }},
-                          {{ test.binding | cppstr }}, {{ call.request | cppstr }},
-                          {{ test.traits | cppstr }},
-                          {{ "true" if call.declared else "false" }}, "ok");
-  } catch (const std::exception &error) {
-    write_resolve_outcome({{ call.name | cppstr }}, {{ test.scope | cppstr }},
-                          {{ test.storage | cppstr }},
-                          {{ test.binding | cppstr }}, {{ call.request | cppstr }},
-                          {{ test.traits | cppstr }},
-                          {{ "true" if call.declared else "false" }},
-                          (std::string("exception:") + error.what()).c_str());
+  {{ case.registration }}
+  std::string error =
+      probe<{{ case.request }}>(container{% if case.binding == "keyed" %},
+                                dingo::key_type<key_a>{}{% endif %});
+  write_resolve_outcome(
+      {{ case.outcome_name | cppstr }}, {{ case.scope | cppstr }},
+      {{ case.storage | cppstr }}, {{ case.binding | cppstr }},
+      {{ case.request | cppstr }}, {{ case.traits | cppstr }},
+      {{ "true" if case.declared else "false" }},
+      error.empty() ? "ok" : (std::string("skip:") + error).c_str());
+  if (!error.empty()) {
+    GTEST_SKIP() << error;
   }
-{% endfor %}
 }
 
 {% endfor %}
-} // namespace resolve_cells
+} // namespace resolve_cells_{{ shard.scope }}_{{ shard.storage }}

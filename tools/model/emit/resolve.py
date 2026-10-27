@@ -8,17 +8,15 @@
 
 """Generate per-storage resolve probes for the supported path domain.
 
-This is the runtime counterpart of the shape matrix. Instead of asking the
-compile-time route table whether a shape is published, it registers each
-storage once per binding and calls ``container.resolve<Request>()`` for every
-supported case. Each shard covers one ``(scope, form)`` cell and contains the
-concrete storage paths of that cell, so a compile failure maps back to a
-storage.
+The output path mirrors the resolution hierarchy:
 
-Outcomes are written as JSONL rather than asserted. The generated report is the
-oracle for what the implementation really resolves; the model expectation is in
-the manifest. This lets the model be tightened against the implementation
-instead of the other way around.
+    runtime/<scope>/<storage>.cpp
+
+One file is one storage path under one container front-end. A file contains a
+single GTest suite named after that path, and one test per
+``(traits, binding, request)``. A missing resolve is a skipped test and an
+outcome line, not a build failure. The manifest is the model expectation; the
+outcome report is what the implementation really resolves.
 """
 
 from __future__ import annotations
@@ -43,8 +41,8 @@ from tools.model.grammar.bindings import (
     INTERFACE,
     KEYED,
 )
+from tools.model.grammar.catalog import CONSUMING_SCOPES
 from tools.model.grammar.expr import Expr, annotated, interface, keyed
-from tools.model.grammar.catalog import CONSUMING_SCOPES, FormConstructor
 from tools.model.grammar.storage import (
     STORAGE_PATHS,
     StoragePath,
@@ -56,36 +54,35 @@ from tools.model.semantics.gaps import declared_runtime_gap
 from tools.model.semantics.support import classify, to_shape
 
 BINDINGS = (CONCRETE, ANNOTATED, KEYED, INTERFACE, ANNOTATED_INTERFACE)
+CONTAINERS = ("runtime",)
 
 
 @dataclass(frozen=True)
-class ResolveCall:
+class ResolveCase:
     name: str
-    request: str
-    expression: str
-    declared: bool
-    declared_reason: str = ""
-
-
-@dataclass(frozen=True)
-class ResolveTest:
-    name: str
+    outcome_name: str
     scope: str
     storage: str
+    form: str
     binding: str
     traits: str
-    form: str
+    request: str
+    declared: bool
+    declared_reason: str
     instance: str
     registration: str
-    calls: tuple[ResolveCall, ...]
+    suite: str
 
 
 @dataclass(frozen=True)
 class Shard:
-    name: str
+    container: str
     scope: str
+    storage: str
     form: str
-    tests: tuple[ResolveTest, ...]
+    path: str
+    suite: str
+    cases: tuple[ResolveCase, ...]
 
 
 def _is_const(path: StoragePath) -> bool:
@@ -93,6 +90,10 @@ def _is_const(path: StoragePath) -> bool:
     return const_leaf(storage) or (
         storage.op == "variant" and has_const(storage)
     )
+
+
+def _fixture(traits: LeafTraits) -> str:
+    return "copyable" if traits.copyable else "movable"
 
 
 def _project(request: Expr, binding) -> Expr:
@@ -110,95 +111,33 @@ def _project(request: Expr, binding) -> Expr:
     return request
 
 
-def _fixture(traits: LeafTraits) -> str:
-    """The resolve probe's fixture name, named for the trait."""
-    return "copyable" if traits.copyable else "movable"
-
-
-def _request_type(binding, request: Expr, leaf: str) -> str:
+def _request_type(binding, request: Expr, fixture: str) -> str:
     if binding.kind in {"interface", "annotated_interface"}:
         return binding.request_type(request).render()
-    return request.with_leaf(leaf).render()
-
-
-def _resolve_expression(binding, request: Expr, leaf: str) -> str:
-    request_type = _request_type(binding, request, leaf)
-    if binding.kind == "keyed":
-        return (
-            f"container.template resolve<{request_type}>("
-            f"dingo::key_type<{binding.key}>{{}})"
-        )
-    return f"container.template resolve<{request_type}>()"
+    return request.with_leaf(fixture).render()
 
 
 def _slug(expr: Expr) -> str:
     return re.sub(r"[^a-z0-9]+", "_", expr.render().lower()).strip("_")
 
 
-def _test_rows(
-    path: StoragePath,
-    binding,
-    traits: LeafTraits,
-) -> tuple[ResolveCall, ...]:
-    fixture = _fixture(traits)
-    calls = []
-    for request in object_requests(path):
-        projected = _project(request, binding)
-        verdict = classify(
-            path.scope.name,
-            path.name,
-            binding,
-            projected,
-            traits,
-        )
-        if verdict.outcome != "supported":
-            continue
-        shape = to_shape(projected)
-        reason = declared_runtime_gap(
-            binding.kind,
-            path.scope.name,
-            path.form.kind,
-            shape.access if shape is not None else "",
-        )
-        declared = reason is not None
-        request_type = _request_type(binding, projected, fixture)
-        digest = hashlib.sha1(
-            projected.render().encode()
-        ).hexdigest()[:8]
-        calls.append(
-            ResolveCall(
-                name=(
-                    f"{path.scope.name}_{path.name}_{binding.kind}_"
-                    f"{_slug(projected)}_{traits.name}_{digest}"
-                ),
-                request=request_type,
-                expression=_resolve_expression(binding, projected, fixture),
-                declared=declared,
-                declared_reason=reason or "",
-            )
-        )
-    return tuple(calls)
-
-
-def _registration(
-    path: StoragePath,
-    binding,
-    traits: LeafTraits,
-) -> tuple[str, str]:
-    # A consuming scope cannot materialize an abstract interface value; the
-    # declared interface gap is a registration limitation, not a route probe.
+def _skip_reason(path: StoragePath, binding) -> str | None:
     if (
         binding.kind in {"interface", "annotated_interface"}
         and path.scope.name in CONSUMING_SCOPES
     ):
-        return "", ""
-    # The cyclical pointer cell has no valid factory recipe yet; it is a
-    # declared graph-scenario gap.
+        return "consuming scope cannot materialize an abstract interface value"
     if (
         path.scope.name == "shared_cyclical"
         and path.form.name == "pointer"
     ):
-        return "", ""
+        return "cyclical pointer has no registration recipe yet"
+    return None
+
+
+def _registration(
+    path: StoragePath, binding, traits: LeafTraits
+) -> tuple[str, str]:
     const = _is_const(path)
     leaf = _fixture(traits)
     storage = path.storage(leaf)
@@ -232,10 +171,7 @@ def _registration(
             and path.form.kind != "array"
         )
         instance = external_instance(
-            path.form,
-            leaf,
-            const=const,
-            move=move,
+            path.form, leaf, const=const, move=move
         )
         if instance is None:
             return "", ""
@@ -263,80 +199,118 @@ def _registration(
     return "", line
 
 
-def build_shards(
-    traits: tuple[LeafTraits, ...] = TRAITS,
-) -> tuple[Shard, ...]:
-    grouped: dict[tuple[str, str], list[ResolveTest]] = defaultdict(list)
-    for trait in traits:
-        for path in STORAGE_PATHS:
-            for binding in BINDINGS:
-                calls = _test_rows(path, binding, trait)
-                if not calls:
+def _cases_for(
+    path: StoragePath, container: str
+) -> tuple[ResolveCase, ...]:
+    cases: list[ResolveCase] = []
+    for traits in TRAITS:
+        fixture = _fixture(traits)
+        for binding in BINDINGS:
+            if _skip_reason(path, binding) is not None:
+                continue
+            instance, line = _registration(path, binding, traits)
+            if not line:
+                continue
+            for request in object_requests(path):
+                projected = _project(request, binding)
+                verdict = classify(
+                    path.scope.name,
+                    path.name,
+                    binding,
+                    projected,
+                    traits,
+                )
+                if verdict.outcome != "supported":
                     continue
-                instance, line = _registration(path, binding, trait)
-                if not line:
-                    continue
-                grouped[(path.scope.name, path.form.name)].append(
-                    ResolveTest(
+                shape = to_shape(projected)
+                reason = declared_runtime_gap(
+                    binding.kind,
+                    path.scope.name,
+                    path.form.kind,
+                    shape.access if shape is not None else "",
+                )
+                digest = hashlib.sha1(
+                    projected.render().encode()
+                ).hexdigest()[:8]
+                slug = _slug(projected)
+                cases.append(
+                    ResolveCase(
                         name=(
-                            f"{trait.name}_{path.scope.name}_{path.name}_"
-                            f"{binding.kind}"
+                            f"{traits.name}_{binding.kind}_"
+                            f"{slug}_{digest}"
+                        ),
+                        outcome_name=(
+                            f"{container}_{path.scope.name}_{path.name}_"
+                            f"{traits.name}_{binding.kind}_{slug}_{digest}"
                         ),
                         scope=path.scope.name,
                         storage=path.name,
-                        binding=binding.kind,
-                        traits=trait.name,
                         form=path.form.name,
+                        binding=binding.kind,
+                        traits=traits.name,
+                        request=_request_type(binding, projected, fixture),
+                        declared=reason is not None,
+                        declared_reason=reason or "",
                         instance=instance,
                         registration=line,
-                        calls=calls,
+                        suite=f"resolve_runtime_{path.scope.name}_{path.name}",
                     )
                 )
-    return tuple(
-        Shard(
-            name=f"{scope}_{form}",
-            scope=scope,
-            form=form,
-            tests=tuple(tests),
+    return tuple(cases)
+
+
+def build_shards() -> tuple[Shard, ...]:
+    grouped: dict[tuple[str, str, str], list[ResolveCase]] = defaultdict(list)
+    for container in CONTAINERS:
+        for path in STORAGE_PATHS:
+            cases = _cases_for(path, container)
+            if cases:
+                grouped[(container, path.scope.name, path.name)].extend(cases)
+    shards = []
+    for (container, scope, storage), cases in sorted(grouped.items()):
+        suite = f"resolve_{container}_{scope}_{storage}"
+        shards.append(
+            Shard(
+                container=container,
+                scope=scope,
+                storage=storage,
+                form=cases[0].form,
+                path=f"{container}/{scope}/{storage}.cpp",
+                suite=suite,
+                cases=tuple(cases),
+            )
         )
-        for (scope, form), tests in sorted(grouped.items())
-    )
+    return tuple(shards)
 
 
 def render(shard: Shard) -> str:
-    return render_template(
-        "resolve_cells.cpp.j2",
-        shard=shard,
-        traits=TRAITS,
-    )
+    return render_template("resolve_cells.cpp.j2", shard=shard)
 
 
 def manifest(shards: tuple[Shard, ...]) -> str:
     payload = {
         "shards": [
             {
-                "name": shard.name,
+                "container": shard.container,
                 "scope": shard.scope,
+                "storage": shard.storage,
                 "form": shard.form,
-                "tests": [
+                "path": shard.path,
+                "suite": shard.suite,
+                "cases": [
                     {
-                        "name": test.name,
-                        "scope": test.scope,
-                        "storage": test.storage,
-                        "binding": test.binding,
-                        "traits": test.traits,
-                        "form": test.form,
-                        "calls": [
-                            {
-                                "name": call.name,
-                                "request": call.request,
-                                "declared": call.declared,
-                                "declared_reason": call.declared_reason,
-                            }
-                            for call in test.calls
-                        ],
+                        "name": case.name,
+                        "outcome": case.outcome_name,
+                        "scope": case.scope,
+                        "storage": case.storage,
+                        "form": case.form,
+                        "binding": case.binding,
+                        "traits": case.traits,
+                        "request": case.request,
+                        "declared": case.declared,
+                        "declared_reason": case.declared_reason,
                     }
-                    for test in shard.tests
+                    for case in shard.cases
                 ],
             }
             for shard in shards
@@ -352,7 +326,7 @@ def main() -> None:
     parser.add_argument(
         "--shard",
         action="append",
-        help="only emit the named shard (repeatable)",
+        help="only emit the named storage path (repeatable)",
     )
     parser.add_argument(
         "--include",
@@ -367,17 +341,17 @@ def main() -> None:
     shards = build_shards()
     if arguments.shard:
         wanted = set(arguments.shard)
-        shards = tuple(shard for shard in shards if shard.name in wanted)
-        missing = wanted - {shard.name for shard in shards}
-        if missing:
-            raise SystemExit(f"unknown shards: {', '.join(sorted(missing))}")
-    arguments.out_dir.mkdir(parents=True, exist_ok=True)
-    for shard in shards:
-        emit(
-            arguments.out_dir / f"{shard.name}.cpp",
-            render(shard),
-            check=arguments.check,
+        shards = tuple(
+            shard
+            for shard in shards
+            if shard.suite in wanted or shard.storage in wanted
         )
+        if not shards:
+            raise SystemExit(
+                f"unknown shards: {', '.join(sorted(wanted))}"
+            )
+    for shard in shards:
+        emit(arguments.out_dir / shard.path, render(shard), check=arguments.check)
     if arguments.manifest is not None:
         emit(arguments.manifest, manifest(shards), check=arguments.check)
 

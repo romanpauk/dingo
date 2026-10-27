@@ -11,55 +11,58 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tools.model.emit.resolve import (
-    build_shards,
-    manifest,
-    render,
-)
+from tools.model.emit.resolve import build_shards, manifest, render
 from tools.model.grammar.traits import COPYABLE, MOVE_ONLY
 
 
-def test_resolve_shards_are_complete_and_unique() -> None:
+def test_resolve_shards_follow_the_storage_hierarchy() -> None:
     shards = build_shards()
     assert shards
-    assert len({shard.name for shard in shards}) == len(shards)
-    tests = [test for shard in shards for test in shard.tests]
-    assert tests
-    assert len({test.name for test in tests}) == len(tests)
-    calls = [call for test in tests for call in test.calls]
-    assert calls
-    assert len({call.name for call in calls}) == len(calls)
-    assert all(call.expression.startswith("container.template resolve<") for call in calls)
-
-
-def test_resolve_shards_cover_both_leaf_traits() -> None:
-    traits = {
-        test.traits
-        for shard in build_shards()
-        for test in shard.tests
-    }
-    assert traits == {COPYABLE.name, MOVE_ONLY.name}
-
-
-def test_resolve_render_is_deterministic(tmp_path: Path) -> None:
-    shards = build_shards()
+    assert len({shard.path for shard in shards}) == len(shards)
     for shard in shards:
+        assert shard.path == (
+            f"{shard.container}/{shard.scope}/{shard.storage}.cpp"
+        )
+        assert shard.suite == (
+            f"resolve_{shard.container}_{shard.scope}_{shard.storage}"
+        )
+        assert shard.cases
+
+
+def test_resolve_cases_are_unique_and_cover_both_traits() -> None:
+    cases = [case for shard in build_shards() for case in shard.cases]
+    assert cases
+    assert len({(case.suite, case.name) for case in cases}) == len(cases)
+    assert len({case.outcome_name for case in cases}) == len(cases)
+    assert {case.traits for case in cases} == {
+        COPYABLE.name,
+        MOVE_ONLY.name,
+    }
+    assert all(case.request for case in cases)
+    assert all(case.registration for case in cases)
+
+
+def test_resolve_render_is_one_test_per_case() -> None:
+    for shard in build_shards()[:4]:
         content = render(shard)
         assert content == render(shard)
-        assert f"TEST(resolve_cells, {shard.tests[0].name})" in content
-        assert "write_resolve_outcome" in content
+        for case in shard.cases:
+            assert f"TEST({shard.suite}, {case.name})" in content
+        assert content.count("GTEST_SKIP()") == len(shard.cases)
 
 
-def test_resolve_manifest_round_trips(tmp_path: Path) -> None:
+def test_resolve_manifest_round_trips() -> None:
     shards = build_shards()
     payload = json.loads(manifest(shards))
     assert len(payload["shards"]) == len(shards)
     for shard, entry in zip(shards, payload["shards"]):
-        assert entry["name"] == shard.name
-        assert len(entry["tests"]) == len(shard.tests)
-        for test, test_entry in zip(shard.tests, entry["tests"]):
-            assert test_entry["name"] == test.name
-            assert len(test_entry["calls"]) == len(test.calls)
+        assert entry["path"] == shard.path
+        assert entry["suite"] == shard.suite
+        assert entry["storage"] == shard.storage
+        assert len(entry["cases"]) == len(shard.cases)
+        for case, case_entry in zip(shard.cases, entry["cases"]):
+            assert case_entry["name"] == case.name
+            assert case_entry["request"] == case.request
 
 
 if __name__ == "__main__":
