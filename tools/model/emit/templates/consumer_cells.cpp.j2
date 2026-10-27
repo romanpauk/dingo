@@ -19,14 +19,62 @@
 
 #include <gtest/gtest.h>
 
+#include <fstream>
 #include <memory>
 #include <optional>
+#include <string>
 #include <utility>
 #include <variant>
+
+#ifndef DINGO_CLAIM_REPORT
+#define DINGO_CLAIM_REPORT "claim-outcomes.jsonl"
+#endif
 
 namespace consumer_cells_{{ file.scope }}_{{ file.storage }}_{{ file.consumer }} {
 
 {% include "_probe_fixtures.h.j2" %}
+
+inline std::string claim_json_escape(const std::string &value) {
+  std::string result;
+  result.reserve(value.size());
+  for (char character : value) {
+    switch (character) {
+    case '\\':
+      result += "\\\\";
+      break;
+    case '"':
+      result += "\\\"";
+      break;
+    case '\n':
+      result += "\\n";
+      break;
+    default:
+      result += character;
+      break;
+    }
+  }
+  return result;
+}
+
+inline std::ofstream &claim_outcome_file() {
+  static std::ofstream out(DINGO_CLAIM_REPORT, std::ios::trunc);
+  return out;
+}
+
+inline void write_claim_outcome(const char *path, const char *claim,
+                                const char *scope, const char *storage,
+                                const char *binding, const char *traits,
+                                const char *request, const char *result) {
+  auto &out = claim_outcome_file();
+  out << "{\"path\":\"" << claim_json_escape(path) << "\",\"claim\":\""
+      << claim_json_escape(claim) << "\",\"scope\":\""
+      << claim_json_escape(scope) << "\",\"storage\":\""
+      << claim_json_escape(storage) << "\",\"binding\":\""
+      << claim_json_escape(binding) << "\",\"traits\":\""
+      << claim_json_escape(traits) << "\",\"request\":\""
+      << claim_json_escape(request) << "\",\"result\":\""
+      << claim_json_escape(result) << "\"}\n";
+}
 
 {% for case in file.cases %}
 TEST({{ file.suite }}, {{ case.name }}) {
@@ -36,6 +84,7 @@ TEST({{ file.suite }}, {{ case.name }}) {
 {% endif %}
   dingo::container<> container;
   {{ case.registration }}
+  std::string error;
   try {
 {% if file.consumer == "construct" %}
     auto value = container.template construct<
@@ -45,8 +94,18 @@ TEST({{ file.suite }}, {{ case.name }}) {
     bool called = container.invoke([]({{ case.request }}) { return true; });
     EXPECT_TRUE(called);
 {% endif %}
-  } catch (const std::exception &error) {
-    GTEST_SKIP() << error.what();
+  } catch (const std::exception &failure) {
+    error = failure.what();
+  } catch (...) {
+    error = "unknown exception";
+  }
+  write_claim_outcome({{ case.path | cppstr }}, {{ file.consumer | cppstr }},
+                      {{ case.scope | cppstr }}, {{ case.storage | cppstr }},
+                      {{ case.binding | cppstr }}, {{ case.traits | cppstr }},
+                      {{ case.request | cppstr }},
+                      error.empty() ? "ok" : (std::string("skip:") + error).c_str());
+  if (!error.empty()) {
+    GTEST_SKIP() << error;
   }
 }
 

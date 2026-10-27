@@ -103,6 +103,32 @@ The 82 construct rows that cannot be instantiated are pinned by path in
 `tools/model/emit/consumers.py`, with a reason, so a new gap cannot be absorbed
 silently by a rule.
 
+## The claim report
+
+`cmake --build build -t claim-check` runs the resolve probe, the runtime claim
+tests, and `tools/model/report/claims.py`, then writes
+`build/test/claim-gaps.md`. Every `(row, claim)` pair is classified as:
+
+| state | meaning | | --- | --- | | `ok` | resolve resolves the row and the
+claim consumes it | | `declared` | the claim cannot consume the row for a
+declared reason (keyed rows need a key) | | `shared gap` | resolve already skips
+the row, so the claim adds nothing | | `recovered` | a declared reason no longer
+applies; the declaration is stale | | `diverged` | resolve resolves the row but
+the claim cannot consume it | | `missing` | the row was emitted without an
+outcome line | | `pinned` | the claim file cannot contain the row; kept honest
+by a negative check |
+
+`diverged` and `missing` fail the target. Pinned rows are checked in both
+directions: a compile pin must still fail to compile, and a runtime pin must
+still fail instead of passing. A fixed bug therefore turns into a stale pin
+instead of staying excluded silently.
+
+The current report:
+
+| claim | rows | ok | declared | shared gap | pinned | | --- | ---: | ---: |
+---: | ---: | ---: | | `construct` | 2,009 | 899 | 257 | 771 | 82 | | `invoke` |
+2,009 | 952 | 257 | 800 | 0 |
+
 ## Operator classes
 
 The per-cell claim files answer "can this row be consumed". They do not answer

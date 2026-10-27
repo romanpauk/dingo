@@ -185,7 +185,9 @@ parity | | constructor detection | classification | backend/mode/shape parity |
 
 The matrix is removed feature by feature. A feature is removable only when:
 
-1. the model family covers every supported row the matrix generated for it;
+1. the model family covers every supported row the matrix generated for it, and
+   `claim-check` shows `resolve`, `construct`, and `invoke` agreeing on every
+   row the feature produces;
 2. the rows are pinned by assertions, not just compiled;
 3. the feature is listed in `FULLY_MODEL_COVERED_FEATURES` (or the matrix
    generator no longer emits it);

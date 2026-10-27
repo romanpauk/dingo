@@ -53,7 +53,7 @@ _CONSTRUCT_BOUNDED_ARRAY_RVALUE = (
     "rvalue reference into a unique bounded array is destroyed twice"
 )
 
-NON_COMPOSABLE: dict[str, dict[str, str]] = {
+COMPILE_GAPS: dict[str, dict[str, str]] = {
     "construct": {
     "resolution/runtime/external/alternative/resolve/copyable/concrete/optional_t": _CONSTRUCT_OPTIONAL_PARAMETER,
     "resolution/runtime/external/alternative/resolve/copyable/concrete/optional_variant_t_long": _CONSTRUCT_OPTIONAL_PARAMETER,
@@ -135,10 +135,22 @@ NON_COMPOSABLE: dict[str, dict[str, str]] = {
     "resolution/runtime/unique/shared_handle/resolve/copyable/concrete/optional_shared_ptr_t": _CONSTRUCT_OPTIONAL_PARAMETER,
     "resolution/runtime/unique/shared_handle/resolve/move_only/concrete/optional_shared_ptr_shared_ptr_t": _CONSTRUCT_OPTIONAL_PARAMETER,
     "resolution/runtime/unique/shared_handle/resolve/move_only/concrete/optional_shared_ptr_t": _CONSTRUCT_OPTIONAL_PARAMETER,
-    "resolution/runtime/unique/bounded_array_array_t_2/resolve/copyable/concrete/t_rref": _CONSTRUCT_BOUNDED_ARRAY_RVALUE,
-    "resolution/runtime/unique/bounded_array_array_t_3/resolve/copyable/concrete/t_rref": _CONSTRUCT_BOUNDED_ARRAY_RVALUE,
     },
     "invoke": {},
+}
+
+RUNTIME_PINS: dict[str, dict[str, str]] = {
+    "construct": {
+        "resolution/runtime/unique/bounded_array_array_t_2/resolve/copyable/concrete/t_rref": _CONSTRUCT_BOUNDED_ARRAY_RVALUE,
+        "resolution/runtime/unique/bounded_array_array_t_3/resolve/copyable/concrete/t_rref": _CONSTRUCT_BOUNDED_ARRAY_RVALUE,
+    },
+    "invoke": {},
+}
+
+# Rows the claim files must not contain, by claim.
+NON_COMPOSABLE: dict[str, dict[str, str]] = {
+    consumer: {**COMPILE_GAPS[consumer], **RUNTIME_PINS[consumer]}
+    for consumer in CONSUMERS
 }
 
 

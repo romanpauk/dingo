@@ -626,6 +626,15 @@ endforeach()
 file(GLOB_RECURSE DINGO_CONSUMER_SOURCES CONFIGURE_DEPENDS
     "${DINGO_RESOLVE_DIR}/resolution/runtime/*/*/construct.cpp"
     "${DINGO_RESOLVE_DIR}/resolution/runtime/*/*/invoke.cpp")
+foreach(claim_source ${DINGO_CONSUMER_SOURCES})
+    file(RELATIVE_PATH claim_relative
+        "${DINGO_RESOLVE_DIR}" "${claim_source}")
+    string(REPLACE "/" "_" claim_name "${claim_relative}")
+    string(REPLACE ".cpp" "" claim_name "${claim_name}")
+    set_source_files_properties(${claim_source} PROPERTIES
+        COMPILE_DEFINITIONS
+        "DINGO_CLAIM_REPORT=\"${CMAKE_CURRENT_BINARY_DIR}/claim-${claim_name}.jsonl\"")
+endforeach()
 file(GLOB_RECURSE DINGO_RUNTIME_REQUEST_SOURCES CONFIGURE_DEPENDS
     "${DINGO_RESOLVE_DIR}/resolution/runtime/*/*/annotated/*.cpp"
     "${DINGO_RESOLVE_DIR}/resolution/runtime/*/*/keyed/*.cpp"
@@ -844,6 +853,8 @@ set_tests_properties(dingo_resolution_static_asserts_test PROPERTIES
 
 add_executable(dingo_resolve_probe EXCLUDE_FROM_ALL ${DINGO_RESOLVE_SOURCES})
 target_link_libraries(dingo_resolve_probe PRIVATE dingo::dingo gtest_main)
+target_include_directories(dingo_resolve_probe PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}")
 foreach(resolve_source ${DINGO_RESOLVE_SOURCES})
     file(RELATIVE_PATH resolve_relative
         "${DINGO_RESOLVE_DIR}" "${resolve_source}")
@@ -853,6 +864,28 @@ foreach(resolve_source ${DINGO_RESOLVE_SOURCES})
         COMPILE_DEFINITIONS
         "DINGO_RESOLVE_REPORT=\"${CMAKE_CURRENT_BINARY_DIR}/resolve-${resolve_name}.jsonl\"")
 endforeach()
+add_custom_target(claim-check
+    COMMENT "Running the consumer claim probes and writing the claim report"
+    COMMAND $<TARGET_FILE:dingo_resolve_probe>
+    COMMAND $<TARGET_FILE:dingo_resolution_runtime_test>
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        tools.model.report.claims
+        --manifest ${DINGO_RESOLVE_MANIFEST}
+        --outcomes-dir ${CMAKE_CURRENT_BINARY_DIR}
+        --out ${CMAKE_CURRENT_BINARY_DIR}/claim-gaps.md
+        --json ${CMAKE_CURRENT_BINARY_DIR}/claim-gaps.json
+        --check-pins
+        --check-runtime-pins
+        --compiler ${CMAKE_CXX_COMPILER}
+        --include ${PROJECT_SOURCE_DIR}/include
+        --include ${CMAKE_CURRENT_SOURCE_DIR}
+        --include ${CMAKE_BINARY_DIR}/_deps/googletest-src/googletest/include
+        --library ${CMAKE_BINARY_DIR}/lib/libgtest_main.a
+        --library ${CMAKE_BINARY_DIR}/lib/libgtest.a
+        --jobs 8
+    DEPENDS dingo_resolve_probe dingo_resolution_runtime_test
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
 add_custom_target(resolve-check
     COMMENT "Running the per-storage resolve probes and writing the gap report"
     COMMAND $<TARGET_FILE:dingo_resolve_probe>

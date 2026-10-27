@@ -21,6 +21,9 @@ The tree is green:
 - `ctest`: 83/83 passed
 - `resolve-check`: 274 tests, report written to `build/test/resolve-gaps.md`
   (2,009 calls, 772 overclaims)
+- `claim-check`: report written to `build/test/claim-gaps.md`; `construct` 899
+  ok / 257 declared / 771 shared / 82 pinned, `invoke` 952 ok / 257 declared /
+  800 shared, nothing diverged or missing
 - `format-check` and full `check`: pass
 
 Current model snapshot (both leaf traits):
