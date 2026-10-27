@@ -31,7 +31,7 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   stored as formatting templates. The structural probes instantiate the same
   form with `int` and the behavior suites with their tracked leaf, so the two
   no longer keep parallel catalogs.
-- `emit/families/storage.py` writes `detection/<scope>/<form>/storage.cpp` and enumerates every built-in storage scope by storage form
+- `emit/families/storage.py` writes `classification/<scope>/<form>/storage.cpp` and enumerates every built-in storage scope by storage form
   cell. Each scope declares capabilities (consuming, cyclical, pointer source)
   and each form declares its semantic kind and array/handle facts; the exposure
   bits are derived from those capabilities rather than a per-form table. Raw
@@ -56,7 +56,7 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   each executed case's counts and result (`ok` or an exception class).
   `check` fails on any difference; `update --reason ...` rewrites the baseline
   and records the declared change in `test/baselines/model-changes.json`.
-- `emit/families/property.py` writes `detection/global/wrapper/<wrapper>.cpp` and generates static assertions that compare the C++ wrapper
+- `emit/families/property.py` writes `classification/global/wrapper/<wrapper>.cpp` and generates static assertions that compare the C++ wrapper
   properties (`is_owning`, `is_sharing`, `is_nullable`, `is_borrowable`,
   `is_array`, `is_variant`, `can_copy_out`, `can_take`) with the Python wrapper
   declarations for every built-in wrapper and the `test_optional`,
@@ -138,12 +138,12 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   into covered calls, overclaims, declared gaps, and stale declarations. It is
   a report target (`resolve-check`), not part of `check`, while the model is
   being tightened.
-- `emit/detection_constructor.py` generates the first detection slice under
-  `detection/constructor/<shape>.cpp`: constructor arity and kind for
+- `emit/detection_constructor.py` generates the first classification slice under
+  `classification/constructor/<shape>.cpp`: constructor arity and kind for
   zero-argument, copy-only, move-only, aggregate, dependency, annotated, and
   move-only array shapes.
 - `emit/binding_matrix.py` emits compile-time `dingo::bindings<dingo::bind<...>>`
-  instantiations under `registration/compile/<scope>/<storage>/binding.cpp`,
+  instantiations under `registration/static_asserts/<scope>/<storage>/binding.cpp`,
   one file per storage, for both leaf traits. It
   checks the registration composition (scope, storage spelling, annotation,
   interface list, and lookup key); runtime families check the route.

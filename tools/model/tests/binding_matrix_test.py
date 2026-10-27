@@ -59,12 +59,12 @@ def test_binding_shards_follow_the_registration_hierarchy() -> None:
     assert len({shard.path for shard in shards}) == len(shards)
     for shard in shards:
         assert shard.path == (
-            f"registration/compile/{shard.scope}/{shard.storage}/binding.cpp"
+            f"registration/static_asserts/{shard.scope}/{shard.storage}/binding.cpp"
         )
         assert shard.cases
         for case in shard.cases:
             assert case.path.startswith(
-                f"registration/compile/{shard.scope}/{shard.storage}/binding/"
+                f"registration/static_asserts/{shard.scope}/{shard.storage}/binding/"
             )
 
 

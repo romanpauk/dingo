@@ -174,7 +174,7 @@ set(DINGO_INTERFACE_RUNTIME_MODEL_GENERATOR
     "tools.model.emit.families.interface_runtime")
 set(DINGO_RESOLVE_GENERATOR
     "tools.model.emit.resolve")
-set(DINGO_DETECTION_CONSTRUCTOR_GENERATOR
+set(DINGO_CLASSIFICATION_CONSTRUCTOR_GENERATOR
     "tools.model.emit.detection_constructor")
 set(DINGO_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/storage_cells.cpp.j2")
@@ -206,12 +206,12 @@ set(DINGO_INTERFACE_RUNTIME_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/interface_runtime.cpp.j2")
 set(DINGO_RESOLVE_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/resolve_cells.cpp.j2")
-set(DINGO_DETECTION_CONSTRUCTOR_TEMPLATE
+set(DINGO_CLASSIFICATION_CONSTRUCTOR_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/detection_constructor.cpp.j2")
-set(DINGO_DETECTION_DIR
+set(DINGO_CLASSIFICATION_DIR
     "${CMAKE_CURRENT_BINARY_DIR}/generated")
-set(DINGO_DETECTION_CONSTRUCTOR_MANIFEST
-    "${DINGO_DETECTION_DIR}/detection-manifest.json")
+set(DINGO_CLASSIFICATION_CONSTRUCTOR_MANIFEST
+    "${DINGO_CLASSIFICATION_DIR}/classification-manifest.json")
 set(DINGO_RESOLVE_DIR
     "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(DINGO_RESOLVE_MANIFEST
@@ -221,21 +221,21 @@ set(DINGO_SCOPES_HEADER
 set(DINGO_SELECTION_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/selection_rules.cpp.j2")
 set(DINGO_STORAGE_MANIFEST
-    "${DINGO_DETECTION_DIR}/storage-manifest.json")
+    "${DINGO_CLASSIFICATION_DIR}/storage-manifest.json")
 set(DINGO_SELECTION_MANIFEST
-    "${DINGO_DETECTION_DIR}/selection-manifest.json")
+    "${DINGO_CLASSIFICATION_DIR}/selection-manifest.json")
 set(DINGO_ROUTE_MANIFEST
-    "${DINGO_DETECTION_DIR}/route-manifest.json")
+    "${DINGO_CLASSIFICATION_DIR}/route-manifest.json")
 set(DINGO_BEHAVIOR_MODEL_TEST_SOURCE
     "${DINGO_RESOLVE_DIR}/resolution/mixed/global/behavior/copyable.cpp")
 set(DINGO_BEHAVIOR_MOVE_ONLY_MODEL_TEST_SOURCE
     "${DINGO_RESOLVE_DIR}/resolution/mixed/global/behavior/move_only.cpp")
 set(DINGO_INTERFACE_MODEL_TEST_SOURCE
-    "${DINGO_RESOLVE_DIR}/resolution/compile/global/interface/interface_cells.cpp")
+    "${DINGO_RESOLVE_DIR}/resolution/static_asserts/global/interface/interface_cells.cpp")
 set(DINGO_TYPE_MATRIX_TEST_SOURCE
-    "${DINGO_RESOLVE_DIR}/resolution/compile/global/matrix/type_matrix.cpp")
+    "${DINGO_RESOLVE_DIR}/resolution/static_asserts/global/matrix/type_matrix.cpp")
 set(DINGO_TRAIT_MATRIX_TEST_SOURCE
-    "${DINGO_RESOLVE_DIR}/resolution/compile/global/matrix/trait_matrix.cpp")
+    "${DINGO_RESOLVE_DIR}/resolution/static_asserts/global/matrix/trait_matrix.cpp")
 set(DINGO_REGISTRATION_DIR
     "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(DINGO_BINDING_MATRIX_MANIFEST
@@ -249,7 +249,7 @@ set(DINGO_TYPE_BEHAVIOR_MOVE_ONLY_TEST_SOURCE
 set(DINGO_TYPE_BEHAVIOR_STATIC_MOVE_ONLY_TEST_SOURCE
     "${DINGO_RESOLVE_DIR}/resolution/static/global/type_behavior/move_only.cpp")
 set(DINGO_PROPERTY_MANIFEST
-    "${DINGO_DETECTION_DIR}/property-manifest.json")
+    "${DINGO_CLASSIFICATION_DIR}/property-manifest.json")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/__init__.py"
     "${PROJECT_SOURCE_DIR}/tools/model/__main__.py"
@@ -339,7 +339,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_TYPE_MATRIX_TEMPLATE}"
     "${DINGO_TRAIT_MATRIX_TEMPLATE}"
     "${DINGO_RESOLVE_TEMPLATE}"
-    "${DINGO_DETECTION_CONSTRUCTOR_TEMPLATE}"
+    "${DINGO_CLASSIFICATION_CONSTRUCTOR_TEMPLATE}"
     "${DINGO_TYPE_BEHAVIOR_TEMPLATE}"
     "${DINGO_PROPERTY_MODEL_TEMPLATE}"
     "${DINGO_ANNOTATED_MODEL_TEMPLATE}"
@@ -349,7 +349,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_MODEL_GENERATOR}
-        --out-dir ${DINGO_DETECTION_DIR}
+        --out-dir ${DINGO_CLASSIFICATION_DIR}
         --manifest ${DINGO_STORAGE_MANIFEST}
         --header ${DINGO_SCOPES_HEADER}
         --include ${PROJECT_SOURCE_DIR}/include
@@ -363,7 +363,7 @@ endif()
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_SELECTION_MODEL_GENERATOR}
-        --out-dir ${DINGO_DETECTION_DIR}
+        --out-dir ${DINGO_CLASSIFICATION_DIR}
         --manifest ${DINGO_SELECTION_MANIFEST}
         --include ${PROJECT_SOURCE_DIR}/include
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
@@ -376,7 +376,7 @@ endif()
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_ROUTE_MODEL_GENERATOR}
-        --out-dir ${DINGO_DETECTION_DIR}
+        --out-dir ${DINGO_CLASSIFICATION_DIR}
         --manifest ${DINGO_ROUTE_MANIFEST}
         --include ${PROJECT_SOURCE_DIR}/include
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
@@ -451,7 +451,7 @@ if(NOT DINGO_BINDING_MATRIX_GENERATOR_RESULT EQUAL 0)
         "${DINGO_BINDING_MATRIX_GENERATOR_RESULT}")
 endif()
 file(GLOB_RECURSE DINGO_REGISTRATION_SOURCES CONFIGURE_DEPENDS
-    "${DINGO_REGISTRATION_DIR}/registration/compile/*/*/*.cpp")
+    "${DINGO_REGISTRATION_DIR}/registration/static_asserts/*/*/*.cpp")
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_TYPE_BEHAVIOR_GENERATOR}
@@ -472,7 +472,7 @@ endif()
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_PROPERTY_MODEL_GENERATOR}
-        --out-dir ${DINGO_DETECTION_DIR}
+        --out-dir ${DINGO_CLASSIFICATION_DIR}
         --manifest ${DINGO_PROPERTY_MANIFEST}
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     RESULT_VARIABLE DINGO_PROPERTY_MODEL_GENERATOR_RESULT)
@@ -556,46 +556,46 @@ file(GLOB_RECURSE DINGO_RUNTIME_REQUEST_SOURCES CONFIGURE_DEPENDS
     "${DINGO_RESOLVE_DIR}/resolution/runtime/*/*/const/*.cpp"
     "${DINGO_RESOLVE_DIR}/resolution/runtime/*/*/interface/*.cpp")
 
-file(MAKE_DIRECTORY ${DINGO_DETECTION_DIR})
+file(MAKE_DIRECTORY ${DINGO_CLASSIFICATION_DIR})
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
-        ${DINGO_DETECTION_CONSTRUCTOR_GENERATOR}
-        --out-dir ${DINGO_DETECTION_DIR}
-        --manifest ${DINGO_DETECTION_CONSTRUCTOR_MANIFEST}
+        ${DINGO_CLASSIFICATION_CONSTRUCTOR_GENERATOR}
+        --out-dir ${DINGO_CLASSIFICATION_DIR}
+        --manifest ${DINGO_CLASSIFICATION_CONSTRUCTOR_MANIFEST}
         --include ${PROJECT_SOURCE_DIR}/include
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-    RESULT_VARIABLE DINGO_DETECTION_CONSTRUCTOR_GENERATOR_RESULT)
-if(NOT DINGO_DETECTION_CONSTRUCTOR_GENERATOR_RESULT EQUAL 0)
+    RESULT_VARIABLE DINGO_CLASSIFICATION_CONSTRUCTOR_GENERATOR_RESULT)
+if(NOT DINGO_CLASSIFICATION_CONSTRUCTOR_GENERATOR_RESULT EQUAL 0)
     message(FATAL_ERROR
         "Failed to generate constructor-detection probes: "
-        "${DINGO_DETECTION_CONSTRUCTOR_GENERATOR_RESULT}")
+        "${DINGO_CLASSIFICATION_CONSTRUCTOR_GENERATOR_RESULT}")
 endif()
 file(GLOB_RECURSE DINGO_ROUTE_SOURCES CONFIGURE_DEPENDS
-    "${DINGO_RESOLVE_DIR}/resolution/compile/*/*/route.cpp")
-file(GLOB_RECURSE DINGO_DETECTION_SOURCES CONFIGURE_DEPENDS
-    "${DINGO_DETECTION_DIR}/detection/constructor/*.cpp"
-    "${DINGO_DETECTION_DIR}/detection/*/*/storage.cpp"
-    "${DINGO_DETECTION_DIR}/detection/global/wrapper/*.cpp"
-    "${DINGO_DETECTION_DIR}/detection/global/selection/*.cpp")
+    "${DINGO_RESOLVE_DIR}/resolution/static_asserts/*/*/route.cpp")
+file(GLOB_RECURSE DINGO_CLASSIFICATION_SOURCES CONFIGURE_DEPENDS
+    "${DINGO_CLASSIFICATION_DIR}/classification/constructor/*.cpp"
+    "${DINGO_CLASSIFICATION_DIR}/classification/*/*/storage.cpp"
+    "${DINGO_CLASSIFICATION_DIR}/classification/global/wrapper/*.cpp"
+    "${DINGO_CLASSIFICATION_DIR}/classification/global/selection/*.cpp")
 
 add_custom_target(cells-check
     COMMENT "Verifying generated cell coverage"
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_MODEL_GENERATOR}
-        --out-dir ${DINGO_DETECTION_DIR}
+        --out-dir ${DINGO_CLASSIFICATION_DIR}
         --manifest ${DINGO_STORAGE_MANIFEST}
         --header ${DINGO_SCOPES_HEADER}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_SELECTION_MODEL_GENERATOR}
-        --out-dir ${DINGO_DETECTION_DIR}
+        --out-dir ${DINGO_CLASSIFICATION_DIR}
         --manifest ${DINGO_SELECTION_MANIFEST}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_ROUTE_MODEL_GENERATOR}
-        --out-dir ${DINGO_DETECTION_DIR}
+        --out-dir ${DINGO_CLASSIFICATION_DIR}
         --manifest ${DINGO_ROUTE_MANIFEST}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
@@ -637,7 +637,7 @@ add_custom_target(cells-check
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_PROPERTY_MODEL_GENERATOR}
-        --out-dir ${DINGO_DETECTION_DIR}
+        --out-dir ${DINGO_CLASSIFICATION_DIR}
         --manifest ${DINGO_PROPERTY_MANIFEST}
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
@@ -667,9 +667,9 @@ add_custom_target(cells-check
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
-        ${DINGO_DETECTION_CONSTRUCTOR_GENERATOR}
-        --out-dir ${DINGO_DETECTION_DIR}
-        --manifest ${DINGO_DETECTION_CONSTRUCTOR_MANIFEST}
+        ${DINGO_CLASSIFICATION_CONSTRUCTOR_GENERATOR}
+        --out-dir ${DINGO_CLASSIFICATION_DIR}
+        --manifest ${DINGO_CLASSIFICATION_CONSTRUCTOR_MANIFEST}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
@@ -684,7 +684,7 @@ add_executable(dingo_model_test
 )
 target_link_libraries(dingo_model_test dingo::dingo gtest_main)
 target_include_directories(dingo_model_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-# The type matrix moved to the detection phase.
+# The type matrix moved to the resolution/static-asserts phase.
 set_source_files_properties(${DINGO_BEHAVIOR_MODEL_TEST_SOURCE} PROPERTIES
     COMPILE_DEFINITIONS
     "DINGO_BEHAVIOR_REPORT=\"${CMAKE_CURRENT_BINARY_DIR}/behavior-outcomes.jsonl\"")
@@ -710,28 +710,28 @@ add_test(NAME dingo_registration_test COMMAND dingo_registration_test)
 set_tests_properties(dingo_registration_test PROPERTIES
     LABELS "unit;generator")
 
-add_executable(dingo_detection_test ${DINGO_DETECTION_SOURCES})
-target_link_libraries(dingo_detection_test dingo::dingo gtest_main)
-target_include_directories(dingo_detection_test PRIVATE
+add_executable(dingo_classification_test ${DINGO_CLASSIFICATION_SOURCES})
+target_link_libraries(dingo_classification_test dingo::dingo gtest_main)
+target_include_directories(dingo_classification_test PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}")
-add_test(NAME dingo_detection_test COMMAND dingo_detection_test)
-set_tests_properties(dingo_detection_test PROPERTIES
+add_test(NAME dingo_classification_test COMMAND dingo_classification_test)
+set_tests_properties(dingo_classification_test PROPERTIES
     LABELS "unit;generator")
 
-add_executable(dingo_resolution_compile_test
+add_executable(dingo_resolution_static_asserts_test
     ${DINGO_INTERFACE_MODEL_TEST_SOURCE}
     ${DINGO_TYPE_MATRIX_TEST_SOURCE}
     ${DINGO_TRAIT_MATRIX_TEST_SOURCE}
     ${DINGO_ROUTE_SOURCES})
-target_link_libraries(dingo_resolution_compile_test dingo::dingo gtest_main)
-target_include_directories(dingo_resolution_compile_test PRIVATE
+target_link_libraries(dingo_resolution_static_asserts_test dingo::dingo gtest_main)
+target_include_directories(dingo_resolution_static_asserts_test PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}")
-target_compile_definitions(dingo_resolution_compile_test PRIVATE
+target_compile_definitions(dingo_resolution_static_asserts_test PRIVATE
     DINGO_TYPE_MATRIX_REPORT="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.md"
     DINGO_TYPE_MATRIX_JSON="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.json")
-add_test(NAME dingo_resolution_compile_test
-    COMMAND dingo_resolution_compile_test)
-set_tests_properties(dingo_resolution_compile_test PROPERTIES
+add_test(NAME dingo_resolution_static_asserts_test
+    COMMAND dingo_resolution_static_asserts_test)
+set_tests_properties(dingo_resolution_static_asserts_test PROPERTIES
     LABELS "unit;generator")
 
 add_executable(dingo_resolve_probe EXCLUDE_FROM_ALL ${DINGO_RESOLVE_SOURCES})
@@ -767,7 +767,7 @@ add_test(NAME dingo_model_baseline_test
         --baseline ${PROJECT_SOURCE_DIR}/test/baselines/model.json)
 set_tests_properties(dingo_model_baseline_test PROPERTIES
     LABELS "unit;generator"
-    DEPENDS "dingo_model_test;dingo_resolution_compile_test"
+    DEPENDS "dingo_model_test;dingo_resolution_static_asserts_test"
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 add_test(NAME dingo_model_generator_test

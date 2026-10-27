@@ -10,7 +10,7 @@
 
 The output follows the shared hierarchy:
 
-    registration/compile/<scope>/<storage>/binding.cpp
+    registration/static_asserts/<scope>/<storage>/binding.cpp
 
 One file is one storage path, one suite is that path, and one test is one
 ``(traits, binding)`` pair. The test instantiates
@@ -91,7 +91,7 @@ def _rows_for(traits: LeafTraits) -> list[dict[str, object]]:
         seen.add(key)
         path = CasePath(
             phase="registration",
-            container="compile",
+            container="static_asserts",
             scope=case.scope,
             storage=case.storage_name,
             category="binding",
@@ -159,7 +159,7 @@ def build_shards() -> tuple[BindingShard, ...]:
                     binding_type=first["binding_type"],
                     path=CasePath(
                         phase="registration",
-                        container="compile",
+                        container="static_asserts",
                         scope=scope,
                         storage=storage,
                         category="binding",
@@ -171,7 +171,7 @@ def build_shards() -> tuple[BindingShard, ...]:
             )
         prefix = CasePath(
             phase="registration",
-            container="compile",
+            container="static_asserts",
             scope=scope,
             storage=storage,
             category="binding",

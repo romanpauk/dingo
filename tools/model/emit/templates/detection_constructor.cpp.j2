@@ -30,7 +30,7 @@ static_assert(
     "detected constructor kind disagrees with the model");
 
 TEST(detection_compile_constructor_{{ shape.name }}, detected) {
-  RecordProperty("path", "detection/constructor/{{ shape.name }}");
+  RecordProperty("path", "classification/constructor/{{ shape.name }}");
   SUCCEED();
 }
 

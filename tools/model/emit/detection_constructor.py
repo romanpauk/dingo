@@ -6,14 +6,14 @@
 # SPDX-License-Identifier: MIT
 #
 
-"""Generating constructor-detection probes under the detection phase.
+"""Generating constructor-detection probes under the classification phase.
 
 One file per constructor shape:
 
-    detection/constructor/<shape>.cpp
+    classification/constructor/<shape>.cpp
 
 The file contains the type declaration, a static assertion on the detected
-arity, and a presence test. This is the first slice of the detection phase; the
+arity, and a presence test. This is the first slice of the classification phase; the
 richer backend/mode/shape matrix can move here next.
 """
 
@@ -122,8 +122,8 @@ def manifest() -> str:
         "shapes": [
             {
                 "name": shape.name,
-                "path": f"detection/constructor/{shape.name}",
-                "file": f"detection/constructor/{shape.name}.cpp",
+                "path": f"classification/constructor/{shape.name}",
+                "file": f"classification/constructor/{shape.name}.cpp",
                 "arity": shape.arity,
                 "kind": shape.kind,
             }
@@ -150,7 +150,7 @@ def main() -> None:
     for shape in SHAPES:
         emit(
             arguments.out_dir
-            / "detection"
+            / "classification"
             / "constructor"
             / f"{shape.name}.cpp",
             render(shape),
