@@ -43,8 +43,8 @@ def test_type_behavior_product_is_complete() -> None:
         assert any(not shape["gap"] for shape in row["shapes"])
 
 
-def test_type_behavior_cells_follow_the_route_ledger() -> None:
-    cells = {(row["scope"], row["form"], row["container"]) for row in build_rows()}
+def test_type_behavior_forms_follow_the_route_ledger() -> None:
+    forms = {(row["scope"], row["form"], row["container"]) for row in build_rows()}
     expected = {
         (scope.name, form.name, container)
         for scope in SCOPES
@@ -54,7 +54,7 @@ def test_type_behavior_cells_follow_the_route_ledger() -> None:
         for container in ("runtime", "static")
         if not (scope.name == "external" and container == "static")
     }
-    assert cells == expected
+    assert forms == expected
 
 
 def test_consuming_scope_lvalue_borrows_are_top_level_gaps() -> None:
@@ -117,7 +117,7 @@ def test_move_only_rows_use_the_move_only_leaf() -> None:
     assert "std::optional<move_only_tracked>" in content
 
 
-def test_trait_rows_keep_the_same_cells() -> None:
+def test_trait_rows_keep_the_same_forms() -> None:
     from tools.model.grammar.traits import COPYABLE
 
     copyable = build_rows(("runtime",), COPYABLE)
@@ -131,7 +131,7 @@ def test_library_catalog_matches_model() -> None:
     validate_catalog(Path(__file__).resolve().parents[3] / "include")
 
 
-def test_render_is_stable_and_covers_every_cell(tmp_path: Path) -> None:
+def test_render_is_stable_and_covers_every_form(tmp_path: Path) -> None:
     for container in ("runtime", "static"):
         shards = [
             shard

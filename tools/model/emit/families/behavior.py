@@ -8,16 +8,16 @@
 
 """Generate behavior classes from the scope/form model.
 
-The generator owns the product: every supported scope/form cell from the route
+The generator owns the product: every supported scope/form from the route
 ledger becomes a behavior class in each applicable container front-end. The
 primary request, relation, request class, and construction count are derived
 from the semantic form kind, stored wrapper properties, and scope; a form adds
 its registration facts and capabilities, not a hand-written expectation per
-cell.
+form.
 
-Behavior gaps are cells the ledger publishes but that have no resolvable
+Behavior gaps are forms the ledger publishes but that have no resolvable
 behavior case yet. They carry a reason and are checked by the coverage
-contract, so a supported cell can never silently lose its behavior test.
+contract, so a supported form can never silently lose its behavior test.
 """
 
 from __future__ import annotations
@@ -35,8 +35,8 @@ from tools.model.grammar.catalog import (
     FormConstructor,
     StorageForm,
 )
-from tools.model.semantics.cells import iter_supported_cells
-from tools.model.semantics.gaps import cell_gaps, name_gaps, validate as validate_gaps
+from tools.model.semantics.storage_forms import iter_supported_forms
+from tools.model.semantics.gaps import form_gaps, name_gaps, validate as validate_gaps
 from tools.model.emit.common.recipe import external_instance, registration
 from tools.model.semantics.routes.ledger import supported_categories
 from tools.model.emit.common.runner import emit, render_template
@@ -57,7 +57,7 @@ class Expectation:
     """The resolvable request, its identity relation, and its shape.
 
     Construction counts are storage-shape facts and stay explicit. Copy and
-    move counts are derived from the request class and the scope, so a cell
+    move counts are derived from the request class and the scope, so a storage form
     cannot silently carry a count that no longer matches its shape.
     """
 
@@ -267,7 +267,7 @@ def derive_expectation(
     raise ValueError(f"no behavior expectation for {form.name}/{scope}")
 
 
-# Additional request shapes for a cell that the primary expectation does not
+# Additional request shapes for a storage form that the primary expectation does not
 # exercise: the unique rvalue route and the shared wrapper-value route.
 def derive_extra_expectations(
     form: StorageForm,
@@ -275,11 +275,11 @@ def derive_extra_expectations(
     primary: Expectation,
     traits: LeafTraits = COPYABLE,
 ) -> tuple[tuple[str, Expectation], ...]:
-    """Additional route shapes worth executing for a cell.
+    """Additional route shapes worth executing for a storage form.
 
     These are not alternate expectations: they exercise a second published
-    route. The unique plain cell also moves its rvalue route; the shared
-    alternative cell also copies the variant wrapper value.
+    route. The unique plain form also moves its rvalue route; the shared
+    alternative form also copies the variant wrapper value.
     """
     kind = form.kind
     extras = []
@@ -863,10 +863,10 @@ def _annotation_rows(
     return rows
 
 
-# Supported cells the route model publishes but that have no resolvable
+# Supported forms the route model publishes but that have no resolvable
 # behavior case yet. Each one must state why, so the contract distinguishes a
 # missing test from a shape the library cannot actually serve.
-BEHAVIOR_GAPS = cell_gaps("behavior")
+BEHAVIOR_GAPS = form_gaps("behavior")
 
 
 def _registration(
@@ -952,7 +952,7 @@ def build_rows(
     traits: LeafTraits = COPYABLE,
 ) -> list[dict[str, object]]:
     rows = []
-    for scope, form in iter_supported_cells(form_major=True):
+    for scope, form in iter_supported_forms(form_major=True):
         scope_name = scope.name
         if (scope_name, form.name) in BEHAVIOR_GAPS:
             continue
@@ -1038,7 +1038,7 @@ def build_rows(
     return rows
 
 
-def covered_cells(traits: LeafTraits = COPYABLE) -> set[tuple[str, str]]:
+def covered_forms(traits: LeafTraits = COPYABLE) -> set[tuple[str, str]]:
     rows = build_rows(traits)
     return {
         (str(row["scope"]), str(row["form"]))
@@ -1047,10 +1047,10 @@ def covered_cells(traits: LeafTraits = COPYABLE) -> set[tuple[str, str]]:
     }
 
 
-def supported_cells() -> set[tuple[str, str]]:
+def supported_forms() -> set[tuple[str, str]]:
     return {
         (scope.name, form.name)
-        for scope, form in iter_supported_cells()
+        for scope, form in iter_supported_forms()
     }
 
 
@@ -1076,15 +1076,15 @@ def validate(traits: LeafTraits = COPYABLE) -> None:
     rows = build_rows(traits)
     _require(rows, "behavior catalog must not be empty")
     _check_unique("behavior catalog", (row["name"] for row in rows))
-    expected = supported_cells()
-    accounted = covered_cells() | set(BEHAVIOR_GAPS)
+    expected = supported_forms()
+    accounted = covered_forms() | set(BEHAVIOR_GAPS)
     _require(
         not expected - accounted,
-        f"supported cells without a behavior case: {expected - accounted}",
+        f"supported forms without a behavior case: {expected - accounted}",
     )
     _require(
         not accounted - expected,
-        f"behavior cases for unsupported cells: {accounted - expected}",
+        f"behavior cases for unsupported forms: {accounted - expected}",
     )
     validate_gaps()
     for form in FORMS:
@@ -1094,12 +1094,12 @@ def validate(traits: LeafTraits = COPYABLE) -> None:
             if not supported_categories(scope, form.name):
                 continue
             expectation = derive_expectation(form, scope, traits)
-            _check_case("behavior cell", f"{scope}/{form.name}", expectation.request_class, scope)
+            _check_case("behavior form", f"{scope}/{form.name}", expectation.request_class, scope)
             for case, extra in derive_extra_expectations(
                 form, scope, expectation, traits
             ):
                 _check_case(
-                    "behavior cell",
+                    "behavior form",
                     f"{scope}/{form.name}/{case}",
                     extra.request_class,
                     scope,
@@ -1194,7 +1194,7 @@ def build_shards() -> list[BehaviorShard]:
 
 def render(shard: BehaviorShard) -> str:
     return render_template(
-        "behavior_cells.cpp.j2",
+        "behavior_cases.cpp.j2",
         rows=shard.rows,
         namespace=shard.namespace,
         suite=shard.suite,

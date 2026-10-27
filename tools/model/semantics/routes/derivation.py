@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 #
 
-"""Derive a cell route from wrapper properties and shape categories.
+"""Derive a storage route from wrapper properties and shape categories.
 
 A route is selected by matching (category, form kind, source shape, wrapper
 properties) against an ordered rule list. The rules do not name a storage form:
@@ -625,7 +625,7 @@ def leaf_copy_required(scope_name: str, form_name: str, shape: Shape) -> bool:
 
 
 def source_shape(scope_name: str, form_name: str) -> str:
-    """How one cell hands its stored shape to a conversion."""
+    """How one storage form hands its stored shape to a conversion."""
     scope = SCOPE_BY_NAME[scope_name]
     kind = form_kind(form_name)
     if scope.consumes:

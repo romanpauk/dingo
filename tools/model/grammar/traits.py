@@ -10,7 +10,7 @@
 
 A path describes a type shape; the leaf's special members decide whether a
 route that would copy the leaf is available. The traits are a separate
-dimension of the domain: every storage cell and request shape is classified
+dimension of the domain: every storage form and request shape is classified
 once per trait.
 
 The leaf spelling is the C++ fixture the generated probes use. The traits

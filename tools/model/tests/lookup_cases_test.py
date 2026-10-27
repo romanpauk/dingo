@@ -11,7 +11,7 @@ from __future__ import annotations
 from tools.model.emit.families.lookup import build_shards, render
 
 
-def test_lookup_cases_are_rules_not_cells() -> None:
+def test_lookup_cases_are_rules_not_forms() -> None:
     shards = build_shards()
     assert {shard.name for shard in shards} == {
         "local_binding",

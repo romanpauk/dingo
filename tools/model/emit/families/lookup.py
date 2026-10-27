@@ -10,7 +10,7 @@
 
 A lookup scope is where a binding is found. Two forms exist and they share the
 same rule set: a binding may carry its own child container, and a container may
-have a parent. The cases are therefore the rules, not the storage cells:
+have a parent. The cases are therefore the rules, not the storage forms:
 
 - a local binding is visible to the registration that declares it;
 - a local binding shadows a root binding of the same type;
@@ -124,7 +124,7 @@ def build_shards() -> list[LookupShard]:
 
 
 def render(shard: LookupShard) -> str:
-    return render_template("lookup_cells.cpp.j2", shard=shard)
+    return render_template("lookup_cases.cpp.j2", shard=shard)
 
 
 def main() -> None:

@@ -37,7 +37,7 @@ from tools.model.grammar.catalog import FORM_BY_NAME
 GAPS: dict[str, str] = {}
 
 
-def _cell(scope: str, form: str, leaf: str = "dependency") -> str:
+def _registration(scope: str, form: str, leaf: str = "dependency") -> str:
     line, _ = registration(FORM_BY_NAME[form], scope, "runtime", leaf=leaf)
     return line
 
@@ -63,69 +63,69 @@ ARGUMENTS = (
         name="value",
         param="dependency",
         value="{x}.value",
-        registration=_cell("shared", "plain"),
+        registration=_registration("shared", "plain"),
     ),
     Argument(
         name="value_move_only",
         param="movable_dependency",
         value="{x}.value",
-        registration=_cell("unique", "plain", "movable_dependency"),
+        registration=_registration("unique", "plain", "movable_dependency"),
         expected=9,
     ),
     Argument(
         name="lvalue_reference",
         param="dependency &",
         value="{x}.value",
-        registration=_cell("shared", "plain"),
+        registration=_registration("shared", "plain"),
     ),
     Argument(
         name="const_lvalue_reference",
         param="const dependency &",
         value="{x}.value",
-        registration=_cell("shared", "plain"),
+        registration=_registration("shared", "plain"),
     ),
     Argument(
         name="rvalue_reference",
         param="movable_dependency &&",
         value="{x}.value",
-        registration=_cell("unique", "plain", "movable_dependency"),
+        registration=_registration("unique", "plain", "movable_dependency"),
         expected=9,
     ),
     Argument(
         name="pointer",
         param="dependency *",
         value="{x}->value",
-        registration=_cell("shared", "plain"),
+        registration=_registration("shared", "plain"),
     ),
     Argument(
         name="const_pointer",
         param="const dependency *",
         value="{x}->value",
-        registration=_cell("shared", "plain"),
+        registration=_registration("shared", "plain"),
     ),
     Argument(
         name="shared_handle",
         param="std::shared_ptr<dependency>",
         value="{x}->value",
-        registration=_cell("shared", "shared_handle"),
+        registration=_registration("shared", "shared_handle"),
     ),
     Argument(
         name="shared_handle_reference",
         param="std::shared_ptr<dependency> &",
         value="{x}->value",
-        registration=_cell("shared", "shared_handle"),
+        registration=_registration("shared", "shared_handle"),
     ),
     Argument(
         name="shared_handle_const_reference",
         param="const std::shared_ptr<dependency> &",
         value="{x}->value",
-        registration=_cell("shared", "shared_handle"),
+        registration=_registration("shared", "shared_handle"),
     ),
     Argument(
         name="unique_handle",
         param="std::unique_ptr<dependency>",
         value="{x}->value",
-        registration=_cell("unique", "unique_handle"),
+        registration=_registration("unique", "unique_handle"),
     ),
     Argument(
         name="optional_reference",
@@ -141,13 +141,13 @@ ARGUMENTS = (
         name="variant",
         param="std::variant<dependency, long>",
         value="std::get<0>({x}).value",
-        registration=_cell("shared", "alternative"),
+        registration=_registration("shared", "alternative"),
     ),
     Argument(
         name="variant_reference",
         param="std::variant<dependency, long> &",
         value="std::get<0>({x}).value",
-        registration=_cell("shared", "alternative"),
+        registration=_registration("shared", "alternative"),
     ),
     Argument(
         name="array_reference",

@@ -70,23 +70,23 @@ shard so unrelated scenarios are not compiled together. Registration suites
 split their cases into bounded compilation units so one suite cannot dominate
 the build; the case set and runner stay the same.
 
-## Generated Cell Coverage
+## Generated Form Coverage
 
 The storage and selection models under [`tools/model/`](../tools/model)
-enumerate the built-in cells independently of the C++ headers. The generator
+enumerate the built-in forms independently of the C++ headers. The generator
 writes one translation unit for the full storage scope-by-form product, one for
 every selection policy and source status, one route probe for every supported
-storage cell, one type matrix that applies every request shape to every storable
-cell and writes `type-matrix.md`, one interface route probe for storage exposed
+storage form, one type matrix that applies every request shape to every storable
+form and writes `type-matrix.md`, one interface route probe for storage exposed
 through `dingo::interfaces<...>`, one behavior class per supported scope/form
-cell in the applicable runtime and static containers, and type behavior units
+form in the applicable runtime and static containers, and type behavior units
 that resolve every supported top-level shape through the runtime container and
-through `static_container` for every statically bindable cell, checking
+through `static_container` for every statically bindable form, checking
 identity, ownership transfer, and the lifetime balance. The type matrix reports
 both the direct route, the lifted request, and whether the route is safe at the
 container boundary: lvalue borrows from consuming scopes serve dependents but
 not top-level callers, so those rows are explicit gaps rather than hidden
-support. A wrapper the cell does not store is lifted from its value; owning
+support. A wrapper the form does not store is lifted from its value; owning
 handles require a consumed value. Every remaining miss carries a structural
 reason, and the report summarizes the misses by reason with a count and an
 example. Runtime value routes address the source a consuming scope already
@@ -95,7 +95,7 @@ move instead of copying a context value and moving it out. The route ledger
 classifies every scope/form/category row as supported, unavailable with a
 reason, or a tracked gap. `route_derivation.py` derives the operation-kind and
 retention sequence from the form's stored wrapper and the source shape the scope
-publishes, so the ledger no longer keeps one hand-written sequence per cell. The
+publishes, so the ledger no longer keeps one hand-written sequence per form. The
 route probes check value, object, and rvalue availability against that ledger,
 require every published route target to be reachable from both the static and
 runtime request matchers, check that the scope's access satisfies every route,
@@ -104,7 +104,7 @@ step, and target-shape sequences. The interface probes ask the same model for
 their value/object/rvalue counts by exposed form and copyable interface value.
 It also generates the committed `include/dingo/storage/scopes.gen.h` header,
 which owns the built-in `storage_scope_policy` data. Compile-time assertions
-compare the generated expectation with the library; a missing cell, changed
+compare the generated expectation with the library; a missing form, changed
 exposure, or stale catalog fails the build.
 
 The model is also mapped as a type-path grammar. `type_expr.py` defines the
@@ -122,9 +122,9 @@ The report is the map for extending coverage: unmodeled families are model gaps,
 unsupported families are route/library constraints. The full design is in
 [Type Path Coverage](architecture/type-path-coverage.md).
 
-Behavior classes are data-driven too. `behavior_cells.py` owns a registration
+Behavior classes are data-driven too. `behavior_cases.py` owns a registration
 description and an expectation entry per form, derives the scope and container
-product from the route ledger, and requires every supported scope/form cell to
+product from the route ledger, and requires every supported scope/form pair to
 be either behavior-tested or listed in `BEHAVIOR_GAPS` with a reason. Adding a
 form is one table entry instead of a hand-written test per scope. A behavior
 class asserts the request identity relation, construction count, optional copy
@@ -132,8 +132,8 @@ and move counts, array element identity, leaf address, and the lifetime balance
 `destructions == constructions + copies + moves`.
 
 The generated sources live in the build tree, so consumer builds never run
-Python. The `cells-check` target regenerates them and verifies that they are up
-to date, and the model's pytest suite checks the catalog against the library
+Python. The `generated-check` target regenerates them and verifies that they are
+up to date, and the model's pytest suite checks the catalog against the library
 declarations in `include/dingo/storage` and `include/dingo/binding`.
 
 `resolve-check` is the storage-driven runtime probe. The generated tree is
@@ -150,7 +150,7 @@ cmake --build build -t resolve-check
 ```
 
 ```bash
-cmake --build build -t cells-check
+cmake --build build -t generated-check
 uv run --locked pytest -q tools/model
 ```
 
@@ -196,8 +196,8 @@ count and object size) are worth comparing between revisions; wall time is a
 trend because it depends on machine load.
 
 The model suites are split by catalog, so their units are small
-(`storage_cells`, `route_cells`, and `selection_rules` are around one second
-each, and `behavior_cells` is the largest). When one unit grows past a few
+(`storage policies`, `route_probes`, and `selection_rules` are around one second
+each, and `behavior_cases` is the largest). When one unit grows past a few
 seconds, split it by form or cost class before adding more cases. Compact
 translation units preserve parallel build time without duplicating the shared
 kernel's instantiations.

@@ -122,13 +122,13 @@ def _derive_access(
             return _fail("borrow", "the scope does not publish a pointer route")
     elif access in {"array_lvalue_reference", "array_pointer"}:
         if form_name != "bounded_array":
-            return _fail("decay", "the cell does not store a bounded array")
+            return _fail("decay", "the storage form does not store a bounded array")
         if not _published(scope_name, form_name, access):
             return _fail("decay", "the scope does not publish the array view")
 
     inner = shape.inner
     if inner is not None and inner.outer is not None and inner.outer.name == "const":
-        # const is a qualifier of the object, not a wrapper the cell stores.
+        # const is a qualifier of the object, not a wrapper the storage form stores.
         inner = inner.inner
     if inner is not None and inner.access != "value":
         return _fail(
@@ -141,7 +141,7 @@ def _derive_access(
         if stored is None or stored.name != inner.outer.name:
             return _fail(
                 "borrow",
-                f"the cell does not store {inner.outer.name}",
+                f"the storage form does not store {inner.outer.name}",
             )
 
     if (
@@ -150,7 +150,7 @@ def _derive_access(
     ):
         return _fail(
             "decay",
-            "the cell exposes its row/array, not a leaf reference",
+            "the storage form exposes its row/array, not a leaf reference",
         )
     return None
 
@@ -164,7 +164,7 @@ def _derive_value(
             return None
         return _fail(
             "copy_out",
-            "the cell does not publish its leaf as a value",
+            "the storage form does not publish its leaf as a value",
         )
 
     inner = shape.inner
@@ -190,12 +190,12 @@ def _derive_value(
         if family != "variant":
             return _fail(
                 "select_alternative",
-                "the cell does not store a variant",
+                "the storage form does not store a variant",
             )
         if inner.outer is not None:
             return _fail(
                 "select_alternative",
-                "the cell stores a different alternative",
+                "the storage form stores a different alternative",
             )
         return None
 
@@ -214,7 +214,7 @@ def _derive_value(
                 return None
             return _fail(
                 "copy_out",
-                "the cell does not publish the inner value",
+                "the storage form does not publish the inner value",
             )
         iw = inner.outer
         if iw.has("sharing"):
@@ -222,7 +222,7 @@ def _derive_value(
                 return None
             return _fail(
                 "wrap",
-                f"the cell does not provide a {iw.name} to wrap",
+                f"the storage form does not provide a {iw.name} to wrap",
             )
         if iw.has("sole_owner"):
             if _can_take(scope_name, form_name, outer.name):
@@ -236,13 +236,13 @@ def _derive_value(
                 return None
             return _fail(
                 "wrap",
-                f"the cell does not provide a {iw.name} to wrap",
+                f"the storage form does not provide a {iw.name} to wrap",
             )
         return _fail("wrap", f"cannot wrap {iw.name}")
 
     if outer.kind in {"handle", "array_handle"}:
         # A stored handle is the request's whole chain; an inner wrapper means
-        # the request wraps something the cell stores inside the handle, not
+        # the request wraps something the storage form stores inside the handle, not
         # the handle itself.
         stored_match = (
             stored is not None

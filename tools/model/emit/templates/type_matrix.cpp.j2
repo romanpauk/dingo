@@ -87,7 +87,7 @@ void print_routes(std::ostream &out, const char *scope, const char *form,
 }
 
 {% for row in rows %}
-namespace {{ row.cell }} {
+namespace {{ row.path }} {
 using storage = dingo::detail::storage<
     {{ row.scope_type }}, {{ row.type }}, {{ row.type }},
     dingo::constructor<{{ row.constructor }}>,
@@ -103,7 +103,7 @@ static constexpr bool {{ shape.name }}_direct = direct_request_supported<{{ shap
 static constexpr bool {{ shape.name }} = lifted_request_supported<{{ shape.cpp_type }}, storage, int>();
 static constexpr bool {{ shape.name }}_lifted = {{ shape.name }} && !{{ shape.name }}_direct;
 {% endfor %}
-} // namespace {{ row.cell }}
+} // namespace {{ row.path }}
 
 {% endfor %}
 TEST(type_matrix, writes_support_report) {
@@ -119,9 +119,9 @@ TEST(type_matrix, writes_support_report) {
 {% for row in rows %}
 {
 {% for shape in shapes %}
-  constexpr bool direct_{{ shape.name }} = {{ row.cell }}::{{ shape.name }}_direct;
-  constexpr bool lifted_{{ shape.name }} = {{ row.cell }}::{{ shape.name }}_lifted;
-  constexpr bool supported_{{ shape.name }} = {{ row.cell }}::{{ shape.name }};
+  constexpr bool direct_{{ shape.name }} = {{ row.path }}::{{ shape.name }}_direct;
+  constexpr bool lifted_{{ shape.name }} = {{ row.path }}::{{ shape.name }}_lifted;
+  constexpr bool supported_{{ shape.name }} = {{ row.path }}::{{ shape.name }};
   constexpr bool top_ok_{{ shape.name }} =
       direct_{{ shape.name }}
           ? ({{ "true" if row.top_level[shape.name] else "false" }})
@@ -184,11 +184,11 @@ TEST(type_matrix, writes_support_report) {
   out << "| --- | --- | --- | --- |\n";
 {% for row in rows %}
   print_routes(out, "{{ row.scope }}", "{{ row.form }}", "value",
-               {{ row.cell }}::value_routes{});
+               {{ row.path }}::value_routes{});
   print_routes(out, "{{ row.scope }}", "{{ row.form }}", "object",
-               {{ row.cell }}::object_routes{});
+               {{ row.path }}::object_routes{});
   print_routes(out, "{{ row.scope }}", "{{ row.form }}", "rvalue",
-               {{ row.cell }}::rvalue_routes{});
+               {{ row.path }}::rvalue_routes{});
 {% endfor %}
 }
 

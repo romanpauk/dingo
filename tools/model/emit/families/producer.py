@@ -8,14 +8,14 @@
 
 """Producer classes.
 
-The per-cell claims register a cell with the factory the storage form chooses.
-This family asks the other half of the question: when the cell stays the same
+The per-row claims register a storage form with the factory it chooses.
+This family asks the other half of the question: when the storage form stays the same
 and only the way its value is produced changes, does the capability change?
 
-Each cell is registered with every producer it accepts, and every producer gets
+Each pair is registered with every producer it accepts, and every producer gets
 the same three claims against the same dependency:
 
-    resolution/runtime/global/producer/<cell>/<kind>/{resolve,construct,invoke}
+    resolution/runtime/global/producer/<pair>/<kind>/{resolve,construct,invoke}
 
 The asserted value is the same for every producer, so a producer that quietly
 changes the result fails.
@@ -31,7 +31,7 @@ from tools.model.emit.common.runner import emit, render_template
 from tools.model.emit.common.validation import validate_catalog
 from tools.model.emit.hierarchy import CasePath
 
-CELLS = (
+TARGETS = (
     "shared_plain",
     "shared_pointer",
     "shared_shared_handle",
@@ -51,8 +51,8 @@ class ProducerCase:
 
 
 @dataclass(frozen=True)
-class ProducerCell:
-    cell: str
+class ProducerTarget:
+    name: str
     cases: tuple[ProducerCase, ...]
 
 
@@ -129,7 +129,7 @@ def _wrapped_cases(
     )
 
 
-def build_cells() -> tuple[ProducerCell, ...]:
+def build_targets() -> tuple[ProducerTarget, ...]:
     plain_kinds = (
         "detected",
         "constructor",
@@ -140,8 +140,8 @@ def build_cells() -> tuple[ProducerCell, ...]:
         "overloaded_callable",
     )
     return (
-        ProducerCell(
-            cell="shared_plain",
+        ProducerTarget(
+            name="shared_plain",
             cases=tuple(
                 ProducerCase(
                     kind=kind,
@@ -153,14 +153,14 @@ def build_cells() -> tuple[ProducerCell, ...]:
                 for kind in plain_kinds
             ),
         ),
-        ProducerCell(
-            cell="shared_pointer",
+        ProducerTarget(
+            name="shared_pointer",
             cases=_wrapped_cases(
                 "shared", "produced *", "make_pointer", "make_pointer"
             ),
         ),
-        ProducerCell(
-            cell="shared_shared_handle",
+        ProducerTarget(
+            name="shared_shared_handle",
             cases=_wrapped_cases(
                 "shared",
                 "std::shared_ptr<produced>",
@@ -168,8 +168,8 @@ def build_cells() -> tuple[ProducerCell, ...]:
                 "make_shared",
             ),
         ),
-        ProducerCell(
-            cell="unique_unique_handle",
+        ProducerTarget(
+            name="unique_unique_handle",
             cases=_wrapped_cases(
                 "unique",
                 "std::unique_ptr<produced>",
@@ -178,8 +178,8 @@ def build_cells() -> tuple[ProducerCell, ...]:
                 "std::unique_ptr<produced>",
             ),
         ),
-        ProducerCell(
-            cell="shared_alternative",
+        ProducerTarget(
+            name="shared_alternative",
             cases=_wrapped_cases(
                 "shared",
                 "std::variant<produced, long>",
@@ -187,8 +187,8 @@ def build_cells() -> tuple[ProducerCell, ...]:
                 "make_variant",
             ),
         ),
-        ProducerCell(
-            cell="shared_optional",
+        ProducerTarget(
+            name="shared_optional",
             cases=_wrapped_cases(
                 "shared", "std::optional<produced>", "make_optional", "make_optional"
             ),
@@ -198,7 +198,7 @@ def build_cells() -> tuple[ProducerCell, ...]:
 
 @dataclass(frozen=True)
 class ProducerShard:
-    cell: str
+    target: str
     path: str
     case_path: str
     suite: str
@@ -208,28 +208,28 @@ class ProducerShard:
 
 def build_shards() -> list[ProducerShard]:
     shards = []
-    for cell in build_cells():
+    for target in build_targets():
         case = CasePath(
             phase="resolution",
             container="runtime",
             scope="global",
-            category=f"producer/{cell.cell}",
+            category=f"producer/{target.name}",
         )
         shards.append(
             ProducerShard(
-                cell=cell.cell,
+                target=target.name,
                 path=case.file,
                 case_path=f"{case.path}",
                 suite=case.suite,
                 namespace=case.suite,
-                cases=cell.cases,
+                cases=target.cases,
             )
         )
     return shards
 
 
 def render(shard: ProducerShard) -> str:
-    return render_template("producer_cells.cpp.j2", shard=shard, claims=CLAIMS)
+    return render_template("producer_cases.cpp.j2", shard=shard, claims=CLAIMS)
 
 
 def main() -> None:

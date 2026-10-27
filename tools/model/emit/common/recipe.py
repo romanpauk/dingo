@@ -79,7 +79,7 @@ def registration(
     storage: str | None = None,
     factory: str | None = None,
 ) -> tuple[str, str]:
-    """Render the runtime registration and the static source for one cell."""
+    """Render the runtime registration and the static source for one storage form."""
     scope_type = cpp.template(
         "dingo::scope", cpp.text(f"dingo::{scope_name}")
     ).render()

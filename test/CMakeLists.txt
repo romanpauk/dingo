@@ -65,15 +65,15 @@ set(DINGO_INDEXED_MODEL_GENERATOR
 set(DINGO_CLASSIFICATION_CONSTRUCTOR_GENERATOR
     "tools.model.emit.detection_constructor")
 set(DINGO_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/storage_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/storage_facts.cpp.j2")
 set(DINGO_SCOPES_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/scopes.gen.h.j2")
 set(DINGO_ROUTE_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/route_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/route_probes.cpp.j2")
 set(DINGO_BEHAVIOR_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/behavior_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/behavior_cases.cpp.j2")
 set(DINGO_INTERFACE_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/interface_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/interface_routes.cpp.j2")
 set(DINGO_TYPE_MATRIX_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/type_matrix.cpp.j2")
 set(DINGO_TRAIT_MATRIX_TEMPLATE
@@ -83,41 +83,41 @@ set(DINGO_BINDING_MATRIX_TEMPLATE
 set(DINGO_TYPE_BEHAVIOR_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/type_behavior.cpp.j2")
 set(DINGO_PROPERTY_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/property_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/wrapper_properties.cpp.j2")
 set(DINGO_ANNOTATED_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/annotated_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/annotated_cases.cpp.j2")
 set(DINGO_CONST_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/const_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/const_cases.cpp.j2")
 set(DINGO_KEYED_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/keyed_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/keyed_cases.cpp.j2")
 set(DINGO_CONSTRUCT_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/construct_shapes.cpp.j2")
 set(DINGO_INVOKE_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/invoke_shapes.cpp.j2")
 set(DINGO_PRODUCER_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/producer_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/producer_cases.cpp.j2")
 set(DINGO_CONFIGURATION_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/configuration_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/configuration_cases.cpp.j2")
 set(DINGO_MIXED_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/mixed_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/mixed_cases.cpp.j2")
 set(DINGO_CYCLICAL_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/cyclical_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/cyclical_cases.cpp.j2")
 set(DINGO_LOOKUP_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/lookup_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/lookup_cases.cpp.j2")
 set(DINGO_DEPENDENCIES_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/dependency_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/dependency_cases.cpp.j2")
 set(DINGO_CONVERSION_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/conversion_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/conversion_cases.cpp.j2")
 set(DINGO_WRAPPER_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/wrapper_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/wrapper_cases.cpp.j2")
 set(DINGO_CONSUMER_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/consumer_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/consumer_cases.cpp.j2")
 set(DINGO_PROBE_FIXTURES_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/_probe_fixtures.h.j2")
 set(DINGO_INTERFACE_RUNTIME_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/interface_runtime.cpp.j2")
 set(DINGO_RESOLVE_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/resolve_cells.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/resolve_cases.cpp.j2")
 set(DINGO_CLASSIFICATION_CONSTRUCTOR_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/detection_constructor.cpp.j2")
 set(DINGO_CLASSIFICATION_DIR
@@ -139,7 +139,7 @@ set(DINGO_SELECTION_MANIFEST
 set(DINGO_ROUTE_MANIFEST
     "${DINGO_CLASSIFICATION_DIR}/route-manifest.json")
 set(DINGO_INTERFACE_MODEL_TEST_SOURCE
-    "${DINGO_RESOLVE_DIR}/resolution/static_asserts/global/interface/interface_cells.cpp")
+    "${DINGO_RESOLVE_DIR}/resolution/static_asserts/global/interface/interface_routes.cpp")
 set(DINGO_TYPE_MATRIX_TEST_SOURCE
     "${DINGO_RESOLVE_DIR}/resolution/static_asserts/global/matrix/type_matrix.cpp")
 set(DINGO_TRAIT_MATRIX_TEST_SOURCE
@@ -195,7 +195,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/report/resolves.py"
     "${PROJECT_SOURCE_DIR}/tools/model/semantics/__init__.py"
     "${PROJECT_SOURCE_DIR}/tools/model/semantics/capabilities.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/semantics/cells.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/semantics/storage_forms.py"
     "${PROJECT_SOURCE_DIR}/tools/model/semantics/extended_shapes.py"
     "${PROJECT_SOURCE_DIR}/tools/model/semantics/forms.py"
     "${PROJECT_SOURCE_DIR}/tools/model/semantics/gaps.py"
@@ -205,33 +205,33 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/semantics/routes/rules.py"
     "${PROJECT_SOURCE_DIR}/tools/model/semantics/support.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/__init__.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/annotated_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/annotated_cases_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/architecture_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/behavior_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/behavior_cases_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/conftest.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/const_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/const_cases_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/grammar_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/keyed_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/keyed_cases_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/interface_runtime_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/binding_matrix_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/interface_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/interface_routes_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/outcome_baseline_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/paths_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/property_cells_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/route_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/wrapper_properties_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/route_probes_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/route_derivation_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/route_ledger_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/route_rules_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/selection_rules_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/storage_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/storage_facts_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/type_behavior_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/type_matrix_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/collection_cells_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/indexed_cells_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/construct_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/collection_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/indexed_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/construct_cases_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/detection_constructor_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/factory_cells_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/resolve_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/factory_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/resolve_cases_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/resolve_report_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/trait_matrix_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/wrapper_semantics_test.py"
@@ -258,19 +258,19 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_DEPENDENCIES_MODEL_TEMPLATE}"
     "${DINGO_CONVERSION_MODEL_TEMPLATE}"
     "${DINGO_WRAPPER_MODEL_TEMPLATE}"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/wrapper_cells_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/conversion_cells_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/dependency_cells_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/lookup_cells_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/cyclical_cells_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/mixed_cells_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/configuration_cells_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/producer_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/wrapper_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/conversion_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/dependency_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/lookup_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/cyclical_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/mixed_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/configuration_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/producer_cases_test.py"
     "${DINGO_CONSUMER_MODEL_TEMPLATE}"
     "${DINGO_PROBE_FIXTURES_TEMPLATE}"
     "${PROJECT_SOURCE_DIR}/tools/model/emit/consumers.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/construct_cells_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/consumer_cells_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/construct_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/consumer_cases_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/claim_report_test.py"
     "${DINGO_CONST_MODEL_TEMPLATE}"
     "${DINGO_SCOPES_HEADER}"
@@ -286,7 +286,7 @@ execute_process(
     RESULT_VARIABLE DINGO_MODEL_GENERATOR_RESULT)
 if(NOT DINGO_MODEL_GENERATOR_RESULT EQUAL 0)
     message(FATAL_ERROR
-        "Failed to generate storage-cell coverage: "
+        "Failed to generate storage coverage: "
         "${DINGO_MODEL_GENERATOR_RESULT}")
 endif()
 execute_process(
@@ -721,8 +721,8 @@ file(GLOB_RECURSE DINGO_CLASSIFICATION_SOURCES CONFIGURE_DEPENDS
     "${DINGO_CLASSIFICATION_DIR}/classification/global/wrapper/*.cpp"
     "${DINGO_CLASSIFICATION_DIR}/classification/global/selection/*.cpp")
 
-add_custom_target(cells-check
-    COMMENT "Verifying generated cell coverage"
+add_custom_target(generated-check
+    COMMENT "Verifying generated coverage"
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_MODEL_GENERATOR}
         --out-dir ${DINGO_CLASSIFICATION_DIR}

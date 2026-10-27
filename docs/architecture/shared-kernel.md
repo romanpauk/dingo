@@ -5,7 +5,7 @@ has been retired; see [Matrix Retirement](matrix-migration.md).
 
 This page describes a design for removing the duplicated runtime and
 compile-time implementations without replacing the library with a second
-implementation, and for making the storage and conversion cells exhaustive by
+implementation, and for making the storage and conversion forms exhaustive by
 construction. It is deliberately incremental: every step is independently
 testable and every step has a cost gate against the current `master`.
 
@@ -43,7 +43,7 @@ infrastructure described below. It changes no public API and no behavior.
   the same as the static container, and requests no longer need a typed maker
   indirection.
 - `tools/model/` is the first coverage catalog. It enumerates every built-in
-  storage scope by form cell, every selection policy by source status, and every
+  storage scope by form, every selection policy by source status, and every
   scope/form/route-category row. Every route row is classified as supported,
   unavailable with a reason, or a tracked gap; the generator emits one
   translation unit of compile-time assertions for the supported rows and checks
@@ -53,14 +53,14 @@ infrastructure described below. It changes no public API and no behavior.
   conversion step, and target-shape sequences derived by `route_derivation.py`
   match. The recipes are ordered rules over semantic kind, source shape, and
   wrapper properties, so a new scope reuses them and a custom wrapper with the
-  same shape follows the same rule instead of adding a row per cell.
+  same shape follows the same rule instead of adding a row per form.
   Representative routes also assert that no conversion cache is published
   unexpectedly. Interface probes derive their value/object/rvalue counts from
   the same model by form and copyable interface value. Raw dynamic arrays are
   declared unavailable because the element count is not part of the type;
   unsized shared array handles under `shared_cyclical` are an explicit
-  constraint for the same reason. `cells-check` fails when the library catalog
-  and the model drift.
+  constraint for the same reason. `generated-check` fails when the library
+  catalog and the model drift.
 - Scope lifetime and source shape are descriptors now: `scope_info_of` derives
   consuming/stability/guard/retention from the generated policy, and
   `storage_yield_traits` derives the yielded type and source category from the
@@ -81,18 +81,18 @@ infrastructure described below. It changes no public API and no behavior.
   its step list and retained cache types, and `conversion_walk` applies the
   steps as the single conversion executor. Leaf conversions stay the primitives;
   wrapper, alternative, retention, and source steps only compose them.
-- Behavior coverage follows the same catalog. `behavior_cells.py` declares each
+- Behavior coverage follows the same catalog. `behavior_cases.py` declares each
   form once (storage, factory, external instance) plus one expectation entry per
   scope, then derives the runtime and static product from the route ledger.
-  Every supported cell is behavior-tested or listed in `BEHAVIOR_GAPS` with a
+  Every supported form is behavior-tested or listed in `BEHAVIOR_GAPS` with a
   reason, so a new form or scope cannot silently lose execution coverage. The
   classes assert request identity, construction counts, optional copy and move
   counts, array element identity, leaf addresses, and the lifetime balance
   `destructions == constructions + copies + moves`.
 - `include/dingo/storage/scopes.gen.h` owns the built-in `storage_scope_policy`
-  specializations and the `shared_cyclical` cell-list table. The per-scope
+  specializations and the `shared_cyclical` form-list table. The per-scope
   headers keep their public tag and storage implementation, but the policy and
-  per-cell publication data is generated from the model, so a new scope or form
+  per-form publication data is generated from the model, so a new scope or form
   cannot bypass the coverage product. The static graph uses the generated
   `allows_cycles` and `consumes` fields instead of hard-coding scope names.
 - `tools/cost/measure.py` records object text/data/bss sizes and optional Clang
@@ -151,9 +151,9 @@ explains why a change in one path can pass its tests while the other path stays
 wrong.
 
 The same problem appears inside the storage and conversion tables. A scope
-declares its policy once, but individual `(scope, form)` cells and conversion
+declares its policy once, but individual `(scope, form)` forms and conversion
 routes are still C++ specializations. Each specialization is correct only if its
-author remembers the cell, writes its route, and adds it to the matrix. The
+author remembers the form, writes its route, and adds it to the matrix. The
 matrix keeps a separate, hand-curated approximation of the same table, so the
 test model and the library can drift independently.
 
@@ -349,8 +349,8 @@ pipeline.
 
 The generator is a **coverage compiler**, not a code multiplier. It computes the
 declared product of axes, emits the data tables the kernel consumes, and emits
-the probes that prove every cell is covered. It does not emit one C++
-specialization per cell.
+the probes that prove every form is covered. It does not emit one C++
+specialization per form.
 
 ### Catalog
 
@@ -372,7 +372,7 @@ The catalog owns the semantic choices. The existing hand-written
 `storage_scope_policy`, form traits, and conversion primitives remain the
 implementation of those choices, because they manipulate C++ types and names.
 
-### Products And Cells
+### Products And Forms
 
 Every axis product is materialized as rows, including intentional gaps:
 
@@ -384,13 +384,13 @@ For storage, the product is scope × form × exposed request category. For
 conversion, it is source layer kind × target layer kind × scope access × special
 form (array, alternative, optional, custom). For containers, it is registration
 mode × container kind × request decoration. A rule is a function over a row; an
-override is an explicit row. There is no third state in which a cell is simply
+override is an explicit row. There is no third state in which a form is simply
 forgotten.
 
 The generator emits:
 
 - a compact `constexpr` table per component
-  (`include/dingo/generated/storage_cells.gen.h`, `route_cells.gen.h`);
+  (`include/dingo/generated/storage policies.gen.h`, `route_probes.gen.h`);
 - one aggregate `static_assert` that the table has exactly the expected number
   of rows and that every row names a known operation;
 - a coverage manifest mapping every row to at least one test case or one
@@ -407,8 +407,8 @@ difference, stale file, or hand edit.
 
 There are three distinct correctness levels.
 
-1. **Library-owned cells.** The generator enumerates the full product and emits
-   a table with an explicit outcome for every cell. A missing or duplicate cell
+1. **Library-owned forms.** The generator enumerates the full product and emits
+   a table with an explicit outcome for every form. A missing or duplicate form
    is a generator failure and a compile-time assertion. A new built-in scope or
    operation cannot be added by writing one specialization and forgetting the
    rest; it must be declared, and the declaration forces a complete row.
@@ -425,10 +425,10 @@ There are three distinct correctness levels.
    table, the test does not merely repeat the implementation; it checks the
    emission and the C++ consumer against an independent evaluator.
 
-A structural check (`cells-check`) additionally verifies that the library does
-not contain built-in `storage_cell` or route specializations for cells that the
-catalog says are generated. Those specializations become a compile-time error or
-a lint failure. This prevents the old habit from returning.
+A structural check (`generated-check`) additionally verifies that the library
+does not contain built-in `storage_policy` or route specializations for forms
+that the catalog says are generated. Those specializations become a compile-time
+error or a lint failure. This prevents the old habit from returning.
 
 ### Test Cost
 
@@ -439,22 +439,22 @@ representative, and the generator enforces a coverage invariant:
 - every row is covered by a compile/instantiation probe;
 - every behavior class has one or more executable cases per applicable container
   mode;
-- boundary cells (empty, unavailable, ambiguous, non-copyable, non-movable,
+- boundary forms (empty, unavailable, ambiguous, non-copyable, non-movable,
   runtime key, parent/local) are declared as their own classes;
-- shards are sized by the current matrix batching limits, so adding a cell does
+- shards are sized by the current matrix batching limits, so adding a form does
   not recompile the world.
 
 This is coverage by construction without a combinatorial build.
 
 The implemented model uses that split directly:
 
-- **Structural cells** (storage traits, route availability, access, operation
+- **Structural forms** (storage traits, route availability, access, operation
   kinds, retention) are compile-time assertions. The full storage product is one
   translation unit; the full route product is another; both stay around a second
   to compile.
-- **Behavior cells** are execution cases derived from the same scope/form
+- **Behavior forms** are execution cases derived from the same scope/form
   catalog. Each form declares its registration once and one expectation per
-  scope; the runtime and static containers are generated. Cells the library
+  scope; the runtime and static containers are generated. Forms the library
   publishes but cannot serve are listed as explicit behavior gaps with a reason.
 - **Request shapes are derived from wrapper semantics, not listed.** A shape is
   a leaf wrapped in zero or more wrappers, and each wrapper declares what it can
@@ -466,9 +466,9 @@ The implemented model uses that split directly:
   behavior suites. The route rules (`copy_out`, `borrow`, `move`, `take`,
   `wrap`, `share`, `adopt`, `decay`, `select_alternative`, ...) derive the first
   rule that blocks a request and name it in the report. Every derived shape is
-  applied to every storable cell through the real resolution kernel. The report
+  applied to every storable form through the real resolution kernel. The report
   has the direct route, the lifted request, the top-level verdict, the blocking
-  rule, and the published route targets. A request for a wrapper the cell does
+  rule, and the published route targets. A request for a wrapper the form does
   not store is lifted from the wrapper's value: value wrappers copy or move, and
   owning handles only move from a consumed value so a borrowed instance cannot
   become an owner. A matching route can still be unsafe at the container
@@ -481,12 +481,12 @@ The implemented model uses that split directly:
   identity and fresh distinctness, releases only pointers whose ownership the
   consuming scope transferred, and asserts the lifetime balance after each
   block. The catalog runs in two translation units: the runtime container and
-  the static container for every statically bindable cell (`external` is
+  the static container for every statically bindable form (`external` is
   runtime-only). The shape catalog and the top-level verdict are shared with the
   matrix, so the executable set is derived rather than maintained separately.
   This is the foundation for deriving behavior and decorator cases from shapes
   instead of listing supported requests by hand.
-- **The matrix keeps the scenarios that a cell catalog cannot express**:
+- **The matrix keeps the scenarios that a form catalog cannot express**:
   constructor detection, invocation, dependency graphs, collections, keys,
   annotations, parent containers, caching, transactions, error paths, custom
   RTTI and allocators. Those are not derivable from a scope/form product.
@@ -546,17 +546,17 @@ model suites. In priority order:
 Do **not** migrate constructor detection, invocation and dependency
 provisioning, dependency compositions, shared-cyclical graphs, or the imperative
 parent/runtime regression scenarios. They describe behavior that is not a
-function of a scope/form cell.
+function of a scope/form pair.
 
-Each step should land with a coverage manifest: the model declares the cells it
+Each step should land with a coverage manifest: the model declares the forms it
 covers, the matrix declares the registration rows it still owns, and a test
 fails when the union no longer covers the catalog. That makes the removal
 incremental and safe. `model_coverage.py` was that manifest while the matrix
-existed: `FEATURE_RESTRICTIONS` lists the dropped rows with the model cells that
-justify them, and the generator test fails if any claimed cell loses its
+existed: `FEATURE_RESTRICTIONS` lists the dropped rows with the model forms that
+justify them, and the generator test fails if any claimed form loses its
 behavior class.
 
-Behavior copy and move counts are not hand-written per cell. Each behavior case
+Behavior copy and move counts are not hand-written per form. Each behavior case
 declares a request class, and the generator derives the minimum count from it:
 one copy per borrowed value resolution, one move per consumed value resolution,
 one library move plus one caller move for a consumed rvalue reference, and no
@@ -596,9 +596,9 @@ work.
 
 ### Compile Time
 
-- The generator emits data plus one generic consumer, not one class per cell.
+- The generator emits data plus one generic consumer, not one class per form.
   Header parse cost therefore grows with the number of operations, not the
-  product of cells.
+  product of forms.
 
 - Static selection stays type-list based and is not replaced by a runtime
   interpreter.
@@ -676,12 +676,12 @@ separate. Delete the duplicated static materialization and cache ladder.
 ### Step 3: Generate Storage And Route Tables
 
 Status: in progress. The storage scope policies are generated into
-`include/dingo/storage/scopes.gen.h`; the storage scope/form cells and selection
-policies are generated as coverage probes. The remaining route cells and the
+`include/dingo/storage/scopes.gen.h`; the storage scope/form pairs and selection
+policies are generated as coverage probes. The remaining route forms and the
 matrix consumption still need to move to the catalog.
 
-Move the built-in `(scope, form)` and route cells into the catalog. Emit the
-tables and coverage assertions, then replace the per-cell specializations one
+Move the built-in `(scope, form)` and route forms into the catalog. Emit the
+tables and coverage assertions, then replace the per-form specializations one
 group at a time:
 
 1. scopes × plain values;
@@ -720,7 +720,7 @@ step, so the tree never contains two supported implementations.
   cost grounds.
 - **A runtime interpreter over generated tables.** Solves the static/runtime
   split by making both slow. Rejected.
-- **Generate one specialization per cell.** Header and compile cost grow with
+- **Generate one specialization per form.** Header and compile cost grow with
   the product; it also multiplies the effect of a template bug. Rejected in
   favor of data plus one consumer.
 - **Replace the library with a second implementation and diff it.** It creates a
@@ -753,8 +753,8 @@ The design is working when the first step lands with:
 - fewer lines in the container and registry selection paths;
 - tracked object size, code-size probe results, instantiation counts, and
   benchmark results, with any regression recorded rather than hidden;
-- a `generate-check` and `cells-check` target that fail when a declared cell has
-  no implementation or coverage.
+- a `generate-check` and `generated-check` target that fail when a declared form
+  has no implementation or coverage.
 
 The first slice records cost through `tools/cost/measure.py`. Closing a
 compile-time regression is an explicit follow-up optimization; it does not block

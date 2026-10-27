@@ -31,7 +31,7 @@ resolved and fed into a constructor; it does not re-prove the storage route.
 Do not build:
 
 ```text
-operator x every storage cell x every request shape x every binding
+operator x every storage form x every request shape x every binding
 ```
 
 That is the matrix's over-approximation. Factor into:
@@ -66,7 +66,7 @@ resolution/runtime/<scope>/<storage>/construct.cpp   # same rows
 resolution/runtime/<scope>/<storage>/invoke.cpp      # same rows
 ```
 
-The case path keeps the cell and swaps only the claim level:
+The case path keeps the form and swaps only the claim level:
 
 ```text
 resolution/runtime/<scope>/<storage>/<claim>/<traits>/<binding>/<request>
@@ -131,9 +131,9 @@ The current report:
 
 ## Operator classes
 
-The per-cell claim files answer "can this row be consumed". They do not answer
+The per-form claim files answer "can this row be consumed". They do not answer
 "which constructor shapes does the operator support". Those are operator
-classes, they are not tied to a cell, and they live at:
+classes, they are not tied to a form, and they live at:
 
 ```text
 resolution/runtime/global/construct/<shape>/<traits>.cpp
@@ -288,7 +288,7 @@ same time. There are exactly two outcomes, so the family is two cases at
 ## Producers
 
 The producer family answers "does the capability survive a change of factory" at
-`resolution/runtime/global/producer/<cell>`:
+`resolution/runtime/global/producer/<form>`:
 
 - `shared/plain` with detected construction, explicit `constructor<...>`,
   `function<...>`, `callable(...)`, `callable<Signature>(...)`, a
@@ -299,7 +299,7 @@ The producer family answers "does the capability survive a change of factory" at
 
 Each producer gets the same three claims over the same dependency: `resolve`,
 `construct`, and `invoke`, asserting the same value. A producer that quietly
-changes the result fails. `unique_handle` is the one cell whose request is the
+changes the result fails. `unique_handle` is the one form whose request is the
 handle itself, because a unique scope cannot lend an lvalue.
 
 ## Completeness
@@ -321,11 +321,11 @@ finite set of operator classes.
 
 ## Consequences for the migration
 
-- `construct` is now split into the per-cell claim files and the
+- `construct` is now split into the per-form claim files and the
   `global/construct/<shape>` operator classes.
 - `factory_override` is a registration operator: test factory forms x argument
   categories, not every storage.
-- `invoke` has per-cell claim files; its callable-shape family is still to be
+- `invoke` has per-form claim files; its callable-shape family is still to be
   added.
 - collections test collection mode x element binding x container, not every
   element request.

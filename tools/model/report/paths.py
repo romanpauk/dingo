@@ -149,7 +149,7 @@ def render(report: dict[str, object]) -> str:
     lines += [
         "",
         "`cases` is the full request × slot product. Qualified requests are "
-        "classified even when the cell lacks a binding model; see Binding "
+        "classified even when the storage form lacks a binding model; see Binding "
         "applicability and Test coverage.",
         "",
         f"Total classified cases: **{total}**.",

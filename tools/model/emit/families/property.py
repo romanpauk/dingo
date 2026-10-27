@@ -155,7 +155,7 @@ def build_shards() -> list[PropertyShard]:
 
 def render(shard: PropertyShard) -> str:
     return render_template(
-        "property_cells.cpp.j2",
+        "wrapper_properties.cpp.j2",
         shard=shard,
     )
 

@@ -6,10 +6,10 @@
 # SPDX-License-Identifier: MIT
 #
 
-"""Probe every storage cell and request shape once per leaf trait.
+"""Probe every storage form and request shape once per leaf trait.
 
 Copyability is a property of the leaf, not of the shape. This matrix keeps the
-shape catalog and the storage cells from `emit/matrix.py`, builds each cell for
+shape catalog and the storage forms from `emit/matrix.py`, builds each form for
 a copyable and a move-only leaf, and asks the real resolution kernel whether a
 route is published for either.
 
@@ -36,7 +36,7 @@ from tools.model.emit.matrix import SHAPES
 from tools.model.grammar import cpp
 from tools.model.grammar.catalog import ARRAY_STORAGE_FORMS
 from tools.model.grammar.traits import COPYABLE, MOVE_ONLY
-from tools.model.semantics.cells import iter_supported_cells
+from tools.model.semantics.storage_forms import iter_supported_forms
 from tools.model.semantics.routes.derivation import leaf_copy_required
 
 
@@ -66,7 +66,7 @@ def probe_shape(shape) -> bool:
 def build_rows() -> list[dict[str, object]]:
     rows = []
     shapes = [shape for shape in SHAPES if probe_shape(shape)]
-    for scope, form in iter_supported_cells():
+    for scope, form in iter_supported_forms():
         rows.append(
             {
                 "name": _slug(f"{scope.name}_{form.name}"),
@@ -121,7 +121,7 @@ def validate() -> None:
     _check_unique("shape catalog", (shape.name for shape in SHAPES))
     for row in rows:
         if not row["shapes"]:
-            raise ValueError(f"cell {row['name']} has no shapes")
+            raise ValueError(f"form {row['name']} has no shapes")
 
 
 def render(output: Path) -> str:

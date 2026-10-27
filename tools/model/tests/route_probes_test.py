@@ -55,7 +55,7 @@ def test_render_asserts_every_candidate_target_shape(tmp_path: Path) -> None:
     assert content.count("route target shape changed") == expected
 
 
-def test_every_unavailable_cell_has_an_explicit_probe_gap() -> None:
+def test_every_unavailable_form_has_an_explicit_probe_gap() -> None:
     expected = {
         (scope.name, form.name)
         for scope in SCOPES
@@ -84,7 +84,7 @@ def test_route_categories_follow_scope_and_form() -> None:
     assert rows[("shared_cyclical", "shared_handle")]["value"] is True
 
 
-def test_render_names_every_cell(tmp_path: Path) -> None:
+def test_render_names_every_form(tmp_path: Path) -> None:
     shards = build_shards()
     assert len(shards) == len(build_rows())
     for shard in shards:

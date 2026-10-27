@@ -6,11 +6,11 @@
 # SPDX-License-Identifier: MIT
 #
 
-"""The scope/form cell product and its supported subset.
+"""The scope/form storage product and its supported subset.
 
 Families iterate the same product: route probes, the type matrix, type
-behavior, and behavior all consume every supported cell. Keeping the iteration
-here means the "is this cell publishable" question has one answer.
+behavior, and behavior all consume every supported pair. Keeping the iteration
+here means the "is this storage form publishable" question has one answer.
 """
 
 from __future__ import annotations
@@ -21,21 +21,21 @@ from tools.model.grammar.catalog import FORMS, SCOPES, Scope, StorageForm
 from tools.model.semantics.routes.ledger import supported_categories
 
 
-def iter_cells() -> Iterator[tuple[Scope, StorageForm]]:
+def iter_storage_forms() -> Iterator[tuple[Scope, StorageForm]]:
     for scope in SCOPES:
         for form in FORMS:
             yield scope, form
 
 
-def iter_supported_cells(
+def iter_supported_forms(
     *, form_major: bool = False
 ) -> Iterator[tuple[Scope, StorageForm]]:
     if form_major:
-        cells = (
+        pairs = (
             (scope, form) for form in FORMS for scope in SCOPES
         )
     else:
-        cells = iter_cells()
-    for scope, form in cells:
+        pairs = iter_storage_forms()
+    for scope, form in pairs:
         if supported_categories(scope.name, form.name):
             yield scope, form

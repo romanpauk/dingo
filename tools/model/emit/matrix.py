@@ -6,10 +6,10 @@
 # SPDX-License-Identifier: MIT
 #
 
-"""Generate the exhaustive storage-cell by request-shape matrix.
+"""Generate the exhaustive storage-form by request-shape matrix.
 
-The model owns the request-shape catalog and the storage-cell product. Every
-cell is checked against every shape through the real resolution kernel, and the
+The model owns the request-shape catalog and the storage-form product. Every
+form is checked against every shape through the real resolution kernel, and the
 generated test writes the route/top-level table. Supported rows are not
 hand-written: the library answers them, and the report makes the gaps visible.
 """
@@ -22,7 +22,7 @@ from pathlib import Path
 from tools.model.emit.common.runner import emit, render_template
 
 from tools.model.grammar.catalog import ARRAY_STORAGE_FORMS, CONSUMING_SCOPES
-from tools.model.semantics.cells import iter_supported_cells
+from tools.model.semantics.storage_forms import iter_supported_forms
 from tools.model.semantics.extended_shapes import extended_shapes
 from tools.model.semantics.routes.rules import reason_text
 from tools.model.emit.common.validation import validate_catalog
@@ -97,7 +97,7 @@ def shape_family(shape: Shape) -> str:
 
 
 def gap_reason(scope_name: str, form_name: str, shape: Shape) -> str:
-    """Why a shape is not a published target of one cell."""
+    """Why a shape is not a published target of one storage form."""
     return reason_text(scope_name, form_name, shape)
 
 
@@ -119,11 +119,11 @@ def _constructor(form) -> str:
 
 def build_rows() -> list[dict[str, object]]:
     rows = []
-    for scope, form in iter_supported_cells():
-        cell = f"{scope.name}_{form.name}"
+    for scope, form in iter_supported_forms():
+        path = f"{scope.name}_{form.name}"
         rows.append(
             {
-                "cell": cell,
+                "path": path,
                 "scope": scope.name,
                 "form": form.name,
                 "type": form.cpp_type(),
@@ -151,13 +151,13 @@ def validate() -> None:
     rows = build_rows()
     if not rows:
         raise ValueError("type matrix must not be empty")
-    if len({row["cell"] for row in rows}) != len(rows):
-        raise ValueError("type matrix contains duplicate cells")
+    if len({row["path"] for row in rows}) != len(rows):
+        raise ValueError("type matrix contains duplicate forms")
     for row in rows:
         for shape in SHAPES:
             if not row["reasons"][shape.name]:
                 raise ValueError(
-                    f"cell {row['cell']} has no gap reason for {shape.name}"
+                    f"form {row['form']} has no gap reason for {shape.name}"
                 )
 
 

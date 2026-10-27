@@ -24,11 +24,11 @@ from tools.model.emit.families.behavior import (
     REQUEST_COSTS,
     build_rows,
     build_shards,
-    covered_cells,
+    covered_forms,
     derive_expectation,
     derive_extra_expectations,
     render,
-    supported_cells,
+    supported_forms,
     validate,
 )
 from tools.model.emit.common.validation import validate_catalog
@@ -81,12 +81,12 @@ def test_extra_route_cases_are_derived() -> None:
     assert extras[0][1].request == "std::variant<tracked, long>"
 
 
-def test_every_non_gap_supported_cell_derives_a_known_request_class() -> None:
+def test_every_non_gap_supported_form_derives_a_known_request_class() -> None:
     for form in FORMS:
         for scope in ("shared", "unique", "external", "shared_cyclical"):
             if (scope, form.name) in BEHAVIOR_GAPS:
                 continue
-            if (scope, form.name) not in supported_cells():
+            if (scope, form.name) not in supported_forms():
                 continue
             expectation = derive_expectation(form, scope)
             assert expectation.request_class in REQUEST_COSTS
@@ -99,14 +99,14 @@ def test_behavior_product_is_complete() -> None:
     assert len({row["name"] for row in rows}) == len(rows)
 
 
-def test_every_supported_cell_has_a_behavior_case_or_gap() -> None:
-    accounted = covered_cells() | set(BEHAVIOR_GAPS)
-    assert accounted == supported_cells()
+def test_every_supported_form_has_a_behavior_case_or_gap() -> None:
+    accounted = covered_forms() | set(BEHAVIOR_GAPS)
+    assert accounted == supported_forms()
 
 
 def test_behavior_gaps_have_reasons() -> None:
-    for cell, reason in BEHAVIOR_GAPS.items():
-        assert cell in supported_cells()
+    for form, reason in BEHAVIOR_GAPS.items():
+        assert form in supported_forms()
         assert reason
 
 
@@ -205,7 +205,7 @@ def test_annotation_recipes_are_valid() -> None:
     assert all(row["request_class"] in REQUEST_COSTS for row in rows)
 
 
-def test_external_cells_are_runtime_only() -> None:
+def test_external_forms_are_runtime_only() -> None:
     for row in build_rows():
         if row["scope"] == "external":
             assert row["container"] == "runtime"
@@ -249,7 +249,7 @@ def test_move_only_rows_have_no_copying_expectation() -> None:
     assert "move_only_tracked(const move_only_tracked &) = delete;" in content
 
 
-def test_render_names_every_cell(tmp_path: Path) -> None:
+def test_render_names_every_form(tmp_path: Path) -> None:
     shards = build_shards()
     assert shards
     for shard in shards:

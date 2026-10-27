@@ -72,7 +72,7 @@ def test_wrapper_rules_are_named() -> None:
     ).startswith("select_alternative:")
 
 
-def test_rules_accept_what_the_cell_stores() -> None:
+def test_rules_accept_what_the_form_stores() -> None:
     assert derive_route(
         "shared", "plain", SHAPE_BY_NAME["value"]
     ) is None

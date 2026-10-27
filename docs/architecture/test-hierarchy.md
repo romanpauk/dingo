@@ -19,9 +19,9 @@ The generated tests share one path hierarchy:
   `annotated_interface`, or empty;
 - **request** — the structural request slug (`t`, `t_ref`, `optional_t`, …).
 
-The root of the tree is the capability cell, not the claim. A claim file is a
-sibling of `resolve.cpp` inside the cell, and the claim is the first segment of
-the case path after the cell:
+The root of the tree is the capability form, not the claim. A claim file is a
+sibling of `resolve.cpp` inside the form, and the claim is the first segment of
+the case path after the form:
 
 ```text
 resolution/runtime/shared/plain/resolve.cpp      # rows: resolve
@@ -30,7 +30,7 @@ resolution/runtime/shared/plain/invoke.cpp       # same rows: invoke
 ```
 
 Each of those files is rendered from `resolve-manifest.json`, so the row sets
-are identical by construction. A claim that is not tied to a cell (constructor
+are identical by construction. A claim that is not tied to a form (constructor
 shapes, collections, indexed lookup) lives under `global` instead:
 
 ```text
@@ -84,7 +84,7 @@ array shapes, move-only elements, copy-only types | | `wrapper` | wrapper
 properties (`is_owning`, `is_sharing`, `is_nullable`, `can_copy_out`,
 `can_take`, …) | | `selection` | selection policy and source status rules | |
 `storage` | storage-frame exposure and form facts | | `route` | compile-time
-route publication for a cell and shape |
+route publication for a form and shape |
 
 ### registration
 
@@ -110,18 +110,18 @@ resolution | | `keyed` | keyed resolution | | `const` | const storage resolution
 
 ## Current families
 
-| family | target phase / container / category | | --- | --- | | `resolve_cells`
-| `resolution/runtime/<scope>/<storage>/resolve` | | `behavior_cells` |
+| family | target phase / container / category | | --- | --- | | `resolve_cases`
+| `resolution/runtime/<scope>/<storage>/resolve` | | `behavior_cases` |
 `resolution/runtime/<scope>/<storage>/behavior` | | `type_behavior` |
-`resolution/runtime|static/<scope>/<storage>/route` | | `annotated_cells` |
-`resolution/runtime/<scope>/<storage>/annotated` | | `keyed_cells` |
-`resolution/runtime/<scope>/<storage>/keyed` | | `const_cells` |
+`resolution/runtime|static/<scope>/<storage>/route` | | `annotated_cases` |
+`resolution/runtime/<scope>/<storage>/annotated` | | `keyed_cases` |
+`resolution/runtime/<scope>/<storage>/keyed` | | `const_cases` |
 `resolution/runtime/<scope>/<storage>/const` | | `interface_runtime` |
 `resolution/runtime/<scope>/<storage>/interface` | | `binding_matrix` |
-`registration/static_asserts/<scope>/<storage>/binding` | | `storage_cells` |
-`classification/<scope>/<form>/storage` | | `route_cells` |
+`registration/static_asserts/<scope>/<storage>/binding` | | `storage policies` |
+`classification/<scope>/<form>/storage` | | `route_probes` |
 `classification/<scope>/<form>/route` | | `type_matrix` / `trait_matrix` |
-`classification/<scope>/<form>/route` | | `property_cells` |
+`classification/<scope>/<form>/route` | | `wrapper_properties` |
 `classification/global/wrapper` | | `selection_rules` |
 `classification/global/selection` | | constructor detection matrix |
 `classification/global/constructor/<backend>/<mode>/<shape>` |
@@ -133,8 +133,8 @@ resolution | | `keyed` | keyed resolution | | `const` | const storage resolution
 2. Done: `classification/constructor/…` is the first classification slice.
 3. Done: `binding_matrix` lives under `registration/static_asserts/…`, one file
    per storage.
-4. Move `storage_cells`, `selection_rules`, `property_cells`, and the route
-   matrices to `classification/…`.
+4. Move `storage policies`, `selection_rules`, `wrapper_properties`, and the
+   route matrices to `classification/…`.
 5. Move the runtime behavior families to the matching `resolution/…` categories.
 6. Retire the standalone translation units once their categories cover the same
    cases and the coverage report is driven by the hierarchy.

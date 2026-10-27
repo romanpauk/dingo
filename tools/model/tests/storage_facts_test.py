@@ -88,7 +88,7 @@ def test_scope_policies_are_named() -> None:
     assert scopes["shared"].allows_cycles is False
 
 
-def test_render_names_every_cell(tmp_path: Path) -> None:
+def test_render_names_every_form(tmp_path: Path) -> None:
     shards = build_shards()
     assert len(shards) == len(build_rows())
     for shard in shards:
@@ -107,7 +107,7 @@ def test_scope_header_names_every_scope(tmp_path: Path) -> None:
         assert f"storage_scope_policy<{scope.name}>" in content
     assert "materialization_guard::while_unresolved" in content
     assert "storage_exposure exposures[]" in content
-    assert "shared_cyclical_cell_lists[]" in content
+    assert "shared_cyclical_form_lists[]" in content
 
 
 def test_catalog_forms_share_one_wrapper_declaration() -> None:

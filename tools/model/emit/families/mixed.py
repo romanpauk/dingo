@@ -57,7 +57,7 @@ SHARDS = (_case("external_dependency"), _case("singular_ambiguity"))
 
 
 def render(shard: MixedCase) -> str:
-    return render_template("mixed_cells.cpp.j2", shard=shard)
+    return render_template("mixed_cases.cpp.j2", shard=shard)
 
 
 def main() -> None:

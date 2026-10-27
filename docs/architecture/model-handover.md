@@ -10,7 +10,7 @@ per-storage request-derivation refactor.
 The tree is green:
 
 - `pytest tools/model/tests`: 217 passed
-- `dingo_model_test`: 279 tests passed (behavior/type behavior, per cell)
+- `dingo_model_test`: 279 tests passed (behavior/type behavior, per form)
 - `dingo_classification_test`: 111 tests (both detection backends)
 - `dingo_resolution_static_asserts_test`: 40 tests
 - `dingo_resolution_static_test`: 7 tests
@@ -20,7 +20,7 @@ The tree is green:
   cyclical cases, 7 conversion cases, 4 wrapper cases)
 - `dingo_registration_test`: 158 tests
 - `dingo_registration_runtime_test`: 6 tests
-- `cells-check`: passes
+- `generated-check`: passes
 - `ctest`: 38/38 passed (the retired matrix executables are gone)
 - `resolve-check`: 274 tests, report written to `build/test/resolve-gaps.md`
   (2,009 calls, 772 overclaims)
@@ -50,7 +50,7 @@ Supported by binding (copyable / move-only):
 - annotated interface: 34 / 34
 
 The runtime-tested count is a key mapping, not an execution log. The request
-based families (`behavior_cells`, `annotated`, `keyed`, `const`, and the
+based families (`behavior_cases`, `annotated`, `keyed`, `const`, and the
 interface families) call `resolve` per row. The concrete shape matrix guards
 each probe with `lifted_request_supported`; when the model overclaims a shape
 the block compiles out, but `report/coverage.py` still maps the key. Comparing
@@ -143,7 +143,7 @@ combinations. The earlier global-list model overclaimed many of them.
   - interface direct-target rules
   - annotated wrapper matching and const matching
 - `semantics/capabilities.py` — derived exposed binding kinds per scope/form.
-- `semantics/cells.py` — supported scope/form cell product.
+- `semantics/forms.py` — supported scope/form pair product.
 - `semantics/gaps.py` — explicit gap registry and `declared_runtime_gap(...)`.
 - `semantics/extended_shapes.py` — shapes outside the base shape catalog.
 
@@ -151,10 +151,10 @@ combinations. The earlier global-list model overclaimed many of them.
 
 - `emit/matrix.py` — concrete compile-time shape matrix.
 - `emit/resolve.py` — storage-driven runtime probe. One shard per
-  `(scope, form)` cell registers each storage once per binding and calls
+  `(scope, form)` form registers each storage once per binding and calls
   `resolve` for every supported case. Outcomes are recorded, not asserted.
 - `emit/traits.py` — copyable/move-only compile-time matrix. It builds each
-  supported cell for both leaves and asserts the library's move-only route set
+  supported form for both leaves and asserts the library's move-only route set
   is the copyable set minus the routes that copy the leaf. The copy boundary is
   derived by `semantics/routes/derivation.py:leaf_copy_required`.
 - `emit/binding_matrix.py` — compile-time `dingo::bindings<dingo::bind<...>>`
@@ -202,8 +202,8 @@ Generated files are under `build/test/generated/model/` and are compiled into
 - `tests/grammar_test.py` checks constructor registry consistency.
 - `tests/architecture_test.py` checks layer imports.
 - `tests/binding_matrix_test.py` checks compile binding rows are supported.
-- `tests/keyed_cells_test.py`, `interface_runtime_test.py`,
-  `annotated_cells_test.py`, `const_cells_test.py` check each runtime family.
+- `tests/keyed_cases_test.py`, `interface_runtime_test.py`,
+  `annotated_cases_test.py`, `const_cases_test.py` check each runtime family.
 - `coverage.py` splits untested supported cases into undeclared gaps and
   declared gaps. Do not make a missing case disappear without a reason.
 
@@ -249,10 +249,10 @@ Done:
 - `classify(..., traits)` rejects copying routes for a move-only leaf, const
   rvalue requests, and const inline external registrations.
 - `emit/traits.py` asserts the trait delta against the real resolution kernel
-  for every supported cell and shape (const rvalue shapes are excluded because
+  for every supported form and shape (const rvalue shapes are excluded because
   the lift trait overclaims them).
-- Every runtime family emits a move-only variant: `behavior_cells`,
-  `annotated_cells`, `keyed_cells`, `const_cells`, `interface_runtime`, and the
+- Every runtime family emits a move-only variant: `behavior_cases`,
+  `annotated_cases`, `keyed_cases`, `const_cases`, `interface_runtime`, and the
   shape-level `type_behavior`.
 - `emit/binding_matrix.py` includes move-only registration probes.
 - `Shape.with_leaf()` now rebases the `int` base leaf, so the type-behavior
@@ -363,7 +363,7 @@ python -m tools.model const --out ...
 Quality:
 
 ```bash
-cmake --build build -t cells-check
+cmake --build build -t generated-check
 cmake --build build -t resolve-check
 ctest --test-dir build --output-on-failure -j8
 cmake --build build -t format

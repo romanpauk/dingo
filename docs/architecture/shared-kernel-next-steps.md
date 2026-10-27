@@ -95,9 +95,9 @@ Risk: low. Python and generated tests only.
   - Rules: `access`, `borrow`, `move`, `copy_out`, `take`, `wrap`, `share`,
     `adopt`, `decay`, `select_alternative`, `nested_access`, `const_copy`,
     `target`.
-  - The storage-cell model (`storage_cells` exposure) and the wrapper semantics
-    are the rule input; a route is a derivation and the first blocking rule
-    names the miss.
+  - The storage-form model (`storage policies` exposure) and the wrapper
+    semantics are the rule input; a route is a derivation and the first blocking
+    rule names the miss.
 - [x] Replace `type_matrix.Constructor` composition with wrapper-chain
   composition. Existing generated C++ spellings are unchanged where the wrapper
   chain spells the same type.
@@ -106,8 +106,8 @@ Risk: low. Python and generated tests only.
 - [x] Add const as a wrapper property, not a special target list.
 - [x] Derive the support reason from the failed rule, e.g.
   `take: a borrowing scope cannot become an owner`,
-  `decay: the cell does not store a bounded array`,
-  `select_alternative: the cell does not store a variant`.
+  `decay: the form does not store a bounded array`,
+  `select_alternative: the form does not store a variant`.
 - [x] Keep `SHAPES`/`build_rows` output compatible where possible so the C++
   matrix and behavior templates change minimally. The direct-support check now
   asks both the leaf interface and the stored-wrapper interface, because a
@@ -124,21 +124,21 @@ Definition of done:
 
 Risk: low to medium. Model-only, but it touches assertions.
 
-- [x] Derive `route_ledger.OPERATION_KINDS` and `RETENTION` from `storage_cells`
-  (scope/form) + route rules.
+- [x] Derive `route_ledger.OPERATION_KINDS` and `RETENTION` from
+  `storage policies` (scope/form) + route rules.
   - `route_derivation.py` derives the sequence from the semantic source shape
     (pointer, lvalue, rvalue, cyclical pointer/handle) and the stored wrapper.
     The later follow-up replaces its form scripts with the property rule engine.
     `route_ledger` still decides the outcome from the exposure and asks the
     recipe only for supported rows.
-  - The hand tables are gone. A supported cell with no rule raises during
+  - The hand tables are gone. A supported form with no rule raises during
     validation.
-- [x] Derive `interface_cells.INTERFACE_ROUTES` counts from the same model.
+- [x] Derive `interface_routes.INTERFACE_ROUTES` counts from the same model.
   - `route_derivation.interface_route_counts` keys the counts by exposed form
     and whether the interface is a copyable value; the interface entries now
     name their form instead of carrying counts.
 - [x] Keep the generated C++ route asserts as the oracle. A mismatch must name
-  the cell, the category, and the rule. The generated C++ is unchanged.
+  the form, the category, and the rule. The generated C++ is unchanged.
 - [x] Remove the hand tables once the generated values match.
 - [x] Add a pytest that checks every supported route has a derived kind and
   retention sequence.
@@ -223,7 +223,7 @@ Definition of done:
 Risk: medium. Tooling and CI.
 
 - [x] Record a baseline JSON for matrix/behavior outcomes:
-  - cell/shape, direct/lifted/top-level,
+  - form/shape, direct/lifted/top-level,
   - result or exception class,
   - construction/copy/move/destruction counts,
   - `sizeof` of containers/bindings.
@@ -308,7 +308,7 @@ What kept it unmerged:
     derived ledger should explain or remove them. Step 5 adds the remaining
     variant/custom-wrapper behavior cases.
   - Next: Step 2 derives `route_ledger.OPERATION_KINDS`/`RETENTION` and
-    `interface_cells` counts from the same rule model.
+    `interface_routes` counts from the same rule model.
 - 2026-10-25: Step 2, operation kinds and retention landed.
   - `tools/model/semantics/routes/derivation.py` derives the kind/retention
     sequence from the form's stored wrapper and the scope's source shape. The
@@ -319,9 +319,9 @@ What kept it unmerged:
     rvalue, and cyclical pointer storage as a pointer-to-pointer.
   - All 3,200 rows and the generated route asserts are unchanged. The C++ route
     probe remains the oracle.
-  - Still open in Step 2: derive `interface_cells.INTERFACE_ROUTES` counts.
+  - Still open in Step 2: derive `interface_routes.INTERFACE_ROUTES` counts.
 - 2026-10-25: Step 2 complete.
-  - `interface_cells` counts now come from
+  - `interface_routes` counts now come from
     `route_derivation.interface_route_counts`, keyed by exposed form and
     copyable interface value. The six interface cases keep their
     storage/interface data only; the generated C++ counts are unchanged.
@@ -348,7 +348,7 @@ What kept it unmerged:
   - `request_lift` uses the semantic flags directly (`can_take`, `is_array`,
     `is_variant`); its `wrap`/`adopt`/`make` selection is named as a route
     operation.
-  - `property_cells.py` generates a static property probe for every built-in
+  - `families/property.py` generates a static property probe for every built-in
     wrapper and the custom `test_optional`/`test_unique`/`test_shared` families.
     It passes against the C++ flags.
   - Cost probe is unchanged from Step 3 (232,873 text / 573,136 object bytes);
@@ -367,7 +367,7 @@ What kept it unmerged:
   - `type_matrix` and `type_behavior` include the custom wrapper header;
     `type_behavior` adds identity helpers for the custom families. The static
     suite follows the same `SHAPES` catalog automatically.
-  - `property_cells` covers `test_variant` as well; its
+  - `wrapper_properties` covers `test_variant` as well; its
     `alternative_type_traits` specialization makes `is_variant_type_v` true.
   - Generated sizes grow from 5.4 MB to 6.0 MB for the matrix and 1.3 MB to 1.5
     MB for the runtime behavior suite; the library cost probe is unchanged.
@@ -400,7 +400,7 @@ layer into the C++ probes and then the library.
   matching rule by category, semantic kind, source shape, and wrapper
   properties. The generated C++ route asserts remain the oracle.
 - [x] Derive behavior expectations from the selected route: request class,
-  relation, and copy/move counts. The per-cell `EXPECTATIONS` table is gone;
+  relation, and copy/move counts. The per-form `EXPECTATIONS` table is gone;
   `derive_expectation` uses the semantic form kind, wrapper properties, and
   scope. Construction counts are derived from scope/kind/element count. The
   external registration move stays explicit; extra multi-route cases are derived
@@ -447,8 +447,8 @@ optional/handle/array-handle/variant/pointer/array/value categories from the
 stored wrapper and form capabilities. Route kinds, retention, interface counts,
 and generated C++ asserts are unchanged.
 
-2026-10-25: behavior expectations are route-derived. `behavior_cells.py` no
-longer has the per-cell `EXPECTATIONS` table. `derive_expectation` selects the
+2026-10-25: behavior expectations are route-derived. `behavior_cases.py` no
+longer has the per-form `EXPECTATIONS` table. `derive_expectation` selects the
 primary request, relation, request class, leaf/array checks, and construction
 count from the semantic form kind, stored wrapper properties, and scope.
 
@@ -565,7 +565,7 @@ unchanged at 232,581 text / 571,856 object bytes (2,557,699 preprocessed bytes).
 `conversion_route` flattens the nested `type_conversion` tree into steps in
 execution order; `conversion_walk` runs them with a continuation and preserves
 value/reference lifetime at each step. `resolution::conversion_steps` exposes
-the descriptor, and generated route cells assert every published route has
+the descriptor, and generated route forms assert every published route has
 steps. The model's `ResolutionStep` is renamed to `ResolutionCandidate` because
 it describes one published route, not an internal step. Committed as `3b57a54`.
 Generated source and the outcome baseline are unchanged; ctest is 77/77, pytest
@@ -574,7 +574,7 @@ with 2,570,896 preprocessed bytes.
 
 2026-10-25: the step-sequence gap is closed. `STEP_RULES` derives the internal
 conversion step kinds for each published candidate from its category, candidate
-kind, form kind, and source shape. Generated route cells now assert the exact
+kind, form kind, and source shape. Generated route forms now assert the exact
 step count and every step kind, not just a non-empty list. Candidate-level
 source retention remains on `ResolutionCandidate`; C++ does not model retention
 per internal step, so the step descriptor carries kinds and order only.
@@ -583,16 +583,16 @@ ctest is 77/77, pytest is 219 passed, and the cost probe is unchanged at 232,581
 text / 571,856 object bytes.
 
 2026-10-25: unavailable routes are now asserted, not just recorded. Generated
-route cells emit zero-route assertions for every unavailable value/object/rvalue
-category in a probed cell. Cells that publish no route at all and cannot
+route forms emit zero-route assertions for every unavailable value/object/rvalue
+category in a probed form. Forms that publish no route at all and cannot
 instantiate a storage alias are listed explicitly in `ABSENCE_PROBE_GAPS`; the
-route-cell validator fails if an all-unavailable cell is neither probed nor
+route-form validator fails if an all-unavailable form is neither probed nor
 listed. Committed as `7c78432`; ctest is 77/77 and pytest is 221 passed.
 
 2026-10-25: candidate target shapes are asserted. `TARGET_SHAPES` and
 `route_candidate_targets` derive whether each candidate resolves a value, an
 lvalue/rvalue reference, a pointer, an array, an array pointer, or a wrapper;
-the route ledger carries the sequence and generated route cells compare it with
+the route ledger carries the sequence and generated route forms compare it with
 a C++ `target_shape_of` probe. Exact C++ spellings, exact access types, and
 cache types remain implementation territory. Committed as `ca6d3d0`; ctest is
 77/77 and pytest is 224 passed.
@@ -609,7 +609,7 @@ the zero-tolerance header gate flags it.
 2026-10-26: route candidates and probe accessors are unified. One
 `RouteCandidate` now carries kind, retention, steps, and target shape; the
 ledger stores one tuple and exposes kinds/retention/steps/targets as views. The
-generated route cells iterate candidates directly. The recursive probe accessors
+generated route forms iterate candidates directly. The recursive probe accessors
 in `model_probe.h` are replaced by `route_at_t` over the non-recursive
 `type_list_at`. Committed as `f0ca627`; ctest is 77/77 and pytest is 224 passed.
 
@@ -934,7 +934,7 @@ The existing gate plus the two canaries:
 
 ```bash
 cmake --build build -t format
-cmake --build build -t cells-check
+cmake --build build -t generated-check
 cmake --build build -j8
 ctest --test-dir build -j8
 ./.venv/bin/python -m pytest -q tools/model/tests tools/cost

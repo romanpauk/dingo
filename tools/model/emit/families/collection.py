@@ -169,7 +169,7 @@ def build_shards() -> list[CollectionShard]:
 
 
 def render(shard: CollectionShard) -> str:
-    return render_template("collection_cells.cpp.j2", shard=shard)
+    return render_template("collection_cases.cpp.j2", shard=shard)
 
 
 def main() -> None:

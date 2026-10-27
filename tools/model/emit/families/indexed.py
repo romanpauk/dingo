@@ -84,7 +84,7 @@ SHARDS = (
 
 
 def render(shard: IndexedShard) -> str:
-    return render_template("indexed_cells.cpp.j2", shard=shard)
+    return render_template("indexed_cases.cpp.j2", shard=shard)
 
 
 def main() -> None:

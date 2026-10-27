@@ -88,11 +88,11 @@ correctness requirement. The current snapshot is:
 
 `tools/model/semantics/support.py` classifies every case as one of:
 
-- `supported` — the model's route rules publish the request from the cell;
+- `supported` — the model's route rules publish the request from the form;
 - `unavailable` — the scope/form does not expose the category;
 - `unsupported` — a route rule blocks the request (`take`, `wrap`, `decay`,
   `nested_access`, `const_copy`, …);
-- `unmodeled` — the path is outside the current cell/shape vocabulary.
+- `unmodeled` — the path is outside the current form/shape vocabulary.
 
 `unmodeled` is the important signal: it means the grammar knows the path but the
 model does not yet map it. It is never silently dropped. The report
@@ -122,7 +122,7 @@ The report is the map for the next extension step. A family with a large
 `unmodeled` count is a model gap; a family with a large `unsupported` count is a
 library/route limitation. The “path-extended shapes” table is the set that
 `type_matrix.py` merges into the compile-time matrix, so every supported path is
-generated as a cell row.
+generated as a form row.
 
 ## Current gap
 
@@ -177,14 +177,14 @@ answers whether a route copies the leaf. A value request copies it unless the
 scope hands out an rvalue (move), the request is an owning handle (a handle copy
 or move), or the value is adopted from a pointer/array. A const pointee promoted
 from a value also copies, while a const pointee on a stored or adopted handle
-does not. `emit/traits.py` builds every supported cell for both leaves and
+does not. `emit/traits.py` builds every supported form for both leaves and
 asserts the move-only route set is the copyable set minus the copying routes.
 `build/paths.md` includes per-trait outcome and rule tables next to the copyable
 aggregate tables. `emit/behavior.py` runs the same shape matrix once per trait:
 the shape leaf is rebased, the copy-requiring guards compile out for the
 move-only fixture, and both the runtime and static containers are exercised. The
-request-based runtime families (`behavior_cells`, `annotated_cells`,
-`keyed_cells`, `const_cells`, and `interface_runtime`) also emit a move-only
+request-based runtime families (`behavior_cases`, `annotated_cases`,
+`keyed_cases`, `const_cases`, and `interface_runtime`) also emit a move-only
 variant. Their move-only expectation selects the first non-copying route, so the
 expected copy count is zero. The path report still classifies the copyable
 domain.
@@ -195,7 +195,7 @@ wrapped pointers. They are merged into the type matrix, so the compile-time
 matrix and the runtime behavior suite consume them instead of keeping a separate
 hand-written list.
 
-The type matrix now enumerates **222 shapes** over 32 cells (**7,104 probes**),
+The type matrix now enumerates **222 shapes** over 32 forms (**7,104 probes**),
 and the binding matrix adds **586** compile-time registration probes (copyable
 and move-only). The behavior outcome baseline has **183** rows (95 copyable, 88
 move-only). The matrix baseline records the shape removals from rejecting const

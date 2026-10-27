@@ -10,7 +10,7 @@
 
 A wrapper is a type the library is taught about through ``type_traits`` or
 ``alternative_type_traits``. Wrapper *properties* are classified at compile time;
-what is not covered elsewhere is a cell whose storage is a user wrapper and the
+what is not covered elsewhere is a storage form whose storage is a user wrapper and the
 row that unwraps it.
 
     resolution/runtime/global/wrapper/<case>.cpp
@@ -110,7 +110,7 @@ def build_shards() -> list[WrapperShard]:
 
 
 def render(shard: WrapperShard) -> str:
-    return render_template("wrapper_cells.cpp.j2", shard=shard)
+    return render_template("wrapper_cases.cpp.j2", shard=shard)
 
 
 def main() -> None:

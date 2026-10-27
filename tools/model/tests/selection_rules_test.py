@@ -49,7 +49,7 @@ def test_conflict_policy_rejects_two_sources() -> None:
     assert resolve("not_found", "found", "ambiguous_on_conflict") == "secondary"
 
 
-def test_render_names_every_cell(tmp_path: Path) -> None:
+def test_render_names_every_form(tmp_path: Path) -> None:
     shards = build_shards()
     assert len(shards) == len(POLICIES)
     count = 0

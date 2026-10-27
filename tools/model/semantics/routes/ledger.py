@@ -6,11 +6,11 @@
 # SPDX-License-Identifier: MIT
 #
 
-"""The explicit route ledger for the built-in storage cells.
+"""The explicit route ledger for the built-in storage forms.
 
 Every scope, storage form, and route category has exactly one outcome:
 
-- supported: the cell publishes the category;
+- supported: the storage form publishes the category;
 - unavailable: the scope/form combination intentionally cannot publish it;
 - gap: the route shape is not modeled yet, with a tracked gap id.
 

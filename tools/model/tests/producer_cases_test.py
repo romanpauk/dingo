@@ -11,13 +11,13 @@ from __future__ import annotations
 from tools.model.emit.families.producer import CLAIMS, build_shards, render
 
 
-def test_producer_cells_are_operator_independent() -> None:
+def test_producer_forms_are_operator_independent() -> None:
     shards = build_shards()
     assert shards
     assert len({shard.path for shard in shards}) == len(shards)
     for shard in shards:
         assert shard.path == (
-            f"resolution/runtime/global/producer/{shard.cell}.cpp"
+            f"resolution/runtime/global/producer/{shard.target}.cpp"
         )
         assert shard.cases
         content = render(shard)

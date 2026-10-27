@@ -28,13 +28,13 @@ namespace dingo {
 struct shared_cyclical {};
 
 namespace detail {
-// Cells of shared_cyclical, which publishes the leaf U and a shared_ptr<U>
+// Storage forms of shared_cyclical: it publishes the leaf U and a shared_ptr<U>
 // directly, whatever the registered shape. The published lists are generated
-// per form in storage/scopes.gen.h; this cell joins the data with the type
+// per form in storage/scopes.gen.h; this policy joins the data with the type
 // lists that the shape traits already define.
-template <storage_form Form, typename U> struct shared_cyclical_cell {
+template <storage_form Form, typename U> struct shared_cyclical_policy {
   static constexpr unsigned lists =
-      shared_cyclical_cell_lists[static_cast<unsigned>(Form)];
+      shared_cyclical_form_lists[static_cast<unsigned>(Form)];
   static constexpr bool shares_handle =
       Form == storage_form::shared_handle ||
       Form == storage_form::shared_array_handle;
@@ -64,11 +64,11 @@ template <storage_form Form, typename U> struct shared_cyclical_cell {
 };
 
 template <storage_form Form, typename Type, typename U>
-struct storage_cell<shared_cyclical, Form, Type, U>
+struct storage_policy<shared_cyclical, Form, Type, U>
     : std::conditional_t<Form == storage_form::array ||
                              Form == storage_form::bounded_array,
-                         storage_cell_rule<shared_cyclical, Type, U>,
-                         shared_cyclical_cell<Form, U>> {};
+                         storage_policy_rule<shared_cyclical, Type, U>,
+                         shared_cyclical_policy<Form, U>> {};
 } // namespace detail
 
 template <typename Base, typename Derived> struct is_virtual_base {

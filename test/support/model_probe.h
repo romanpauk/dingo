@@ -138,7 +138,7 @@ constexpr bool request_supported(type_list<Resolutions...> resolutions) {
 }
 
 // A direct request is published by either the leaf interface or the stored
-// wrapper interface. The two lists overlap for some cells and diverge for
+// wrapper interface. The two lists overlap for some forms and diverge for
 // alternative and wrapper-as-leaf rows.
 template <typename Request, typename Storage, typename Leaf>
 constexpr bool direct_request_supported() {

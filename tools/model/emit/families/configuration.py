@@ -57,7 +57,7 @@ SHARDS = (_shard("allocator"), _shard("rtti"))
 
 
 def render(shard: ConfigurationShard) -> str:
-    return render_template("configuration_cells.cpp.j2", shard=shard)
+    return render_template("configuration_cases.cpp.j2", shard=shard)
 
 
 def main() -> None:

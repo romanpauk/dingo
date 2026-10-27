@@ -6,14 +6,14 @@
 # SPDX-License-Identifier: MIT
 #
 
-"""Execute every supported storage-cell by request-shape row.
+"""Execute every supported storage-form by request-shape row.
 
 The type matrix says which shapes match. This suite resolves them for real:
 every top-level shape is exercised against the same registration recipe as the
-behavior cells, identity is checked for stable scopes, owned raw pointers are
+behavior forms, identity is checked for stable scopes, owned raw pointers are
 released, and every block must finish with the lifetime balance intact. The
 catalog is emitted twice: once through the runtime container and once through
-`static_container` for every statically bindable cell. Unsupported shapes are
+`static_container` for every statically bindable form. Unsupported shapes are
 discarded by the compile-time support check, so the suite follows the library
 rather than a hand-written list.
 """
@@ -29,7 +29,7 @@ from tools.model.emit.hierarchy import CasePath
 
 from tools.model.emit.families.behavior import BEHAVIOR_GAPS, FORMS, SCOPES
 from tools.model.grammar.catalog import ARRAY_STORAGE_FORMS, RUNTIME_ONLY_SCOPES
-from tools.model.semantics.cells import iter_supported_cells
+from tools.model.semantics.storage_forms import iter_supported_forms
 from tools.model.emit.common.recipe import external_instance, registration
 from tools.model.emit.common.validation import validate_catalog
 from tools.model.emit.matrix import SHAPES, CONSUMING_SCOPES, top_level_safe
@@ -82,9 +82,9 @@ def build_rows(
     traits: LeafTraits = COPYABLE,
 ) -> list[dict[str, object]]:
     rows = []
-    for scope, form in iter_supported_cells():
+    for scope, form in iter_supported_forms():
         scope_name = scope.name
-        # Cells the behavior model declares as gaps are not registrable in
+        # Forms the behavior model declares as gaps are not registrable in
         # the container front-end yet; the matrix still classifies them.
         if (scope_name, form.name) in BEHAVIOR_GAPS:
             continue
@@ -145,21 +145,21 @@ def validate(
     if not rows:
         raise ValueError("type behavior catalog must not be empty")
     if len({row["name"] for row in rows}) != len(rows):
-        raise ValueError("type behavior catalog contains duplicate cells")
+        raise ValueError("type behavior catalog contains duplicate forms")
     if not SHAPES:
         raise ValueError("shape catalog must not be empty")
     for row in rows:
         if row["container"] == "static" and not row["static_source"]:
-            raise ValueError(f"static cell {row['name']} needs a source")
+            raise ValueError(f"static form {row['name']} needs a source")
         if row["container"] == "runtime" and not row["registration"]:
-            raise ValueError(f"runtime cell {row['name']} needs a registration")
+            raise ValueError(f"runtime form {row['name']} needs a registration")
         if row["scope"] == "external" and not row["instance"]:
-            raise ValueError(f"external cell {row['name']} needs an instance")
+            raise ValueError(f"external form {row['name']} needs an instance")
         if row["scope"] in RUNTIME_ONLY_SCOPES and row["container"] == "static":
-            raise ValueError(f"cell {row['name']} cannot be static")
+            raise ValueError(f"form {row['name']} cannot be static")
         executable = [shape for shape in row["shapes"] if not shape["gap"]]
         if not executable:
-            raise ValueError(f"cell {row['name']} has no executable shape")
+            raise ValueError(f"form {row['name']} has no executable shape")
 
 
 @dataclass(frozen=True)

@@ -182,7 +182,7 @@ def build_shards() -> list[ConversionShard]:
 
 
 def render(shard: ConversionShard) -> str:
-    return render_template("conversion_cells.cpp.j2", shard=shard)
+    return render_template("conversion_cases.cpp.j2", shard=shard)
 
 
 def main() -> None:

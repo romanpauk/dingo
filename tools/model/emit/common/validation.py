@@ -40,7 +40,7 @@ def catalog_names(include_directory: Path) -> tuple[set[str], set[str]]:
 
     The model is the source of coverage, but the library owns the declaration.
     Comparing them here makes a new built-in scope or form fail the check when
-    the model has not been extended, instead of silently leaving the new cell
+    the model has not been extended, instead of silently leaving the new form
     untested.
     """
     storage_root = include_directory / "dingo" / "storage"

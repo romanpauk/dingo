@@ -147,7 +147,7 @@ def build_shards() -> list[CyclicalShard]:
 
 
 def render(shard: CyclicalShard) -> str:
-    return render_template("cyclical_cells.cpp.j2", shard=shard)
+    return render_template("cyclical_cases.cpp.j2", shard=shard)
 
 
 def main() -> None:

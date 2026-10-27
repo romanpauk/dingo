@@ -10,7 +10,7 @@
 
 A storage slot is `(scope, storage path)`. The binding kinds a storage exposes
 are derived from the scope capabilities and the storage form -- never from a
-per-cell allowlist. Tags, keys, and interface leaves live on the request side;
+per-form allowlist. Tags, keys, and interface leaves live on the request side;
 the storage only says which binding kinds it can expose.
 """
 
@@ -88,5 +88,5 @@ def binding_gap(
         return None
     path = storage_path(scope, storage_name)
     if path is None:
-        return f"{storage_name} has no cell form"
+        return f"{storage_name} has no storage form"
     return f"{scope}/{path.form.name} does not expose the {binding.kind} binding"

@@ -18,7 +18,7 @@ from tu_report import rewrite_output, select, summarize
 def test_select_keeps_matching_sources() -> None:
     entries = [
         {"file": "/build/generated/matrix/array.cpp"},
-        {"file": "/build/generated/model/route_cells.cpp"},
+        {"file": "/build/generated/model/route_probes.cpp"},
         {"file": "/test/unit/container.cpp"},
     ]
     selected = select(entries, ["generated/matrix"])

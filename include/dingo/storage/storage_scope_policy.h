@@ -35,10 +35,11 @@
 //      reference).
 //   2. storage_scope_policy<Scope>::exposed(form) selects which of those lists
 //      the scope publishes.
-//   3. detail::storage_cell<Scope, form, Type, U> turns the selection into the
-//      four lists. A cell that deviates from the rule specializes
-//      detail::storage_cell; those specializations are the complete list of
-//      per-cell deviations.
+//   3. detail::storage_policy<Scope, form, Type, U> turns the selection into
+//   the
+//      four lists. A form that deviates from the rule specializes
+//      detail::storage_policy; those specializations are the complete list of
+//      per-form deviations.
 
 namespace dingo {
 
@@ -174,7 +175,8 @@ template <typename T, typename U> struct array_row_handle_promotions {
 // The raw dynamic array form is classified so the catalog and the model agree
 // on its name, but no scope exposes it: without an extent the storage cannot
 // size, construct, or destroy the array. Registering one is a compile-time
-// "storage cell unavailable" error. Use T[N] or an owning array handle instead.
+// "storage policy unavailable" error. Use T[N] or an owning array handle
+// instead.
 template <typename T> struct storage_form_traits<T[]> {
   static constexpr storage_form form = storage_form::array;
 };
@@ -331,14 +333,14 @@ template <typename Lists> struct consumed_storage_lists<true, Lists> : Lists {};
 
 // A form is stored in a scope if the scope publishes any list for it.
 template <typename StorageTag, typename Type>
-inline constexpr bool has_storage_cell_v =
+inline constexpr bool has_storage_policy_v =
     storage_form_traits<Type>::form != storage_form::unknown &&
     storage_scope_policy<StorageTag>::exposed(
         storage_form_traits<Type>::form) != storage_exposure::none;
 
 // The generic rule: publish the lists of the form that the policy exposes.
 template <typename StorageTag, typename Type, typename U>
-struct storage_cell_rule {
+struct storage_policy_rule {
 private:
   using policy = storage_scope_policy<StorageTag>;
   using form = storage_form_traits<Type>;
@@ -373,17 +375,18 @@ public:
                          typename borrowed::pointer_types, type_list<>>;
 };
 
-// A (scope, form) cell. Specialize it for a cell that deviates from the rule.
+// A (scope, form) policy. Specialize it for a form that deviates from the rule.
 template <typename StorageTag, storage_form Form, typename Type, typename U>
-struct storage_cell : storage_cell_rule<StorageTag, Type, U> {};
+struct storage_policy : storage_policy_rule<StorageTag, Type, U> {};
 } // namespace detail
 
 template <typename StorageTag, typename Type, typename U>
 struct storage_traits<
     StorageTag, Type, U,
-    std::enable_if_t<detail::has_storage_cell_v<StorageTag, Type>>>
-    : detail::storage_cell<StorageTag, detail::storage_form_traits<Type>::form,
-                           Type, U> {};
+    std::enable_if_t<detail::has_storage_policy_v<StorageTag, Type>>>
+    : detail::storage_policy<StorageTag,
+                             detail::storage_form_traits<Type>::form, Type, U> {
+};
 
 namespace detail {
 // A scope without a guard does not consult the factory of its storage.

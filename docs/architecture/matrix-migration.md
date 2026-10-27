@@ -23,7 +23,7 @@ resolution/runtime/<configuration>/<scope>/<storage>/
 
 resolution/runtime/global/construct/<argument>/<shape>.cpp
 resolution/runtime/global/invoke/<shape>/<traits>.cpp
-resolution/runtime/global/producer/<cell>.cpp
+resolution/runtime/global/producer/<form>.cpp
 resolution/runtime/global/collection.cpp
 resolution/runtime/global/cyclical.cpp
 resolution/runtime/global/conversion/<case>.cpp
@@ -40,7 +40,7 @@ classification/constructor/<backend>/<mode>/<shape>.cpp
 
 | matrix feature | replacement | granularity | | --- | --- | --- | |
 `resolve_concrete`, `resolve_wrapper`, `resolve_unique_wrapper` | row probes |
-one row per cell, binding, request, traits | | `nested_wrappers` | row probes
+one row per form, binding, request, traits | | `nested_wrappers` | row probes
 (`shared_ptr<shared_ptr<T>>`, `unique_ptr<unique_ptr<T>>`, …) | already rows | |
 `annotated`, `variant`, `array`, `lifetime_counts` | row probes and behavior
 families | one row or one behavior class | | `resolve_interface` | row probes
@@ -48,7 +48,7 @@ with the interface binding | one row | | `resolve_keyed` | row probes with the
 keyed binding | one row | | `construct`, `construct_invoke` |
 `global/construct/<argument>/<shape>` | 16 types x 5 shapes | | invoke family |
 `global/invoke/<shape>` plus the `invoke` claim column | 19 shapes | |
-`factory_override` | `global/producer/<cell>` | 6 cells x producers x 3 claims |
+`factory_override` | `global/producer/<form>` | 6 forms x producers x 3 claims |
 | `resolve_collection`, `resolve_keyed_collection`, `construct_collection` |
 `global/collection` | 5 cases x 2 modes | | `resolve_indexed` | the indexed
 configuration (`runtime/indexed/...`) | one row set per key type | |
@@ -79,8 +79,8 @@ replacement existed. That job is now split:
 
 - `claim-check` compares `resolve`, `construct`, and `invoke` on every row and
   fails on an undeclared divergence or a missing outcome;
-- `cells-check` regenerates every family and fails when a generated file is out
-  of date;
+- `generated-check` regenerates every family and fails when a generated file is
+  out of date;
 - `pytest tools/model/tests` pins the structure of every family: paths, case
   paths, declared gaps, and the row set each claim file must contain.
 

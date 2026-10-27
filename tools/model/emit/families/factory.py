@@ -71,7 +71,7 @@ SHARDS = tuple(
 
 
 def render(shard: FactoryShard) -> str:
-    return render_template("factory_cells.cpp.j2", shard=shard)
+    return render_template("factory_cases.cpp.j2", shard=shard)
 
 
 def main() -> None:

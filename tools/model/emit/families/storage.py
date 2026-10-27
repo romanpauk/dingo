@@ -6,16 +6,16 @@
 # SPDX-License-Identifier: MIT
 #
 
-"""Generate the exhaustive storage-cell coverage probes.
+"""Generate the exhaustive storage-form coverage probes.
 
 The catalog owns the scope policies and the storage forms. This module derives
-each cell's exposure from the scope and form capabilities, then renders one
-assertion per cell. A missing cell, a changed exposure, or a form that stops
+each form's exposure from the scope and form capabilities, then renders one
+assertion per form. A missing form, a changed exposure, or a form that stops
 publishing a request list fails to compile instead of silently dropping out of
 the matrix.
 
 This is intentionally a coverage generator, not a code multiplier: it emits one
-assertion per cell and one consumer to instantiate them.
+assertion per form and one consumer to instantiate them.
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ def build_rows() -> list[dict[str, object]]:
             bits = exposure(scope, form)
             enabled = bits != 0
             if scope.name == "shared_cyclical":
-                # shared_cyclical publishes its own cells: the leaf and a
+                # shared_cyclical publishes its own forms: the leaf and a
                 # sharing handle, independent of the generic form lists.
                 has_value = form.name in {
                     "shared_handle",
@@ -125,7 +125,7 @@ def render(shard: dict[str, object]) -> str:
         }
     )
     return render_template(
-        "storage_cells.cpp.j2",
+        "storage_facts.cpp.j2",
         row=shard,
         headers=headers,
     )

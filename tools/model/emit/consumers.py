@@ -8,7 +8,7 @@
 
 """Render the consumer claim files from the resolve manifest.
 
-A resolve row is a capability: one request type against one registered cell.
+A resolve row is a capability: one request type against one registered form.
 ``resolve`` is the first claim about that row. ``construct`` and ``invoke`` are
 claims about the same row through a different entry point, so they are rendered
 from the same manifest instead of enumerating storage again:
@@ -16,7 +16,7 @@ from the same manifest instead of enumerating storage again:
     resolution/runtime/<scope>/<storage>/construct.cpp
     resolution/runtime/<scope>/<storage>/invoke.cpp
 
-The case path keeps the cell and only swaps the claim level:
+The case path keeps the storage form and only swaps the claim level:
 
     resolution/runtime/<scope>/<storage>/<claim>/<traits>/<binding>/<request>
 
@@ -199,7 +199,7 @@ def build_files(manifest: dict[str, object], consumer: str) -> tuple[ConsumerFil
 
 
 def render(file: ConsumerFile) -> str:
-    return render_template("consumer_cells.cpp.j2", file=file)
+    return render_template("consumer_cases.cpp.j2", file=file)
 
 
 def main() -> None:
@@ -210,7 +210,7 @@ def main() -> None:
     parser.add_argument(
         "--shard",
         action="append",
-        help="only emit the named cell (repeatable, matches <scope>/<storage>)",
+        help="only emit the named form (repeatable, matches <scope>/<storage>)",
     )
     parser.add_argument(
         "--list-excluded",

@@ -107,7 +107,7 @@ def build_shards() -> list[DependencyShard]:
 
 
 def render(shard: DependencyShard) -> str:
-    return render_template("dependency_cells.cpp.j2", shard=shard)
+    return render_template("dependency_cases.cpp.j2", shard=shard)
 
 
 def main() -> None:

@@ -205,7 +205,7 @@ def build_shards() -> list[ConstShard]:
 
 def render(shard: ConstShard) -> str:
     return render_template(
-        "const_cells.cpp.j2",
+        "const_cases.cpp.j2",
         rows=shard.rows,
         namespace=shard.namespace,
         suite=shard.suite,

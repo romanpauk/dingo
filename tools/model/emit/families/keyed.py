@@ -109,7 +109,7 @@ def _unqualified(request: Expr) -> Expr:
 def _direct_leaf_request(request: Expr) -> bool:
     """Whether the request is a direct value/reference/pointer to the leaf.
 
-    The keyed runtime harness can address the registered cell through these
+    The keyed runtime harness can address the registered form through these
     forms. Wrapped requests (optional/handle/variant conversions) are part of
     the classified keyed set but remain in the coverage gap until their routes
     are verified.
@@ -285,7 +285,7 @@ def build_shards() -> list[KeyedShard]:
 
 def render(shard: KeyedShard) -> str:
     return render_template(
-        "keyed_cells.cpp.j2",
+        "keyed_cases.cpp.j2",
         rows=shard.rows,
         namespace=shard.namespace,
         suite=shard.suite,

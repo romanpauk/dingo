@@ -6,11 +6,11 @@
 # SPDX-License-Identifier: MIT
 #
 
-"""Generate route-category probes for the built-in storage cells.
+"""Generate route-category probes for the built-in storage forms.
 
-Each enabled scope/form cell is instantiated through the real storage type and
+Each enabled scope/form is instantiated through the real storage type and
 the real resolution lists. Value, object, and rvalue availability is compared
-with the route ledger. Cells whose route shape is not modeled stay in the ledger
+with the route ledger. Forms whose route shape is not modeled stay in the ledger
 as tracked gaps instead of disappearing from the product.
 """
 
@@ -20,8 +20,8 @@ import argparse
 from pathlib import Path
 
 from tools.model.grammar.catalog import FORMS, SCOPES
-from tools.model.semantics.cells import iter_supported_cells
-from tools.model.semantics.gaps import cell_gaps, validate as validate_gaps
+from tools.model.semantics.storage_forms import iter_supported_forms
+from tools.model.semantics.gaps import form_gaps, validate as validate_gaps
 from tools.model.semantics.routes.ledger import (
     category_access,
     category_candidates,
@@ -33,15 +33,15 @@ from tools.model.emit.hierarchy import CasePath
 from tools.model.emit.common.validation import validate_catalog
 
 
-# Cells that publish no route at all and whose storage type cannot be named by
+# Storage forms that publish no route at all and whose storage type cannot be named by
 # an absence probe. The ledger still records them as unavailable; the generated
 # probe set cannot instantiate their storage aliases.
-ABSENCE_PROBE_GAPS = cell_gaps("absence")
+ABSENCE_PROBE_GAPS = form_gaps("absence")
 
 
 def build_rows() -> list[dict[str, object]]:
     rows = []
-    for scope, form in iter_supported_cells():
+    for scope, form in iter_supported_forms():
         categories = supported_categories(scope.name, form.name)
         rows.append(
             {
@@ -102,7 +102,7 @@ def validate() -> None:
         raise ValueError("route catalog must not be empty")
     keys = {(row["scope_name"], row["form_name"]) for row in rows}
     if len(keys) != len(rows):
-        raise ValueError("route catalog contains duplicate cells")
+        raise ValueError("route catalog contains duplicate forms")
     for scope in SCOPES:
         for form in FORMS:
             key = (scope.name, form.name)
@@ -110,7 +110,7 @@ def validate() -> None:
             if categories and key in ABSENCE_PROBE_GAPS:
                 raise ValueError(f"absence-probe gap is supported: {key}")
             if not categories and key not in ABSENCE_PROBE_GAPS:
-                raise ValueError(f"unavailable cell has no absence probe: {key}")
+                raise ValueError(f"unavailable form has no absence probe: {key}")
 
 
 def build_shards() -> list[dict[str, object]]:
@@ -141,7 +141,7 @@ def build_shards() -> list[dict[str, object]]:
 
 def render(shard: dict[str, object]) -> str:
     return render_template(
-        "route_cells.cpp.j2",
+        "route_probes.cpp.j2",
         row=shard,
         headers=shard["headers"],
     )

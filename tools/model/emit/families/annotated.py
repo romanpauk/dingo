@@ -243,7 +243,7 @@ def build_shards() -> list[AnnotatedShard]:
 
 def render(shard: AnnotatedShard) -> str:
     return render_template(
-        "annotated_cells.cpp.j2",
+        "annotated_cases.cpp.j2",
         rows=shard.rows,
         namespace=shard.namespace,
         suite=shard.suite,

@@ -8,10 +8,10 @@
 
 """Invoke operator classes.
 
-The per-cell claim ``resolution/runtime/<scope>/<storage>/invoke.cpp`` asks
+The per-form claim ``resolution/runtime/<scope>/<storage>/invoke.cpp`` asks
 whether one row's request can be consumed by ``invoke``. This family asks which
 callable shapes the operator supports, and what "supported" means. It is not
-tied to a storage cell, so each case names one canonical cell for its dependency
+tied to a storage form, so each case names one canonical form for its dependency
 and one callable shape:
 
     resolution/runtime/global/invoke/<shape>/<traits>.cpp
@@ -40,7 +40,7 @@ GAPS = {
 }
 
 
-def _cell(scope: str, form: str, leaf: str = "dependency") -> str:
+def _registration(scope: str, form: str, leaf: str = "dependency") -> str:
     line, _ = registration(FORM_BY_NAME[form], scope, "runtime", leaf=leaf)
     return line
 
@@ -56,9 +56,9 @@ class InvokeShape:
     expects: str = "value"
 
 
-_SHARED = _cell("shared", "plain")
-_UNIQUE = _cell("unique", "plain", "movable_dependency")
-_SHARED_HANDLE = _cell("shared", "shared_handle")
+_SHARED = _registration("shared", "plain")
+_UNIQUE = _registration("unique", "plain", "movable_dependency")
+_SHARED_HANDLE = _registration("shared", "shared_handle")
 
 
 def build_shapes() -> tuple[InvokeShape, ...]:

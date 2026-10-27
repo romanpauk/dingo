@@ -9,7 +9,7 @@
 """Scope/form exposure facts shared by the route model and generators.
 
 The catalog owns the scope policies and the storage forms. This module turns
-those facts into the access bits a cell publishes, so the route ledger, route
+those facts into the access bits a storage form publishes, so the route ledger, route
 rules, and generated storage probes all read the same answer.
 """
 
@@ -28,13 +28,13 @@ UNAVAILABLE_FORMS = frozenset({"array"})
 
 
 def exposure(scope, form) -> int:
-    """Return the exposure of one scope/form cell from scope capabilities.
+    """Return the exposure of one scope/form pair from scope capabilities.
 
     Borrowing scopes publish value, lvalue, and pointer access. A consuming
     scope publishes its consumed value plus the leaf lvalue or pointer it can
     still lend. A cyclical scope publishes the leaf and sharing handles; it
     does not store sole-owner or optional forms. Raw arrays are never exposed,
-    and the cyclical shared-array handle remains an explicit unavailable cell.
+    and the cyclical shared-array handle remains an explicit unavailable form.
     """
     if form.name in UNAVAILABLE_FORMS:
         return 0

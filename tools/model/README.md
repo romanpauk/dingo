@@ -1,4 +1,4 @@
-# Cell Coverage Model
+# Form Coverage Model
 
 This directory is the first slice of the shared kernel's coverage model. It
 owns the declarations that the library used to keep only in C++ and in the
@@ -11,7 +11,7 @@ The model is layered by pipeline stage:
 ```text
 grammar/   what types exist; cpp.py owns C++ spelling
 domain/    the storage x request case product
-semantics/ support, capabilities, route rules, cells, gaps
+semantics/ support, capabilities, route rules, forms, gaps
 emit/      C++ generators, shared recipe/runner, templates
 report/    coverage report and outcome baseline
 tests/     the model test suite
@@ -31,12 +31,12 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   form with `int` and the behavior suites with their tracked leaf, so the two
   no longer keep parallel catalogs.
 - `emit/families/storage.py` writes `classification/<scope>/<form>/storage.cpp` and enumerates every built-in storage scope by storage form
-  cell. Each scope declares capabilities (consuming, cyclical, pointer source)
+  form. Each scope declares capabilities (consuming, cyclical, pointer source)
   and each form declares its semantic kind and array/handle facts; the exposure
   bits are derived from those capabilities rather than a per-form table. Raw
   arrays and the cyclical shared-array handle stay explicit unavailable
   exceptions. The model is compared against the scope policies and the
-  `storage_form` enum, renders one compile-time assertion per cell, and rejects
+  `storage_form` enum, renders one compile-time assertion per form, and rejects
   a catalog that is missing or stale. It also generates the committed
   `include/dingo/storage/scopes.gen.h` header, which owns the built-in
   `storage_scope_policy` specializations.
@@ -73,10 +73,10 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   leaf. A target-shape rule derives whether the candidate resolves a value,
   reference, pointer, array, or wrapper. Rules do not name a storage form, so a
   custom wrapper with the same kind and properties follows the same rule as the
-  built-in wrapper it mirrors. A supported cell with no matching rule fails
+  built-in wrapper it mirrors. A supported form with no matching rule fails
   validation instead of losing its kind coverage.
 - `emit/families/route.py` instantiates the real storage type and resolution list for
-  every supported storage cell, including bounded arrays and array handles. It
+  every supported storage form, including bounded arrays and array handles. It
   checks value, object, and rvalue route availability against the ledger and
   asserts that an unavailable category publishes no route, requires every
   published route target to be reachable from both the static and
@@ -103,10 +103,10 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   whether a route is published; the rule model names the first rule that blocks
   a request, so the report says `take: a borrowing scope cannot become an owner` instead of a structural category.
 - `emit/matrix.py` composes every shape from the wrapper semantics and applies
-  it to every storable scope/form cell through the real resolution kernel. It
+  it to every storable scope/form pair through the real resolution kernel. It
   writes a `type-matrix.md` report with the direct route, the lifted request,
   the top-level verdict, the route rule for every miss, and the published route
-  targets per cell. Supported rows are answered by the library, not by a
+  targets per form. Supported rows are answered by the library, not by a
   hand-written case list; the report is the exhaustive support table. The depth
   bound is an explicit model limitation. A route that only works as a dependency
   of a longer-lived construction is reported as `top-level = no`: a consuming
@@ -115,7 +115,7 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   A shape that is not a direct target is reported as `lifted` when its value is
   resolvable: value wrappers copy or move their value, and owning handles only
   lift from a consumed value. The report groups misses by rule.
-- `emit/traits.py` builds every supported storage cell for a copyable and a
+- `emit/traits.py` builds every supported storage form for a copyable and a
   move-only leaf and asks the resolution kernel whether each shape is
   published. The move-only route set must be a subset of the copyable one and
   must lose exactly the routes that copy the leaf (value copies, const
@@ -148,11 +148,11 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   interface list, and lookup key); runtime families check the route.
 - `emit/behavior.py` executes the top-level half of that matrix. Every
   supported shape is resolved twice through the same registration recipe as the
-  behavior cells, stable scopes are checked for identity, fresh scopes for
+  behavior forms, stable scopes are checked for identity, fresh scopes for
   distinctness, owned raw pointers are released according to the transfer
   contract, and every block finishes with the lifetime balance intact. The
   runtime suite uses `container<>`; a second translation unit runs the same
-  catalog through `static_container` for every statically bindable cell
+  catalog through `static_container` for every statically bindable form
   (`external` is runtime-only). Both are emitted once per leaf trait: the
   copyable and move-only fixtures share the shape catalog, and the
   copy-requiring shapes compile out for the move-only leaf. The shape catalog
@@ -170,7 +170,7 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   whether the interface is a copyable value. Single- and multiple-interface
   bindings are covered.
 - `emit/families/behavior.py` generates one behavior class per supported scope/form
-  cell in the applicable runtime and static containers. Form registration and
+  form in the applicable runtime and static containers. Form registration and
   expectations are data: a form comes from `grammar/catalog.py`, and its
   scope/container product is derived from the route ledger. The tests check
   request identity, construction counts, copy and move counts, array element
@@ -179,17 +179,17 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   construction count are derived from the semantic form kind, wrapper
   properties, and scope. Copy and move counts come from the derived request
   class (`borrow_value`, `consume_value`, `consume_rvalue`, `reference`,
-  `handle`, `array`) instead of being hand-written per cell, so a count that
+  `handle`, `array`) instead of being hand-written per form, so a count that
   does not match the request shape fails the build. The external instance and
   its registration move are derived by `emit/common/recipe.py` from the form's wrapper
   properties. A consumed raw
   pointer or row pointer transfers ownership to the caller, and its behavior
-  case deletes the result before checking the balance. Multi-route cells add
-  derived secondary cases: the unique plain cell also moves the rvalue route,
-  and the shared alternative cell also copies the variant wrapper value.
+  case deletes the result before checking the balance. Multi-route forms add
+  derived secondary cases: the unique plain form also moves the rvalue route,
+  and the shared alternative form also copies the variant wrapper value.
   Supported
-  cells without a resolvable behavior case are listed in `BEHAVIOR_GAPS` with a
-  reason, so a cell cannot silently lose its test. Interface and annotation
+  forms without a resolvable behavior case are listed in `BEHAVIOR_GAPS` with a
+  reason, so a form cannot silently lose its test. Interface and annotation
   scenarios are derived from the behavior forms plus a request-form rule set,
   not a flat list of complete cases. Forms with no interface or annotation
   route are listed in `INTERFACE_GAPS` / `ANNOTATION_GAPS`. The interface cases
@@ -226,7 +226,7 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   projection, storage forms, wrapper semantics, shape mapping, or bindings.
 - `grammar/traits.py` declares the leaf copy/move traits. A path describes a
   shape; the leaf's special members decide whether a copying route exists.
-  Every storage cell and request shape is classified once per trait, and
+  Every storage form and request shape is classified once per trait, and
   `emit/traits.py` asserts the move-only answer is exactly the copyable answer
   minus the routes that copy the leaf. Every generated runtime family runs
   both leaves; the move-only variant selects the first non-copying route and
@@ -266,15 +266,15 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   registrations. Const walks the same classified case set as the report and derives
   each registration from the storage form. The report shows the cases that
   remain outside each harness.
-- `semantics/cells.py` owns the scope/form product and its supported subset. The route
+- `semantics/forms.py` owns the scope/form product and its supported subset. The route
   probes, type matrix, type behavior, and behavior families iterate the same
-  cell list; "is this cell publishable" has one answer.
+  form list; "is this form publishable" has one answer.
 - `semantics/gaps.py` is the one exception registry: behavior, interface, annotation,
   and absence-probe exceptions live together with their reasons, so the full
   undeclared-coverage surface is visible in one place and a reason cannot be
   empty.
 - `emit/common/recipe.py` renders the stored type, factory, external instance, runtime
-  registration, and static binding source for one cell. The behavior,
+  registration, and static binding source for one form. The behavior,
   type-behavior, interface, and annotation families share it, so a form is
   spelled once.
 - `emit/common/runner.py` owns the Jinja environment, output writing, and `--check`
@@ -289,10 +289,10 @@ The generated translation units are built by `test/CMakeLists.txt` into
 `build/test/generated/model/`. They are development artifacts, not shipped
 headers, so consumer builds do not need Python.
 
-`cells-check` regenerates both outputs and fails on any difference. The same
+`generated-check` regenerates both outputs and fails on any difference. The same
 check also validates the model against the C++ catalogs, so adding a built-in
 scope, storage form, selection policy, or status without extending the model is
-an error rather than an untested cell.
+an error rather than an untested form.
 
 Add a form or scope by extending the model first:
 
@@ -300,14 +300,14 @@ Add a form or scope by extending the model first:
 1. Add one entry to `grammar/catalog.py`: the scope policy or the form's semantic kind,
    wrapper, leaf-relative C++ spelling, headers, and capability facts. Exposure,
    registration, factories, and external instance facts are derived.
-1. Run `cells-check`; the generated assertions are the list of cells that must
+1. Run `generated-check`; the generated assertions are the list of forms that must
    be implemented.
 
 When the scope policies change, regenerate the committed header:
 
 ```bash
 uv run --locked python -m tools.model storage \
-    --out build/model/storage_cells.cpp \
+    --out build/model/storage policies.cpp \
     --header include/dingo/storage/scopes.gen.h \
     --include include
 ```

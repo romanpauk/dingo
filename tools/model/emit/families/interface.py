@@ -149,7 +149,7 @@ def validate() -> None:
 
 def render(output: Path) -> str:
     validate()
-    return render_template("interface_cells.cpp.j2", rows=INTERFACE_ROUTES)
+    return render_template("interface_routes.cpp.j2", rows=INTERFACE_ROUTES)
 
 
 def main() -> None:

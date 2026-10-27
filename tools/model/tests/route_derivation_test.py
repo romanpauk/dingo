@@ -27,7 +27,7 @@ from tools.model.semantics.routes.derivation import (
 from tools.model.grammar.catalog import FORMS, SCOPES
 
 
-def test_every_supported_cell_has_a_route_script() -> None:
+def test_every_supported_form_has_a_route_script() -> None:
     for row in build_rows():
         if row.outcome != "supported":
             continue
@@ -219,14 +219,14 @@ def test_every_supported_route_has_an_access() -> None:
             assert len(row.retention) == len(row.kinds)
 
 
-def test_unmodeled_cell_forms_fail_loudly() -> None:
+def test_unmodeled_form_forms_fail_loudly() -> None:
     with pytest.raises(KeyError):
         route_candidates("shared", "unknown_form", "value")
     with pytest.raises(KeyError):
         route_candidates("shared", "plain", "unknown_category")
 
 
-def test_route_scripts_cover_every_supported_cell_category() -> None:
+def test_route_scripts_cover_every_supported_form_category() -> None:
     for scope in SCOPES:
         for form in FORMS:
             for category in supported_categories(scope.name, form.name):

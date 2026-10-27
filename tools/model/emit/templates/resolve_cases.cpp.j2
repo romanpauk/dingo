@@ -27,7 +27,7 @@
 #define DINGO_RESOLVE_REPORT "resolve-outcomes.jsonl"
 #endif
 
-namespace resolve_cells_{{ shard.scope }}_{{ shard.storage }} {
+namespace resolve_paths_{{ shard.scope }}_{{ shard.storage }} {
 
 {% include "_probe_fixtures.h.j2" %}
 
@@ -110,4 +110,4 @@ TEST({{ shard.suite }}, {{ case.name }}) {
 }
 
 {% endfor %}
-} // namespace resolve_cells_{{ shard.scope }}_{{ shard.storage }}
+} // namespace resolve_paths_{{ shard.scope }}_{{ shard.storage }}

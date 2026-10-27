@@ -28,7 +28,7 @@ def write_behavior(path: Path, rows: list[dict[str, object]]) -> None:
     )
 
 
-def test_matrix_rows_are_keyed_by_cell_and_shape(tmp_path: Path) -> None:
+def test_matrix_rows_are_keyed_by_form_and_shape(tmp_path: Path) -> None:
     matrix = tmp_path / "matrix.json"
     write_matrix(
         matrix,

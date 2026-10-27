@@ -8,7 +8,7 @@
 
 """The declared exceptions to the model's derived coverage.
 
-A gap is a cell or shape the library publishes but a family cannot yet execute.
+A gap is a storage form or shape the library publishes but a family cannot yet execute.
 Every entry carries a reason, and the families that consume a table still check
 that a declared gap is required. Keeping the tables together makes the full
 exception surface visible in one place.
@@ -29,7 +29,7 @@ class Gap:
 
 
 GAPS = (
-    # Behavior cells that the route ledger publishes but that have no
+    # Behavior forms that the route ledger publishes but that have no
     # resolvable behavior case yet.
     Gap(
         "behavior",
@@ -49,12 +49,12 @@ GAPS = (
     Gap(
         "behavior",
         ("shared_cyclical", "alternative"),
-        "the cyclical alternative cell needs the graph scenario family",
+        "the cyclical alternative form needs the graph scenario family",
     ),
     Gap(
         "behavior",
         ("shared_cyclical", "pointer"),
-        "the cyclical pointer cell needs the graph scenario family",
+        "the cyclical pointer form needs the graph scenario family",
     ),
     # Forms with no interface behavior scenario.
     Gap("interface", "alternative", "variant storage does not publish an interface route"),
@@ -89,7 +89,7 @@ GAPS = (
         "shared_array_handle",
         "array handle storage has no annotation scenario",
     ),
-    # Cells that publish no route and whose storage type cannot be named by an
+    # Storage forms that publish no route and whose storage type cannot be named by an
     # absence probe.
     Gap("absence", ("shared", "array"), "raw dynamic array storage cannot be instantiated"),
     Gap("absence", ("unique", "array"), "raw dynamic array storage cannot be instantiated"),
@@ -122,7 +122,7 @@ GAPS = (
 )
 
 
-def cell_gaps(owner: str) -> dict[tuple[str, str], str]:
+def form_gaps(owner: str) -> dict[tuple[str, str], str]:
     return {
         gap.key: gap.reason
         for gap in GAPS

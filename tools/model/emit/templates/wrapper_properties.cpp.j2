@@ -17,7 +17,7 @@
 
 #include "support/custom_wrappers.h"
 
-namespace property_cells_{{ shard.name }} {
+namespace property_forms_{{ shard.name }} {
 
 {% if shard.row.kind == "variant" %}
 static_assert(dingo::is_variant_type_v<{{ shard.row.cpp_type }}>);
@@ -41,4 +41,4 @@ TEST({{ shard.suite }}, properties) {
   SUCCEED();
 }
 
-} // namespace property_cells_{{ shard.name }}
+} // namespace property_forms_{{ shard.name }}

@@ -42,9 +42,9 @@ def test_library_catalog_matches_model() -> None:
     validate_catalog(Path(__file__).resolve().parents[3] / "include")
 
 
-def test_render_names_every_cell(tmp_path: Path) -> None:
-    content = render(tmp_path / "interface_cells.cpp")
-    assert content == render(tmp_path / "interface_cells.cpp")
+def test_render_names_every_form(tmp_path: Path) -> None:
+    content = render(tmp_path / "interface_routes.cpp")
+    assert content == render(tmp_path / "interface_routes.cpp")
     for route in INTERFACE_ROUTES:
         assert f"namespace {route.name}" in content
 

@@ -518,7 +518,7 @@ def classify(
             return Verdict(
                 "unmodeled",
                 "storage",
-                f"{storage_name} has no form in the cell model",
+                f"{storage_name} has no form in the storage model",
             )
         if not binding_supported(scope, storage_name, binding):
             return Verdict(
@@ -545,7 +545,7 @@ def classify(
             return Verdict(
                 "unmodeled",
                 "storage",
-                f"{storage_name} has no form in the cell model",
+                f"{storage_name} has no form in the storage model",
             )
         if not binding_supported(scope, storage_name, binding):
             return Verdict(
@@ -587,7 +587,7 @@ def classify(
             return Verdict(
                 "unmodeled",
                 "storage",
-                f"{storage_name} has no form in the cell model",
+                f"{storage_name} has no form in the storage model",
             )
         if not binding_supported(scope, storage_name, binding):
             return Verdict(
@@ -608,7 +608,7 @@ def classify(
             return Verdict(
                 "unmodeled",
                 "storage",
-                f"{storage_name} has no form in the cell model",
+                f"{storage_name} has no form in the storage model",
             )
         if not binding_supported(scope, storage_name, binding):
             return Verdict(
@@ -644,7 +644,7 @@ def classify(
         return Verdict(
             "unmodeled",
             "storage",
-            f"{storage_name} has no form in the cell model",
+            f"{storage_name} has no form in the storage model",
         )
     shape = to_shape(request_key)
     if shape is None:
@@ -712,7 +712,7 @@ def classify(
     if row is None:
         return Verdict(
             "unmodeled",
-            "cell",
+            "storage form",
             f"{scope}/{form} is outside the route ledger",
         )
     if row.outcome != "supported":

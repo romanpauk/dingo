@@ -9,9 +9,9 @@
 """Generate the exhaustive selection-policy probes.
 
 The two-source selection rule is small enough to write by hand, which is
-exactly why a missed cell is easy to introduce. The model enumerates every
+exactly why a missed form is easy to introduce. The model enumerates every
 policy, primary status, and secondary status, evaluates a reference rule, and
-emits one assertion per cell.
+emits one assertion per form.
 """
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ def validate() -> None:
         raise ValueError("selection product is incomplete")
     keys = {(row.policy, row.primary, row.secondary) for row in rows}
     if len(keys) != len(rows):
-        raise ValueError("selection product contains duplicate cells")
+        raise ValueError("selection product contains duplicate forms")
     for row in rows:
         if row.result not in RESULTS:
             raise ValueError(f"unknown result {row.result!r}")

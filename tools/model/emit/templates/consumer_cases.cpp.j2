@@ -30,7 +30,7 @@
 #define DINGO_CLAIM_REPORT "claim-outcomes.jsonl"
 #endif
 
-namespace consumer_cells_{{ file.scope }}_{{ file.storage }}_{{ file.consumer }} {
+namespace consumer_claims_{{ file.scope }}_{{ file.storage }}_{{ file.consumer }} {
 
 {% include "_probe_fixtures.h.j2" %}
 
@@ -110,4 +110,4 @@ TEST({{ file.suite }}, {{ case.name }}) {
 }
 
 {% endfor %}
-} // namespace consumer_cells_{{ file.scope }}_{{ file.storage }}_{{ file.consumer }}
+} // namespace consumer_claims_{{ file.scope }}_{{ file.storage }}_{{ file.consumer }}

@@ -347,7 +347,7 @@ def build_shards() -> tuple[Shard, ...]:
 
 
 def render(shard: Shard) -> str:
-    return render_template("resolve_cells.cpp.j2", shard=shard)
+    return render_template("resolve_cases.cpp.j2", shard=shard)
 
 
 def manifest(shards: tuple[Shard, ...]) -> str:
