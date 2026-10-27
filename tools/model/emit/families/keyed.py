@@ -200,7 +200,7 @@ def build_rows(
                 "registration": registration_line,
                 "request": case.request.with_leaf(traits.cpp).render(),
                 "bind": _binding(case.request),
-                "coverage": key,
+                "coverage": (*key, traits.name),
             }
         )
     return rows

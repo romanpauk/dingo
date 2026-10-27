@@ -9,33 +9,33 @@ per-storage request-derivation refactor.
 
 The tree is green:
 
-- `pytest tools/model/tests test/matrix/generator_test.py`: 289 passed
+- `pytest tools/model/tests test/matrix/generator_test.py`: 290 passed
 - `dingo_model_test`: 600 tests passed, including the trait matrix and move-only
   type behavior
 - `cells-check`: passes
 - `ctest`: 77/77 passed
 - `format-check` and full `check`: pass
 
-Current model snapshot:
+Current model snapshot (both leaf traits):
 
-| metric | value | | --- | ---: | | storage paths | 105 | | derived request
-paths | 10,032 | | cases | 105,648 | | supported | 1,080 | | compile-tested |
-1,080 | | runtime-tested | 1,037 | | compile gap | 0 | | undeclared runtime gap
-| 0 | | declared runtime gap | 43 |
+- storage paths: 105
+- derived request paths: 10,032
+- cases (copyable domain): 105,648
+- supported: 1,973 (copyable 1,058, move-only 915)
+- compile-tested: 1,973
+- runtime-tested: 1,887
+- compile gap: 0
+- undeclared runtime gap: 0
+- declared runtime gap: 86 (43 per trait)
 
-The trait matrix adds one compile-time probe per supported cell and shape for
-both a copyable and a move-only leaf. Every generated runtime family now emits a
-move-only variant too. The path-domain counts above still describe the copyable
-domain; the trait-aware coverage keys are the remaining work.
+Supported by binding (copyable / move-only):
 
-Supported by binding:
+- concrete: 778 / 677
+- keyed: 139 / 118
+- annotated: 99 / 78
+- interface: 42 / 42
 
-- concrete: 798
-- keyed: 141
-- annotated: 99
-- interface: 42
-
-Declared runtime gaps:
+Declared runtime gaps (per trait):
 
 - 35 concrete top-level handle / cyclical / consuming-borrow forms
 - 8 consuming-scope interface forms
@@ -93,7 +93,7 @@ replaced the old global `request_forms() x storage` product.
 Important: `DEPTH = 2` is the current coverage bound. It is conservative.
 Experiments showed:
 
-- depth 2: ~105k cases, 1,080 supported
+- depth 2: ~105k cases, 1,058 copyable supported
 - depth 3: ~857k cases, 4,299 supported
 - depth 4: ~6.8M cases, 29,303 supported
 
@@ -143,7 +143,7 @@ combinations. The earlier global-list model overclaimed many of them.
 
 Current generated test counts (copyable + move-only):
 
-- `keyed_cells`: 141 + 118
+- `keyed_cells`: 139 + 118
 - `annotated_cells`: 99 + 78
 - `behavior_cells`: 93 + 86
 - `const_cells`: 52 + 28
@@ -180,26 +180,28 @@ Done:
 
 - `grammar/traits.py` declares `LeafTraits` with `copyable`/`movable`.
 - `Case` carries `traits`; `iter_cases(..., traits)` stamps the domain.
-- `classify(..., traits)` rejects the routes that copy a move-only leaf with
-  rule `copy`, plus the const-inline external registration limitation.
+- `classify(..., traits)` rejects copying routes for a move-only leaf, const
+  rvalue requests, and const inline external registrations.
 - `emit/traits.py` asserts the trait delta against the real resolution kernel
   for every supported cell and shape (const rvalue shapes are excluded because
   the lift trait overclaims them).
-- `emit/behavior.py` and every request-based runtime family emit a move-only
-  variant: `behavior_cells`, `annotated_cells`, `keyed_cells`, `const_cells`,
-  and `interface_runtime`.
+- Every runtime family emits a move-only variant: `behavior_cells`,
+  `annotated_cells`, `keyed_cells`, `const_cells`, `interface_runtime`, and the
+  shape-level `type_behavior`.
+- `emit/binding_matrix.py` includes move-only registration probes.
 - `Shape.with_leaf()` now rebases the `int` base leaf, so the type-behavior
   guards run real leaf-typed requests instead of compiling out.
-- Baselines include the move-only behavior outcomes.
+- Coverage keys include the trait; `build/paths.md` has a `## Leaf traits`
+  table. Baselines include the move-only behavior outcomes.
 
 Remaining work:
 
-1. Make the coverage keys trait-aware:
-   `(scope, storage, binding, request, traits)` in `report/coverage.py`, and
-   count the move-only compile/runtime probes.
-2. Add the trait column and move-only counts to `report/paths.py`.
-3. Decide whether the compile-time lift trait should reject const rvalue
-   requests instead of the trait matrix excluding them.
+1. The library's compile-time lift trait still answers for const rvalue requests
+   that the runtime container cannot materialize. Rejecting them in the lift
+   layer would let the trait matrix drop its exclusion.
+2. `report/paths.py` still classifies the copyable domain in its outcome and
+   per-family tables; the trait table is aggregated separately. If the model
+   needs per-trait rule histograms, iterate both traits there too.
 
 ### 2. Annotated interfaces
 

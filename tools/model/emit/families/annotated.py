@@ -158,7 +158,7 @@ def build_rows(
                 "request": case.request.with_leaf(traits.cpp).render(),
                 "relation": relation,
                 "bind_reference": bind_reference,
-                "coverage": key,
+                "coverage": (*key, traits.name),
             }
         )
     return rows

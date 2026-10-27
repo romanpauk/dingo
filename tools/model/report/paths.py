@@ -190,6 +190,24 @@ def render(report: dict[str, object]) -> str:
         f"| runtime gap | {coverage['runtime_gap']} |",
         f"| declared runtime gap | {coverage['declared_gap']} |",
         "",
+        "## Leaf traits",
+        "",
+        "| trait | supported | compile-tested | runtime-tested | compile gap "
+        "| runtime gap | declared |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for traits in ("copyable", "move_only"):
+        lines.append(
+            f"| {traits} "
+            f"| {coverage['supported_by_trait'].get(traits, 0)} "
+            f"| {coverage['compile_by_trait'].get(traits, 0)} "
+            f"| {coverage['runtime_by_trait'].get(traits, 0)} "
+            f"| {coverage['compile_gap_by_trait'].get(traits, 0)} "
+            f"| {coverage['runtime_gap_by_trait'].get(traits, 0)} "
+            f"| {coverage['declared_gap_by_trait'].get(traits, 0)} |"
+        )
+    lines += [
+        "",
         "## Coverage gap by binding",
         "",
         "| binding | compile gap | runtime gap | declared |",

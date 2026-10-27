@@ -220,14 +220,16 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   ledger; unmodeled paths are never silently dropped.
 - `report/paths.py` writes the path coverage report (`build/paths.md` and JSON) with
   domain counts, outcome totals, per-family/per-storage/binding tables, rule
-  histograms, binding applicability, and the comparison between supported paths
-  and the cases the generated C++ suites exercise. Its path-extended shapes are
+  histograms, binding applicability, a per-leaf-trait coverage table, and the
+  comparison between supported paths and the cases the generated C++ suites
+  exercise. Its path-extended shapes are
   merged into the type matrix. The full design is in
   [Type Path Coverage](../../docs/architecture/type-path-coverage.md).
-- `report/coverage.py` compares the supported path set with the compile-time type
-  and binding matrices and the runtime behavior, annotated, keyed, interface,
-  and const probes. The difference is split into undeclared gaps and declared
-  gaps with reasons.
+- `report/coverage.py` compares the supported path set with the compile-time
+  type, trait, and binding matrices and the runtime shape, behavior, annotated,
+  keyed, interface, and const probes. Every coverage key carries the leaf
+  trait. The difference is split into undeclared gaps and declared gaps with
+  reasons.
 - `emit/families/annotated.py`, `emit/families/keyed.py`,
   `emit/families/interface_runtime.py`, and `emit/families/const.py` emit
   runtime probes. Annotated covers every supported leaf/reference/pointer

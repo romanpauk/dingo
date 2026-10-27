@@ -15,6 +15,7 @@ import pytest
 from tools.model.emit.binding_matrix import build_rows, render, validate
 from tools.model.emit.common.validation import validate_catalog
 from tools.model.grammar.bindings import binding_for
+from tools.model.grammar.traits import TRAITS_BY_NAME
 
 
 def test_binding_matrix_is_non_empty_and_unique() -> None:
@@ -28,9 +29,15 @@ def test_binding_matrix_rows_are_supported() -> None:
     from tools.model.semantics.support import classify
 
     for row in build_rows():
-        scope, name, request = row["coverage"]
+        scope, name, request, traits = row["coverage"]
         assert (
-            classify(scope, name, binding_for(request), request).outcome
+            classify(
+                scope,
+                name,
+                binding_for(request),
+                request,
+                TRAITS_BY_NAME[traits],
+            ).outcome
             == "supported"
         )
 

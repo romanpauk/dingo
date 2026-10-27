@@ -14,7 +14,7 @@ import pytest
 
 from tools.model.emit.families.const import build_rows, render, validate
 from tools.model.emit.common.validation import validate_catalog
-from tools.model.grammar.traits import MOVE_ONLY
+from tools.model.grammar.traits import MOVE_ONLY, TRAITS_BY_NAME
 
 
 def test_const_catalog_is_non_empty_and_unique() -> None:
@@ -35,8 +35,17 @@ def test_const_rows_are_classified_supported() -> None:
     from tools.model.semantics.support import classify
 
     for row in build_rows():
-        scope, name, request = row["coverage"]
-        assert classify(scope, name, CONCRETE, request).outcome == "supported"
+        scope, name, request, traits = row["coverage"]
+        assert (
+            classify(
+                scope,
+                name,
+                CONCRETE,
+                request,
+                TRAITS_BY_NAME[traits],
+            ).outcome
+            == "supported"
+        )
 
 
 def test_variant_rows_keep_the_fixed_alternative() -> None:

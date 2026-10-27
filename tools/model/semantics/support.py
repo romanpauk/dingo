@@ -447,6 +447,16 @@ def _keyed_capability(
     return None
 
 
+def _const_rvalue(request: Expr) -> bool:
+    while request.op in {"annotated", "keyed", "interface"}:
+        request = request.inner
+    return (
+        request.op == "rvalue_reference"
+        and request.inner is not None
+        and request.inner.op == "const"
+    )
+
+
 @lru_cache(maxsize=None)
 def classify(
     scope: str,
@@ -455,6 +465,12 @@ def classify(
     request_key: Expr,
     traits: LeafTraits = DEFAULT_TRAITS,
 ) -> Verdict:
+    if _const_rvalue(request_key):
+        return Verdict(
+            "unsupported",
+            "move",
+            "a const rvalue request has no conversion route",
+        )
     if request_key.op == "const":
         return Verdict(
             "unsupported",

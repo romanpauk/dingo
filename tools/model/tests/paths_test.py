@@ -351,6 +351,20 @@ def test_coverage_report_separates_tested_and_gap() -> None:
     }
 
 
+def test_coverage_is_split_by_leaf_trait() -> None:
+    from tools.model.report.coverage import coverage_report
+
+    report = coverage_report()
+    assert set(report["supported_by_trait"]) == {"copyable", "move_only"}
+    assert sum(report["supported_by_trait"].values()) == report["supported"]
+    assert report["compile_gap_by_trait"] == {
+        "copyable": 0,
+        "move_only": 0,
+    }
+    assert report["runtime_gap_by_trait"] == {}
+    assert set(report["declared_gap_by_trait"]) == {"copyable", "move_only"}
+
+
 def test_report_is_deterministic() -> None:
     first = build_report()
     second = build_report()

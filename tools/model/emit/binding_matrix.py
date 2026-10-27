@@ -27,21 +27,28 @@ from tools.model.emit.common.validation import validate_catalog
 from tools.model.grammar import cpp
 from tools.model.grammar.expr import Expr
 from tools.model.semantics.support import classify
+from tools.model.grammar.traits import COPYABLE, MOVE_ONLY, LeafTraits
 
-LEAF = "implementation_type"
+COPYABLE_LEAF = "implementation_type"
+MOVE_ONLY_LEAF = "move_only_implementation_type"
+
+
+def _leaf(traits: LeafTraits) -> str:
+    return COPYABLE_LEAF if traits.copyable else MOVE_ONLY_LEAF
 BINDINGS = frozenset({"annotated", "keyed", "interface"})
 
 
-def _binding_type(case) -> str:
+def _binding_type(case, traits: LeafTraits = COPYABLE) -> str:
     path = case.storage_path
+    leaf = _leaf(traits)
     scope = cpp.template(
         "dingo::scope", cpp.text(f"dingo::{case.scope}")
     ).render()
     args = [
         cpp.text(scope),
-        cpp.text(path.storage(LEAF)),
+        cpp.text(path.storage(leaf)),
     ]
-    args.extend(case.binding.registration_interfaces(cpp.leaf(LEAF)))
+    args.extend(case.binding.registration_interfaces(cpp.leaf(leaf)))
     key = case.binding.registration_key()
     if key is not None:
         args.append(key)
@@ -54,14 +61,18 @@ def _slug(expr: Expr) -> str:
     return re.sub(r"[^a-z0-9]+", "_", expr.render().lower()).strip("_")
 
 
-def build_rows() -> list[dict[str, object]]:
+def _rows_for(traits: LeafTraits) -> list[dict[str, object]]:
     rows = []
     seen = set()
-    for case in iter_cases(request_forms()):
+    for case in iter_cases(request_forms(), traits):
         if case.binding.kind not in BINDINGS:
             continue
         verdict = classify(
-            case.scope, case.storage_name, case.binding, case.request
+            case.scope,
+            case.storage_name,
+            case.binding,
+            case.request,
+            traits,
         )
         if verdict.outcome != "supported":
             continue
@@ -74,13 +85,17 @@ def build_rows() -> list[dict[str, object]]:
             {
                 "name": (
                     f"{case.binding.kind}_{case.scope}_{case.storage_name}_"
-                    f"{_slug(case.request)}_{digest}"
+                    f"{_slug(case.request)}_{digest}_{traits.name}"
                 ),
-                "binding": _binding_type(case),
-                "coverage": key,
+                "binding": _binding_type(case, traits),
+                "coverage": (*key, traits.name),
             }
         )
     return rows
+
+
+def build_rows() -> list[dict[str, object]]:
+    return [*_rows_for(COPYABLE), *_rows_for(MOVE_ONLY)]
 
 
 def validate() -> None:

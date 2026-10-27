@@ -143,7 +143,7 @@ def build_rows(
                 "registration": registration_line,
                 "request": request_type.render(),
                 "bind": _binding(request_type),
-                "coverage": key,
+                "coverage": (*key, traits.name),
             }
         )
     return rows

@@ -2501,43 +2501,7 @@
       "reason": "target: the derived route has no published target",
       "top_level": false
     },
-    "external/alternative/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/alternative/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/alternative/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/alternative/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/alternative/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "external/alternative/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/alternative/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -3869,43 +3833,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "external/bounded_array/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/bounded_array/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/bounded_array/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/bounded_array/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/bounded_array/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "external/bounded_array/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/bounded_array/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -5237,43 +5165,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "external/optional/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/optional/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/optional/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/optional/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/optional/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "external/optional/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/optional/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -6605,43 +6497,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "external/plain/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/plain/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/plain/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/plain/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/plain/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "external/plain/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/plain/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -7973,43 +7829,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "external/pointer/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/pointer/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/pointer/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/pointer/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/pointer/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "external/pointer/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/pointer/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -9341,43 +9161,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "external/shared_array_handle/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/shared_array_handle/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/shared_array_handle/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/shared_array_handle/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/shared_array_handle/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "external/shared_array_handle/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/shared_array_handle/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -10709,43 +10493,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "external/shared_handle/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/shared_handle/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/shared_handle/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/shared_handle/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/shared_handle/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "external/shared_handle/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/shared_handle/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -12077,43 +11825,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "external/unique_array_handle/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/unique_array_handle/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/unique_array_handle/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/unique_array_handle/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/unique_array_handle/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "external/unique_array_handle/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/unique_array_handle/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -13445,43 +13157,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "external/unique_handle/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/unique_handle/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/unique_handle/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/unique_handle/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/unique_handle/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "external/unique_handle/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "external/unique_handle/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -14813,43 +14489,7 @@
       "reason": "target: the derived route has no published target",
       "top_level": false
     },
-    "shared/alternative/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/alternative/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/alternative/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/alternative/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/alternative/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "shared/alternative/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/alternative/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -16181,43 +15821,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "shared/bounded_array/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/bounded_array/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/bounded_array/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/bounded_array/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/bounded_array/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "shared/bounded_array/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/bounded_array/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -17549,43 +17153,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "shared/optional/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/optional/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/optional/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/optional/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/optional/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "shared/optional/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/optional/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -18917,43 +18485,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "shared/plain/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/plain/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/plain/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/plain/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/plain/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "shared/plain/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/plain/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -20285,43 +19817,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "shared/pointer/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/pointer/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/pointer/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/pointer/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/pointer/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "shared/pointer/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/pointer/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -21653,43 +21149,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "shared/shared_array_handle/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/shared_array_handle/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/shared_array_handle/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/shared_array_handle/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/shared_array_handle/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "shared/shared_array_handle/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/shared_array_handle/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -23021,43 +22481,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "shared/shared_handle/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/shared_handle/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/shared_handle/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/shared_handle/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/shared_handle/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "shared/shared_handle/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/shared_handle/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -24389,43 +23813,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "shared/unique_array_handle/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/unique_array_handle/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/unique_array_handle/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/unique_array_handle/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/unique_array_handle/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "shared/unique_array_handle/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/unique_array_handle/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -25757,43 +25145,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "shared/unique_handle/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/unique_handle/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/unique_handle/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/unique_handle/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/unique_handle/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "shared/unique_handle/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared/unique_handle/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -27125,43 +26477,7 @@
       "reason": "target: the derived route has no published target",
       "top_level": false
     },
-    "shared_cyclical/alternative/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/alternative/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/alternative/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/alternative/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/alternative/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "shared_cyclical/alternative/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/alternative/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -28493,43 +27809,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "shared_cyclical/bounded_array/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/bounded_array/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/bounded_array/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/bounded_array/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/bounded_array/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "shared_cyclical/bounded_array/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/bounded_array/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -29861,43 +29141,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "shared_cyclical/plain/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/plain/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/plain/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/plain/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/plain/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "shared_cyclical/plain/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/plain/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -31229,43 +30473,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "shared_cyclical/pointer/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/pointer/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/pointer/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/pointer/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/pointer/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "shared_cyclical/pointer/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/pointer/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -32597,43 +31805,7 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "shared_cyclical/shared_handle/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/shared_handle/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/shared_handle/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/shared_handle/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/shared_handle/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
     "shared_cyclical/shared_handle/rvalue_reference_const_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "move: the scope does not publish an rvalue route",
-      "top_level": false
-    },
-    "shared_cyclical/shared_handle/rvalue_reference_const_variant_value": {
       "direct": false,
       "lifted": false,
       "reason": "move: the scope does not publish an rvalue route",
@@ -33965,43 +33137,7 @@
       "reason": "borrow: the scope does not publish a pointer route",
       "top_level": false
     },
-    "unique/alternative/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store optional",
-      "top_level": false
-    },
-    "unique/alternative/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store shared_array",
-      "top_level": false
-    },
-    "unique/alternative/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store shared_ptr",
-      "top_level": false
-    },
-    "unique/alternative/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store unique_array",
-      "top_level": false
-    },
-    "unique/alternative/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store unique_ptr",
-      "top_level": false
-    },
     "unique/alternative/rvalue_reference_const_value": {
-      "direct": true,
-      "lifted": false,
-      "reason": "-",
-      "top_level": true
-    },
-    "unique/alternative/rvalue_reference_const_variant_value": {
       "direct": true,
       "lifted": false,
       "reason": "-",
@@ -35333,46 +34469,10 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "unique/bounded_array/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store optional",
-      "top_level": false
-    },
-    "unique/bounded_array/rvalue_reference_const_shared_array_value": {
-      "direct": true,
-      "lifted": false,
-      "reason": "-",
-      "top_level": true
-    },
-    "unique/bounded_array/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store shared_ptr",
-      "top_level": false
-    },
-    "unique/bounded_array/rvalue_reference_const_unique_array_value": {
-      "direct": true,
-      "lifted": false,
-      "reason": "-",
-      "top_level": true
-    },
-    "unique/bounded_array/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store unique_ptr",
-      "top_level": false
-    },
     "unique/bounded_array/rvalue_reference_const_value": {
       "direct": false,
       "lifted": false,
       "reason": "target: the derived route has no published target",
-      "top_level": false
-    },
-    "unique/bounded_array/rvalue_reference_const_variant_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
     "unique/bounded_array/rvalue_reference_optional_optional_value": {
@@ -36701,46 +35801,10 @@
       "reason": "borrow: the scope does not publish a pointer route",
       "top_level": false
     },
-    "unique/optional/rvalue_reference_const_optional_value": {
-      "direct": true,
-      "lifted": false,
-      "reason": "-",
-      "top_level": true
-    },
-    "unique/optional/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store shared_array",
-      "top_level": false
-    },
-    "unique/optional/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store shared_ptr",
-      "top_level": false
-    },
-    "unique/optional/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store unique_array",
-      "top_level": false
-    },
-    "unique/optional/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store unique_ptr",
-      "top_level": false
-    },
     "unique/optional/rvalue_reference_const_value": {
       "direct": false,
       "lifted": false,
       "reason": "target: the derived route has no published target",
-      "top_level": false
-    },
-    "unique/optional/rvalue_reference_const_variant_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
     "unique/optional/rvalue_reference_optional_optional_value": {
@@ -38069,47 +37133,11 @@
       "reason": "borrow: the scope does not publish a pointer route",
       "top_level": false
     },
-    "unique/plain/rvalue_reference_const_optional_value": {
-      "direct": true,
-      "lifted": false,
-      "reason": "-",
-      "top_level": true
-    },
-    "unique/plain/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store shared_array",
-      "top_level": false
-    },
-    "unique/plain/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store shared_ptr",
-      "top_level": false
-    },
-    "unique/plain/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store unique_array",
-      "top_level": false
-    },
-    "unique/plain/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store unique_ptr",
-      "top_level": false
-    },
     "unique/plain/rvalue_reference_const_value": {
       "direct": true,
       "lifted": false,
       "reason": "-",
       "top_level": true
-    },
-    "unique/plain/rvalue_reference_const_variant_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store variant",
-      "top_level": false
     },
     "unique/plain/rvalue_reference_optional_optional_value": {
       "direct": false,
@@ -39437,46 +38465,10 @@
       "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
-    "unique/pointer/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store optional",
-      "top_level": false
-    },
-    "unique/pointer/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store shared_array",
-      "top_level": false
-    },
-    "unique/pointer/rvalue_reference_const_shared_ptr_value": {
-      "direct": true,
-      "lifted": false,
-      "reason": "-",
-      "top_level": true
-    },
-    "unique/pointer/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store unique_array",
-      "top_level": false
-    },
-    "unique/pointer/rvalue_reference_const_unique_ptr_value": {
-      "direct": true,
-      "lifted": false,
-      "reason": "-",
-      "top_level": true
-    },
     "unique/pointer/rvalue_reference_const_value": {
       "direct": false,
       "lifted": false,
       "reason": "target: the derived route has no published target",
-      "top_level": false
-    },
-    "unique/pointer/rvalue_reference_const_variant_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
     "unique/pointer/rvalue_reference_optional_optional_value": {
@@ -40805,46 +39797,10 @@
       "reason": "borrow: the scope does not publish a pointer route",
       "top_level": false
     },
-    "unique/shared_array_handle/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store optional",
-      "top_level": false
-    },
-    "unique/shared_array_handle/rvalue_reference_const_shared_array_value": {
-      "direct": true,
-      "lifted": false,
-      "reason": "-",
-      "top_level": true
-    },
-    "unique/shared_array_handle/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store shared_ptr",
-      "top_level": false
-    },
-    "unique/shared_array_handle/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store unique_array",
-      "top_level": false
-    },
-    "unique/shared_array_handle/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store unique_ptr",
-      "top_level": false
-    },
     "unique/shared_array_handle/rvalue_reference_const_value": {
       "direct": false,
       "lifted": false,
       "reason": "target: the derived route has no published target",
-      "top_level": false
-    },
-    "unique/shared_array_handle/rvalue_reference_const_variant_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
     "unique/shared_array_handle/rvalue_reference_optional_optional_value": {
@@ -42173,46 +41129,10 @@
       "reason": "borrow: the scope does not publish a pointer route",
       "top_level": false
     },
-    "unique/shared_handle/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store optional",
-      "top_level": false
-    },
-    "unique/shared_handle/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store shared_array",
-      "top_level": false
-    },
-    "unique/shared_handle/rvalue_reference_const_shared_ptr_value": {
-      "direct": true,
-      "lifted": false,
-      "reason": "-",
-      "top_level": true
-    },
-    "unique/shared_handle/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store unique_array",
-      "top_level": false
-    },
-    "unique/shared_handle/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store unique_ptr",
-      "top_level": false
-    },
     "unique/shared_handle/rvalue_reference_const_value": {
       "direct": false,
       "lifted": false,
       "reason": "target: the derived route has no published target",
-      "top_level": false
-    },
-    "unique/shared_handle/rvalue_reference_const_variant_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
     "unique/shared_handle/rvalue_reference_optional_optional_value": {
@@ -43541,46 +42461,10 @@
       "reason": "borrow: the scope does not publish a pointer route",
       "top_level": false
     },
-    "unique/unique_array_handle/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store optional",
-      "top_level": false
-    },
-    "unique/unique_array_handle/rvalue_reference_const_shared_array_value": {
-      "direct": true,
-      "lifted": false,
-      "reason": "-",
-      "top_level": true
-    },
-    "unique/unique_array_handle/rvalue_reference_const_shared_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store shared_ptr",
-      "top_level": false
-    },
-    "unique/unique_array_handle/rvalue_reference_const_unique_array_value": {
-      "direct": true,
-      "lifted": false,
-      "reason": "-",
-      "top_level": true
-    },
-    "unique/unique_array_handle/rvalue_reference_const_unique_ptr_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store unique_ptr",
-      "top_level": false
-    },
     "unique/unique_array_handle/rvalue_reference_const_value": {
       "direct": false,
       "lifted": false,
       "reason": "target: the derived route has no published target",
-      "top_level": false
-    },
-    "unique/unique_array_handle/rvalue_reference_const_variant_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
     "unique/unique_array_handle/rvalue_reference_optional_optional_value": {
@@ -44909,46 +43793,10 @@
       "reason": "borrow: the scope does not publish a pointer route",
       "top_level": false
     },
-    "unique/unique_handle/rvalue_reference_const_optional_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store optional",
-      "top_level": false
-    },
-    "unique/unique_handle/rvalue_reference_const_shared_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store shared_array",
-      "top_level": false
-    },
-    "unique/unique_handle/rvalue_reference_const_shared_ptr_value": {
-      "direct": true,
-      "lifted": false,
-      "reason": "-",
-      "top_level": true
-    },
-    "unique/unique_handle/rvalue_reference_const_unique_array_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store unique_array",
-      "top_level": false
-    },
-    "unique/unique_handle/rvalue_reference_const_unique_ptr_value": {
-      "direct": true,
-      "lifted": false,
-      "reason": "-",
-      "top_level": true
-    },
     "unique/unique_handle/rvalue_reference_const_value": {
       "direct": false,
       "lifted": false,
       "reason": "target: the derived route has no published target",
-      "top_level": false
-    },
-    "unique/unique_handle/rvalue_reference_const_variant_value": {
-      "direct": false,
-      "lifted": false,
-      "reason": "borrow: the cell does not store variant",
       "top_level": false
     },
     "unique/unique_handle/rvalue_reference_optional_optional_value": {

@@ -131,10 +131,13 @@ At the time of writing the report classifies 105,648 cases:
 - plain: 42, wrapped: 180, variant: 190, annotated: 412, keyed: 412, interface:
   412;
 - 10,032 request paths, 105 storage paths, 4 bindings, 4 scopes;
-- 1,080 supported;
+- 1,058 supported (copyable leaf);
 - 52,823 unavailable;
 - 32,584 unsupported;
 - 19,161 unmodeled.
+
+A move-only leaf adds 915 of the same paths; the domain spelling is unchanged
+because the trait replaces the leaf type, not the request expression.
 
 `unavailable` means the storage does not expose the category or the binding
 kind. `unmodeled` means the model has no rule or registration model for the
@@ -146,13 +149,14 @@ when the storage does not expose that binding kind.
 The report compares the supported set with what the generated C++ suites
 exercise:
 
-- 1,080 supported paths;
-- 1,080 covered by the compile-time type/binding matrices and const probes;
-- 1,037 covered by the runtime behavior, annotated, keyed, interface, and const
-  probes;
+- 1,973 supported paths over both traits (1,058 copyable, 915 move-only);
+- 1,973 covered by the compile-time type/binding matrices, the trait matrix, and
+  const probes;
+- 1,887 covered by the runtime shape, behavior, annotated, keyed, interface, and
+  const probes;
 - 0 supported paths have no compile-time test;
 - 0 supported paths have an undeclared runtime gap;
-- 43 supported paths are declared runtime gaps.
+- 86 supported paths are declared runtime gaps (43 per trait).
 
 The declared runtime gaps are 35 concrete top-level handle/cyclical/
 consuming-borrow forms and 8 consuming-scope interface forms. They are listed
@@ -183,18 +187,17 @@ families (`behavior_cells`, `annotated_cells`, `keyed_cells`, `const_cells`, and
 selects the first non-copying route, so the expected copy count is zero. The
 path report still classifies the copyable domain.
 
-The 475 path-extended shapes are mostly access forms around composed objects:
+The 110 path-extended shapes are mostly access forms around composed objects:
 `optional<T> &`, `shared_ptr<T> *`, `variant<const T, long> &`, and arrays of
 wrapped pointers. They are merged into the type matrix, so the compile-time
 matrix and the runtime behavior suite consume them instead of keeping a separate
 hand-written list.
 
-The type matrix now enumerates **587 shapes** over 32 cells (**18,784 probes**),
-and the binding matrix adds **254** compile-time registration probes. The
-behavior suites run the same catalog; the behavior outcome baseline remains 95
-rows because the new shapes are not top-level behavior cases. The matrix
-baseline was updated with the declared reason
-`render C++ types and factories from the structured form model`.
+The type matrix now enumerates **222 shapes** over 32 cells (**7,104 probes**),
+and the binding matrix adds **518** compile-time registration probes (copyable
+and move-only). The behavior outcome baseline has **183** rows (95 copyable, 88
+move-only). The matrix baseline records the shape removals from rejecting const
+rvalue requests.
 
 ## Test generation
 
