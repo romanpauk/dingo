@@ -178,6 +178,15 @@ row; the indexed cases assert lookup by key.
 `test/support/model_configuration.h` owns the traits so the probes do not depend
 on the matrix headers.
 
+## Cycles
+
+A cycle is two slots that each need the other, so the container publishes both
+before filling them. `resolution/<mode>/global/cyclical.cpp` covers the two
+storage representations (both nodes by value, both as `shared_ptr`) and the
+mixed representation, in the runtime, static, and mixed containers. Each case
+asserts that both edges point at the same instance: `a.peer == &b` and
+`b.peer == &a`. The edge request form is the atom request space.
+
 ## Co-residence
 
 A mixed container holds compile-time bindings and runtime registrations at the

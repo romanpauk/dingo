@@ -188,6 +188,8 @@ set(DINGO_CONFIGURATION_MODEL_GENERATOR
     "tools.model.emit.families.configuration")
 set(DINGO_MIXED_MODEL_GENERATOR
     "tools.model.emit.families.mixed")
+set(DINGO_CYCLICAL_MODEL_GENERATOR
+    "tools.model.emit.families.cyclical")
 set(DINGO_COLLECTION_MODEL_GENERATOR
     "tools.model.emit.families.collection")
 set(DINGO_INDEXED_MODEL_GENERATOR
@@ -230,6 +232,8 @@ set(DINGO_CONFIGURATION_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/configuration_cells.cpp.j2")
 set(DINGO_MIXED_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/mixed_cells.cpp.j2")
+set(DINGO_CYCLICAL_MODEL_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/cyclical_cells.cpp.j2")
 set(DINGO_CONSUMER_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/consumer_cells.cpp.j2")
 set(DINGO_PROBE_FIXTURES_TEMPLATE
@@ -376,6 +380,8 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_PRODUCER_MODEL_TEMPLATE}"
     "${DINGO_CONFIGURATION_MODEL_TEMPLATE}"
     "${DINGO_MIXED_MODEL_TEMPLATE}"
+    "${DINGO_CYCLICAL_MODEL_TEMPLATE}"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/cyclical_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/mixed_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/configuration_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/producer_cells_test.py"
@@ -607,6 +613,23 @@ if(NOT DINGO_MIXED_MODEL_GENERATOR_RESULT EQUAL 0)
 endif()
 file(GLOB_RECURSE DINGO_MIXED_SOURCES CONFIGURE_DEPENDS
     "${DINGO_RESOLVE_DIR}/resolution/mixed/global/*.cpp")
+
+execute_process(
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_CYCLICAL_MODEL_GENERATOR}
+        --out-dir ${DINGO_RESOLVE_DIR}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE DINGO_CYCLICAL_MODEL_GENERATOR_RESULT)
+if(NOT DINGO_CYCLICAL_MODEL_GENERATOR_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to generate cyclical publication probes: "
+        "${DINGO_CYCLICAL_MODEL_GENERATOR_RESULT}")
+endif()
+file(GLOB_RECURSE DINGO_CYCLICAL_SOURCES CONFIGURE_DEPENDS
+    "${DINGO_RESOLVE_DIR}/resolution/runtime/global/cyclical.cpp"
+    "${DINGO_RESOLVE_DIR}/resolution/mixed/global/cyclical.cpp")
+file(GLOB_RECURSE DINGO_STATIC_CYCLICAL_SOURCES CONFIGURE_DEPENDS
+    "${DINGO_RESOLVE_DIR}/resolution/static/global/cyclical.cpp")
 
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
@@ -899,6 +922,7 @@ add_executable(dingo_resolution_runtime_test
     ${DINGO_PRODUCER_SOURCES}
     ${DINGO_CONFIGURATION_SOURCES}
     ${DINGO_MIXED_SOURCES}
+    ${DINGO_CYCLICAL_SOURCES}
     ${DINGO_CONSUMER_SOURCES}
     ${DINGO_INDEXED_SOURCES})
 target_link_libraries(dingo_resolution_runtime_test dingo::dingo gtest_main)
@@ -909,7 +933,9 @@ add_test(NAME dingo_resolution_runtime_test
 set_tests_properties(dingo_resolution_runtime_test PROPERTIES
     LABELS "unit;generator")
 
-add_executable(dingo_resolution_static_test ${DINGO_COLLECTION_SOURCES})
+add_executable(dingo_resolution_static_test
+    ${DINGO_COLLECTION_SOURCES}
+    ${DINGO_STATIC_CYCLICAL_SOURCES})
 target_link_libraries(dingo_resolution_static_test dingo::dingo gtest_main)
 add_test(NAME dingo_resolution_static_test
     COMMAND dingo_resolution_static_test)
