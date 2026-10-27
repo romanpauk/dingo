@@ -91,6 +91,46 @@ SHAPES = (
         1,
     ),
     ConstructorShape(
+        "dependency_reference",
+        """struct dependency { int value; };
+struct probe_type { explicit probe_type(dependency &); };""",
+        "probe_type",
+        1,
+    ),
+    ConstructorShape(
+        "dependency_const_reference",
+        """struct dependency { int value; };
+struct probe_type { explicit probe_type(const dependency &); };""",
+        "probe_type",
+        1,
+    ),
+    ConstructorShape(
+        "dependency_rvalue_reference",
+        """struct dependency { int value; };
+struct probe_type { explicit probe_type(dependency &&); };""",
+        "probe_type",
+        1,
+    ),
+    ConstructorShape(
+        "dependency_pointer",
+        """struct dependency { int value; };
+struct probe_type { explicit probe_type(dependency *); };""",
+        "probe_type",
+        1,
+    ),
+    ConstructorShape(
+        "std_array_aggregate",
+        "struct element { int first; float second; };",
+        "std::array<element, 2>",
+        2,
+    ),
+    ConstructorShape(
+        "nested_std_array_aggregate",
+        "struct element { int first; float second; };",
+        "std::array<std::array<element, 2>, 2>",
+        2,
+    ),
+    ConstructorShape(
         "array_move_only",
         """struct element {
   element() = default;

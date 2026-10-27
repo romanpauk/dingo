@@ -197,9 +197,14 @@ MODEL_COVERED_EXPOSED_TYPES = frozenset(
 FULLY_MODEL_COVERED_FEATURES = frozenset(
     {
         "annotated",
+        "array",
         "lifetime_counts",
+        "resolve_concrete",
         "resolve_interface",
+        "resolve_keyed",
         "resolve_unique_wrapper",
+        "resolve_wrapper",
+        "variant",
     }
 )
 
