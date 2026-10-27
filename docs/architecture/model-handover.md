@@ -15,7 +15,7 @@ The tree is green:
   cases skipped)
 - `dingo_resolution_static_asserts_test`: 40 tests
 - `dingo_resolution_static_test`: 7 tests
-- `dingo_resolution_runtime_test`: 4,770 tests (resolve rows, `construct` and
+- `dingo_resolution_runtime_test`: 4,774 tests (resolve rows, `construct` and
   `invoke` claims, 84 construct cases (16 argument types x 5 shapes), 7
   conversion cases and 19 invoke shape classes, 51 producer claims, 5 mixed
   collection cases, 2 configuration cases, 2 mixed co-residence cases, 4

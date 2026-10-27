@@ -12,8 +12,8 @@ the model hierarchy covers the same behavior.
 covered | dropped | | `resolve_keyed` | covered | dropped | | `annotated` |
 covered | dropped | | `variant` | covered | dropped | | `array` | covered |
 dropped | | `lifetime_counts` | covered | dropped | | `nested_wrappers` |
-partial | `resolution/.../nested` | | `custom_wrappers` | partial (properties
-only) | `classification/.../wrapper` + `resolution/.../nested` | |
+partial | `resolution/.../nested` | | `custom_wrappers` | covered (properties +
+row) | `classification/wrapper` + `resolution/runtime/global/wrapper` | |
 `constructor_detection` | partial (shape slice) |
 `classification/constructor/<backend>/<mode>/<shape>` | | `construct` | covered
 (row claims + 18 shape classes) | `resolution/runtime/<cell>/construct.cpp` and

@@ -196,6 +196,8 @@ set(DINGO_DEPENDENCIES_MODEL_GENERATOR
     "tools.model.emit.families.dependencies")
 set(DINGO_CONVERSION_MODEL_GENERATOR
     "tools.model.emit.families.conversion")
+set(DINGO_WRAPPER_MODEL_GENERATOR
+    "tools.model.emit.families.wrapper")
 set(DINGO_COLLECTION_MODEL_GENERATOR
     "tools.model.emit.families.collection")
 set(DINGO_INDEXED_MODEL_GENERATOR
@@ -246,6 +248,8 @@ set(DINGO_DEPENDENCIES_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/dependency_cells.cpp.j2")
 set(DINGO_CONVERSION_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/conversion_cells.cpp.j2")
+set(DINGO_WRAPPER_MODEL_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/wrapper_cells.cpp.j2")
 set(DINGO_CONSUMER_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/consumer_cells.cpp.j2")
 set(DINGO_PROBE_FIXTURES_TEMPLATE
@@ -396,6 +400,8 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_LOOKUP_MODEL_TEMPLATE}"
     "${DINGO_DEPENDENCIES_MODEL_TEMPLATE}"
     "${DINGO_CONVERSION_MODEL_TEMPLATE}"
+    "${DINGO_WRAPPER_MODEL_TEMPLATE}"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/wrapper_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/conversion_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/dependency_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/lookup_cells_test.py"
@@ -693,6 +699,20 @@ file(GLOB_RECURSE DINGO_CONVERSION_SOURCES CONFIGURE_DEPENDS
 
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_WRAPPER_MODEL_GENERATOR}
+        --out-dir ${DINGO_RESOLVE_DIR}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE DINGO_WRAPPER_MODEL_GENERATOR_RESULT)
+if(NOT DINGO_WRAPPER_MODEL_GENERATOR_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to generate user wrapper probes: "
+        "${DINGO_WRAPPER_MODEL_GENERATOR_RESULT}")
+endif()
+file(GLOB_RECURSE DINGO_WRAPPER_SOURCES CONFIGURE_DEPENDS
+    "${DINGO_RESOLVE_DIR}/resolution/runtime/global/wrapper/*.cpp")
+
+execute_process(
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_COLLECTION_MODEL_GENERATOR}
         --out-dir ${DINGO_RESOLVE_DIR}
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
@@ -986,6 +1006,7 @@ add_executable(dingo_resolution_runtime_test
     ${DINGO_LOOKUP_SOURCES}
     ${DINGO_DEPENDENCIES_SOURCES}
     ${DINGO_CONVERSION_SOURCES}
+    ${DINGO_WRAPPER_SOURCES}
     ${DINGO_CONSUMER_SOURCES}
     ${DINGO_INDEXED_SOURCES})
 target_link_libraries(dingo_resolution_runtime_test dingo::dingo gtest_main)
