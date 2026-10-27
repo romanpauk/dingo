@@ -178,6 +178,8 @@ set(DINGO_FACTORY_MODEL_GENERATOR
     "tools.model.emit.families.factory")
 set(DINGO_CONSTRUCT_MODEL_GENERATOR
     "tools.model.emit.families.construct")
+set(DINGO_COLLECTION_MODEL_GENERATOR
+    "tools.model.emit.families.collection")
 set(DINGO_CLASSIFICATION_CONSTRUCTOR_GENERATOR
     "tools.model.emit.detection_constructor")
 set(DINGO_MODEL_TEMPLATE
@@ -267,6 +269,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/emit/detection_constructor.py"
     "${PROJECT_SOURCE_DIR}/tools/model/emit/families/factory.py"
     "${PROJECT_SOURCE_DIR}/tools/model/emit/families/construct.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/collection.py"
     "${PROJECT_SOURCE_DIR}/tools/model/emit/selection.py"
     "${PROJECT_SOURCE_DIR}/tools/model/emit/traits.py"
     "${PROJECT_SOURCE_DIR}/tools/model/grammar/__init__.py"
@@ -319,6 +322,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/tests/storage_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/type_behavior_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/type_matrix_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/collection_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/construct_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/detection_constructor_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/factory_cells_test.py"
@@ -501,6 +505,20 @@ if(NOT DINGO_CONSTRUCT_MODEL_GENERATOR_RESULT EQUAL 0)
 endif()
 file(GLOB_RECURSE DINGO_CONSTRUCT_SOURCES CONFIGURE_DEPENDS
     "${DINGO_RESOLVE_DIR}/resolution/runtime/*/*/construct/*.cpp")
+
+execute_process(
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_COLLECTION_MODEL_GENERATOR}
+        --out-dir ${DINGO_RESOLVE_DIR}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE DINGO_COLLECTION_MODEL_GENERATOR_RESULT)
+if(NOT DINGO_COLLECTION_MODEL_GENERATOR_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to generate collection probes: "
+        "${DINGO_COLLECTION_MODEL_GENERATOR_RESULT}")
+endif()
+file(GLOB_RECURSE DINGO_COLLECTION_SOURCES CONFIGURE_DEPENDS
+    "${DINGO_RESOLVE_DIR}/resolution/static/global/collection/*.cpp")
 
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
@@ -725,6 +743,13 @@ target_include_directories(dingo_resolution_runtime_test PRIVATE
 add_test(NAME dingo_resolution_runtime_test
     COMMAND dingo_resolution_runtime_test)
 set_tests_properties(dingo_resolution_runtime_test PROPERTIES
+    LABELS "unit;generator")
+
+add_executable(dingo_resolution_static_test ${DINGO_COLLECTION_SOURCES})
+target_link_libraries(dingo_resolution_static_test dingo::dingo gtest_main)
+add_test(NAME dingo_resolution_static_test
+    COMMAND dingo_resolution_static_test)
+set_tests_properties(dingo_resolution_static_test PROPERTIES
     LABELS "unit;generator")
 
 add_executable(dingo_registration_runtime_test
