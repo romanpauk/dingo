@@ -69,8 +69,8 @@ The matrix still owns the backend (`portable`/`msvc`), detection-mode
 ## Removal order
 
 1. Drop the features the model already covers. Done.
-2. Rebuild construction, factory, collection, indexed, and container-composition
-   features as model families.
+2. Rebuild the remaining construction (unique/cyclical) and factory forms, then
+   collection, indexed, and container-composition features as model families.
 3. Move the invoke, scenario, cyclical, dependency-composition, and conversion
    parity families.
 4. Delete `test/matrix`, its axes, fixtures, scenarios, and the `legacy/`

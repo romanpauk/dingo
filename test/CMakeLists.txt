@@ -174,6 +174,10 @@ set(DINGO_INTERFACE_RUNTIME_MODEL_GENERATOR
     "tools.model.emit.families.interface_runtime")
 set(DINGO_RESOLVE_GENERATOR
     "tools.model.emit.resolve")
+set(DINGO_FACTORY_MODEL_GENERATOR
+    "tools.model.emit.families.factory")
+set(DINGO_CONSTRUCT_MODEL_GENERATOR
+    "tools.model.emit.families.construct")
 set(DINGO_CLASSIFICATION_CONSTRUCTOR_GENERATOR
     "tools.model.emit.detection_constructor")
 set(DINGO_MODEL_TEMPLATE
@@ -261,6 +265,8 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/emit/matrix.py"
     "${PROJECT_SOURCE_DIR}/tools/model/emit/resolve.py"
     "${PROJECT_SOURCE_DIR}/tools/model/emit/detection_constructor.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/factory.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/construct.py"
     "${PROJECT_SOURCE_DIR}/tools/model/emit/selection.py"
     "${PROJECT_SOURCE_DIR}/tools/model/emit/traits.py"
     "${PROJECT_SOURCE_DIR}/tools/model/grammar/__init__.py"
@@ -313,7 +319,9 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/tools/model/tests/storage_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/type_behavior_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/type_matrix_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/construct_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/detection_constructor_test.py"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/factory_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/resolve_cells_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/resolve_report_test.py"
     "${PROJECT_SOURCE_DIR}/tools/model/tests/trait_matrix_test.py"
@@ -464,6 +472,35 @@ if(NOT DINGO_PROPERTY_MODEL_GENERATOR_RESULT EQUAL 0)
         "Failed to generate wrapper property coverage: "
         "${DINGO_PROPERTY_MODEL_GENERATOR_RESULT}")
 endif()
+
+execute_process(
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_FACTORY_MODEL_GENERATOR}
+        --out-dir ${DINGO_REGISTRATION_DIR}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE DINGO_FACTORY_MODEL_GENERATOR_RESULT)
+if(NOT DINGO_FACTORY_MODEL_GENERATOR_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to generate factory registration probes: "
+        "${DINGO_FACTORY_MODEL_GENERATOR_RESULT}")
+endif()
+file(GLOB_RECURSE DINGO_REGISTRATION_RUNTIME_SOURCES CONFIGURE_DEPENDS
+    "${DINGO_REGISTRATION_DIR}/registration/runtime/*/*/factory/*.cpp")
+
+execute_process(
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_CONSTRUCT_MODEL_GENERATOR}
+        --out-dir ${DINGO_RESOLVE_DIR}
+        --include ${PROJECT_SOURCE_DIR}/include
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE DINGO_CONSTRUCT_MODEL_GENERATOR_RESULT)
+if(NOT DINGO_CONSTRUCT_MODEL_GENERATOR_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to generate construction probes: "
+        "${DINGO_CONSTRUCT_MODEL_GENERATOR_RESULT}")
+endif()
+file(GLOB_RECURSE DINGO_CONSTRUCT_SOURCES CONFIGURE_DEPENDS
+    "${DINGO_RESOLVE_DIR}/resolution/runtime/*/*/construct/*.cpp")
 
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
@@ -680,13 +717,22 @@ add_test(NAME dingo_model_test COMMAND dingo_model_test)
 set_tests_properties(dingo_model_test PROPERTIES LABELS "unit;generator")
 
 add_executable(dingo_resolution_runtime_test
-    ${DINGO_RUNTIME_REQUEST_SOURCES})
+    ${DINGO_RUNTIME_REQUEST_SOURCES}
+    ${DINGO_CONSTRUCT_SOURCES})
 target_link_libraries(dingo_resolution_runtime_test dingo::dingo gtest_main)
 target_include_directories(dingo_resolution_runtime_test PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}")
 add_test(NAME dingo_resolution_runtime_test
     COMMAND dingo_resolution_runtime_test)
 set_tests_properties(dingo_resolution_runtime_test PROPERTIES
+    LABELS "unit;generator")
+
+add_executable(dingo_registration_runtime_test
+    ${DINGO_REGISTRATION_RUNTIME_SOURCES})
+target_link_libraries(dingo_registration_runtime_test dingo::dingo gtest_main)
+add_test(NAME dingo_registration_runtime_test
+    COMMAND dingo_registration_runtime_test)
+set_tests_properties(dingo_registration_runtime_test PROPERTIES
     LABELS "unit;generator")
 
 add_executable(dingo_registration_test ${DINGO_REGISTRATION_SOURCES})
