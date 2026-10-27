@@ -178,6 +178,17 @@ row; the indexed cases assert lookup by key.
 `test/support/model_configuration.h` owns the traits so the probes do not depend
 on the matrix headers.
 
+## Co-residence
+
+A mixed container holds compile-time bindings and runtime registrations at the
+same time. There are exactly two outcomes, so the family is two cases at
+`resolution/mixed/global/`:
+
+- `external_dependency` — a static binding resolves a dependency that only
+  exists at runtime;
+- `singular_ambiguity` — the same type exists on both sides, and a singular
+  request throws `type_ambiguous_exception`.
+
 ## Producers
 
 The producer family answers "does the capability survive a change of factory" at
