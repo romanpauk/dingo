@@ -59,7 +59,6 @@ for _spec in (
 INTERFACE_INNER_OPS = frozenset(
     {"leaf", "lvalue_reference", "pointer", "shared_ptr", "unique_ptr"}
 )
-ANNOTATED_INNER_OPS = frozenset({"leaf", "lvalue_reference", "pointer"})
 
 
 def _direct_interface_target(expr: Expr) -> bool:
@@ -147,16 +146,6 @@ def _annotated_wrapper_const_matches(storage: Expr, request: Expr) -> bool:
         return False
     return True
 
-
-def _leaf_interface(expr: Expr) -> bool:
-    while expr.op in {
-        "const",
-        "lvalue_reference",
-        "rvalue_reference",
-        "pointer",
-    }:
-        expr = expr.inner
-    return expr.op == "leaf"
 
 _LEDGER = {
     (row.scope, row.form, row.category): row for row in build_rows()

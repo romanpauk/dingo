@@ -238,13 +238,14 @@ Reducing them requires new scenario families, not more generated cases.
 ### 5. Cleanup
 
 - `behavior.py` still contains scenario-level C++ strings; move them through
-  `CppType` / registration plans.
-- `semantics/support.py` has unused `ANNOTATED_INNER_OPS` and `_leaf_interface`;
-  remove them.
+  `CppType` / registration plans. The interface and annotation recipes are
+  hand-built shape lists, not derived from the ledger.
 - `legacy/binding.py` and `legacy/request.py` are test/matrix-only. Migrate
   `test/matrix` or keep them clearly isolated.
 - `type_matrix.cpp` is the compile-time bottleneck. If it grows, split it into
   multiple translation units.
+- `report/paths.py` outcome and per-family tables still describe only the
+  copyable domain; the trait split lives in the coverage table.
 
 ## Commands
 

@@ -49,7 +49,6 @@ from tools.model.grammar.traits import COPYABLE, MOVE_ONLY, LeafTraits
 SCOPES = tuple(scope.name for scope in CATALOG_SCOPES)
 FORMS = tuple(form for form in CATALOG_FORMS if form.name != "array")
 CONTAINERS = ("runtime", "static")
-TRACKED = cpp.leaf("tracked")
 
 
 @dataclass(frozen=True)
@@ -301,7 +300,9 @@ def derive_extra_expectations(
             (
                 "wrapper",
                 Expectation(
-                    cpp.template("std::variant", TRACKED, cpp.leaf("long")).render(),
+                    cpp.template(
+                        "std::variant", cpp.leaf(traits.cpp), cpp.leaf("long")
+                    ).render(),
                     "std::get<0>(first).id == std::get<0>(second).id",
                     primary.constructions,
                     "borrow_value",
