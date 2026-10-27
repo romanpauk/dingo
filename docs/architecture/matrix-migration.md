@@ -1,240 +1,94 @@
-# Matrix Migration
+# Matrix Retirement
 
-The legacy `test/matrix` generator is being retired. Its features are being
-moved into the test hierarchy; a feature is removed from the matrix only after
-the model hierarchy covers the same behavior.
+The generated `test/matrix` corpus has been retired. It was a product of
+registration modes, scopes, stored types, exposed types, resolved types, and
+container shapes, which made it enormous and made "is this covered" answerable
+only by counting rows.
 
-## Coverage map
+This page records what replaced it, so the mapping is not lost with the code.
+The model itself is described in [Coverage Model](coverage-model.md).
 
-| matrix feature / family | model status | target | | --- | --- | --- | |
-`resolve_concrete` | covered | dropped | | `resolve_wrapper` | covered | dropped
-| | `resolve_unique_wrapper` | covered | dropped | | `resolve_interface` |
-covered | dropped | | `resolve_keyed` | covered | dropped | | `annotated` |
-covered | dropped | | `variant` | covered | dropped | | `array` | covered |
-dropped | | `lifetime_counts` | covered | dropped | | `nested_wrappers` |
-partial | `resolution/.../nested` | | `custom_wrappers` | covered (properties +
-row) | `classification/wrapper` + `resolution/runtime/global/wrapper` | |
-`constructor_detection` | partial (shape slice) |
-`classification/constructor/<backend>/<mode>/<shape>` | | `construct` | covered
-(row claims + 18 shape classes) | `resolution/runtime/<cell>/construct.cpp` and
-`resolution/runtime/global/construct/<shape>` | | `construct_collection` |
-covered (vector + map insert) | `resolution/<mode>/global/collection` | |
-`local_bindings` | not covered | `resolution/.../local` | | `nested_container` |
-not covered | `resolution/.../container` | | `factory_override` | covered
-(producer classes) | `resolution/runtime/global/producer/<cell>` | |
-`explicit_dependencies` | not covered | `resolution/.../dependencies` | |
-`mixed_external_dependency` | not covered | `resolution/.../mixed` | |
-`mixed_singular_ambiguity` | not covered | `resolution/.../mixed` | |
-`custom_allocator` | not covered | `resolution/.../config/allocator` | |
-`custom_rtti` | not covered | `resolution/.../config/rtti` | |
-`resolve_collection` | covered (static + mixed) |
-`resolution/<mode>/global/collection` | | `resolve_keyed_collection` | covered
-(static + mixed) | `resolution/<mode>/global/collection` | | `resolve_indexed` |
-not covered | `registration/.../indexed` | | `construct_invoke` / invoke family
-| covered (19 shape classes) | `resolution/runtime/global/invoke/<shape>` | |
-`scenario` family | not covered | `resolution/.../scenario` | |
-`shared_cyclical` family | not covered | `resolution/.../cyclical` | |
-dependency-composition families | not covered | `resolution/.../composition` | |
-conversion parity | not covered | `classification/conversion` |
+## Structure
 
-## Removed matrix features
-
-`test/matrix/model_coverage.py` lists the features that no longer generate
-matrix rows because the model hierarchy covers them:
-
-- `annotated`
-- `array`
-- `lifetime_counts`
-- `resolve_concrete`
-- `resolve_interface`
-- `resolve_keyed`
-- `resolve_unique_wrapper`
-- `resolve_wrapper`
-- `variant`
-
-## Constructor detection
-
-The model has the first slice:
+The matrix's features were regrouped by mechanism rather than by name. Features
+that share a mechanism share a family; features that only looked similar keep
+separate families; features whose rows the atom probes already execute need no
+family at all.
 
 ```text
-classification/constructor/<shape>.cpp
-```
+resolution/runtime/<configuration>/<scope>/<storage>/
+    resolve.cpp      rows: <traits>/<binding>/<request>
+    construct.cpp    the same rows, claim = construct
+    invoke.cpp       the same rows, claim = invoke
 
-It covers zero-argument, copy-only, move-only, aggregate, two-value,
-dependency-reference/value/pointer/rvalue, annotated-constructor, `std::array`,
-nested `std::array`, and move-only array element shapes.
-
-The matrix still owns the backend (`portable`/`msvc`), detection-mode
-(`shape`/`signature`), and constructor-argument-conversion axes. Those move into
-`classification/constructor/<backend>/<mode>/<shape>` next.
-
-## Removal order
-
-1. Drop the features the model already covers. Done.
-2. Rebuild the remaining construction (unique/cyclical) and factory forms, then
-   collection, indexed, and container-composition features as model families.
-3. Move the invoke, scenario, cyclical, dependency-composition, and conversion
-   parity families.
-4. Delete `test/matrix`, its axes, fixtures, scenarios, and the `legacy/`
-   request/binding algebra once no feature remains.
-
-## Factorization
-
-See [Coverage Model](coverage-model.md). Operator families are factored over
-dependency categories; a matrix feature is removed when its operator classes are
-covered, not when its row count is reproduced.
-
-## Test structure
-
-The matrix features fall into four structural shapes. Each one maps to a
-category under the shared hierarchy:
-
-```text
-<phase>/<execution>/<container>/<scope>/<storage>/<category>/<traits>/<binding>/<request>
-```
-
-- `container` is omitted for the default container. Other values are `indexed`,
-  `indexed_int`, `indexed_string`, `indexed_dsl`, `allocator`, and `rtti`.
-- `execution` is `classification`, `registration`, `resolution`, or
-  `resolution/static` when the static front-end is the subject.
-
-### Storage-cell behavior
-
-Used by construct, factory, local bindings, nested containers, and the existing
-resolve/behavior families:
-
-```text
-resolution/runtime/<scope>/<storage>/construct.cpp
-resolution/runtime/<scope>/<storage>/invoke.cpp
-registration/runtime/<scope>/<storage>/factory/<kind>.cpp
-resolution/runtime/<scope>/<storage>/local/<traits>.cpp
-```
-
-`construct.cpp` and `invoke.cpp` are claims over the same rows as `resolve.cpp`,
-rendered from `resolve-manifest.json`; the claim is the level after the cell in
-the case path. Operator classes that are not tied to a cell live under `global`:
-
-```text
-resolution/runtime/global/construct/<shape>/<traits>.cpp
-```
-
-### Container configuration
-
-Used by indexed lookup, allocator, RTTI, and mixed registration:
-
-```text
-resolution/runtime/indexed/<scope>/<storage>/resolve/<traits>.cpp
-resolution/runtime/allocator/<scope>/<storage>/resolve/<traits>.cpp
-resolution/runtime/rtti/<scope>/<storage>/resolve/<traits>.cpp
-registration/mixed/<scope>/<storage>/binding/<traits>.cpp
-```
-
-The configuration is a path level, not a test-name suffix, so the same cell can
-be exercised under multiple container front-ends without collisions.
-
-### Global orchestration
-
-Used by invoke, nested containers, scenarios, shared-cyclical graphs, and
-dependency compositions:
-
-```text
-resolution/runtime/<container>/global/invoke/<form>.cpp
-resolution/runtime/<container>/global/nested/<form>.cpp
-resolution/runtime/<container>/global/scenario/<name>.cpp
-resolution/runtime/<container>/global/cyclical/<graph>.cpp
-resolution/runtime/<container>/global/composition/<profile>.cpp
-```
-
-These cases register more than one binding, so there is no single storage path.
-The suite is the scenario/form; the test is the case.
-
-### Compile-time classification
-
-Used by constructor detection and conversion parity:
-
-```text
+resolution/runtime/global/construct/<argument>/<shape>.cpp
+resolution/runtime/global/invoke/<shape>/<traits>.cpp
+resolution/runtime/global/producer/<cell>.cpp
+resolution/runtime/global/collection.cpp
+resolution/runtime/global/cyclical.cpp
+resolution/runtime/global/conversion/<case>.cpp
+resolution/runtime/global/dependencies/<case>.cpp
+resolution/runtime/global/lookup/<case>.cpp
+resolution/runtime/global/wrapper/<case>.cpp
+resolution/mixed/global/<case>.cpp
+resolution/static/global/collection.cpp
+resolution/runtime/<trait>/global/resolve.cpp
 classification/constructor/<backend>/<mode>/<shape>.cpp
-classification/conversion/<form>.cpp
 ```
 
-Static assertions only; no container.
+## Feature mapping
 
-## Remaining features by mechanism
+| matrix feature | replacement | granularity | | --- | --- | --- | |
+`resolve_concrete`, `resolve_wrapper`, `resolve_unique_wrapper` | row probes |
+one row per cell, binding, request, traits | | `nested_wrappers` | row probes
+(`shared_ptr<shared_ptr<T>>`, `unique_ptr<unique_ptr<T>>`, …) | already rows | |
+`annotated`, `variant`, `array`, `lifetime_counts` | row probes and behavior
+families | one row or one behavior class | | `resolve_interface` | row probes
+with the interface binding | one row | | `resolve_keyed` | row probes with the
+keyed binding | one row | | `construct`, `construct_invoke` |
+`global/construct/<argument>/<shape>` | 16 types x 5 shapes | | invoke family |
+`global/invoke/<shape>` plus the `invoke` claim column | 19 shapes | |
+`factory_override` | `global/producer/<cell>` | 6 cells x producers x 3 claims |
+| `resolve_collection`, `resolve_keyed_collection`, `construct_collection` |
+`global/collection` | 5 cases x 2 modes | | `resolve_indexed` | the indexed
+configuration (`runtime/indexed/...`) | one row set per key type | |
+`custom_wrappers` | `classification/wrapper` plus `global/wrapper` | properties
+\+ one row per wrapper | | `local_bindings`, `nested_container` | `global/lookup`
+| 5 rules | | `explicit_dependencies` | `global/dependencies` | 2 declarations |
+| `mixed_external_dependency`, `mixed_singular_ambiguity` | `mixed/global` | 2
+cases | | `custom_allocator`, `custom_rtti` | `runtime/<trait>` configuration |
+one case each | | shared-cyclical graphs | `global/cyclical` | 3 modes x storage
+representations | | conversion parity | `global/conversion` | 6 cases plus
+front-end parity | | `constructor_detection` | `classification/constructor` | 2
+backends x 2 modes x 15 shapes | | scenarios | the family owning the mechanism |
+one named case per regression |
 
-The matrix treats every feature as an independent axis and multiplies it by
-storage, scope, request form, and mode. Several features share one mechanism, so
-they belong in one family with the mechanism's own degrees of freedom, and some
-need no family at all because the row probes already execute them.
+## What is gone
 
-| group | features | shared mechanism | family | cases | | --- | --- | --- | ---
-| --- | | assembly | `resolve_collection`, `resolve_keyed_collection`,
-`construct_collection`, indexed collections | several bindings assembled into
-one value | `global/collection/<mode>` | ~8 | | scope | `local_bindings`,
-`nested_container` | where a binding is looked up | `global/scope/<case>` | ~5 |
-| trait | `custom_allocator`, `custom_rtti`, `resolve_indexed` (DSL) | a
-container trait swapped under the same rows | `configuration/<trait>` | ~3 | |
-co-residence | `mixed_external_dependency`, `mixed_singular_ambiguity` | static
-and runtime bindings in one container | `global/mixed/<case>` | ~3 | |
-publication | `shared_cyclical` | two-phase publication of a cycle |
-`global/cyclical/<graph>` | ~4 | | selection | `explicit_dependencies` |
-constructor metadata chooses among same-typed dependencies | extension of
-`global/construct` | ~2 | | composition | `dependency_composition` | the
-dependency type is itself composed | mostly the atom request space;
-`global/composition/<depth>` | ~3 | | table | `constructor_detection`,
-conversion parity | compile-time type tables | `classification/...` | tables |
+- `test/matrix`, its axes, fixtures, scenarios, templates, generator, and
+  generator test;
+- `test/matrix/model_coverage.py`, which was the parity gate while features
+  moved;
+- `tools/model/legacy`, the request and binding algebra that only the matrix
+  consumed.
 
-Features that share nothing must not be merged:
+## What replaced the parity gate
 
-- assembly and publication are unrelated: one collects bindings, the other
-  publishes edges before the graph is complete;
-- `explicit_dependencies` selects between dependencies of the *same* type, while
-  `dependency_composition` changes the dependency's *type*; one extends the
-  construct shapes, the other is mostly atom rows;
-- constructor detection and conversion parity share the emission mechanism
-  (tables of static assertions) but not their axes.
+The matrix generator test proved that a feature was not dropped before its
+replacement existed. That job is now split:
 
-Features that need no family:
+- `claim-check` compares `resolve`, `construct`, and `invoke` on every row and
+  fails on an undeclared divergence or a missing outcome;
+- `cells-check` regenerates every family and fails when a generated file is out
+  of date;
+- `pytest tools/model/tests` pins the structure of every family: paths, case
+  paths, declared gaps, and the row set each claim file must contain.
 
-| feature | why | | --- | --- | | `nested_wrappers`, `resolve_wrapper`,
-`resolve_unique_wrapper` | the row probes already request
-`shared_ptr<shared_ptr<T>>`, `unique_ptr<unique_ptr<T>>`, and deeper nestings |
-| `construct_invoke` | `global/construct` and `global/invoke` shape families | |
-`factory_override` | `global/producer` | | `custom_wrappers` |
-`classification/wrapper` for the properties, plus one row with the custom
-wrapper | | scenarios | each scenario belongs to the family owning its
-mechanism; a regression keeps one named case there |
+## Remaining work
 
-Granularity follows the mechanism, not the matrix product. A collection case
-varies the collection shape and the registration mode; the element storage and
-request form are the row probes. A cycle case varies the graph shape; the edge
-storage is the row probe. That is roughly 35 runtime cases and two static tables
-for the whole remainder, instead of the matrix's hundreds of rows.
+The model is now the only generated corpus, but two threads continue:
 
-## Migration and removal
-
-The matrix is removed feature by feature. A feature is removable only when:
-
-1. the model family covers every supported row the matrix generated for it, and
-   `claim-check` shows `resolve`, `construct`, and `invoke` agreeing on every
-   row the feature produces;
-2. the rows are pinned by assertions, not just compiled;
-3. the feature is listed in `FULLY_MODEL_COVERED_FEATURES` (or the matrix
-   generator no longer emits it);
-4. the matrix generator test still passes with the feature removed.
-
-Order:
-
-1. Done: `construct`, `invoke`, and the producer classes.
-2. Collections: runtime, mixed, keyed, and the indexed container trait.
-3. Configuration: allocator, RTTI, and the indexed DSL.
-4. Mixed co-residence and the singular ambiguity.
-5. Cycles: self, two-node, and three-node graphs.
-6. Lookup scope: local bindings, child, grandchild, shadowing.
-7. `explicit_dependencies` as a construct shape, then composition depth.
-8. Classification tables: constructor detection axes and conversion parity.
-9. Delete `test/matrix`, its axes, fixtures, scenarios, and the `legacy/`
-   algebra.
-
-The matrix generator test and `model_coverage.py` are the parity gate until step
-8\. No feature is deleted from the matrix before its model family exists and the
-generator test passes.
+- the resolve probe still reports overclaims (`resolve-check`), which is a
+  library-versus-model disagreement rather than a missing test;
+- new mechanisms get a family and, where they apply to every row, a claim
+  column.

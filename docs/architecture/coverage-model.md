@@ -211,9 +211,12 @@ than the constructor takes would inject the wrong arguments while every runtime
 test still passed. Signature recovery also normalizes an rvalue-reference
 parameter to the value type, because the injected prvalue binds to `T &&`.
 
-The MSVC backend only exists under `_MSC_VER`. Its files are generated and
-guarded, with a `GTEST_SKIP` naming the platform elsewhere, so the test set runs
-on MSVC and the shape of the coverage is still pinned by the generator tests.
+The MSVC backend header is directly usable by GCC and Clang, so both backends
+run on every platform and the table compares them instead of skipping one. The
+`annotated_constructor` shape is emitted for the default backend only: a
+`DINGO_CONSTRUCTOR` typedef is applied by the public `constructor_detection`
+alias before any backend runs, so the raw backend would report the implicit
+default constructor instead.
 
 ## Collections
 

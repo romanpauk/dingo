@@ -19,7 +19,10 @@ from tools.model.emit.detection_constructor import (
 
 def test_detection_is_backend_by_mode_by_shape() -> None:
     shards = build_shards()
-    assert len(shards) == len(BACKENDS) * len(MODES) * len(SHAPES)
+    public_only = {shape for shape in SHAPES if shape.public_only}
+    assert len(shards) == len(BACKENDS) * len(MODES) * len(SHAPES) - len(
+        MODES
+    ) * len(public_only)
     assert len({shard.path for shard in shards}) == len(shards)
     for shard in shards:
         assert shard.path == (
@@ -45,13 +48,20 @@ def test_signature_mode_asserts_the_recovered_list() -> None:
             assert "std::is_same_v<typename detection::arguments" not in content
 
 
-def test_msvc_backend_is_guarded() -> None:
+def test_msvc_backend_runs_on_every_platform() -> None:
     for shard in build_shards():
         content = render(shard)
         if shard.backend == "msvc":
-            assert "#if defined(_MSC_VER)" in content
             assert "constructor_detection_msvc" in content
-            assert "GTEST_SKIP" in content
-        else:
-            assert "constructor_detection_msvc" not in content
+            assert "constructor_detection_msvc.hpp" in content
             assert "GTEST_SKIP" not in content
+        else:
+            assert "constructor_detection_msvc<" not in content
+
+    shapes = {shard.shape for shard in build_shards()}
+    assert "annotated_constructor" in shapes
+    assert not [
+        shard
+        for shard in build_shards()
+        if shard.shape == "annotated_constructor" and shard.backend == "msvc"
+    ]

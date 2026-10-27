@@ -20,6 +20,10 @@ Read these pages in order for the full picture:
   wrapper, storage exposure policy, or conversion.
 - [Conversion Model](conversion-model.md): how Dingo chooses value, reference,
   pointer, and wrapper conversions at resolution time.
+- [Coverage Model](coverage-model.md): capability rows, the claims over them,
+  operator classes, and what completeness means.
+- [Matrix Retirement](matrix-migration.md): what replaced the retired
+  `test/matrix` corpus, feature by feature.
 
 The public API is centered on three container entry points:
 

@@ -937,7 +937,7 @@ cmake --build build -t format
 cmake --build build -t cells-check
 cmake --build build -j8
 ctest --test-dir build -j8
-./.venv/bin/python -m pytest -q tools/model tools/cost test/matrix/generator_test.py
+./.venv/bin/python -m pytest -q tools/model/tests tools/cost
 cmake --build build -t check
 ```
 

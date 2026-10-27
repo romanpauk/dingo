@@ -17,7 +17,7 @@
 #include <utility>
 #include <vector>
 
-namespace dingo::matrix {
+namespace dingo::fixtures {
 
 class value_type {
 public:
@@ -256,4 +256,4 @@ struct key_b : std::integral_constant<int, 1> {};
 struct tag_a {};
 struct tag_b {};
 
-} // namespace dingo::matrix
+} // namespace dingo::fixtures

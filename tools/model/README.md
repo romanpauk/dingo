@@ -15,7 +15,6 @@ semantics/ support, capabilities, route rules, cells, gaps
 emit/      C++ generators, shared recipe/runner, templates
 report/    coverage report and outcome baseline
 tests/     the model test suite
-legacy/    request/binding algebra still consumed by test/matrix
 ```
 
 Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
@@ -270,16 +269,6 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
 - `semantics/cells.py` owns the scope/form product and its supported subset. The route
   probes, type matrix, type behavior, and behavior families iterate the same
   cell list; "is this cell publishable" has one answer.
-- `legacy/` is test/matrix-only and is not imported by the packaged model;
-  `tests/architecture_test.py` enforces the boundary. `legacy/request.py` is
-  the request algebra. A request is a `Shape` plus qualifiers;
-  its `provides`, `requires`, and `dependency_forms` follow from the wrapper
-  chain. The first slice derives the concrete resolved rows; interface, key,
-  annotation, and collection qualifiers follow the same mechanism.
-- `legacy/binding.py` is the binding/exposure algebra. An exposed type is a binding
-  form (concrete, interface, custom, keyed, annotated) applied to a stored
-  kind; the capability tags and registration recipe are derived from the form
-  and its interface/key/tag qualifiers.
 - `semantics/gaps.py` is the one exception registry: behavior, interface, annotation,
   and absence-probe exceptions live together with their reasons, so the full
   undeclared-coverage surface is visible in one place and a reason cannot be

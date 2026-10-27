@@ -361,7 +361,7 @@ assert(&repo.replica == &replica);
 
 See:
 
-- [test/matrix/README.md](../test/matrix/README.md)
+- [docs/architecture/coverage-model.md](architecture/coverage-model.md)
 - [include/dingo/type/annotated.h](../include/dingo/type/annotated.h)
 
 ## Runtime And Compile-Time Registration
@@ -494,7 +494,7 @@ assert(nested_container.resolve<B>().value == 1);
 
 See:
 
-- [test/matrix/README.md](../test/matrix/README.md)
+- [docs/architecture/coverage-model.md](architecture/coverage-model.md)
 
 ## Moving Containers
 

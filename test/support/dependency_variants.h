@@ -7,11 +7,11 @@
 
 #pragma once
 
-#include "matrix/fixtures/values.h"
+#include "support/dependency_values.h"
 
 #include <variant>
 
-namespace dingo::matrix {
+namespace dingo::fixtures {
 
 struct variant_a {
   explicit variant_a(value_type &dependency) : value(dependency.marker()) {}
@@ -25,4 +25,4 @@ struct variant_b {
   int value;
 };
 
-} // namespace dingo::matrix
+} // namespace dingo::fixtures

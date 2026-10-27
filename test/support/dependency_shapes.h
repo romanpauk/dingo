@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "matrix/fixtures/variant_types.h"
+#include "support/dependency_variants.h"
 
 #include <array>
 #include <cstddef>
@@ -17,7 +17,7 @@
 #include <utility>
 #include <variant>
 
-namespace dingo::matrix {
+namespace dingo::fixtures {
 
 struct dependency_regular {
   int marker() const { return 3; }
@@ -173,4 +173,4 @@ using dependency_const_pointer = std::add_pointer_t<std::add_const_t<Type>>;
 template <typename Type>
 using dependency_variant = std::variant<Type, variant_b>;
 
-} // namespace dingo::matrix
+} // namespace dingo::fixtures

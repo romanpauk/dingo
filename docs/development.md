@@ -45,7 +45,7 @@ Run a quality target with `cmake --build build -t <target>`.
   non-Windows builds.
 - `resolve-check`: builds the per-storage resolve probes, runs them, and writes
   `build/test/resolve-gaps.md`. It is a report, not a gate; see
-  [Generated Matrix Tests](#generated-matrix-tests).
+  [Generated Tests](#generated-tests).
 - `test-cost`: reports the per-translation-unit compile time and object size of
   the generated test suites. It is a report, not a gate; see
   [Test Compile Cost](#test-compile-cost).
@@ -53,13 +53,14 @@ Run a quality target with `cmake --build build -t <target>`.
 
 The development tools are provided by the locked `uv` environment.
 
-## Generated Matrix Tests
+## Generated Tests
 
-`dingo_matrix_test` is generated from the axis model in
-[`test/matrix/README.md`](../test/matrix/README.md). The model combines
-features, registration modes, scopes, stored types, exposed types, resolved
-types, and container shapes, then filters invalid combinations before emitting
-GoogleTest sources.
+The generated tests are derived from the model in
+[`tools/model`](../tools/model/README.md). One row per capability is rendered
+into a claim file for `resolve`, `construct`, and `invoke`, and the operator
+families cover construction shapes, invocation shapes, producers, collections,
+cycles, conversions, and container configuration. See the
+[coverage model](architecture/coverage-model.md).
 
 The hand-written C++ portion is organized by role: `common/` provides matrix
 plumbing, `containers/` and `fixtures/` define axis inputs, `policies/` contains

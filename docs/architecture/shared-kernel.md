@@ -1,6 +1,7 @@
 # Shared Kernel And Generated Coverage
 
-Status: first slice implemented.
+Status: historical design note. The `test/matrix` corpus this document refers to
+has been retired; see [Matrix Retirement](matrix-migration.md).
 
 This page describes a design for removing the duplicated runtime and
 compile-time implementations without replacing the library with a second
@@ -550,9 +551,10 @@ function of a scope/form cell.
 Each step should land with a coverage manifest: the model declares the cells it
 covers, the matrix declares the registration rows it still owns, and a test
 fails when the union no longer covers the catalog. That makes the removal
-incremental and safe. `test/matrix/model_coverage.py` is that manifest:
-`FEATURE_RESTRICTIONS` lists the dropped rows with the model cells that justify
-them, and the generator test fails if any claimed cell loses its behavior class.
+incremental and safe. `model_coverage.py` was that manifest while the matrix
+existed: `FEATURE_RESTRICTIONS` lists the dropped rows with the model cells that
+justify them, and the generator test fails if any claimed cell loses its
+behavior class.
 
 Behavior copy and move counts are not hand-written per cell. Each behavior case
 declares a request class, and the generator derives the minimum count from it:

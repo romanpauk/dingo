@@ -46,6 +46,9 @@ class ConstructorShape:
     arity: int
     arguments: str = ""
     kind: str = "concrete"
+    # A shape whose selection happens in the public alias rather than in a
+    # detection backend: the typedef wins before any backend runs.
+    public_only: bool = False
 
 
 SHAPES = (
@@ -106,6 +109,7 @@ SHAPES = (
 };""",
         "probe_type",
         1,
+        public_only=True,
     ),
     ConstructorShape(
         "dependency_reference",
@@ -202,6 +206,8 @@ def build_shards() -> list[ConstructorShard]:
     for backend in BACKENDS:
         for mode in MODES:
             for shape in SHAPES:
+                if backend == "msvc" and shape.public_only:
+                    continue
                 case_path = (
                     f"classification/constructor/{backend}/{mode}/{shape.name}"
                 )

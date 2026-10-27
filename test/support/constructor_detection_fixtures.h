@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "matrix/fixtures/dependency_shapes.h"
+#include "support/dependency_shapes.h"
 
 #include <dingo/factory/constructor.h>
 #include <dingo/factory/detail/constructor_detection_msvc.hpp>
@@ -21,7 +21,7 @@
 #include <type_traits>
 #include <variant>
 
-namespace dingo::matrix {
+namespace dingo::fixtures {
 
 using constructor_config = dependency_regular;
 
@@ -206,17 +206,17 @@ struct constructor_copy_only_context {
   }
 };
 
-} // namespace dingo::matrix
+} // namespace dingo::fixtures
 
 namespace dingo {
 
 template <>
-struct constructor_detection_traits<matrix::constructor_trait_limited> {
+struct constructor_detection_traits<fixtures::constructor_trait_limited> {
   static constexpr size_t max_arity = 2;
 };
 
 template <>
-struct is_auto_constructible<matrix::constructor_public_selected_dependency>
+struct is_auto_constructible<fixtures::constructor_public_selected_dependency>
     : std::true_type {};
 
 } // namespace dingo

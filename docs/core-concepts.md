@@ -390,7 +390,7 @@ assert(&held == &std::get<A>(existing));
 
 See:
 
-- [test/matrix/README.md](../test/matrix/README.md)
+- [docs/architecture/coverage-model.md](architecture/coverage-model.md)
 - [include/dingo/type/type_traits.h](../include/dingo/type/type_traits.h)
 
 ## Factories
@@ -598,7 +598,7 @@ assert(container.construct<A>(callable<A(int)>(overloaded_factory{})).value ==
 See:
 
 - [test/factory/constructor_detection.cpp](../test/factory/constructor_detection.cpp)
-- [test/matrix/README.md](../test/matrix/README.md)
+- [docs/architecture/coverage-model.md](architecture/coverage-model.md)
 - [include/dingo/factory/constructor_detection.h](../include/dingo/factory/constructor_detection.h)
 - [include/dingo/factory/constructor.h](../include/dingo/factory/constructor.h)
 - [include/dingo/factory/function.h](../include/dingo/factory/function.h)

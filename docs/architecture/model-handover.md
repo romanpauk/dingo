@@ -9,21 +9,19 @@ per-storage request-derivation refactor.
 
 The tree is green:
 
-- `pytest tools/model/tests test/matrix/generator_test.py`: 333 passed
+- `pytest tools/model/tests`: 217 passed
 - `dingo_model_test`: 279 tests passed (behavior/type behavior, per cell)
-- `dingo_classification_test`: 113 tests (83 on this platform, 30 MSVC backend
-  cases skipped)
+- `dingo_classification_test`: 111 tests (both detection backends)
 - `dingo_resolution_static_asserts_test`: 40 tests
 - `dingo_resolution_static_test`: 7 tests
 - `dingo_resolution_runtime_test`: 4,774 tests (resolve rows, `construct` and
-  `invoke` claims, 84 construct cases (16 argument types x 5 shapes), 7
-  conversion cases and 19 invoke shape classes, 51 producer claims, 5 mixed
-  collection cases, 2 configuration cases, 2 mixed co-residence cases, 4
-  cyclical cases)
+  `invoke` claims, 84 construct cases, 19 invoke shapes, 51 producer claims, 5
+  mixed collection cases, 2 configuration cases, 2 mixed co-residence cases, 4
+  cyclical cases, 7 conversion cases, 4 wrapper cases)
 - `dingo_registration_test`: 158 tests
 - `dingo_registration_runtime_test`: 6 tests
 - `cells-check`: passes
-- `ctest`: 83/83 passed
+- `ctest`: 38/38 passed (the retired matrix executables are gone)
 - `resolve-check`: 274 tests, report written to `build/test/resolve-gaps.md`
   (2,009 calls, 772 overclaims)
 - `claim-check`: report written to `build/test/claim-gaps.md`; `construct` 899
@@ -91,7 +89,6 @@ semantics/    support rules, capabilities, routes, extended shapes, gaps
 emit/         C++ generators, templates, compile binding matrix
 report/       coverage report, outcome baseline
 tests/        pytest suite
-legacy/       request/binding algebra still consumed by test/matrix
 ```
 
 Imports flow downwards only:
@@ -322,9 +319,8 @@ Reducing them requires new scenario families, not more generated cases.
 - `behavior.py` still contains scenario-level C++ strings; move them through
   `CppType` / registration plans. The interface and annotation recipes are
   hand-built shape lists, not derived from the ledger.
-- `legacy/binding.py` and `legacy/request.py` are test/matrix-only. The
-  architecture test now enforces that no packaged module imports the layer.
-  Migrating `test/matrix` is still the end state.
+- The legacy `test/matrix` generator and its `tools/model/legacy` algebra are
+  deleted; the model families above are the only generated coverage.
 - `type_matrix.cpp` is the compile-time bottleneck. If it grows, split it into
   multiple translation units.
 - `report/paths.py` outcome and per-family tables still describe only the
@@ -341,7 +337,7 @@ cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON
 Model pytest:
 
 ```bash
-./.venv/bin/python -m pytest -q tools/model/tests test/matrix/generator_test.py
+./.venv/bin/python -m pytest -q tools/model/tests
 ```
 
 Coverage report:
