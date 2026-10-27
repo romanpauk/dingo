@@ -8,11 +8,18 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
-from tools.model.emit.binding_matrix import build_rows, render, validate
+from tools.model.emit.binding_matrix import (
+    build_rows,
+    build_shards,
+    manifest,
+    render,
+    validate,
+)
 from tools.model.emit.common.validation import validate_catalog
 from tools.model.grammar.bindings import binding_for
 from tools.model.grammar.traits import TRAITS_BY_NAME
@@ -22,7 +29,11 @@ def test_binding_matrix_is_non_empty_and_unique() -> None:
     validate()
     rows = build_rows()
     assert rows
-    assert len({row["name"] for row in rows}) == len(rows)
+    keys = {
+        (row["scope"], row["storage"], row["traits"], row["binding"], row["request"])
+        for row in rows
+    }
+    assert len(keys) == len(rows)
 
 
 def test_binding_matrix_rows_are_supported() -> None:
@@ -42,9 +53,37 @@ def test_binding_matrix_rows_are_supported() -> None:
         )
 
 
-def test_binding_matrix_render_is_deterministic(tmp_path: Path) -> None:
-    content = render(tmp_path / "binding_matrix.cpp")
-    assert content == render(tmp_path / "binding_matrix.cpp")
+def test_binding_shards_follow_the_registration_hierarchy() -> None:
+    shards = build_shards()
+    assert shards
+    assert len({shard.path for shard in shards}) == len(shards)
+    for shard in shards:
+        assert shard.path == (
+            f"registration/compile/{shard.scope}/{shard.storage}/binding.cpp"
+        )
+        assert shard.cases
+        for case in shard.cases:
+            assert case.path.startswith(
+                f"registration/compile/{shard.scope}/{shard.storage}/binding/"
+            )
+
+
+def test_binding_matrix_render_is_deterministic() -> None:
+    for shard in build_shards()[:4]:
+        content = render(shard)
+        assert content == render(shard)
+        for case in shard.cases:
+            assert f"TEST({shard.suite}, {case.name})" in content
+            assert f'RecordProperty("path", "{case.path}")' in content
+
+
+def test_binding_manifest_round_trips() -> None:
+    shards = build_shards()
+    payload = json.loads(manifest(shards))
+    assert len(payload["shards"]) == len(shards)
+    for shard, entry in zip(shards, payload["shards"]):
+        assert entry["path"] == shard.path
+        assert len(entry["cases"]) == len(shard.cases)
 
 
 def test_library_catalog_matches_model() -> None:

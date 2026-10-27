@@ -21,11 +21,11 @@ def test_resolve_shards_follow_the_storage_hierarchy() -> None:
     assert len({shard.path for shard in shards}) == len(shards)
     for shard in shards:
         assert shard.path == (
-            f"{shard.container}/{shard.scope}/{shard.storage}/"
-            f"{shard.category}.cpp"
+            f"resolution/{shard.container}/{shard.scope}/"
+            f"{shard.storage}/{shard.category}.cpp"
         )
         assert shard.suite == (
-            f"{shard.container}_{shard.scope}_{shard.storage}_"
+            f"resolution_{shard.container}_{shard.scope}_{shard.storage}_"
             f"{shard.category}"
         )
         assert shard.cases

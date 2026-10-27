@@ -30,6 +30,7 @@ from pathlib import Path
 
 from tools.model.domain.requests import object_requests
 from tools.model.emit.common.recipe import external_instance, registration
+from tools.model.emit.hierarchy import CasePath
 from tools.model.emit.common.runner import emit, render_template
 from tools.model.emit.common.validation import validate_catalog
 from tools.model.grammar import cpp
@@ -270,13 +271,20 @@ def _cases_for(
                     shape.access if shape is not None else "",
                 )
                 slug = _slug(request)
+                case_path = CasePath(
+                    phase="resolution",
+                    container=container,
+                    scope=path.scope.name,
+                    storage=path.name,
+                    category=category,
+                    traits=traits.name,
+                    binding=binding.kind,
+                    request=slug,
+                )
                 cases.append(
                     ResolveCase(
                         name=f"{traits.name}_{binding.kind}_{slug}",
-                        path=(
-                            f"{container}/{path.scope.name}/{path.name}/"
-                            f"{category}/{traits.name}/{binding.kind}/{slug}"
-                        ),
+                        path=case_path.path,
                         category=category,
                         scope=path.scope.name,
                         storage=path.name,
@@ -288,10 +296,7 @@ def _cases_for(
                         declared_reason=reason or "",
                         instance=instance,
                         registration=line,
-                        suite=(
-                            f"{container}_{path.scope.name}_{path.name}_"
-                            f"{category}"
-                        ),
+                        suite=case_path.suite,
                     )
                 )
     return tuple(cases)
@@ -313,7 +318,13 @@ def build_shards() -> tuple[Shard, ...]:
     for (container, scope, storage, category), cases in sorted(
         grouped.items()
     ):
-        suite = f"{container}_{scope}_{storage}_{category}"
+        suite = CasePath(
+            phase="resolution",
+            container=container,
+            scope=scope,
+            storage=storage,
+            category=category,
+        ).suite
         shards.append(
             Shard(
                 container=container,
@@ -321,7 +332,13 @@ def build_shards() -> tuple[Shard, ...]:
                 storage=storage,
                 form=cases[0].form,
                 category=category,
-                path=f"{container}/{scope}/{storage}/{category}.cpp",
+                path=CasePath(
+                    phase="resolution",
+                    container=container,
+                    scope=scope,
+                    storage=storage,
+                    category=category,
+                ).file,
                 suite=suite,
                 cases=tuple(cases),
             )

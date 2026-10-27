@@ -31,6 +31,7 @@ COMMANDS = {
     "matrix": "tools.model.emit.matrix",
     "trait-matrix": "tools.model.emit.traits",
     "resolve": "tools.model.emit.resolve",
+    "detection-constructor": "tools.model.emit.detection_constructor",
     "binding-matrix": "tools.model.emit.binding_matrix",
     "type-behavior": "tools.model.emit.behavior",
     "property": "tools.model.emit.families.property",

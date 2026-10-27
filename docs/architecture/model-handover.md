@@ -9,10 +9,12 @@ per-storage request-derivation refactor.
 
 The tree is green:
 
-- `pytest tools/model/tests test/matrix/generator_test.py`: 299 passed
+- `pytest tools/model/tests test/matrix/generator_test.py`: 304 passed
 - `dingo_model_test`: 1013 tests passed, including both leaf traits
+- `dingo_detection_test`: 9 tests
+- `dingo_registration_test`: 158 tests
 - `cells-check`: passes
-- `ctest`: 77/77 passed
+- `ctest`: 79/79 passed
 - `resolve-check`: 274 tests, report written to `build/test/resolve-gaps.md`
   (2,009 calls, 772 overclaims)
 - `format-check` and full `check`: pass
@@ -181,6 +183,8 @@ Current generated test counts (copyable + move-only):
 - `route_cells`: 33
 - `interface_cells`: 7
 - `annotation_cells`: 3 + 3
+- `detection/constructor`: 9
+- `registration/binding`: 158
 - `type_matrix`, `trait_matrix`, `selection_rules`, `property_cells`: 1 each
 
 The behavior move-only variant writes its outcomes to
@@ -205,10 +209,11 @@ Generated files are under `build/test/generated/model/` and are compiled into
 ### 0. Storage-driven resolve probe (in progress)
 
 `cmake --build build -t resolve-check` builds the hierarchy
-`runtime/<scope>/<storage>/<category>.cpp` (63 storage files, 2,009 tests) and
-writes `build/test/resolve-gaps.md`. A file is one storage path, a suite is that
-storage path, and a test is one `(trait, binding, request)`. The logical case
-path is `<container>/<scope>/<storage>/<category>/<traits>/<binding>/<request>`;
+`resolution/runtime/<scope>/<storage>/<category>.cpp` (63 storage files, 2,009
+tests) and writes `build/test/resolve-gaps.md`. A file is one storage path, a
+suite is that storage path, and a test is one `(trait, binding, request)`. The
+logical case path is
+`<phase>/<container>/<scope>/<storage>/<category>/<traits>/<binding>/<request>`;
 it is recorded through `RecordProperty("path", ...)`. A resolve that throws is
 recorded and the test is skipped. The probe fixtures are `copyable`/`movable`;
 the behavior families keep the lifetime-counting `tracked` fixture. Current

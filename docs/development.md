@@ -136,13 +136,13 @@ to date, and the model's pytest suite checks the catalog against the library
 declarations in `include/dingo/storage` and `include/dingo/binding`.
 
 `resolve-check` is the storage-driven runtime probe. The generated tree is
-`runtime/<scope>/<storage>/<category>.cpp`; each file has one GTest suite per
-storage path and category and one test per `(trait, binding, request)`. Each
-case also has a logical path
-`<container>/<scope>/<storage>/<category>/<traits>/<binding>/<request>`, written
-through `RecordProperty("path", ...)`. The probe records the outcome and skips a
-test when `resolve` throws. The report splits covered calls, model overclaims,
-declared gaps, and stale declarations. Build it with:
+`resolution/runtime/<scope>/<storage>/<category>.cpp`; each file has one GTest
+suite per storage path and category and one test per
+`(trait, binding, request)`. Each case also has a logical path
+`<phase>/<container>/<scope>/<storage>/<category>/<traits>/<binding>/<request>`,
+written through `RecordProperty("path", ...)`. The probe records the outcome and
+skips a test when `resolve` throws. The report splits covered calls, model
+overclaims, declared gaps, and stale declarations. Build it with:
 
 ```bash
 cmake --build build -t resolve-check

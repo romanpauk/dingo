@@ -123,13 +123,13 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   pointees promoted from a value, inline wrappers that contain the leaf).
   Borrows, moves, adopted pointers/arrays, and owning-handle copies stay.
 - `emit/resolve.py` generates the storage-driven runtime probe. On disk the
-  hierarchy is `runtime/<scope>/<storage>/<category>.cpp`; one file is one
+  hierarchy is `resolution/runtime/<scope>/<storage>/<category>.cpp`; one file is one
   storage path and category (`resolve` today),
   one GTest suite is that path, and one test is one `(trait, binding, request)`.
   Each test registers the storage once and calls `resolve` through the
   `probe<Request>` helper. A resolve that throws is recorded and the test is
   skipped. Every case has a path
-  `<container>/<scope>/<storage>/<category>/<traits>/<binding>/<request>`; the GTest test
+  `<phase>/<container>/<scope>/<storage>/<category>/<traits>/<binding>/<request>`; the GTest test
   name is the path tail and `RecordProperty("path", ...)` writes the full path
   into the test output. Its fixtures are named for the trait
   (`copyable`/`movable`); the behavior suites keep `tracked` because they count
@@ -138,9 +138,13 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
   into covered calls, overclaims, declared gaps, and stale declarations. It is
   a report target (`resolve-check`), not part of `check`, while the model is
   being tightened.
+- `emit/detection_constructor.py` generates the first detection slice under
+  `detection/compile/constructor/<shape>.cpp`: constructor arity and kind for
+  zero-argument, copy-only, move-only, aggregate, dependency, annotated, and
+  move-only array shapes.
 - `emit/binding_matrix.py` emits compile-time `dingo::bindings<dingo::bind<...>>`
-  instantiations for every supported annotated, annotated-interface, keyed, and
-  interface case, for both leaf traits. It
+  instantiations under `registration/compile/<scope>/<storage>/binding.cpp`,
+  one file per storage, for both leaf traits. It
   checks the registration composition (scope, storage spelling, annotation,
   interface list, and lookup key); runtime families check the route.
 - `emit/behavior.py` executes the top-level half of that matrix. Every
