@@ -182,6 +182,8 @@ set(DINGO_CONSTRUCT_MODEL_GENERATOR
     "tools.model.emit.families.construct")
 set(DINGO_INVOKE_MODEL_GENERATOR
     "tools.model.emit.families.invoke")
+set(DINGO_PRODUCER_MODEL_GENERATOR
+    "tools.model.emit.families.producer")
 set(DINGO_COLLECTION_MODEL_GENERATOR
     "tools.model.emit.families.collection")
 set(DINGO_INDEXED_MODEL_GENERATOR
@@ -218,6 +220,8 @@ set(DINGO_CONSTRUCT_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/construct_shapes.cpp.j2")
 set(DINGO_INVOKE_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/invoke_shapes.cpp.j2")
+set(DINGO_PRODUCER_MODEL_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/producer_cells.cpp.j2")
 set(DINGO_CONSUMER_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/consumer_cells.cpp.j2")
 set(DINGO_PROBE_FIXTURES_TEMPLATE
@@ -361,6 +365,8 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_ANNOTATED_MODEL_TEMPLATE}"
     "${DINGO_CONSTRUCT_MODEL_TEMPLATE}"
     "${DINGO_INVOKE_MODEL_TEMPLATE}"
+    "${DINGO_PRODUCER_MODEL_TEMPLATE}"
+    "${PROJECT_SOURCE_DIR}/tools/model/tests/producer_cells_test.py"
     "${DINGO_CONSUMER_MODEL_TEMPLATE}"
     "${DINGO_PROBE_FIXTURES_TEMPLATE}"
     "${PROJECT_SOURCE_DIR}/tools/model/emit/consumers.py"
@@ -544,6 +550,21 @@ if(NOT DINGO_INVOKE_MODEL_GENERATOR_RESULT EQUAL 0)
 endif()
 file(GLOB_RECURSE DINGO_INVOKE_SHAPE_SOURCES CONFIGURE_DEPENDS
     "${DINGO_RESOLVE_DIR}/resolution/runtime/global/invoke/*/*.cpp")
+
+execute_process(
+    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
+        ${DINGO_PRODUCER_MODEL_GENERATOR}
+        --out-dir ${DINGO_RESOLVE_DIR}
+        --include ${PROJECT_SOURCE_DIR}/include
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE DINGO_PRODUCER_MODEL_GENERATOR_RESULT)
+if(NOT DINGO_PRODUCER_MODEL_GENERATOR_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to generate producer probes: "
+        "${DINGO_PRODUCER_MODEL_GENERATOR_RESULT}")
+endif()
+file(GLOB_RECURSE DINGO_PRODUCER_SOURCES CONFIGURE_DEPENDS
+    "${DINGO_RESOLVE_DIR}/resolution/runtime/global/producer/*.cpp")
 
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
@@ -830,6 +851,7 @@ add_executable(dingo_resolution_runtime_test
     ${DINGO_RUNTIME_REQUEST_SOURCES}
     ${DINGO_CONSTRUCT_SOURCES}
     ${DINGO_INVOKE_SHAPE_SOURCES}
+    ${DINGO_PRODUCER_SOURCES}
     ${DINGO_CONSUMER_SOURCES}
     ${DINGO_INDEXED_SOURCES})
 target_link_libraries(dingo_resolution_runtime_test dingo::dingo gtest_main)

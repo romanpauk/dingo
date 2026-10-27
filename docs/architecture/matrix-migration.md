@@ -20,10 +20,10 @@ only) | `classification/.../wrapper` + `resolution/.../nested` | |
 `resolution/runtime/global/construct/<shape>` | | `construct_collection` | not
 covered | `resolution/.../construct/collection` | | `local_bindings` | not
 covered | `resolution/.../local` | | `nested_container` | not covered |
-`resolution/.../container` | | `factory_override` | not covered |
-`registration/.../factory` | | `explicit_dependencies` | not covered |
-`resolution/.../dependencies` | | `mixed_external_dependency` | not covered |
-`resolution/.../mixed` | | `mixed_singular_ambiguity` | not covered |
+`resolution/.../container` | | `factory_override` | covered (producer classes) |
+`resolution/runtime/global/producer/<cell>` | | `explicit_dependencies` | not
+covered | `resolution/.../dependencies` | | `mixed_external_dependency` | not
+covered | `resolution/.../mixed` | | `mixed_singular_ambiguity` | not covered |
 `resolution/.../mixed` | | `custom_allocator` | not covered |
 `resolution/.../config/allocator` | | `custom_rtti` | not covered |
 `resolution/.../config/rtti` | | `resolve_collection` | not covered |

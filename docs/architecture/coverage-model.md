@@ -149,6 +149,23 @@ pointer and functor forms; explicit and overloaded signature selection;
 move-only and reference returns; and a missing dependency that must throw. An
 overloaded callable without an explicit signature is a declared gap.
 
+## Producers
+
+The producer family answers "does the capability survive a change of factory" at
+`resolution/runtime/global/producer/<cell>`:
+
+- `shared/plain` with detected construction, explicit `constructor<...>`,
+  `function<...>`, `callable(...)`, `callable<Signature>(...)`, a
+  `DINGO_CONSTRUCTOR` type, and an overloaded callable selected by signature;
+- `shared/pointer`, `shared/shared_handle`, `unique/unique_handle`,
+  `shared/alternative`, and `shared/optional` with a function factory and a
+  callable factory.
+
+Each producer gets the same three claims over the same dependency: `resolve`,
+`construct`, and `invoke`, asserting the same value. A producer that quietly
+changes the result fails. `unique_handle` is the one cell whose request is the
+handle itself, because a unique scope cannot lend an lvalue.
+
 ## Completeness
 
 Coverage is complete when:
