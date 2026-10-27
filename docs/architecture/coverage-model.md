@@ -140,9 +140,14 @@ resolution/runtime/global/construct/<shape>/<traits>.cpp
 ```
 
 with one canonical storage per shape (shared/plain for references, pointers and
-values; unique/plain for rvalue and move-only; the handle form for handles). The
-same split will apply to `invoke`: per-cell claim files for breadth, a small
-shape family for meaning.
+values; unique/plain for rvalue and move-only; the handle form for handles).
+
+`invoke` uses the same split at `resolution/runtime/global/invoke/<shape>`: no
+arguments; lvalue, const-lvalue, value, rvalue, pointer, const-pointer and
+shared-handle arguments; two arguments; `void` return; `std::function`, function
+pointer and functor forms; explicit and overloaded signature selection;
+move-only and reference returns; and a missing dependency that must throw. An
+overloaded callable without an explicit signature is a declared gap.
 
 ## Completeness
 

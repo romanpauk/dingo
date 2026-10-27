@@ -29,12 +29,12 @@ covered | `resolution/.../local` | | `nested_container` | not covered |
 `resolution/.../config/rtti` | | `resolve_collection` | not covered |
 `registration/.../collection` | | `resolve_keyed_collection` | not covered |
 `registration/.../collection` | | `resolve_indexed` | not covered |
-`registration/.../indexed` | | `construct_invoke` / invoke family | claim files
-covered; callable shapes remaining | `resolution/runtime/<cell>/invoke.cpp` | |
-`scenario` family | not covered | `resolution/.../scenario` | |
-`shared_cyclical` family | not covered | `resolution/.../cyclical` | |
-dependency-composition families | not covered | `resolution/.../composition` | |
-conversion parity | not covered | `classification/conversion` |
+`registration/.../indexed` | | `construct_invoke` / invoke family | covered (19
+shape classes) | `resolution/runtime/global/invoke/<shape>` | | `scenario`
+family | not covered | `resolution/.../scenario` | | `shared_cyclical` family |
+not covered | `resolution/.../cyclical` | | dependency-composition families |
+not covered | `resolution/.../composition` | | conversion parity | not covered |
+`classification/conversion` |
 
 ## Removed matrix features
 
