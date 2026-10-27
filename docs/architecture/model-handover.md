@@ -9,16 +9,17 @@ per-storage request-derivation refactor.
 
 The tree is green:
 
-- `pytest tools/model/tests test/matrix/generator_test.py`: 330 passed
+- `pytest tools/model/tests test/matrix/generator_test.py`: 333 passed
 - `dingo_model_test`: 279 tests passed (behavior/type behavior, per cell)
 - `dingo_classification_test`: 113 tests (83 on this platform, 30 MSVC backend
   cases skipped)
 - `dingo_resolution_static_asserts_test`: 40 tests
 - `dingo_resolution_static_test`: 7 tests
-- `dingo_resolution_runtime_test`: 4,763 tests (resolve rows, `construct` and
-  `invoke` claims, 84 construct cases (16 argument types x 5 shapes) and 19
-  invoke shape classes, 51 producer claims, 5 mixed collection cases, 2
-  configuration cases, 2 mixed co-residence cases, 4 cyclical cases)
+- `dingo_resolution_runtime_test`: 4,770 tests (resolve rows, `construct` and
+  `invoke` claims, 84 construct cases (16 argument types x 5 shapes), 7
+  conversion cases and 19 invoke shape classes, 51 producer claims, 5 mixed
+  collection cases, 2 configuration cases, 2 mixed co-residence cases, 4
+  cyclical cases)
 - `dingo_registration_test`: 158 tests
 - `dingo_registration_runtime_test`: 6 tests
 - `cells-check`: passes

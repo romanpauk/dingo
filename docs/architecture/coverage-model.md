@@ -171,6 +171,27 @@ pointer and functor forms; explicit and overloaded signature selection;
 move-only and reference returns; and a missing dependency that must throw. An
 overloaded callable without an explicit signature is a declared gap.
 
+## Conversions
+
+A conversion decides whether a value registered as `S` can be delivered as a
+request `R`. It has two halves that fail differently:
+
+- **qualification** — a reference or pointer conversion may add cv qualifiers
+  and may not remove them, and nested pointers follow the language rule
+  (`int **` to `const int *const *` is allowed, `int **` to `const int **` is
+  not);
+- **delivery** — a value conversion copies or moves, which is countable.
+
+`resolution/runtime/global/conversion/<case>` owns the rejecting direction, the
+volatile axis, nested pointers, the copy counts, and the claim that all four
+front-ends agree (`runtime_container<>`, `container<>`, the mixed static
+container, and `static_container`). The add-qualifier direction is already in
+the row probes, which request `T &`, `const T &`, `T *`, and `const T *`.
+
+Rejected conversions throw `type_not_convertible_exception`; they cannot be row
+requests because the row space only contains shapes the model believes are
+supported.
+
 ## Detection axes
 
 Constructor detection has two independent axes and one dependent one:
