@@ -216,14 +216,27 @@ the composed registration.
 
 ### 3. Raise the per-storage request depth
 
-Current `DEPTH = 2` is conservative. Before raising it:
+Current `DEPTH = 2` is conservative. Measured with the current model (five
+bindings, both leaf traits):
+
+- depth 2: 2,508 request forms, 264,120 cases, 2,041 supported, 170 shapes;
+- depth 3: 20,030 request forms, 2,141,450 cases, 8,098 supported, 1,145 shapes.
+
+Almost all depth-3 growth is concrete (3,971 copyable / 3,541 move-only); keyed,
+annotated, interface, and annotated-interface counts do not change. The type
+matrix, trait matrix, and type-behavior suites would grow from 222 to about
+1,145 shapes (roughly 5x). `type_matrix.cpp` is already the compile-time
+bottleneck, so consider a compile-only depth-3 probe before wiring the new
+shapes into every runtime family.
+
+Before raising it:
 
 - define per-storage route rules for the new combinations;
-- probe the new derived requests;
-- update supported counts and baselines.
+- probe the new derived requests and fix any overclaims the compile/runtime
+  matrices expose;
+- update supported counts, baselines, and the docs.
 
-Do not simply remove the bound; depth 4 produces ~29k supported paths and a very
-large C++ surface.
+Do not simply remove the bound; depth 4 produces a much larger surface.
 
 ### 4. Remaining declared gaps
 
