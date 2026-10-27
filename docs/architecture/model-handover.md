@@ -9,7 +9,7 @@ per-storage request-derivation refactor.
 
 The tree is green:
 
-- `pytest tools/model/tests test/matrix/generator_test.py`: 291 passed
+- `pytest tools/model/tests test/matrix/generator_test.py`: 293 passed
 - `dingo_model_test`: 1013 tests passed, including both leaf traits
 - `cells-check`: passes
 - `ctest`: 77/77 passed
@@ -253,8 +253,9 @@ Reducing them requires new scenario families, not more generated cases.
 - `behavior.py` still contains scenario-level C++ strings; move them through
   `CppType` / registration plans. The interface and annotation recipes are
   hand-built shape lists, not derived from the ledger.
-- `legacy/binding.py` and `legacy/request.py` are test/matrix-only. Migrate
-  `test/matrix` or keep them clearly isolated.
+- `legacy/binding.py` and `legacy/request.py` are test/matrix-only. The
+  architecture test now enforces that no packaged module imports the layer.
+  Migrating `test/matrix` is still the end state.
 - `type_matrix.cpp` is the compile-time bottleneck. If it grows, split it into
   multiple translation units.
 - `report/paths.py` outcome and per-family tables still describe only the

@@ -247,7 +247,9 @@ Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
 - `semantics/cells.py` owns the scope/form product and its supported subset. The route
   probes, type matrix, type behavior, and behavior families iterate the same
   cell list; "is this cell publishable" has one answer.
-- `legacy/request.py` is the request algebra. A request is a `Shape` plus qualifiers;
+- `legacy/` is test/matrix-only and is not imported by the packaged model;
+  `tests/architecture_test.py` enforces the boundary. `legacy/request.py` is
+  the request algebra. A request is a `Shape` plus qualifiers;
   its `provides`, `requires`, and `dependency_forms` follow from the wrapper
   chain. The first slice derives the concrete resolved rows; interface, key,
   annotation, and collection qualifiers follow the same mechanism.

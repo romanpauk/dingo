@@ -59,3 +59,54 @@ def test_model_imports_only_flow_downwards() -> None:
                     f"layer {target_layer} from layer {source_layer}"
                 )
     assert not violations, "\n".join(violations)
+
+
+def _imports_legacy(tree: ast.AST) -> bool:
+    for node in ast.walk(tree):
+        module = None
+        if isinstance(node, ast.ImportFrom):
+            module = node.module
+        elif isinstance(node, ast.Import):
+            module = node.names[0].name
+        if module and (
+            module == "tools.model.legacy"
+            or module.startswith("tools.model.legacy.")
+        ):
+            return True
+    return False
+
+
+def test_only_the_matrix_tests_import_the_legacy_layer() -> None:
+    root = MODEL_ROOT.parents[1]
+    violations = []
+    for base in (root / "tools", root / "test"):
+        for path in sorted(base.rglob("*.py")):
+            relative = path.relative_to(root)
+            if relative.parts[:3] == ("tools", "model", "legacy"):
+                continue
+            if relative.parts[:2] == ("test", "matrix"):
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            if _imports_legacy(tree):
+                violations.append(str(relative))
+    assert not violations, (
+        "the legacy algebra is test/matrix-only; unexpected importers: "
+        + ", ".join(violations)
+    )
+
+
+def test_legacy_layer_does_not_reach_into_emit_or_report() -> None:
+    legacy_root = MODEL_ROOT / "legacy"
+    offenders = []
+    for path in sorted(legacy_root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                if node.module.startswith(
+                    ("tools.model.emit", "tools.model.report")
+                ):
+                    offenders.append(str(path.relative_to(MODEL_ROOT)))
+    assert not offenders, (
+        "the legacy algebra must not depend on emit/report: "
+        + ", ".join(offenders)
+    )
