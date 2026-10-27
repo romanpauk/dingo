@@ -182,16 +182,16 @@ TEST(resolve_cells, {{ test.name }}) {
   try {
     auto &&value{{ loop.index }} = {{ call.expression }};
     (void)value{{ loop.index }};
-    write_resolve_outcome({{ call.name | tojson }}, {{ test.scope | tojson }},
-                          {{ test.storage | tojson }},
-                          {{ test.binding | tojson }}, {{ call.request | tojson }},
-                          {{ test.traits | tojson }},
+    write_resolve_outcome({{ call.name | cppstr }}, {{ test.scope | cppstr }},
+                          {{ test.storage | cppstr }},
+                          {{ test.binding | cppstr }}, {{ call.request | cppstr }},
+                          {{ test.traits | cppstr }},
                           {{ "true" if call.declared else "false" }}, "ok");
   } catch (const std::exception &error) {
-    write_resolve_outcome({{ call.name | tojson }}, {{ test.scope | tojson }},
-                          {{ test.storage | tojson }},
-                          {{ test.binding | tojson }}, {{ call.request | tojson }},
-                          {{ test.traits | tojson }},
+    write_resolve_outcome({{ call.name | cppstr }}, {{ test.scope | cppstr }},
+                          {{ test.storage | cppstr }},
+                          {{ test.binding | cppstr }}, {{ call.request | cppstr }},
+                          {{ test.traits | cppstr }},
                           {{ "true" if call.declared else "false" }},
                           (std::string("exception:") + error.what()).c_str());
   }

@@ -10,18 +10,26 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 
 def environment() -> Environment:
-    return Environment(
+    env = Environment(
         loader=FileSystemLoader(Path(__file__).parent.parent / "templates"),
         undefined=StrictUndefined,
         autoescape=False,
         keep_trailing_newline=True,
     )
+
+    def cppstr(value: object) -> str:
+        """A C++ string literal without Jinja's HTML-safe JSON escaping."""
+        return json.dumps(str(value))
+
+    env.filters["cppstr"] = cppstr
+    return env
 
 
 def render_template(name: str, **context: object) -> str:
