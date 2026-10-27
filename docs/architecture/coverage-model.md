@@ -161,6 +161,15 @@ dimensions here.
 The mixed cases are the interesting ones: one element is registered statically
 and one at runtime, and the assembled collection must contain both.
 
+## Declared dependency order
+
+A type whose constructors differ only in argument order is ambiguous to
+detection. `dingo::dependencies<...>` on the registration declares the order,
+and `resolution/runtime/global/dependencies/<case>` covers the runtime and
+compile-time spellings. `construct<T>()` cannot use that metadata for an
+ambiguous type, because it re-derives the constructor; that is a declared gap,
+and `constructor<T(args...)>` is the escape hatch.
+
 ## Lookup scope
 
 Local bindings and nested containers are the same rule set — where a binding is
