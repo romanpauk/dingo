@@ -12,7 +12,13 @@ from pathlib import Path
 
 import pytest
 
-from tools.model.emit.families.route import ABSENCE_PROBE_GAPS, build_rows, render, validate
+from tools.model.emit.families.route import (
+    ABSENCE_PROBE_GAPS,
+    build_rows,
+    build_shards,
+    render,
+    validate,
+)
 from tools.model.semantics.routes.ledger import supported_categories
 from tools.model.emit.common.validation import validate_catalog
 from tools.model.grammar.catalog import FORMS, SCOPES
@@ -34,7 +40,7 @@ def test_unavailable_categories_have_absence_assertions(tmp_path: Path) -> None:
         for category in ("value", "object", "rvalue")
         if not row[category]
     )
-    content = render(tmp_path / "route_cells.cpp")
+    content = "".join(render(shard) for shard in build_shards())
     assert content.count("route unexpectedly available") == missing
 
 
@@ -45,7 +51,7 @@ def test_render_asserts_every_candidate_target_shape(tmp_path: Path) -> None:
         for row in rows
         for category in ("value", "object", "rvalue")
     )
-    content = render(tmp_path / "route_cells.cpp")
+    content = "".join(render(shard) for shard in build_shards())
     assert content.count("route target shape changed") == expected
 
 
@@ -79,11 +85,13 @@ def test_route_categories_follow_scope_and_form() -> None:
 
 
 def test_render_names_every_cell(tmp_path: Path) -> None:
-    content = render(tmp_path / "route_cells.cpp")
-    assert content == render(tmp_path / "route_cells.cpp")
-    for row in build_rows():
-        assert f"{row['scope_name']}_{row['form_name']}" in content
-    assert content.count("TEST(route_cells, ") == len(build_rows()) + 1
+    shards = build_shards()
+    assert len(shards) == len(build_rows())
+    for shard in shards:
+        content = render(shard)
+        assert content == render(shard)
+        assert f"TEST({shard['suite']}, routes)" in content
+        assert f'RecordProperty("path", "{shard['case_path']}")' in content
 
 
 if __name__ == "__main__":

@@ -26,6 +26,7 @@ import subprocess
 from pathlib import Path
 
 from tools.model.emit.common.runner import emit, render_template
+from tools.model.emit.hierarchy import CasePath
 from tools.model.emit.common.validation import validate, validate_catalog
 from tools.model.semantics.forms import (
     LVALUE,
@@ -98,22 +99,35 @@ def build_rows() -> list[dict[str, object]]:
     return rows
 
 
-def render(output: Path) -> str:
-    validate()
+def build_shards() -> list[dict[str, object]]:
+    shards = []
+    for row in build_rows():
+        path = CasePath(
+            phase="detection",
+            container="compile",
+            scope=str(row["scope_name"]),
+            storage=str(row["form_name"]),
+            category="storage",
+            request="facts",
+        )
+        shards.append({**row, "path": path.file, "suite": path.suite,
+                       "case_path": path.path})
+    return shards
+
+
+def render(shard: dict[str, object]) -> str:
     headers = sorted(
-        {scope.header for scope in SCOPES}
-        | {header for form in FORMS for header in form.headers}
+        {str(shard["scope_header"])}
+        | {
+            str(header)
+            for header in shard["form_headers"]
+            if not str(header).startswith("dingo/")
+        }
     )
     return render_template(
         "storage_cells.cpp.j2",
-        rows=build_rows(),
-        scopes=SCOPES,
-        forms=FORMS,
+        row=shard,
         headers=headers,
-        value=VALUE,
-        lvalue=LVALUE,
-        rvalue=RVALUE,
-        pointer=POINTER,
     )
 
 
@@ -155,9 +169,29 @@ def format_cpp(content: str, executable: str | None) -> str:
     return result.stdout
 
 
+def manifest() -> str:
+    import json
+
+    return json.dumps(
+        {
+            "shards": [
+                {
+                    "path": shard["path"],
+                    "suite": shard["suite"],
+                    "case": shard["case_path"],
+                }
+                for shard in build_shards()
+            ]
+        },
+        indent=2,
+        sort_keys=True,
+    ) + "\n"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--out-dir", type=Path, required=True)
+    parser.add_argument("--manifest", type=Path)
     parser.add_argument(
         "--header",
         type=Path,
@@ -178,24 +212,26 @@ def main() -> None:
 
     if arguments.include is not None:
         validate_catalog(arguments.include)
-    content = render(arguments.out)
+    for shard in build_shards():
+        emit(
+            arguments.out_dir / str(shard["path"]),
+            render(shard),
+            check=arguments.check,
+        )
+    if arguments.manifest is not None:
+        emit(arguments.manifest, manifest(), check=arguments.check)
     header_content = (
         format_cpp(render_header(arguments.header), arguments.clang_format)
         if arguments.header is not None
         else None
     )
     if arguments.check:
-        if not arguments.out.exists() or arguments.out.read_text(
-            encoding="utf-8"
-        ) != content:
-            raise SystemExit(f"{arguments.out} is out of date")
         if arguments.header is not None and (
             not arguments.header.exists()
             or arguments.header.read_text(encoding="utf-8") != header_content
         ):
             raise SystemExit(f"{arguments.header} is out of date")
         return
-    emit(arguments.out, content, check=False)
     if arguments.header is not None and header_content is not None:
         emit(arguments.header, header_content, check=False)
 

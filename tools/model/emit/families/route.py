@@ -29,6 +29,7 @@ from tools.model.semantics.routes.ledger import (
     validate as validate_ledger,
 )
 from tools.model.emit.common.runner import emit, render_template
+from tools.model.emit.hierarchy import CasePath
 from tools.model.emit.common.validation import validate_catalog
 
 
@@ -112,24 +113,63 @@ def validate() -> None:
                 raise ValueError(f"unavailable cell has no absence probe: {key}")
 
 
-def render(output: Path) -> str:
-    validate()
-    rows = build_rows()
-    headers = sorted(
-        {row["scope_header"] for row in rows}
-        | {
-            header
-            for row in rows
-            for header in row["form_headers"]
-            if not str(header).startswith("dingo/")
-        }
+def build_shards() -> list[dict[str, object]]:
+    shards = []
+    for row in build_rows():
+        path = CasePath(
+            phase="detection",
+            container="compile",
+            scope=str(row["scope_name"]),
+            storage=str(row["form_name"]),
+            category="route",
+            request="routes",
+        )
+        headers = sorted(
+            {str(row["scope_header"])}
+            | {
+                str(header)
+                for header in row["form_headers"]
+                if not str(header).startswith("dingo/")
+            }
+        )
+        shards.append(
+            {**row, "path": path.file, "suite": path.suite,
+             "case_path": path.path, "headers": headers}
+        )
+    return shards
+
+
+def render(shard: dict[str, object]) -> str:
+    return render_template(
+        "route_cells.cpp.j2",
+        row=shard,
+        headers=shard["headers"],
     )
-    return render_template("route_cells.cpp.j2", rows=rows, headers=headers)
+
+
+def manifest() -> str:
+    import json
+
+    return json.dumps(
+        {
+            "shards": [
+                {
+                    "path": shard["path"],
+                    "suite": shard["suite"],
+                    "case": shard["case_path"],
+                }
+                for shard in build_shards()
+            ]
+        },
+        indent=2,
+        sort_keys=True,
+    ) + "\n"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--out-dir", type=Path, required=True)
+    parser.add_argument("--manifest", type=Path)
     parser.add_argument(
         "--include",
         type=Path,
@@ -140,7 +180,15 @@ def main() -> None:
 
     if arguments.include is not None:
         validate_catalog(arguments.include)
-    emit(arguments.out, render(arguments.out), check=arguments.check)
+    validate()
+    for shard in build_shards():
+        emit(
+            arguments.out_dir / str(shard["path"]),
+            render(shard),
+            check=arguments.check,
+        )
+    if arguments.manifest is not None:
+        emit(arguments.manifest, manifest(), check=arguments.check)
 
 
 if __name__ == "__main__":

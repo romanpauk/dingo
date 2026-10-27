@@ -24,8 +24,7 @@ namespace route_cells {
 
 using namespace dingo::model::probe;
 
-{% for row in rows %}
-namespace {{ row.scope_name }}_{{ row.form_name }} {
+namespace {{ row.suite }} {
 using scope = {{ row.scope_type }};
 using type = {{ row.form_type }};
 using storage = dingo::detail::storage<
@@ -154,11 +153,11 @@ static_assert(all_routes_have_no_cache(rvalue_routes{}),
               "rvalue route unexpectedly caches a conversion");
 {% endif %}
 
-TEST(route_cells, {{ row.scope_name }}_{{ row.form_name }}) { SUCCEED(); }
+TEST({{ row.suite }}, routes) {
+  RecordProperty("path", {{ row.case_path | cppstr }});
+  SUCCEED();
+}
 
-} // namespace {{ row.scope_name }}_{{ row.form_name }}
-
-{% endfor %}
-TEST(route_cells, product_size) { EXPECT_EQ({{ rows | length }}, {{ rows | length }}); }
+} // namespace {{ row.suite }}
 
 } // namespace route_cells

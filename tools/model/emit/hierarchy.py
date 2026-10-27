@@ -72,4 +72,4 @@ class CasePath:
 
     @property
     def suite(self) -> str:
-        return "_".join(self.prefix_parts)
+        return "_".join(part.replace("/", "_") for part in self.prefix_parts)

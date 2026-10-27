@@ -15,6 +15,7 @@ import pytest
 from tools.model.emit.common.validation import validate, validate_catalog
 from tools.model.emit.families.storage import (
     build_rows,
+    build_shards,
     render,
     render_header,
 )
@@ -88,18 +89,15 @@ def test_scope_policies_are_named() -> None:
 
 
 def test_render_names_every_cell(tmp_path: Path) -> None:
-    content = render(tmp_path / "storage_cells.cpp")
-    assert content == render(tmp_path / "storage_cells.cpp")
-    for row in build_rows():
-        assert f"{row['scope_name']}_{row['form_name']}" in content
-    assert content.count("TEST(storage_cells, ") == len(build_rows()) + 1
-
-
-def test_generation_is_byte_stable(tmp_path: Path) -> None:
-    path = tmp_path / "storage_cells.cpp"
-    first = render(path)
-    path.write_text(first, encoding="utf-8")
-    assert render(path) == first
+    shards = build_shards()
+    assert len(shards) == len(build_rows())
+    for shard in shards:
+        content = render(shard)
+        assert content == render(shard)
+        assert f"TEST({shard['suite']}, facts)" in content
+        assert shard["scope_name"] in content
+        assert shard["form_name"] in content
+        assert f'RecordProperty("path", "{shard["case_path"]}")' in content
 
 
 def test_scope_header_names_every_scope(tmp_path: Path) -> None:

@@ -9,9 +9,9 @@ per-storage request-derivation refactor.
 
 The tree is green:
 
-- `pytest tools/model/tests test/matrix/generator_test.py`: 304 passed
+- `pytest tools/model/tests test/matrix/generator_test.py`: 303 passed
 - `dingo_model_test`: 1013 tests passed, including both leaf traits
-- `dingo_detection_test`: 9 tests
+- `dingo_detection_test`: 102 tests
 - `dingo_registration_test`: 158 tests
 - `cells-check`: passes
 - `ctest`: 79/79 passed
@@ -171,21 +171,13 @@ combinations. The earlier global-list model overclaimed many of them.
 
 ## Generated C++ suites
 
-Current generated test counts (copyable + move-only):
+Current generated tests are grouped by phase:
 
-- `keyed_cells`: 139 + 118
-- `annotated_cells`: 99 + 78
-- `behavior_cells`: 93 + 86
-- `const_cells`: 52 + 28
-- `type_behavior`: 47 + 47
-- `storage_cells`: 41
-- `interface_runtime`: 68 + 68
-- `route_cells`: 33
-- `interface_cells`: 7
-- `annotation_cells`: 3 + 3
-- `detection/constructor`: 9
-- `registration/binding`: 158
-- `type_matrix`, `trait_matrix`, `selection_rules`, `property_cells`: 1 each
+- detection: `dingo_detection_test` (102 tests: constructor, wrapper, selection,
+  storage, route, interface, type/trait matrices);
+- registration: `dingo_registration_test` (158 tests, 47 storage files);
+- resolution: `dingo_model_test` (1,013 tests), `dingo_resolve_probe` (2,009
+  resolve cases, skipped on failure).
 
 The behavior move-only variant writes its outcomes to
 `behavior-outcomes-move-only.jsonl`; the baseline check merges it with the

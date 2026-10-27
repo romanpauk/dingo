@@ -10,21 +10,15 @@
 #include <dingo/base/type_list.h>
 #include <dingo/storage/type_storage_traits.h>
 
-{% for scope in scopes %}
-#include <{{ scope.header }}>
-{% endfor %}
+#include <{{ row.scope_header }}>
 {% for header in headers %}
-{% if not header.startswith("dingo/") %}
 #include <{{ header }}>
-{% endif %}
 {% endfor %}
 
 #include <gtest/gtest.h>
 
-namespace storage_cells {
+namespace {{ row.suite }} {
 
-{% for row in rows %}
-namespace {{ row.scope_name }}_{{ row.form_name }} {
 using scope = {{ row.scope_type }};
 using type = {{ row.form_type }};
 using leaf = int;
@@ -71,13 +65,9 @@ static_assert((dingo::type_list_size_v<typename traits::pointer_types> != 0) ==
                   {{ "true" if row.pointer else "false" }},
               "pointer exposure changed");
 
-TEST(storage_cells, {{ row.scope_name }}_{{ row.form_name }}) { SUCCEED(); }
-
-} // namespace {{ row.scope_name }}_{{ row.form_name }}
-
-{% endfor %}
-TEST(storage_cells, product_size) {
-  EXPECT_EQ({{ rows | length }}, {{ scopes | length }} * {{ forms | length }});
+TEST({{ row.suite }}, facts) {
+  RecordProperty("path", {{ row.case_path | cppstr }});
+  SUCCEED();
 }
 
-} // namespace storage_cells
+} // namespace {{ row.suite }}

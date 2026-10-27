@@ -16,6 +16,7 @@ from tools.model.emit.selection import (
     POLICIES,
     STATUSES,
     build_rows,
+    build_shards,
     render,
     resolve,
     validate,
@@ -49,9 +50,15 @@ def test_conflict_policy_rejects_two_sources() -> None:
 
 
 def test_render_names_every_cell(tmp_path: Path) -> None:
-    content = render(tmp_path / "selection_rules.cpp")
-    assert content == render(tmp_path / "selection_rules.cpp")
-    assert content.count("selection policy changed for") == len(build_rows())
+    shards = build_shards()
+    assert len(shards) == len(POLICIES)
+    count = 0
+    for shard in shards:
+        content = render(shard)
+        assert content == render(shard)
+        assert f"TEST({shard.suite}, rules)" in content
+        count += content.count("selection policy changed for")
+    assert count == len(build_rows())
 
 
 if __name__ == "__main__":

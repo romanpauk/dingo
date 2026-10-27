@@ -17,11 +17,13 @@ emits one assertion per cell.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from tools.model.emit.common.runner import emit, render_template
+from tools.model.emit.hierarchy import CasePath
 
 
 STATUSES = ("found", "not_found", "ambiguous")
@@ -137,14 +139,66 @@ def validate_catalog(include_directory: Path) -> None:
         )
 
 
-def render(output: Path) -> str:
-    validate()
-    return render_template("selection_rules.cpp.j2", rows=build_rows(), results=RESULTS)
+@dataclass(frozen=True)
+class SelectionShard:
+    policy: str
+    path: str
+    suite: str
+    case_path: str
+    rows: tuple[Row, ...]
+
+
+def build_shards() -> list[SelectionShard]:
+    shards = []
+    for policy in POLICIES:
+        rows = tuple(row for row in build_rows() if row.policy == policy)
+        path = CasePath(
+            phase="detection",
+            container="compile",
+            scope="global",
+            category=f"selection/{policy}",
+            request="rules",
+        )
+        shards.append(
+            SelectionShard(
+                policy=policy,
+                path=path.file,
+                suite=path.suite,
+                case_path=path.path,
+                rows=rows,
+            )
+        )
+    return shards
+
+
+def render(shard: SelectionShard) -> str:
+    return render_template(
+        "selection_rules.cpp.j2",
+        shard=shard,
+        results=RESULTS,
+    )
+
+
+def manifest() -> str:
+    payload = {
+        "shards": [
+            {
+                "policy": shard.policy,
+                "path": shard.path,
+                "suite": shard.suite,
+                "case": shard.case_path,
+                "rows": len(shard.rows),
+            }
+            for shard in build_shards()
+        ]
+    }
+    return json.dumps(payload, indent=2, sort_keys=True) + "\n"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--out-dir", type=Path, required=True)
+    parser.add_argument("--manifest", type=Path)
     parser.add_argument(
         "--include",
         type=Path,
@@ -155,7 +209,11 @@ def main() -> None:
 
     if arguments.include is not None:
         validate_catalog(arguments.include)
-    emit(arguments.out, render(arguments.out), check=arguments.check)
+    validate()
+    for shard in build_shards():
+        emit(arguments.out_dir / shard.path, render(shard), check=arguments.check)
+    if arguments.manifest is not None:
+        emit(arguments.manifest, manifest(), check=arguments.check)
 
 
 if __name__ == "__main__":

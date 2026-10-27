@@ -12,7 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from tools.model.emit.families.property import build_rows, render, validate
+from tools.model.emit.families.property import (
+    build_rows,
+    build_shards,
+    render,
+    validate,
+)
 from tools.model.grammar.shapes import CUSTOM_WRAPPERS, WRAPPERS
 
 
@@ -60,10 +65,13 @@ def test_properties_are_consistent() -> None:
 
 
 def test_render_is_stable(tmp_path: Path) -> None:
-    content = render(tmp_path / "property_cells.cpp")
-    assert content == render(tmp_path / "property_cells.cpp")
-    for row in build_rows():
-        assert row.cpp_type in content
+    shards = build_shards()
+    assert len(shards) == len(build_rows())
+    for shard in shards:
+        content = render(shard)
+        assert content == render(shard)
+        assert shard.row.cpp_type in content
+        assert f'RecordProperty("path", "{shard.case_path}")' in content
 
 
 if __name__ == "__main__":
