@@ -14,8 +14,10 @@ The tree is green:
 - `dingo_classification_test`: 62 tests
 - `dingo_resolution_static_asserts_test`: 40 tests
 - `dingo_resolution_static_test`: 7 tests
-- `dingo_resolution_runtime_test`: 4,677 tests (resolve rows, `construct` and
-  `invoke` claims, 18 construct and 19 invoke shape classes, 51 producer claims)
+- `dingo_resolution_runtime_test`: 4,690 tests (resolve rows, `construct` and
+  `invoke` claims, 18 construct and 19 invoke shape classes, 51 producer claims,
+  5 mixed collection cases, 2 configuration cases, 2 mixed co-residence cases, 4
+  cyclical cases)
 - `dingo_registration_test`: 158 tests
 - `dingo_registration_runtime_test`: 6 tests
 - `cells-check`: passes
