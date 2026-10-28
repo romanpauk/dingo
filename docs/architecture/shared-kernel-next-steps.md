@@ -878,8 +878,8 @@ path slices 1-2. Both sources carry the protocol names: `static_registry`
 exposes `resolve_named`, `collect`, and `fixed_count`; the runtime store exposes
 `resolve_named`, `collect`, and `count`. The static source's singular resolve no
 longer branches on collections. `container_operations<Self, RuntimeSource>` now
-owns both no-scope `resolve` entries, including the static minimal-context
-decision.
+owns both no-scope `resolve` entries and the dependency-path `resolve`,
+including the static minimal-context decision.
 
 What remains is the rest of the decision layer:
 

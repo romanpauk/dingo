@@ -2,9 +2,10 @@
 
 Status: design note, slices 1-2 applied for resolve.
 `container_operations<Self, RuntimeSource>` owns both no-scope `resolve`
-spellings: the id/key form for runtime-backed containers and the compile-time
-key form for static-only containers, including the static minimal-context
-decision. `construct`, `invoke`, and the collection entry points remain.
+spellings and the dependency-path `resolve`: the id/key form for runtime-backed
+containers, the compile-time key form for static-only containers, the static
+minimal-context decision, and the nested request path. `construct`, `invoke`,
+and the collection entry points remain.
 
 [Shared-Kernel Next Steps](shared-kernel-next-steps.md) records the long-range
 plan for one container engine. This page narrows the next change: what the

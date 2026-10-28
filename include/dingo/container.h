@@ -933,6 +933,10 @@ private:
         scope, context, detail::binding_collection_append{}, std::move(key));
   }
 
+  template <typename Context> bool owns_runtime(Context &context) {
+    return context.owns(runtime_registry_.runtime());
+  }
+
   template <typename Request, typename R, typename Origin, typename LookupKey>
   DINGO_NOINLINE R resolve_nested(construction_scope scope,
                                   runtime_context_type &context, Origin &origin,
@@ -954,42 +958,6 @@ public:
                                 runtime_context_type &context, LookupKey key) {
     return resolve<T, RemoveRvalueReferences>(scope, context, *this,
                                               std::move(key));
-  }
-
-  template <typename T, bool RemoveRvalueReferences, typename Origin,
-            typename LookupKey,
-            typename R =
-                typename request_type<T, RemoveRvalueReferences>::lookup_type,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  DINGO_ALWAYS_INLINE R resolve(construction_scope scope,
-                                runtime_context_type &context, Origin &origin,
-                                LookupKey key) {
-    using request = request_type<T, RemoveRvalueReferences>;
-    using policy =
-        detail::resolution_policy<T, LookupKey, static_bindings_type,
-                                  detail::resolution_mode::runtime_fallback>;
-    if constexpr (!policy::lift_enabled) {
-      if (context.owns(runtime_registry_.runtime())) {
-        return selection_type::template resolve<request, R>(
-            scope, context, origin, std::move(key));
-      }
-      return resolve_nested<request, R>(scope, context, origin, std::move(key));
-    }
-    return policy::template resolve<R>(
-        [&](auto) -> R {
-          if (context.owns(runtime_registry_.runtime())) {
-            return selection_type::template resolve<request, R>(
-                scope, context, origin, std::move(key));
-          }
-          return resolve_nested<request, R>(scope, context, origin,
-                                            std::move(key));
-        },
-        [&](auto tag) -> R {
-          using selected_policy = typename decltype(tag)::policy;
-          return selected_policy::lift_type::make(
-              resolve<typename selected_policy::inner_type, false>(
-                  scope, context, origin, key));
-        });
   }
 
   template <typename Request, bool MayAutoConstruct, typename LookupKey,

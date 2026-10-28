@@ -319,51 +319,6 @@ public:
                                               std::move(key));
   }
 
-  template <typename T, bool RemoveRvalueReferences, typename Context,
-            typename Origin, typename LookupKey,
-            typename R = request_result_t<T, RemoveRvalueReferences>,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(construction_scope scope, Context &context, Origin &origin,
-            LookupKey key) {
-    using lookup_request = request_type<T, true>;
-    using request = request_type<T, RemoveRvalueReferences>;
-    using policy =
-        detail::resolution_policy<T, LookupKey, static_bindings_type,
-                                  detail::resolution_mode::compile_time>;
-    return policy::template resolve<R>(
-        [&](auto) -> R {
-          if constexpr (!collection_traits<R>::is_collection) {
-            using selection = typename static_bindings_type::template selection<
-                typename lookup_request::lookup_type, LookupKey>;
-            if constexpr (selection::status == binding_status::found) {
-              using binding = typename selection::binding_type;
-              using binding_model_type = typename binding::binding_model_type;
-              if constexpr (binding_supports_request_v<R, binding> &&
-                            (std::is_reference_v<R> || std::is_pointer_v<R>) &&
-                            stored_request_identity_v<
-                                R, typename binding_model_type::storage_type> &&
-                            factory_without_dependencies_v<
-                                typename binding_model_type::factory_type>) {
-                using selected =
-                    typename static_registry_type::template selection<
-                        typename lookup_request::lookup_type, LookupKey>;
-                return static_registry_.template resolve_binding<
-                    typename lookup_request::lookup_type, R, selected>(
-                    scope, context, *this);
-              }
-            }
-          }
-          return selection_type::template resolve<request, R>(scope, context,
-                                                              origin, key);
-        },
-        [&](auto tag) -> R {
-          using selected_policy = typename decltype(tag)::policy;
-          return selected_policy::lift_type::make(
-              resolve<typename selected_policy::inner_type, false>(
-                  scope, context, origin, key));
-        });
-  }
-
   template <typename T, typename IdType, typename R = request_result_t<T, true>,
             std::enable_if_t<!detail::is_lookup_key_v<IdType>, int> = 0>
   R resolve(IdType &&id) {
