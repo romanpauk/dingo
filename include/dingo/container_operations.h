@@ -15,6 +15,7 @@
 #include <dingo/base/construction_scope.h>
 #include <dingo/base/none.h>
 #include <dingo/binding/binding_collection.h>
+#include <dingo/binding/container_miss.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/factory/invoke.h>
 #include <dingo/runtime/context.h>
@@ -428,6 +429,55 @@ public:
       typename Self::context_type context;
       return construct_collection<T>(ephemeral_scope, context,
                                      std::forward<Fn>(fn), std::move(key));
+    }
+  }
+
+  template <typename Request, typename Context, typename Origin,
+            typename LookupKey,
+            typename R = request_result_t<typename Request::user_type,
+                                          Request::removes_rvalue_references>,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  DINGO_ALWAYS_INLINE R resolve_parent(construction_scope scope,
+                                       Context &context, Origin &origin,
+                                       LookupKey key) {
+    using user_type = typename Request::user_type;
+    return self()
+        .parent_
+        ->template resolve<user_type, Request::removes_rvalue_references>(
+            scope, context, origin, std::move(key));
+  }
+
+  // A request no source answers goes to the parent when it can serve it, and
+  // is reported unresolved otherwise.
+  template <typename Request, typename R, bool MayAutoConstruct,
+            bool ParentServes, bool StaticError = !ParentServes,
+            typename Context, typename Origin, typename LookupKey>
+  R resolve_missing(construction_scope scope, Context &context, Origin &origin,
+                    LookupKey key) {
+    if constexpr (ParentServes) {
+      if (self().parent_) {
+        return resolve_parent<Request>(scope, context, origin, std::move(key));
+      }
+    }
+    return origin.template unresolved<Request, MayAutoConstruct, LookupKey, R,
+                                      StaticError>(scope, context, key);
+  }
+
+  template <typename Request, bool MayAutoConstruct, typename LookupKey,
+            typename R = typename Request::lookup_type,
+            bool StaticError = false, typename Context,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  R unresolved(construction_scope scope, Context &context, LookupKey key) {
+    if constexpr (RuntimeSource) {
+      return detail::resolve_missing_request<
+          detail::runtime_miss_policy<Self::runtime_only>, MayAutoConstruct,
+          StaticError, Request, LookupKey, R>(self(), scope, context,
+                                              std::move(key));
+    } else {
+      return detail::resolve_missing_request<detail::static_miss_policy,
+                                             MayAutoConstruct, StaticError,
+                                             Request, LookupKey, R>(
+          self(), scope, context, std::move(key));
     }
   }
 

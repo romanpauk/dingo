@@ -2,8 +2,8 @@
 
 Status: design note, slices 1-4 applied. The operations layer is complete.
 `container_operations<Self, RuntimeSource>` owns the no-scope and dependency
-`resolve` spellings, `construct`, `invoke`, and the collection count, append,
-and construction entries. The id/key form serves runtime-backed containers, the
+`resolve` spellings, `construct`, `invoke`, the collection entries, and the
+parent/miss hand-off. The id/key form serves runtime-backed containers, the
 compile-time key form serves static-only containers, and the static
 minimal-context and construct rules live beside the runtime ones. Only the
 state/move policy remains.

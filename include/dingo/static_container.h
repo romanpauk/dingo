@@ -233,36 +233,6 @@ private:
       uses_static_minimal_context_v<Request, Result, LookupKey>,
       no_dependency_context, context_type>;
 
-  template <typename Request, typename Context, typename Origin,
-            typename LookupKey,
-            typename R = request_result_t<typename Request::user_type,
-                                          Request::removes_rvalue_references>,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve_parent(construction_scope scope, Context &context, Origin &origin,
-                   LookupKey key) {
-    using user_type = typename Request::user_type;
-    return parent_
-        ->template resolve<user_type, Request::removes_rvalue_references>(
-            scope, context, origin, key);
-  }
-
-  // A request no binding of this container answers goes to the parent and is
-  // reported unresolved when there is none.
-  template <typename Request, typename R, bool MayAutoConstruct = false,
-            bool ParentServes = has_parent_v, typename Context, typename Origin,
-            typename LookupKey>
-  R resolve_missing(construction_scope scope, Context &context, Origin &origin,
-                    LookupKey key) {
-    if constexpr (has_parent_v) {
-      if (parent_) {
-        return resolve_parent<Request>(scope, context, origin, std::move(key));
-      }
-    }
-    return origin
-        .template unresolved<Request, false, LookupKey, R, !has_parent_v>(
-            scope, context, key);
-  }
-
 public:
   using static_registry_type =
       static_registry<static_bindings_type, state_type>;
@@ -341,6 +311,9 @@ public:
   using detail::container_operations<self_type, false>::count_collection;
 
   using detail::container_operations<self_type, false>::invoke;
+  using detail::container_operations<self_type, false>::resolve_missing;
+  using detail::container_operations<self_type, false>::resolve_parent;
+  using detail::container_operations<self_type, false>::unresolved;
 
 private:
   template <typename T, typename LookupKey, typename Context, typename... Args>
@@ -381,17 +354,6 @@ public:
     return selection_type::template resolve<
         request_type<T, RemoveRvalueReferences>, R>(scope, context, *this,
                                                     detail::no_lookup_key());
-  }
-
-  template <typename Request, bool MayAutoConstruct, typename LookupKey,
-            typename R = typename Request::lookup_type,
-            bool StaticError = false, typename Context,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R unresolved(construction_scope scope, Context &context, LookupKey key) {
-    return detail::resolve_missing_request<detail::static_miss_policy,
-                                           MayAutoConstruct, StaticError,
-                                           Request, LookupKey, R>(
-        *this, scope, context, std::move(key));
   }
 
 private:
