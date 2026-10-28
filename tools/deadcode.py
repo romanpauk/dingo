@@ -39,6 +39,12 @@ DECLARATION = re.compile(
 )
 SOURCE_ROOTS = ("include", "examples", "test")
 SUFFIXES = ("", "_t", "_v")
+ENTRY_HEADERS = ("container.h", "runtime_container.h", "static_container.h")
+IDENTIFIER = re.compile(r"[A-Za-z_]\w*")
+FUNCTION = re.compile(
+    r"^(?:([A-Za-z_][\w:<>,\s\*&]*?)\b(\w+)\s*\([^;{}]*\)\s*(?:const\s*)?)\{",
+    re.MULTILINE,
+)
 
 
 @dataclass(frozen=True)
@@ -114,6 +120,128 @@ def scan(root: Path) -> tuple[list[Finding], list[Finding]]:
     return dead, test_only
 
 
+def declaration_bodies(text: str) -> dict[str, str]:
+    """Each declared name mapped to its signature and body.
+
+    The body is taken to the matching closing brace, or to the next semicolon
+    for an alias. This is a lexical approximation: braces inside strings or
+    comments are not special-cased, which can only widen a body, never hide a
+    reference.
+    """
+    bodies: dict[str, str] = {}
+    for match in DECLARATION.finditer(text):
+        name = match.group(1)
+        start = match.start()
+        brace = text.find("{", match.end())
+        semicolon = text.find(";", match.end())
+        if brace == -1 or (semicolon != -1 and semicolon < brace):
+            body = text[start : semicolon + 1 if semicolon != -1 else len(text)]
+            bodies[name] = bodies.get(name, "") + body
+            continue
+        depth = 0
+        end = brace
+        while end < len(text):
+            if text[end] == "{":
+                depth += 1
+            elif text[end] == "}":
+                depth -= 1
+                if depth == 0:
+                    end += 1
+                    break
+            end += 1
+        bodies[name] = bodies.get(name, "") + text[start:end]
+    return bodies
+
+
+def _resolve(identifier: str, names: set[str]) -> str | None:
+    if identifier in names:
+        return identifier
+    for suffix in SUFFIXES[1:]:
+        if identifier.endswith(suffix) and identifier[: -len(suffix)] in names:
+            return identifier[: -len(suffix)]
+    return None
+
+
+def function_bodies(text: str) -> dict[str, str]:
+    """Namespace-scope function definitions, which the declaration scan misses.
+
+    Members live inside a class body and are covered by that body. A free
+    function starts at column zero in this codebase, which keeps the scan away
+    from statement blocks and lambdas.
+    """
+    bodies: dict[str, str] = {}
+    for match in FUNCTION.finditer(text):
+        name = match.group(2)
+        brace = text.find("{", match.end() - 1)
+        depth = 0
+        end = brace
+        while end < len(text):
+            if text[end] == "{":
+                depth += 1
+            elif text[end] == "}":
+                depth -= 1
+                if depth == 0:
+                    end += 1
+                    break
+            end += 1
+        bodies.setdefault(name, text[match.start() : end])
+    return bodies
+
+
+def _live_names(
+    bodies: dict[str, str], names: set[str], texts: dict[Path, str],
+    repository: Path,
+) -> set[str]:
+    live: set[str] = set()
+    for path, text in texts.items():
+        relative = path.relative_to(repository)
+        if relative.parts[0] in {"test", "examples"} or (
+            relative.parts[0] == "include" and path.name in ENTRY_HEADERS
+        ):
+            for identifier in IDENTIFIER.findall(text):
+                resolved = _resolve(identifier, names)
+                if resolved is not None:
+                    live.add(resolved)
+
+    pending = list(live)
+    while pending:
+        name = pending.pop()
+        for identifier in IDENTIFIER.findall(bodies.get(name, "")):
+            resolved = _resolve(identifier, names)
+            if resolved is not None and resolved not in live:
+                live.add(resolved)
+                pending.append(resolved)
+    return live
+
+
+def unreachable(root: Path) -> list[Finding]:
+    """Declarations not reachable from the tests, examples, or entry headers."""
+    repository = repository_of(root)
+    texts = source_texts(repository)
+
+    declared: dict[str, Path] = {}
+    bodies: dict[str, str] = {}
+    for header in sorted(root.rglob("*.h")):
+        text = texts.get(header)
+        if text is None:
+            continue
+        found = declaration_bodies(text)
+        found.update(function_bodies(text))
+        for name, body in found.items():
+            if len(name) < 5 or name.isupper():
+                continue
+            declared.setdefault(name, header)
+            # A name can declare several specializations; every body is part of
+            # what the name reaches.
+            bodies[name] = bodies.get(name, "") + body
+    names = set(declared)
+    live = _live_names(bodies, names, texts, repository)
+    return [
+        Finding(declared[name].as_posix(), name, 0)
+        for name in sorted(names - live)
+    ]
+
+
 def render(dead: list[Finding], test_only: list[Finding]) -> str:
     lines = [f"## Unreferenced declarations ({len(dead)})", ""]
     if dead:
@@ -134,10 +262,24 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path("include/dingo"))
     parser.add_argument("--all", action="store_true", help="include test-only rows")
+    parser.add_argument(
+        "--reachable",
+        action="store_true",
+        help="report declarations unreachable from tests, examples, or entry headers",
+    )
     arguments = parser.parse_args()
 
     dead, test_only = scan(arguments.root)
     print(render(dead, test_only if arguments.all else []), end="")
+    if arguments.reachable:
+        rows = unreachable(arguments.root)
+        print(f"\n## Unreachable declarations ({len(rows)})\n")
+        if rows:
+            print("| header | declaration |")
+            print("| --- | --- |")
+            for finding in rows:
+                path = finding.path.replace("include/dingo/", "")
+                print(f"| `{path}` | `{finding.name}` |")
 
 
 if __name__ == "__main__":

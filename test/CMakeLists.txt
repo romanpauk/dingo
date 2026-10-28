@@ -1008,6 +1008,7 @@ add_custom_target(deadcode-report
     COMMAND ${DINGO_UV_RUN_COMMAND} python
         ${PROJECT_SOURCE_DIR}/tools/deadcode.py
         --all
+        --reachable
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 add_custom_target(complexity-report

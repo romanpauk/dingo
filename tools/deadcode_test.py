@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tools.deadcode import render, scan
+from tools.deadcode import render, scan, unreachable
 
 USED = """\
 #pragma once
@@ -86,3 +86,46 @@ def test_render_lists_both_sections(tmp_path: Path) -> None:
     assert "Referenced only by tests" in text
     assert "dead_type" in text
     assert "only_tested" in text
+
+
+def build_chain_tree(root: Path) -> Path:
+    headers = root / "include" / "dingo"
+    headers.mkdir(parents=True)
+    (root / "examples").mkdir()
+    (root / "test").mkdir()
+    (headers / "container.h").write_text("""\
+#pragma once
+struct entry_type {
+  reachable_helper field;
+};
+""")
+    (headers / "helpers.h").write_text("""\
+#pragma once
+struct reachable_helper {
+  reachable_leaf leaf;
+};
+struct reachable_leaf {};
+struct orphan_root {
+  orphan_leaf leaf;
+};
+struct orphan_leaf {};
+""")
+    (root / "test" / "checks.cpp").write_text('#include "container.h"\n')
+    return headers
+
+
+def test_unreachable_follows_the_declaration_chain(tmp_path: Path) -> None:
+    root = build_chain_tree(tmp_path)
+    rows = unreachable(root)
+    names = {finding.name for finding in rows}
+    assert "reachable_helper" not in names
+    assert "reachable_leaf" not in names
+    assert "orphan_root" in names
+    # Reached only from the orphan, so it is unreachable too.
+    assert "orphan_leaf" in names
+
+
+def test_unreachable_keeps_entry_headers_live(tmp_path: Path) -> None:
+    root = build_chain_tree(tmp_path)
+    rows = unreachable(root)
+    assert "entry_type" not in {finding.name for finding in rows}
