@@ -294,14 +294,14 @@ grandparent (`lookup_selection`) rather than its parent is cosmetic. The
 remaining improvement is to remove entries that no layer uses, not to reshape
 the chain.
 
-### Duplicated lifetime slots
+### Lifetime slots (applied)
 
 `storage/shared.h` and `storage/shared_cyclical.h` each split a storage slot
-into trivially and non-trivially destructible forms. The four classes share the
-aligned storage, the resolved/constructed flags, `get`, `empty`, `reset`, and
-`std::launder`; they differ in when the resolved flag is set. A shared
-destructible-slot base would remove roughly 70 lines without changing the
-lifetime contract.
+into trivially and non-trivially destructible forms.
+`storage/destructible_slot.h` now owns the aligned storage, the constructed
+flag, `std::launder`, and destruction, with the same triviality split. `shared`
+keeps the resolved flag in its storage object and `shared_cyclical` sets it
+before construction, so the cycle contract is unchanged.
 
 ## 6. Proposed Order
 
@@ -317,8 +317,9 @@ Each step is independently reviewable. Steps 1–4 change no behavior.
    `construct_resolved_request` helper. *(Applied — see
    [Applied Changes](#applied-changes).)* Gate: behavior baseline unchanged,
    `test-cost` unchanged or better.
-4. **Deduplicate the storage slots** and the `lookup.h` trait pairs. Gate:
-   `object_sizes.cpp`, resolve probes.
+4. **Deduplicate the storage slots** and the `lookup.h` trait pairs. *(Applied —
+   see [Applied Changes](#applied-changes).)* Gate: `object_sizes.cpp`, resolve
+   probes.
 5. **Single conversion-path source of truth** (§3), coordinated with the wrapper
    semantics model in `spec/`. Gate: model baseline, behavior and type-table
    outcomes unchanged, declared baseline update only if a behavior change is
@@ -420,6 +421,24 @@ templates instantiate only when called.
 
 Verification: full build, 39/39 tests, `check` (including `includes-tidy` with
 the suppression removed), and `includes-check`.
+
+### Step 4: storage slots and lookup traits
+
+`storage/destructible_slot.h` now owns the inline object storage, the
+constructed flag, `std::launder`, and destruction for the storage instances. The
+trivial specialization keeps the slot trivially destructible, so the static
+graph counts the same destructible slots. `storage_instance_base` and its dtor
+split collapse into one base, the wrapper and array copies share the slot, and
+the two `cyclical_storage_instance_impl` specializations become one; the
+resolved flag stays where the cycle contract needs it.
+
+`lookup.h` merges the key-type and definition variants of contains, duplicate
+detection, and matching into one implementation parameterized by whether the
+cardinality takes part. Only the two `selected_lookup_entry*_t` aliases are used
+outside the header, and both keep their spelling.
+
+Verification: full build, 39/39 tests (including `object_sizes.cpp`),
+`resolve-check`, `check`, and `includes-check`.
 
 ## Non-Goals
 

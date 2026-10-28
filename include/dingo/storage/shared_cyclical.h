@@ -12,7 +12,7 @@
 #include <dingo/base/type_descriptor.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/memory/aligned_storage.h>
-#include <dingo/memory/object_lifetime.h>
+#include <dingo/storage/destructible_slot.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>
@@ -116,18 +116,12 @@ struct storage_interface_requirements<
     storage<shared_cyclical, Type, StoredType, Factory, Conversions>, Derived,
     Base> : std::bool_constant<!is_virtual_base_v<Base, Derived>> {};
 
-template <typename Type, typename Factory,
-          bool IsTriviallyDestructible = std::is_trivially_destructible_v<Type>>
-class cyclical_storage_instance_impl;
-
 template <typename Type, typename Factory>
-class cyclical_storage_instance_impl<Type, Factory, false> : Factory {
+class cyclical_storage_instance_impl : Factory, destructible_slot<Type> {
 public:
   template <typename... Args>
   cyclical_storage_instance_impl(Args &&...args)
       : Factory(std::forward<Args>(args)...) {}
-
-  ~cyclical_storage_instance_impl() { reset(); }
 
   template <typename Context> auto resolve(Context &) {
     assert(!resolved_);
@@ -137,9 +131,9 @@ public:
 
   auto get() {
     if constexpr (std::is_array_v<Type>) {
-      return std::addressof((*get_array())[0]);
+      return std::addressof((*this->slot_address())[0]);
     } else {
-      return get_array();
+      return this->slot_address();
     }
   }
 
@@ -147,68 +141,19 @@ public:
   auto construct(construction_scope scope, Context &context,
                  Container &container) {
     assert(resolved_);
-    Factory::template construct<Type *>(&instance_, scope, context, container);
-    constructed_ = true;
+    Factory::template construct<Type *>(this->slot_address(), scope, context,
+                                        container);
+    this->mark_constructed();
   }
 
   bool empty() const { return !resolved_; }
 
   void reset() {
     resolved_ = false;
-    if (constructed_) {
-      constructed_ = false;
-      detail::destroy_object_value(*get_array());
-    }
+    this->destroy();
   }
 
 private:
-  Type *get_array() {
-    return std::launder(reinterpret_cast<Type *>(&instance_));
-  }
-
-  dingo::aligned_storage_t<sizeof(Type), alignof(Type)> instance_;
-  bool resolved_ = false;
-  bool constructed_ = false;
-};
-
-template <typename Type, typename Factory>
-class cyclical_storage_instance_impl<Type, Factory, true> : Factory {
-public:
-  template <typename... Args>
-  cyclical_storage_instance_impl(Args &&...args)
-      : Factory(std::forward<Args>(args)...) {}
-
-  template <typename Context> auto resolve(Context &) {
-    assert(!resolved_);
-    resolved_ = true;
-    return get();
-  }
-
-  auto get() {
-    if constexpr (std::is_array_v<Type>) {
-      return std::addressof((*get_array())[0]);
-    } else {
-      return get_array();
-    }
-  }
-
-  template <typename Context, typename Container>
-  auto construct(construction_scope scope, Context &context,
-                 Container &container) {
-    assert(resolved_);
-    Factory::template construct<Type *>(&instance_, scope, context, container);
-  }
-
-  bool empty() const { return !resolved_; }
-
-  void reset() { resolved_ = false; }
-
-private:
-  Type *get_array() {
-    return std::launder(reinterpret_cast<Type *>(&instance_));
-  }
-
-  dingo::aligned_storage_t<sizeof(Type), alignof(Type)> instance_;
   bool resolved_ = false;
 };
 

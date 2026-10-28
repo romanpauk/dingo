@@ -11,9 +11,8 @@
 
 #include <dingo/factory/constructor.h>
 #include <dingo/factory/factory_traits.h>
-#include <dingo/memory/aligned_storage.h>
-#include <dingo/memory/object_lifetime.h>
 #include <dingo/resolution/resolution_operation.h>
+#include <dingo/storage/destructible_slot.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>
@@ -33,14 +32,12 @@ struct conversions<shared, Type, U> : type_storage_traits<shared, Type, U> {};
 #pragma warning(disable : 4324)
 #endif
 template <typename Type, typename Factory>
-struct storage_instance_base : Factory {
+struct storage_instance_base : Factory, destructible_slot<Type> {
   template <typename... Args>
   storage_instance_base(Args &&...args)
       : Factory(std::forward<Args>(args)...) {}
 
-  Type *get() const {
-    return std::launder(reinterpret_cast<Type *>(&instance_));
-  }
+  Type *get() const { return this->slot_address(); }
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -49,72 +46,40 @@ struct storage_instance_base : Factory {
   template <typename Context, typename Container>
   auto construct(construction_scope scope, Context &context,
                  Container &container) {
-    assert(!initialized_);
-    Factory::template construct<Type *>(&instance_, scope, context, container);
-    initialized_ = true;
+    assert(!this->constructed());
+    Factory::template construct<Type *>(this->slot_address(), scope, context,
+                                        container);
+    this->mark_constructed();
   }
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
 
-  bool empty() const { return !initialized_; }
+  bool empty() const { return !this->constructed(); }
 
-protected:
-  mutable dingo::aligned_storage_t<sizeof(Type), alignof(Type)> instance_;
-  bool initialized_ = false;
+  void reset() { this->destroy(); }
 };
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
-
-template <typename Type, typename Factory,
-          bool IsTriviallyDestructible = std::is_trivially_destructible_v<Type>>
-struct storage_instance_dtor;
-
-template <typename Type, typename Factory>
-struct storage_instance_dtor<Type, Factory, true>
-    : storage_instance_base<Type, Factory> {
-  template <typename... Args>
-  storage_instance_dtor(Args &&...args)
-      : storage_instance_base<Type, Factory>(std::forward<Args>(args)...) {}
-
-  void reset() { this->initialized_ = false; }
-};
-
-template <typename Type, typename Factory>
-struct storage_instance_dtor<Type, Factory, false>
-    : storage_instance_base<Type, Factory> {
-  template <typename... Args>
-  storage_instance_dtor(Args &&...args)
-      : storage_instance_base<Type, Factory>(std::forward<Args>(args)...) {}
-
-  ~storage_instance_dtor() { reset(); }
-
-  void reset() {
-    if (this->initialized_) {
-      this->initialized_ = false;
-      this->get()->~Type();
-    }
-  }
-};
 
 template <typename Type, typename StoredType, typename Factory, typename = void>
 class shared_storage_instance_impl
-    : public storage_instance_dtor<Type, Factory> {
+    : public storage_instance_base<Type, Factory> {
 public:
   template <typename... Args>
   shared_storage_instance_impl(Args &&...args)
-      : storage_instance_dtor<Type, Factory>(std::forward<Args>(args)...) {}
+      : storage_instance_base<Type, Factory>(std::forward<Args>(args)...) {}
 
   static_assert(
       std::is_trivially_destructible_v<Type> ==
-      std::is_trivially_destructible_v<storage_instance_dtor<Type, Factory>>);
+      std::is_trivially_destructible_v<storage_instance_base<Type, Factory>>);
 };
 
 template <typename Type, typename StoredType, typename Factory>
 class shared_storage_instance_impl<Type, StoredType, Factory,
                                    std::enable_if_t<type_traits<Type>::enabled>>
-    : Factory {
+    : Factory, destructible_slot<StoredType> {
 public:
   template <typename... Args>
   shared_storage_instance_impl(Args &&...args)
@@ -123,39 +88,25 @@ public:
   template <typename Context, typename Container>
   auto construct(construction_scope scope, Context &context,
                  Container &container) {
-    assert(empty());
+    assert(this->empty());
     // When the stored type is the registered type there is no conversion to
     // perform, so let the factory's prvalue initialize the slot directly.
     if constexpr (std::is_same_v<Type, StoredType>) {
-      new (&instance_) StoredType(
+      new (this->slot_address()) StoredType(
           Factory::template construct<Type>(scope, context, container));
     } else {
-      new (&instance_) StoredType(detail::convert_type<StoredType, consume>(
-          Factory::template construct<Type>(scope, context, container)));
+      new (this->slot_address())
+          StoredType(detail::convert_type<StoredType, consume>(
+              Factory::template construct<Type>(scope, context, container)));
     }
-    initialized_ = true;
+    this->mark_constructed();
   }
 
-  ~shared_storage_instance_impl() { reset(); }
+  StoredType &get() const { return *this->slot_address(); }
 
-  StoredType &get() const { return *get_ptr(); }
+  void reset() { this->destroy(); }
 
-  void reset() {
-    if (initialized_) {
-      get_ptr()->~StoredType();
-      initialized_ = false;
-    }
-  }
-
-  bool empty() const { return !initialized_; }
-
-private:
-  StoredType *get_ptr() const {
-    return std::launder(reinterpret_cast<StoredType *>(&instance_));
-  }
-
-  mutable aligned_storage_t<sizeof(StoredType), alignof(StoredType)> instance_;
-  bool initialized_ = false;
+  bool empty() const { return !this->constructed(); }
 };
 
 template <typename Type, typename StoredType, typename Factory>
@@ -169,41 +120,26 @@ public:
 };
 
 template <typename Type, size_t N, typename StoredType, typename Factory>
-class storage_instance<shared, Type[N], StoredType, Factory> : Factory {
+class storage_instance<shared, Type[N], StoredType, Factory>
+    : Factory, destructible_slot<Type[N]> {
 public:
   template <typename... Args>
   storage_instance(Args &&...args) : Factory(std::forward<Args>(args)...) {}
-
-  ~storage_instance() { reset(); }
 
   template <typename Context, typename Container>
   auto construct(construction_scope scope, Context &context,
                  Container &container) {
     assert(empty());
-    Factory::template construct<Type[N]>(&instance_, scope, context, container);
-    initialized_ = true;
+    Factory::template construct<Type[N]>(this->slot_address(), scope, context,
+                                         container);
+    this->mark_constructed();
   }
 
-  Type *get() const { return std::addressof((*get_array())[0]); }
+  Type *get() const { return std::addressof((*this->slot_address())[0]); }
 
-  void reset() {
-    if (!initialized_) {
-      return;
-    }
+  void reset() { this->destroy(); }
 
-    destroy_object_value(*get_array());
-    initialized_ = false;
-  }
-
-  bool empty() const { return !initialized_; }
-
-private:
-  Type (*get_array() const)[N] {
-    return std::launder(reinterpret_cast<Type(*)[N]>(&instance_));
-  }
-
-  mutable aligned_storage_t<sizeof(Type[N]), alignof(Type[N])> instance_;
-  bool initialized_ = false;
+  bool empty() const { return !this->constructed(); }
 };
 
 template <typename Type, typename StoredType, typename Factory>
