@@ -322,29 +322,6 @@ private:
         [&](auto) { return resolve_static<Request, no_key>(scope, context); });
   }
 
-  template <typename T, typename LookupKey, typename Fn,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection_impl(construction_scope scope,
-                              runtime_context_type &context, LookupKey key,
-                              Fn &&fn) {
-    // A declared collection lookup with no rows is a valid empty collection.
-    return detail::construct_binding_collection<T>(
-        this->template count_collection<T>(key),
-        runtime_registry_.template has_explicit_collection_lookup<T>(key),
-        [&](T &results) {
-          this->template append_collection<T>(scope, results, context, fn, key);
-        });
-  }
-
-  template <typename T, typename Fn, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection(construction_scope scope,
-                         runtime_context_type &context, Fn &&fn,
-                         LookupKey key) {
-    return construct_collection_impl<T>(scope, context, std::move(key),
-                                        std::forward<Fn>(fn));
-  }
-
   static_registry_type &statics() { return *this; }
 
   // A request no binding of this container answers goes to the parent, when
@@ -736,6 +713,9 @@ public:
   using detail::container_operations<self_type, true>::resolve;
 
   using detail::container_operations<self_type, true>::append_collection;
+  using detail::container_operations<self_type, true>::construct_collection;
+  using detail::container_operations<self_type,
+                                     true>::construct_collection_by_key;
   using detail::container_operations<self_type, true>::construct;
   using detail::container_operations<self_type, true>::count_collection;
 
@@ -745,49 +725,6 @@ public:
 
 private:
   friend class detail::container_collections<self_type>;
-
-  template <typename T, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection_by_key(LookupKey key) {
-    if constexpr (has_static_v && detail::is_static_lookup_key_v<LookupKey>) {
-      if (select_static_collection_construct<T, LookupKey>()) {
-        return execute_transaction(
-            runtime_registry_.runtime(),
-            [&](runtime_context_type &context) -> T {
-              return statics().template construct_collection<T, LookupKey>(
-                  ephemeral_scope, *this, context);
-            });
-      }
-    }
-
-    return execute_transaction(
-        runtime_registry_.runtime(), [&](runtime_context_type &context) -> T {
-          return construct_collection<T>(ephemeral_scope, context,
-                                         detail::binding_collection_append{},
-                                         std::move(key));
-        });
-  }
-
-  template <typename T, typename Fn, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection_by_key(Fn &&fn, LookupKey key) {
-    if constexpr (has_static_v && detail::is_static_lookup_key_v<LookupKey>) {
-      if (select_static_collection_construct<T, LookupKey>()) {
-        return execute_transaction(
-            runtime_registry_.runtime(),
-            [&](runtime_context_type &context) -> T {
-              return statics().template construct_collection<T, LookupKey>(
-                  ephemeral_scope, *this, context, std::forward<Fn>(fn));
-            });
-      }
-    }
-
-    return execute_transaction(
-        runtime_registry_.runtime(), [&](runtime_context_type &context) -> T {
-          return construct_collection<T>(ephemeral_scope, context,
-                                         std::forward<Fn>(fn), std::move(key));
-        });
-  }
 
 public:
   using detail::container_operations<self_type, true>::invoke;
@@ -833,7 +770,7 @@ private:
   template <typename R, typename LookupKey>
   R construct_collection_request(construction_scope scope,
                                  runtime_context_type &context, LookupKey key) {
-    return construct_collection<R>(
+    return this->template construct_collection<R>(
         scope, context, detail::binding_collection_append{}, std::move(key));
   }
 
@@ -842,6 +779,11 @@ private:
   }
 
   auto &runtime_storage() { return runtime_registry_.runtime(); }
+
+  template <typename T, typename LookupKey>
+  bool runtime_has_explicit_collection_lookup(LookupKey key) {
+    return runtime_registry_.template has_explicit_collection_lookup<T>(key);
+  }
 
   template <typename T, typename LookupKey>
   std::size_t runtime_count(LookupKey key) {

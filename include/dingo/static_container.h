@@ -334,6 +334,9 @@ public:
   }
 
   using detail::container_operations<self_type, false>::append_collection;
+  using detail::container_operations<self_type, false>::construct_collection;
+  using detail::container_operations<self_type,
+                                     false>::construct_collection_by_key;
   using detail::container_operations<self_type, false>::construct;
   using detail::container_operations<self_type, false>::count_collection;
 
@@ -368,35 +371,7 @@ private:
   friend class container_collections<static_container_impl<
       static_bindings<Registrations...>, ParentContainer, ContainerTraits>>;
 
-  template <typename T, typename LookupKey>
-  T construct_collection_by_key(LookupKey key) {
-    context_type context;
-    return construct_collection<T>(ephemeral_scope, context, std::move(key));
-  }
-
-  template <typename T, typename Fn, typename LookupKey>
-  T construct_collection_by_key(Fn &&fn, LookupKey key) {
-    context_type context;
-    return construct_collection<T>(ephemeral_scope, context,
-                                   std::forward<Fn>(fn), std::move(key));
-  }
-
 public:
-  template <typename T, typename Context, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection(construction_scope scope, Context &context,
-                         LookupKey) {
-    return construct_collection_static<T, LookupKey>(scope, context);
-  }
-
-  template <typename T, typename Fn, typename Context, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection(construction_scope scope, Context &context, Fn &&fn,
-                         LookupKey) {
-    return construct_collection_static<T, LookupKey>(scope, context,
-                                                     std::forward<Fn>(fn));
-  }
-
   template <typename T, bool RemoveRvalueReferences, typename Context,
             typename R = request_result_t<T, RemoveRvalueReferences>,
             typename = typename resolve_request_check<

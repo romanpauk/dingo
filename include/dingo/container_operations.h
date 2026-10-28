@@ -340,6 +340,97 @@ public:
     }
   }
 
+  template <typename T, typename Context, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  T construct_collection(construction_scope scope, Context &context,
+                         LookupKey key) {
+    if constexpr (RuntimeSource) {
+      return construct_collection<T>(
+          scope, context, detail::binding_collection_append{}, std::move(key));
+    } else {
+      (void)key;
+      return self().template construct_collection_static<T, LookupKey>(scope,
+                                                                       context);
+    }
+  }
+
+  template <typename T, typename Fn, typename Context, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  T construct_collection(construction_scope scope, Context &context, Fn &&fn,
+                         LookupKey key) {
+    if constexpr (RuntimeSource) {
+      return detail::construct_binding_collection<T>(
+          self().template count_collection<T>(key),
+          self().template runtime_has_explicit_collection_lookup<T>(key),
+          [&](T &results) {
+            self().template append_collection<T>(scope, results, context, fn,
+                                                 key);
+          });
+    } else {
+      (void)key;
+      return self().template construct_collection_static<T, LookupKey>(
+          scope, context, std::forward<Fn>(fn));
+    }
+  }
+
+  template <typename T, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  T construct_collection_by_key(LookupKey key) {
+    if constexpr (RuntimeSource) {
+      if constexpr (Self::has_static_source &&
+                    detail::is_static_lookup_key_v<LookupKey>) {
+        if (self()
+                .template select_static_collection_construct<T, LookupKey>()) {
+          return execute_transaction(
+              self().runtime_storage(), [&](auto &context) -> T {
+                return self()
+                    .statics()
+                    .template construct_collection<T, LookupKey>(
+                        ephemeral_scope, self(), context);
+              });
+        }
+      }
+      return execute_transaction(
+          self().runtime_storage(), [&](auto &context) -> T {
+            return construct_collection<T>(ephemeral_scope, context,
+                                           detail::binding_collection_append{},
+                                           std::move(key));
+          });
+    } else {
+      typename Self::context_type context;
+      return construct_collection<T>(ephemeral_scope, context, std::move(key));
+    }
+  }
+
+  template <typename T, typename Fn, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  T construct_collection_by_key(Fn &&fn, LookupKey key) {
+    if constexpr (RuntimeSource) {
+      if constexpr (Self::has_static_source &&
+                    detail::is_static_lookup_key_v<LookupKey>) {
+        if (self()
+                .template select_static_collection_construct<T, LookupKey>()) {
+          return execute_transaction(
+              self().runtime_storage(), [&](auto &context) -> T {
+                return self()
+                    .statics()
+                    .template construct_collection<T, LookupKey>(
+                        ephemeral_scope, self(), context, std::forward<Fn>(fn));
+              });
+        }
+      }
+      return execute_transaction(
+          self().runtime_storage(), [&](auto &context) -> T {
+            return construct_collection<T>(
+                ephemeral_scope, context, std::forward<Fn>(fn), std::move(key));
+          });
+    } else {
+      typename Self::context_type context;
+      return construct_collection<T>(ephemeral_scope, context,
+                                     std::forward<Fn>(fn), std::move(key));
+    }
+  }
+
 private:
   Self &self() { return static_cast<Self &>(*this); }
 };
