@@ -263,9 +263,10 @@ private:
         auto materialize = [&]() -> decltype(auto) {
           return state().template with_resolution_container<true>(
               context, [&](auto &container) -> decltype(auto) {
-                return detail::with_runtime_binding_source(
-                    persistent_scope, context, get_storage(), container,
-                    std::forward<Fn>(fn));
+                return detail::with_materialized_source<
+                    detail::source_lifetime::context>(persistent_scope, context,
+                                                      get_storage(), container,
+                                                      std::forward<Fn>(fn));
               });
         };
         using result_type = std::invoke_result_t<decltype(materialize) &>;
@@ -285,7 +286,8 @@ private:
     }
     return state().with_resolution_container(
         context, [&](auto &container) -> decltype(auto) {
-          return detail::with_runtime_binding_source(
+          return detail::with_materialized_source<
+              detail::source_lifetime::context>(
               scope, context, get_storage(), container, std::forward<Fn>(fn));
         });
   }

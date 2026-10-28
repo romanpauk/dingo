@@ -296,37 +296,30 @@ struct static_binding_policy {
         source_category_of<StorageType> == source_category::consume_value;
     constexpr bool retained_source = Operation::requires_source_retention &&
                                      context_supports_retained_frame_v<Context>;
-    if constexpr (context_lvalue) {
-      return with_context_lvalue_source(source_scope, context, storage,
-                                        activation, std::forward<Fn>(fn));
-    } else if constexpr (is_runtime_context_v<Context>) {
-      return with_runtime_binding_source(source_scope, context, storage,
-                                         activation, std::forward<Fn>(fn));
-    } else if constexpr (!context_supports_construct<Context>::value) {
-      if constexpr (retained_source) {
-        return with_retained_binding_source(source_scope, context, storage,
-                                            activation, std::forward<Fn>(fn));
+    constexpr source_lifetime lifetime = [] {
+      if constexpr (context_lvalue) {
+        return source_lifetime::context_lvalue;
+      } else if constexpr (is_runtime_context_v<Context>) {
+        return source_lifetime::context;
+      } else if constexpr (!context_supports_construct<Context>::value) {
+        return retained_source ? source_lifetime::retained
+                               : source_lifetime::local;
       } else {
-        return with_binding_source(source_scope, context, storage, activation,
-                                   std::forward<Fn>(fn));
+        using materialization_traits =
+            storage_materialization_traits<typename StorageType::tag_type,
+                                           typename StorageType::type>;
+        if constexpr (has_context_materialize_source<materialization_traits,
+                                                     Context, StorageType,
+                                                     Activation>::value) {
+          return source_lifetime::context;
+        } else {
+          return retained_source ? source_lifetime::retained
+                                 : source_lifetime::local;
+        }
       }
-    } else {
-      using materialization_traits =
-          storage_materialization_traits<typename StorageType::tag_type,
-                                         typename StorageType::type>;
-      if constexpr (has_context_materialize_source<materialization_traits,
-                                                   Context, StorageType,
-                                                   Activation>::value) {
-        return with_runtime_binding_source(source_scope, context, storage,
-                                           activation, std::forward<Fn>(fn));
-      } else if constexpr (retained_source) {
-        return with_retained_binding_source(source_scope, context, storage,
-                                            activation, std::forward<Fn>(fn));
-      } else {
-        return with_binding_source(source_scope, context, storage, activation,
-                                   std::forward<Fn>(fn));
-      }
-    }
+    }();
+    return with_materialized_source<lifetime>(source_scope, context, storage,
+                                              activation, std::forward<Fn>(fn));
   }
 
   template <typename Context, typename StorageType, typename Activation,
@@ -334,8 +327,8 @@ struct static_binding_policy {
   decltype(auto) with_value_source(construction_scope source_scope,
                                    Context &context, StorageType &storage,
                                    Activation &activation, Fn &&fn) {
-    return with_binding_source(source_scope, context, storage, activation,
-                               std::forward<Fn>(fn));
+    return with_materialized_source<source_lifetime::local>(
+        source_scope, context, storage, activation, std::forward<Fn>(fn));
   }
 
   static_binding_policy &activation() { return *this; }

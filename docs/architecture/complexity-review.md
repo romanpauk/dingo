@@ -492,6 +492,15 @@ selected/missing source pair plus policy adapters. It now selects once, calls
 structs and the adapters are gone. The miss rule and auto-construction stay. The
 registry lost 50 lines and the policy header 35.
 
+### Follow-up: one materialization entry
+
+The four `with_*_source` dispatchers and the static four-branch ladder are now
+one `with_materialized_source<Lifetime>` entry. The policy selects
+`context_lvalue`, `context`, `retained`, or `local`; the guard, the
+materialization preamble, and the retain decision are written once. The
+`source_lifetime` vocabulary that was removed as unused in step 1 now has its
+intended use.
+
 ## Non-Goals
 
 - No big-bang reimplementation. The transaction, storage, graph, and generated
