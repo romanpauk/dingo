@@ -100,14 +100,14 @@ defects that were invisible while `construct` re-tested storage instead of
 composing over it.
 
 The 82 construct rows that cannot be instantiated are pinned by path in
-`tools/model/emit/consumers.py`, with a reason, so a new gap cannot be absorbed
+`spec/emit/consumers.py`, with a reason, so a new gap cannot be absorbed
 silently by a rule.
 
 ## The claim report
 
 `cmake --build build -t claim-check` runs the resolve probe, the runtime claim
-tests, and `tools/model/report/claims.py`, then writes
-`build/test/claim-gaps.md`. Every `(row, claim)` pair is classified as:
+tests, and `spec/report/claims.py`, then writes `build/test/claim-gaps.md`.
+Every `(row, claim)` pair is classified as:
 
 | state | meaning | | --- | --- | | `ok` | resolve resolves the row and the
 claim consumes it | | `declared` | the claim cannot consume the row for a

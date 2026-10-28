@@ -55,12 +55,11 @@ The development tools are provided by the locked `uv` environment.
 
 ## Generated Tests
 
-The generated tests are derived from the model in
-[`tools/model`](../tools/model/README.md). One row per capability is rendered
-into a claim file for `resolve`, `construct`, and `invoke`, and the operator
-families cover construction shapes, invocation shapes, producers, collections,
-cycles, conversions, and container configuration. See the
-[coverage model](architecture/coverage-model.md).
+The generated tests are derived from the model in [`spec`](../spec/README.md).
+One row per capability is rendered into a claim file for `resolve`, `construct`,
+and `invoke`, and the operator families cover construction shapes, invocation
+shapes, producers, collections, cycles, conversions, and container
+configuration. See the [coverage model](architecture/coverage-model.md).
 
 The hand-written C++ portion is organized by role: `common/` provides matrix
 plumbing, `containers/` and `fixtures/` define axis inputs, `policies/` contains
@@ -72,15 +71,15 @@ the build; the case set and runner stay the same.
 
 ## Generated Form Coverage
 
-The storage and selection models under [`tools/model/`](../tools/model)
-enumerate the built-in forms independently of the C++ headers. The generator
-writes one translation unit for the full storage scope-by-form product, one for
-every selection policy and source status, one route probe for every supported
-storage form, one type matrix that applies every request shape to every storable
-form and writes `type-matrix.md`, one interface route probe for storage exposed
-through `dingo::interfaces<...>`, one behavior class per supported scope/form
-form in the applicable runtime and static containers, and type behavior units
-that resolve every supported top-level shape through the runtime container and
+The storage and selection models under [`spec/`](../spec) enumerate the built-in
+forms independently of the C++ headers. The generator writes one translation
+unit for the full storage scope-by-form product, one for every selection policy
+and source status, one route probe for every supported storage form, one type
+matrix that applies every request shape to every storable form and writes
+`type-matrix.md`, one interface route probe for storage exposed through
+`dingo::interfaces<...>`, one behavior class per supported scope/form form in
+the applicable runtime and static containers, and type behavior units that
+resolve every supported top-level shape through the runtime container and
 through `static_container` for every statically bindable form, checking
 identity, ownership transfer, and the lifetime balance. The type matrix reports
 both the direct route, the lifted request, and whether the route is safe at the
@@ -114,7 +113,7 @@ as supported, unavailable, unsupported, or unmodeled; and `paths.py` writes the
 coverage report. Generate it with:
 
 ```bash
-uv run --locked python -m tools.model.report.paths \
+uv run --locked python -m spec.report.paths \
     --out build/paths.md --json build/paths.json
 ```
 
@@ -151,7 +150,7 @@ cmake --build build -t resolve-check
 
 ```bash
 cmake --build build -t generated-check
-uv run --locked pytest -q tools/model
+uv run --locked pytest -q spec
 ```
 
 ## Code Size Tests
@@ -239,8 +238,8 @@ be compared between revisions, not against the static probe.
 The model has its own differential baseline in `test/baselines/model.json`. It
 pins the matrix outcomes and the actual behavior runtime outcomes, including
 construction/copy/move/destruction counts and the result or exception class.
-`ctest` runs `python -m tools.model.report.baseline check` after the model test;
-an intended change is recorded with `update --reason "..."`, which rewrites the
+`ctest` runs `python -m spec.report.baseline check` after the model test; an
+intended change is recorded with `update --reason "..."`, which rewrites the
 baseline and appends the declared differences to
 `test/baselines/model-changes.json`.
 

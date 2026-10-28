@@ -2,14 +2,14 @@
 
 Date: 2026-10-27
 
-This is the handover for the `tools/model` coverage generator after the
-per-storage request-derivation refactor.
+This is the handover for the `spec` coverage generator after the per-storage
+request-derivation refactor.
 
 ## Current status
 
 The tree is green:
 
-- `pytest tools/model/tests`: 217 passed
+- `pytest spec/tests`: 217 passed
 - `dingo_model_test`: 279 tests passed (behavior/type behavior, per form)
 - `dingo_classification_test`: 111 tests (both detection backends)
 - `dingo_resolution_static_asserts_test`: 40 tests
@@ -80,7 +80,7 @@ The declared gaps are listed with reasons in `build/paths.md`
 
 ## Architecture
 
-The model now lives in packages under `tools/model`:
+The model now lives in packages under `spec`:
 
 ```text
 grammar/      type grammar, C++ type algebra, storage forms, wrappers
@@ -97,7 +97,7 @@ Imports flow downwards only:
 grammar -> domain -> semantics -> emit -> report
 ```
 
-`tools/model/tests/architecture_test.py` fails on upward imports.
+`spec/tests/architecture_test.py` fails on upward imports.
 
 ### Grammar
 
@@ -319,8 +319,8 @@ Reducing them requires new scenario families, not more generated cases.
 - `behavior.py` still contains scenario-level C++ strings; move them through
   `CppType` / registration plans. The interface and annotation recipes are
   hand-built shape lists, not derived from the ledger.
-- The legacy `test/matrix` generator and its `tools/model/legacy` algebra are
-  deleted; the model families above are the only generated coverage.
+- The legacy `test/matrix` generator and its `spec/legacy` algebra are deleted;
+  the model families above are the only generated coverage.
 - `type_matrix.cpp` is the compile-time bottleneck. If it grows, split it into
   multiple translation units.
 - `report/paths.py` outcome and per-family tables still describe only the
@@ -337,27 +337,27 @@ cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON
 Model pytest:
 
 ```bash
-./.venv/bin/python -m pytest -q tools/model/tests
+./.venv/bin/python -m pytest -q spec/tests
 ```
 
 Coverage report:
 
 ```bash
-./.venv/bin/python -m tools.model paths \
+./.venv/bin/python -m spec paths \
     --out build/paths.md --json build/paths.json
 ```
 
 Other generators through the dispatcher:
 
 ```bash
-python -m tools.model matrix --out ...
-python -m tools.model trait-matrix --out ...
-python -m tools.model resolve --out-dir ... --manifest ...
-python -m tools.model binding-matrix --out ...
-python -m tools.model keyed --out ...
-python -m tools.model interface-runtime --out ...
-python -m tools.model annotated --out ...
-python -m tools.model const --out ...
+python -m spec matrix --out ...
+python -m spec trait-matrix --out ...
+python -m spec resolve --out-dir ... --manifest ...
+python -m spec binding-matrix --out ...
+python -m spec keyed --out ...
+python -m spec interface-runtime --out ...
+python -m spec annotated --out ...
+python -m spec const --out ...
 ```
 
 Quality:
@@ -373,7 +373,7 @@ cmake --build build -t check
 Baseline update after an intended model change:
 
 ```bash
-python -m tools.model.report.baseline update \
+python -m spec.report.baseline update \
   --matrix build/test/type-matrix.json \
   --behavior build/test/behavior-outcomes.jsonl \
   --baseline test/baselines/model.json \
@@ -391,4 +391,4 @@ next commit: `grammar/traits.py`, `emit/traits.py`,
 See also:
 
 - `docs/architecture/type-path-coverage.md`
-- `tools/model/README.md`
+- `spec/README.md`

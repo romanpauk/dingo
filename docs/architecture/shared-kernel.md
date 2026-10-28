@@ -42,8 +42,8 @@ infrastructure described below. It changes no public API and no behavior.
   context slot. The runtime path therefore constructs the result with one move,
   the same as the static container, and requests no longer need a typed maker
   indirection.
-- `tools/model/` is the first coverage catalog. It enumerates every built-in
-  storage scope by form, every selection policy by source status, and every
+- `spec/` is the first coverage catalog. It enumerates every built-in storage
+  scope by form, every selection policy by source status, and every
   scope/form/route-category row. Every route row is classified as supported,
   unavailable with a reason, or a tracked gap; the generator emits one
   translation unit of compile-time assertions for the supported rows and checks
@@ -354,9 +354,9 @@ specialization per form.
 
 ### Catalog
 
-Add `tools/model/` as the single declarative catalog shared by the library
-generator and the matrix generator. The catalog is typed Python records, not C++
-text. The first records are:
+Add `spec/` as the single declarative catalog shared by the library generator
+and the matrix generator. The catalog is typed Python records, not C++ text. The
+first records are:
 
 ```python
 scope(name="shared", stable=True, consumes=False, slot="lazy",
@@ -733,8 +733,8 @@ step, so the tree never contains two supported implementations.
 ## Open Decisions
 
 - The exact home of the catalog: extend `test/matrix/axes` into a shared
-  `tools/model/`, or keep the matrix model and add a library-facing projection.
-  The design prefers the former because two catalogs will drift.
+  `spec/`, or keep the matrix model and add a library-facing projection. The
+  design prefers the former because two catalogs will drift.
 - Whether a runtime key value over a static table is part of the first pass or a
   declared follow-up. The selection algebra makes it a source property, not a
   separate backend.

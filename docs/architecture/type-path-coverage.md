@@ -21,15 +21,14 @@ Leaf(name)
   annotated<Expr, Tag>
 ```
 
-`tools/model/grammar/expr.py` owns the path constructors. They reject
-combinations C++ itself rejects (reference to reference, optional of reference,
-array of reference, variant of reference, array handle of array). `Expr.cpp()`
-projects a path to a structured `CppType`; `grammar/cpp.py` is the single source
-of C++ spelling. Storage forms and wrappers build the same `CppType` values
-instead of formatting type strings, and no consumer parses a rendered type back
-into parts.
+`spec/grammar/expr.py` owns the path constructors. They reject combinations C++
+itself rejects (reference to reference, optional of reference, array of
+reference, variant of reference, array handle of array). `Expr.cpp()` projects a
+path to a structured `CppType`; `grammar/cpp.py` is the single source of C++
+spelling. Storage forms and wrappers build the same `CppType` values instead of
+formatting type strings, and no consumer parses a rendered type back into parts.
 
-`tools/model/grammar/enumerate.py` owns the bounded enumeration. Given a leaf it
+`spec/grammar/enumerate.py` owns the bounded enumeration. Given a leaf it
 produces one universe and projects it:
 
 - `object_forms` — plain paths, wrappers, variants, and the access closure
@@ -67,8 +66,8 @@ and an interface request requires an interface binding.
 
 ## Bounds
 
-The grammar is infinite, so `tools/model/grammar/enumerate.py` enumerates a
-bounded domain:
+The grammar is infinite, so `spec/grammar/enumerate.py` enumerates a bounded
+domain:
 
 - qualifier depth 2;
 - wrapper depth 2;
@@ -86,7 +85,7 @@ correctness requirement. The current snapshot is:
 
 ## Support classification
 
-`tools/model/semantics/support.py` classifies every case as one of:
+`spec/semantics/support.py` classifies every case as one of:
 
 - `supported` — the model's route rules publish the request from the form;
 - `unavailable` — the scope/form does not expose the category;
@@ -104,7 +103,7 @@ which is what keeps the domain tractable.
 ## The report
 
 ```bash
-uv run --locked python -m tools.model.report.paths \
+uv run --locked python -m spec.report.paths \
     --out build/paths.md \
     --json build/paths.json
 ```
@@ -243,7 +242,7 @@ enumeration and classification functions are cached with `functools.lru_cache`;
 profiling with `cProfile` is the first step when bounds grow:
 
 ```bash
-uv run --locked python -m cProfile -s cumulative -m tools.model.report.paths \
+uv run --locked python -m cProfile -s cumulative -m spec.report.paths \
     --out /tmp/paths.md
 ```
 

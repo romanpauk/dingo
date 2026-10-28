@@ -53,45 +53,45 @@ wrapper or composition adds a branch in `request_lift.h`; semantics are implicit
 | | Route model | `storage_form_traits` lists + `binding_*_resolutions` +
 per-shape expectations | new optional/const/handle targets require editing form
 lists, ledgers, interface counts, and static trait expectations | | Model tables
-| `tools/model/semantics/routes/ledger.py` (`OPERATION_KINDS`, `RETENTION`),
-`tools/model/emit/families/interface.py` (`INTERFACE_ROUTES` counts) |
-hand-maintained; const-handle support required 19 ledger edits and five
-interface-count edits | | Shape grammar | `tools/model/emit/matrix.py`
-`Shape`/`Constructor` | no variants, no custom wrappers; wrapper properties are
-implied by constructor names | | Lift/direct decision |
-`container::resolve_entry`, the dependency origin overload, `static_container`
-public and origin overloads | the same policy is encoded in four places | |
-Contracts | `tools/cost/measure.py`, `test-cost`, codegen probes | not tied to
-routes/features, so new routes can silently cost more |
+| `spec/semantics/routes/ledger.py` (`OPERATION_KINDS`, `RETENTION`),
+`spec/emit/families/interface.py` (`INTERFACE_ROUTES` counts) | hand-maintained;
+const-handle support required 19 ledger edits and five interface-count edits | |
+Shape grammar | `spec/emit/matrix.py` `Shape`/`Constructor` | no variants, no
+custom wrappers; wrapper properties are implied by constructor names | |
+Lift/direct decision | `container::resolve_entry`, the dependency origin
+overload, `static_container` public and origin overloads | the same policy is
+encoded in four places | | Contracts | `tools/cost/measure.py`, `test-cost`,
+codegen probes | not tied to routes/features, so new routes can silently cost
+more |
 
 ## Principles borrowed from M9.2
 
 | M9.2 idea | smaller version here | | --- | --- | | Wrapper semantics are
-classes of handles with traits, not concrete types | property model in
-`tools/model`; later optional semantic flags in `type_traits` | | A route is a
-derivation over rules | Python `route_rules` model derives operation kind,
-retention, and support reasons | | One engine, three binding times | factor the
-lift/direct policy into one resolution-policy helper with static/runtime
-backends | | Spec-generated expectations | generate matrix/behavior expectations
-and ledger data from the rule model | | Contracts | object-size,
-instantiation-count, codegen, and header probes for added routes | |
-Differential baseline | pinned outcome JSON for matrix/behavior, with declared
-changes | | Wrapper extension by semantics | `type_traits` semantic properties
-consumed by `request_lift` | | Variants are first-class tree nodes | add variant
-shapes and alternative routes to the grammar and behavior model |
+classes of handles with traits, not concrete types | property model in `spec`;
+later optional semantic flags in `type_traits` | | A route is a derivation over
+rules | Python `route_rules` model derives operation kind, retention, and
+support reasons | | One engine, three binding times | factor the lift/direct
+policy into one resolution-policy helper with static/runtime backends | |
+Spec-generated expectations | generate matrix/behavior expectations and ledger
+data from the rule model | | Contracts | object-size, instantiation-count,
+codegen, and header probes for added routes | | Differential baseline | pinned
+outcome JSON for matrix/behavior, with declared changes | | Wrapper extension by
+semantics | `type_traits` semantic properties consumed by `request_lift` | |
+Variants are first-class tree nodes | add variant shapes and alternative routes
+to the grammar and behavior model |
 
 ## Step 1: wrapper semantics and route rules in the model
 
 Risk: low. Python and generated tests only.
 
-- [x] Add `tools/model/grammar/shapes.py`:
+- [x] Add `spec/grammar/shapes.py`:
   - `WrapperSemantics(name, render, kind, properties)`.
   - Properties: `owning`, `sharing`, `sole_owner`, `nullable`, `borrowable`,
     `array`, `array_handle`, `variant`, `in_place`, `mapped`, `move`, `const`.
   - Built-ins: const, lvalue/rvalue reference, pointer, optional, unique/shared
     handle, unique/shared array handle, array reference/pointer, variant.
   - Applicability is declared per wrapper, so a user wrapper is one entry.
-- [x] Add `tools/model/semantics/routes/rules.py`:
+- [x] Add `spec/semantics/routes/rules.py`:
   - Rules: `access`, `borrow`, `move`, `copy_out`, `take`, `wrap`, `share`,
     `adopt`, `decay`, `select_alternative`, `nested_access`, `const_copy`,
     `target`.
@@ -310,9 +310,9 @@ What kept it unmerged:
   - Next: Step 2 derives `route_ledger.OPERATION_KINDS`/`RETENTION` and
     `interface_routes` counts from the same rule model.
 - 2026-10-25: Step 2, operation kinds and retention landed.
-  - `tools/model/semantics/routes/derivation.py` derives the kind/retention
-    sequence from the form's stored wrapper and the scope's source shape. The
-    two hand tables in `route_ledger.py` are removed; `route_ledger` keeps the
+  - `spec/semantics/routes/derivation.py` derives the kind/retention sequence
+    from the form's stored wrapper and the scope's source shape. The two hand
+    tables in `route_ledger.py` are removed; `route_ledger` keeps the
     outcome/access decisions.
   - Source shape is scope data now (`Scope.returns_pointer`): shared hands a
     non-wrapper value out as an address, external as an lvalue, unique as an
@@ -937,7 +937,7 @@ cmake --build build -t format
 cmake --build build -t generated-check
 cmake --build build -j8
 ctest --test-dir build -j8
-./.venv/bin/python -m pytest -q tools/model/tests tools/cost
+./.venv/bin/python -m pytest -q spec/tests tools/cost
 cmake --build build -t check
 ```
 

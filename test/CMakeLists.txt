@@ -5,121 +5,121 @@ uv_get_run_command(DINGO_UV_RUN_COMMAND
 
 
 set(DINGO_MODEL_GENERATOR
-    "tools.model.emit.families.storage")
+    "spec.emit.families.storage")
 set(DINGO_SELECTION_MODEL_GENERATOR
-    "tools.model.emit.selection")
+    "spec.emit.selection")
 set(DINGO_ROUTE_MODEL_GENERATOR
-    "tools.model.emit.families.route")
+    "spec.emit.families.route")
 set(DINGO_BEHAVIOR_MODEL_GENERATOR
-    "tools.model.emit.families.behavior")
+    "spec.emit.families.behavior")
 set(DINGO_INTERFACE_MODEL_GENERATOR
-    "tools.model.emit.families.interface")
+    "spec.emit.families.interface")
 set(DINGO_TYPE_MATRIX_GENERATOR
-    "tools.model.emit.matrix")
+    "spec.emit.matrix")
 set(DINGO_TRAIT_MATRIX_GENERATOR
-    "tools.model.emit.traits")
+    "spec.emit.traits")
 set(DINGO_BINDING_MATRIX_GENERATOR
-    "tools.model.emit.binding_matrix")
+    "spec.emit.binding_matrix")
 set(DINGO_TYPE_BEHAVIOR_GENERATOR
-    "tools.model.emit.behavior")
+    "spec.emit.behavior")
 set(DINGO_PROPERTY_MODEL_GENERATOR
-    "tools.model.emit.families.property")
+    "spec.emit.families.property")
 set(DINGO_ANNOTATED_MODEL_GENERATOR
-    "tools.model.emit.families.annotated")
+    "spec.emit.families.annotated")
 set(DINGO_CONST_MODEL_GENERATOR
-    "tools.model.emit.families.const")
+    "spec.emit.families.const")
 set(DINGO_KEYED_MODEL_GENERATOR
-    "tools.model.emit.families.keyed")
+    "spec.emit.families.keyed")
 set(DINGO_INTERFACE_RUNTIME_MODEL_GENERATOR
-    "tools.model.emit.families.interface_runtime")
+    "spec.emit.families.interface_runtime")
 set(DINGO_RESOLVE_GENERATOR
-    "tools.model.emit.resolve")
+    "spec.emit.resolve")
 set(DINGO_CONSUMER_MODEL_GENERATOR
-    "tools.model.emit.consumers")
+    "spec.emit.consumers")
 set(DINGO_FACTORY_MODEL_GENERATOR
-    "tools.model.emit.families.factory")
+    "spec.emit.families.factory")
 set(DINGO_CONSTRUCT_MODEL_GENERATOR
-    "tools.model.emit.families.construct")
+    "spec.emit.families.construct")
 set(DINGO_INVOKE_MODEL_GENERATOR
-    "tools.model.emit.families.invoke")
+    "spec.emit.families.invoke")
 set(DINGO_PRODUCER_MODEL_GENERATOR
-    "tools.model.emit.families.producer")
+    "spec.emit.families.producer")
 set(DINGO_CONFIGURATION_MODEL_GENERATOR
-    "tools.model.emit.families.configuration")
+    "spec.emit.families.configuration")
 set(DINGO_MIXED_MODEL_GENERATOR
-    "tools.model.emit.families.mixed")
+    "spec.emit.families.mixed")
 set(DINGO_CYCLICAL_MODEL_GENERATOR
-    "tools.model.emit.families.cyclical")
+    "spec.emit.families.cyclical")
 set(DINGO_LOOKUP_MODEL_GENERATOR
-    "tools.model.emit.families.lookup")
+    "spec.emit.families.lookup")
 set(DINGO_DEPENDENCIES_MODEL_GENERATOR
-    "tools.model.emit.families.dependencies")
+    "spec.emit.families.dependencies")
 set(DINGO_CONVERSION_MODEL_GENERATOR
-    "tools.model.emit.families.conversion")
+    "spec.emit.families.conversion")
 set(DINGO_WRAPPER_MODEL_GENERATOR
-    "tools.model.emit.families.wrapper")
+    "spec.emit.families.wrapper")
 set(DINGO_COLLECTION_MODEL_GENERATOR
-    "tools.model.emit.families.collection")
+    "spec.emit.families.collection")
 set(DINGO_INDEXED_MODEL_GENERATOR
-    "tools.model.emit.families.indexed")
+    "spec.emit.families.indexed")
 set(DINGO_CLASSIFICATION_CONSTRUCTOR_GENERATOR
-    "tools.model.emit.detection_constructor")
+    "spec.emit.detection_constructor")
 set(DINGO_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/storage_facts.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/storage_facts.cpp.j2")
 set(DINGO_SCOPES_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/scopes.gen.h.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/scopes.gen.h.j2")
 set(DINGO_ROUTE_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/route_probes.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/route_probes.cpp.j2")
 set(DINGO_BEHAVIOR_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/behavior_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/behavior_cases.cpp.j2")
 set(DINGO_INTERFACE_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/interface_routes.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/interface_routes.cpp.j2")
 set(DINGO_TYPE_MATRIX_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/type_matrix.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/type_matrix.cpp.j2")
 set(DINGO_TRAIT_MATRIX_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/trait_matrix.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/trait_matrix.cpp.j2")
 set(DINGO_BINDING_MATRIX_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/binding_matrix.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/binding_matrix.cpp.j2")
 set(DINGO_TYPE_BEHAVIOR_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/type_behavior.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/type_behavior.cpp.j2")
 set(DINGO_PROPERTY_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/wrapper_properties.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/wrapper_properties.cpp.j2")
 set(DINGO_ANNOTATED_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/annotated_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/annotated_cases.cpp.j2")
 set(DINGO_CONST_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/const_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/const_cases.cpp.j2")
 set(DINGO_KEYED_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/keyed_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/keyed_cases.cpp.j2")
 set(DINGO_CONSTRUCT_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/construct_shapes.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/construct_shapes.cpp.j2")
 set(DINGO_INVOKE_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/invoke_shapes.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/invoke_shapes.cpp.j2")
 set(DINGO_PRODUCER_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/producer_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/producer_cases.cpp.j2")
 set(DINGO_CONFIGURATION_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/configuration_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/configuration_cases.cpp.j2")
 set(DINGO_MIXED_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/mixed_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/mixed_cases.cpp.j2")
 set(DINGO_CYCLICAL_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/cyclical_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/cyclical_cases.cpp.j2")
 set(DINGO_LOOKUP_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/lookup_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/lookup_cases.cpp.j2")
 set(DINGO_DEPENDENCIES_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/dependency_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/dependency_cases.cpp.j2")
 set(DINGO_CONVERSION_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/conversion_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/conversion_cases.cpp.j2")
 set(DINGO_WRAPPER_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/wrapper_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/wrapper_cases.cpp.j2")
 set(DINGO_CONSUMER_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/consumer_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/consumer_cases.cpp.j2")
 set(DINGO_PROBE_FIXTURES_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/_probe_fixtures.h.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/_probe_fixtures.h.j2")
 set(DINGO_INTERFACE_RUNTIME_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/interface_runtime.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/interface_runtime.cpp.j2")
 set(DINGO_RESOLVE_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/resolve_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/resolve_cases.cpp.j2")
 set(DINGO_CLASSIFICATION_CONSTRUCTOR_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/detection_constructor.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/detection_constructor.cpp.j2")
 set(DINGO_CLASSIFICATION_DIR
     "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(DINGO_CLASSIFICATION_CONSTRUCTOR_MANIFEST
@@ -131,7 +131,7 @@ set(DINGO_RESOLVE_MANIFEST
 set(DINGO_SCOPES_HEADER
     "${PROJECT_SOURCE_DIR}/include/dingo/storage/scopes.gen.h")
 set(DINGO_SELECTION_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/templates/selection_rules.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/emit/templates/selection_rules.cpp.j2")
 set(DINGO_STORAGE_MANIFEST
     "${DINGO_CLASSIFICATION_DIR}/storage-manifest.json")
 set(DINGO_SELECTION_MANIFEST
@@ -151,90 +151,90 @@ set(DINGO_BINDING_MATRIX_MANIFEST
 set(DINGO_PROPERTY_MANIFEST
     "${DINGO_CLASSIFICATION_DIR}/property-manifest.json")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    "${PROJECT_SOURCE_DIR}/tools/model/__init__.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/__main__.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/domain/__init__.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/domain/cases.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/domain/requests.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/__init__.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/behavior.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/common/__init__.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/common/recipe.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/common/runner.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/common/validation.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/__init__.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/annotated.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/behavior.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/const.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/interface.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/property.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/route.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/storage.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/matrix.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/resolve.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/detection_constructor.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/factory.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/construct.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/collection.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/families/indexed.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/selection.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/traits.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/grammar/__init__.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/grammar/bindings.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/grammar/catalog.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/grammar/cpp.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/grammar/enumerate.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/grammar/expr.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/grammar/shapes.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/grammar/storage.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/grammar/traits.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/report/__init__.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/report/baseline.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/report/coverage.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/report/paths.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/report/resolves.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/semantics/__init__.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/semantics/capabilities.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/semantics/storage_forms.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/semantics/extended_shapes.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/semantics/forms.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/semantics/gaps.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/semantics/routes/__init__.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/semantics/routes/derivation.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/semantics/routes/ledger.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/semantics/routes/rules.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/semantics/support.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/__init__.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/annotated_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/architecture_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/behavior_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/conftest.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/const_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/grammar_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/keyed_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/interface_runtime_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/binding_matrix_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/interface_routes_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/outcome_baseline_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/paths_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/wrapper_properties_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/route_probes_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/route_derivation_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/route_ledger_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/route_rules_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/selection_rules_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/storage_facts_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/type_behavior_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/type_matrix_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/collection_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/indexed_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/construct_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/detection_constructor_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/factory_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/resolve_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/resolve_report_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/trait_matrix_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/wrapper_semantics_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/__init__.py"
+    "${PROJECT_SOURCE_DIR}/spec/__main__.py"
+    "${PROJECT_SOURCE_DIR}/spec/domain/__init__.py"
+    "${PROJECT_SOURCE_DIR}/spec/domain/cases.py"
+    "${PROJECT_SOURCE_DIR}/spec/domain/requests.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/__init__.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/behavior.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/common/__init__.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/common/recipe.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/common/runner.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/common/validation.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/families/__init__.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/families/annotated.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/families/behavior.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/families/const.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/families/interface.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/families/property.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/families/route.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/families/storage.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/matrix.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/resolve.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/detection_constructor.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/families/factory.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/families/construct.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/families/collection.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/families/indexed.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/selection.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/traits.py"
+    "${PROJECT_SOURCE_DIR}/spec/grammar/__init__.py"
+    "${PROJECT_SOURCE_DIR}/spec/grammar/bindings.py"
+    "${PROJECT_SOURCE_DIR}/spec/grammar/catalog.py"
+    "${PROJECT_SOURCE_DIR}/spec/grammar/cpp.py"
+    "${PROJECT_SOURCE_DIR}/spec/grammar/enumerate.py"
+    "${PROJECT_SOURCE_DIR}/spec/grammar/expr.py"
+    "${PROJECT_SOURCE_DIR}/spec/grammar/shapes.py"
+    "${PROJECT_SOURCE_DIR}/spec/grammar/storage.py"
+    "${PROJECT_SOURCE_DIR}/spec/grammar/traits.py"
+    "${PROJECT_SOURCE_DIR}/spec/report/__init__.py"
+    "${PROJECT_SOURCE_DIR}/spec/report/baseline.py"
+    "${PROJECT_SOURCE_DIR}/spec/report/coverage.py"
+    "${PROJECT_SOURCE_DIR}/spec/report/paths.py"
+    "${PROJECT_SOURCE_DIR}/spec/report/resolves.py"
+    "${PROJECT_SOURCE_DIR}/spec/semantics/__init__.py"
+    "${PROJECT_SOURCE_DIR}/spec/semantics/capabilities.py"
+    "${PROJECT_SOURCE_DIR}/spec/semantics/storage_forms.py"
+    "${PROJECT_SOURCE_DIR}/spec/semantics/extended_shapes.py"
+    "${PROJECT_SOURCE_DIR}/spec/semantics/forms.py"
+    "${PROJECT_SOURCE_DIR}/spec/semantics/gaps.py"
+    "${PROJECT_SOURCE_DIR}/spec/semantics/routes/__init__.py"
+    "${PROJECT_SOURCE_DIR}/spec/semantics/routes/derivation.py"
+    "${PROJECT_SOURCE_DIR}/spec/semantics/routes/ledger.py"
+    "${PROJECT_SOURCE_DIR}/spec/semantics/routes/rules.py"
+    "${PROJECT_SOURCE_DIR}/spec/semantics/support.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/__init__.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/annotated_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/architecture_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/behavior_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/conftest.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/const_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/grammar_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/keyed_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/interface_runtime_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/binding_matrix_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/interface_routes_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/outcome_baseline_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/paths_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/wrapper_properties_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/route_probes_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/route_derivation_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/route_ledger_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/route_rules_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/selection_rules_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/storage_facts_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/type_behavior_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/type_matrix_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/collection_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/indexed_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/construct_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/detection_constructor_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/factory_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/resolve_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/resolve_report_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/trait_matrix_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/wrapper_semantics_test.py"
     "${DINGO_MODEL_TEMPLATE}"
     "${DINGO_SCOPES_TEMPLATE}"
     "${DINGO_SELECTION_MODEL_TEMPLATE}"
@@ -258,20 +258,20 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_DEPENDENCIES_MODEL_TEMPLATE}"
     "${DINGO_CONVERSION_MODEL_TEMPLATE}"
     "${DINGO_WRAPPER_MODEL_TEMPLATE}"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/wrapper_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/conversion_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/dependency_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/lookup_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/cyclical_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/mixed_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/configuration_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/producer_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/wrapper_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/conversion_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/dependency_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/lookup_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/cyclical_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/mixed_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/configuration_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/producer_cases_test.py"
     "${DINGO_CONSUMER_MODEL_TEMPLATE}"
     "${DINGO_PROBE_FIXTURES_TEMPLATE}"
-    "${PROJECT_SOURCE_DIR}/tools/model/emit/consumers.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/construct_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/consumer_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/tools/model/tests/claim_report_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/emit/consumers.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/construct_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/consumer_cases_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/claim_report_test.py"
     "${DINGO_CONST_MODEL_TEMPLATE}"
     "${DINGO_SCOPES_HEADER}"
     "${PROJECT_SOURCE_DIR}/tools/cost/measure_test.py")
@@ -939,7 +939,7 @@ add_custom_target(claim-check
     COMMAND $<TARGET_FILE:dingo_resolve_probe>
     COMMAND $<TARGET_FILE:dingo_resolution_runtime_test>
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
-        tools.model.report.claims
+        spec.report.claims
         --manifest ${DINGO_RESOLVE_MANIFEST}
         --outcomes-dir ${CMAKE_CURRENT_BINARY_DIR}
         --out ${CMAKE_CURRENT_BINARY_DIR}/claim-gaps.md
@@ -960,7 +960,7 @@ add_custom_target(resolve-check
     COMMENT "Running the per-storage resolve probes and writing the gap report"
     COMMAND $<TARGET_FILE:dingo_resolve_probe>
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
-        tools.model.report.resolves
+        spec.report.resolves
         --manifest ${DINGO_RESOLVE_MANIFEST}
         --outcomes-dir ${CMAKE_CURRENT_BINARY_DIR}
         --out ${CMAKE_CURRENT_BINARY_DIR}/resolve-gaps.md
@@ -970,7 +970,7 @@ add_custom_target(resolve-check
 
 add_test(NAME dingo_model_baseline_test
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
-        tools.model.report.baseline check
+        spec.report.baseline check
         --matrix ${CMAKE_CURRENT_BINARY_DIR}/type-matrix.json
         ${DINGO_BEHAVIOR_REPORT_ARGS}
         --baseline ${PROJECT_SOURCE_DIR}/test/baselines/model.json)
@@ -981,7 +981,7 @@ set_tests_properties(dingo_model_baseline_test PROPERTIES
 
 add_test(NAME dingo_model_generator_test
     COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q
-        ${PROJECT_SOURCE_DIR}/tools/model/tests)
+        ${PROJECT_SOURCE_DIR}/spec/tests)
 set_tests_properties(dingo_model_generator_test PROPERTIES
     LABELS "unit;generator"
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})

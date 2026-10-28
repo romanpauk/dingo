@@ -1,0 +1,335 @@
+#!/usr/bin/env python3
+#
+# This file is part of dingo project <https://github.com/romanpauk/dingo>
+#
+# See LICENSE for license and copyright information
+# SPDX-License-Identifier: MIT
+#
+
+"""Write the type-path coverage report.
+
+The report is the domain map: every enumerated request, storage, and scope,
+classified as supported, unavailable, unsupported, or unmodeled. It is the
+input for deciding what to extend next, and the guard that keeps new grammar
+paths from being silently ignored.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+from collections import Counter, defaultdict
+from pathlib import Path
+
+from spec.grammar.catalog import SCOPES
+from spec.semantics.capabilities import exposed_binding_kinds
+from spec.domain.cases import counts, iter_cases, request_forms
+from spec.emit.common.runner import emit
+from spec.grammar.storage import STORAGE_PATHS
+from spec.semantics.extended_shapes import extended_shapes
+from spec.semantics.support import classify, classify_case, to_shape
+from spec.grammar.expr import Expr, family
+from spec.grammar.traits import TRAITS
+
+OUTCOMES = ("supported", "unavailable", "unsupported", "unmodeled")
+
+
+def binding_applicability() -> list[dict[str, object]]:
+    """Exposed and non-exposed slots for each qualified binding."""
+    slots = len(STORAGE_PATHS)
+    rows = []
+    for kind in ("annotated", "annotated_interface", "keyed", "interface"):
+        exposed = sum(
+            1
+            for path in STORAGE_PATHS
+            if (
+                {"annotated", "interface"}
+                <= exposed_binding_kinds(path.scope, path.form)
+                if kind == "annotated_interface"
+                else kind in exposed_binding_kinds(path.scope, path.form)
+            )
+        )
+        rows.append(
+            {
+                "binding": kind,
+                "exposed": exposed,
+                "not_exposed": slots - exposed,
+            }
+        )
+    return rows
+
+
+def build_report(
+    request: tuple[Expr, ...] | None = None,
+    examples: int = 4,
+) -> dict[str, object]:
+    from spec.report.coverage import coverage_report
+
+    forms = request or request_forms()
+    cases = iter_cases(forms)
+    by_family: dict[str, Counter[str]] = defaultdict(Counter)
+    by_storage: dict[str, Counter[str]] = defaultdict(Counter)
+    by_binding: dict[str, Counter[str]] = defaultdict(Counter)
+    by_rule: Counter[str] = Counter()
+    unmodeled: dict[str, list[str]] = defaultdict(list)
+    totals: Counter[str] = Counter()
+
+    by_trait_outcome: dict[str, Counter[str]] = {
+        traits.name: Counter() for traits in TRAITS
+    }
+    by_trait_rule: dict[str, Counter[str]] = {
+        traits.name: Counter() for traits in TRAITS
+    }
+    for traits in TRAITS:
+        for case in iter_cases(forms, traits):
+            verdict = classify_case(case)
+            by_trait_outcome[traits.name][verdict.outcome] += 1
+            if verdict.outcome in {"unsupported", "unavailable"}:
+                by_trait_rule[traits.name][verdict.rule or "exposure"] += 1
+
+    for case in cases:
+        verdict = classify_case(case)
+        name = family(case.request)
+        totals[verdict.outcome] += 1
+        by_family[name][verdict.outcome] += 1
+        by_storage[case.storage_name][verdict.outcome] += 1
+        by_binding[case.binding.label][verdict.outcome] += 1
+        if verdict.outcome == "unmodeled":
+            if len(unmodeled[name]) < examples:
+                unmodeled[name].append(case.request.render())
+        elif verdict.outcome in {"unsupported", "unavailable"}:
+            by_rule[verdict.rule or "exposure"] += 1
+
+    return {
+        "counts": counts(),
+        "totals": dict(totals),
+        "by_family": {key: dict(value) for key, value in sorted(by_family.items())},
+        "by_storage": {
+            key: dict(value) for key, value in sorted(by_storage.items())
+        },
+        "by_binding": {
+            key: dict(value) for key, value in sorted(by_binding.items())
+        },
+        "binding_applicability": binding_applicability(),
+        "coverage": coverage_report(examples),
+        "by_rule": dict(by_rule.most_common()),
+        "by_trait_outcome": {
+            name: dict(values) for name, values in by_trait_outcome.items()
+        },
+        "by_trait_rule": {
+            name: dict(values.most_common()) for name, values in by_trait_rule.items()
+        },
+        "unmodeled_examples": {key: value for key, value in sorted(unmodeled.items())},
+        "extended_shapes": [
+            {"name": shape.name, "type": shape.cpp_type}
+            for shape in extended_shapes()
+        ],
+    }
+
+
+def _row(values: dict[str, int]) -> str:
+    return " | ".join(str(values.get(outcome, 0)) for outcome in OUTCOMES)
+
+
+def render(report: dict[str, object]) -> str:
+    totals = report["totals"]
+    total = sum(totals.values())
+    lines = [
+        "# Type Path Coverage",
+        "",
+        "Generated by `python -m spec.report.paths`.",
+        "",
+        "## Domain",
+        "",
+        "| dimension | count |",
+        "| --- | ---: |",
+    ]
+    for key, value in report["counts"].items():
+        lines.append(f"| {key} | {value} |")
+    lines += [
+        "",
+        "`cases` is the full request × slot product. Qualified requests are "
+        "classified even when the storage form lacks a binding model; see Binding "
+        "applicability and Test coverage.",
+        "",
+        f"Total classified cases: **{total}**.",
+        "",
+        "## Outcomes",
+        "",
+        "| outcome | cases | share |",
+        "| --- | ---: | ---: |",
+    ]
+    for outcome in OUTCOMES:
+        value = totals.get(outcome, 0)
+        share = (100.0 * value / total) if total else 0.0
+        lines.append(f"| {outcome} | {value} | {share:.1f}% |")
+    lines += [
+        "",
+        "## By request family",
+        "",
+        "| family | supported | unavailable | unsupported | unmodeled |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for name, values in report["by_family"].items():
+        lines.append(f"| {name} | {_row(values)} |")
+    lines += [
+        "",
+        "## By storage",
+        "",
+        "| storage | supported | unavailable | unsupported | unmodeled |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for name, values in report["by_storage"].items():
+        lines.append(f"| {name} | {_row(values)} |")
+    lines += [
+        "",
+        "## By binding",
+        "",
+        "| binding | supported | unavailable | unsupported | unmodeled |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for name, values in report["by_binding"].items():
+        lines.append(f"| {name} | {_row(values)} |")
+    lines += [
+        "",
+        "## Binding applicability",
+        "",
+        "| binding | exposed slots | not exposed |",
+        "| --- | ---: | ---: |",
+    ]
+    for row in report["binding_applicability"]:
+        lines.append(
+            f"| {row['binding']} | {row['exposed']} | {row['not_exposed']} |"
+        )
+    coverage = report["coverage"]
+    lines += [
+        "",
+        "## Test coverage",
+        "",
+        "| metric | cases |",
+        "| --- | ---: |",
+        f"| supported | {coverage['supported']} |",
+        f"| compile-tested | {coverage['compile_tested']} |",
+        f"| runtime-tested | {coverage['runtime_tested']} |",
+        f"| compile gap | {coverage['compile_gap']} |",
+        f"| runtime gap | {coverage['runtime_gap']} |",
+        f"| declared runtime gap | {coverage['declared_gap']} |",
+        "",
+        "## Leaf traits",
+        "",
+        "| trait | supported | compile-tested | runtime-tested | compile gap "
+        "| runtime gap | declared |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for traits in ("copyable", "move_only"):
+        lines.append(
+            f"| {traits} "
+            f"| {coverage['supported_by_trait'].get(traits, 0)} "
+            f"| {coverage['compile_by_trait'].get(traits, 0)} "
+            f"| {coverage['runtime_by_trait'].get(traits, 0)} "
+            f"| {coverage['compile_gap_by_trait'].get(traits, 0)} "
+            f"| {coverage['runtime_gap_by_trait'].get(traits, 0)} "
+            f"| {coverage['declared_gap_by_trait'].get(traits, 0)} |"
+        )
+    lines += [
+        "",
+        "## Coverage gap by binding",
+        "",
+        "| binding | compile gap | runtime gap | declared |",
+        "| --- | ---: | ---: | ---: |",
+    ]
+    compile_gaps = coverage["gap_by_binding"]
+    runtime_gaps = coverage["runtime_gap_by_binding"]
+    for name in sorted(set(compile_gaps) | set(runtime_gaps)):
+        compile_gap = compile_gaps.get(name, 0)
+        runtime_gap = runtime_gaps.get(name, 0)
+        declared = coverage["declared_gap_by_binding"].get(name, 0)
+        if compile_gap or runtime_gap or declared:
+            lines.append(
+                f"| {name} | {compile_gap} | {runtime_gap} | {declared} |"
+            )
+    lines += ["", "### Untested examples", ""]
+    for name, values in coverage["examples"].items():
+        for value in values:
+            lines.append(f"- `{name}`: `{value}`")
+    lines += ["", "### Declared runtime gaps", ""]
+    for reason, values in coverage["declared_gap_examples"].items():
+        lines.append(f"- {reason}")
+        for value in values:
+            lines.append(f"  - `{value}`")
+    lines += [
+        "",
+        "## Unsupported / unavailable rules",
+        "",
+        "| rule | cases |",
+        "| --- | ---: |",
+    ]
+    for rule, value in report["by_rule"].items():
+        lines.append(f"| {rule} | {value} |")
+    lines += [
+        "",
+        "## Outcomes by leaf trait",
+        "",
+        "| trait | supported | unavailable | unsupported | unmodeled |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for traits in TRAITS:
+        values = report["by_trait_outcome"][traits.name]
+        lines.append(f"| {traits.name} | {_row(values)} |")
+    lines += [
+        "",
+        "## Unsupported / unavailable rules by leaf trait",
+        "",
+        "| rule | copyable | move_only |",
+        "| --- | ---: | ---: |",
+    ]
+    rules = report["by_trait_rule"]
+    names = sorted(
+        set(rules["copyable"]) | set(rules["move_only"]),
+        key=lambda name: (-(rules["copyable"].get(name, 0)
+                           + rules["move_only"].get(name, 0)), name),
+    )
+    for name in names:
+        lines.append(
+            f"| {name} | {rules['copyable'].get(name, 0)} "
+            f"| {rules['move_only'].get(name, 0)} |"
+        )
+    lines += ["", "## Unmodeled examples", ""]
+    for name, values in report["unmodeled_examples"].items():
+        for value in values:
+            lines.append(f"- `{name}`: `{value}`")
+    lines += [
+        "",
+        "## Path-extended shapes",
+        "",
+        f"{len(report['extended_shapes'])} supported shapes are outside the "
+        "bounded depth-2 catalog. `emit/matrix.py` merges them into the "
+        "compile-time matrix.",
+        "",
+        "| shape | type |",
+        "| --- | --- |",
+    ]
+    for shape in report["extended_shapes"]:
+        lines.append(f"| {shape['name']} | `{shape['type']}` |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--json", type=Path)
+    parser.add_argument("--examples", type=int, default=4)
+    parser.add_argument("--check", action="store_true")
+    arguments = parser.parse_args()
+
+    report = build_report(examples=arguments.examples)
+    content = render(report)
+    emit(arguments.out, content, check=arguments.check)
+    if arguments.json is not None:
+        payload = json.dumps(report, indent=2, sort_keys=True) + "\n"
+        emit(arguments.json, payload, check=arguments.check)
+
+
+if __name__ == "__main__":
+    main()

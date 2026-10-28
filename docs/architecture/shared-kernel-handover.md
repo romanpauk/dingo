@@ -31,8 +31,8 @@ The conversion path is shared:
 
 The model is richer than the C++ descriptor:
 
-- `tools/model/semantics/routes/derivation.py` derives `RouteCandidate` objects
-  with kind, retention, steps, and target shape.
+- `spec/semantics/routes/derivation.py` derives `RouteCandidate` objects with
+  kind, retention, steps, and target shape.
 - `test/support/model_probe.h` exposes non-recursive route/step accessors.
 - `route_probes` asserts candidate presence, absence, kind, retention, step
   sequence, and target shape.
@@ -186,7 +186,7 @@ cmake --build build -t format
 cmake --build build -t generated-check
 cmake --build build -j8
 ctest --test-dir build -j8
-./.venv/bin/python -m pytest -q tools/model/tests tools/cost
+./.venv/bin/python -m pytest -q spec/tests tools/cost
 cmake --build build -t check
 ```
 
@@ -328,7 +328,6 @@ priority than the registry split.
 - `include/dingo/resolution/resolution_operation.h` — conversion
   descriptor/walker
 - `include/dingo/base/type_list.h` — non-recursive type-list indexing
-- `tools/model/semantics/routes/derivation.py` — route candidate rules
+- `spec/semantics/routes/derivation.py` — route candidate rules
 - `test/support/model_probe.h` — generated-probe accessors
-- `tools/model/templates/route_probes.cpp.j2` — candidate/absence/step/target
-  asserts
+- `spec/templates/route_probes.cpp.j2` — candidate/absence/step/target asserts

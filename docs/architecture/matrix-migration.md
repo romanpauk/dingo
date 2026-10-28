@@ -69,8 +69,7 @@ one named case per regression |
   generator test;
 - `test/matrix/model_coverage.py`, which was the parity gate while features
   moved;
-- `tools/model/legacy`, the request and binding algebra that only the matrix
-  consumed.
+- `spec/legacy`, the request and binding algebra that only the matrix consumed.
 
 ## What replaced the parity gate
 
@@ -81,8 +80,8 @@ replacement existed. That job is now split:
   fails on an undeclared divergence or a missing outcome;
 - `generated-check` regenerates every family and fails when a generated file is
   out of date;
-- `pytest tools/model/tests` pins the structure of every family: paths, case
-  paths, declared gaps, and the row set each claim file must contain.
+- `pytest spec/tests` pins the structure of every family: paths, case paths,
+  declared gaps, and the row set each claim file must contain.
 
 ## Remaining work
 
