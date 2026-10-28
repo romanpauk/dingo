@@ -17,7 +17,8 @@ Slice 2 switched storage pairing to the trait: `is_default_object_request` and
 paths, and `shared_object_resolutions` takes its conversion from the same path.
 `is_object_address_candidate_v`, `is_default_object_route`,
 `is_value_copy_candidate_v`, `is_default_value_route`, and
-`default_object_conversion_t` are gone. Slice 3 below remains.
+`default_object_conversion_t` are gone. Slice 3 was evaluated and rejected; see
+[Precedence](#precedence).
 
 [Conversion Model](conversion-model.md) describes how a request is selected and
 executed today. This page records the one structural duplication left in that
@@ -152,6 +153,18 @@ it must preserve that laziness. The recommendation is a second slice:
 
 This is lower priority than the property trait. The property trait removes a
 cross-file sync hazard; the precedence table removes a within-file one.
+
+### Evaluation
+
+The merge was attempted on 2026-10-28 and rejected. Moving each necessary
+condition into a per-index trait specialization to share the walk added about 64
+lines of boilerplate and read worse than the existing chain. The chain keeps the
+order visible in one function and already skips candidates without instantiating
+their conversion.
+
+If this is revisited, generate both the candidate and its condition from one
+table (for example an X-macro list) instead of moving the conditions into
+separate specializations. Do not merge the walk for its own sake.
 
 ## Migration Slices
 

@@ -320,10 +320,10 @@ Each step is independently reviewable. Steps 1–4 change no behavior.
    see [Applied Changes](#applied-changes).)* Gate: `object_sizes.cpp`, resolve
    probes.
 5. **Single conversion-path source of truth** (§3), coordinated with the wrapper
-   semantics model in `spec/`. *(Slices 1–2 applied; slice 3 remains — see
-   [Conversion Path](conversion-path.md).)* Gate: model baseline, behavior and
-   type-table outcomes unchanged, declared baseline update only if a behavior
-   change is intended.
+   semantics model in `spec/`. *(Slices 1–2 applied; slice 3 evaluated and
+   rejected — see [Conversion Path](conversion-path.md).)* Gate: model baseline,
+   behavior and type-table outcomes unchanged, declared baseline update only if
+   a behavior change is intended.
 6. **Unify the container front-ends** following the slices in
    [Shared-Kernel Next Steps](shared-kernel-next-steps.md). Gate: 45/48-link
    dependency chains, `test-cost`, and `object_sizes.cpp`.
@@ -456,8 +456,9 @@ The object-route matrix in `test/registration/object_routes.cpp` is the
 differential check: it covers plain types, pointers, wrappers, alternatives,
 arrays, custom wrappers, and all four scopes.
 
-Slice 3, merging the three encodings of the fallback order, remains. See
-[Conversion Path](conversion-path.md).
+Slice 3, merging the three encodings of the fallback order, was attempted and
+rejected: the per-index condition traits added boilerplate and read worse than
+the chain. See [Conversion Path](conversion-path.md#evaluation).
 
 Verification: full build, 39/39 tests, `check`, and `includes-check`.
 
