@@ -217,6 +217,8 @@ private:
 
   static constexpr bool runtime_only = runtime_only_v;
   static constexpr bool has_parent = has_parent_v;
+  static constexpr bool merge_parent_collections =
+      runtime_configuration::merge_parent_collections;
   static constexpr bool has_static_source = has_static_v;
   static constexpr bool has_runtime_source = true;
   static constexpr bool static_binding_uses_result = true;
@@ -327,10 +329,10 @@ private:
                               Fn &&fn) {
     // A declared collection lookup with no rows is a valid empty collection.
     return detail::construct_binding_collection<T>(
-        count_collection<T>(key),
+        this->template count_collection<T>(key),
         runtime_registry_.template has_explicit_collection_lookup<T>(key),
         [&](T &results) {
-          append_collection_impl<T>(scope, results, context, key, fn);
+          this->template append_collection<T>(scope, results, context, fn, key);
         });
   }
 
@@ -733,7 +735,9 @@ private:
 public:
   using detail::container_operations<self_type, true>::resolve;
 
+  using detail::container_operations<self_type, true>::append_collection;
   using detail::container_operations<self_type, true>::construct;
+  using detail::container_operations<self_type, true>::count_collection;
 
   using detail::container_collections<self_type>::append_collection;
   using detail::container_collections<self_type>::construct_collection;
@@ -815,69 +819,10 @@ public:
     }
   }
 
-  template <typename T, typename Fn, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t append_collection(construction_scope scope, T &results,
-                                runtime_context_type &context, Fn &&fn,
-                                LookupKey key) {
-    return append_collection_impl<T>(scope, results, context, std::move(key),
-                                     std::forward<Fn>(fn));
-  }
-
-  template <typename T, typename LookupKey, typename Fn,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t append_collection_impl(construction_scope scope, T &results,
-                                     runtime_context_type &context,
-                                     LookupKey key, Fn &&fn) {
-    std::size_t count = 0;
-    if constexpr (runtime_configuration::merge_parent_collections &&
-                  has_parent_v) {
-      if (parent_) {
-        count += parent_->template append_collection<T>(scope, results, context,
-                                                        fn, key);
-      }
-    }
-    if constexpr (has_static_v) {
-      count += detail::append_binding_collection(
-          results,
-          [&](auto &collection, auto &&append) {
-            return runtime_registry_.template collect<T>(
-                scope, collection, context,
-                std::forward<decltype(append)>(append), key);
-          },
-          [&](auto &collection, auto &&append) {
-            return statics().template collect<T, LookupKey>(
-                scope, collection, *this, context,
-                std::forward<decltype(append)>(append));
-          },
-          std::forward<Fn>(fn));
-    } else {
-      count += runtime_registry_.template collect<T>(scope, results, context,
-                                                     std::forward<Fn>(fn), key);
-    }
-    return count;
-  }
-
-  template <typename T, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t count_collection(LookupKey key) {
-    std::size_t count = runtime_registry_.template count<T>(key);
-    if constexpr (has_static_v) {
-      count += static_registry_type::template fixed_count<T, LookupKey>();
-    }
-    if constexpr (runtime_configuration::merge_parent_collections &&
-                  has_parent_v) {
-      if (parent_) {
-        count += parent_->template count_collection<T>(key);
-      }
-    }
-    return count;
-  }
-
 private:
   template <typename R, typename LookupKey>
   std::size_t collection_count(LookupKey key) {
-    return count_collection<R>(std::move(key));
+    return this->template count_collection<R>(std::move(key));
   }
 
   template <typename R, typename LookupKey>
@@ -897,6 +842,18 @@ private:
   }
 
   auto &runtime_storage() { return runtime_registry_.runtime(); }
+
+  template <typename T, typename LookupKey>
+  std::size_t runtime_count(LookupKey key) {
+    return runtime_registry_.template count<T>(key);
+  }
+
+  template <typename T, typename Fn, typename Context, typename LookupKey>
+  std::size_t runtime_collect(construction_scope scope, T &results,
+                              Context &context, Fn &&fn, LookupKey key) {
+    return runtime_registry_.template collect<T>(scope, results, context,
+                                                 std::forward<Fn>(fn), key);
+  }
 
   template <typename Request, typename R, typename Origin, typename LookupKey>
   DINGO_NOINLINE R resolve_nested(construction_scope scope,

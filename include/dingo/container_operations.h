@@ -14,6 +14,7 @@
 #include <dingo/base/config.h>
 #include <dingo/base/construction_scope.h>
 #include <dingo/base/none.h>
+#include <dingo/binding/binding_collection.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/factory/invoke.h>
 #include <dingo/runtime/context.h>
@@ -277,6 +278,65 @@ public:
       typename Self::context_type context;
       return detail::container_invoke<Signature>(
           context, self(), ephemeral_scope, std::forward<Callable>(callable));
+    }
+  }
+
+  template <typename T, typename Fn, typename Context, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  std::size_t append_collection(construction_scope scope, T &results,
+                                Context &context, Fn &&fn, LookupKey key) {
+    if constexpr (RuntimeSource) {
+      std::size_t count = 0;
+      if constexpr (Self::merge_parent_collections && Self::has_parent) {
+        if (self().parent_) {
+          count += self().parent_->template append_collection<T>(
+              scope, results, context, fn, key);
+        }
+      }
+      if constexpr (Self::has_static_source) {
+        count += detail::append_binding_collection(
+            results,
+            [&](auto &collection, auto &&append) {
+              return self().template runtime_collect<T>(
+                  scope, collection, context,
+                  std::forward<decltype(append)>(append), key);
+            },
+            [&](auto &collection, auto &&append) {
+              return self().statics().template collect<T, LookupKey>(
+                  scope, collection, self(), context,
+                  std::forward<decltype(append)>(append));
+            },
+            std::forward<Fn>(fn));
+      } else {
+        count += self().template runtime_collect<T>(scope, results, context,
+                                                    std::forward<Fn>(fn), key);
+      }
+      return count;
+    } else {
+      (void)key;
+      return self().static_registry_.template collect<T, LookupKey>(
+          scope, results, self(), context, std::forward<Fn>(fn));
+    }
+  }
+
+  template <typename T, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  std::size_t count_collection(LookupKey key) {
+    if constexpr (RuntimeSource) {
+      std::size_t count = self().template runtime_count<T>(key);
+      if constexpr (Self::has_static_source) {
+        count +=
+            Self::static_registry_type::template fixed_count<T, LookupKey>();
+      }
+      if constexpr (Self::merge_parent_collections && Self::has_parent) {
+        if (self().parent_) {
+          count += self().parent_->template count_collection<T>(key);
+        }
+      }
+      return count;
+    } else {
+      (void)key;
+      return Self::static_registry_type::template fixed_count<T, LookupKey>();
     }
   }
 

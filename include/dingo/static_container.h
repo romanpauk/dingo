@@ -333,7 +333,9 @@ public:
     }
   }
 
+  using detail::container_operations<self_type, false>::append_collection;
   using detail::container_operations<self_type, false>::construct;
+  using detail::container_operations<self_type, false>::count_collection;
 
   using detail::container_operations<self_type, false>::invoke;
 
@@ -393,20 +395,6 @@ public:
                          LookupKey) {
     return construct_collection_static<T, LookupKey>(scope, context,
                                                      std::forward<Fn>(fn));
-  }
-
-  template <typename T, typename Fn, typename Context, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t append_collection(construction_scope scope, T &results,
-                                Context &context, Fn &&fn, LookupKey) {
-    return static_registry_.template collect<T, LookupKey>(
-        scope, results, *this, context, std::forward<Fn>(fn));
-  }
-
-  template <typename T, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t count_collection(LookupKey) {
-    return static_registry_.template fixed_count<T, LookupKey>();
   }
 
   template <typename T, bool RemoveRvalueReferences, typename Context,

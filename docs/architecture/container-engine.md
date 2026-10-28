@@ -2,10 +2,11 @@
 
 Status: design note, slices 1-4 applied for the operations.
 `container_operations<Self, RuntimeSource>` owns both no-scope `resolve`
-spellings, the dependency-path `resolve`, `construct`, and `invoke`: the id/key
-form for runtime-backed containers, the compile-time key form for static-only
-containers, the static minimal-context and construct rules, and the nested
-request path. The collection entry points and the state/move policy remain.
+spellings, the dependency-path `resolve`, `construct`, `invoke`, and the
+collection count/append combination: the id/key form for runtime-backed
+containers, the compile-time key form for static-only containers, the static
+minimal-context and construct rules, and the nested request path. Collection
+construction and the state/move policy remain.
 
 [Shared-Kernel Next Steps](shared-kernel-next-steps.md) records the long-range
 plan for one container engine. This page narrows the next change: what the
@@ -113,7 +114,8 @@ canaries are:
    chains.
 4. **Move invoke and the collection entry points.** They are the remaining
    public operations; their bodies are small, but moving them last keeps each
-   slice reviewable. *(Invoke moved; the collection entry points remain.)*
+   slice reviewable. *(Invoke and collection count/append moved; collection
+   construction remains.)*
 5. **State and move policy.** Decide `runtime_container`'s fate separately:
    either an alias of `container` or a thin owner, with the stable-address
    contract preserved. Re-pin `object_sizes.cpp`.
