@@ -989,6 +989,7 @@ set_tests_properties(dingo_model_generator_test PROPERTIES
 add_test(NAME dingo_tools_test
     COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q
         ${PROJECT_SOURCE_DIR}/tools/complexity_test.py
+        ${PROJECT_SOURCE_DIR}/tools/deadcode_test.py
         ${PROJECT_SOURCE_DIR}/tools/release_flow_test.py)
 set_tests_properties(dingo_tools_test PROPERTIES
     LABELS "unit"
@@ -1001,6 +1002,13 @@ add_test(NAME dingo_cost_tool_test
 set_tests_properties(dingo_cost_tool_test PROPERTIES
     LABELS "unit;generator"
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/cost)
+
+add_custom_target(deadcode-report
+    COMMENT "Listing header declarations nothing references"
+    COMMAND ${DINGO_UV_RUN_COMMAND} python
+        ${PROJECT_SOURCE_DIR}/tools/deadcode.py
+        --all
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 add_custom_target(complexity-report
     COMMENT "Ranking library headers by accreted-complexity signals"
