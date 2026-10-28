@@ -225,12 +225,12 @@ chain, the step list, and the storage pairing. A single `conversion_path`
 descriptor computed once in `type_conversion_traits`, consumed by both the
 walker and storage pairing, is the one real rewrite this review recommends.
 
-The second rewrite is smaller and more urgent for readability:
-`container.h::construct` is 126 lines and 10 `if constexpr` arms inside a file
-that holds 36 branches overall, and its nested lambda re-evaluates the same
-"default factory" decision with different status semantics. It should be
-expressed through the generic helper that `binding_resolution.h` already
-provides.
+The second rewrite was smaller: `container.h::construct` was 126 lines with a
+nested lambda that repeated the default-factory decision. It is now a 31-line
+dispatch over `construct_rvalue_request`, `construct_static_transaction`,
+`construct_runtime_transaction`, and `construct_mixed_request`. The mixed block
+keeps the existing `construct_resolved_request` helper. See
+[Applied Changes](#applied-changes).
 
 ## 4. What To Keep
 
@@ -314,7 +314,8 @@ Each step is independently reviewable. Steps 1–4 change no behavior.
    [Applied Changes](#applied-changes).)* The registry type bundle is not viable
    (see §5); the alias blocks stay. Gate: build, tests, `object_sizes.cpp`.
 3. **Rewrite `container.h::construct`** around the existing
-   `construct_resolved_request` helper. Gate: behavior baseline unchanged,
+   `construct_resolved_request` helper. *(Applied — see
+   [Applied Changes](#applied-changes).)* Gate: behavior baseline unchanged,
    `test-cost` unchanged or better.
 4. **Deduplicate the storage slots** and the `lookup.h` trait pairs. Gate:
    `object_sizes.cpp`, resolve probes.
@@ -402,6 +403,23 @@ Kept deliberately:
 
 Verification: full build, 39/39 tests, `format-check`, `layers-check`,
 `includes-check`.
+
+### Step 3: construct dispatch
+
+`runtime_container_impl::construct` is now a 31-line dispatch. The three
+repeated runtime transactions collapse into `construct_runtime_transaction`, the
+two static ones into `construct_static_transaction`, and the nested
+default-factory lambda becomes `construct_mixed_request`. The rvalue decision
+moves to `construct_rvalue_request`, which also takes the function below the
+nesting threshold without a `NOLINT` suppression.
+
+The transaction helpers are member function templates rather than local lambdas:
+a non-generic lambda body is instantiated whenever the enclosing `construct` is,
+which would instantiate the static path for runtime-only containers. The
+templates instantiate only when called.
+
+Verification: full build, 39/39 tests, `check` (including `includes-tidy` with
+the suppression removed), and `includes-check`.
 
 ## Non-Goals
 

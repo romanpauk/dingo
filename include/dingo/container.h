@@ -497,6 +497,110 @@ private:
     }
   }
 
+  // The mixed-source construct decision: a default factory with both a static
+  // and a runtime binding, or any custom factory. The merged binding status
+  // decides whether the exact request, its normalized value, or the factory
+  // answers.
+  template <typename T, typename Request, typename Factory, typename R>
+  R construct_mixed_request(construction_scope scope,
+                            runtime_context_type &context, Factory &factory) {
+    using value_type = typename Request::value_type;
+
+    if constexpr (std::is_same_v<Factory, constructor<normalized_type_t<T>>>) {
+      auto key = detail::no_lookup_key();
+      const auto status = binding_status<T>(key);
+      if (status != detail::binding_status::not_found) {
+        if constexpr (construct_normalized_request_v<T>) {
+          return ::dingo::construct_resolved_request<T>(
+              [&]() {
+                return selection_type::template resolve<
+                    Request, typename Request::lookup_type>(scope, context,
+                                                            *this, key);
+              },
+              [&]() {
+                using normalized_request = request_type<value_type>;
+                return selection_type::template resolve<
+                    normalized_request,
+                    typename normalized_request::lookup_type>(scope, context,
+                                                              *this, key);
+              });
+        } else {
+          return selection_type::template resolve<
+              Request, typename Request::lookup_type>(scope, context, *this,
+                                                      key);
+        }
+      } else if (binding_status<value_type>(key) !=
+                 detail::binding_status::not_found) {
+        if constexpr (construct_normalized_request_v<T>) {
+          using normalized_request = request_type<value_type>;
+          return type_traits<std::decay_t<T>>::make(
+              selection_type::template resolve<
+                  normalized_request, typename normalized_request::lookup_type>(
+                  scope, context, *this, key));
+        } else {
+          return selection_type::template resolve<
+              Request, typename Request::lookup_type>(scope, context, *this,
+                                                      key);
+        }
+      }
+    }
+
+    if constexpr (construct_factory_request_v<T>) {
+      auto type_guard = context.template track_type<value_type>();
+      return factory.template construct<R>(scope, context, *this);
+    } else {
+      return selection_type::template resolve<Request,
+                                              typename Request::lookup_type>(
+          scope, context, *this, detail::no_lookup_key());
+    }
+  }
+
+  // An rvalue request publishes a movable result. A runtime binding wins over
+  // a static one; a static normalized binding that cannot publish the rvalue is
+  // an explicit conversion error rather than a miss.
+  template <typename T, typename Request, typename Factory, typename R>
+  R construct_rvalue_request(Factory &factory) {
+    using interface_type = typename Request::interface_type;
+    using value_type = typename Request::value_type;
+    using no_key = detail::no_lookup_key_t;
+    constexpr bool has_static_normalized_binding =
+        is_static_binding_available_v<value_type, no_key>;
+    const bool has_runtime_no_key =
+        has_runtime_no_key_binding<interface_type, value_type>();
+
+    if constexpr (has_static_construct_v<T>) {
+      if (!has_runtime_no_key) {
+        return construct_static_transaction<Request, R>();
+      }
+    }
+
+    if (has_runtime_no_key) {
+      return construct_runtime_transaction<Request, Factory, R>(factory);
+    }
+
+    if constexpr (has_static_normalized_binding) {
+      ::dingo::throw_missing_rvalue_conversion<T>(true);
+    }
+
+    return construct_runtime_transaction<Request, Factory, R>(factory);
+  }
+
+  template <typename Request, typename R> R construct_static_transaction() {
+    return execute_transaction(
+        runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
+          return construct_static<Request, R>(ephemeral_scope, context);
+        });
+  }
+
+  template <typename Request, typename Factory, typename R>
+  R construct_runtime_transaction(Factory &factory) {
+    return execute_transaction(
+        runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
+          return construct_runtime_request<Request, Factory, R>(
+              ephemeral_scope, context, factory);
+        });
+  }
+
 public:
   template <bool OwnsRuntimeData = runtime_configuration::owns_runtime_data,
             std::enable_if_t<OwnsRuntimeData, int> = 0>
@@ -643,7 +747,6 @@ public:
 
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
             typename R = request_result_t<T, true>>
-  // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
   DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {
     using request = request_type<T>;
     using interface_type = typename request::interface_type;
@@ -657,113 +760,22 @@ public:
     } else {
       if constexpr (std::is_same_v<Factory,
                                    constructor<normalized_type_t<T>>>) {
-        const bool has_runtime_no_key =
-            has_runtime_no_key_binding<interface_type, value_type>();
         if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
                           T>) {
-          using no_key = detail::no_lookup_key_t;
-          constexpr bool has_static_normalized_binding =
-              is_static_binding_available_v<value_type, no_key>;
-
-          if constexpr (has_static_construct_v<T>) {
-            if (!has_runtime_no_key) {
-              return execute_transaction(
-                  runtime_registry_.runtime(),
-                  [&](runtime_context_type &context) -> R {
-                    return construct_static<request, R>(ephemeral_scope,
-                                                        context);
-                  });
-            }
-          }
-
-          if (has_runtime_no_key) {
-            return execute_transaction(
-                runtime_registry_.runtime(),
-                [&](runtime_context_type &context) -> R {
-                  return construct_runtime_request<request, Factory, R>(
-                      ephemeral_scope, context, std::move(factory));
-                });
-          }
-
-          if constexpr (has_static_normalized_binding) {
-            ::dingo::throw_missing_rvalue_conversion<T>(true);
-          }
-
-          return execute_transaction(
-              runtime_registry_.runtime(),
-              [&](runtime_context_type &context) -> R {
-                return construct_runtime_request<request, Factory, R>(
-                    ephemeral_scope, context, std::move(factory));
-              });
+          return construct_rvalue_request<T, request, Factory, R>(factory);
         } else if constexpr (has_static_construct_v<T>) {
-          if (!has_runtime_no_key) {
-            return execute_transaction(runtime_registry_.runtime(),
-                                       [&](runtime_context_type &context) -> R {
-                                         return construct_static<request, R>(
-                                             ephemeral_scope, context);
-                                       });
+          if (!has_runtime_no_key_binding<interface_type, value_type>()) {
+            return construct_static_transaction<request, R>();
           }
         } else {
-          return execute_transaction(
-              runtime_registry_.runtime(),
-              [&](runtime_context_type &context) -> R {
-                return construct_runtime_request<request, Factory, R>(
-                    ephemeral_scope, context, std::move(factory));
-              });
+          return construct_runtime_transaction<request, Factory, R>(factory);
         }
       }
+
       return execute_transaction(
           runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
-            if constexpr (std::is_same_v<Factory,
-                                         constructor<normalized_type_t<T>>>) {
-              auto key = detail::no_lookup_key();
-              const auto status = binding_status<T>(key);
-              if (status != detail::binding_status::not_found) {
-                if constexpr (construct_normalized_request_v<T>) {
-                  return ::dingo::construct_resolved_request<T>(
-                      [&]() {
-                        return selection_type::template resolve<
-                            request, typename request::lookup_type>(
-                            ephemeral_scope, context, *this, key);
-                      },
-                      [&]() {
-                        using normalized_request = request_type<value_type>;
-                        return selection_type::template resolve<
-                            normalized_request,
-                            typename normalized_request::lookup_type>(
-                            ephemeral_scope, context, *this, key);
-                      });
-                } else {
-                  return selection_type::template resolve<
-                      request, typename request::lookup_type>(
-                      ephemeral_scope, context, *this, key);
-                }
-              } else if (binding_status<value_type>(key) !=
-                         detail::binding_status::not_found) {
-                if constexpr (construct_normalized_request_v<T>) {
-                  using normalized_request = request_type<value_type>;
-                  return type_traits<std::decay_t<T>>::make(
-                      selection_type::template resolve<
-                          normalized_request,
-                          typename normalized_request::lookup_type>(
-                          ephemeral_scope, context, *this, key));
-                } else {
-                  return selection_type::template resolve<
-                      request, typename request::lookup_type>(
-                      ephemeral_scope, context, *this, key);
-                }
-              }
-            }
-
-            if constexpr (construct_factory_request_v<T>) {
-              auto type_guard = context.template track_type<value_type>();
-              return factory.template construct<R>(ephemeral_scope, context,
-                                                   *this);
-            } else {
-              return selection_type::template resolve<
-                  request, typename request::lookup_type>(
-                  ephemeral_scope, context, *this, detail::no_lookup_key());
-            }
+            return construct_mixed_request<T, request, Factory, R>(
+                ephemeral_scope, context, factory);
           });
     }
   }
