@@ -13,6 +13,8 @@ Read these pages in order for the full picture:
   compile-time registration, and the shared path to `resolve<T>()`.
 - [Shared Kernel](shared-kernel.md): the proposed unification of runtime and
   compile-time selection and resolution, and the generated coverage model.
+- [Container Engine](container-engine.md): the decision-function design note for
+  making the static and mixed front-ends configurations of one operations layer.
 - [Handles, Leaf Types, And Lookup](handles-leaf-types-and-lookup.md): wrapper
   algebra, `leaf_type_t`, `rebind_leaf_t`, `lookup_type_t`, and
   `exact_lookup<T>`.

@@ -838,10 +838,10 @@ Each slice is one commit; behavior, generated source, and
 1. **Prerequisite: finish the lookup split.** The runtime source is exactly the
    selection half of `registry_store`. Finish moving selection into
    `lookup_selection` first; do not move the same code twice.
-2. **Name the source protocol on the existing sources.** Give `static_registry`
-   and the runtime lookup store `count` / `resolve_named` / `collect` (plus
-   `fixed_count` / `serves_named` for the static one). Forward to today's entry
-   points; add no call layer. Gate: identical cost probe and object sizes.
+2. **Name the source protocol on the existing sources.** *(Applied.)*
+   `static_registry` exposes `resolve_named`, `collect`, `fixed_count`; the
+   runtime store exposes `resolve_named`, `collect`, `count`. Slice 3 is the one
+   decision function.
 3. **One decision function.** Replace the hand-coded singular, collection, and
    construct branch trees in `container_with_static_bindings` with one
    always-inline function that asks the sources in one order. Keep the resolve
@@ -880,29 +880,25 @@ exposes `resolve_named`, `collect`, and `count`. The static source's singular
 resolve no longer branches on collections. The one decision function remains,
 and its first commit should not be a rename pass.
 
-The current entry points already embed decisions the engine is meant to own:
+The sources now carry the protocol names. What remains is the decision layer:
 
-- `static_registry::resolve_request` chooses the collection branch and the
-  selection route;
-- `resolve_binding` selects and resolves in one call;
-- `runtime_registry::select_binding` plus `resolve_binding` split the same two
-  steps, with the cache probe needing the selection between them;
-- collection count/append/construct live on each source with different shapes.
+- `static_registry::resolve_named` resolves its compile-time selection;
+- the runtime `resolve_named` executes a selection the engine made, with the
+  cache probe keeping `select_binding` between select and resolve;
+- collection `count`/`collect`/construct still live on each source with
+  different shapes.
 
-Renaming those to `count`/`resolve_named`/`collect` without moving the decisions
-would add a second vocabulary and a call layer, which is exactly what the slice
-forbids. Do slice 2 together with slice 3, and let the one decision function be
-the first caller of the protocol:
+The next commit should start the operations layer and replace the static resolve
+entry with it, not wrap it:
 
-1. Add `count` and `fixed_count`/`serves_named` to `static_registry`, and
-   `count` to the runtime lookup store, forwarding to the existing count paths.
-2. Add one `resolve_named` per source that takes the resolver, host/context, and
-   key and returns the request. Keep the selection-returning entry point for the
-   cache probe; it is not part of the protocol.
-3. Add `collect` only when the collection branch of the decision function lands,
-   so the method has its eventual caller.
-4. Replace the static resolve entry with the decision function in the same
-   commit that starts calling the protocol. Do not leave a wrapper.
+1. Add `container_operations<Self>` and move `resolve` and `construct` into it;
+   make both front-ends derive from it and remove the old public entries in the
+   same commit.
+2. Move the static minimal-context fast path into the layer as a policy query.
+3. Fold the construct tree into the layer's construct variant.
+4. Move `invoke` and the collection entry points last.
+
+[Container Engine](container-engine.md) records the shape, constants, and gate.
 
 Gate: `test/container/dependency_chain.cpp` (45/48 links), `object_sizes.cpp`,
 and a cost probe before and after. The static-only path has three links of
