@@ -476,8 +476,9 @@ carry the protocol names: the static source exposes `resolve_named`, `collect`,
 and `fixed_count`; the runtime store exposes `resolve_named`, `collect`, and
 `count`. The static source's singular resolve no longer branches on collections.
 `container_operations<Self, RuntimeSource>` now owns both no-scope `resolve`
-entries, including the static minimal-context decision; `construct`, `invoke`,
-and the collection entries remain. See [Container Engine](container-engine.md).
+entries and the dependency-path `resolve`, including the static minimal-context
+decision; `construct`, `invoke`, and the collection entries remain. See
+[Container Engine](container-engine.md).
 
 Verification: full build, 39/39 tests (including the literal diagnostic tests),
 `check`, and `includes-check`.
