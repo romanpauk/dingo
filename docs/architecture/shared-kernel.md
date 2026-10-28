@@ -1,5 +1,8 @@
 # Shared Kernel And Generated Coverage
 
+> Historical design note. Mixed containers were removed on 2026-10-28; only the
+> runtime and static shapes remain.
+
 Status: historical design note. The the generated test corpus corpus this
 document refers to has been retired; see
 [Test Corpus Retirement](retired-corpus.md).

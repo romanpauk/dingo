@@ -288,21 +288,18 @@ TEST(static_execution_traits_test,
   static_assert(
       std::is_same_v<detail::binding_cache_types_t<direct_model>, type_list<>>);
   static_assert(detail::binding_uses_default_conversions_v<wrapped_model>);
-  static_assert(
-      detail::binding_has_cacheless_default_leaf_v<payload, wrapped_model>);
+  static_assert(detail::binding_is_default_leaf_v<payload, wrapped_model>);
   static_assert(std::is_same_v<detail::binding_cache_types_t<wrapped_model>,
                                type_list<>>);
   static_assert(
       !detail::binding_has_cacheless_conversion_shape_v<converted_model>);
-  static_assert(detail::binding_has_cacheless_default_leaf_v<service_interface,
-                                                             converted_model>);
+  static_assert(
+      detail::binding_is_default_leaf_v<service_interface, converted_model>);
   static_assert(std::is_same_v<detail::binding_cache_types_t<converted_model>,
                                type_list<>>);
   static_assert(!detail::binding_uses_default_conversions_v<custom_model>);
-  static_assert(
-      !detail::binding_has_cacheless_default_leaf_v<payload, custom_model>);
-  static_assert(
-      !detail::binding_has_cacheless_default_leaf_v<payload, unstable_model>);
+  static_assert(!detail::binding_is_default_leaf_v<payload, custom_model>);
+  static_assert(!detail::binding_is_default_leaf_v<payload, unstable_model>);
 }
 
 TEST(static_execution_traits_test,
@@ -363,24 +360,15 @@ TEST(static_execution_traits_test,
   using array_pointer_match = typename detail::matching_binding_resolution<
       payload *, array_pointer_resolutions>::type;
 
+  static_assert(detail::binding_is_canonical_leaf_v<payload &, wrapped_model>);
   static_assert(
-      detail::binding_has_direct_default_leaf_resolution_v<payload &,
-                                                           wrapped_model>);
+      detail::binding_is_canonical_leaf_v<const payload &, wrapped_model>);
+  static_assert(detail::binding_is_canonical_leaf_v<payload *, wrapped_model>);
+  static_assert(detail::binding_is_canonical_leaf_v<service_interface *,
+                                                    converted_model>);
+  static_assert(!detail::binding_is_canonical_leaf_v<payload, wrapped_model>);
   static_assert(
-      detail::binding_has_direct_default_leaf_resolution_v<const payload &,
-                                                           wrapped_model>);
-  static_assert(
-      detail::binding_has_direct_default_leaf_resolution_v<payload *,
-                                                           wrapped_model>);
-  static_assert(
-      detail::binding_has_direct_default_leaf_resolution_v<service_interface *,
-                                                           converted_model>);
-  static_assert(
-      !detail::binding_has_direct_default_leaf_resolution_v<payload,
-                                                            wrapped_model>);
-  static_assert(
-      !detail::binding_has_direct_default_leaf_resolution_v<payload &&,
-                                                            wrapped_model>);
+      !detail::binding_is_canonical_leaf_v<payload &&, wrapped_model>);
   static_assert(std::is_same_v<typename detail::binding_supports_request<
                                    payload &, wrapped_binding>::type,
                                wrapped_match>);
@@ -394,18 +382,11 @@ TEST(static_execution_traits_test,
       std::is_same_v<typename detail::binding_supports_request<
                          service_interface *, converted_binding>::type,
                      converted_match>);
+  static_assert(!detail::binding_is_canonical_leaf_v<payload &, custom_model>);
   static_assert(
-      !detail::binding_has_direct_default_leaf_resolution_v<payload &,
-                                                            custom_model>);
-  static_assert(
-      !detail::binding_has_direct_default_leaf_resolution_v<payload &,
-                                                            unstable_model>);
-  static_assert(
-      !detail::binding_has_direct_default_leaf_resolution_v<payload &,
-                                                            array_model>);
-  static_assert(
-      detail::binding_has_direct_default_leaf_resolution_v<payload *,
-                                                           array_model>);
+      !detail::binding_is_canonical_leaf_v<payload &, unstable_model>);
+  static_assert(!detail::binding_is_canonical_leaf_v<payload &, array_model>);
+  static_assert(detail::binding_is_canonical_leaf_v<payload *, array_model>);
   static_assert(!detail::binding_supports_request_v<payload &, array_binding>);
   static_assert(std::is_same_v<typename detail::binding_supports_request<
                                    payload *, array_binding>::type,

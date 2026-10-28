@@ -140,9 +140,6 @@ CASES = (
                      dingo::factory<dingo::function<&make_eleven>>>();
   check_qualification(root);
 
-  dingo::container<static_source> mixed;
-  check_qualification(mixed);
-
   dingo::static_container<static_source> fixed;
   check_qualification(fixed);""",
     ),

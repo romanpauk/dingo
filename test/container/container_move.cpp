@@ -218,25 +218,6 @@ TYPED_TEST(container_move_test, moved_container_keeps_registration_containers) {
   EXPECT_EQ(target.template resolve<move_child_service &>().value, 18);
 }
 
-TYPED_TEST(container_move_test,
-           moved_container_keeps_static_registration_containers) {
-  auto source = this->make();
-  source->template register_type<dingo::scope<dingo::shared>,
-                                 dingo::storage<move_dependency>>();
-  auto child = source->template register_type<
-      dingo::scope<dingo::shared>, dingo::storage<move_static_service>,
-      dingo::dependencies<move_static_dependency &, move_dependency &>,
-      dingo::bindings<dingo::bind<dingo::scope<dingo::shared>,
-                                  dingo::storage<move_static_dependency>>>>();
-  auto *child_container = std::addressof(child.get());
-
-  TypeParam target(std::move(*source));
-  this->replace(source);
-
-  EXPECT_EQ(std::addressof(child.get()), child_container);
-  EXPECT_EQ(target.template resolve<move_static_service &>().value, 20);
-}
-
 TEST(container_move_test, moved_container_keeps_collection_factories) {
   std::optional<dingo::container<move_collection_traits>> source(std::in_place);
   source->register_type<dingo::scope<dingo::shared>,
@@ -314,8 +295,7 @@ using move_service_bindings = dingo::bindings<
 
 using move_child_container_types = ::testing::Types<
     dingo::container<dingo::dynamic_container_traits, std::allocator<char>,
-                     move_parent_container>,
-    dingo::container<move_service_bindings, move_parent_container>>;
+                     move_parent_container>>;
 
 template <typename Child>
 class container_move_parent_test : public ::testing::Test {};
@@ -342,17 +322,12 @@ TYPED_TEST(container_move_parent_test, child_follows_moved_parent) {
   EXPECT_EQ(std::addressof(service.dependency), std::addressof(dependency));
 }
 
-TEST(container_move_test, compile_time_binding_containers_are_not_movable) {
+TEST(container_move_test, compile_time_binding_container_is_not_movable) {
   using bindings =
       dingo::bindings<dingo::bind<dingo::scope<dingo::shared>,
                                   dingo::storage<move_dependency>>>;
-  using container_type = dingo::container<bindings>;
   using static_container_type = dingo::static_container<bindings>;
 
-  static_assert(!std::is_move_constructible_v<container_type>);
-  static_assert(!std::is_move_assignable_v<container_type>);
-  static_assert(!std::is_copy_constructible_v<container_type>);
-  static_assert(!std::is_copy_assignable_v<container_type>);
   static_assert(!std::is_move_constructible_v<static_container_type>);
   static_assert(!std::is_move_assignable_v<static_container_type>);
   static_assert(!std::is_copy_constructible_v<static_container_type>);

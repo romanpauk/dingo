@@ -46,7 +46,6 @@ def test_parity_runs_every_front_end() -> None:
     for spelling in (
         "dingo::runtime_container<>",
         "dingo::container<>",
-        "dingo::container<static_source>",
         "dingo::static_container<static_source>",
     ):
         assert spelling in content

@@ -1,5 +1,9 @@
 # Container Engine
 
+> Mixed containers were removed on 2026-10-28. The runtime container and
+> `static_container` are now the only shapes; references to the mixed front-end
+> below describe the design work that preceded the removal.
+
 Status: design note, slices 1-4 applied. The operations layer is complete.
 `container_operations<Self, RuntimeSource>` owns the no-scope and dependency
 `resolve` spellings, `construct`, `invoke`, the collection entries, and the

@@ -88,9 +88,10 @@ public:
   decltype(auto) resolve_binding(construction_scope construction,
                                  Context &context, Host &host) {
     using binding = typename Selection::binding_type;
-    auto resolver =
-        state_.template make_binding_resolver<binding>(construction, host);
-    return resolver.template resolve<ResolveRequest>(context);
+    static_binding_policy<State, Host, typename binding::binding_model_type>
+        policy{state_, host, construction};
+    return detail::resolve_static_binding<ResolveRequest, binding>(policy,
+                                                                   context);
   }
 
 private:

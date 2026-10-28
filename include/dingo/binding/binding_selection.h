@@ -46,62 +46,27 @@ constexpr binding_status selection_status_from_count(std::size_t count) {
                       : binding_status::ambiguous;
 }
 
-template <binding_status Status, typename Bindings>
-struct static_binding_result;
+template <typename Bindings> struct static_binding;
 
-template <typename... Bindings>
-struct static_binding_result<binding_status::not_found,
-                             type_list<Bindings...>> {
+template <> struct static_binding<type_list<>> {
   using type = missing_binding_choice_t;
 };
 
 template <typename Binding, typename... Bindings>
-struct static_binding_result<binding_status::found,
-                             type_list<Binding, Bindings...>> {
-  using type = found_binding_choice_t<Binding>;
+struct static_binding<type_list<Binding, Bindings...>> {
+  using type = std::conditional_t<sizeof...(Bindings) == 0,
+                                  found_binding_choice_t<Binding>,
+                                  ambiguous_binding_choice_t>;
 };
-
-template <typename... Bindings>
-struct static_binding_result<binding_status::ambiguous,
-                             type_list<Bindings...>> {
-  using type = ambiguous_binding_choice_t;
-};
-
-template <typename Bindings> struct static_binding;
-
-template <typename... Bindings>
-struct static_binding<type_list<Bindings...>>
-    : static_binding_result<selection_status_from_count(sizeof...(Bindings)),
-                            type_list<Bindings...>> {};
 
 template <typename Bindings>
 using static_binding_t = typename static_binding<Bindings>::type;
 
-template <typename Candidate> struct selection_accumulator {
-  binding_status status = binding_status::not_found;
-  Candidate candidate{};
-  std::size_t matches = 0;
-
-  constexpr void add(Candidate value) {
-    ++matches;
-    if (matches == 1) {
-      candidate = value;
-      status = binding_status::found;
-    } else {
-      status = binding_status::ambiguous;
-    }
-  }
-
-  constexpr binding_status result() const {
-    return selection_status_from_count(matches);
-  }
-};
-
-template <typename Binding, typename State = std::nullptr_t>
-struct runtime_binding_selection {
+// The runtime answer: the selected binding and its status. The caller owns
+// everything else about the candidate.
+template <typename Binding> struct runtime_binding_selection {
   binding_status status = binding_status::not_found;
   Binding *binding = nullptr;
-  State state = nullptr;
 
   constexpr bool found() const { return status == binding_status::found; }
 
@@ -109,32 +74,30 @@ struct runtime_binding_selection {
     return status == binding_status::ambiguous;
   }
 
-  static constexpr runtime_binding_selection found(Binding &binding,
-                                                   State state = nullptr) {
-    return {binding_status::found, &binding, state};
+  static constexpr runtime_binding_selection found(Binding &binding) {
+    return {binding_status::found, &binding};
   }
 
   static constexpr runtime_binding_selection miss() { return {}; }
 
   static constexpr runtime_binding_selection ambiguity() {
-    return {binding_status::ambiguous, nullptr, nullptr};
+    return {binding_status::ambiguous, nullptr};
   }
 };
 
-template <typename Binding, typename State = std::nullptr_t>
-constexpr runtime_binding_selection<Binding, State>
-make_runtime_selection(Binding *binding, State state = nullptr) {
-  return binding
-             ? runtime_binding_selection<Binding, State>::found(*binding, state)
-             : runtime_binding_selection<Binding, State>::miss();
+template <typename Binding>
+constexpr runtime_binding_selection<Binding>
+make_runtime_selection(Binding *binding) {
+  return binding ? runtime_binding_selection<Binding>::found(*binding)
+                 : runtime_binding_selection<Binding>::miss();
 }
 
 // Resolves a runtime selection. A selection that matched several bindings is
 // ambiguous in every container; a selection that matched none is handed to the
 // missing callback, which owns parent fallback and auto-construction.
-template <typename R, typename Request, typename Binding, typename State,
-          typename Context, typename Found, typename Missing>
-R resolve_selection(const runtime_binding_selection<Binding, State> &selection,
+template <typename R, typename Request, typename Binding, typename Context,
+          typename Found, typename Missing>
+R resolve_selection(const runtime_binding_selection<Binding> &selection,
                     Context &context, Found &&found, Missing &&missing) {
   if (selection.ambiguous()) {
     throw make_type_ambiguous_exception<Request>(context);
@@ -143,28 +106,6 @@ R resolve_selection(const runtime_binding_selection<Binding, State> &selection,
     return std::forward<Found>(found)();
   }
   return std::forward<Missing>(missing)();
-}
-
-template <typename Binding, typename State = std::nullptr_t, typename Visitor>
-constexpr runtime_binding_selection<Binding, State>
-make_runtime_selection(Visitor &&visit_candidates) {
-  selection_accumulator<runtime_binding_selection<Binding, State>> accumulator;
-
-  std::forward<Visitor>(visit_candidates)(
-      [&](Binding &binding, State state = nullptr) {
-        accumulator.add(
-            runtime_binding_selection<Binding, State>::found(binding, state));
-      });
-
-  switch (accumulator.result()) {
-  case binding_status::not_found:
-    return runtime_binding_selection<Binding, State>::miss();
-  case binding_status::found:
-    return accumulator.candidate;
-  case binding_status::ambiguous:
-    return runtime_binding_selection<Binding, State>::ambiguity();
-  }
-  return runtime_binding_selection<Binding, State>::miss();
 }
 
 } // namespace detail

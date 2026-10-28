@@ -154,12 +154,6 @@ extern "C" [[gnu::noinline]] int probe_runtime_resolution_consumer_read() {
   return runtime.resolve<consumer &>().read();
 }
 
-extern "C" [[gnu::noinline]] int
-probe_static_resolution_mixed_container_consumer_read() {
-  container<static_consumer_source> mixed_container;
-  return mixed_container.resolve<consumer &>().read();
-}
-
 extern "C" [[gnu::noinline]] int probe_static_resolution_shared_config() {
   static_container<static_wrapper_source> container;
   return container.construct<std::shared_ptr<config>>()->value;
@@ -169,12 +163,6 @@ extern "C" [[gnu::noinline]] int probe_runtime_resolution_shared_config() {
   container<> runtime;
   register_runtime_wrapper_binding(runtime);
   return runtime.construct<std::shared_ptr<config>>()->value;
-}
-
-extern "C" [[gnu::noinline]] int
-probe_static_resolution_mixed_container_shared_config() {
-  container<static_wrapper_source> mixed_container;
-  return mixed_container.construct<std::shared_ptr<config>>()->value;
 }
 
 extern "C" [[gnu::noinline]] int probe_static_resolution_shared_value_config() {
@@ -190,12 +178,6 @@ probe_runtime_resolution_shared_value_config() {
 }
 
 extern "C" [[gnu::noinline]] int
-probe_static_resolution_mixed_container_shared_value_config() {
-  container<static_wrapper_source> mixed_container;
-  return mixed_container.construct<config>().value;
-}
-
-extern "C" [[gnu::noinline]] int
 probe_static_resolution_shared_reference_config() {
   static_container<static_wrapper_source> container;
   return container.resolve<config &>().value;
@@ -208,12 +190,6 @@ probe_runtime_resolution_shared_reference_config() {
   return runtime.resolve<config &>().value;
 }
 
-extern "C" [[gnu::noinline]] int
-probe_static_resolution_mixed_container_shared_reference_config() {
-  container<static_wrapper_source> mixed_container;
-  return mixed_container.resolve<config &>().value;
-}
-
 extern "C" [[gnu::noinline]] int probe_static_resolution_optional_config() {
   static_container<static_wrapper_source> container;
   return container.construct<std::optional<config>>()->value;
@@ -223,12 +199,6 @@ extern "C" [[gnu::noinline]] int probe_runtime_resolution_optional_config() {
   container<> runtime;
   register_runtime_wrapper_binding(runtime);
   return runtime.construct<std::optional<config>>()->value;
-}
-
-extern "C" [[gnu::noinline]] int
-probe_static_resolution_mixed_container_optional_config() {
-  container<static_wrapper_source> mixed_container;
-  return mixed_container.construct<std::optional<config>>()->value;
 }
 
 extern "C" [[gnu::noinline]] int probe_static_resolution_unique_value_config() {
@@ -257,18 +227,6 @@ probe_runtime_resolution_unique_rvalue_config() {
 }
 
 extern "C" [[gnu::noinline]] int
-probe_static_resolution_mixed_container_unique_value_config() {
-  container<static_unique_source> mixed_container;
-  return mixed_container.construct<config>().value;
-}
-
-extern "C" [[gnu::noinline]] int
-probe_static_resolution_mixed_container_unique_rvalue_config() {
-  container<static_unique_source> mixed_container;
-  return mixed_container.resolve<config &&>().value;
-}
-
-extern "C" [[gnu::noinline]] int
 probe_static_resolution_unique_wrapper_config() {
   static_container<static_unique_source> container;
   return container.construct<std::unique_ptr<config>>()->value;
@@ -279,12 +237,6 @@ probe_runtime_resolution_unique_wrapper_config() {
   container<> runtime;
   register_runtime_unique_binding(runtime);
   return runtime.construct<std::unique_ptr<config>>()->value;
-}
-
-extern "C" [[gnu::noinline]] int
-probe_static_resolution_mixed_container_unique_wrapper_config() {
-  container<static_unique_source> mixed_container;
-  return mixed_container.construct<std::unique_ptr<config>>()->value;
 }
 
 extern "C" [[gnu::noinline]] int probe_static_resolution_interface_handle() {
@@ -299,23 +251,10 @@ extern "C" [[gnu::noinline]] int probe_runtime_resolution_interface_handle() {
 }
 
 extern "C" [[gnu::noinline]] int
-probe_static_resolution_mixed_container_interface_handle() {
-  container<static_interface_source> mixed_container;
-  return mixed_container.resolve<std::shared_ptr<iface> &>()->read();
-}
-
-extern "C" [[gnu::noinline]] int
 probe_runtime_resolution_external_value_storage() {
   container<> runtime;
   register_runtime_external_value_binding(runtime);
   return runtime.resolve<external_config &>().value;
-}
-
-extern "C" [[gnu::noinline]] int
-probe_runtime_resolution_mixed_container_external_value_storage() {
-  container<static_consumer_source> mixed_container;
-  register_runtime_external_value_binding(mixed_container);
-  return mixed_container.resolve<external_config &>().value;
 }
 
 extern "C" [[gnu::noinline]] int
@@ -327,28 +266,11 @@ probe_runtime_resolution_external_reference_storage() {
 }
 
 extern "C" [[gnu::noinline]] int
-probe_runtime_resolution_mixed_container_external_reference_storage() {
-  container<static_consumer_source> mixed_container;
-  auto config = make_external_config();
-  register_runtime_external_reference_binding(mixed_container, config);
-  return mixed_container.resolve<external_config &>().value;
-}
-
-extern "C" [[gnu::noinline]] int
 probe_runtime_resolution_external_wrapper_storage() {
   container<> runtime;
   register_runtime_external_wrapper_binding(
       runtime, std::make_shared<external_config>(make_external_config()));
   return runtime.resolve<std::shared_ptr<external_config> &>()->value;
-}
-
-extern "C" [[gnu::noinline]] int
-probe_runtime_resolution_mixed_container_external_wrapper_storage() {
-  container<static_consumer_source> mixed_container;
-  register_runtime_external_wrapper_binding(
-      mixed_container,
-      std::make_shared<external_config>(make_external_config()));
-  return mixed_container.resolve<std::shared_ptr<external_config> &>()->value;
 }
 
 extern "C" [[gnu::noinline]] int probe_static_resolution_collection_sum() {
@@ -361,12 +283,5 @@ extern "C" [[gnu::noinline]] int probe_runtime_resolution_collection_sum() {
   container<> runtime;
   register_runtime_collection_bindings(runtime);
   auto values = runtime.resolve<std::vector<std::shared_ptr<iface>>>();
-  return values[0]->read() + values[1]->read();
-}
-
-extern "C" [[gnu::noinline]] int
-probe_static_resolution_mixed_container_collection_sum() {
-  container<static_collection_source> mixed_container;
-  auto values = mixed_container.resolve<std::vector<std::shared_ptr<iface>>>();
   return values[0]->read() + values[1]->read();
 }

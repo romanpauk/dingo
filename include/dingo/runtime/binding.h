@@ -24,19 +24,7 @@
 
 namespace dingo {
 // TODO: this is bit convoluted, ideally merge resolver with runtime binding
-namespace detail {
-template <typename Container, typename = void>
-struct runtime_resolution_requires_container : std::false_type {};
-
-template <typename Container>
-struct runtime_resolution_requires_container<
-    Container, std::void_t<typename Container::static_bindings_type>>
-    : std::true_type {};
-
-template <typename Container>
-inline constexpr bool runtime_resolution_requires_container_v =
-    runtime_resolution_requires_container<Container>::value;
-} // namespace detail
+namespace detail {} // namespace detail
 
 template <typename Owner, typename InstanceContainer, typename Storage,
           typename RegistrationParent = typename Owner::parent_container_type>
@@ -48,7 +36,6 @@ class runtime_binding_state
 public:
   using owner_type = Owner;
   using container_type = InstanceContainer;
-  using resolution_container_type = InstanceContainer;
   using registration_parent_type = RegistrationParent;
   using allocator_type = typename Owner::allocator_type;
   using runtime_type = runtime_storage<allocator_type>;
@@ -103,16 +90,11 @@ public:
   template <bool TrackRollback = true, typename Fn>
   decltype(auto) with_resolution_container(runtime_context_type &context,
                                            Fn &&fn) {
-    if constexpr (detail::runtime_resolution_requires_container_v<
-                      InstanceContainer>) {
-      return fn(container<TrackRollback>(context));
-    } else {
-      (void)context;
-      if (instance_container_ != nullptr) {
-        return fn(*instance_container_);
-      }
-      return fn(*parent());
+    (void)context;
+    if (instance_container_ != nullptr) {
+      return fn(*instance_container_);
     }
+    return fn(*parent());
   }
 
 private:
@@ -137,7 +119,6 @@ private:
 namespace detail {
 
 template <typename Owner, typename InstanceContainer, typename Storage,
-          typename Bindings,
           typename RegistrationParent = typename Owner::parent_container_type>
 using runtime_binding_state_t =
     runtime_binding_state<Owner, InstanceContainer, Storage,
@@ -154,15 +135,11 @@ template <typename T> T &state_ref(T *state) { return *state; }
 } // namespace detail
 
 namespace detail {
-template <typename Storage> using registered_type_t = typename Storage::type;
-
 template <typename Type, typename Storage>
 using runtime_binding_cache_types_t =
-    binding_conversion_cache_types_t<Type, Storage>;
-
-template <typename Types>
-static constexpr bool has_runtime_binding_cache_v =
-    has_binding_conversion_cache_types_v<Types>;
+    std::conditional_t<Storage::conversions::is_stable,
+                       binding_conversion_cache_types_t<Type, Storage>,
+                       type_list<>>;
 
 template <typename Storage, typename = void>
 struct runtime_storage_can_reset : std::false_type {};
@@ -196,10 +173,7 @@ class runtime_binding
     : public runtime_binding_interface<
           typename Container::rtti_type,
           runtime_context<typename Container::allocator_type>>,
-      private detail::binding_cache_slot<
-          Storage::conversions::is_stable &&
-              detail::has_runtime_binding_cache_v<
-                  detail::runtime_binding_cache_types_t<Type, Storage>>,
+      private detail::conversion_cache_slot<
           detail::runtime_binding_cache_types_t<Type, Storage>> {
 public:
   using storage_type = Storage;
@@ -213,17 +187,13 @@ public:
   using interface_base =
       runtime_binding_interface<typename Container::rtti_type,
                                 runtime_context_type>;
-  using cache_types = detail::runtime_binding_cache_types_t<Type, Storage>;
   using request_resolutions =
       typename detail::binding_resolutions<Type, Storage>::type;
-  static constexpr bool uses_cached_conversions =
-      Storage::conversions::is_stable &&
-      detail::has_runtime_binding_cache_v<cache_types>;
   using materialization_traits =
       storage_materialization_traits<typename Storage::tag_type,
                                      typename Storage::type>;
-  using conversion_cache_base =
-      detail::binding_cache_slot<uses_cached_conversions, cache_types>;
+  using conversion_cache_base = detail::conversion_cache_slot<
+      detail::runtime_binding_cache_types_t<Type, Storage>>;
 
 private:
   template <typename T, typename Context, typename... Args>

@@ -45,12 +45,12 @@ struct static_registration_checks<static_bindings<Registrations...>,
   static constexpr bool graph_resolvable =
       graph_analysis<bindings_type>::resolvable;
   static constexpr bool factories_constructible =
-      (binding_factory_is_default_constructible<
-           binding_model<Registrations>>::value &&
+      (std::is_default_constructible_v<
+           typename binding_model<Registrations>::factory_type> &&
        ...);
   static constexpr bool storage_constructible =
-      (binding_storage_is_default_constructible<
-           binding_model<Registrations>>::value &&
+      (std::is_default_constructible_v<
+           typename binding_model<Registrations>::storage_type> &&
        ...);
 };
 

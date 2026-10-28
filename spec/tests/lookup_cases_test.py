@@ -14,8 +14,6 @@ from spec.gen.resolution.lookup import build_shards, render
 def test_lookup_cases_are_rules_not_forms() -> None:
     shards = build_shards()
     assert {shard.name for shard in shards} == {
-        "local_binding",
-        "local_override",
         "child_inherits",
         "child_shadows",
         "grandchild",

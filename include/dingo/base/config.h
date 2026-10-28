@@ -84,3 +84,10 @@
 #if !defined(DINGO_VARIANT_PACK_AT_BUILTIN)
 #define DINGO_VARIANT_PACK_AT_BUILTIN DINGO_HAS_TYPE_PACK_ELEMENT
 #endif
+
+namespace dingo {
+namespace detail {
+template <typename...>
+inline constexpr bool container_dependent_false_v = false;
+} // namespace detail
+} // namespace dingo

@@ -14,7 +14,8 @@ Read these pages in order for the full picture:
 - [Shared Kernel](shared-kernel.md): the proposed unification of runtime and
   compile-time selection and resolution, and the generated coverage model.
 - [Container Engine](container-engine.md): the decision-function design note for
-  making the static and mixed front-ends configurations of one operations layer.
+  making the static and runtime front-ends configurations of one operations
+  layer.
 - [Handles, Leaf Types, And Lookup](handles-leaf-types-and-lookup.md): wrapper
   algebra, `leaf_type_t`, `rebind_leaf_t`, `lookup_type_t`, and
   `exact_lookup<T>`.
@@ -32,6 +33,9 @@ Read these pages in order for the full picture:
 - [Complexity Review](complexity-review.md): a maintenance report on dead
   surface, forwarding layers, and rules that are encoded more than once, with a
   proposed order for removing them.
+- [Binding Restructure](binding-restructure.md): the functionality-level plan
+  for collapsing the binding layer to one home per question, with the slice
+  order and gates.
 
 The public API is centered on three container entry points:
 

@@ -11,7 +11,7 @@
 A collection is several bindings assembled into one value. The mechanism has
 three degrees of freedom and nothing else:
 
-- registration mode: static bindings, or static plus runtime bindings merged;
+- registration mode: static bindings;
 - keyed or unkeyed: the key selects which collection is assembled;
 - collection shape: a vector of elements, or a map built with an insert policy.
 
@@ -148,7 +148,7 @@ class CollectionShard:
 
 def build_shards() -> list[CollectionShard]:
     shards = []
-    for mode in ("static", "mixed"):
+    for mode in ("static",):
         case = CasePath(
             phase="resolution",
             container=mode,

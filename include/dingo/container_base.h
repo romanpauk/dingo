@@ -30,10 +30,9 @@ template <typename ContainerTraits = dynamic_container_traits,
           typename ParentContainer = void>
 class runtime_container {
 public:
-  using implementation_type = detail::runtime_container_impl<
-      static_bindings<>, ParentContainer,
-      detail::static_container_runtime_config<ContainerTraits, Allocator, void,
-                                              void, true>>;
+  using implementation_type =
+      detail::runtime_container_impl<ParentContainer, ContainerTraits,
+                                     Allocator>;
 
 private:
   using implementation_allocator = typename std::allocator_traits<
@@ -164,26 +163,20 @@ private:
 
 namespace dingo::detail {
 
-template <typename... Ts>
-inline constexpr bool container_dependent_false_v = false;
-
 template <typename... Params> struct container_base;
 template <typename Param, typename Enable = void>
 struct container_base_from_parameter;
-template <typename Param, typename Parent, typename Enable = void>
-struct container_base_from_static_parent;
 struct container_base_runtime_two_parameter_tag {};
-struct container_base_static_parent_tag {};
+struct container_base_mixed_tag {};
 struct container_base_invalid_two_parameter_tag {};
 
 template <typename First>
 using container_base_two_parameter_tag_t = std::conditional_t<
     is_runtime_container_traits_v<First>,
     container_base_runtime_two_parameter_tag,
-    std::conditional_t<is_static_bindings_v<First> ||
-                           is_bindings_wrapper_v<First>,
-                       container_base_static_parent_tag,
-                       container_base_invalid_two_parameter_tag>>;
+    std::conditional_t<
+        is_static_bindings_v<First> || is_bindings_wrapper_v<First>,
+        container_base_mixed_tag, container_base_invalid_two_parameter_tag>>;
 
 template <> struct container_base<> {
   using type = runtime_container<dynamic_container_traits>;
@@ -206,8 +199,12 @@ struct container_base<container_base_runtime_two_parameter_tag, First, Second> {
 };
 
 template <typename First, typename Second>
-struct container_base<container_base_static_parent_tag, First, Second> {
-  using type = typename container_base_from_static_parent<First, Second>::type;
+struct container_base<container_base_mixed_tag, First, Second> {
+  static_assert(container_dependent_false_v<First, Second>,
+                "mixed containers are not supported; use "
+                "static_container<bindings<...>, Parent> for compile-time "
+                "bindings or container<Traits, Allocator, Parent> for runtime "
+                "registration");
 };
 
 template <typename First, typename Second>
@@ -250,45 +247,12 @@ struct container_base_from_parameter<
 
 template <typename Param>
 struct container_base_from_parameter<
-    Param, std::enable_if_t<is_static_bindings_v<Param>>> {
-  using type = runtime_container_impl<Param>;
-};
-
-template <typename Param>
-struct container_base_from_parameter<
-    Param, std::enable_if_t<is_bindings_wrapper_v<Param>>> {
-  using static_bindings_type = bindings_wrapper_registry_t<Param>;
-
-  static_assert(is_static_bindings_v<static_bindings_type>,
-                "container<bindings<...>> requires a valid compile-time "
-                "bindings source");
-
-  using type = runtime_container_impl<static_bindings_type>;
-};
-
-template <typename Param, typename Parent, typename Enable>
-struct container_base_from_static_parent {
-  static_assert(container_dependent_false_v<Param, Parent>,
-                "container<bindings<...>, Parent> requires a valid "
-                "compile-time bindings source");
-};
-
-template <typename Param, typename Parent>
-struct container_base_from_static_parent<
-    Param, Parent, std::enable_if_t<is_static_bindings_v<Param>>> {
-  using type = runtime_container_impl<Param, Parent>;
-};
-
-template <typename Param, typename Parent>
-struct container_base_from_static_parent<
-    Param, Parent, std::enable_if_t<is_bindings_wrapper_v<Param>>> {
-  using static_bindings_type = bindings_wrapper_registry_t<Param>;
-
-  static_assert(is_static_bindings_v<static_bindings_type>,
-                "container<bindings<...>, Parent> requires a valid "
-                "compile-time bindings source");
-
-  using type = runtime_container_impl<static_bindings_type, Parent>;
+    Param, std::enable_if_t<is_static_bindings_v<Param> ||
+                            is_bindings_wrapper_v<Param>>> {
+  static_assert(container_dependent_false_v<Param>,
+                "mixed containers are not supported; use "
+                "static_container<bindings<...>> for compile-time bindings or "
+                "container<> for runtime registration");
 };
 
 } // namespace dingo::detail

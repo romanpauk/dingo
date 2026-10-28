@@ -9,15 +9,17 @@
 
 #include <dingo/binding/container_miss.h>
 #include <dingo/binding/container_selection.h>
-#include <dingo/container.h>
 #include <dingo/container_collections.h>
 #include <dingo/container_operations.h>
 #include <dingo/factory/invoke.h>
 #include <dingo/lookup/container_lookup_definition.h>
 #include <dingo/static/binding.h>
+#include <dingo/static/bindings.h>
 #include <dingo/static/construction.h>
 #include <dingo/static/container_traits.h>
 #include <dingo/static/context.h>
+#include <dingo/static/registration.h>
+#include <dingo/static/registry.h>
 #include <dingo/static/resolution_policy.h>
 #include <dingo/type/dependency_traits.h>
 
@@ -139,10 +141,7 @@ private:
   static constexpr binding_status resolve_status_v =
       selection_t<typename Request::lookup_type, Key>::status;
 
-  static constexpr bool runtime_only = false;
-  static constexpr bool has_static_source = true;
   static constexpr bool has_runtime_source = false;
-  static constexpr bool static_binding_uses_result = false;
 
   template <typename T> static constexpr bool may_auto_construct_v = false;
 

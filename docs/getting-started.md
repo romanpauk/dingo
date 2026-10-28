@@ -25,23 +25,23 @@ factory policy model.
   fits registrations assembled from ordinary control flow, split across modules,
   or selected by runtime configuration.
 - Compile-time registration uses `bindings<...>` and instantiates
-  `container<bindings<...>>` or `static_container<bindings<...>>`. It fits
-  graphs known in the type system and provides earlier diagnostics for missing
-  dependencies or cycles.
+  `static_container<bindings<...>>`. It fits graphs known in the type system and
+  provides earlier diagnostics for missing dependencies or cycles.
 
 Both modes use `resolve<T>()`, `construct<T>()`, and `invoke(...)` in the same
 way after the container is configured.
 
-Dingo exposes focused runtime/static containers plus a convenience `container`
-facade:
+Dingo exposes two container shapes:
 
-- `runtime_container<>`: runtime-only registration with `register_type<...>()`
+- `container<>`: runtime registration with `register_type<...>()`
+- `runtime_container<>`: the same runtime container with an explicit name and a
+  stable heap address
 - `static_container<bindings<...>>`: compile-time registration only, with no
   runtime registration API
-- `container<>`: the common runtime-only spelling, backed by the runtime
-  container implementation
-- `container<bindings<...>>`: the mixed form, with compile-time registrations
-  plus optional runtime registrations in the same container
+
+A container has one registration mode. Use `static_container` for a graph known
+in the type system and `container<>` for an open runtime graph; there is no
+container that combines both.
 
 Dingo also applies supported ownership and interface
 [conversions](architecture/conversion-model.md) automatically: a registration
@@ -135,7 +135,7 @@ using app_bindings =
              dingo::bind<scope<shared>, storage<std::unique_ptr<B>>>,
              dingo::bind<scope<unique>, storage<C>>>;
 
-container<app_bindings> container;
+static_container<app_bindings> container;
 // Resolution still uses the same API.
 C c = container.resolve<C>();
 

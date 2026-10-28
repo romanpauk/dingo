@@ -140,14 +140,9 @@ template <typename Interface, typename LookupKey, typename InterfaceBindings>
 using static_selection_t =
     typename static_selection<Interface, LookupKey, InterfaceBindings>::type;
 
-// Backward-compatible spellings of the static selection.
 template <typename Interface, typename LookupKey, typename InterfaceBindings>
-using binding_selection_t =
-    static_selection_t<Interface, LookupKey, InterfaceBindings>;
-
-template <typename Interface, typename LookupKey, typename InterfaceBindings>
-using binding_t = typename binding_selection_t<Interface, LookupKey,
-                                               InterfaceBindings>::binding_type;
+using binding_t = typename static_selection_t<Interface, LookupKey,
+                                              InterfaceBindings>::binding_type;
 
 } // namespace detail
 } // namespace dingo

@@ -69,9 +69,9 @@ D e = container.invoke([&](A &a, B *b) { return D{a, b}; });
 
 ## Compile-Time Registration
 
-Compile-time registration uses `bindings<...>` with `container<bindings<...>>`
-or `static_container<bindings<...>>`, which fits graphs known in the type
-system.
+Compile-time registration uses `bindings<...>` with
+`static_container<bindings<...>>`, which fits graphs known in the type system.
+Runtime registration uses `container<>`; a container has one registration mode.
 
 <!-- { include("examples/container/quick_static.cpp", scope="////") -->
 
@@ -96,7 +96,7 @@ using app_bindings =
              dingo::bind<scope<shared>, storage<std::unique_ptr<B>>>,
              dingo::bind<scope<unique>, storage<C>>>;
 
-container<app_bindings> container;
+static_container<app_bindings> container;
 // Resolution still uses the same API.
 C c = container.resolve<C>();
 

@@ -1,5 +1,8 @@
 # Model Generator Handover
 
+> Mixed containers were removed on 2026-10-28. Mixed cases described below no
+> longer exist.
+
 Date: 2026-10-27
 
 This is the handover for the `spec` coverage generator after the per-storage

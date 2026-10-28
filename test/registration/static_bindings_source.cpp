@@ -251,7 +251,7 @@ TEST(static_bindings_source_test,
       dingo::bind<scope<shared>, storage<std::shared_ptr<second_service>>,
                   interfaces<annotated<service_interface, second_tag>>>>;
 
-  dingo::container<source> container;
+  dingo::static_container<source> container;
   const auto values = container.invoke(
       [](annotated<std::shared_ptr<service_interface>, first_tag> first,
          annotated<std::shared_ptr<service_interface>, second_tag> second) {
@@ -418,7 +418,7 @@ TEST(static_bindings_source_test,
       dingo::bind<scope<shared_cyclical>, storage<std::shared_ptr<b>>,
                   interfaces<b_interface>, dependencies<a &>>>;
 
-  dingo::container<source> container;
+  dingo::static_container<source> container;
   auto &instance = container.resolve<a &>();
   auto &b_view = container.resolve<b_interface &>();
   auto &b_instance = static_cast<b &>(b_view);
@@ -476,7 +476,7 @@ TEST(static_bindings_source_test,
       dingo::bind<scope<unique>, storage<consumer>,
                   dependencies<std::vector<collection_interface *>>>>;
 
-  dingo::container<source> container;
+  dingo::static_container<source> container;
 
   EXPECT_EQ(container.resolve<consumer>().values.size(), 2u);
 }

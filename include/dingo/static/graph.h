@@ -135,40 +135,6 @@ using binding_temporary_storage_traits =
 // Numbering of the bindings of a graph.
 // ---------------------------------------------------------------------------
 
-template <typename LocalBindings> struct graph_local_bindings {
-  using type = type_list<>;
-};
-
-template <typename... LocalRegistrations>
-struct graph_local_bindings<static_bindings<LocalRegistrations...>> {
-  using type = static_registry_bindings_t<LocalRegistrations...>;
-};
-
-template <typename... Bindings>
-constexpr bool graph_any_local_bindings(type_list<Bindings...>) {
-  return (
-      !std::is_void_v<typename Bindings::binding_model_type::bindings_type> ||
-      ...);
-}
-
-// The graph nodes are the interface bindings of the registry followed by the
-// local bindings declared by its registrations, transitively. A local binding
-// is only a node when some registration declares it.
-template <typename Bindings,
-          bool HasLocalBindings = graph_any_local_bindings(Bindings{})>
-struct graph_universe {
-  using type = Bindings;
-};
-
-template <typename... Bindings>
-struct graph_universe<type_list<Bindings...>, true> {
-  using type = type_list_cat_t<
-      type_list<Bindings...>,
-      typename graph_universe<type_list_cat_t<typename graph_local_bindings<
-          typename Bindings::binding_model_type::bindings_type>::type...>>::
-          type>;
-};
-
 // Returns the first position of Binding in Universe, or graph_npos for a
 // binding that is not a node (void stands for a dependency without a binding).
 template <typename Binding, typename... Universe>
@@ -282,18 +248,12 @@ constexpr std::size_t graph_requests_slots(type_list<Requests...> *) {
   return (std::size_t{0} + ... + graph_request_slots<Host, Requests>());
 }
 
-// Number of edges of a binding: one per matching binding of its requests,
-// resolved against the host bindings and the local bindings of its model.
+// Number of edges of a binding: one per matching binding of its requests.
 template <typename Host, typename Binding>
 constexpr std::size_t graph_node_slots() {
   using model = typename Binding::binding_model_type;
-  if constexpr (std::is_void_v<typename model::bindings_type>) {
-    return graph_requests_slots<Host>(
-        static_cast<typename graph_requests<model>::type *>(nullptr));
-  } else {
-    return graph_slot_count(
-        static_cast<resolved_dependency_bindings_t<model, Host> *>(nullptr));
-  }
+  return graph_requests_slots<Host>(
+      static_cast<typename graph_requests<model>::type *>(nullptr));
 }
 
 template <typename Universe, std::size_t Edges>
@@ -362,14 +322,8 @@ constexpr void graph_add_vertex(graph_structure<Vertices, Edges> &structure,
           static_cast<binding_dependencies_t<model> *>(nullptr)),
       edge,
       slots};
-  if constexpr (std::is_void_v<typename model::bindings_type>) {
-    graph_write_requests<Host, Universe>(static_cast<requests *>(nullptr),
-                                         structure.edges, edge);
-  } else {
-    graph_write_bindings<Universe>(
-        static_cast<resolved_dependency_bindings_t<model, Host> *>(nullptr),
-        structure.edges, edge);
-  }
+  graph_write_requests<Host, Universe>(static_cast<requests *>(nullptr),
+                                       structure.edges, edge);
   edge += slots;
 }
 
@@ -944,11 +898,10 @@ graph_bound(const graph_structure<Vertices, Edges> &structure,
 // checking that a graph is resolvable never instantiates them.
 template <typename StaticRegistry> struct graph_model {
   using host_bindings = typename StaticRegistry::interface_bindings;
-  using universe = typename graph_universe<host_bindings>::type;
 
   static constexpr std::size_t root_count = type_list_size_v<host_bindings>;
   static constexpr auto structure =
-      graph_make_structure<host_bindings>(universe{});
+      graph_make_structure<host_bindings>(host_bindings{});
   static constexpr auto topology = graph_sort(structure, root_count);
   static constexpr bool bounds_known =
       graph_roots_bounded(structure, root_count);
@@ -957,7 +910,7 @@ template <typename StaticRegistry> struct graph_model {
 template <typename StaticRegistry> struct graph_cost_model {
   static constexpr auto costs =
       graph_make_costs(graph_model<StaticRegistry>::structure,
-                       typename graph_model<StaticRegistry>::universe{});
+                       typename graph_model<StaticRegistry>::host_bindings{});
 };
 
 template <typename StaticRegistry,
@@ -984,7 +937,7 @@ auto graph_topological_list(type_list<Universe...>,
 template <typename StaticRegistry>
 struct graph_topological_bindings<StaticRegistry, true> {
   using type = decltype(graph_topological_list<StaticRegistry>(
-      typename graph_model<StaticRegistry>::universe{},
+      typename graph_model<StaticRegistry>::host_bindings{},
       std::make_index_sequence<
           graph_model<StaticRegistry>::topology.order_size>{}));
 };
@@ -996,8 +949,8 @@ using graph_topological_bindings_t =
 template <typename Binding, typename StaticRegistry>
 inline constexpr bool static_binding_resolvable_v = graph_binding_resolvable(
     graph_model<StaticRegistry>::structure,
-    graph_type_index_in<Binding,
-                        typename graph_model<StaticRegistry>::universe>::value);
+    graph_type_index_in<
+        Binding, typename graph_model<StaticRegistry>::host_bindings>::value);
 
 template <typename StaticRegistry>
 constexpr bool graph_bindings_resolvable(void *) {

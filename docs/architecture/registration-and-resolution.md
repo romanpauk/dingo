@@ -32,7 +32,7 @@ into the full internal policy set before the factory is created.
 
 ## Compile-Time Registration
 
-`container<bindings<...>>` accepts a compile-time binding source:
+`static_container<bindings<...>>` accepts a compile-time binding source:
 
 ```c++
 using app_bindings = dingo::bindings<
@@ -40,7 +40,7 @@ using app_bindings = dingo::bindings<
     dingo::bind<dingo::scope<dingo::unique>, dingo::storage<Service>>
 >;
 
-dingo::container<app_bindings> container;
+dingo::static_container<app_bindings> container;
 ```
 
 That path is normalized through
@@ -52,8 +52,8 @@ There are two registration modes:
 - runtime registration through `register_type<...>()`
 - compile-time registration through `bindings<...>`
 
-`container<bindings<...>>` can host compile-time bindings and runtime
-registrations at the same time.
+A container has one registration mode: `container<>` is runtime and
+`static_container<bindings<...>>` is compile time. The modes are not combined.
 
 ## Stored Type Versus Exposed Interface
 
@@ -210,11 +210,11 @@ Dingo does not try to model the full C++ overload-resolution space, which is why
 ambiguous, policy-sensitive, or readability-critical cases should move to an
 explicit factory.
 
-`container<bindings<...>>` also checks statically known static cycles at compile
-time. Ordinary static cycles are rejected; cycles where every participating
-binding uses `scope<shared_cyclical>` are allowed through the static binding
-path. Mixed runtime/static recursion that only appears during actual
-construction is still rejected at runtime by the recursion guard.
+`static_container` also checks statically known static cycles at compile time.
+Ordinary static cycles are rejected; cycles where every participating binding
+uses `scope<shared_cyclical>` are allowed through the static binding path.
+Runtime recursion that only appears during actual construction is still rejected
+at runtime by the recursion guard.
 
 ## Good Source Companions
 

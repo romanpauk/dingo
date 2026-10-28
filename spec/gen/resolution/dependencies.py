@@ -67,7 +67,7 @@ CASES = (
                  dingo::storage<selected_arguments>,
                  dingo::dependencies<second_dependency &,
                                      first_dependency &>>>;
-  dingo::container<source> container;
+  dingo::static_container<source> container;
   EXPECT_EQ(container.resolve<selected_arguments &>().value, 17);""",
     ),
 )

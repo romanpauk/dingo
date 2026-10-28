@@ -13,7 +13,7 @@ from spec.gen.resolution.cyclical import build_shards, render
 
 def test_cyclical_shards_cover_modes_and_storage() -> None:
     shards = build_shards()
-    assert {shard.mode for shard in shards} == {"runtime", "static", "mixed"}
+    assert {shard.mode for shard in shards} == {"runtime", "static"}
     for shard in shards:
         assert shard.path == f"resolution/{shard.mode}/global/cyclical.cpp"
         content = render(shard)

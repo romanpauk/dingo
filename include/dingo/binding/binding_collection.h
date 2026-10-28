@@ -49,17 +49,6 @@ constexpr std::size_t static_collection_binding_count() {
       LookupKey>>;
 }
 
-template <typename T, typename RuntimeAppendFn, typename StaticAppendFn,
-          typename Fn>
-std::size_t append_binding_collection(T &results,
-                                      RuntimeAppendFn &&runtime_append,
-                                      StaticAppendFn &&static_append, Fn &&fn) {
-  std::size_t count = 0;
-  count += std::forward<RuntimeAppendFn>(runtime_append)(results, fn);
-  count += std::forward<StaticAppendFn>(static_append)(results, fn);
-  return count;
-}
-
 // Constructs a collection from the bindings of one or more sources. The caller
 // sums the sources into total and supplies append, which fills the collection
 // from each source in turn. An empty collection is an error unless the lookup

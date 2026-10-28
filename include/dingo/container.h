@@ -7,13 +7,10 @@
 
 #pragma once
 
-#include <dingo/base/complete_type.h>
 #include <dingo/base/config.h>
 #include <dingo/base/exceptions.h>
 #include <dingo/base/none.h>
 #include <dingo/binding/binding_collection.h>
-#include <dingo/binding/binding_model.h>
-#include <dingo/binding/binding_resolution_policy.h>
 #include <dingo/binding/binding_selection.h>
 #include <dingo/binding/container_miss.h>
 #include <dingo/binding/container_selection.h>
@@ -21,26 +18,15 @@
 #include <dingo/container_collections.h>
 #include <dingo/container_operations.h>
 #include <dingo/factory/callable.h>
+#include <dingo/factory/constructor.h>
 #include <dingo/factory/invoke.h>
 #include <dingo/lookup/container_lookup_definition.h>
 #include <dingo/lookup/lookup.h>
-#include <dingo/memory/allocator.h>
-#include <dingo/registration/requirements.h>
 #include <dingo/registration/type_registration.h>
-#include <dingo/rtti/static_provider.h>
-#include <dingo/rtti/typeid_provider.h>
 #include <dingo/runtime/binding.h>
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>
 #include <dingo/runtime/registration.h>
-#include <dingo/static/binding.h>
-#include <dingo/static/construction.h>
-#include <dingo/static/container_traits.h>
-#include <dingo/static/graph.h>
-#include <dingo/static/registration.h>
-#include <dingo/static/registry.h>
-#include <dingo/static/resolution_policy.h>
-#include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/auto_constructible.h>
 #include <dingo/type/collection_traits.h>
@@ -49,15 +35,9 @@
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/request_lift.h>
 
-#include <algorithm>
 #include <cstdlib>
-#include <functional>
-#include <map>
-#include <optional>
 #include <type_traits>
-#include <typeindex>
 #include <utility>
-#include <variant>
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -67,65 +47,23 @@
 namespace dingo {
 namespace detail {
 
-template <typename Self, typename RuntimeConfig>
-struct static_container_runtime_configuration {
-  using runtime_base = runtime_registry<
-      typename RuntimeConfig::container_traits_type,
-      typename RuntimeConfig::allocator_type,
-      typename RuntimeConfig::parent_registry_type,
-      std::conditional_t<
-          std::is_void_v<typename RuntimeConfig::resolve_root_type>, Self,
-          typename RuntimeConfig::resolve_root_type>,
-      RuntimeConfig::owns_runtime_data>;
-
-  static constexpr bool owns_runtime_data = RuntimeConfig::owns_runtime_data;
-  static constexpr bool merge_parent_collections =
-      RuntimeConfig::merge_parent_collections;
-  // A runtime-only front-end has no parent registry: the container is the
-  // resolve root and consults its parent container directly.
-  static constexpr bool runtime_only =
-      std::is_void_v<typename RuntimeConfig::parent_registry_type>;
-};
-
-template <typename Self>
-struct static_container_runtime_configuration<Self, void> {
-  using runtime_base =
-      runtime_registry<dynamic_container_traits,
-                       typename dynamic_container_traits::allocator_type, Self,
-                       Self>;
-
-  static constexpr bool owns_runtime_data = true;
-  static constexpr bool merge_parent_collections = false;
-  static constexpr bool runtime_only = false;
-};
-
-} // namespace detail
-
-// One resolve front-end for all container shapes: runtime-only containers
-// (container<>, runtime_container) are the form with empty static bindings
-// and a runtime-only configuration, container<bindings<...>> adds the static
-// registry, and registration-local containers use the merging configuration.
-template <typename ParentContainer, typename RuntimeConfig,
-          typename... Registrations>
-class detail::runtime_container_impl<static_bindings<Registrations...>,
-                                     ParentContainer, RuntimeConfig>
+// The runtime container: one registry that owns runtime registrations, resolves
+// through them, and falls back to its parent container. It has no compile-time
+// source; static_container is the other container shape.
+template <typename ParentContainer,
+          typename ContainerTraits = dynamic_container_traits,
+          typename Allocator = typename ContainerTraits::allocator_type>
+class runtime_container_impl
     : public detail::runtime_registration<detail::runtime_container_impl<
-          static_bindings<Registrations...>, ParentContainer, RuntimeConfig>>,
+          ParentContainer, ContainerTraits, Allocator>>,
       public detail::container_collections<detail::runtime_container_impl<
-          static_bindings<Registrations...>, ParentContainer, RuntimeConfig>>,
+          ParentContainer, ContainerTraits, Allocator>>,
       public detail::container_selection<detail::runtime_container_impl<
-          static_bindings<Registrations...>, ParentContainer, RuntimeConfig>>,
+          ParentContainer, ContainerTraits, Allocator>>,
       public detail::container_operations<
-          detail::runtime_container_impl<static_bindings<Registrations...>,
-                                         ParentContainer, RuntimeConfig>,
-          true>,
-      // Empty bindings leave an empty base, so the object does not grow.
-      private std::conditional_t<
-          (sizeof...(Registrations) != 0),
-          detail::static_registry<
-              static_bindings<Registrations...>,
-              detail::static_registry_state<Registrations...>>,
-          none_t> {
+          detail::runtime_container_impl<ParentContainer, ContainerTraits,
+                                         Allocator>,
+          true> {
   template <typename> friend class runtime_context;
   template <typename> friend class detail::container_selection;
   template <typename, typename, typename>
@@ -138,199 +76,50 @@ class detail::runtime_container_impl<static_bindings<Registrations...>,
   template <typename, bool> friend class container_operations;
 
 public:
-  using static_bindings_type = static_bindings<Registrations...>;
-  using static_registry_type =
-      detail::static_registry<static_bindings_type,
-                              detail::static_registry_state<Registrations...>>;
+  using container_traits_type = ContainerTraits;
+  using allocator_type = Allocator;
+  using rtti_type = typename ContainerTraits::rtti_type;
+  using lookup_definition_type =
+      detail::container_lookup_definition_type_t<ContainerTraits>;
 
 private:
   using self_type =
-      detail::runtime_container_impl<static_bindings_type, ParentContainer,
-                                     RuntimeConfig>;
+      runtime_container_impl<ParentContainer, ContainerTraits, Allocator>;
   using selection_type = detail::container_selection<self_type>;
-  using runtime_configuration =
-      detail::static_container_runtime_configuration<self_type, RuntimeConfig>;
-  using runtime_base = typename runtime_configuration::runtime_base;
-  using runtime_context_type =
-      runtime_context<typename runtime_base::allocator_type>;
+  using runtime_base =
+      runtime_registry<ContainerTraits, Allocator, void, self_type, true>;
+  using runtime_context_type = runtime_context<Allocator>;
   friend runtime_base;
   template <typename, typename, typename, typename, bool>
   friend class ::dingo::runtime_registry;
 
-  static constexpr bool runtime_only_v = runtime_configuration::runtime_only;
-  static constexpr bool has_static_v = sizeof...(Registrations) != 0;
-
 public:
-  // A runtime-only container without an explicit parent type accepts a parent
-  // of its own type.
   using parent_container_type =
-      std::conditional_t<std::is_void_v<ParentContainer> && runtime_only_v,
-                         self_type,
+      std::conditional_t<std::is_void_v<ParentContainer>, self_type,
                          detail::container_implementation_t<ParentContainer>>;
   using runtime_registry_type = runtime_base;
   using registry_type = runtime_base;
   using container_type = self_type;
-  using container_traits_type = typename runtime_base::container_traits_type;
-  using allocator_type = typename runtime_base::allocator_type;
-  using rtti_type = typename runtime_base::rtti_type;
-  using lookup_definition_type = typename runtime_base::lookup_definition_type;
+  using runtime_selection = typename runtime_registry_type::runtime_selection;
 
 private:
   static constexpr bool has_parent_v = !std::is_void_v<parent_container_type>;
 
-  static_assert(
-      detail::static_registration_requirements<
-          has_static_v, static_bindings_type,
-          typename runtime_base::container_traits_type, RuntimeConfig>::value);
-
-  template <typename T, typename Key>
-  using static_selection_t =
-      typename static_bindings_type::template selection<T, Key>;
-
-  template <typename T>
-  static constexpr bool runtime_auto_constructible_v =
-      detail::is_runtime_auto_constructible_dependency_v<T>;
-
-  template <typename Lookup, typename Key>
-  static constexpr detail::binding_status static_status_v = [] {
-    if constexpr (has_static_v) {
-      return static_selection_t<Lookup, Key>::status;
-    } else {
-      return detail::binding_status::not_found;
-    }
-  }();
-
-  // Runtime-only containers fall back to the parent only for lookups the
-  // parent declares; containers with static bindings always do.
-  template <typename Lookup, typename LookupKey>
-  static constexpr bool parent_serves() {
-    static_assert(detail::is_lookup_key_v<LookupKey>);
-    if constexpr (runtime_only_v) {
-      return has_parent_v &&
-             detail::has_lookup<parent_container_type, Lookup, LookupKey>();
-    } else {
-      return has_parent_v;
-    }
-  }
-
-  using runtime_selection = typename runtime_registry_type::runtime_selection;
-
-  static constexpr bool runtime_only = runtime_only_v;
   static constexpr bool has_parent = has_parent_v;
-  static constexpr bool merge_parent_collections =
-      runtime_configuration::merge_parent_collections;
-  static constexpr bool has_static_source = has_static_v;
   static constexpr bool has_runtime_source = true;
-  static constexpr bool static_binding_uses_result = true;
 
   template <typename T>
-  static constexpr bool may_auto_construct_v = runtime_auto_constructible_v<T>;
+  static constexpr bool may_auto_construct_v =
+      [] { return detail::is_runtime_auto_constructible_dependency_v<T>; }();
 
   template <typename Lookup, typename LookupKey>
-  static constexpr bool parent_serves_v = parent_serves<Lookup, LookupKey>();
+  static constexpr bool parent_serves_v =
+      has_parent_v &&
+      detail::has_lookup<parent_container_type, Lookup, LookupKey>();
 
+public:
   runtime_registry_type &runtime_source() { return runtime_registry_; }
-  static_registry_type &static_source() { return statics(); }
   parent_container_type *parent() { return parent_; }
-
-  template <typename Request, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  bool has_runtime_binding(LookupKey key) {
-    return runtime_registry_.template binding_status<
-               typename request_type<Request>::value_type,
-               typename request_type<Request>::exact_type>(key) !=
-           detail::binding_status::not_found;
-  }
-
-  template <typename Request, typename NormalizedRequest>
-  bool has_runtime_no_key_binding() {
-    auto key = detail::no_lookup_key();
-    static_assert(std::is_same_v<request_value_t<Request>,
-                                 request_value_t<NormalizedRequest>>);
-    return has_runtime_binding<Request>(key);
-  }
-
-  template <typename T, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  bool has_runtime_collection(LookupKey key) {
-    return runtime_registry_.template count<T>(key) != 0;
-  }
-
-  template <typename Request, typename Key,
-            bool Found =
-                static_status_v<Request, Key> == detail::binding_status::found>
-  struct is_static_binding_available : std::false_type {};
-
-  template <typename Request, typename Key>
-  struct is_static_binding_available<Request, Key, true> {
-    using binding = typename static_selection_t<Request, Key>::binding_type;
-    static constexpr bool value =
-        detail::binding_supports_request_v<request_result_t<Request>, binding>;
-  };
-
-  template <typename Request, typename Key>
-  static constexpr bool is_static_binding_available_v =
-      is_static_binding_available<Request, Key>::value;
-  template <typename T>
-  static constexpr bool has_static_construct_v = [] {
-    if constexpr (has_static_v) {
-      using request = request_type<T>;
-      using interface_type = typename request::interface_type;
-      using value_type = typename request::value_type;
-      using no_key = detail::no_lookup_key_t;
-      constexpr bool has_exact_static_binding =
-          is_static_binding_available_v<interface_type, no_key>;
-      constexpr bool has_normalized_static_binding =
-          is_static_binding_available_v<value_type, no_key>;
-
-      return has_exact_static_binding || (has_normalized_static_binding &&
-                                          construct_normalized_request_v<T>);
-    } else {
-      return false;
-    }
-  }();
-
-  template <typename T, typename Key>
-  bool select_static_collection_construct() {
-    constexpr bool has_static_collection_bindings =
-        detail::static_collection_binding_count<static_bindings_type, T,
-                                                Key>() != 0;
-    if constexpr (!has_static_collection_bindings) {
-      return false;
-    } else {
-      return !has_runtime_collection<T>(Key{});
-    }
-  }
-
-  template <typename Request, typename R = typename Request::result_type>
-  DINGO_ALWAYS_INLINE R construct_static(construction_scope scope,
-                                         runtime_context_type &context) {
-    using interface_type = typename Request::interface_type;
-    using request_value_type = typename Request::value_type;
-    using no_key = detail::no_lookup_key_t;
-    using exact_selection = static_selection_t<interface_type, no_key>;
-    using normalized_selection = static_selection_t<request_value_type, no_key>;
-    return detail::construct_from_static_source<
-        Request, R, runtime_context_type, false, exact_selection,
-        normalized_selection>(
-        scope, context,
-        [&](auto) { return resolve_static<Request, no_key>(scope, context); },
-        [&](auto) {
-          return resolve_static<request_type<request_value_type>, no_key>(
-              scope, context);
-        },
-        [&](auto) { return resolve_static<Request, no_key>(scope, context); });
-  }
-
-  static_registry_type &statics() { return *this; }
-
-  template <typename Request, typename LookupKey, typename Context,
-            typename R = typename Request::result_type>
-  DINGO_ALWAYS_INLINE R resolve_static(construction_scope scope,
-                                       Context &context) {
-    return statics().template resolve_named<Request, LookupKey>(scope, context,
-                                                                *this);
-  }
 
   template <typename Request, typename R = typename Request::lookup_type>
   R resolve_request(construction_scope scope, runtime_context_type &context) {
@@ -347,14 +136,15 @@ private:
         [&]() -> R {
           return this->template unresolved<
               Request,
-              runtime_auto_constructible_v<typename Request::user_type>,
+              detail::is_runtime_auto_constructible_dependency_v<
+                  typename Request::user_type>,
               detail::no_lookup_key_t, R>(scope, context, std::move(key));
         });
   }
 
   template <typename Request, typename R = typename Request::result_type>
-  R construct_runtime_resolved_request(construction_scope scope,
-                                       runtime_context_type &context) {
+  R construct_resolved_request(construction_scope scope,
+                               runtime_context_type &context) {
     using user_type = typename Request::user_type;
     using request_value_type = typename Request::value_type;
     return ::dingo::construct_resolved_request<user_type>(
@@ -368,9 +158,8 @@ private:
   template <typename Request,
             typename Factory = constructor<typename Request::value_type>,
             typename R = typename Request::result_type>
-  R construct_runtime_request(construction_scope scope,
-                              runtime_context_type &context,
-                              Factory factory = Factory()) {
+  R construct_request(construction_scope scope, runtime_context_type &context,
+                      Factory factory = Factory()) {
     using user_type = typename Request::user_type;
     using request_value_type = typename Request::value_type;
 
@@ -379,57 +168,6 @@ private:
       if (runtime_registry_.template binding_status<
               typename Request::value_type, typename Request::exact_type>(
               key) != detail::binding_status::not_found) {
-        if constexpr (!construct_normalized_request_v<user_type> ||
-                      ::dingo::rvalue_request_requires_explicit_conversion_v<
-                          user_type>) {
-          return resolve_request<Request>(scope, context);
-        } else {
-          return construct_runtime_resolved_request<Request, R>(scope, context);
-        }
-      }
-    }
-
-    if constexpr (construct_factory_request_v<user_type>) {
-      auto type_guard = context.template track_type<request_value_type>();
-      return factory.template construct<R>(scope, context, *this);
-    } else if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
-                             user_type>) {
-      ::dingo::throw_missing_rvalue_conversion<user_type>(false, context);
-    } else {
-      return resolve_request<Request>(scope, context);
-    }
-  }
-
-  // Runtime-only containers resolve through their parent when constructing.
-  template <typename Request, typename R = typename Request::result_type>
-  R construct_resolved_request(construction_scope scope,
-                               runtime_context_type &context) {
-    using user_type = typename Request::user_type;
-    using normalized = request_type<typename Request::value_type>;
-    return ::dingo::construct_resolved_request<user_type>(
-        [&]() -> R {
-          return selection_type::template resolve<Request, R>(
-              scope, context, *this, detail::no_lookup_key());
-        },
-        [&]() {
-          return selection_type::template resolve<
-              normalized, typename normalized::lookup_type>(
-              scope, context, *this, detail::no_lookup_key());
-        });
-  }
-
-  template <typename Request,
-            typename Factory = constructor<typename Request::value_type>,
-            typename R = typename Request::result_type>
-  R construct_request(construction_scope scope, runtime_context_type &context,
-                      Factory factory = Factory()) {
-    using user_type = typename Request::user_type;
-    using request_value_type = typename Request::value_type;
-
-    if constexpr (std::is_same_v<Factory, constructor<request_value_type>>) {
-      auto key = detail::no_lookup_key();
-      if (binding_status<typename Request::lookup_type>(key) !=
-          detail::binding_status::not_found) {
         if constexpr (!construct_normalized_request_v<user_type> ||
                       ::dingo::rvalue_request_requires_explicit_conversion_v<
                           user_type>) {
@@ -453,166 +191,13 @@ private:
     }
   }
 
-  // The mixed-source construct decision: a default factory with both a static
-  // and a runtime binding, or any custom factory. The merged binding status
-  // decides whether the exact request, its normalized value, or the factory
-  // answers.
-  template <typename T, typename Request, typename Factory, typename R>
-  R construct_mixed_request(construction_scope scope,
-                            runtime_context_type &context, Factory &factory) {
-    using value_type = typename Request::value_type;
-
-    if constexpr (std::is_same_v<Factory, constructor<normalized_type_t<T>>>) {
-      auto key = detail::no_lookup_key();
-      const auto status = binding_status<T>(key);
-      if (status != detail::binding_status::not_found) {
-        if constexpr (construct_normalized_request_v<T>) {
-          return ::dingo::construct_resolved_request<T>(
-              [&]() {
-                return selection_type::template resolve<
-                    Request, typename Request::lookup_type>(scope, context,
-                                                            *this, key);
-              },
-              [&]() {
-                using normalized_request = request_type<value_type>;
-                return selection_type::template resolve<
-                    normalized_request,
-                    typename normalized_request::lookup_type>(scope, context,
-                                                              *this, key);
-              });
-        } else {
-          return selection_type::template resolve<
-              Request, typename Request::lookup_type>(scope, context, *this,
-                                                      key);
-        }
-      } else if (binding_status<value_type>(key) !=
-                 detail::binding_status::not_found) {
-        if constexpr (construct_normalized_request_v<T>) {
-          using normalized_request = request_type<value_type>;
-          return type_traits<std::decay_t<T>>::make(
-              selection_type::template resolve<
-                  normalized_request, typename normalized_request::lookup_type>(
-                  scope, context, *this, key));
-        } else {
-          return selection_type::template resolve<
-              Request, typename Request::lookup_type>(scope, context, *this,
-                                                      key);
-        }
-      }
-    }
-
-    if constexpr (construct_factory_request_v<T>) {
-      auto type_guard = context.template track_type<value_type>();
-      return factory.template construct<R>(scope, context, *this);
-    } else {
-      return selection_type::template resolve<Request,
-                                              typename Request::lookup_type>(
-          scope, context, *this, detail::no_lookup_key());
-    }
-  }
-
-  // An rvalue request publishes a movable result. A runtime binding wins over
-  // a static one; a static normalized binding that cannot publish the rvalue is
-  // an explicit conversion error rather than a miss.
-  template <typename T, typename Request, typename Factory, typename R>
-  R construct_rvalue_request(Factory &factory) {
-    using interface_type = typename Request::interface_type;
-    using value_type = typename Request::value_type;
-    using no_key = detail::no_lookup_key_t;
-    constexpr bool has_static_normalized_binding =
-        is_static_binding_available_v<value_type, no_key>;
-    const bool has_runtime_no_key =
-        has_runtime_no_key_binding<interface_type, value_type>();
-
-    if constexpr (has_static_construct_v<T>) {
-      if (!has_runtime_no_key) {
-        return construct_static_transaction<Request, R>();
-      }
-    }
-
-    if (has_runtime_no_key) {
-      return construct_runtime_transaction<Request, Factory, R>(factory);
-    }
-
-    if constexpr (has_static_normalized_binding) {
-      ::dingo::throw_missing_rvalue_conversion<T>(true);
-    }
-
-    return construct_runtime_transaction<Request, Factory, R>(factory);
-  }
-
-  template <typename Request, typename R> R construct_static_transaction() {
-    return execute_transaction(
-        runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
-          return construct_static<Request, R>(ephemeral_scope, context);
-        });
-  }
-
-  template <typename Request, typename Factory, typename R>
-  R construct_runtime_transaction(Factory &factory) {
-    return execute_transaction(
-        runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
-          return construct_runtime_request<Request, Factory, R>(
-              ephemeral_scope, context, factory);
-        });
-  }
-
-public:
-  template <bool OwnsRuntimeData = runtime_configuration::owns_runtime_data,
-            std::enable_if_t<OwnsRuntimeData, int> = 0>
-  runtime_container_impl()
-      : runtime_registry_(detail::runtime_data_owner, this) {}
-
-  template <bool OwnsRuntimeData = runtime_configuration::owns_runtime_data,
-            std::enable_if_t<OwnsRuntimeData, int> = 0>
-  explicit runtime_container_impl(allocator_type alloc)
-      : runtime_registry_(detail::runtime_data_owner, this, alloc) {}
-
-  template <bool RuntimeOnly = runtime_only_v,
-            std::enable_if_t<RuntimeOnly, int> = 0>
-  runtime_container_impl(parent_container_type *parent,
-                         const allocator_type &alloc = allocator_type())
-      : runtime_registry_(detail::runtime_data_owner, this, alloc),
-        parent_(parent) {}
-
-  template <typename Parent = ParentContainer,
-            bool OwnsRuntimeData = runtime_configuration::owns_runtime_data,
-            std::enable_if_t<!std::is_void_v<Parent> && OwnsRuntimeData &&
-                                 !runtime_only_v,
-                             int> = 0>
-  explicit runtime_container_impl(Parent *parent,
-                                  allocator_type alloc = allocator_type())
-      : runtime_registry_(detail::runtime_data_owner, this, alloc),
-        parent_(detail::container_implementation_of(parent)) {}
-
-  template <
-      typename Parent = ParentContainer,
-      bool OwnsRuntimeData = runtime_configuration::owns_runtime_data,
-      std::enable_if_t<!std::is_void_v<Parent> && !OwnsRuntimeData, int> = 0>
-  explicit runtime_container_impl(Parent *parent,
-                                  allocator_type alloc = allocator_type())
-      : runtime_registry_(parent, alloc), parent_(parent) {}
-
-  // Compile-time bindings keep their instances inline, resolved instances
-  // reference each other by address, and runtime bindings point back at the
-  // container, so it cannot move. runtime_container moves by owning it through
-  // a handle.
-  runtime_container_impl(const self_type &) = delete;
-  runtime_container_impl(self_type &&) = delete;
-  self_type &operator=(const self_type &) = delete;
-  self_type &operator=(self_type &&) = delete;
-
 private:
   template <typename Request, typename R, typename LookupKey>
-  static constexpr bool is_cacheable() {
+  static constexpr bool cacheable() {
     if constexpr (!detail::cache::supports_v<
                       typename Request::interface_type> ||
                   collection_traits<R>::is_collection) {
       return false;
-    } else if constexpr (has_static_v &&
-                         detail::is_static_lookup_key_definition_v<LookupKey>) {
-      return static_status_v<typename Request::lookup_type, LookupKey> ==
-             detail::binding_status::not_found;
     } else {
       return true;
     }
@@ -632,7 +217,7 @@ private:
   template <typename Request, typename R, typename LookupKey>
   R resolve_entry_direct(LookupKey key) {
     using interface_type = typename Request::interface_type;
-    if constexpr (is_cacheable<Request, R, LookupKey>()) {
+    if constexpr (cacheable<Request, R, LookupKey>()) {
       auto selected = runtime_registry_.template select_binding<
           typename Request::value_type, typename Request::exact_type>(key);
       auto result =
@@ -646,8 +231,6 @@ private:
       }
       return execute_transaction(
           runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
-            // MSVC's pre-C++20 lambda processor does not treat an enclosing
-            // constexpr local as a constant expression, so spell it here.
             return selection_type::template resolve_selected<Request, R>(
                 selected, ephemeral_scope, context, *this, std::move(key));
           });
@@ -667,7 +250,7 @@ private:
   R resolve_entry(LookupKey key) {
     using user_type = typename Request::user_type;
     using policy =
-        detail::resolution_policy<user_type, LookupKey, static_bindings_type,
+        detail::resolution_policy<user_type, LookupKey, static_bindings<>,
                                   detail::resolution_mode::runtime_fallback>;
     if constexpr (!policy::lift_enabled) {
       return resolve_entry_direct<Request, R>(std::move(key));
@@ -711,26 +294,15 @@ public:
     using request = request_type<Request>;
     auto key = detail::make_lookup_key(std::forward<IdType>(id));
     using lookup_key_type = decltype(key);
-    if constexpr (runtime_only_v) {
-      auto status = runtime_registry_.template binding_status<
-          typename request::value_type, typename request::exact_type>(key);
-      if constexpr (parent_serves<typename request::lookup_type,
-                                  lookup_key_type>()) {
-        if (parent_ && status == detail::binding_status::not_found) {
-          return parent_->template binding_status<Request>(key);
-        }
+    auto status = runtime_registry_.template binding_status<
+        typename request::value_type, typename request::exact_type>(key);
+    if constexpr (parent_serves_v<typename request::lookup_type,
+                                  lookup_key_type>) {
+      if (parent_ && status == detail::binding_status::not_found) {
+        return parent_->template binding_status<Request>(key);
       }
-      return status;
-    } else {
-      using interface_type = typename request::interface_type;
-      const auto runtime_status = runtime_registry_.template binding_status<
-          typename request_type<interface_type>::value_type,
-          typename request_type<interface_type>::exact_type>(key);
-      return detail::resolve_binding_status<
-          static_status_v<interface_type, lookup_key_type>>(
-          runtime_status,
-          detail::binding_resolution_policy::ambiguous_on_conflict);
     }
+    return status;
   }
 
 private:
@@ -797,6 +369,24 @@ public:
                                               std::move(key));
   }
 
+public:
+  runtime_container_impl()
+      : runtime_registry_(detail::runtime_data_owner, this) {}
+
+  explicit runtime_container_impl(allocator_type alloc)
+      : runtime_registry_(detail::runtime_data_owner, this, alloc) {}
+
+  explicit runtime_container_impl(
+      parent_container_type *parent,
+      const allocator_type &alloc = allocator_type())
+      : runtime_registry_(detail::runtime_data_owner, this, alloc),
+        parent_(parent) {}
+
+  runtime_container_impl(const self_type &) = delete;
+  runtime_container_impl(self_type &&) = delete;
+  self_type &operator=(const self_type &) = delete;
+  self_type &operator=(self_type &&) = delete;
+
 private:
   friend class detail::runtime_registration<self_type>;
 
@@ -805,6 +395,8 @@ private:
   runtime_registry_type runtime_registry_;
   parent_container_type *parent_ = nullptr;
 };
+
+} // namespace detail
 
 template <typename... Params>
 class container : public detail::container_base_t<Params...> {

@@ -8,10 +8,9 @@
 #pragma once
 
 // The construct rule over a static source: the exact binding, the normalized
-// binding wrapped into the request, or the caller's factory. The runtime and
-// mixed containers enter it only after their runtime-binding checks; the
-// static container enters it for every default-factory construction. Keeping
-// the choice here makes the static-binding half of `construct` one rule.
+// binding wrapped into the request, or the caller's factory. Only the static
+// container enters it. Keeping the choice here makes the static-binding half of
+// `construct` one rule.
 
 #include <dingo/base/config.h>
 #include <dingo/base/construction_scope.h>

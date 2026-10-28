@@ -62,8 +62,6 @@ struct size_multi_implementation : size_interface, size_second_interface {};
 
 struct size_dependency {};
 
-size_dependency make_size_dependency() { return {}; }
-
 using size_registry_type = typename container<>::registry_type;
 
 using size_service_proxy =
@@ -119,8 +117,7 @@ using size_instance_container =
                      container<>, container<>, false>;
 using size_binding_state =
     detail::runtime_binding_state_t<size_registry_type, size_instance_container,
-                                    size_storage,
-                                    typename size_model::bindings_type>;
+                                    size_storage>;
 using size_binding = size_probe_registry::binding<size_interface, size_storage,
                                                   size_binding_state, none_t>;
 using size_keyed_binding =
@@ -146,9 +143,9 @@ using size_multi_interface_cache_types =
                                           size_multi_interface_storage>;
 using size_multi_interface_conversion_cache =
     conversion_cache<size_multi_interface_cache_types>;
-using size_multi_interface_state = detail::runtime_binding_state_t<
-    size_registry_type, size_instance_container, size_multi_interface_storage,
-    typename size_multi_interface_model::bindings_type>;
+using size_multi_interface_state =
+    detail::runtime_binding_state_t<size_registry_type, size_instance_container,
+                                    size_multi_interface_storage>;
 using size_multi_interface_pointer_state_owner = size_probe_registry::owner<
     typename size_multi_interface_model::interface_types,
     size_multi_interface_storage, size_multi_interface_state *, none_t>;
@@ -188,19 +185,12 @@ using size_lookup_index =
                          size_type_map_value,
                          typename size_registry_type::allocator_type>;
 
-using size_local_binding = bind<scope<shared>, storage<size_dependency>,
-                                factory<function<make_size_dependency>>>;
-using size_local_registration =
-    type_registration<scope<shared>, storage<size_service>,
-                      bindings<size_local_binding>>;
-using size_local_model = detail::binding_model<size_local_registration>;
 template <typename Registration,
           typename RegistrationParent =
               typename size_registry_type::parent_container_type>
 using size_runtime_state_for = detail::runtime_binding_state_t<
     size_registry_type, size_instance_container,
     typename detail::binding_model<Registration>::storage_type,
-    typename detail::binding_model<Registration>::bindings_type,
     RegistrationParent>;
 
 using size_unique_state = size_runtime_state_for<
@@ -214,7 +204,6 @@ using size_shared_ptr_state = size_runtime_state_for<type_registration<
     scope<shared>, storage<std::shared_ptr<size_implementation>>>>;
 using size_shared_cyclical_state = size_runtime_state_for<type_registration<
     scope<shared_cyclical>, storage<std::shared_ptr<size_implementation>>>>;
-using size_local_state = size_runtime_state_for<size_local_registration>;
 
 template <typename T>
 void expect_size_at_most(const char *name, std::size_t expected) {
@@ -259,8 +248,6 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
         "shared_ptr runtime binding state", 56);
     expect_size_at_most<size_shared_cyclical_state>(
         "shared_cyclical runtime binding state", 56);
-    expect_size_at_most<size_local_state>(
-        "local-bindings runtime binding state", 48);
     expect_size_at_most<size_multi_interface_state>(
         "multi-interface runtime binding state", 56);
     expect_size_at_most<size_multi_interface_conversion_cache>(

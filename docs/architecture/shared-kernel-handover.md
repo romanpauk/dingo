@@ -1,5 +1,8 @@
 # Shared-Kernel Handover
 
+> Mixed containers and registration-local static bindings were removed on
+> 2026-10-28. The mixed measurements and plans below are historical.
+
 Status: `feature/shared-kernel`. The working plan stays untracked in
 `docs/architecture/shared-kernel-next-steps.md`.
 

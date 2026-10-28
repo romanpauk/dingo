@@ -21,7 +21,7 @@ CASES = {
 
 def test_collection_shards_are_hierarchical() -> None:
     shards = build_shards()
-    assert {shard.mode for shard in shards} == {"static", "mixed"}
+    assert {shard.mode for shard in shards} == {"static"}
     for shard in shards:
         assert shard.path == f"resolution/{shard.mode}/global/collection.cpp"
         assert {case.name for case in shard.cases} == CASES
@@ -32,10 +32,7 @@ def test_collection_shards_are_hierarchical() -> None:
             assert f'RecordProperty("path", "{shard.case_path}/{case.name}")' in content
 
 
-def test_mixed_shards_register_at_runtime() -> None:
+def test_static_shards_have_no_runtime_setup() -> None:
     for shard in build_shards():
         for case in shard.cases:
-            if shard.mode == "mixed":
-                assert "container.register_type<" in case.setup
-            else:
-                assert not case.setup
+            assert not case.setup

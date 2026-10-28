@@ -513,19 +513,6 @@ using registration_key_t =
                        typename ParsedArgs::key_type,
                        registration_selected_key_t<ParsedArgs>>;
 
-template <typename Bindings> struct is_empty_bindings : std::false_type {};
-
-template <> struct is_empty_bindings<::dingo::bindings<>> : std::true_type {};
-
-template <>
-struct is_empty_bindings<::dingo::bindings<static_bindings<>>>
-    : std::true_type {};
-
-template <typename Bindings>
-using canonical_bindings_t =
-    std::conditional_t<is_empty_bindings<Bindings>::value,
-                       ::dingo::bindings<void>, Bindings>;
-
 } // namespace detail
 
 // TODO:
@@ -570,8 +557,18 @@ public:
                 "failed to deduce a conversions type");
 
   using dependencies_type = detail::registration_dependencies_t<parsed_args>;
-  using bindings_type =
-      detail::canonical_bindings_t<typename parsed_args::bindings_type>;
+
+  // Registration-local bindings are a static source inside a runtime
+  // registration, which is the mixed mode. Use static_container for a
+  // compile-time graph or register the dependencies at runtime.
+  static constexpr bool has_local_bindings =
+      !std::is_same_v<typename parsed_args::bindings_type, bindings<void>> &&
+      !std::is_same_v<typename parsed_args::bindings_type, bindings<>>;
+  static_assert(!has_local_bindings,
+                "registration-local bindings are not supported; use "
+                "static_container for a compile-time graph or runtime "
+                "registration for an open one");
+  using bindings_type = void;
 };
 
 } // namespace dingo

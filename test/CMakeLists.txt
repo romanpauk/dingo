@@ -6,8 +6,6 @@ uv_get_run_command(DINGO_UV_RUN_COMMAND
 
 set(DINGO_MODEL_GENERATOR
     "spec.gen.classification.storage")
-set(DINGO_SELECTION_MODEL_GENERATOR
-    "spec.gen.classification.selection")
 set(DINGO_ROUTE_MODEL_GENERATOR
     "spec.gen.resolution.route")
 set(DINGO_BEHAVIOR_MODEL_GENERATOR
@@ -46,8 +44,6 @@ set(DINGO_PRODUCER_MODEL_GENERATOR
     "spec.gen.resolution.producer")
 set(DINGO_CONFIGURATION_MODEL_GENERATOR
     "spec.gen.resolution.configuration")
-set(DINGO_MIXED_MODEL_GENERATOR
-    "spec.gen.resolution.mixed")
 set(DINGO_CYCLICAL_MODEL_GENERATOR
     "spec.gen.resolution.cyclical")
 set(DINGO_LOOKUP_MODEL_GENERATOR
@@ -98,8 +94,6 @@ set(DINGO_PRODUCER_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/producer_cases.cpp.j2")
 set(DINGO_CONFIGURATION_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/configuration_cases.cpp.j2")
-set(DINGO_MIXED_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/mixed_cases.cpp.j2")
 set(DINGO_CYCLICAL_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/cyclical_cases.cpp.j2")
 set(DINGO_LOOKUP_MODEL_TEMPLATE
@@ -130,12 +124,8 @@ set(DINGO_RESOLVE_MANIFEST
     "${DINGO_RESOLVE_DIR}/resolve-manifest.json")
 set(DINGO_SCOPES_HEADER
     "${PROJECT_SOURCE_DIR}/include/dingo/storage/scopes.gen.h")
-set(DINGO_SELECTION_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/selection_rules.cpp.j2")
 set(DINGO_STORAGE_MANIFEST
     "${DINGO_CLASSIFICATION_DIR}/storage-manifest.json")
-set(DINGO_SELECTION_MANIFEST
-    "${DINGO_CLASSIFICATION_DIR}/selection-manifest.json")
 set(DINGO_ROUTE_MANIFEST
     "${DINGO_CLASSIFICATION_DIR}/route-manifest.json")
 set(DINGO_INTERFACE_MODEL_TEST_SOURCE
@@ -222,7 +212,6 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/spec/tests/route_derivation_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/route_ledger_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/route_rules_test.py"
-    "${PROJECT_SOURCE_DIR}/spec/tests/selection_rules_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/storage_facts_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/type_behavior_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/type_table_test.py"
@@ -237,7 +226,6 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/spec/tests/wrapper_semantics_test.py"
     "${DINGO_MODEL_TEMPLATE}"
     "${DINGO_SCOPES_TEMPLATE}"
-    "${DINGO_SELECTION_MODEL_TEMPLATE}"
     "${DINGO_ROUTE_MODEL_TEMPLATE}"
     "${DINGO_BEHAVIOR_MODEL_TEMPLATE}"
     "${DINGO_INTERFACE_MODEL_TEMPLATE}"
@@ -252,7 +240,6 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_INVOKE_MODEL_TEMPLATE}"
     "${DINGO_PRODUCER_MODEL_TEMPLATE}"
     "${DINGO_CONFIGURATION_MODEL_TEMPLATE}"
-    "${DINGO_MIXED_MODEL_TEMPLATE}"
     "${DINGO_CYCLICAL_MODEL_TEMPLATE}"
     "${DINGO_LOOKUP_MODEL_TEMPLATE}"
     "${DINGO_DEPENDENCIES_MODEL_TEMPLATE}"
@@ -263,7 +250,6 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/spec/tests/dependency_cases_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/lookup_cases_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/cyclical_cases_test.py"
-    "${PROJECT_SOURCE_DIR}/spec/tests/mixed_cases_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/configuration_cases_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/producer_cases_test.py"
     "${DINGO_CONSUMER_MODEL_TEMPLATE}"
@@ -288,19 +274,6 @@ if(NOT DINGO_MODEL_GENERATOR_RESULT EQUAL 0)
     message(FATAL_ERROR
         "Failed to generate storage coverage: "
         "${DINGO_MODEL_GENERATOR_RESULT}")
-endif()
-execute_process(
-    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
-        ${DINGO_SELECTION_MODEL_GENERATOR}
-        --out-dir ${DINGO_CLASSIFICATION_DIR}
-        --manifest ${DINGO_SELECTION_MANIFEST}
-        --include ${PROJECT_SOURCE_DIR}/include
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-    RESULT_VARIABLE DINGO_SELECTION_MODEL_GENERATOR_RESULT)
-if(NOT DINGO_SELECTION_MODEL_GENERATOR_RESULT EQUAL 0)
-    message(FATAL_ERROR
-        "Failed to generate selection-rule coverage: "
-        "${DINGO_SELECTION_MODEL_GENERATOR_RESULT}")
 endif()
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
@@ -482,21 +455,6 @@ file(GLOB_RECURSE DINGO_CONFIGURATION_SOURCES CONFIGURE_DEPENDS
 
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
-        ${DINGO_MIXED_MODEL_GENERATOR}
-        --out-dir ${DINGO_RESOLVE_DIR}
-        --include ${PROJECT_SOURCE_DIR}/include
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-    RESULT_VARIABLE DINGO_MIXED_MODEL_GENERATOR_RESULT)
-if(NOT DINGO_MIXED_MODEL_GENERATOR_RESULT EQUAL 0)
-    message(FATAL_ERROR
-        "Failed to generate mixed co-residence probes: "
-        "${DINGO_MIXED_MODEL_GENERATOR_RESULT}")
-endif()
-file(GLOB_RECURSE DINGO_MIXED_SOURCES CONFIGURE_DEPENDS
-    "${DINGO_RESOLVE_DIR}/resolution/mixed/global/*.cpp")
-
-execute_process(
-    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_CYCLICAL_MODEL_GENERATOR}
         --out-dir ${DINGO_RESOLVE_DIR}
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
@@ -508,7 +466,7 @@ if(NOT DINGO_CYCLICAL_MODEL_GENERATOR_RESULT EQUAL 0)
 endif()
 file(GLOB_RECURSE DINGO_CYCLICAL_SOURCES CONFIGURE_DEPENDS
     "${DINGO_RESOLVE_DIR}/resolution/runtime/global/cyclical.cpp"
-    "${DINGO_RESOLVE_DIR}/resolution/mixed/global/cyclical.cpp")
+)
 file(GLOB_RECURSE DINGO_STATIC_CYCLICAL_SOURCES CONFIGURE_DEPENDS
     "${DINGO_RESOLVE_DIR}/resolution/static/global/cyclical.cpp")
 
@@ -581,9 +539,6 @@ if(NOT DINGO_COLLECTION_MODEL_GENERATOR_RESULT EQUAL 0)
 endif()
 file(GLOB_RECURSE DINGO_COLLECTION_SOURCES CONFIGURE_DEPENDS
     "${DINGO_RESOLVE_DIR}/resolution/static/global/collection.cpp")
-file(GLOB_RECURSE DINGO_MIXED_COLLECTION_SOURCES CONFIGURE_DEPENDS
-    "${DINGO_RESOLVE_DIR}/resolution/mixed/global/collection.cpp")
-
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         ${DINGO_INDEXED_MODEL_GENERATOR}
@@ -718,8 +673,7 @@ file(GLOB_RECURSE DINGO_ROUTE_SOURCES CONFIGURE_DEPENDS
 file(GLOB_RECURSE DINGO_CLASSIFICATION_SOURCES CONFIGURE_DEPENDS
     "${DINGO_CLASSIFICATION_DIR}/classification/constructor/*/*/*.cpp"
     "${DINGO_CLASSIFICATION_DIR}/classification/*/*/storage.cpp"
-    "${DINGO_CLASSIFICATION_DIR}/classification/global/wrapper/*.cpp"
-    "${DINGO_CLASSIFICATION_DIR}/classification/global/selection/*.cpp")
+    "${DINGO_CLASSIFICATION_DIR}/classification/global/wrapper/*.cpp")
 
 add_custom_target(generated-check
     COMMENT "Verifying generated coverage"
@@ -728,12 +682,6 @@ add_custom_target(generated-check
         --out-dir ${DINGO_CLASSIFICATION_DIR}
         --manifest ${DINGO_STORAGE_MANIFEST}
         --header ${DINGO_SCOPES_HEADER}
-        --include ${PROJECT_SOURCE_DIR}/include
-        --check
-    COMMAND ${DINGO_UV_RUN_COMMAND} python -m
-        ${DINGO_SELECTION_MODEL_GENERATOR}
-        --out-dir ${DINGO_CLASSIFICATION_DIR}
-        --manifest ${DINGO_SELECTION_MANIFEST}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
@@ -852,13 +800,11 @@ add_test(NAME dingo_model_test COMMAND dingo_model_test)
 set_tests_properties(dingo_model_test PROPERTIES LABELS "unit;generator")
 
 add_executable(dingo_resolution_runtime_test
-    ${DINGO_MIXED_COLLECTION_SOURCES}
     ${DINGO_RUNTIME_REQUEST_SOURCES}
     ${DINGO_CONSTRUCT_SOURCES}
     ${DINGO_INVOKE_SHAPE_SOURCES}
     ${DINGO_PRODUCER_SOURCES}
     ${DINGO_CONFIGURATION_SOURCES}
-    ${DINGO_MIXED_SOURCES}
     ${DINGO_CYCLICAL_SOURCES}
     ${DINGO_LOOKUP_SOURCES}
     ${DINGO_DEPENDENCIES_SOURCES}

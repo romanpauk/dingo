@@ -53,12 +53,8 @@ struct resolution_policy_static_probe {
 };
 
 template <typename Bindings, typename T, typename LookupKey>
-struct resolution_policy_static_probe<Bindings, T, LookupKey, true> {
-  static constexpr bool present =
-      static_request_present_v<Bindings, std::remove_cv_t<T>, LookupKey>;
-  static constexpr bool served =
-      static_request_served_v<Bindings, std::remove_cv_t<T>, LookupKey>;
-};
+struct resolution_policy_static_probe<Bindings, T, LookupKey, true>
+    : static_request_state<Bindings, T, LookupKey> {};
 
 // One resolution policy for every entry point. It owns the static route probe,
 // the liftability check, and the direct/lift precedence; the entry point only

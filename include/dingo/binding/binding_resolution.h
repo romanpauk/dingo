@@ -11,6 +11,7 @@
 #include <dingo/base/type_descriptor.h>
 #include <dingo/base/type_list.h>
 #include <dingo/binding/binding_selection.h>
+#include <dingo/binding/routes.h>
 #include <dingo/binding/runtime_binding_interface.h>
 #include <dingo/context/context_base.h>
 #include <dingo/resolution/conversion_cache.h>
@@ -57,56 +58,39 @@ using binding_conversion_cache_types_t = resolution_cache_types_t<
     typename binding_resolutions<Interface, Storage>::type,
     storage_shape_t<Storage>>;
 
-template <typename Types>
-inline constexpr bool has_binding_conversion_cache_types_v =
-    type_list_size_v<Types> != 0;
-
 template <typename Storage>
 constexpr type_descriptor binding_registered_type() {
   return describe_type<typename Storage::type>();
 }
 
-template <bool Enabled, typename ConversionTypes>
-struct binding_conversion_cache_base;
-
+// One conversion-cache slot for both binding backends. An empty type list
+// disables the cache: the slot then constructs in the context. The cache itself
+// is an empty base when disabled, so a cacheless binding does not grow.
 template <typename ConversionTypes>
-struct binding_conversion_cache_base<true, ConversionTypes> {
+struct conversion_cache_slot : private conversion_cache<ConversionTypes> {
   template <typename T, typename Context, typename... Args>
   T &construct_conversion(construction_scope scope, Context &context,
                           Args &&...args) {
-    return conversions_.template construct<T>(scope, context,
-                                              std::forward<Args>(args)...);
-  }
-
-  template <typename T, typename Owner, typename Context, typename... Args>
-  T &construct_conversion_with(Owner &owner, construction_scope,
-                               Context &context, Args &&...args) {
-    (void)owner;
-    return conversions_.template construct_tracked<T>(
-        context, std::forward<Args>(args)...);
-  }
-
-  void reset_conversions() { conversions_.reset(); }
-
-protected:
-  conversion_cache<ConversionTypes> conversions_;
-};
-
-template <typename ConversionTypes>
-struct binding_conversion_cache_base<false, ConversionTypes> {
-  template <typename T, typename Context, typename... Args>
-  T &construct_conversion(construction_scope scope, Context &context,
-                          Args &&...args) {
-    return context.template construct<T>(scope, std::forward<Args>(args)...);
+    if constexpr (type_list_size_v<ConversionTypes> != 0) {
+      return this->template construct<T>(scope, context,
+                                         std::forward<Args>(args)...);
+    } else {
+      return context.template construct<T>(scope, std::forward<Args>(args)...);
+    }
   }
 
   template <typename T, typename Owner, typename Context, typename... Args>
   T &construct_conversion_with(Owner &, construction_scope scope,
                                Context &context, Args &&...args) {
-    return construct_conversion<T>(scope, context, std::forward<Args>(args)...);
+    if constexpr (type_list_size_v<ConversionTypes> != 0) {
+      return this->template construct_tracked<T>(context,
+                                                 std::forward<Args>(args)...);
+    } else {
+      return context.template construct<T>(scope, std::forward<Args>(args)...);
+    }
   }
 
-  void reset_conversions() {}
+  void reset_conversions() { this->reset(); }
 };
 
 // One storage owner for both binding backends. Static slots default-construct
@@ -128,13 +112,6 @@ public:
 private:
   Storage storage_;
 };
-
-// One conversion-cache slot for both binding backends. A cached slot constructs
-// with the owner that tracks the lifetime; a non-cached slot constructs in the
-// context. The two callers differ only in the owner they pass.
-template <bool Enabled, typename ConversionTypes>
-using binding_cache_slot =
-    binding_conversion_cache_base<Enabled, ConversionTypes>;
 
 template <typename Context> struct retained_frame_scope {
   explicit retained_frame_scope(Context &context) : context_(context) {
@@ -184,24 +161,6 @@ template <typename T> T convert_resolved_binding(void *ptr) {
 }
 
 template <typename T, typename Instance, typename Fn>
-decltype(auto) forward_resolved_binding(Instance &&instance, Fn &&fn) {
-  if constexpr (std::is_lvalue_reference_v<T> || std::is_pointer_v<T>) {
-    return std::forward<Fn>(fn)(instance);
-  } else if constexpr (std::is_rvalue_reference_v<T>) {
-    return std::forward<Fn>(fn)(
-        static_cast<std::remove_reference_t<Instance> &&>(instance));
-  } else {
-    return std::forward<Fn>(fn)(std::forward<Instance>(instance));
-  }
-}
-
-// The request a static request resolves: the annotation of an annotated or
-// selected request does not take part in the resolution.
-template <typename Request>
-using unwrapped_static_request_t = typename annotated_traits<std::conditional_t<
-    is_selected_v<Request>, selected_type_t<Request>, Request>>::type;
-
-template <typename T, typename Instance, typename Fn>
 decltype(auto) consume_resolved_binding(Instance &&instance, Fn &&fn) {
   if constexpr (std::is_lvalue_reference_v<unwrapped_static_request_t<T>> &&
                 std::is_pointer_v<std::remove_reference_t<Instance>>) {
@@ -213,29 +172,6 @@ decltype(auto) consume_resolved_binding(Instance &&instance, Fn &&fn) {
     return std::forward<Fn>(fn)(instance);
   } else {
     return std::forward<Fn>(fn)(std::forward<Instance>(instance));
-  }
-}
-
-template <typename Resolution>
-constexpr bool matches_resolution_request(type_descriptor requested_type) {
-  if (matches_qualification_conversion(
-          describe_type<typename Resolution::target_type>(), requested_type)) {
-    return true;
-  }
-  // An object route serves the reference form and the copy of its object as
-  // well.
-  if constexpr (Resolution::serves_reference) {
-    if (matches_qualification_conversion(
-            describe_type<resolution_reference_target_t<Resolution>>(),
-            requested_type)) {
-      return true;
-    }
-  }
-  if constexpr (Resolution::serves_value) {
-    return matches_qualification_conversion(
-        describe_type<resolution_value_target_t<Resolution>>(), requested_type);
-  } else {
-    return false;
   }
 }
 
@@ -494,59 +430,6 @@ DINGO_ALWAYS_INLINE resolved_address resolve_candidate(
   assert(matched);
   return result;
 }
-
-// The typed execution layer after selection: materialize the source, apply the
-// selected resolution, retain conversions, and produce an address or value.
-// Selection, storage ownership, and dispatch stay in the policy base.
-template <typename Policy> class static_binding_core : public Policy {
-public:
-  using storage_type = typename Policy::storage_type;
-
-  explicit static_binding_core(Policy policy) : Policy(std::move(policy)) {}
-
-  template <typename Request, typename Resolution, typename Context>
-  void *resolve_address(Context &context) {
-    using operation = typename Resolution::operation;
-    auto activation = this->activation();
-    auto &storage = this->slot().storage();
-    auto materialize = [&](auto &&source) -> void * {
-      return resolve_address_from_source<Resolution, storage_type>(
-                 this->scope, activation, context,
-                 std::forward<decltype(source)>(source),
-                 describe_type<Request>(), this->registered_type())
-          .address;
-    };
-    return this->template with_source<operation, Request>(
-        this->scope, context, storage, activation, std::move(materialize));
-  }
-
-  template <typename Request, typename Resolution, typename Context,
-            typename Fn>
-  decltype(auto) consume_request(Context &context, Fn &&fn) {
-    using operation = typename Resolution::operation;
-    auto activation = this->activation();
-    auto &storage = this->slot().storage();
-    auto consume = [&](auto &&source) -> decltype(auto) {
-      return apply_consumed_resolution<Request, Resolution, storage_type>(
-          activation, context, std::forward<decltype(source)>(source),
-          std::forward<Fn>(fn));
-    };
-    return this->template with_source<operation, Request>(
-        this->scope, context, storage, activation, std::move(consume));
-  }
-
-  template <typename T, typename Context>
-  decltype(auto) resolve_value(Context &context) {
-    auto activation = this->activation();
-    auto &storage = this->slot().storage();
-    auto resolve = [&](auto &&source) -> decltype(auto) {
-      return resolve_binding_value<T>(activation, context,
-                                      std::forward<decltype(source)>(source));
-    };
-    return this->with_value_source(this->scope, context, storage, activation,
-                                   std::move(resolve));
-  }
-};
 
 } // namespace detail
 

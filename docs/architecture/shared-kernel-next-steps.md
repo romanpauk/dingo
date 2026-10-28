@@ -1,5 +1,8 @@
 # Shared-Kernel Next Steps
 
+> Mixed containers and registration-local static bindings were removed on
+> 2026-10-28. Mixed plans and measurements below are historical.
+
 Status: working notes, deliberately untracked. `feature/shared-kernel` tip is
 `c66fde5`.
 

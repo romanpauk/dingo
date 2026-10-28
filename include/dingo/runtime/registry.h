@@ -13,7 +13,6 @@
 #include <dingo/base/type_list.h>
 #include <dingo/binding/binding_collection.h>
 #include <dingo/binding/binding_model.h>
-#include <dingo/binding/binding_resolution_policy.h>
 #include <dingo/binding/binding_selection.h>
 #include <dingo/factory/callable.h>
 #include <dingo/lookup/lookup.h>
@@ -56,27 +55,14 @@ namespace detail {
 
 template <typename Derived> class runtime_registration;
 
-template <typename StaticRegistry, typename ParentContainer,
-          typename RuntimeConfig>
+template <typename ParentContainer, typename ContainerTraits,
+          typename Allocator>
 class runtime_container_impl;
 
 template <typename Self> class container_selection;
 
 struct runtime_data_owner_t {};
 inline constexpr runtime_data_owner_t runtime_data_owner{};
-
-template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
-          typename ResolveRoot, bool OwnsRuntimeData,
-          bool MergeParentCollections = false>
-struct static_container_runtime_config {
-  using container_traits_type = ContainerTraits;
-  using allocator_type = Allocator;
-  using parent_registry_type = ParentRegistry;
-  using resolve_root_type = ResolveRoot;
-
-  static constexpr bool owns_runtime_data = OwnsRuntimeData;
-  static constexpr bool merge_parent_collections = MergeParentCollections;
-};
 
 template <typename BindingsState> struct runtime_scope_state {
   template <typename Allocator>
@@ -294,22 +280,16 @@ protected:
                          runtime_context_type &context, Fn &&fn,
                          LookupKey key) {
     using collection_type = collection_traits<T>;
-    using resolve_type = typename collection_type::resolve_type;
 
     static_assert(collection_type::is_collection,
                   "missing collection_traits specialization for type T");
 
-    T results;
-    const std::size_t total = this->template count<T>(state, key);
-    if (total == 0 &&
-        !(this->template has_explicit_collection_lookup<T>(key))) {
-      throw detail::make_collection_type_not_found_exception<T, resolve_type>();
-    }
-
-    collection_type::reserve(results, total);
-    collect(state, results, scope, context, std::forward<Fn>(fn),
-            std::move(key));
-    return results;
+    return detail::construct_binding_collection<T>(
+        this->template count<T>(state, key),
+        this->template has_explicit_collection_lookup<T>(key), [&](T &results) {
+          collect(state, results, scope, context, std::forward<Fn>(fn),
+                  std::move(key));
+        });
   }
 
   template <typename Request, typename Result = Request>
@@ -415,17 +395,9 @@ class DINGO_EMPTY_BASES runtime_registry
   using typename store_type::runtime_selection;
   using typename store_type::runtime_transaction_type;
   template <typename Parent>
-  using registration_runtime_config = detail::static_container_runtime_config<
-      ContainerTraits, Allocator, Parent, resolve_root_type, false, true>;
-  template <typename Parent>
   using runtime_registration_container_type =
       runtime_registry<ContainerTraits, Allocator, Parent, resolve_root_type,
                        false>;
-  template <typename Bindings, typename Parent>
-  using registration_container_type = std::conditional_t<
-      std::is_void_v<Bindings>, runtime_registration_container_type<Parent>,
-      detail::runtime_container_impl<Bindings, Parent,
-                                     registration_runtime_config<Parent>>>;
 
 public:
   using container_traits_type = ContainerTraits;
@@ -773,9 +745,7 @@ private:
         "dingo::key_type<T, V> registration keys require a static fixed "
         "runtime-key request");
     using binding_model = detail::binding_model<registration>;
-    using bindings_type = typename binding_model::bindings_type;
-    using instance_container_type =
-        registration_container_type<bindings_type, Parent>;
+    using instance_container_type = runtime_registration_container_type<Parent>;
     (void)std::addressof(arg);
     using interface_types = typename binding_model::interface_types;
     static constexpr bool storage_tag_is_complete =
@@ -790,10 +760,8 @@ private:
 
       registration_requirements::assert_valid();
 
-      using runtime_binding_state_type =
-          detail::runtime_binding_state_t<registry_type,
-                                          instance_container_type, storage_type,
-                                          bindings_type, Parent>;
+      using runtime_binding_state_type = detail::runtime_binding_state_t<
+          registry_type, instance_container_type, storage_type, Parent>;
 
       if constexpr (registration_requirements::valid &&
                     type_list_size_v<interface_types> == 1) {

@@ -14,7 +14,7 @@
 #include <dingo/base/type_list.h>
 #include <dingo/binding/binding_model.h>
 #include <dingo/binding/binding_resolution.h>
-#include <dingo/resolution/cache.h>
+#include <dingo/binding/routes.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/rebind_type.h>
 
@@ -81,20 +81,6 @@ inline constexpr bool binding_has_cacheless_conversion_shape_v = [] {
                         type_list<runtime_type *>>;
 }();
 
-template <typename BindingModel>
-inline constexpr bool binding_uses_default_conversions_v = std::is_same_v<
-    typename BindingModel::conversions_type,
-    detail::conversions<typename BindingModel::storage_tag,
-                        typename BindingModel::registered_storage_type,
-                        runtime_type>>;
-
-template <typename Request, typename BindingModel>
-inline constexpr bool binding_has_cacheless_default_leaf_v =
-    binding_uses_default_conversions_v<BindingModel> &&
-    BindingModel::conversions_type::is_stable &&
-    std::is_same_v<std::remove_cv_t<Request>,
-                   std::remove_cv_t<typename BindingModel::stored_leaf_type>>;
-
 template <typename BindingModel, typename... Interfaces>
 struct binding_cache_types<BindingModel, type_list<Interfaces...>>
     // Exact stored requests and stable default leaf requests cannot retain an
@@ -106,7 +92,7 @@ struct binding_cache_types<BindingModel, type_list<Interfaces...>>
                 typename annotated_traits<Interfaces>::type,
                 typename BindingModel::storage_type> &&
             ...)) ||
-              (binding_has_cacheless_default_leaf_v<
+              (binding_is_default_leaf_v<
                    typename annotated_traits<Interfaces>::type, BindingModel> &&
                ...),
           Interfaces...> {};
@@ -116,41 +102,12 @@ using binding_cache_types_t =
     typename binding_cache_types<BindingModel,
                                  typename BindingModel::interface_types>::type;
 
-// The cache types are only enumerated for stable conversions; naming them in
-// the primary template would instantiate them for every binding.
-template <typename BindingModel,
-          bool Stable =
-              cache::is_stable_storage_v<typename BindingModel::storage_type>>
-inline constexpr bool has_binding_conversion_cache_v = false;
-
-template <typename BindingModel>
-inline constexpr bool has_binding_conversion_cache_v<BindingModel, true> =
-    type_list_size_v<binding_cache_types_t<BindingModel>> != 0;
-
-template <typename Registration, bool Enabled = has_binding_conversion_cache_v<
-                                     detail::binding_model<Registration>>>
-struct binding_conversion_cache_slot;
-
-template <typename Registration, bool Enabled> struct registration_cache_types {
-  using binding_model = detail::binding_model<Registration>;
-  using type = binding_cache_types_t<binding_model>;
-};
-
 template <typename Registration>
-struct registration_cache_types<Registration, false> {
-  using type = type_list<>;
-};
-
-template <typename Registration, bool Enabled>
-using registration_conversion_cache_base = binding_cache_slot<
-    Enabled, typename registration_cache_types<Registration, Enabled>::type>;
-
-template <typename Registration, bool Enabled>
 struct binding_conversion_cache_slot
-    : registration_conversion_cache_base<Registration, Enabled> {
-  using binding_model = detail::binding_model<Registration>;
-  using conversions_type = typename binding_model::storage_type::conversions;
-  using base_type = registration_conversion_cache_base<Registration, Enabled>;
+    : conversion_cache_slot<
+          binding_cache_types_t<detail::binding_model<Registration>>> {
+  using base_type = conversion_cache_slot<
+      binding_cache_types_t<detail::binding_model<Registration>>>;
 
   using base_type::construct_conversion;
 };

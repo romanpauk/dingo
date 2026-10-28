@@ -16,10 +16,9 @@ assembly | element bindings | | `construct_collection` | an unregistered
 collection | collection construction and insertion policy | element
 `construct`/`resolve` | | `nested_container` | parent/child containers |
 container hierarchy and scope boundaries | `resolve` in each container | |
-`mixed` | static + runtime registrations | mixed registration placement |
-`resolve` and `register` | | `shared_cyclical` | a storage graph | cycle edges
-and node materialization | `resolve` at graph nodes | | `dependency_composition`
-| a recursive type composition | type-level composition and projection |
+`shared_cyclical` | a storage graph | cycle edges and node materialization |
+`resolve` at graph nodes | | `dependency_composition` | a recursive type
+composition | type-level composition and projection |
 `construct`/`invoke`/`resolve` |
 
 Construct and invoke are **not** alternative coverage for resolve. They are
@@ -43,7 +42,7 @@ That is the table's over-approximation. Factor into:
      detected/typedef/selected/annotated);
    - invoke: callable shape (signature, return, overload selection);
    - collection: collection type, key/index mode, element binding;
-   - nested/mixed/cyclical: composition shape.
+   - nested/cyclical: composition shape.
 3. **Dependency categories** — value, lvalue reference, const lvalue reference,
    rvalue reference, pointer, const pointer, selected, annotated,
    optional/handle.
@@ -183,10 +182,10 @@ request `R`. It has two halves that fail differently:
 - **delivery** — a value conversion copies or moves, which is countable.
 
 `resolution/runtime/global/conversion/<case>` owns the rejecting direction, the
-volatile axis, nested pointers, the copy counts, and the claim that all four
-front-ends agree (`runtime_container<>`, `container<>`, the mixed static
-container, and `static_container`). The add-qualifier direction is already in
-the row probes, which request `T &`, `const T &`, `T *`, and `const T *`.
+volatile axis, nested pointers, the copy counts, and the claim that all three
+front-ends agree (`runtime_container<>`, `container<>`, and `static_container`).
+The add-qualifier direction is already in the row probes, which request `T &`,
+`const T &`, `T *`, and `const T *`.
 
 Rejected conversions throw `type_not_convertible_exception`; they cannot be row
 requests because the row space only contains shapes the model believes are
@@ -221,14 +220,10 @@ default constructor instead.
 ## Collections
 
 A collection is several bindings assembled into one value, so the mechanism has
-three degrees of freedom: registration mode (static, or static plus runtime
-merged), keyed or unkeyed, and collection shape (vector, or a map built with an
-insert policy). `resolution/<mode>/global/collection.cpp` covers all of them in
-five cases per mode. Element storage and request form are row probes, not
-dimensions here.
-
-The mixed cases are the interesting ones: one element is registered statically
-and one at runtime, and the assembled collection must contain both.
+three degrees of freedom: registration mode (runtime or static), keyed or
+unkeyed, and collection shape (vector, or a map built with an insert policy).
+`resolution/<mode>/global/collection.cpp` covers all of them in five cases per
+mode. Element storage and request form are row probes, not dimensions here.
 
 ## Declared dependency order
 
@@ -241,12 +236,10 @@ and `constructor<T(args...)>` is the escape hatch.
 
 ## Lookup scope
 
-Local bindings and nested containers are the same rule set — where a binding is
-found — so they share one family at `resolution/runtime/global/lookup/<case>`
-with five cases: a local binding is visible to its registration; it shadows a
-root binding of the same type; a child inherits an unshadowed parent binding; a
-child shadows a parent binding without changing the parent; a grandchild
-inherits through the chain.
+Nested containers share one rule set — where a binding is found — so they share
+one family at `resolution/runtime/global/lookup/<case>` with three cases: a
+child inherits an unshadowed parent binding; a child shadows a parent binding
+without changing the parent; a grandchild inherits through the chain.
 
 ## Configurations
 
@@ -269,21 +262,10 @@ on the table headers.
 
 A cycle is two slots that each need the other, so the container publishes both
 before filling them. `resolution/<mode>/global/cyclical.cpp` covers the two
-storage representations (both nodes by value, both as `shared_ptr`) and the
-mixed representation, in the runtime, static, and mixed containers. Each case
-asserts that both edges point at the same instance: `a.peer == &b` and
-`b.peer == &a`. The edge request form is the atom request space.
-
-## Co-residence
-
-A mixed container holds compile-time bindings and runtime registrations at the
-same time. There are exactly two outcomes, so the family is two cases at
-`resolution/mixed/global/`:
-
-- `external_dependency` — a static binding resolves a dependency that only
-  exists at runtime;
-- `singular_ambiguity` — the same type exists on both sides, and a singular
-  request throws `type_ambiguous_exception`.
+storage representations (both nodes by value, both as `shared_ptr`) in the
+runtime and static containers. Each case asserts that both edges point at the
+same instance: `a.peer == &b` and `b.peer == &a`. The edge request form is the
+atom request space.
 
 ## Producers
 

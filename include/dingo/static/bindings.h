@@ -294,73 +294,10 @@ struct dependency_bindings<type_list<Dependencies...>, InterfaceBindings> {
       Dependencies, InterfaceBindings>::type...>;
 };
 
-template <typename BindingModel, typename InterfaceBindings,
-          typename LocalBindings = typename BindingModel::bindings_type>
-struct effective_interface_bindings {
-  using type = InterfaceBindings;
-};
-
-template <typename InterfaceBinding, typename InterfaceBindings>
-struct binding_shadowed_by {
-  static constexpr bool value = false;
-};
-
-template <typename InterfaceBinding, typename Head, typename... Tail>
-struct binding_shadowed_by<InterfaceBinding, type_list<Head, Tail...>>
-    : std::bool_constant<
-          (std::is_same_v<typename InterfaceBinding::interface_type,
-                          typename Head::interface_type> &&
-           lookup_keys_match<typename InterfaceBinding::key_type,
-                             typename Head::key_type>::value) ||
-          binding_shadowed_by<InterfaceBinding, type_list<Tail...>>::value> {};
-
-template <typename InterfaceBindings, typename LocalInterfaceBindings>
-struct remove_shadowed_bindings;
-
-template <typename LocalInterfaceBindings>
-struct remove_shadowed_bindings<type_list<>, LocalInterfaceBindings> {
-  using type = type_list<>;
-};
-
-template <typename Head, typename... Tail, typename LocalInterfaceBindings>
-struct remove_shadowed_bindings<type_list<Head, Tail...>,
-                                LocalInterfaceBindings> {
-private:
-  using tail_type =
-      typename remove_shadowed_bindings<type_list<Tail...>,
-                                        LocalInterfaceBindings>::type;
-
-public:
-  using type = std::conditional_t<
-      binding_shadowed_by<Head, LocalInterfaceBindings>::value, tail_type,
-      type_list_cat_t<type_list<Head>, tail_type>>;
-};
-
-template <typename BindingModel, typename InterfaceBindings,
-          typename... LocalRegistrations>
-struct effective_interface_bindings<BindingModel, InterfaceBindings,
-                                    static_bindings<LocalRegistrations...>> {
-private:
-  using local_interface_bindings = type_list_cat_t<typename binding_expansion<
-      binding_model<LocalRegistrations>>::interface_bindings...>;
-  using host_interface_bindings =
-      typename remove_shadowed_bindings<InterfaceBindings,
-                                        local_interface_bindings>::type;
-
-public:
-  using type =
-      type_list_cat_t<local_interface_bindings, host_interface_bindings>;
-};
-
 template <typename BindingModel, typename InterfaceBindings>
-using effective_interface_bindings_t =
-    typename effective_interface_bindings<BindingModel,
-                                          InterfaceBindings>::type;
-
-template <typename BindingModel, typename InterfaceBindings>
-using resolved_dependency_bindings_t = typename binding_dependency_resolution<
-    BindingModel,
-    effective_interface_bindings_t<BindingModel, InterfaceBindings>>::type;
+using resolved_dependency_bindings_t =
+    typename binding_dependency_resolution<BindingModel,
+                                           InterfaceBindings>::type;
 
 template <typename BindingModel, typename MissingDependency,
           bool Valid = std::is_void_v<MissingDependency>>
@@ -388,8 +325,7 @@ template <typename BindingModel, typename InterfaceBindings>
 struct binding_declared_dependencies_resolved<BindingModel, InterfaceBindings,
                                               true>
     : std::bool_constant<std::is_void_v<first_missing_declared_dependency_t<
-          binding_dependencies_t<BindingModel>,
-          effective_interface_bindings_t<BindingModel, InterfaceBindings>>>> {};
+          binding_dependencies_t<BindingModel>, InterfaceBindings>>> {};
 
 template <typename BindingModel, typename InterfaceBindings>
 struct binding_declared_dependencies_resolved<BindingModel, InterfaceBindings,
@@ -408,10 +344,9 @@ template <typename BindingModel, typename InterfaceBindings>
 struct binding_declared_dependency_diagnostic<BindingModel, InterfaceBindings,
                                               false>
     : declared_dependency_diagnostic<
-          BindingModel, first_missing_declared_dependency_t<
-                            binding_dependencies_t<BindingModel>,
-                            effective_interface_bindings_t<
-                                BindingModel, InterfaceBindings>>> {};
+          BindingModel,
+          first_missing_declared_dependency_t<
+              binding_dependencies_t<BindingModel>, InterfaceBindings>> {};
 
 template <typename BindingModel>
 struct binding_factory_is_compile_time_bindable
@@ -434,7 +369,6 @@ struct static_registry_dependency_diagnostics
 
 template <typename... Registrations> struct static_bindings {
   using registration_types = type_list<Registrations...>;
-  using binding_models = type_list<detail::binding_model<Registrations>...>;
   using interface_bindings =
       detail::static_registry_bindings_t<Registrations...>;
 
@@ -455,91 +389,65 @@ template <typename... Registrations> struct static_bindings {
       "bindings<...> source requires compile-time-bindable factories");
 
 private:
-  template <typename Interface, typename LookupKey>
-  using binding_lookup_key_t =
-      std::conditional_t<detail::is_no_lookup_key_v<LookupKey>,
-                         detail::binding_dependency_key_t<Interface>,
-                         LookupKey>;
+  // The exact and normalized interfaces of one request, its lookup key, and
+  // the two lookups the public aliases select from. `bindings` and `selection`
+  // differ only in whether they keep the whole list or one choice.
+  template <typename Interface, typename LookupKey> struct lookup_keys {
+    using exact_interface =
+        detail::binding_exact_dependency_interface_t<Interface>;
+    using normalized_interface =
+        detail::binding_dependency_interface_t<Interface>;
+    using key = std::conditional_t<detail::is_no_lookup_key_v<LookupKey>,
+                                   detail::binding_dependency_key_t<Interface>,
+                                   LookupKey>;
 
-  template <typename Interface, typename LookupKey>
-  using exact_bindings_t = detail::bindings_t<
-      detail::binding_exact_dependency_interface_t<Interface>,
-      binding_lookup_key_t<Interface, LookupKey>, interface_bindings>;
+    static constexpr bool same =
+        std::is_same_v<exact_interface, normalized_interface>;
 
-  template <typename Interface, typename LookupKey>
-  using normalized_bindings_t =
-      detail::bindings_t<detail::binding_dependency_interface_t<Interface>,
-                         binding_lookup_key_t<Interface, LookupKey>,
-                         interface_bindings>;
-
-  template <typename Interface, typename LookupKey>
-  using exact_selection_t = detail::static_selection_t<
-      detail::binding_exact_dependency_interface_t<Interface>,
-      binding_lookup_key_t<Interface, LookupKey>, interface_bindings>;
-
-  template <typename Interface, typename LookupKey>
-  using normalized_selection_t = detail::static_selection_t<
-      detail::binding_dependency_interface_t<Interface>,
-      binding_lookup_key_t<Interface, LookupKey>, interface_bindings>;
-
-  template <typename Interface, typename LookupKey, typename Exact,
-            bool HasExact = (type_list_size_v<Exact> != 0)>
-  struct select_bindings {
-    using type = Exact;
+    template <typename I>
+    using list = detail::bindings_t<I, key, interface_bindings>;
+    template <typename I>
+    using choice = detail::static_selection_t<I, key, interface_bindings>;
   };
 
-  template <typename Interface, typename LookupKey, typename Exact>
-  struct select_bindings<Interface, LookupKey, Exact, false> {
-    using type = normalized_bindings_t<Interface, LookupKey>;
+  template <typename Lookup, bool Same> struct selected_bindings;
+  template <typename Lookup> struct selected_bindings<Lookup, true> {
+    using type =
+        typename Lookup::template list<typename Lookup::exact_interface>;
+  };
+  template <typename Lookup> struct selected_bindings<Lookup, false> {
+    using exact =
+        typename Lookup::template list<typename Lookup::exact_interface>;
+    using type = std::conditional_t<
+        type_list_size_v<exact> != 0, exact,
+        typename Lookup::template list<typename Lookup::normalized_interface>>;
   };
 
-  template <typename Interface, typename LookupKey,
-            bool SameLookup = std::is_same_v<
-                detail::binding_exact_dependency_interface_t<Interface>,
-                detail::binding_dependency_interface_t<Interface>>>
-  struct selected_bindings
-      : select_bindings<Interface, LookupKey,
-                        exact_bindings_t<Interface, LookupKey>> {};
-
-  template <typename Interface, typename LookupKey>
-  struct selected_bindings<Interface, LookupKey, true> {
-    using type = exact_bindings_t<Interface, LookupKey>;
+  template <typename Lookup, bool Same> struct selected_binding;
+  template <typename Lookup> struct selected_binding<Lookup, true> {
+    using type =
+        typename Lookup::template choice<typename Lookup::exact_interface>;
   };
-
-  template <typename Interface, typename LookupKey, typename ExactSelection,
-            bool HasExact =
-                ExactSelection::status != detail::binding_status::not_found>
-  struct selected_binding {
-    using type = ExactSelection;
-  };
-
-  template <typename Interface, typename LookupKey, typename ExactSelection>
-  struct selected_binding<Interface, LookupKey, ExactSelection, false> {
-    using type = normalized_selection_t<Interface, LookupKey>;
-  };
-
-  template <typename Interface, typename LookupKey, bool SameLookup>
-  struct selected_binding_for_request;
-
-  template <typename Interface, typename LookupKey>
-  struct selected_binding_for_request<Interface, LookupKey, false>
-      : selected_binding<Interface, LookupKey,
-                         exact_selection_t<Interface, LookupKey>> {};
-
-  template <typename Interface, typename LookupKey>
-  struct selected_binding_for_request<Interface, LookupKey, true> {
-    using type = exact_selection_t<Interface, LookupKey>;
+  template <typename Lookup> struct selected_binding<Lookup, false> {
+    using exact =
+        typename Lookup::template choice<typename Lookup::exact_interface>;
+    using type =
+        std::conditional_t<exact::status != detail::binding_status::not_found,
+                           exact,
+                           typename Lookup::template choice<
+                               typename Lookup::normalized_interface>>;
   };
 
 public:
   template <typename Interface, typename LookupKey>
-  using bindings = typename selected_bindings<Interface, LookupKey>::type;
+  using bindings =
+      typename selected_bindings<lookup_keys<Interface, LookupKey>,
+                                 lookup_keys<Interface, LookupKey>::same>::type;
 
   template <typename Interface, typename LookupKey>
-  using selection = typename selected_binding_for_request<
-      Interface, LookupKey,
-      std::is_same_v<detail::binding_exact_dependency_interface_t<Interface>,
-                     detail::binding_dependency_interface_t<Interface>>>::type;
+  using selection =
+      typename selected_binding<lookup_keys<Interface, LookupKey>,
+                                lookup_keys<Interface, LookupKey>::same>::type;
 
   template <typename Interface, typename LookupKey>
   using binding = typename selection<Interface, LookupKey>::binding_type;

@@ -232,7 +232,6 @@ template <typename T> struct tracked_collection {
 namespace detail {
 template <typename T> struct collection_traits<tracked_collection<T>> {
   static const bool is_collection = true;
-  static const bool has_fixed_size_construct = false;
   using resolve_type = T;
 
   static void reserve(tracked_collection<T> &collection, std::size_t size) {

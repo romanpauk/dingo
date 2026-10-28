@@ -116,9 +116,8 @@ public:
                                 Origin &origin, LookupKey key) {
     if constexpr (RuntimeSource) {
       using request = request_type<T, RemoveRvalueReferences>;
-      using policy =
-          resolution_policy<T, LookupKey, typename Self::static_bindings_type,
-                            resolution_mode::runtime_fallback>;
+      using policy = resolution_policy<T, LookupKey, static_bindings<>,
+                                       resolution_mode::runtime_fallback>;
       if constexpr (!policy::lift_enabled) {
         if (self().owns_runtime(context)) {
           return self().selection_type::template resolve<request, R>(
@@ -186,54 +185,19 @@ public:
     }
   }
 
-  // Construction: the runtime tree decides between the runtime-only path, the
-  // static-only fast path, and the mixed fallback; the static-only path is the
-  // exact/normalized/factory rule over the compile-time source.
+  // Construction: the runtime container resolves or constructs from its own
+  // registry; the static container applies the exact/normalized/factory rule
+  // over the compile-time source.
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
             typename R = request_result_t<T, true>>
   DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {
     if constexpr (RuntimeSource) {
       using request = request_type<T>;
-      using interface_type = typename request::interface_type;
-      using value_type = typename request::value_type;
-      if constexpr (Self::runtime_only_v) {
-        return execute_transaction(
-            self().runtime_storage(), [&](auto &context) -> R {
-              return self().template construct_request<request, Factory, R>(
-                  ephemeral_scope, context, std::move(factory));
-            });
-      } else {
-        constexpr bool default_factory =
-            std::is_same_v<Factory, constructor<normalized_type_t<T>>>;
-        constexpr bool rvalue =
-            ::dingo::rvalue_request_requires_explicit_conversion_v<T>;
-        if constexpr (default_factory && rvalue) {
-          return self()
-              .template construct_rvalue_request<T, request, Factory, R>(
-                  factory);
-        }
-        if constexpr (default_factory && !rvalue &&
-                      !Self::template has_static_construct_v<T>) {
-          return self()
-              .template construct_runtime_transaction<request, Factory, R>(
-                  factory);
-        }
-        if constexpr (default_factory && !rvalue &&
-                      Self::template has_static_construct_v<T>) {
-          if (!self()
-                   .template has_runtime_no_key_binding<interface_type,
-                                                        value_type>()) {
-            return self().template construct_static_transaction<request, R>();
-          }
-        }
-
-        return execute_transaction(
-            self().runtime_storage(), [&](auto &context) -> R {
-              return self()
-                  .template construct_mixed_request<T, request, Factory, R>(
-                      ephemeral_scope, context, factory);
-            });
-      }
+      return execute_transaction(
+          self().runtime_storage(), [&](auto &context) -> R {
+            return self().template construct_request<request, Factory, R>(
+                ephemeral_scope, context, std::move(factory));
+          });
     } else {
       using request = request_type<T>;
       using user_type = typename request::user_type;
@@ -288,30 +252,8 @@ public:
                                 Context &context, Fn &&fn, LookupKey key) {
     if constexpr (RuntimeSource) {
       std::size_t count = 0;
-      if constexpr (Self::merge_parent_collections && Self::has_parent) {
-        if (self().parent_) {
-          count += self().parent_->template append_collection<T>(
-              scope, results, context, fn, key);
-        }
-      }
-      if constexpr (Self::has_static_source) {
-        count += detail::append_binding_collection(
-            results,
-            [&](auto &collection, auto &&append) {
-              return self().template runtime_collect<T>(
-                  scope, collection, context,
-                  std::forward<decltype(append)>(append), key);
-            },
-            [&](auto &collection, auto &&append) {
-              return self().statics().template collect<T, LookupKey>(
-                  scope, collection, self(), context,
-                  std::forward<decltype(append)>(append));
-            },
-            std::forward<Fn>(fn));
-      } else {
-        count += self().template runtime_collect<T>(scope, results, context,
-                                                    std::forward<Fn>(fn), key);
-      }
+      count += self().template runtime_collect<T>(scope, results, context,
+                                                  std::forward<Fn>(fn), key);
       return count;
     } else {
       (void)key;
@@ -325,11 +267,7 @@ public:
   std::size_t count_collection(LookupKey key) {
     if constexpr (RuntimeSource) {
       std::size_t count = self().template runtime_count<T>(key);
-      if constexpr (Self::has_static_source) {
-        count +=
-            Self::static_registry_type::template fixed_count<T, LookupKey>();
-      }
-      if constexpr (Self::merge_parent_collections && Self::has_parent) {
+      if constexpr (Self::has_parent) {
         if (self().parent_) {
           count += self().parent_->template count_collection<T>(key);
         }
@@ -378,19 +316,6 @@ public:
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   T construct_collection_by_key(LookupKey key) {
     if constexpr (RuntimeSource) {
-      if constexpr (Self::has_static_source &&
-                    detail::is_static_lookup_key_v<LookupKey>) {
-        if (self()
-                .template select_static_collection_construct<T, LookupKey>()) {
-          return execute_transaction(
-              self().runtime_storage(), [&](auto &context) -> T {
-                return self()
-                    .statics()
-                    .template construct_collection<T, LookupKey>(
-                        ephemeral_scope, self(), context);
-              });
-        }
-      }
       return execute_transaction(
           self().runtime_storage(), [&](auto &context) -> T {
             return construct_collection<T>(ephemeral_scope, context,
@@ -407,19 +332,6 @@ public:
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   T construct_collection_by_key(Fn &&fn, LookupKey key) {
     if constexpr (RuntimeSource) {
-      if constexpr (Self::has_static_source &&
-                    detail::is_static_lookup_key_v<LookupKey>) {
-        if (self()
-                .template select_static_collection_construct<T, LookupKey>()) {
-          return execute_transaction(
-              self().runtime_storage(), [&](auto &context) -> T {
-                return self()
-                    .statics()
-                    .template construct_collection<T, LookupKey>(
-                        ephemeral_scope, self(), context, std::forward<Fn>(fn));
-              });
-        }
-      }
       return execute_transaction(
           self().runtime_storage(), [&](auto &context) -> T {
             return construct_collection<T>(
@@ -468,17 +380,16 @@ public:
             bool StaticError = false, typename Context,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R unresolved(construction_scope scope, Context &context, LookupKey key) {
-    if constexpr (RuntimeSource) {
-      return detail::resolve_missing_request<
-          detail::runtime_miss_policy<Self::runtime_only>, MayAutoConstruct,
-          StaticError, Request, LookupKey, R>(self(), scope, context,
-                                              std::move(key));
-    } else {
-      return detail::resolve_missing_request<detail::static_miss_policy,
-                                             MayAutoConstruct, StaticError,
-                                             Request, LookupKey, R>(
-          self(), scope, context, std::move(key));
-    }
+    constexpr auto policy = [] {
+      if constexpr (!RuntimeSource) {
+        return detail::miss_policy::static_only;
+      } else {
+        return detail::miss_policy::runtime_only;
+      }
+    }();
+    return detail::resolve_missing_request<policy, MayAutoConstruct,
+                                           StaticError, Request, LookupKey, R>(
+        self(), scope, context, std::move(key));
   }
 
 private:

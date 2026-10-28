@@ -8,12 +8,9 @@
 
 """Lookup scope classes.
 
-A lookup scope is where a binding is found. Two forms exist and they share the
-same rule set: a binding may carry its own child container, and a container may
-have a parent. The cases are therefore the rules, not the storage forms:
+A lookup scope is where a binding is found. A container may have a parent, so
+the cases are the rules, not the storage forms:
 
-- a local binding is visible to the registration that declares it;
-- a local binding shadows a root binding of the same type;
 - a child inherits an unshadowed parent binding;
 - a child shadows a parent binding without changing the parent;
 - a grandchild inherits through the chain.
@@ -30,10 +27,6 @@ from pathlib import Path
 from spec.gen.shared.runner import emit, render_template
 from spec.gen.shared.hierarchy import CasePath
 
-LOCAL_BINDINGS = """dingo::bindings<
-    dingo::bind<dingo::scope<dingo::shared>, dingo::storage<dependency>,
-               dingo::factory<dingo::function<&make_local>>>>"""
-
 def _root(target: str = "container") -> str:
     return f"""{target}.register_type<
       dingo::scope<dingo::shared>, dingo::storage<dependency>,
@@ -47,22 +40,6 @@ class LookupCase:
 
 
 CASES = (
-    LookupCase(
-        name="local_binding",
-        body=f"""dingo::container<> container;
-  container.register_type<dingo::scope<dingo::shared>,
-                          dingo::storage<local_host>, {LOCAL_BINDINGS}>();
-  EXPECT_EQ(container.resolve<local_host &>().value, 2);""",
-    ),
-    LookupCase(
-        name="local_override",
-        body=f"""dingo::container<> container;
-  {_root()}
-  container.register_type<dingo::scope<dingo::shared>,
-                          dingo::storage<local_host>, {LOCAL_BINDINGS}>();
-  EXPECT_EQ(container.resolve<local_host &>().value, 2);
-  EXPECT_EQ(container.resolve<dependency &>().value, 1);""",
-    ),
     LookupCase(
         name="child_inherits",
         body=f"""dingo::runtime_container<> parent;

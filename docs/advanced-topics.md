@@ -77,7 +77,7 @@ preserve registration order.
 Registration-created child containers use a root-owned dense table of lookup
 scopes. A child indexes that table by scope ID, then performs the lookup in its
 own state with the declared backend, cardinality, and logical key. Lookup state
-is allocated lazily when a child first registers a local binding.
+is allocated lazily when a child first registers a binding.
 
 Typed-key registrations can also use explicit lookups:
 
@@ -132,8 +132,8 @@ value is fixed in the type:
   `resolve<Collection>(key_type<K, Value>{})`; `resolve<I &>(K{...})` is runtime
   key lookup and is not supported by `static_container`.
 - Static fixed runtime-key bindings require `static_container` with traits that
-  declare the lookup. `container<bindings<...>>` rejects them because that mixed
-  form cannot carry custom lookup traits.
+  declare the lookup. A runtime container uses its runtime lookup definitions
+  instead.
 
 <!-- { include("../examples/index/static_fixed.cpp", scope="////") -->
 
@@ -370,10 +370,11 @@ Dingo has two registration modes with different tradeoffs.
 
 - Runtime registration uses `container<>` or `runtime_container` and adds
   registrations with `register_type<...>()`.
-- Compile-time registration uses `bindings<...>` with `container<bindings<...>>`
-  or `static_container<bindings<...>>`.
-- `container<bindings<...>>` may also accept runtime registrations, which is
-  useful when most of the graph is static but a small boundary remains dynamic.
+- Compile-time registration uses `bindings<...>` with
+  `static_container<bindings<...>>`.
+- The two modes are separate container shapes; a runtime container cannot carry
+  compile-time bindings and a static container cannot accept runtime
+  registrations.
 
 The modes share the same resolution API and policy vocabulary. The difference is
 where the registration list lives: runtime container state or the container
@@ -443,12 +444,11 @@ while its own return type is being deduced.
 
 Containers can form a parent-child hierarchy. Resolution walks from the child
 toward the parent chain, which allows local overrides on top of broader shared
-configuration. Runtime-only containers use `container<> child(&parent)`. Mixed
-static/runtime containers use `container<bindings<...>, Parent>` and construct
-the child with `child(&parent)`. Purely static containers use
+configuration. Runtime containers use `container<> child(&parent)` and construct
+the child with `child(&parent)`. Static containers use
 `static_container<bindings<...>, Parent>` the same way. Static bindings in the
-child can resolve missing dependencies from the parent's static or runtime
-graph.
+child can resolve missing dependencies from the parent's static graph, and a
+runtime child can resolve from a runtime parent.
 
 Nesting is most useful for:
 
@@ -506,8 +506,7 @@ containers created with `child(&parent)` therefore stay valid when the container
 moves. This supports builder-style setup that registers types and then hands the
 container over. A moved-from container can only be destroyed or assigned to.
 
-Containers with compile-time bindings, `container<bindings<...>>` and
-`static_container<bindings<...>>`, store their instances inline and are neither
+`static_container<bindings<...>>` stores its instances inline and is neither
 movable nor copyable.
 
 ## Custom RTTI

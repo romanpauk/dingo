@@ -42,11 +42,9 @@ The public entry points are:
 - [include/dingo/static_container.h](../../include/dingo/static_container.h):
   static-only facade
 
-`container` is the primary public API. It supports:
-
-- `container<>` for runtime-only registrations
-- `container<bindings<...>>` for compile-time bindings with optional runtime
-  registrations
+`container` is the primary runtime public API. It supports `container<>` for
+runtime registrations. Compile-time registration uses
+`static_container<bindings<...>>`; the two modes are separate container shapes.
 
 Below that API, the runtime registration path owns:
 
@@ -149,7 +147,7 @@ The shared runtime/static binding and resolution kernel now lives under
 - `binding_model.h`
 - `binding_selection.h`
 - `binding_resolution.h`
-- `binding_resolution_policy.h`
+- `routes.h`
 
 Runtime and static implementation code sits under:
 
@@ -172,13 +170,6 @@ At a high level, Dingo runs this sequence:
    using its scope-specific state.
 7. The matched resolution operation converts that materialized source into the
    requested `T`.
-
-For `container<bindings<...>>`:
-
-- singular runtime/static conflicts are ambiguous
-- collection requests merge runtime and static results
-- registration child bindings take precedence for singular requests and merge
-  child static and runtime collections with the root container
 
 The pieces above are not independent extension systems. They cooperate in one
 pipeline.

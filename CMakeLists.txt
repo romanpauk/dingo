@@ -96,7 +96,7 @@ if(DINGO_DEVELOPMENT_MODE)
         type/auto_constructible.h
         binding/binding_model.h
         binding/binding_resolution.h
-        binding/binding_resolution_policy.h
+        binding/routes.h
         binding/binding_selection.h
         type/dependency.h
         factory/factory_traits.h

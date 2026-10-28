@@ -45,7 +45,6 @@ def _shard_cases(mode: str) -> tuple[CyclicalCase, ...]:
 
     runtime = "dingo::container<> container;"
     static = "dingo::static_container<source> container;"
-    mixed = "dingo::container<source> container;"
 
     runtime_case = (
         "container.register_type<dingo::scope<dingo::shared_cyclical>,\n"
@@ -104,14 +103,7 @@ def _shard_cases(mode: str) -> tuple[CyclicalCase, ...]:
                 setup="",
             ),
         )
-    return (
-        CyclicalCase(
-            name="value_pair",
-            source=f"using source = dingo::bindings<\n    {value_a}>;",
-            container=mixed,
-            setup=runtime_case,
-        ),
-    )
+
 
 
 @dataclass(frozen=True)
@@ -126,7 +118,7 @@ class CyclicalShard:
 
 def build_shards() -> list[CyclicalShard]:
     shards = []
-    for mode in ("runtime", "static", "mixed"):
+    for mode in ("runtime", "static"):
         case = CasePath(
             phase="resolution",
             container=mode,
