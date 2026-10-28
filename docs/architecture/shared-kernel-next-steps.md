@@ -874,11 +874,11 @@ container class; slice 6 removes the recursive configuration.
 
 The cleanup work on `feature/shared-kernel` is done: dead declarations, the
 forwarding adapters, the construct dispatch, the storage slots, and conversion
-path slices 1-2. The static half of the source protocol is named:
-`static_registry` now exposes `resolve_named`, `collect`, and `fixed_count`, and
-its singular resolve no longer branches on collections. The runtime source and
-the one decision function remain, and the first commit of those should not be a
-rename pass.
+path slices 1-2. Both sources now carry the protocol names: `static_registry`
+exposes `resolve_named`, `collect`, and `fixed_count`, and the runtime store
+exposes `resolve_named`, `collect`, and `count`. The static source's singular
+resolve no longer branches on collections. The one decision function remains,
+and its first commit should not be a rename pass.
 
 The current entry points already embed decisions the engine is meant to own:
 

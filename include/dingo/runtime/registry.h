@@ -255,7 +255,7 @@ protected:
       typename lookup_base::template static_key_lookup_cardinality_t<Interface,
                                                                      KeyDomain>;
   using lookup_base::binding_status;
-  using lookup_base::count_collection;
+  using lookup_base::count;
   using lookup_base::for_each_collection_entry;
   using lookup_base::has_explicit_collection_lookup;
   using lookup_base::source_select;
@@ -300,21 +300,21 @@ protected:
                   "missing collection_traits specialization for type T");
 
     T results;
-    const std::size_t count = this->template count_collection<T>(state, key);
-    if (count == 0 &&
+    const std::size_t total = this->template count<T>(state, key);
+    if (total == 0 &&
         !(this->template has_explicit_collection_lookup<T>(key))) {
       throw detail::make_collection_type_not_found_exception<T, resolve_type>();
     }
 
-    collection_type::reserve(results, count);
-    append_runtime_collection(state, results, scope, context,
-                              std::forward<Fn>(fn), std::move(key));
+    collection_type::reserve(results, total);
+    collect(state, results, scope, context, std::forward<Fn>(fn),
+            std::move(key));
     return results;
   }
 
   template <typename Request, typename Result = Request>
-  Result resolve_binding(runtime_selection selection, construction_scope scope,
-                         runtime_context_type &context) {
+  Result resolve_named(runtime_selection selection, construction_scope scope,
+                       runtime_context_type &context) {
     auto &binding = *selection.binding;
     if constexpr (detail::cache::supports_v<Request>) {
       return resolve<Request, Result>(scope, binding, context,
@@ -352,17 +352,16 @@ protected:
   auto source_resolve(construction_scope scope, runtime_selection selection,
                       runtime_context_type &context, const LookupKey &) ->
       typename Request::interface_type {
-    return resolve_binding<typename Request::lookup_type,
-                           typename Request::interface_type>(selection, scope,
-                                                             context);
+    return resolve_named<typename Request::lookup_type,
+                         typename Request::interface_type>(selection, scope,
+                                                           context);
   }
 
   template <typename T, typename Fn, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t append_runtime_collection(runtime_bindings_state *state,
-                                        T &results, construction_scope scope,
-                                        runtime_context_type &context, Fn &&fn,
-                                        LookupKey key) {
+  std::size_t collect(runtime_bindings_state *state, T &results,
+                      construction_scope scope, runtime_context_type &context,
+                      Fn &&fn, LookupKey key) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
     if (!state) {
@@ -642,27 +641,23 @@ protected:
 
   template <typename T, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t count_collection(LookupKey key) {
-    return store_type::template count_collection<T>(runtime_bindings(),
-                                                    std::move(key));
+  std::size_t count(LookupKey key) {
+    return store_type::template count<T>(runtime_bindings(), std::move(key));
   }
 
   template <typename T, typename Fn>
-  std::size_t append_collection(construction_scope scope, T &results,
-                                runtime_context_type &context, Fn &&fn) {
-    return store_type::append_runtime_collection(
-        runtime_bindings(), results, scope, context, std::forward<Fn>(fn),
-        detail::no_lookup_key());
+  std::size_t collect(construction_scope scope, T &results,
+                      runtime_context_type &context, Fn &&fn) {
+    return store_type::collect(runtime_bindings(), results, scope, context,
+                               std::forward<Fn>(fn), detail::no_lookup_key());
   }
 
   template <typename T, typename Fn, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t append_collection(construction_scope scope, T &results,
-                                runtime_context_type &context, Fn &&fn,
-                                LookupKey key) {
-    return store_type::append_runtime_collection(
-        runtime_bindings(), results, scope, context, std::forward<Fn>(fn),
-        std::move(key));
+  std::size_t collect(construction_scope scope, T &results,
+                      runtime_context_type &context, Fn &&fn, LookupKey key) {
+    return store_type::collect(runtime_bindings(), results, scope, context,
+                               std::forward<Fn>(fn), std::move(key));
   }
 
   template <typename Value, typename Exact, typename LookupKey,
@@ -729,7 +724,7 @@ protected:
     using lookup_key_type = std::decay_t<LookupKey>;
 
     if constexpr (MayAutoConstruct && collection_traits<R>::is_collection) {
-      if (this->template count_collection<R>(key) != 0) {
+      if (this->template count<R>(key) != 0) {
         return this->template construct_collection<R>(
             scope, context, detail::binding_collection_append{}, key);
       }

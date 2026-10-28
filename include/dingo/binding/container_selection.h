@@ -102,8 +102,8 @@ public:
             if (selected.status == binding_status::found) {
               return self()
                   .runtime_source()
-                  .template resolve_binding<typename Request::interface_type,
-                                            R>(selected, scope, context);
+                  .template resolve_named<typename Request::interface_type, R>(
+                      selected, scope, context);
             }
           }
           if (self().template count_collection<R>(key) == 0) {
@@ -138,8 +138,8 @@ public:
               [&]() -> R {
                 return self()
                     .runtime_source()
-                    .template resolve_binding<typename Request::interface_type,
-                                              R>(selected, scope, context);
+                    .template resolve_named<typename Request::interface_type,
+                                            R>(selected, scope, context);
               },
               [&]() -> R {
                 return origin.template unresolved<Request, false, LookupKey, R>(
@@ -185,7 +185,7 @@ public:
             static_status, R, lookup_type>(
             runtime_selection, context,
             [&]() -> R {
-              return self().runtime_source().template resolve_binding<R, R>(
+              return self().runtime_source().template resolve_named<R, R>(
                   runtime_selection, scope, context);
             },
             [&]() -> R {
@@ -230,7 +230,7 @@ public:
           [&]() -> R {
             return self()
                 .runtime_source()
-                .template resolve_binding<typename Request::interface_type, R>(
+                .template resolve_named<typename Request::interface_type, R>(
                     selected, scope, context);
           },
           [&]() -> R {
@@ -262,7 +262,7 @@ public:
         [&]() -> R {
           return self()
               .runtime_source()
-              .template resolve_binding<typename Request::interface_type, R>(
+              .template resolve_named<typename Request::interface_type, R>(
                   selected, scope, context);
         },
         [&]() -> R {

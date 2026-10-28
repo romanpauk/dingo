@@ -298,7 +298,7 @@ protected:
 
   template <typename T, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t count_collection(runtime_bindings_state *state, LookupKey key) {
+  std::size_t count(runtime_bindings_state *state, LookupKey key) {
     std::size_t result = 0;
     if (state) {
       for_each_collection_entry<T>(*state, key, [&](auto &) { ++result; });

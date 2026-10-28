@@ -245,7 +245,7 @@ private:
   template <typename T, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   bool has_runtime_collection(LookupKey key) {
-    return runtime_registry_.template count_collection<T>(key) != 0;
+    return runtime_registry_.template count<T>(key) != 0;
   }
 
   template <typename Request, typename Key,
@@ -382,7 +382,7 @@ private:
         selected, context,
         [&]() -> R {
           return runtime_registry_
-              .template resolve_binding<typename Request::interface_type, R>(
+              .template resolve_named<typename Request::interface_type, R>(
                   selected, scope, context);
         },
         [&]() -> R {
@@ -665,7 +665,7 @@ private:
     using interface_type = typename Request::interface_type;
     return execute_transaction(
         runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
-          return runtime_registry_.template resolve_binding<interface_type, R>(
+          return runtime_registry_.template resolve_named<interface_type, R>(
               selected, ephemeral_scope, context);
         });
   }
@@ -891,7 +891,7 @@ public:
       count += detail::append_binding_collection(
           results,
           [&](auto &collection, auto &&append) {
-            return runtime_registry_.template append_collection<T>(
+            return runtime_registry_.template collect<T>(
                 scope, collection, context,
                 std::forward<decltype(append)>(append), key);
           },
@@ -902,8 +902,8 @@ public:
           },
           std::forward<Fn>(fn));
     } else {
-      count += runtime_registry_.template append_collection<T>(
-          scope, results, context, std::forward<Fn>(fn), key);
+      count += runtime_registry_.template collect<T>(scope, results, context,
+                                                     std::forward<Fn>(fn), key);
     }
     return count;
   }
@@ -911,7 +911,7 @@ public:
   template <typename T, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   std::size_t count_collection(LookupKey key) {
-    std::size_t count = runtime_registry_.template count_collection<T>(key);
+    std::size_t count = runtime_registry_.template count<T>(key);
     if constexpr (has_static_v) {
       count += static_registry_type::template fixed_count<T, LookupKey>();
     }
