@@ -15,6 +15,11 @@ The top-level include set is intentionally small:
 
 Everything else is either runtime/static implementation detail or shared core.
 
+The operations themselves are shared:
+[include/dingo/container_operations.h](../../include/dingo/container_operations.h)
+owns `resolve`, `construct`, `invoke`, the collection entries, and the
+parent/miss hand-off for both registration modes.
+
 ## Internal Layout
 
 The container stack is split into three groups:
@@ -22,6 +27,11 @@ The container stack is split into three groups:
 - `include/dingo/binding/`: shared runtime/static substrate
 - `include/dingo/runtime/`: runtime registry internals
 - `include/dingo/static/`: static registry and graph internals
+
+The public operations shared by the front-ends live in
+`include/dingo/container_operations.h`. The front-ends are configurations plus
+state: they provide their registries and answer whether they have a runtime
+source, and the operations layer owns the decision order.
 
 The split keeps public headers small while leaving runtime and static
 implementation details in their own directories. The full header hierarchy is
@@ -54,6 +64,12 @@ The `bindings<...>` form hosts both:
 `container<bindings<...>>` is the container form for mixed graphs: static
 bindings are known when the container type is named, and runtime registrations
 can still be added afterward.
+
+Both forms share the operations layer in
+[include/dingo/container_operations.h](../../include/dingo/container_operations.h).
+The container type and whether it has a runtime source are the only
+configuration inputs; resolving, constructing, invoking, and collecting follow
+one order.
 
 ## Static And Runtime Facades
 
@@ -129,6 +145,7 @@ resolution is rejected at runtime through the normal recursion exception path.
 The key implementation headers behind this model are:
 
 - [include/dingo/container.h](../../include/dingo/container.h)
+- [include/dingo/container_operations.h](../../include/dingo/container_operations.h)
 - [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)

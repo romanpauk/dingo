@@ -27,7 +27,7 @@ exposure traits | | 6 | `registration/` | registration options, requirements | |
 7 | `binding/` | binding model, selection and resolution shared by runtime and
 static | | 8 | `runtime/`, `static/` | runtime registry and static registry,
 graph and activation | | 9 | `dingo/*.h` | `container`, `runtime_container`,
-`static_container`, `container_base` |
+`static_container`, `container_operations`, `container_base` |
 
 ## Main Owners
 
@@ -74,6 +74,22 @@ The compile-time binding path owns:
 The container layer coordinates registration and resolution. It does not
 construct objects directly. It stores or selects bindings and asks factories or
 static resolution helpers for values, references, or pointers.
+
+### Container Operations
+
+[include/dingo/container_operations.h](../../include/dingo/container_operations.h)
+owns the public operation surface for both container modes: `resolve`,
+`construct`, `invoke`, the collection entries, and the parent/miss hand-off. It
+is parameterized by the container and by whether that container has a runtime
+source, so a static-only container and a runtime-backed one share the decision
+order while keeping their own selection and execution.
+
+The front-ends in [container.h](../../include/dingo/container.h) and
+[static_container.h](../../include/dingo/static_container.h) are configurations
+plus state: the static registry keeps its bindings inline, the runtime registry
+keeps its lookup state, and the operations layer decides which source answers.
+The static minimal-context and construct rules live beside the runtime ones in
+the layer rather than in a separate front-end.
 
 ### Type Registration
 
@@ -172,6 +188,7 @@ pipeline.
 For the core path in source order, start here:
 
 - [include/dingo/container.h](../../include/dingo/container.h)
+- [include/dingo/container_operations.h](../../include/dingo/container_operations.h)
 - [include/dingo/runtime_container.h](../../include/dingo/runtime_container.h)
 - [include/dingo/static_container.h](../../include/dingo/static_container.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)

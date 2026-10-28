@@ -50,7 +50,8 @@ resolve<T> -> lookup type -> factory traits -> resolver -> conversion -> T
 ```
 
 The shared binding and resolution kernel for that flow lives under
-`include/dingo/binding/`.
+`include/dingo/binding/`. The public operations shared by the container
+front-ends live in `include/dingo/container_operations.h`.
 
 Runtime and static implementation code sits under:
 
@@ -60,6 +61,7 @@ Runtime and static implementation code sits under:
 The main owners for the current architecture are:
 
 - [include/dingo/container.h](../../include/dingo/container.h)
+- [include/dingo/container_operations.h](../../include/dingo/container_operations.h)
 - [include/dingo/runtime_container.h](../../include/dingo/runtime_container.h)
 - [include/dingo/static_container.h](../../include/dingo/static_container.h)
 - [include/dingo/binding/binding_model.h](../../include/dingo/binding/binding_model.h)
