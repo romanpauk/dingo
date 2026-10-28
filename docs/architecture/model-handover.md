@@ -21,7 +21,7 @@ The tree is green:
 - `dingo_registration_test`: 158 tests
 - `dingo_registration_runtime_test`: 6 tests
 - `generated-check`: passes
-- `ctest`: 38/38 passed (the retired table executables are gone)
+- `ctest`: 39/39 passed (the retired table executables are gone)
 - `resolve-check`: 274 tests, report written to `build/test/resolve-gaps.md`
   (2,009 calls, 772 overclaims)
 - `claim-check`: report written to `build/test/claim-gaps.md`; `construct` 899

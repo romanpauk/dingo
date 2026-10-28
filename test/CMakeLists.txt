@@ -986,6 +986,14 @@ set_tests_properties(dingo_model_generator_test PROPERTIES
     LABELS "unit;generator"
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
+add_test(NAME dingo_tools_test
+    COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q
+        ${PROJECT_SOURCE_DIR}/tools/complexity_test.py
+        ${PROJECT_SOURCE_DIR}/tools/release_flow_test.py)
+set_tests_properties(dingo_tools_test PROPERTIES
+    LABELS "unit"
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
 add_test(NAME dingo_cost_tool_test
     COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q
         ${PROJECT_SOURCE_DIR}/tools/cost/measure_test.py
@@ -993,6 +1001,14 @@ add_test(NAME dingo_cost_tool_test
 set_tests_properties(dingo_cost_tool_test PROPERTIES
     LABELS "unit;generator"
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/cost)
+
+add_custom_target(complexity-report
+    COMMENT "Ranking library headers by accreted-complexity signals"
+    COMMAND ${DINGO_UV_RUN_COMMAND} python
+        ${PROJECT_SOURCE_DIR}/tools/complexity.py
+        --top 20
+        --json ${PROJECT_BINARY_DIR}/complexity.json
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 add_custom_target(test-cost
     COMMENT "Reporting the compile cost of the generated test translation units"
