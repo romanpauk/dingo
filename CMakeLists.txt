@@ -242,8 +242,6 @@ if(DINGO_DEVELOPMENT_MODE)
         add_subdirectory(test)
     endif()
 
-    add_subdirectory(tools/astrefs)
-
     if(DINGO_BENCHMARK_ENABLED)
         add_subdirectory(benchmark)
     endif()
