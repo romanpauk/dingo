@@ -358,8 +358,8 @@ private:
             typename R = typename Request::result_type>
   DINGO_ALWAYS_INLINE R resolve_static(construction_scope scope,
                                        Context &context) {
-    return statics().template resolve_request<Request, LookupKey>(
-        scope, context, *this);
+    return statics().template resolve_named<Request, LookupKey>(scope, context,
+                                                                *this);
   }
 
   template <typename Request, typename Origin, typename LookupKey,
@@ -896,7 +896,7 @@ public:
                 std::forward<decltype(append)>(append), key);
           },
           [&](auto &collection, auto &&append) {
-            return statics().template append_collection<T, LookupKey>(
+            return statics().template collect<T, LookupKey>(
                 scope, collection, *this, context,
                 std::forward<decltype(append)>(append));
           },
@@ -913,7 +913,7 @@ public:
   std::size_t count_collection(LookupKey key) {
     std::size_t count = runtime_registry_.template count_collection<T>(key);
     if constexpr (has_static_v) {
-      count += static_registry_type::template count_collection<T, LookupKey>();
+      count += static_registry_type::template fixed_count<T, LookupKey>();
     }
     if constexpr (runtime_configuration::merge_parent_collections &&
                   has_parent_v) {

@@ -471,8 +471,10 @@ default-constructible factories and storage. `static_registration_requirements`
 and `static_container_impl` keep their own `static_assert` messages, which the
 literal tests pin, but the conditions are defined once.
 
-This is the first shared piece of the container front-ends. The outer operations
-and the source protocol remain; see
+This is the first shared piece of the container front-ends. The static source
+now also carries the protocol names (`resolve_named`, `collect`, `fixed_count`)
+and its singular resolve no longer branches on collections. The runtime source
+and the one decision function remain; see
 [Shared-Kernel Next Steps](shared-kernel-next-steps.md).
 
 Verification: full build, 39/39 tests (including the literal diagnostic tests),

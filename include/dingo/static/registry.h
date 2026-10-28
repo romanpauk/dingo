@@ -33,26 +33,25 @@ public:
 
   static_registry() = default;
 
+  // The source protocol: the static registry resolves one named request. It
+  // makes no collection or precedence decision; the container engine asks the
+  // sources in order and owns those rules.
   template <typename Request, typename LookupKey, typename Host,
             typename Context, typename R = typename Request::result_type>
-  R resolve_request(construction_scope construction, Context &context,
-                    Host &host) {
+  R resolve_named(construction_scope construction, Context &context,
+                  Host &host) {
     static_assert(is_lookup_key_v<LookupKey>);
-    if constexpr (collection_traits<R>::is_collection) {
-      return construct_collection<R, LookupKey>(construction, host, context);
-    } else {
-      using lookup_type = typename Request::lookup_type;
-      using result_type = R;
-      using selected = selection_t<lookup_type, LookupKey>;
-      return resolve_binding<lookup_type, result_type, selected>(construction,
-                                                                 context, host);
-    }
+    using lookup_type = typename Request::lookup_type;
+    using result_type = R;
+    using selected = selection_t<lookup_type, LookupKey>;
+    return resolve_binding<lookup_type, result_type, selected>(construction,
+                                                               context, host);
   }
 
   template <typename T, typename LookupKey, typename Host, typename Context,
             typename Fn>
-  std::size_t append_collection(construction_scope construction, T &results,
-                                Host &host, Context &context, Fn &&fn) {
+  std::size_t collect(construction_scope construction, T &results, Host &host,
+                      Context &context, Fn &&fn) {
     static_assert(is_lookup_key_v<LookupKey>);
     return state_
         .template append_static_collection<T, LookupKey, bindings_type>(
@@ -60,7 +59,7 @@ public:
   }
 
   template <typename T, typename LookupKey>
-  static constexpr std::size_t count_collection() {
+  static constexpr std::size_t fixed_count() {
     static_assert(is_lookup_key_v<LookupKey>);
     return static_collection_binding_count<bindings_type, T, LookupKey>();
   }
