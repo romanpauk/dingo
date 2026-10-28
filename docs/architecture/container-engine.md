@@ -1,11 +1,11 @@
 # Container Engine
 
-Status: design note, slices 1-2 applied for resolve.
+Status: design note, slices 1-3 applied.
 `container_operations<Self, RuntimeSource>` owns both no-scope `resolve`
-spellings and the dependency-path `resolve`: the id/key form for runtime-backed
-containers, the compile-time key form for static-only containers, the static
-minimal-context decision, and the nested request path. `construct`, `invoke`,
-and the collection entry points remain.
+spellings, the dependency-path `resolve`, and `construct`: the id/key form for
+runtime-backed containers, the compile-time key form for static-only containers,
+the static minimal-context and construct rules, and the nested request path.
+`invoke` and the collection entry points remain.
 
 [Shared-Kernel Next Steps](shared-kernel-next-steps.md) records the long-range
 plan for one container engine. This page narrows the next change: what the
@@ -108,8 +108,9 @@ canaries are:
    resolve body.)* Gate: static codegen probe and object sizes.
 3. **Move the construct tree.** Fold `construct`, `construct_mixed_request`, and
    `construct_rvalue_request` into the layer's construct variant, with the
-   static/runtime/mixed differences as the constants above. Gate: behavior
-   baseline, full suite, depth chains.
+   static/runtime/mixed differences as the constants above. *(Applied: both
+   construction trees moved.)* Gate: behavior baseline, full suite, depth
+   chains.
 4. **Move invoke and the collection entry points.** They are the remaining
    public operations; their bodies are small, but moving them last keeps each
    slice reviewable.

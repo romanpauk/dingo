@@ -333,46 +333,8 @@ public:
     }
   }
 
-  template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-            typename R = request_result_t<T, true>>
-  R construct(Factory factory = Factory()) {
-    return construct_request<request_type<T>, Factory, R>(std::move(factory));
-  }
+  using detail::container_operations<self_type, false>::construct;
 
-private:
-  template <typename Request,
-            typename Factory = constructor<typename Request::value_type>,
-            typename R = typename Request::result_type>
-  R construct_request(Factory factory = Factory()) {
-    using user_type = typename Request::user_type;
-    using interface_type = typename Request::interface_type;
-    using request_value_type = typename Request::value_type;
-    if constexpr (std::is_same_v<Factory, constructor<request_value_type>>) {
-      using exact_selection = typename static_bindings_type::template selection<
-          binding_dependency_interface_t<interface_type>,
-          binding_dependency_key_t<interface_type>>;
-      using normalized_selection =
-          typename static_bindings_type::template selection<
-              request_value_type, detail::no_lookup_key_t>;
-      context_type context;
-      return detail::construct_from_static_source<Request, R, context_type,
-                                                  true, exact_selection,
-                                                  normalized_selection>(
-          ephemeral_scope, context, [&](auto) { return resolve<user_type>(); },
-          [&](auto) { return resolve<request_value_type>(); },
-          [&](auto) {
-            auto type_guard = context.template track_type<request_value_type>();
-            return factory.template construct<R>(ephemeral_scope, context,
-                                                 *this);
-          });
-    } else {
-      context_type context;
-      auto type_guard = context.template track_type<request_value_type>();
-      return factory.template construct<R>(ephemeral_scope, context, *this);
-    }
-  }
-
-public:
   template <typename Signature = void, typename Callable>
   auto invoke(Callable &&callable) {
     context_type context;

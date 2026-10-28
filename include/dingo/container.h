@@ -733,40 +733,7 @@ private:
 public:
   using detail::container_operations<self_type, true>::resolve;
 
-  template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-            typename R = request_result_t<T, true>>
-  DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {
-    using request = request_type<T>;
-    using interface_type = typename request::interface_type;
-    using value_type = typename request::value_type;
-    if constexpr (runtime_only_v) {
-      return execute_transaction(
-          runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
-            return construct_request<request, Factory, R>(
-                ephemeral_scope, context, std::move(factory));
-          });
-    } else {
-      if constexpr (std::is_same_v<Factory,
-                                   constructor<normalized_type_t<T>>>) {
-        if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
-                          T>) {
-          return construct_rvalue_request<T, request, Factory, R>(factory);
-        } else if constexpr (has_static_construct_v<T>) {
-          if (!has_runtime_no_key_binding<interface_type, value_type>()) {
-            return construct_static_transaction<request, R>();
-          }
-        } else {
-          return construct_runtime_transaction<request, Factory, R>(factory);
-        }
-      }
-
-      return execute_transaction(
-          runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
-            return construct_mixed_request<T, request, Factory, R>(
-                ephemeral_scope, context, factory);
-          });
-    }
-  }
+  using detail::container_operations<self_type, true>::construct;
 
   using detail::container_collections<self_type>::append_collection;
   using detail::container_collections<self_type>::construct_collection;
@@ -936,6 +903,8 @@ private:
   template <typename Context> bool owns_runtime(Context &context) {
     return context.owns(runtime_registry_.runtime());
   }
+
+  auto &runtime_storage() { return runtime_registry_.runtime(); }
 
   template <typename Request, typename R, typename Origin, typename LookupKey>
   DINGO_NOINLINE R resolve_nested(construction_scope scope,

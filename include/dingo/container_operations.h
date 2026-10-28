@@ -14,10 +14,14 @@
 #include <dingo/base/config.h>
 #include <dingo/base/construction_scope.h>
 #include <dingo/base/none.h>
+#include <dingo/factory/constructor.h>
+#include <dingo/runtime/context.h>
+#include <dingo/static/construction.h>
 #include <dingo/static/resolution_policy.h>
 #include <dingo/type/collection_traits.h>
 #include <dingo/type/dependency_traits.h>
 #include <dingo/type/key.h>
+#include <dingo/type/normalized_type.h>
 
 #include <type_traits>
 #include <utility>
@@ -176,6 +180,88 @@ public:
                 resolve<typename selected_policy::inner_type, false>(
                     scope, context, origin, key));
           });
+    }
+  }
+
+  // Construction: the runtime tree decides between the runtime-only path, the
+  // static-only fast path, and the mixed fallback; the static-only path is the
+  // exact/normalized/factory rule over the compile-time source.
+  template <typename T, typename Factory = constructor<normalized_type_t<T>>,
+            typename R = request_result_t<T, true>>
+  DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {
+    if constexpr (RuntimeSource) {
+      using request = request_type<T>;
+      using interface_type = typename request::interface_type;
+      using value_type = typename request::value_type;
+      if constexpr (Self::runtime_only_v) {
+        return execute_transaction(
+            self().runtime_storage(), [&](auto &context) -> R {
+              return self().template construct_request<request, Factory, R>(
+                  ephemeral_scope, context, std::move(factory));
+            });
+      } else {
+        constexpr bool default_factory =
+            std::is_same_v<Factory, constructor<normalized_type_t<T>>>;
+        constexpr bool rvalue =
+            ::dingo::rvalue_request_requires_explicit_conversion_v<T>;
+        if constexpr (default_factory && rvalue) {
+          return self()
+              .template construct_rvalue_request<T, request, Factory, R>(
+                  factory);
+        }
+        if constexpr (default_factory && !rvalue &&
+                      !Self::template has_static_construct_v<T>) {
+          return self()
+              .template construct_runtime_transaction<request, Factory, R>(
+                  factory);
+        }
+        if constexpr (default_factory && !rvalue &&
+                      Self::template has_static_construct_v<T>) {
+          if (!self()
+                   .template has_runtime_no_key_binding<interface_type,
+                                                        value_type>()) {
+            return self().template construct_static_transaction<request, R>();
+          }
+        }
+
+        return execute_transaction(
+            self().runtime_storage(), [&](auto &context) -> R {
+              return self()
+                  .template construct_mixed_request<T, request, Factory, R>(
+                      ephemeral_scope, context, factory);
+            });
+      }
+    } else {
+      using request = request_type<T>;
+      using user_type = typename request::user_type;
+      using interface_type = typename request::interface_type;
+      using request_value_type = typename request::value_type;
+      if constexpr (std::is_same_v<Factory, constructor<request_value_type>>) {
+        using exact_selection =
+            typename Self::static_bindings_type::template selection<
+                binding_dependency_interface_t<interface_type>,
+                binding_dependency_key_t<interface_type>>;
+        using normalized_selection =
+            typename Self::static_bindings_type::template selection<
+                request_value_type, detail::no_lookup_key_t>;
+        typename Self::context_type context;
+        return detail::construct_from_static_source<
+            request, R, typename Self::context_type, true, exact_selection,
+            normalized_selection>(
+            ephemeral_scope, context,
+            [&](auto) { return self().template resolve<user_type>(); },
+            [&](auto) { return self().template resolve<request_value_type>(); },
+            [&](auto) {
+              auto type_guard =
+                  context.template track_type<request_value_type>();
+              return factory.template construct<R>(ephemeral_scope, context,
+                                                   self());
+            });
+      } else {
+        typename Self::context_type context;
+        auto type_guard = context.template track_type<request_value_type>();
+        return factory.template construct<R>(ephemeral_scope, context, self());
+      }
     }
   }
 
