@@ -1134,5 +1134,47 @@ template <typename Target, typename Source, typename Access = consume>
 struct is_type_conversion_available
     : std::bool_constant<
           is_type_conversion_available_v<Target, Source, Access>> {};
+
+// What the selected conversion says about the route, independent of the
+// requested category. Storage pairing reads these facts instead of re-deriving
+// the default-object and identity-copy rules.
+template <typename Conversion> struct conversion_route_flags {
+  static constexpr bool produces_object_address = false;
+  static constexpr bool identity_copy = false;
+};
+
+template <typename Target, typename Source, typename RequiredAccess,
+          typename Argument>
+struct conversion_route_flags<
+    traits_type_conversion<Target, Source, RequiredAccess, Argument>> {
+  static constexpr bool produces_object_address =
+      is_default_type_conversion<type_conversion_traits<
+          Target, std::remove_cv_t<std::remove_reference_t<Source>>>>::value;
+  static constexpr bool identity_copy = false;
+};
+
+template <typename Target, typename Source>
+struct conversion_route_flags<address_type_conversion<Target, Source>> {
+  static constexpr bool produces_object_address = true;
+  static constexpr bool identity_copy = false;
+};
+
+template <typename Target, typename Source>
+struct conversion_route_flags<identity_type_conversion<Target, Source>> {
+  static constexpr bool produces_object_address = false;
+  static constexpr bool identity_copy = true;
+};
+
+template <typename Target, typename Source, typename Conversion>
+struct conversion_route_flags<
+    dereference_type_conversion<Target, Source, Conversion>>
+    : conversion_route_flags<Conversion> {};
+
+template <typename Conversion>
+struct conversion_properties : conversion_route_flags<Conversion> {
+  static constexpr bool available = Conversion::available;
+  static constexpr conversion_kind kind = Conversion::kind;
+  using required_access = typename Conversion::required_access;
+};
 } // namespace detail
 } // namespace dingo

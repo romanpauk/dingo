@@ -1,6 +1,15 @@
 # Conversion Path
 
-Status: design note. No code is changed by this page.
+Status: design note, slice 1 applied. No behavior is changed by this page.
+
+Slice 1 added `detail::conversion_properties` in
+[type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h):
+`produces_object_address`, `identity_copy`, `available`, `kind`, and
+`required_access` are now read from the selected conversion.
+[object_routes.cpp](../../test/registration/object_routes.cpp) uses the trait
+for its shared-route soundness checks across the plain, pointer, wrapper,
+alternative, array, and custom-wrapper matrix, replacing the local copies of the
+same two predicates. Slices 2 and 3 below remain.
 
 [Conversion Model](conversion-model.md) describes how a request is selected and
 executed today. This page records the one structural duplication left in that

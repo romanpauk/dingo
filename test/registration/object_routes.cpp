@@ -97,26 +97,6 @@ struct resolution_conversion<
   using conversion = Conversion;
 };
 
-// The conversions that only reach an object the source already holds.
-template <typename Conversion> struct is_default_borrow : std::false_type {};
-
-template <typename Target, typename Source, typename Access, typename Argument>
-struct is_default_borrow<
-    detail::traits_type_conversion<Target, Source, Access, Argument>>
-    : std::bool_constant<
-          detail::is_default_type_conversion<type_conversion_traits<
-              Target,
-              std::remove_cv_t<std::remove_reference_t<Source>>>>::value> {};
-
-template <typename Target, typename Source>
-struct is_default_borrow<detail::address_type_conversion<Target, Source>>
-    : std::true_type {};
-
-template <typename Target, typename Source, typename Conversion>
-struct is_default_borrow<
-    detail::dereference_type_conversion<Target, Source, Conversion>>
-    : is_default_borrow<Conversion> {};
-
 // A route that serves a reference request in place of a reference route must
 // replace a route that borrows the same object from the same source.
 template <typename Shared, typename ReferenceRoutes, typename PointerRoutes>
@@ -136,31 +116,16 @@ private:
       std::is_same_v<typename Reference::target_type, object &> &&
       std::is_same_v<typename resolution_conversion<Reference>::source,
                      typename shared::source> &&
-      is_default_borrow<
-          typename resolution_conversion<Reference>::conversion>::value;
+      detail::conversion_properties<typename resolution_conversion<
+          Reference>::conversion>::produces_object_address;
 
 public:
   static constexpr bool value =
       type_list_contains_v<pointer_route, type_list<Pointers...>> &&
-      is_default_borrow<typename shared::conversion>::value &&
+      detail::conversion_properties<
+          typename shared::conversion>::produces_object_address &&
       (replaces<References> || ...);
 };
-
-// The identity copy of a stored object: copied from an lvalue source, or from
-// the pointee of a pointer source.
-template <typename Value, typename Source, typename Conversion>
-inline constexpr bool is_identity_copy_v = false;
-
-template <typename Value, typename Source>
-inline constexpr bool is_identity_copy_v<
-    Value, Source, detail::identity_type_conversion<Value, Source>> = true;
-
-template <typename Value, typename Source>
-inline constexpr bool is_identity_copy_v<
-    Value, Source *,
-    detail::dereference_type_conversion<
-        Value, Source *, detail::identity_type_conversion<Value, Source &>>> =
-    true;
 
 // A route that serves the copy of its object in place of a value route must
 // replace the identity copy of the same source.
@@ -178,8 +143,8 @@ private:
       std::is_same_v<typename Value::target_type, value> &&
       std::is_same_v<typename resolution_conversion<Value>::source,
                      typename shared::source> &&
-      is_identity_copy_v<value, typename shared::source,
-                         typename resolution_conversion<Value>::conversion>;
+      detail::conversion_properties<
+          typename resolution_conversion<Value>::conversion>::identity_copy;
 
 public:
   static constexpr bool value_replaced = (replaces<Values> || ...);

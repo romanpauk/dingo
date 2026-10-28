@@ -322,9 +322,10 @@ Each step is independently reviewable. Steps 1–4 change no behavior.
    see [Applied Changes](#applied-changes).)* Gate: `object_sizes.cpp`, resolve
    probes.
 5. **Single conversion-path source of truth** (§3), coordinated with the wrapper
-   semantics model in `spec/`. Gate: model baseline, behavior and type-table
-   outcomes unchanged, declared baseline update only if a behavior change is
-   intended.
+   semantics model in `spec/`. *(Slice 1 applied — see
+   [Conversion Path](conversion-path.md).)* Gate: model baseline, behavior and
+   type-table outcomes unchanged, declared baseline update only if a behavior
+   change is intended.
 6. **Unify the container front-ends** following the slices in
    [Shared-Kernel Next Steps](shared-kernel-next-steps.md). Gate: 45/48-link
    dependency chains, `test-cost`, and `object_sizes.cpp`.
