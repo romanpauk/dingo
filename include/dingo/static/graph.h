@@ -1013,11 +1013,9 @@ template <typename Bindings, typename StaticRegistry>
 inline constexpr bool static_bindings_resolvable_v =
     graph_bindings_resolvable<StaticRegistry>(static_cast<Bindings *>(nullptr));
 
-// The RuntimeDependencies parameter selects how dependency requests are
-// accounted for in the bounds; edges without a binding are never followed, so
-// the topology does not depend on it.
-template <typename StaticRegistry, bool RuntimeDependencies = false>
-struct basic_static_graph_topology_analysis {
+// Topology introspection. The dependency request accounting does not change it:
+// edges without a binding are never followed.
+template <typename StaticRegistry> struct basic_static_graph_topology_analysis {
   static constexpr bool resolvable =
       graph_model<StaticRegistry>::topology.resolvable;
   static constexpr bool contains_cycle =
@@ -1048,9 +1046,8 @@ public:
   static constexpr std::size_t max_temporary_align = bounds.temporary_align;
 };
 
-template <typename StaticRegistry, bool RuntimeDependencies = false>
-using graph_analysis =
-    basic_static_graph_topology_analysis<StaticRegistry, RuntimeDependencies>;
+template <typename StaticRegistry>
+using graph_analysis = basic_static_graph_topology_analysis<StaticRegistry>;
 
 template <typename StaticRegistry, bool RuntimeDependencies = false>
 using execution_traits =

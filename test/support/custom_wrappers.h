@@ -188,10 +188,6 @@ template <typename T> struct type_traits<test_shared<T>> {
 
   template <typename U> using rebind_t = test_shared<U>;
 
-  template <typename Target>
-  static constexpr bool is_rebindable =
-      test_detail::is_instance<std::remove_cv_t<Target>, test_shared>::value;
-
   static T *get(test_shared<T> &wrapper) { return wrapper.get(); }
   static const T *get(const test_shared<T> &wrapper) { return wrapper.get(); }
   static T &borrow(test_shared<T> &wrapper) { return *wrapper.get(); }
@@ -208,12 +204,6 @@ template <typename T> struct type_traits<test_shared<T>> {
 
   static test_shared<T> from_pointer(T *ptr) {
     return test_shared<T>(std::shared_ptr<T>(ptr));
-  }
-
-  template <typename TargetWrapper, typename Factory, typename Context>
-  static TargetWrapper &resolve_type(Factory &factory, Context &context,
-                                     type_descriptor, type_descriptor) {
-    return factory.template resolve<TargetWrapper>(context);
   }
 };
 
@@ -237,9 +227,6 @@ template <typename T> struct type_traits<test_unique<T>> {
 
   template <typename U> using rebind_t = test_unique<U>;
 
-  template <typename Target>
-  static constexpr bool is_rebindable = std::is_same_v<Target, rebind_t<T>>;
-
   static T *get(test_unique<T> &wrapper) { return wrapper.get(); }
   static const T *get(const test_unique<T> &wrapper) { return wrapper.get(); }
   static T &borrow(test_unique<T> &wrapper) { return *wrapper.get(); }
@@ -256,18 +243,6 @@ template <typename T> struct type_traits<test_unique<T>> {
 
   static test_unique<T> from_pointer(T *ptr) {
     return test_unique<T>(std::unique_ptr<T>(ptr));
-  }
-
-  template <typename TargetWrapper, typename Factory, typename Context>
-  static TargetWrapper &resolve_type(Factory &factory, Context &context,
-                                     type_descriptor requested_type,
-                                     type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetWrapper, rebind_t<T>>) {
-      return factory.resolve(context);
-    } else {
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
-    }
   }
 };
 
@@ -291,9 +266,6 @@ template <typename T> struct type_traits<test_optional<T>> {
 
   template <typename U> using rebind_t = test_optional<U>;
 
-  template <typename Target>
-  static constexpr bool is_rebindable = std::is_same_v<Target, rebind_t<T>>;
-
   static T *get(test_optional<T> &wrapper) { return wrapper.get(); }
   static const T *get(const test_optional<T> &wrapper) { return wrapper.get(); }
   static T &borrow(test_optional<T> &wrapper) { return *wrapper.get(); }
@@ -316,18 +288,6 @@ template <typename T> struct type_traits<test_optional<T>> {
       return test_optional<T>(T(std::forward<Args>(args)...));
     } else {
       return test_optional<T>(T{std::forward<Args>(args)...});
-    }
-  }
-
-  template <typename TargetWrapper, typename Factory, typename Context>
-  static TargetWrapper &resolve_type(Factory &factory, Context &context,
-                                     type_descriptor requested_type,
-                                     type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetWrapper, rebind_t<T>>) {
-      return factory.resolve(context);
-    } else {
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
     }
   }
 };

@@ -244,10 +244,6 @@ protected:
     template <typename... Args>
     explicit runtime_binding_member(Args &&...args)
         : Binding(std::forward<Args>(args)...) {}
-
-    typename Binding::container_type &get_container() {
-      return Binding::get_container();
-    }
   };
 
   template <typename Derived, typename Indexes, typename... Bindings>

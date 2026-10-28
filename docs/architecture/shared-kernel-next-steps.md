@@ -1205,10 +1205,15 @@ static_registry_state        runtime_registry_state
     conversion cache             conversion cache
     static_local_scope_slot      runtime_scope_state
 static_registry              runtime_registry
-static_registry_state_view   (runtime registry is the view over its state)
 static_binding_resolver      runtime_binding
 static_binding_policy        runtime_binding_policy
 ```
+
+2026-10-28: the `static_registry_state_view` adapter was removed.
+`static_registry` now calls its `static_registry_state` directly, so the static
+side has the same shape as the runtime registry, which reads its state without a
+view. The earlier rename note above records where the adapter came from; it no
+longer exists.
 
 `static_binding_resolver` keeps its name because `static_binding` is already the
 type-level selection result; it is a transient resolver over one state, while

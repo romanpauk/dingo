@@ -20,9 +20,6 @@ namespace detail {
 template <typename State, typename... Registrations>
 class static_registry<static_bindings<Registrations...>, State> {
   using bindings_type = static_bindings<Registrations...>;
-  using self_type = static_registry<bindings_type, State>;
-
-  using scope_type = static_registry_state_view<State>;
 
   template <typename Request, typename LookupKey>
   using selection_t =
@@ -57,9 +54,9 @@ public:
   std::size_t append_collection(construction_scope construction, T &results,
                                 Host &host, Context &context, Fn &&fn) {
     static_assert(is_lookup_key_v<LookupKey>);
-    scope_type scope(state_);
-    return scope.template append_static_collection<T, LookupKey, bindings_type>(
-        construction, results, host, context, std::forward<Fn>(fn));
+    return state_
+        .template append_static_collection<T, LookupKey, bindings_type>(
+            construction, results, host, context, std::forward<Fn>(fn));
   }
 
   template <typename T, typename LookupKey>
@@ -72,8 +69,7 @@ public:
   T construct_collection(construction_scope construction, Host &host,
                          Context &context) {
     static_assert(is_lookup_key_v<LookupKey>);
-    scope_type scope(state_);
-    return scope
+    return state_
         .template construct_static_collection<T, LookupKey, bindings_type>(
             construction, host, context);
   }
@@ -83,8 +79,7 @@ public:
   T construct_collection(construction_scope construction, Host &host,
                          Context &context, Fn &&fn) {
     static_assert(is_lookup_key_v<LookupKey>);
-    scope_type scope(state_);
-    return scope
+    return state_
         .template construct_static_collection<T, LookupKey, bindings_type>(
             construction, host, context, std::forward<Fn>(fn));
   }
@@ -94,9 +89,8 @@ public:
   decltype(auto) resolve_binding(construction_scope construction,
                                  Context &context, Host &host) {
     using binding = typename Selection::binding_type;
-    scope_type scope(state_);
     auto resolver =
-        scope.template make_binding_resolver<binding>(construction, host);
+        state_.template make_binding_resolver<binding>(construction, host);
     return resolver.template resolve<ResolveRequest>(context);
   }
 

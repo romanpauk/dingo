@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/base/complete_type.h>
+#include <dingo/base/exceptions.h>
 #include <dingo/type/type_traits.h>
 
 #include <type_traits>

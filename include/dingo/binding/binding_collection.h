@@ -49,12 +49,6 @@ constexpr std::size_t static_collection_binding_count() {
       LookupKey>>;
 }
 
-template <typename T, typename RuntimeCountFn>
-std::size_t count_binding_collection(RuntimeCountFn &&runtime_count,
-                                     std::size_t static_count) {
-  return std::forward<RuntimeCountFn>(runtime_count)() + static_count;
-}
-
 template <typename T, typename RuntimeAppendFn, typename StaticAppendFn,
           typename Fn>
 std::size_t append_binding_collection(T &results,

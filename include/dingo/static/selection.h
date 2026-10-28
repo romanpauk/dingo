@@ -141,11 +141,6 @@ using static_selection_t =
     typename static_selection<Interface, LookupKey, InterfaceBindings>::type;
 
 // Backward-compatible spellings of the static selection.
-template <typename Interface, typename LookupKey, typename InterfaceBindings,
-          bool UseIndex = is_no_lookup_key_v<LookupKey>>
-using binding_selection =
-    static_selection<Interface, LookupKey, InterfaceBindings, UseIndex>;
-
 template <typename Interface, typename LookupKey, typename InterfaceBindings>
 using binding_selection_t =
     static_selection_t<Interface, LookupKey, InterfaceBindings>;

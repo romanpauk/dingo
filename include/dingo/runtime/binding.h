@@ -229,7 +229,7 @@ private:
   template <typename T, typename Context, typename... Args>
   T &construct_conversion(construction_scope scope, Context &context,
                           Args &&...args) {
-    return conversion_cache_base::template construct_conversion_for<T>(
+    return conversion_cache_base::template construct_conversion_with<T>(
         state().runtime(), scope, context, std::forward<Args>(args)...);
   }
 
@@ -298,11 +298,8 @@ private:
     construction_scope scope;
 
     using storage_type = Storage;
-    static constexpr bool direct_source_lifetime = false;
 
     auto &slot() { return binding.state(); }
-
-    auto &storage() { return slot().storage(); }
 
     runtime_binding_policy &activation() { return *this; }
 

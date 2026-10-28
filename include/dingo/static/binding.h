@@ -286,8 +286,6 @@ struct static_binding_policy {
 
   auto &slot() { return state.template get_slot_for_model<BindingModel>(); }
 
-  auto &storage() { return slot().storage(); }
-
   template <typename Operation, typename Request, typename Context,
             typename StorageType, typename Activation, typename Fn>
   decltype(auto) with_source(construction_scope source_scope, Context &context,
@@ -423,10 +421,6 @@ struct static_binding_resolver
   static_binding_resolver(State &state, Host &host, construction_scope scope)
       : core_type(policy_type{state, host, scope}) {}
 
-  static constexpr type_descriptor registered_type() {
-    return detail::binding_registered_type<storage_type>();
-  }
-
   template <typename Request, typename Context>
   Request resolve(Context &context) {
     static_assert(is_runtime_context_v<Context> ||
@@ -449,7 +443,7 @@ struct static_binding_resolver
             context);
       } else {
         throw detail::make_type_not_convertible_exception(
-            describe_type<Request>(), registered_type(), context);
+            describe_type<Request>(), this->registered_type(), context);
       }
       return detail::convert_resolved_binding<Request>(ptr);
     }
@@ -469,7 +463,7 @@ struct static_binding_resolver
           context, std::forward<Fn>(fn));
     } else {
       throw detail::make_type_not_convertible_exception(
-          describe_type<Request>(), registered_type(), context);
+          describe_type<Request>(), this->registered_type(), context);
     }
   }
 };
@@ -702,41 +696,6 @@ public:
   template <typename BindingModel> auto &get_local_scope_for_model() {
     return get_binding_state_for_model<BindingModel>().local_scope();
   }
-
-  template <typename Registration> auto &get_storage() {
-    return static_cast<binding_state<Registration> &>(*this).storage();
-  }
-};
-
-template <typename StorageState>
-class static_registry_state_view
-    : public static_registry_state_base<
-          static_registry_state_view<StorageState>> {
-public:
-  explicit static_registry_state_view(StorageState &state) : state_(&state) {}
-
-  template <typename Registration> auto &get_storage() {
-    return state_->template get_storage<Registration>();
-  }
-
-  template <typename BindingModel> auto &get_slot_for_model() {
-    return state_->template get_slot_for_model<BindingModel>();
-  }
-
-  template <typename BindingModel> auto &get_storage_for_model() {
-    return state_->template get_storage_for_model<BindingModel>();
-  }
-
-  template <typename BindingModel> auto &get_conversion_cache_for_model() {
-    return state_->template get_conversion_cache_for_model<BindingModel>();
-  }
-
-  template <typename BindingModel> auto &get_local_scope_for_model() {
-    return state_->template get_local_scope_for_model<BindingModel>();
-  }
-
-private:
-  StorageState *state_;
 };
 
 } // namespace detail

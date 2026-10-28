@@ -30,12 +30,6 @@ namespace detail {
 
 template <typename StaticBindings, typename State> class static_registry;
 
-enum class dependency_resolution_status {
-  resolved,
-  missing,
-  ambiguous,
-};
-
 template <typename BindingModel>
 using binding_dependencies_t = typename BindingModel::dependencies_type::type;
 
@@ -61,8 +55,6 @@ using binding_dependency_key_t =
 template <typename DependencyList, typename InterfaceBindings>
 struct dependency_bindings;
 
-template <typename ResolvedBindings> struct dependency_bindings_are_resolved;
-
 template <typename BindingModel, typename InterfaceBindings,
           bool HasKnownDependencies =
               !std::is_same_v<binding_dependencies_t<BindingModel>, void>>
@@ -73,10 +65,6 @@ struct binding_dependency_resolution<BindingModel, InterfaceBindings, true> {
   using type =
       typename dependency_bindings<binding_dependencies_t<BindingModel>,
                                    InterfaceBindings>::type;
-  static constexpr dependency_resolution_status status =
-      dependency_bindings_are_resolved<type>::value
-          ? dependency_resolution_status::resolved
-          : dependency_resolution_status::missing;
 };
 
 template <typename BindingModel, typename InterfaceBindings>
@@ -85,12 +73,6 @@ struct binding_dependency_resolution<BindingModel, InterfaceBindings, false> {
       typename factory_traits<
           typename BindingModel::factory_type>::dependencies,
       InterfaceBindings>::type;
-  static constexpr dependency_resolution_status status =
-      std::is_same_v<type, void>
-          ? dependency_resolution_status::resolved
-          : (dependency_bindings_are_resolved<type>::value
-                 ? dependency_resolution_status::resolved
-                 : dependency_resolution_status::missing);
 };
 
 struct key_value_lookup_not_required {};
@@ -311,20 +293,6 @@ struct dependency_bindings<type_list<Dependencies...>, InterfaceBindings> {
   using type = type_list_cat_t<typename dependency_binding_list<
       Dependencies, InterfaceBindings>::type...>;
 };
-
-template <typename ResolvedBindings>
-struct dependency_bindings_are_resolved : std::false_type {};
-
-template <> struct dependency_bindings_are_resolved<void> : std::false_type {};
-
-template <>
-struct dependency_bindings_are_resolved<type_list<>> : std::true_type {};
-
-template <typename Head, typename... Tail>
-struct dependency_bindings_are_resolved<type_list<Head, Tail...>>
-    : std::bool_constant<
-          !std::is_void_v<Head> &&
-          dependency_bindings_are_resolved<type_list<Tail...>>::value> {};
 
 template <typename BindingModel, typename InterfaceBindings,
           typename LocalBindings = typename BindingModel::bindings_type>

@@ -9,7 +9,6 @@
 
 #include <dingo/base/config.h>
 
-#include <dingo/base/exceptions.h>
 #include <dingo/base/type_list.h>
 
 #include <memory>
@@ -64,16 +63,9 @@ template <typename T, typename = void> struct type_traits {
   static constexpr bool can_take = is_owning_handle;
 
   template <typename> static constexpr bool is_handle_rebindable = false;
-
-  template <typename> static constexpr bool is_rebindable = false;
 };
 
 template <typename T> struct type_traits<const T> : type_traits<T> {};
-
-template <typename T>
-inline constexpr bool is_pointer_like_type_v =
-    type_traits<T>::enabled && type_traits<T>::is_pointer_like &&
-    !std::is_pointer_v<T>;
 
 template <typename T, typename = void> struct copy_constructible_traits;
 
@@ -297,19 +289,6 @@ template <typename T, typename... Args> T *make_dynamic_array(Args &&...args) {
   return new T[sizeof...(Args)]{std::forward<Args>(args)...};
 }
 
-template <typename Type, typename Pointer, typename = void>
-struct has_type_from_pointer : std::false_type {};
-
-template <typename Type, typename Pointer>
-struct has_type_from_pointer<
-    Type, Pointer,
-    std::void_t<decltype(type_traits<Type>::from_pointer(
-        std::declval<Pointer>()))>> : std::true_type {};
-
-template <typename Type, typename Pointer>
-inline constexpr bool has_type_from_pointer_v =
-    has_type_from_pointer<Type, Pointer>::value;
-
 template <typename Type, typename = void>
 struct is_array_like_type : std::is_array<Type> {};
 
@@ -453,25 +432,11 @@ template <typename T> struct type_traits<T *> {
 
   template <typename U> using rebind_t = U *;
 
-  template <typename Target>
-  static constexpr bool is_rebindable = std::is_same_v<Target, rebind_t<T>>;
-
   static T *get(T *ptr) { return ptr; }
   static T &borrow(T *ptr) { return *ptr; }
   static bool empty(T *ptr) { return ptr == nullptr; }
   static void reset(T *&ptr) { ptr = nullptr; }
   static T *from_pointer(T *ptr) { return ptr; }
-
-  template <typename TargetType, typename Factory, typename Context>
-  static TargetType resolve_type(Factory &factory, Context &context,
-                                 type_descriptor requested_type,
-                                 type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetType, rebind_t<T>>)
-      return factory.resolve(context);
-    else
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
-  }
 };
 
 template <> struct type_traits<void *> {
@@ -496,24 +461,10 @@ template <> struct type_traits<void *> {
 
   template <typename U> using rebind_t = U *;
 
-  template <typename Target>
-  static constexpr bool is_rebindable = std::is_same_v<Target, rebind_t<void>>;
-
   static void *get(void *ptr) { return ptr; }
   static bool empty(void *ptr) { return ptr == nullptr; }
   static void reset(void *&ptr) { ptr = nullptr; }
   static void *from_pointer(void *ptr) { return ptr; }
-
-  template <typename TargetType, typename Factory, typename Context>
-  static TargetType resolve_type(Factory &factory, Context &context,
-                                 type_descriptor requested_type,
-                                 type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetType, rebind_t<void>>)
-      return factory.resolve(context);
-    else
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
-  }
 };
 
 template <> struct type_traits<const void *> {
@@ -538,25 +489,10 @@ template <> struct type_traits<const void *> {
 
   template <typename U> using rebind_t = U *;
 
-  template <typename Target>
-  static constexpr bool is_rebindable =
-      std::is_same_v<Target, rebind_t<const void>>;
-
   static const void *get(const void *ptr) { return ptr; }
   static bool empty(const void *ptr) { return ptr == nullptr; }
   static void reset(const void *&ptr) { ptr = nullptr; }
   static const void *from_pointer(const void *ptr) { return ptr; }
-
-  template <typename TargetType, typename Factory, typename Context>
-  static TargetType resolve_type(Factory &factory, Context &context,
-                                 type_descriptor requested_type,
-                                 type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetType, rebind_t<const void>>)
-      return factory.resolve(context);
-    else
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
-  }
 };
 
 template <typename Array, typename Deleter>
@@ -586,10 +522,6 @@ struct type_traits<std::unique_ptr<Array, Deleter>,
   template <typename U>
   using rebind_t = std::unique_ptr<U[], std::default_delete<U[]>>;
 
-  template <typename Target>
-  static constexpr bool is_rebindable =
-      std::is_same_v<Target, rebind_t<value_type>>;
-
   static value_type *get(std::unique_ptr<Array, Deleter> &wrapper) {
     return wrapper.get();
   }
@@ -614,17 +546,6 @@ struct type_traits<std::unique_ptr<Array, Deleter>,
 
   static std::unique_ptr<Array, Deleter> from_pointer(value_type *ptr) {
     return std::unique_ptr<Array, Deleter>(ptr);
-  }
-
-  template <typename TargetType, typename Factory, typename Context>
-  static TargetType &resolve_type(Factory &factory, Context &context,
-                                  type_descriptor requested_type,
-                                  type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetType, rebind_t<value_type>>)
-      return factory.resolve(context);
-    else
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
   }
 };
 
@@ -652,9 +573,6 @@ struct type_traits<std::unique_ptr<T, Deleter>,
 
   template <typename U>
   using rebind_t = std::unique_ptr<U, std::default_delete<U>>;
-
-  template <typename Target>
-  static constexpr bool is_rebindable = std::is_same_v<Target, rebind_t<T>>;
 
   static T *get(std::unique_ptr<T, Deleter> &wrapper) { return wrapper.get(); }
 
@@ -694,17 +612,6 @@ struct type_traits<std::unique_ptr<T, Deleter>,
   static std::unique_ptr<T, Deleter> wrap(Value &&value) {
     return std::unique_ptr<T, Deleter>(new T(std::forward<Value>(value)));
   }
-
-  template <typename TargetType, typename Factory, typename Context>
-  static TargetType &resolve_type(Factory &factory, Context &context,
-                                  type_descriptor requested_type,
-                                  type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetType, rebind_t<T>>)
-      return factory.resolve(context);
-    else
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
-  }
 };
 
 template <typename Array>
@@ -733,10 +640,6 @@ struct type_traits<std::shared_ptr<Array>,
 
   template <typename U> using rebind_t = std::shared_ptr<U[]>;
 
-  template <typename Target>
-  static constexpr bool is_rebindable =
-      std::is_constructible_v<std::remove_cv_t<Target>, std::shared_ptr<Array>>;
-
   static value_type *get(std::shared_ptr<Array> &wrapper) {
     return wrapper.get();
   }
@@ -759,12 +662,6 @@ struct type_traits<std::shared_ptr<Array>,
 
   static std::shared_ptr<Array> from_pointer(value_type *ptr) {
     return std::shared_ptr<Array>(ptr);
-  }
-
-  template <typename TargetType, typename Factory, typename Context>
-  static TargetType &resolve_type(Factory &factory, Context &context,
-                                  type_descriptor, type_descriptor) {
-    return factory.template resolve<TargetType>(context);
   }
 };
 
@@ -790,10 +687,6 @@ struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>> {
   using value_type = T;
 
   template <typename U> using rebind_t = std::shared_ptr<U>;
-
-  template <typename Target>
-  static constexpr bool is_rebindable =
-      std::is_constructible_v<std::remove_cv_t<Target>, std::shared_ptr<T>>;
 
   static T *get(std::shared_ptr<T> &wrapper) { return wrapper.get(); }
 
@@ -829,12 +722,6 @@ struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>> {
   template <typename Value> static std::shared_ptr<T> wrap(Value &&value) {
     return std::make_shared<T>(std::forward<Value>(value));
   }
-
-  template <typename TargetType, typename Factory, typename Context>
-  static TargetType &resolve_type(Factory &factory, Context &context,
-                                  type_descriptor, type_descriptor) {
-    return factory.template resolve<TargetType>(context);
-  }
 };
 
 template <typename T> struct type_traits<std::optional<T>> {
@@ -856,9 +743,6 @@ template <typename T> struct type_traits<std::optional<T>> {
   using value_type = T;
 
   template <typename U> using rebind_t = std::optional<U>;
-
-  template <typename Target>
-  static constexpr bool is_rebindable = std::is_same_v<Target, rebind_t<T>>;
 
   static T *get(std::optional<T> &wrapper) {
     return wrapper ? std::addressof(wrapper.value()) : nullptr;
@@ -894,17 +778,6 @@ template <typename T> struct type_traits<std::optional<T>> {
       return std::optional<T>{std::in_place, std::forward<Args>(args)...};
     else
       return std::optional<T>{std::in_place, T{std::forward<Args>(args)...}};
-  }
-
-  template <typename TargetType, typename Factory, typename Context>
-  static TargetType &resolve_type(Factory &factory, Context &context,
-                                  type_descriptor requested_type,
-                                  type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetType, rebind_t<T>>)
-      return factory.resolve(context);
-    else
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
   }
 };
 

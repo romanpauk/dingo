@@ -215,7 +215,6 @@ constexpr bool has_lookup() {
 template <typename ContainerTraits, typename Allocator>
 class registry_store : public registration_store<ContainerTraits, Allocator> {
   using lookup_base = lookup_selection<ContainerTraits, Allocator>;
-  using registration_base = registration_store<ContainerTraits, Allocator>;
 
 protected:
   using store_type = registry_store;
@@ -504,8 +503,6 @@ public:
 private:
   registry_type &binding_store() { return *this; }
 
-  registry_type &runtime_registration_parent() { return *this; }
-
 public:
   runtime_registry(const runtime_registry &) = delete;
   runtime_registry &operator=(const runtime_registry &) = delete;
@@ -696,8 +693,9 @@ protected:
     construction_scope scope;
 
     decltype(auto) select() {
-      return registry.template source_select<typename Request::value_type,
-                                             typename Request::exact_type>(key);
+      return registry.template select_binding<typename Request::value_type,
+                                              typename Request::exact_type>(
+          key);
     }
 
     template <typename ResolveRequest, typename Selection>
@@ -720,12 +718,6 @@ protected:
           scope, context, key);
     }
   };
-
-  template <typename Value, typename Exact, typename LookupKey>
-  runtime_selection source_select(LookupKey key) {
-    return store_type::template source_select<Value, Exact, lookup_may_miss()>(
-        runtime_bindings(), std::move(key));
-  }
 
   template <typename Request, bool MayAutoConstruct, typename LookupKey,
             typename R = typename Request::lookup_type,

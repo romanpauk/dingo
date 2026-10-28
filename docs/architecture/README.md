@@ -24,6 +24,9 @@ Read these pages in order for the full picture:
   operator classes, and what completeness means.
 - [Test Corpus Retirement](retired-corpus.md): what replaced the retired the
   generated test corpus corpus, feature by feature.
+- [Complexity Review](complexity-review.md): a maintenance report on dead
+  surface, forwarding layers, and rules that are encoded more than once, with a
+  proposed order for removing them.
 
 The public API is centered on three container entry points:
 

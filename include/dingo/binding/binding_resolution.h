@@ -86,13 +86,6 @@ struct binding_conversion_cache_base<true, ConversionTypes> {
         context, std::forward<Args>(args)...);
   }
 
-  template <typename T, typename Owner, typename Context, typename... Args>
-  T &construct_conversion_for(Owner &owner, construction_scope scope,
-                              Context &context, Args &&...args) {
-    return construct_conversion_with<T>(owner, scope, context,
-                                        std::forward<Args>(args)...);
-  }
-
   void reset_conversions() { conversions_.reset(); }
 
 protected:
@@ -110,12 +103,6 @@ struct binding_conversion_cache_base<false, ConversionTypes> {
   template <typename T, typename Owner, typename Context, typename... Args>
   T &construct_conversion_with(Owner &, construction_scope scope,
                                Context &context, Args &&...args) {
-    return construct_conversion<T>(scope, context, std::forward<Args>(args)...);
-  }
-
-  template <typename T, typename Owner, typename Context, typename... Args>
-  T &construct_conversion_for(Owner &, construction_scope scope,
-                              Context &context, Args &&...args) {
     return construct_conversion<T>(scope, context, std::forward<Args>(args)...);
   }
 
@@ -298,16 +285,6 @@ struct has_context_materialize_source<
         std::declval<construction_scope>(), std::declval<Context &>(),
         std::declval<Storage &>(), std::declval<Owner &>()))>>
     : std::true_type {};
-
-// A flat source-lifetime dispatcher: one lifetime decision, then the existing
-// lifetime backends. It uses the scope/source descriptors instead of probing
-// storage.resolve.
-enum class source_lifetime {
-  context_lvalue,
-  context,
-  retained,
-  local,
-};
 
 template <typename Context, typename = void>
 struct context_supports_construct : std::false_type {};

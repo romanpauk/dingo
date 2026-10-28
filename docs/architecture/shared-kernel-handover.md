@@ -102,9 +102,11 @@ static_registry_state        runtime_registry_state
     conversion cache             conversion cache
     static_local_scope_slot      runtime_scope_state
 static_registry              runtime_registry
-static_registry_state_view   (the runtime registry is already a view over its
-                              state)
 ```
+
+`static_registry` calls its state object directly. The former
+`static_registry_state_view` shim was removed; both registries read their state
+without an adapter.
 
 `binding/binding_resolution.h` defines `binding_slot<Storage>`; both
 `static_binding_state` and `runtime_binding_state` contain one. `binding_core`

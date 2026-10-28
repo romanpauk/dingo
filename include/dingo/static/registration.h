@@ -53,11 +53,11 @@ struct static_registration_requirements<true, static_bindings<Registrations...>,
       "for one lookups and unique by storage for many lookups");
   static_assert(
       std::is_void_v<RuntimeConfig> ||
-          graph_analysis<bindings_type, true>::resolvable,
+          graph_analysis<bindings_type>::resolvable,
       "register_type bindings<...> requires a resolvable compile-time binding "
       "graph");
   static_assert(!std::is_void_v<RuntimeConfig> ||
-                    graph_analysis<bindings_type, true>::resolvable,
+                    graph_analysis<bindings_type>::resolvable,
                 "container requires a resolvable compile-time binding graph");
   static_assert((binding_factory_is_default_constructible<
                      binding_model<Registrations>>::value &&

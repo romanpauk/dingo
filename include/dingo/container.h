@@ -542,10 +542,6 @@ public:
   self_type &operator=(const self_type &) = delete;
   self_type &operator=(self_type &&) = delete;
 
-  self_type &container() { return *this; }
-
-  const self_type &container() const { return *this; }
-
 private:
   template <typename Request, typename R, typename LookupKey>
   static constexpr bool is_cacheable() {
@@ -1012,8 +1008,6 @@ private:
   friend class detail::runtime_registration<self_type>;
 
   runtime_registry_type &binding_store() { return runtime_registry_; }
-
-  self_type &runtime_registration_parent() { return *this; }
 
   runtime_registry_type runtime_registry_;
   parent_container_type *parent_ = nullptr;

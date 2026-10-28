@@ -31,7 +31,7 @@ public:
 
   template <typename... TypeArgs> auto register_type() {
     return self().binding_store().template prepare_binding<TypeArgs...>(
-        &self().runtime_registration_parent(), none_t{});
+        &self(), none_t{});
   }
 
   template <typename... TypeArgs, typename Arg,
@@ -39,7 +39,7 @@ public:
                              int> = 0>
   auto register_type(Arg &&arg) {
     return self().binding_store().template prepare_binding<TypeArgs...>(
-        &self().runtime_registration_parent(), std::forward<Arg>(arg));
+        &self(), std::forward<Arg>(arg));
   }
 
   template <typename... TypeArgs, typename... KeyArgs,
@@ -49,8 +49,7 @@ public:
                 int> = 0>
   auto register_type(KeyArgs &&...keys) {
     return self().binding_store().template prepare_binding<TypeArgs...>(
-        &self().runtime_registration_parent(), none_t{},
-        std::forward<KeyArgs>(keys)...);
+        &self(), none_t{}, std::forward<KeyArgs>(keys)...);
   }
 
   template <typename... TypeArgs, typename Arg, typename... KeyArgs,
@@ -61,8 +60,7 @@ public:
                 int> = 0>
   auto register_type(Arg &&arg, KeyArgs &&...keys) {
     return self().binding_store().template prepare_binding<TypeArgs...>(
-        &self().runtime_registration_parent(), std::forward<Arg>(arg),
-        std::forward<KeyArgs>(keys)...);
+        &self(), std::forward<Arg>(arg), std::forward<KeyArgs>(keys)...);
   }
 
   template <typename... TypeArgs, typename Fn>

@@ -143,9 +143,8 @@ TEST(static_graph_test,
   using traits = detail::execution_traits<typename source::type, true>;
 
   static_assert(source::type::valid);
-  static_assert(!detail::graph_analysis<typename source::type, true>::acyclic);
-  static_assert(
-      !detail::graph_analysis<typename source::type, true>::resolvable);
+  static_assert(!detail::graph_analysis<typename source::type>::acyclic);
+  static_assert(!detail::graph_analysis<typename source::type>::resolvable);
   static_assert(!traits::resolvable);
   static_assert(!traits::acyclic);
 }

@@ -113,7 +113,7 @@ private:
   using selection_type = container_selection<self_type>;
 
   static constexpr bool has_parent_v = !std::is_void_v<ParentContainer>;
-  using graph_type_ = graph_analysis<static_bindings_type, has_parent_v>;
+  using graph_type_ = graph_analysis<static_bindings_type>;
   using parent_container_type = container_implementation_t<ParentContainer>;
   using state_type = static_registry_state<Registrations...>;
   using context_type = static_context<context_static_bindings_type>;
@@ -207,10 +207,6 @@ private:
   template <typename Request, typename R, typename LookupKey>
   struct resolve_request_check<Request, R, LookupKey, false>
       : resolve_request_status_check<Request, LookupKey> {};
-
-  template <typename Collection, typename Key>
-  static constexpr std::size_t collection_count_v =
-      static_collection_binding_count<static_bindings_type, Collection, Key>();
 
   // Keep the public static boundary out of static_context when the request is a
   // direct stored reference/pointer read. Those paths are part of the tiny
