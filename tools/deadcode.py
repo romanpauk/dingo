@@ -28,6 +28,7 @@ throw it.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -242,6 +243,18 @@ def unreachable(root: Path) -> list[Finding]:
     ]
 
 
+def cross_check(dead: list[Finding], lsp_report: Path) -> list[str]:
+    """Declarations the textual scan and clangd both report as unreferenced."""
+    reported = {
+        str(finding.path) + ":" + finding.name for finding in dead
+    }
+    agreed = []
+    for item in json.loads(lsp_report.read_text(encoding="utf-8")):
+        if item in reported:
+            agreed.append(item)
+    return sorted(agreed)
+
+
 def render(dead: list[Finding], test_only: list[Finding]) -> str:
     lines = [f"## Unreferenced declarations ({len(dead)})", ""]
     if dead:
@@ -267,9 +280,37 @@ def main() -> None:
         action="store_true",
         help="report declarations unreachable from tests, examples, or entry headers",
     )
+    parser.add_argument(
+        "--lsp",
+        type=Path,
+        help="clangd report JSON; print only declarations both methods agree on",
+    )
+    parser.add_argument(
+        "--check",
+        type=Path,
+        help="baseline to compare the agreed set against",
+    )
     arguments = parser.parse_args()
 
     dead, test_only = scan(arguments.root)
+
+    if arguments.lsp is not None:
+        agreed = cross_check(dead, arguments.lsp)
+        print(f"## Confirmed by both methods ({len(agreed)})\n")
+        for item in agreed:
+            print(f"- `{item}`")
+        if arguments.check is not None:
+            expected = json.loads(arguments.check.read_text(encoding="utf-8"))
+            if sorted(agreed) != sorted(expected):
+                added = sorted(set(agreed) - set(expected))
+                removed = sorted(set(expected) - set(agreed))
+                for item in added:
+                    print(f"+ {item}", file=sys.stderr)
+                for item in removed:
+                    print(f"- {item}", file=sys.stderr)
+                raise SystemExit("the agreed set changed; update the baseline")
+        return
+
     print(render(dead, test_only if arguments.all else []), end="")
     if arguments.reachable:
         rows = unreachable(arguments.root)

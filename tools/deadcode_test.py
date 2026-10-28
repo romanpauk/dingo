@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tools.deadcode import render, scan, unreachable
+from tools.deadcode import Finding, cross_check, render, scan, unreachable
 
 USED = """\
 #pragma once
@@ -129,3 +129,15 @@ def test_unreachable_keeps_entry_headers_live(tmp_path: Path) -> None:
     root = build_chain_tree(tmp_path)
     rows = unreachable(root)
     assert "entry_type" not in {finding.name for finding in rows}
+
+
+def test_cross_check_keeps_only_agreed_declarations(tmp_path: Path) -> None:
+    report = tmp_path / "lsp.json"
+    report.write_text(
+        '["include/dingo/a.h:agreed", "include/dingo/a.h:only_lsp"]\n'
+    )
+    dead = [
+        Finding("include/dingo/a.h", "agreed", 0),
+        Finding("include/dingo/a.h", "only_scan", 0),
+    ]
+    assert cross_check(dead, report) == ["include/dingo/a.h:agreed"]

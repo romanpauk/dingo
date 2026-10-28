@@ -1008,6 +1008,11 @@ add_custom_target(lsp-refs-report
     COMMENT "Counting header declaration references through clangd"
     COMMAND ${DINGO_UV_RUN_COMMAND} python
         ${PROJECT_SOURCE_DIR}/tools/lsp_refs.py
+        --json ${PROJECT_BINARY_DIR}/lsp-refs.json
+    COMMAND ${DINGO_UV_RUN_COMMAND} python
+        ${PROJECT_SOURCE_DIR}/tools/deadcode.py
+        --lsp ${PROJECT_BINARY_DIR}/lsp-refs.json
+        --check ${PROJECT_SOURCE_DIR}/tools/deadcode_baseline.json
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 add_custom_target(deadcode-report

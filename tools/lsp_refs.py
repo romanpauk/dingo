@@ -6,30 +6,32 @@
 # SPDX-License-Identifier: MIT
 #
 
-"""Exact reference counts for header declarations, through clangd.
+"""Report declarations that no code references, using clangd.
 
-The lexical scanner in ``deadcode.py`` guesses references by matching names.
-This reports the same question from clangd's symbol index: for every type
-declaration in the headers, ask the language server for its references and count
-them. A declaration with no reference beyond itself is unreachable by any other
-code.
+The claim is deliberately narrow, so it can be trusted:
 
-It needs clangd and a ``compile_commands.json``. Every header is opened, which
-makes each one a translation unit, so a reference from one header to another is
-visible without waiting for a project index.
+- the inventory comes from clangd's hierarchical document symbols, not from a
+  lexical scan;
+- references come from clangd's symbol index;
+- members are attributed to the class that contains them, and specialisations
+  to their primary template, so a class is never reported because one of its
+  members happens to have no direct reference;
+- only namespace-scope declarations are reported.
 
-Reference counts are per symbol, not per reachability: a template used only
-through its ``_t`` alias has no direct references and is still alive. Read the
-result together with the reachability report in ``deadcode.py``.
+A declaration is reported when it, and every declaration grouped with it, has
+no reference other than itself. That is a lower bound on dead code: it says
+"nothing references this", not "nothing can reach this". Template instantiation
+is not a reference, so a template used only through an alias stays out of the
+report only if the alias is referenced.
 
-This is a report, not a gate.
+``--check`` compares the result with the committed baseline, so a new or a
+disappeared entry fails the target instead of passing silently.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -37,37 +39,28 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
-DECLARATION_SPAN = re.compile(
-    r"^\s*(?:template\s*<[^;{}]*>\s*)?"
-    r"(?:struct|class|enum(?:\s*class)?|union|using)\s+([A-Za-z_]\w*)",
-    re.MULTILINE,
-)
-FUNCTION_SPAN = re.compile(
-    r"^(?:([A-Za-z_][\w:<>,\s\*&]*?)\b(\w+)\s*\([^;{}]*\)\s*(?:const\s*)?)\{",
-    re.MULTILINE,
-)
-VARIABLE_SPAN = re.compile(
-    r"^(?:template\s*<[^;{}]*>\s*)?(?:inline\s+|static\s+)*constexpr\s+"
-    r"[\w:<>,&\*\s]+?\b([A-Za-z_]\w*)\s*(?:=|\{)",
-    re.MULTILINE,
-)
+NAMESPACE = 3
 ENTRY_HEADERS = ("container.h", "runtime_container.h", "static_container.h")
-
-DECLARATION = re.compile(
-    r"^\s*(?:template\s*<[^;{}]*>\s*)?"
-    r"(?:struct|class|enum(?:\s+class)?|union|using)\s+([A-Za-z_]\w*)",
-    re.MULTILINE,
-)
+BASELINE = Path("tools/lsp_refs_baseline.json")
 
 
 @dataclass(frozen=True)
-class Declaration:
-    path: Path
+class Symbol:
+    file: Path
     name: str
-    line: int
-    character: int
+    start: tuple[int, int]
+    end: tuple[int, int]
+    select: tuple[int, int]
+
+    @property
+    def key(self) -> tuple[str, int, int]:
+        return (self.file.as_posix(), self.start[0], self.start[1])
+
+    @property
+    def base_name(self) -> str:
+        return self.name.split("<", 1)[0].strip()
 
 
 class Client:
@@ -77,7 +70,7 @@ class Client:
         self.process = subprocess.Popen(
             [
                 executable,
-                "--background-index=1",
+                "--background-index",
                 f"--compile-commands-dir={compile_commands}",
                 "--log=error",
             ],
@@ -113,12 +106,7 @@ class Client:
             self.next_id += 1
             request_id = self.next_id
         self.send(
-            {
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "method": method,
-                "params": params,
-            }
+            {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}
         )
         deadline = time.time() + timeout
         while time.time() < deadline:
@@ -165,122 +153,59 @@ class Client:
 
 
 def uri(path: Path) -> str:
-    return "file://" + quote(str(path))
+    return "file://" + quote(str(path.resolve()))
 
 
-@dataclass(frozen=True)
-class Span:
-    name: str
-    start: int
-    end: int
+def path_of(text: str) -> Path:
+    return Path(unquote(text.removeprefix("file://")))
 
 
-def spans(text: str) -> list[Span]:
-    """Declaration and namespace-scope function bodies with their offsets."""
-    rows: list[Span] = []
-    for match in DECLARATION_SPAN.finditer(text):
-        brace = text.find("{", match.end())
-        semicolon = text.find(";", match.end())
-        if brace == -1 or (semicolon != -1 and semicolon < brace):
-            rows.append(
-                Span(match.group(1), match.start(), semicolon + 1 if semicolon != -1 else len(text))
-            )
+def flatten(
+    file: Path, items: list[dict[str, object]], out: list[Symbol]
+) -> None:
+    for item in items:
+        if int(item.get("kind", 0)) == NAMESPACE:
+            flatten(file, item.get("children") or [], out)
             continue
-        depth = 0
-        end = brace
-        while end < len(text):
-            if text[end] == "{":
-                depth += 1
-            elif text[end] == "}":
-                depth -= 1
-                if depth == 0:
-                    end += 1
-                    break
-            end += 1
-        rows.append(Span(match.group(1), match.start(), end))
-    for match in VARIABLE_SPAN.finditer(text):
-        semicolon = text.find(";", match.end())
-        rows.append(
-            Span(match.group(1), match.start(), semicolon + 1 if semicolon != -1 else len(text))
+        selection = item.get("selectionRange", item["range"])
+        out.append(
+            Symbol(
+                file,
+                str(item.get("name", "")),
+                (int(item["range"]["start"]["line"]), int(item["range"]["start"]["character"])),
+                (int(item["range"]["end"]["line"]), int(item["range"]["end"]["character"])),
+                (
+                    int(selection["start"]["line"]),
+                    int(selection["start"]["character"]),
+                ),
+            )
         )
-    for match in FUNCTION_SPAN.finditer(text):
-        brace = text.find("{", match.end() - 1)
-        depth = 0
-        end = brace
-        while end < len(text):
-            if text[end] == "{":
-                depth += 1
-            elif text[end] == "}":
-                depth -= 1
-                if depth == 0:
-                    end += 1
-                    break
-            end += 1
-        rows.append(Span(match.group(2), match.start(), end))
-    return sorted(rows, key=lambda span: span.start)
+        flatten(file, item.get("children") or [], out)
 
 
-def enclosing(spans_of_file: list[Span], offset: int) -> Span | None:
-    """The innermost span containing the offset."""
-    best: Span | None = None
-    for span in spans_of_file:
-        if span.start <= offset < span.end:
-            if best is None or (span.start >= best.start and span.end <= best.end):
-                best = span
+def containing(symbols: list[Symbol], symbol: Symbol) -> Symbol | None:
+    best: Symbol | None = None
+    for candidate in symbols:
+        if candidate.key == symbol.key:
+            continue
+        if candidate.start <= symbol.select <= candidate.end:
+            if best is None or (
+                candidate.start >= best.start and candidate.end <= best.end
+            ):
+                best = candidate
     return best
 
 
-def offset_of(text: str, line: int, character: int) -> int:
-    start = 0
-    for _ in range(line):
-        start = text.index("\n", start) + 1
-    return start + character
-
-
-def declarations(root: Path) -> list[Declaration]:
-    rows: list[Declaration] = []
-    seen: set[tuple[Path, str]] = set()
-    for header in sorted(root.rglob("*.h")):
-        header = header.resolve()
-        text = header.read_text(encoding="utf-8")
-        for match in DECLARATION.finditer(text):
-            name = match.group(1)
-            if len(name) < 5 or name.isupper():
-                continue
-            start = match.start(1)
-            line = text.count("\n", 0, start)
-            character = start - (text.rfind("\n", 0, start) + 1)
-            if (header, name) in seen:
-                continue
-            seen.add((header, name))
-            rows.append(Declaration(header, name, line, character))
-        for match in VARIABLE_SPAN.finditer(text):
-            name = match.group(1)
-            start = match.start(1)
-            if (header, name) in seen:
-                continue
-            seen.add((header, name))
-            rows.append(
-                Declaration(
-                    header,
-                    name,
-                    text.count("\n", 0, start),
-                    start - (text.rfind("\n", 0, start) + 1),
-                )
-            )
-    return rows
-
-
-def references(
-    client: Client, declaration: Declaration
-) -> list[dict[str, object]] | None:
+def reference_count(
+    client: Client, symbol: Symbol
+) -> int | None:
     response = client.request(
         "textDocument/references",
         {
-            "textDocument": {"uri": uri(declaration.path)},
+            "textDocument": {"uri": uri(symbol.file)},
             "position": {
-                "line": declaration.line,
-                "character": declaration.character,
+                "line": symbol.select[0],
+                "character": symbol.select[1],
             },
             "context": {"includeDeclaration": True},
         },
@@ -289,90 +214,159 @@ def references(
     if response is None or "result" not in response:
         return None
     result = response["result"]
-    return result if isinstance(result, list) else None
+    if not isinstance(result, list):
+        return None
+    own = uri(symbol.file)
+    return sum(
+        1
+        for item in result
+        if not (
+            item.get("uri") == own
+            and (item.get("range") or {}).get("start") == {
+                "line": symbol.select[0],
+                "character": symbol.select[1],
+            }
+        )
+    )
 
 
-def path_of(uri_text: str) -> Path:
-    from urllib.parse import unquote
+def scan(root: Path, wait: float) -> tuple[list[str], list[str]]:
+    executable = shutil.which("clangd")
+    if executable is None:
+        raise RuntimeError("clangd is not installed")
+    repository = root.resolve().parents[1]
+    client = Client(executable, repository, (repository / "build").resolve())
+    try:
+        response = client.request(
+            "initialize",
+            {
+                "processId": None,
+                "rootUri": uri(repository),
+                "capabilities": {
+                    "textDocument": {
+                        "documentSymbol": {"hierarchicalDocumentSymbolSupport": True}
+                    }
+                },
+            },
+        )
+        if response is None:
+            raise RuntimeError("clangd did not answer initialize")
+        client.notify("initialized", {})
 
-    return Path(unquote(uri_text.removeprefix("file://")))
+        headers = sorted(root.rglob("*.h"))
+        for header in headers:
+            client.open(header)
+
+        # The library's users are the tests and the examples. Without them the
+        # server never sees a construct used only from a translation unit.
+        for directory in ("test", "examples"):
+            base = repository / directory
+            if not base.is_dir():
+                continue
+            for source in sorted(base.rglob("*.cpp")):
+                if "generated" in source.parts:
+                    continue
+                client.open(source)
+        time.sleep(wait)
+
+        symbols_by_file: dict[Path, list[Symbol]] = {}
+        for header in headers:
+            response = client.request(
+                "textDocument/documentSymbol",
+                {"textDocument": {"uri": uri(header)}},
+                timeout=60,
+            )
+            if response is None or "result" not in response:
+                continue
+            rows: list[Symbol] = []
+            flatten(header.resolve(), response["result"], rows)
+            symbols_by_file[header.resolve()] = rows
+
+        # Group siblings that differ only by template arguments: a
+        # specialisation and its primary are one declaration.
+        # Group by name across the whole project: a use of a specialisation
+        # counts as a use of the primary, and the primary is what a reader
+        # would delete.
+        groups: dict[str, list[Symbol]] = {}
+        containers: dict[tuple[str, int, int], tuple[str, int, int]] = {}
+        for file, rows in symbols_by_file.items():
+            for symbol in rows:
+                groups.setdefault(symbol.base_name, []).append(symbol)
+                parent = containing(rows, symbol)
+                if parent is not None:
+                    containers[symbol.key] = parent.key
+
+        # A member is not reported on its own, and neither is a declaration
+        # whose group is referenced.
+        unreferenced: list[str] = []
+        unknown: list[str] = []
+        for name, members in sorted(groups.items()):
+            if any(symbol.key in containers for symbol in members):
+                continue
+            counts = [reference_count(client, symbol) for symbol in members]
+            if any(count is None for count in counts):
+                unknown.append(name)
+                continue
+            if max(counts) == 0:
+                primary = next(
+                    (symbol for symbol in members if symbol.name == name), members[0]
+                )
+                unreferenced.append(
+                    f"{primary.file.relative_to(repository)}:{name}"
+                )
+        return unreferenced, unknown
+    finally:
+        client.close()
+
+
+def render(unreferenced: list[str], unknown: list[str]) -> str:
+    lines = [f"## Unreferenced declarations ({len(unreferenced)})", ""]
+    for item in unreferenced:
+        path, _, name = item.partition(":")
+        lines.append(f"- `{path}` `{name}`")
+    if unknown:
+        lines += ["", f"{len(unknown)} declarations could not be queried:"]
+        for item in unknown:
+            lines.append(f"- {item}")
+    return "\n".join(lines) + "\n"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path("include/dingo"))
+    parser.add_argument("--wait", type=float, default=15.0)
+    parser.add_argument("--json", type=Path)
     parser.add_argument(
-        "--compile-commands",
-        type=Path,
-        default=Path("build"),
-        help="directory containing compile_commands.json",
+        "--check",
+        action="store_true",
+        help="fail when the result differs from the committed baseline",
     )
-    parser.add_argument("--wait", type=float, default=30.0)
-    parser.add_argument("--limit", type=int, default=0)
-    parser.add_argument("--show-live", action="store_true")
     arguments = parser.parse_args()
 
-    executable = shutil.which("clangd")
-    if executable is None:
-        raise SystemExit("clangd is not installed")
+    unreferenced, unknown = scan(arguments.root, arguments.wait)
+    print(render(unreferenced, unknown), end="")
+    if arguments.json is not None:
+        arguments.json.write_text(
+            json.dumps(unreferenced, indent=2) + "\n", encoding="utf-8"
+        )
 
-    repository = arguments.root.resolve().parents[1]
-    client = Client(executable, repository, arguments.compile_commands.resolve())
-    response = client.request(
-        "initialize",
-        {"processId": None, "rootUri": uri(repository), "capabilities": {}},
-    )
-    if response is None:
-        raise SystemExit("clangd did not answer initialize")
-    client.notify("initialized", {})
-
-    # Opening every header makes each one a translation unit, so a reference in
-    # one header to another is visible to the server. The project index is not
-    # required.
-    for header in sorted(arguments.root.rglob("*.h")):
-        client.open(header)
-    time.sleep(arguments.wait)
-
-    rows = declarations(arguments.root)
-    if arguments.limit:
-        rows = rows[: arguments.limit]
-
-    unreferenced: list[Declaration] = []
-    unknown = 0
-
-    def is_root_file(path: Path) -> bool:
-        try:
-            relative = path.resolve().relative_to(repository)
-        except ValueError:
-            return False
-        if relative.parts[0] in {"test", "examples"}:
-            return True
-        return relative.parts[0] == "include" and path.name in ENTRY_HEADERS
-
-    for index, declaration in enumerate(rows, start=1):
-        locations = references(client, declaration)
-        if locations is None:
-            unknown += 1
-            continue
-        if len(locations) <= 1:
-            unreferenced.append(declaration)
-        if index % 100 == 0:
-            print(f"# {index}/{len(rows)}", file=sys.stderr)
-    client.close()
-
-    print(f"## Unreferenced by clangd ({len(unreferenced)} of {len(rows)})\n")
-    if unreferenced:
-        print("| header | declaration |")
-        print("| --- | --- |")
-        for declaration in unreferenced:
-            try:
-                path = str(declaration.path.relative_to(repository))
-            except ValueError:
-                path = declaration.path.as_posix()
-            print(f"| `{path}` | `{declaration.name}` |")
-
-    if unknown:
-        print(f"\n{unknown} declarations could not be queried", file=sys.stderr)
+    if arguments.check:
+        if unknown:
+            raise SystemExit(
+                f"{len(unknown)} declarations could not be queried; "
+                "the report is incomplete"
+            )
+        if not BASELINE.exists():
+            raise SystemExit(f"missing baseline: {BASELINE}")
+        expected = json.loads(BASELINE.read_text(encoding="utf-8"))
+        added = sorted(set(unreferenced) - set(expected))
+        removed = sorted(set(expected) - set(unreferenced))
+        if added or removed:
+            for item in added:
+                print(f"+ {item}", file=sys.stderr)
+            for item in removed:
+                print(f"- {item}", file=sys.stderr)
+            raise SystemExit("the unreferenced set changed; update the baseline")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,5 @@
+[
+  "include/dingo/base/exceptions.h:virtual_pointer_exception",
+  "include/dingo/binding/binding_resolution.h:source_lifetime",
+  "include/dingo/runtime/binding.h:registered_type_t"
+]

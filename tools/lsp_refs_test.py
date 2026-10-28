@@ -10,29 +10,41 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tools.lsp_refs import Declaration, declarations, uri
+from tools.lsp_refs import Symbol, flatten, path_of, render, uri
 
 
-def test_uri_is_a_file_url(tmp_path: Path) -> None:
-    assert uri(tmp_path / "a b.h").startswith("file://")
-    assert "a%20b.h" in uri(tmp_path / "a b.h")
+def test_uri_round_trips_through_path_of(tmp_path: Path) -> None:
+    path = tmp_path / "a b.h"
+    assert uri(path).startswith("file://")
+    assert path_of(uri(path)) == path.resolve()
 
 
-def test_declarations_report_positions(tmp_path: Path) -> None:
-    header = tmp_path / "sample.h"
-    header.write_text(
-        "#pragma once\n// a comment mentioning sample_type\n"
-        "struct sample_type {\n};\n"
-    )
-    rows = declarations(tmp_path)
-    assert rows == [Declaration(header, "sample_type", 2, 7)]
+def test_flatten_keeps_names_and_selection_ranges(tmp_path: Path) -> None:
+    file = (tmp_path / "sample.h").resolve()
+    payload = [
+        {
+            "name": "dingo",
+            "kind": 3,
+            "range": {"start": {"line": 0, "character": 0}, "end": {"line": 40, "character": 0}},
+            "selectionRange": {"start": {"line": 0, "character": 11}, "end": {"line": 0, "character": 16}},
+            "children": [
+                {
+                    "name": "sample_type",
+                    "kind": 23,
+                    "range": {"start": {"line": 2, "character": 0}, "end": {"line": 4, "character": 2}},
+                    "selectionRange": {"start": {"line": 2, "character": 7}, "end": {"line": 2, "character": 18}},
+                }
+            ],
+        }
+    ]
+    rows: list[Symbol] = []
+    flatten(file, payload, rows)
+    # The namespace is a container, not a declaration.
+    assert [row.name for row in rows] == ["sample_type"]
+    assert rows[0].select == (2, 7)
+    assert rows[0].base_name == "sample_type"
 
 
-def test_declarations_are_deduplicated(tmp_path: Path) -> None:
-    header = tmp_path / "sample.h"
-    header.write_text(
-        "#pragma once\n"
-        "template <typename T> struct sample_type {};\n"
-        "template <> struct sample_type<int> {};\n"
-    )
-    assert len(declarations(tmp_path)) == 1
+def test_render_lists_the_names() -> None:
+    text = render(["include/a.h:dead_type"], [])
+    assert "dead_type" in text
