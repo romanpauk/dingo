@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from spec.emit.families.interface import INTERFACE_ROUTES, render, validate
-from spec.emit.common.validation import validate_catalog
+from spec.gen.resolution.interface import INTERFACE_ROUTES, render, validate
+from spec.gen.shared.validation import validate_catalog
 
 
 def test_interface_route_product_is_complete() -> None:

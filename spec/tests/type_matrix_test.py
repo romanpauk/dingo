@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from spec.emit.common.validation import validate_catalog
-from spec.emit.matrix import (
+from spec.gen.shared.validation import validate_catalog
+from spec.gen.resolution.type_matrix import (
     BASE_SHAPES,
     SHAPES,
     build_rows,

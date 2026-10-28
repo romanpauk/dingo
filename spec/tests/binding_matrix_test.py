@@ -13,16 +13,16 @@ from pathlib import Path
 
 import pytest
 
-from spec.emit.binding_matrix import (
+from spec.gen.registration.binding import (
     build_rows,
     build_shards,
     manifest,
     render,
     validate,
 )
-from spec.emit.common.validation import validate_catalog
-from spec.grammar.bindings import binding_for
-from spec.grammar.traits import TRAITS_BY_NAME
+from spec.gen.shared.validation import validate_catalog
+from spec.model.grammar.bindings import binding_for
+from spec.model.grammar.traits import TRAITS_BY_NAME
 
 
 def test_binding_matrix_is_non_empty_and_unique() -> None:
@@ -37,7 +37,7 @@ def test_binding_matrix_is_non_empty_and_unique() -> None:
 
 
 def test_binding_matrix_rows_are_supported() -> None:
-    from spec.semantics.support import classify
+    from spec.model.semantics.support import classify
 
     for row in build_rows():
         scope, name, request, traits = row["coverage"]

@@ -17,19 +17,19 @@ silently omitted.
 
 from __future__ import annotations
 
-from spec.grammar.bindings import binding_for
-from spec.grammar.catalog import SCOPES
-from spec.grammar.enumerate import request_types, storage_types
-from spec.grammar.storage import storable
-from spec.semantics.support import to_shape
-from spec.grammar.expr import (
+from spec.model.grammar.bindings import binding_for
+from spec.model.grammar.catalog import SCOPES
+from spec.model.grammar.enumerate import request_types, storage_types
+from spec.model.grammar.storage import storable
+from spec.model.semantics.support import to_shape
+from spec.model.grammar.expr import (
     CONSTRUCTOR_BY_NAME,
     CONSTRUCTORS,
     INDIRECTION_OPS,
     constructors,
     leaf,
 )
-from spec.grammar.shapes import WRAPPER_BY_NAME
+from spec.model.grammar.shapes import WRAPPER_BY_NAME
 
 
 def test_registry_names_are_unique_and_callable() -> None:
@@ -65,7 +65,7 @@ def test_wrapper_semantics_covers_wrapper_like_constructors() -> None:
 
 
 def test_shape_mapping_covers_wrapper_like_constructors() -> None:
-    from spec.semantics.support import _SHAPE_WRAPPERS
+    from spec.model.semantics.support import _SHAPE_WRAPPERS
 
     for kind in ("qualifier", "wrapper"):
         for spec in constructors(kind):
@@ -90,8 +90,8 @@ def test_every_binding_constructor_has_a_binding() -> None:
 
 
 def test_forms_expose_structured_cpp_types() -> None:
-    from spec.grammar import cpp
-    from spec.grammar.catalog import FORM_BY_NAME
+    from spec.model.grammar import cpp
+    from spec.model.grammar.catalog import FORM_BY_NAME
 
     form = FORM_BY_NAME["shared_handle"]
     storage = form.storage_type("tracked")
@@ -103,7 +103,7 @@ def test_forms_expose_structured_cpp_types() -> None:
 
 
 def test_cpp_types_render_from_structure_not_text() -> None:
-    from spec.grammar import cpp
+    from spec.model.grammar import cpp
 
     assert cpp.render(cpp.const(cpp.pointer(cpp.leaf("T")))) == "T * const"
     assert (

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from spec.semantics.routes.ledger import (
+from spec.model.semantics.routes.ledger import (
     CATEGORIES,
     build_rows,
     category_access,
@@ -20,8 +20,8 @@ from spec.semantics.routes.ledger import (
     supported_categories,
     validate,
 )
-from spec.grammar.catalog import FORMS, SCOPES
-from spec.semantics.forms import exposure
+from spec.model.grammar.catalog import FORMS, SCOPES
+from spec.model.semantics.forms import exposure
 
 
 def test_every_row_has_one_outcome() -> None:

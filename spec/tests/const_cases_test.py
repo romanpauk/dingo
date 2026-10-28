@@ -12,14 +12,14 @@ from pathlib import Path
 
 import pytest
 
-from spec.emit.families.const import (
+from spec.gen.resolution.const import (
     build_rows,
     build_shards,
     render,
     validate,
 )
-from spec.emit.common.validation import validate_catalog
-from spec.grammar.traits import MOVE_ONLY, TRAITS_BY_NAME
+from spec.gen.shared.validation import validate_catalog
+from spec.model.grammar.traits import MOVE_ONLY, TRAITS_BY_NAME
 
 
 def test_const_catalog_is_non_empty_and_unique() -> None:
@@ -36,8 +36,8 @@ def test_const_rows_resolve_const_requests() -> None:
 
 
 def test_const_rows_are_classified_supported() -> None:
-    from spec.grammar.bindings import CONCRETE
-    from spec.semantics.support import classify
+    from spec.model.grammar.bindings import CONCRETE
+    from spec.model.semantics.support import classify
 
     for row in build_rows():
         scope, name, request, traits = row["coverage"]

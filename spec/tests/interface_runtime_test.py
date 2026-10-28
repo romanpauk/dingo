@@ -12,16 +12,16 @@ from pathlib import Path
 
 import pytest
 
-from spec.emit.common.validation import validate_catalog
-from spec.emit.families.interface_runtime import (
+from spec.gen.shared.validation import validate_catalog
+from spec.gen.resolution.interface_runtime import (
     build_rows,
     build_shards,
     render,
     validate,
 )
-from spec.grammar.bindings import binding_for
-from spec.grammar.traits import MOVE_ONLY, TRAITS_BY_NAME
-from spec.semantics.support import classify
+from spec.model.grammar.bindings import binding_for
+from spec.model.grammar.traits import MOVE_ONLY, TRAITS_BY_NAME
+from spec.model.semantics.support import classify
 
 
 def test_interface_runtime_catalog_is_non_empty_and_unique() -> None:

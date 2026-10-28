@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from spec.emit.families.behavior import BEHAVIOR_GAPS, supported_categories
-from spec.emit.common.validation import validate_catalog
-from spec.grammar.catalog import FORMS, SCOPES
-from spec.emit.behavior import (
+from spec.gen.resolution.behavior import BEHAVIOR_GAPS, supported_categories
+from spec.gen.shared.validation import validate_catalog
+from spec.model.grammar.catalog import FORMS, SCOPES
+from spec.gen.resolution.type_behavior import (
     TOP_LEVEL_BORROW_GAP,
     build_rows,
     build_shards,
@@ -23,8 +23,8 @@ from spec.emit.behavior import (
     render,
     validate,
 )
-from spec.emit.matrix import SHAPES
-from spec.grammar.traits import MOVE_ONLY
+from spec.gen.resolution.type_matrix import SHAPES
+from spec.model.grammar.traits import MOVE_ONLY
 
 
 def test_type_behavior_product_is_complete() -> None:
@@ -118,7 +118,7 @@ def test_move_only_rows_use_the_move_only_leaf() -> None:
 
 
 def test_trait_rows_keep_the_same_forms() -> None:
-    from spec.grammar.traits import COPYABLE
+    from spec.model.grammar.traits import COPYABLE
 
     copyable = build_rows(("runtime",), COPYABLE)
     move_only = build_rows(("runtime",), MOVE_ONLY)

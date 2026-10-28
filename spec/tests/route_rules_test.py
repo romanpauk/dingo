@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from spec.semantics.routes.rules import derive_route, reason_text
-from spec.grammar.shapes import SHAPES
+from spec.model.semantics.routes.rules import derive_route, reason_text
+from spec.model.grammar.shapes import SHAPES
 
 
 SHAPE_BY_NAME = {shape.name: shape for shape in SHAPES}

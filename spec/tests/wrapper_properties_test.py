@@ -12,13 +12,13 @@ from pathlib import Path
 
 import pytest
 
-from spec.emit.families.property import (
+from spec.gen.classification.wrapper import (
     build_rows,
     build_shards,
     render,
     validate,
 )
-from spec.grammar.shapes import CUSTOM_WRAPPERS, WRAPPERS
+from spec.model.grammar.shapes import CUSTOM_WRAPPERS, WRAPPERS
 
 
 def test_property_catalog_is_complete() -> None:

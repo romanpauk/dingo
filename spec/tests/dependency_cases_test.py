@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from spec.emit.families.dependencies import GAPS, build_shards, render
+from spec.gen.resolution.dependencies import GAPS, build_shards, render
 
 
 def test_dependency_cases_are_the_two_declarations() -> None:

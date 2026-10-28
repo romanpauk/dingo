@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from spec.emit.families.lookup import build_shards, render
+from spec.gen.resolution.lookup import build_shards, render
 
 
 def test_lookup_cases_are_rules_not_forms() -> None:

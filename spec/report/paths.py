@@ -21,15 +21,15 @@ import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from spec.grammar.catalog import SCOPES
-from spec.semantics.capabilities import exposed_binding_kinds
-from spec.domain.cases import counts, iter_cases, request_forms
-from spec.emit.common.runner import emit
-from spec.grammar.storage import STORAGE_PATHS
-from spec.semantics.extended_shapes import extended_shapes
-from spec.semantics.support import classify, classify_case, to_shape
-from spec.grammar.expr import Expr, family
-from spec.grammar.traits import TRAITS
+from spec.model.grammar.catalog import SCOPES
+from spec.model.semantics.capabilities import exposed_binding_kinds
+from spec.model.domain.cases import counts, iter_cases, request_forms
+from spec.gen.shared.runner import emit
+from spec.model.grammar.storage import STORAGE_PATHS
+from spec.model.semantics.extended_shapes import extended_shapes
+from spec.model.semantics.support import classify, classify_case, to_shape
+from spec.model.grammar.expr import Expr, family
+from spec.model.grammar.traits import TRAITS
 
 OUTCOMES = ("supported", "unavailable", "unsupported", "unmodeled")
 

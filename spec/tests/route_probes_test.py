@@ -12,16 +12,16 @@ from pathlib import Path
 
 import pytest
 
-from spec.emit.families.route import (
+from spec.gen.resolution.route import (
     ABSENCE_PROBE_GAPS,
     build_rows,
     build_shards,
     render,
     validate,
 )
-from spec.semantics.routes.ledger import supported_categories
-from spec.emit.common.validation import validate_catalog
-from spec.grammar.catalog import FORMS, SCOPES
+from spec.model.semantics.routes.ledger import supported_categories
+from spec.gen.shared.validation import validate_catalog
+from spec.model.grammar.catalog import FORMS, SCOPES
 
 
 def test_route_product_is_complete() -> None:

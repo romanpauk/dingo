@@ -5,121 +5,121 @@ uv_get_run_command(DINGO_UV_RUN_COMMAND
 
 
 set(DINGO_MODEL_GENERATOR
-    "spec.emit.families.storage")
+    "spec.gen.classification.storage")
 set(DINGO_SELECTION_MODEL_GENERATOR
-    "spec.emit.selection")
+    "spec.gen.classification.selection")
 set(DINGO_ROUTE_MODEL_GENERATOR
-    "spec.emit.families.route")
+    "spec.gen.resolution.route")
 set(DINGO_BEHAVIOR_MODEL_GENERATOR
-    "spec.emit.families.behavior")
+    "spec.gen.resolution.behavior")
 set(DINGO_INTERFACE_MODEL_GENERATOR
-    "spec.emit.families.interface")
+    "spec.gen.resolution.interface")
 set(DINGO_TYPE_MATRIX_GENERATOR
-    "spec.emit.matrix")
+    "spec.gen.resolution.type_matrix")
 set(DINGO_TRAIT_MATRIX_GENERATOR
-    "spec.emit.traits")
+    "spec.gen.resolution.trait_matrix")
 set(DINGO_BINDING_MATRIX_GENERATOR
-    "spec.emit.binding_matrix")
+    "spec.gen.registration.binding")
 set(DINGO_TYPE_BEHAVIOR_GENERATOR
-    "spec.emit.behavior")
+    "spec.gen.resolution.type_behavior")
 set(DINGO_PROPERTY_MODEL_GENERATOR
-    "spec.emit.families.property")
+    "spec.gen.classification.wrapper")
 set(DINGO_ANNOTATED_MODEL_GENERATOR
-    "spec.emit.families.annotated")
+    "spec.gen.resolution.annotated")
 set(DINGO_CONST_MODEL_GENERATOR
-    "spec.emit.families.const")
+    "spec.gen.resolution.const")
 set(DINGO_KEYED_MODEL_GENERATOR
-    "spec.emit.families.keyed")
+    "spec.gen.resolution.keyed")
 set(DINGO_INTERFACE_RUNTIME_MODEL_GENERATOR
-    "spec.emit.families.interface_runtime")
+    "spec.gen.resolution.interface_runtime")
 set(DINGO_RESOLVE_GENERATOR
-    "spec.emit.resolve")
+    "spec.gen.resolution.resolve")
 set(DINGO_CONSUMER_MODEL_GENERATOR
-    "spec.emit.consumers")
+    "spec.gen.resolution.consumers")
 set(DINGO_FACTORY_MODEL_GENERATOR
-    "spec.emit.families.factory")
+    "spec.gen.registration.factory")
 set(DINGO_CONSTRUCT_MODEL_GENERATOR
-    "spec.emit.families.construct")
+    "spec.gen.resolution.construct")
 set(DINGO_INVOKE_MODEL_GENERATOR
-    "spec.emit.families.invoke")
+    "spec.gen.resolution.invoke")
 set(DINGO_PRODUCER_MODEL_GENERATOR
-    "spec.emit.families.producer")
+    "spec.gen.resolution.producer")
 set(DINGO_CONFIGURATION_MODEL_GENERATOR
-    "spec.emit.families.configuration")
+    "spec.gen.resolution.configuration")
 set(DINGO_MIXED_MODEL_GENERATOR
-    "spec.emit.families.mixed")
+    "spec.gen.resolution.mixed")
 set(DINGO_CYCLICAL_MODEL_GENERATOR
-    "spec.emit.families.cyclical")
+    "spec.gen.resolution.cyclical")
 set(DINGO_LOOKUP_MODEL_GENERATOR
-    "spec.emit.families.lookup")
+    "spec.gen.resolution.lookup")
 set(DINGO_DEPENDENCIES_MODEL_GENERATOR
-    "spec.emit.families.dependencies")
+    "spec.gen.resolution.dependencies")
 set(DINGO_CONVERSION_MODEL_GENERATOR
-    "spec.emit.families.conversion")
+    "spec.gen.resolution.conversion")
 set(DINGO_WRAPPER_MODEL_GENERATOR
-    "spec.emit.families.wrapper")
+    "spec.gen.resolution.wrapper")
 set(DINGO_COLLECTION_MODEL_GENERATOR
-    "spec.emit.families.collection")
+    "spec.gen.resolution.collection")
 set(DINGO_INDEXED_MODEL_GENERATOR
-    "spec.emit.families.indexed")
+    "spec.gen.resolution.indexed")
 set(DINGO_CLASSIFICATION_CONSTRUCTOR_GENERATOR
-    "spec.emit.detection_constructor")
+    "spec.gen.classification.constructor")
 set(DINGO_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/storage_facts.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/storage_facts.cpp.j2")
 set(DINGO_SCOPES_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/scopes.gen.h.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/scopes.gen.h.j2")
 set(DINGO_ROUTE_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/route_probes.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/route_probes.cpp.j2")
 set(DINGO_BEHAVIOR_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/behavior_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/behavior_cases.cpp.j2")
 set(DINGO_INTERFACE_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/interface_routes.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/interface_routes.cpp.j2")
 set(DINGO_TYPE_MATRIX_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/type_matrix.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/type_matrix.cpp.j2")
 set(DINGO_TRAIT_MATRIX_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/trait_matrix.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/trait_matrix.cpp.j2")
 set(DINGO_BINDING_MATRIX_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/binding_matrix.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/binding_matrix.cpp.j2")
 set(DINGO_TYPE_BEHAVIOR_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/type_behavior.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/type_behavior.cpp.j2")
 set(DINGO_PROPERTY_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/wrapper_properties.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/wrapper_properties.cpp.j2")
 set(DINGO_ANNOTATED_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/annotated_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/annotated_cases.cpp.j2")
 set(DINGO_CONST_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/const_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/const_cases.cpp.j2")
 set(DINGO_KEYED_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/keyed_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/keyed_cases.cpp.j2")
 set(DINGO_CONSTRUCT_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/construct_shapes.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/construct_shapes.cpp.j2")
 set(DINGO_INVOKE_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/invoke_shapes.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/invoke_shapes.cpp.j2")
 set(DINGO_PRODUCER_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/producer_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/producer_cases.cpp.j2")
 set(DINGO_CONFIGURATION_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/configuration_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/configuration_cases.cpp.j2")
 set(DINGO_MIXED_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/mixed_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/mixed_cases.cpp.j2")
 set(DINGO_CYCLICAL_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/cyclical_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/cyclical_cases.cpp.j2")
 set(DINGO_LOOKUP_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/lookup_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/lookup_cases.cpp.j2")
 set(DINGO_DEPENDENCIES_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/dependency_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/dependency_cases.cpp.j2")
 set(DINGO_CONVERSION_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/conversion_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/conversion_cases.cpp.j2")
 set(DINGO_WRAPPER_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/wrapper_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/wrapper_cases.cpp.j2")
 set(DINGO_CONSUMER_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/consumer_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/consumer_cases.cpp.j2")
 set(DINGO_PROBE_FIXTURES_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/_probe_fixtures.h.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/_probe_fixtures.h.j2")
 set(DINGO_INTERFACE_RUNTIME_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/interface_runtime.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/interface_runtime.cpp.j2")
 set(DINGO_RESOLVE_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/resolve_cases.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/resolve_cases.cpp.j2")
 set(DINGO_CLASSIFICATION_CONSTRUCTOR_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/detection_constructor.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/detection_constructor.cpp.j2")
 set(DINGO_CLASSIFICATION_DIR
     "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(DINGO_CLASSIFICATION_CONSTRUCTOR_MANIFEST
@@ -131,7 +131,7 @@ set(DINGO_RESOLVE_MANIFEST
 set(DINGO_SCOPES_HEADER
     "${PROJECT_SOURCE_DIR}/include/dingo/storage/scopes.gen.h")
 set(DINGO_SELECTION_MODEL_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/emit/templates/selection_rules.cpp.j2")
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/selection_rules.cpp.j2")
 set(DINGO_STORAGE_MANIFEST
     "${DINGO_CLASSIFICATION_DIR}/storage-manifest.json")
 set(DINGO_SELECTION_MANIFEST
@@ -153,57 +153,57 @@ set(DINGO_PROPERTY_MANIFEST
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/spec/__init__.py"
     "${PROJECT_SOURCE_DIR}/spec/__main__.py"
-    "${PROJECT_SOURCE_DIR}/spec/domain/__init__.py"
-    "${PROJECT_SOURCE_DIR}/spec/domain/cases.py"
-    "${PROJECT_SOURCE_DIR}/spec/domain/requests.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/__init__.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/behavior.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/common/__init__.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/common/recipe.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/common/runner.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/common/validation.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/families/__init__.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/families/annotated.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/families/behavior.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/families/const.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/families/interface.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/families/property.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/families/route.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/families/storage.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/matrix.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/resolve.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/detection_constructor.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/families/factory.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/families/construct.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/families/collection.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/families/indexed.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/selection.py"
-    "${PROJECT_SOURCE_DIR}/spec/emit/traits.py"
-    "${PROJECT_SOURCE_DIR}/spec/grammar/__init__.py"
-    "${PROJECT_SOURCE_DIR}/spec/grammar/bindings.py"
-    "${PROJECT_SOURCE_DIR}/spec/grammar/catalog.py"
-    "${PROJECT_SOURCE_DIR}/spec/grammar/cpp.py"
-    "${PROJECT_SOURCE_DIR}/spec/grammar/enumerate.py"
-    "${PROJECT_SOURCE_DIR}/spec/grammar/expr.py"
-    "${PROJECT_SOURCE_DIR}/spec/grammar/shapes.py"
-    "${PROJECT_SOURCE_DIR}/spec/grammar/storage.py"
-    "${PROJECT_SOURCE_DIR}/spec/grammar/traits.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/domain/__init__.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/domain/cases.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/domain/requests.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/__init__.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/behavior.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/common/__init__.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/common/recipe.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/common/runner.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/common/validation.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/families/__init__.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/families/annotated.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/families/behavior.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/families/const.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/families/interface.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/families/property.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/families/route.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/families/storage.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/matrix.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/resolve.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/detection_constructor.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/families/factory.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/families/construct.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/families/collection.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/families/indexed.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/selection.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/traits.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/grammar/__init__.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/grammar/bindings.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/grammar/catalog.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/grammar/cpp.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/grammar/enumerate.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/grammar/expr.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/grammar/shapes.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/grammar/storage.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/grammar/traits.py"
     "${PROJECT_SOURCE_DIR}/spec/report/__init__.py"
     "${PROJECT_SOURCE_DIR}/spec/report/baseline.py"
     "${PROJECT_SOURCE_DIR}/spec/report/coverage.py"
     "${PROJECT_SOURCE_DIR}/spec/report/paths.py"
     "${PROJECT_SOURCE_DIR}/spec/report/resolves.py"
-    "${PROJECT_SOURCE_DIR}/spec/semantics/__init__.py"
-    "${PROJECT_SOURCE_DIR}/spec/semantics/capabilities.py"
-    "${PROJECT_SOURCE_DIR}/spec/semantics/storage_forms.py"
-    "${PROJECT_SOURCE_DIR}/spec/semantics/extended_shapes.py"
-    "${PROJECT_SOURCE_DIR}/spec/semantics/forms.py"
-    "${PROJECT_SOURCE_DIR}/spec/semantics/gaps.py"
-    "${PROJECT_SOURCE_DIR}/spec/semantics/routes/__init__.py"
-    "${PROJECT_SOURCE_DIR}/spec/semantics/routes/derivation.py"
-    "${PROJECT_SOURCE_DIR}/spec/semantics/routes/ledger.py"
-    "${PROJECT_SOURCE_DIR}/spec/semantics/routes/rules.py"
-    "${PROJECT_SOURCE_DIR}/spec/semantics/support.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/semantics/__init__.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/semantics/capabilities.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/semantics/storage_forms.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/semantics/extended_shapes.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/semantics/forms.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/semantics/gaps.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/semantics/routes/__init__.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/semantics/routes/derivation.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/semantics/routes/ledger.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/semantics/routes/rules.py"
+    "${PROJECT_SOURCE_DIR}/spec/model/semantics/support.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/__init__.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/annotated_cases_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/architecture_test.py"
@@ -268,7 +268,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/spec/tests/producer_cases_test.py"
     "${DINGO_CONSUMER_MODEL_TEMPLATE}"
     "${DINGO_PROBE_FIXTURES_TEMPLATE}"
-    "${PROJECT_SOURCE_DIR}/spec/emit/consumers.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/consumers.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/construct_cases_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/consumer_cases_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/claim_report_test.py"

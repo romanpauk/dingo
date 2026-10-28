@@ -31,8 +31,8 @@ The conversion path is shared:
 
 The model is richer than the C++ descriptor:
 
-- `spec/semantics/routes/derivation.py` derives `RouteCandidate` objects with
-  kind, retention, steps, and target shape.
+- `spec/model/semantics/routes/derivation.py` derives `RouteCandidate` objects
+  with kind, retention, steps, and target shape.
 - `test/support/model_probe.h` exposes non-recursive route/step accessors.
 - `route_probes` asserts candidate presence, absence, kind, retention, step
   sequence, and target shape.
@@ -328,6 +328,6 @@ priority than the registry split.
 - `include/dingo/resolution/resolution_operation.h` — conversion
   descriptor/walker
 - `include/dingo/base/type_list.h` — non-recursive type-list indexing
-- `spec/semantics/routes/derivation.py` — route candidate rules
+- `spec/model/semantics/routes/derivation.py` — route candidate rules
 - `test/support/model_probe.h` — generated-probe accessors
 - `spec/templates/route_probes.cpp.j2` — candidate/absence/step/target asserts

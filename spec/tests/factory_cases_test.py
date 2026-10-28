@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from spec.emit.families.factory import SHARDS, render
+from spec.gen.registration.factory import SHARDS, render
 
 
 def test_factory_shards_are_hierarchical() -> None:

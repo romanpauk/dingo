@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from spec.emit.families.cyclical import build_shards, render
+from spec.gen.resolution.cyclical import build_shards, render
 
 
 def test_cyclical_shards_cover_modes_and_storage() -> None:

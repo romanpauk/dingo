@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import pytest
 
-from spec.grammar.bindings import ANNOTATED, CONCRETE, INTERFACE, KEYED
-from spec.domain.cases import counts, iter_cases, plain_forms, request_forms
+from spec.model.grammar.bindings import ANNOTATED, CONCRETE, INTERFACE, KEYED
+from spec.model.domain.cases import counts, iter_cases, plain_forms, request_forms
 from spec.report.paths import build_report, render
-from spec.semantics.support import classify, iter_verdicts, to_shape
-from spec.grammar.expr import (
+from spec.model.semantics.support import classify, iter_verdicts, to_shape
+from spec.model.grammar.expr import (
     annotated,
     array,
     array_pointer,
@@ -122,7 +122,7 @@ def test_known_paths_map_to_model_shapes() -> None:
 
 
 def test_qualified_paths_are_classified_not_skipped() -> None:
-    from spec.semantics.support import classify_case
+    from spec.model.semantics.support import classify_case
 
     qualified = [
         case
@@ -260,7 +260,7 @@ def test_top_level_const_and_arrays_are_explicitly_unsupported() -> None:
 
 
 def test_supported_shapes_are_identified() -> None:
-    from spec.semantics.extended_shapes import (
+    from spec.model.semantics.extended_shapes import (
         extended_shapes,
         supported_shapes,
     )
@@ -275,8 +275,8 @@ def test_supported_shapes_are_identified() -> None:
 
 
 def test_extended_shapes_are_consumed_by_the_type_matrix() -> None:
-    from spec.semantics.extended_shapes import extended_shapes
-    from spec.emit.matrix import SHAPES
+    from spec.model.semantics.extended_shapes import extended_shapes
+    from spec.gen.resolution.type_matrix import SHAPES
 
     names = {shape.name for shape in SHAPES}
     assert {shape.name for shape in extended_shapes()} <= names
@@ -301,11 +301,11 @@ def test_annotated_requests_use_the_annotated_binding() -> None:
 
 
 def test_annotated_interface_requests_use_the_composed_binding() -> None:
-    from spec.grammar.bindings import (
+    from spec.model.grammar.bindings import (
         ANNOTATED_INTERFACE,
         binding_for,
     )
-    from spec.grammar import cpp
+    from spec.model.grammar import cpp
 
     base = leaf()
     request = annotated(
@@ -342,7 +342,7 @@ def test_annotated_interface_requests_use_the_composed_binding() -> None:
         == "unsupported"
     )
     # The composed binding is not interchangeable with either parent.
-    from spec.grammar.bindings import ANNOTATED, INTERFACE
+    from spec.model.grammar.bindings import ANNOTATED, INTERFACE
 
     plain_interface = interface(shared_ptr(base), "interface_type")
     assert not ANNOTATED.exposes(request)

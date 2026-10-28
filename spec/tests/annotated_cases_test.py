@@ -12,14 +12,14 @@ from pathlib import Path
 
 import pytest
 
-from spec.emit.families.annotated import (
+from spec.gen.resolution.annotated import (
     build_rows,
     build_shards,
     render,
     validate,
 )
-from spec.emit.common.validation import validate_catalog
-from spec.grammar.traits import MOVE_ONLY
+from spec.gen.shared.validation import validate_catalog
+from spec.model.grammar.traits import MOVE_ONLY
 
 
 def test_annotated_catalog_is_non_empty_and_unique() -> None:

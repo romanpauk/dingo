@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from spec.emit.consumers import (
+from spec.gen.resolution.consumers import (
     COMPILE_GAPS,
     CONSUMERS,
     NON_COMPOSABLE,

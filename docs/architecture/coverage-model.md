@@ -100,8 +100,8 @@ defects that were invisible while `construct` re-tested storage instead of
 composing over it.
 
 The 82 construct rows that cannot be instantiated are pinned by path in
-`spec/emit/consumers.py`, with a reason, so a new gap cannot be absorbed
-silently by a rule.
+`spec/gen/resolution/consumers.py`, with a reason, so a new gap cannot be
+absorbed silently by a rule.
 
 ## The claim report
 

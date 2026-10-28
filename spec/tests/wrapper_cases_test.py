@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from spec.emit.families.wrapper import build_shards, render
+from spec.gen.resolution.wrapper import build_shards, render
 
 
 def test_wrapper_cases_use_model_owned_wrappers() -> None:

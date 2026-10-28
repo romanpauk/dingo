@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from spec.emit.consumers import (
+from spec.gen.resolution.consumers import (
     CONSUMERS,
     NON_COMPOSABLE,
     build_files,

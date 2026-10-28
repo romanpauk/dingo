@@ -21,14 +21,15 @@ Leaf(name)
   annotated<Expr, Tag>
 ```
 
-`spec/grammar/expr.py` owns the path constructors. They reject combinations C++
-itself rejects (reference to reference, optional of reference, array of
-reference, variant of reference, array handle of array). `Expr.cpp()` projects a
-path to a structured `CppType`; `grammar/cpp.py` is the single source of C++
-spelling. Storage forms and wrappers build the same `CppType` values instead of
-formatting type strings, and no consumer parses a rendered type back into parts.
+`spec/model/grammar/expr.py` owns the path constructors. They reject
+combinations C++ itself rejects (reference to reference, optional of reference,
+array of reference, variant of reference, array handle of array). `Expr.cpp()`
+projects a path to a structured `CppType`; `grammar/cpp.py` is the single source
+of C++ spelling. Storage forms and wrappers build the same `CppType` values
+instead of formatting type strings, and no consumer parses a rendered type back
+into parts.
 
-`spec/grammar/enumerate.py` owns the bounded enumeration. Given a leaf it
+`spec/model/grammar/enumerate.py` owns the bounded enumeration. Given a leaf it
 produces one universe and projects it:
 
 - `object_forms` — plain paths, wrappers, variants, and the access closure
@@ -66,8 +67,8 @@ and an interface request requires an interface binding.
 
 ## Bounds
 
-The grammar is infinite, so `spec/grammar/enumerate.py` enumerates a bounded
-domain:
+The grammar is infinite, so `spec/model/grammar/enumerate.py` enumerates a
+bounded domain:
 
 - qualifier depth 2;
 - wrapper depth 2;
@@ -85,7 +86,7 @@ correctness requirement. The current snapshot is:
 
 ## Support classification
 
-`spec/semantics/support.py` classifies every case as one of:
+`spec/model/semantics/support.py` classifies every case as one of:
 
 - `supported` — the model's route rules publish the request from the form;
 - `unavailable` — the scope/form does not expose the category;

@@ -12,20 +12,20 @@ from pathlib import Path
 
 import pytest
 
-from spec.emit.common.validation import validate, validate_catalog
-from spec.emit.families.storage import (
+from spec.gen.shared.validation import validate, validate_catalog
+from spec.gen.classification.storage import (
     build_rows,
     build_shards,
     render,
     render_header,
 )
-from spec.grammar.catalog import (
+from spec.model.grammar.catalog import (
     FORM_BY_NAME,
     FORMS,
     SCOPE_BY_NAME,
     SCOPES,
 )
-from spec.semantics.forms import (
+from spec.model.semantics.forms import (
     LVALUE,
     POINTER,
     RVALUE,
@@ -111,8 +111,8 @@ def test_scope_header_names_every_scope(tmp_path: Path) -> None:
 
 
 def test_catalog_forms_share_one_wrapper_declaration() -> None:
-    from spec.grammar import cpp
-    from spec.grammar.shapes import WRAPPER_BY_NAME
+    from spec.model.grammar import cpp
+    from spec.model.grammar.shapes import WRAPPER_BY_NAME
 
     for form in FORMS:
         if form.wrapper_name is not None:
@@ -124,7 +124,7 @@ def test_catalog_forms_share_one_wrapper_declaration() -> None:
 
 
 def test_recipe_derives_external_instances() -> None:
-    from spec.emit.common.recipe import external_instance
+    from spec.gen.shared.recipe import external_instance
 
     for form in FORMS:
         if form.name == "array":
@@ -138,7 +138,7 @@ def test_recipe_derives_external_instances() -> None:
 
 
 def test_recipe_adds_a_registration_factory_only_when_declared() -> None:
-    from spec.emit.common.recipe import registration
+    from spec.gen.shared.recipe import registration
 
     for form in FORMS:
         runtime, _ = registration(form, "shared", "runtime")

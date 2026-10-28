@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from spec.semantics.routes.ledger import build_rows, supported_categories
-from spec.semantics.routes.derivation import (
+from spec.model.semantics.routes.ledger import build_rows, supported_categories
+from spec.model.semantics.routes.derivation import (
     DERIVATION_RULES,
     STEP_RULES,
     TARGET_SHAPES,
@@ -24,7 +24,7 @@ from spec.semantics.routes.derivation import (
     route_candidate_targets,
     source_shape,
 )
-from spec.grammar.catalog import FORMS, SCOPES
+from spec.model.grammar.catalog import FORMS, SCOPES
 
 
 def test_every_supported_form_has_a_route_script() -> None:

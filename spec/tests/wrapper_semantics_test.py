@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from spec.grammar.shapes import (
+from spec.model.grammar.shapes import (
     BASE,
     CUSTOM_WRAPPERS,
     SHAPES,
@@ -136,7 +136,7 @@ def test_wrapper_applicability_rejects_invalid_compositions() -> None:
 
 
 def test_storage_forms_map_to_wrapper_families() -> None:
-    from spec.grammar.catalog import FORM_BY_NAME
+    from spec.model.grammar.catalog import FORM_BY_NAME
 
     kinds = {
         "plain": "value",

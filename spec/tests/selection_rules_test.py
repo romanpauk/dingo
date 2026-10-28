@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from spec.emit.selection import (
+from spec.gen.classification.selection import (
     POLICIES,
     STATUSES,
     build_rows,

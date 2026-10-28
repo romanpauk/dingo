@@ -7,19 +7,28 @@ part of the library build; CMake invokes it with `python -m spec...`.
 
 ## Layout
 
-The model is layered by pipeline stage:
+The directory separates the model from the code that renders it, and the
+generators mirror the test tree they emit:
 
 ```text
-grammar/   what types exist; cpp.py owns C++ spelling
-domain/    the storage x request case product
-semantics/ support, capabilities, route rules, forms, gaps
-emit/      C++ generators, shared recipe/runner, templates
-report/    coverage report and outcome baseline
-tests/     the model test suite
+model/          what is true about the library
+  grammar/      what types exist; cpp.py owns C++ spelling
+  domain/       the storage x request case product
+  semantics/    support, capabilities, route rules, forms, gaps
+gen/            rendering that model into C++ sources
+  shared/       CasePath, recipe, runner, validation, templates
+  classification/  emits classification/...
+  registration/    emits registration/...
+  resolution/      emits resolution/...
+report/         coverage, gaps, and the outcome baseline
+tests/          the model test suite
 ```
 
-Imports flow downwards only: `grammar -> domain -> semantics -> emit -> report`.
-`tests/architecture_test.py` fails on an upward import.
+A generator lives under the phase whose paths it emits, so "where is the keyed
+resolution family" has the same answer in `spec/gen` and in
+`build/test/generated`. Imports flow downwards only:
+`grammar -> domain -> semantics -> gen -> report`; `tests/architecture_test.py`
+fails on an upward import.
 
 - `grammar/cpp.py` is the C++ type algebra. `CppType` is rendered once;
   storage forms, wrappers, annotated/interface types, and emitters build the

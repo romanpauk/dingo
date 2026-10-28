@@ -17,7 +17,7 @@ LAYERS = {
     "grammar": 0,
     "domain": 1,
     "semantics": 2,
-    "emit": 3,
+    "gen": 3,
     "report": 4,
 }
 MODEL_ROOT = Path(__file__).resolve().parents[1]
@@ -25,21 +25,24 @@ MODEL_ROOT = Path(__file__).resolve().parents[1]
 
 def _module_layer(path: Path) -> int | None:
     relative = path.relative_to(MODEL_ROOT)
-    if len(relative.parts) < 2:
+    parts = relative.parts
+    if len(parts) < 2:
         return None
-    return LAYERS.get(relative.parts[0])
+    if parts[0] == "model":
+        return LAYERS.get(parts[1]) if len(parts) > 2 else None
+    return LAYERS.get(parts[0])
 
 
 def _imported_layer(node: ast.AST) -> int | None:
     if isinstance(node, ast.ImportFrom) and node.module:
         parts = node.module.split(".")
-    elif isinstance(node, ast.Import):
-        return None
     else:
         return None
-    if parts[:2] != ["tools", "model"] or len(parts) < 3:
+    if not parts or parts[0] != "spec":
         return None
-    return LAYERS.get(parts[2])
+    if parts[1] == "model":
+        return LAYERS.get(parts[2]) if len(parts) > 2 else None
+    return LAYERS.get(parts[1])
 
 
 def test_model_imports_only_flow_downwards() -> None:

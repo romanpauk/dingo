@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from spec.emit.families.conversion import build_shards, render
+from spec.gen.resolution.conversion import build_shards, render
 
 
 def test_conversion_cases_cover_both_halves() -> None:

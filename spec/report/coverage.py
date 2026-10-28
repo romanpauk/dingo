@@ -21,13 +21,13 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 
-from spec.semantics.capabilities import storage_form
-from spec.domain.cases import iter_cases, request_forms
-from spec.grammar.storage import const_leaf
-from spec.grammar.traits import TRAITS
-from spec.semantics.support import classify_case, to_shape
-from spec.grammar.expr import family
-from spec.semantics.gaps import declared_runtime_gap
+from spec.model.semantics.capabilities import storage_form
+from spec.model.domain.cases import iter_cases, request_forms
+from spec.model.grammar.storage import const_leaf
+from spec.model.grammar.traits import TRAITS
+from spec.model.semantics.support import classify_case, to_shape
+from spec.model.grammar.expr import family
+from spec.model.semantics.gaps import declared_runtime_gap
 
 
 def _key(case) -> tuple[str, str, object, str] | None:
@@ -53,10 +53,10 @@ def _key(case) -> tuple[str, str, object, str] | None:
 
 
 def _compile_keys() -> set[tuple[str, str, object, str]]:
-    from spec.emit.binding_matrix import build_rows as binding_rows
-    from spec.emit.families.const import build_rows as const_rows
-    from spec.emit.matrix import SHAPES, build_rows as matrix_rows
-    from spec.emit.traits import build_rows as trait_rows
+    from spec.gen.registration.binding import build_rows as binding_rows
+    from spec.gen.resolution.const import build_rows as const_rows
+    from spec.gen.resolution.type_matrix import SHAPES, build_rows as matrix_rows
+    from spec.gen.resolution.trait_matrix import build_rows as trait_rows
 
     keys = set()
     # The type matrix is the copyable leaf's shape oracle. The trait matrix
@@ -75,13 +75,13 @@ def _compile_keys() -> set[tuple[str, str, object, str]]:
 
 
 def _runtime_keys() -> set[tuple[str, str, object, str]]:
-    from spec.emit.behavior import build_rows as shape_rows
-    from spec.emit.families.annotated import build_rows as annotated_rows
-    from spec.emit.families.const import build_rows as const_rows
-    from spec.emit.families.interface_runtime import (
+    from spec.gen.resolution.type_behavior import build_rows as shape_rows
+    from spec.gen.resolution.annotated import build_rows as annotated_rows
+    from spec.gen.resolution.const import build_rows as const_rows
+    from spec.gen.resolution.interface_runtime import (
         build_rows as interface_rows,
     )
-    from spec.emit.families.keyed import build_rows as keyed_rows
+    from spec.gen.resolution.keyed import build_rows as keyed_rows
 
     keys = set()
     for traits in TRAITS:

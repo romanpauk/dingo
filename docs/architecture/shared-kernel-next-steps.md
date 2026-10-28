@@ -53,16 +53,16 @@ wrapper or composition adds a branch in `request_lift.h`; semantics are implicit
 | | Route model | `storage_form_traits` lists + `binding_*_resolutions` +
 per-shape expectations | new optional/const/handle targets require editing form
 lists, ledgers, interface counts, and static trait expectations | | Model tables
-| `spec/semantics/routes/ledger.py` (`OPERATION_KINDS`, `RETENTION`),
-`spec/emit/families/interface.py` (`INTERFACE_ROUTES` counts) | hand-maintained;
-const-handle support required 19 ledger edits and five interface-count edits | |
-Shape grammar | `spec/emit/matrix.py` `Shape`/`Constructor` | no variants, no
-custom wrappers; wrapper properties are implied by constructor names | |
-Lift/direct decision | `container::resolve_entry`, the dependency origin
-overload, `static_container` public and origin overloads | the same policy is
-encoded in four places | | Contracts | `tools/cost/measure.py`, `test-cost`,
-codegen probes | not tied to routes/features, so new routes can silently cost
-more |
+| `spec/model/semantics/routes/ledger.py` (`OPERATION_KINDS`, `RETENTION`),
+`spec/gen/resolution/interface.py` (`INTERFACE_ROUTES` counts) |
+hand-maintained; const-handle support required 19 ledger edits and five
+interface-count edits | | Shape grammar | `spec/gen/resolution/type_matrix.py`
+`Shape`/`Constructor` | no variants, no custom wrappers; wrapper properties are
+implied by constructor names | | Lift/direct decision |
+`container::resolve_entry`, the dependency origin overload, `static_container`
+public and origin overloads | the same policy is encoded in four places | |
+Contracts | `tools/cost/measure.py`, `test-cost`, codegen probes | not tied to
+routes/features, so new routes can silently cost more |
 
 ## Principles borrowed from M9.2
 
@@ -84,14 +84,14 @@ to the grammar and behavior model |
 
 Risk: low. Python and generated tests only.
 
-- [x] Add `spec/grammar/shapes.py`:
+- [x] Add `spec/model/grammar/shapes.py`:
   - `WrapperSemantics(name, render, kind, properties)`.
   - Properties: `owning`, `sharing`, `sole_owner`, `nullable`, `borrowable`,
     `array`, `array_handle`, `variant`, `in_place`, `mapped`, `move`, `const`.
   - Built-ins: const, lvalue/rvalue reference, pointer, optional, unique/shared
     handle, unique/shared array handle, array reference/pointer, variant.
   - Applicability is declared per wrapper, so a user wrapper is one entry.
-- [x] Add `spec/semantics/routes/rules.py`:
+- [x] Add `spec/model/semantics/routes/rules.py`:
   - Rules: `access`, `borrow`, `move`, `copy_out`, `take`, `wrap`, `share`,
     `adopt`, `decay`, `select_alternative`, `nested_access`, `const_copy`,
     `target`.
@@ -310,9 +310,9 @@ What kept it unmerged:
   - Next: Step 2 derives `route_ledger.OPERATION_KINDS`/`RETENTION` and
     `interface_routes` counts from the same rule model.
 - 2026-10-25: Step 2, operation kinds and retention landed.
-  - `spec/semantics/routes/derivation.py` derives the kind/retention sequence
-    from the form's stored wrapper and the scope's source shape. The two hand
-    tables in `route_ledger.py` are removed; `route_ledger` keeps the
+  - `spec/model/semantics/routes/derivation.py` derives the kind/retention
+    sequence from the form's stored wrapper and the scope's source shape. The
+    two hand tables in `route_ledger.py` are removed; `route_ledger` keeps the
     outcome/access decisions.
   - Source shape is scope data now (`Scope.returns_pointer`): shared hands a
     non-wrapper value out as an address, external as an lvalue, unique as an

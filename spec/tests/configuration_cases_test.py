@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from spec.emit.families.configuration import SHARDS, render
+from spec.gen.resolution.configuration import SHARDS, render
 
 
 def test_configuration_shards_are_one_file_per_trait() -> None:

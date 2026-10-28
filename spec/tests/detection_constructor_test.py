@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from spec.emit.detection_constructor import (
+from spec.gen.classification.constructor import (
     BACKENDS,
     MODES,
     SHAPES,

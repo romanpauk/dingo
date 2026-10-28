@@ -8,8 +8,8 @@
 
 from __future__ import annotations
 
-from spec.emit.families.invoke import GAPS, build_shards, render
-from spec.grammar.traits import COPYABLE, MOVE_ONLY
+from spec.gen.resolution.invoke import GAPS, build_shards, render
+from spec.model.grammar.traits import COPYABLE, MOVE_ONLY
 
 
 def test_invoke_shapes_are_operator_classes() -> None:

@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from spec.emit.families.indexed import SHARDS, render
+from spec.gen.resolution.indexed import SHARDS, render
 
 
 def test_indexed_shards_are_hierarchical() -> None:

@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from spec.emit.families.producer import CLAIMS, build_shards, render
+from spec.gen.resolution.producer import CLAIMS, build_shards, render
 
 
 def test_producer_forms_are_operator_independent() -> None:

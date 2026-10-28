@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from spec.emit.families.construct import (
+from spec.gen.resolution.construct import (
     ARGUMENTS,
     GAPS,
     SHAPES,

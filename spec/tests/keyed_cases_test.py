@@ -12,16 +12,16 @@ from pathlib import Path
 
 import pytest
 
-from spec.emit.common.validation import validate_catalog
-from spec.emit.families.keyed import (
+from spec.gen.shared.validation import validate_catalog
+from spec.gen.resolution.keyed import (
     build_rows,
     build_shards,
     render,
     validate,
 )
-from spec.grammar.bindings import KEYED
-from spec.grammar.traits import MOVE_ONLY, TRAITS_BY_NAME
-from spec.semantics.support import classify
+from spec.model.grammar.bindings import KEYED
+from spec.model.grammar.traits import MOVE_ONLY, TRAITS_BY_NAME
+from spec.model.semantics.support import classify
 
 
 def test_keyed_catalog_is_non_empty_and_unique() -> None:

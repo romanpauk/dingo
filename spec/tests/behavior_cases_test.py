@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from spec.emit.families.behavior import (
+from spec.gen.resolution.behavior import (
     ANNOTATION_GAPS,
     ANNOTATION_RECIPES,
     ANNOTATION_SHAPES,
@@ -31,8 +31,8 @@ from spec.emit.families.behavior import (
     supported_forms,
     validate,
 )
-from spec.emit.common.validation import validate_catalog
-from spec.grammar.traits import MOVE_ONLY
+from spec.gen.shared.validation import validate_catalog
+from spec.model.grammar.traits import MOVE_ONLY
 
 
 def _form(name: str):

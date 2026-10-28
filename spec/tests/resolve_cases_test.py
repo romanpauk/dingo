@@ -11,8 +11,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from spec.emit.resolve import build_shards, manifest, render
-from spec.grammar.traits import COPYABLE, MOVE_ONLY
+from spec.gen.resolution.resolve import build_shards, manifest, render
+from spec.model.grammar.traits import COPYABLE, MOVE_ONLY
 
 
 def test_resolve_shards_follow_the_storage_hierarchy() -> None:

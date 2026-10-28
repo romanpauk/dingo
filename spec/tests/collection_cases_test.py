@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from spec.emit.families.collection import build_shards, render
+from spec.gen.resolution.collection import build_shards, render
 
 CASES = {
     "interface_vector",

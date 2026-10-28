@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from spec.emit.families.mixed import SHARDS, render
+from spec.gen.resolution.mixed import SHARDS, render
 
 
 def test_mixed_cases_share_the_container_but_not_the_assertion() -> None:

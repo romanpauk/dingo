@@ -8,18 +8,18 @@
 
 from __future__ import annotations
 
-from spec.domain.cases import iter_cases, request_forms
-from spec.emit.matrix import SHAPES
-from spec.emit.traits import probe_shape, build_rows, render, validate
-from spec.grammar.bindings import CONCRETE
-from spec.grammar.expr import leaf, lvalue_reference, pointer
-from spec.grammar.traits import (
+from spec.model.domain.cases import iter_cases, request_forms
+from spec.gen.resolution.type_matrix import SHAPES
+from spec.gen.resolution.trait_matrix import probe_shape, build_rows, render, validate
+from spec.model.grammar.bindings import CONCRETE
+from spec.model.grammar.expr import leaf, lvalue_reference, pointer
+from spec.model.grammar.traits import (
     COPYABLE,
     MOVE_ONLY,
     TRAITS,
     TRAITS_BY_NAME,
 )
-from spec.semantics.support import classify
+from spec.model.semantics.support import classify
 
 
 def _row(scope: str, form: str) -> dict[str, object]:
