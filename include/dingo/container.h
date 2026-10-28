@@ -19,6 +19,7 @@
 #include <dingo/binding/container_selection.h>
 #include <dingo/container_base.h>
 #include <dingo/container_collections.h>
+#include <dingo/container_operations.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/invoke.h>
 #include <dingo/lookup/container_lookup_definition.h>
@@ -114,6 +115,8 @@ class detail::runtime_container_impl<static_bindings<Registrations...>,
           static_bindings<Registrations...>, ParentContainer, RuntimeConfig>>,
       public detail::container_selection<detail::runtime_container_impl<
           static_bindings<Registrations...>, ParentContainer, RuntimeConfig>>,
+      public detail::container_operations<detail::runtime_container_impl<
+          static_bindings<Registrations...>, ParentContainer, RuntimeConfig>>,
       // Empty bindings leave an empty base, so the object does not grow.
       private std::conditional_t<
           (sizeof...(Registrations) != 0),
@@ -130,6 +133,7 @@ class detail::runtime_container_impl<static_bindings<Registrations...>,
             typename FriendContainer, typename FriendContext>
   friend R resolve_missing_request(FriendContainer &, construction_scope,
                                    FriendContext &, LookupKey);
+  template <typename> friend class container_operations;
 
 public:
   using static_bindings_type = static_bindings<Registrations...>;
@@ -725,22 +729,7 @@ private:
   }
 
 public:
-  template <typename T, typename IdType = none_t,
-            typename R = request_result_t<T, true>,
-            std::enable_if_t<!detail::is_lookup_key_v<IdType>, int> = 0>
-  DINGO_ALWAYS_INLINE R resolve(IdType &&id = IdType()) {
-    using request = request_type<T>;
-    auto key = detail::make_lookup_key(std::forward<IdType>(id));
-    return resolve_entry<request, R>(std::move(key));
-  }
-
-  template <typename T, typename LookupKey,
-            typename R = request_result_t<T, true>,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  DINGO_ALWAYS_INLINE R resolve(LookupKey key) {
-    using request = request_type<T>;
-    return resolve_entry<request, R>(std::move(key));
-  }
+  using detail::container_operations<self_type>::resolve;
 
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
             typename R = request_result_t<T, true>>

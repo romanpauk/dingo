@@ -475,8 +475,9 @@ This is the first shared piece of the container front-ends. Both sources now
 carry the protocol names: the static source exposes `resolve_named`, `collect`,
 and `fixed_count`; the runtime store exposes `resolve_named`, `collect`, and
 `count`. The static source's singular resolve no longer branches on collections.
-The one decision function remains; see
-[Shared-Kernel Next Steps](shared-kernel-next-steps.md).
+`container_operations<Self>` now owns the runtime/mixed `resolve` entry; the
+static key-typed entry and `construct` remain. See
+[Container Engine](container-engine.md).
 
 Verification: full build, 39/39 tests (including the literal diagnostic tests),
 `check`, and `includes-check`.

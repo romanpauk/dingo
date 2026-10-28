@@ -1,6 +1,9 @@
 # Container Engine
 
-Status: design note. No code is changed by this page.
+Status: design note, slice 1 started. `container_operations<Self>` now owns the
+public no-scope `resolve` for the runtime/mixed front-end. The static key-typed
+`resolve` remains in `static_container` until the layer takes the key form as
+the static configuration; `construct` and the collection entries also remain.
 
 [Shared-Kernel Next Steps](shared-kernel-next-steps.md) records the long-range
 plan for one container engine. This page narrows the next change: what the
@@ -96,7 +99,8 @@ canaries are:
    `container_operations<Self>` with `resolve` and `construct` that forward to
    the current public entries, and make both fronts derive from it. This is a
    move, not a wrapper: the old public entries are removed in the same commit.
-   Gate: depth chains, object sizes, full suite.
+   *(Started: the runtime/mixed `resolve` entry moved; the static key-typed
+   entry and `construct` remain.)* Gate: depth chains, object sizes, full suite.
 2. **Move the minimal-context decision into the layer.** Replace the static-only
    public `resolve` fast path with a policy query the layer uses, so there is
    one entry. Gate: static codegen probe and object sizes.

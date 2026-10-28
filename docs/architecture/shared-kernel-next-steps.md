@@ -874,13 +874,13 @@ container class; slice 6 removes the recursive configuration.
 
 The cleanup work on `feature/shared-kernel` is done: dead declarations, the
 forwarding adapters, the construct dispatch, the storage slots, and conversion
-path slices 1-2. Both sources now carry the protocol names: `static_registry`
-exposes `resolve_named`, `collect`, and `fixed_count`, and the runtime store
-exposes `resolve_named`, `collect`, and `count`. The static source's singular
-resolve no longer branches on collections. The one decision function remains,
-and its first commit should not be a rename pass.
+path slices 1-2. Both sources carry the protocol names: `static_registry`
+exposes `resolve_named`, `collect`, and `fixed_count`; the runtime store exposes
+`resolve_named`, `collect`, and `count`. The static source's singular resolve no
+longer branches on collections. `container_operations<Self>` now owns the
+runtime/mixed `resolve` entry.
 
-The sources now carry the protocol names. What remains is the decision layer:
+What remains is the rest of the decision layer:
 
 - `static_registry::resolve_named` resolves its compile-time selection;
 - the runtime `resolve_named` executes a selection the engine made, with the
@@ -888,12 +888,13 @@ The sources now carry the protocol names. What remains is the decision layer:
 - collection `count`/`collect`/construct still live on each source with
   different shapes.
 
-The next commit should start the operations layer and replace the static resolve
-entry with it, not wrap it:
+The next commit should finish the operations layer and replace the static
+resolve entry with it, not wrap it:
 
 1. Add `container_operations<Self>` and move `resolve` and `construct` into it;
    make both front-ends derive from it and remove the old public entries in the
-   same commit.
+   same commit. *(Runtime/mixed `resolve` moved; the static key-typed resolve
+   and `construct` remain.)*
 2. Move the static minimal-context fast path into the layer as a policy query.
 3. Fold the construct tree into the layer's construct variant.
 4. Move `invoke` and the collection entry points last.
