@@ -1,9 +1,10 @@
 # Container Engine
 
-Status: design note, slice 1 started. `container_operations<Self>` now owns the
-public no-scope `resolve` for the runtime/mixed front-end. The static key-typed
-`resolve` remains in `static_container` until the layer takes the key form as
-the static configuration; `construct` and the collection entries also remain.
+Status: design note, slices 1-2 applied for resolve.
+`container_operations<Self, RuntimeSource>` owns both no-scope `resolve`
+spellings: the id/key form for runtime-backed containers and the compile-time
+key form for static-only containers, including the static minimal-context
+decision. `construct`, `invoke`, and the collection entry points remain.
 
 [Shared-Kernel Next Steps](shared-kernel-next-steps.md) records the long-range
 plan for one container engine. This page narrows the next change: what the
@@ -56,7 +57,7 @@ One operations layer with the decision order in one place, and per-mode facts as
 constants:
 
 ```text
-container_operations<Self>
+container_operations<Self, RuntimeSource>
   resolve(...)            -> source order, then the selected source
   construct(...)          -> the construct variant of the same order
   invoke(...)
@@ -96,14 +97,14 @@ canaries are:
 ## Slices
 
 1. **Name the operations layer without moving behavior.** Add
-   `container_operations<Self>` with `resolve` and `construct` that forward to
-   the current public entries, and make both fronts derive from it. This is a
-   move, not a wrapper: the old public entries are removed in the same commit.
-   *(Started: the runtime/mixed `resolve` entry moved; the static key-typed
-   entry and `construct` remain.)* Gate: depth chains, object sizes, full suite.
+   `container_operations<Self, RuntimeSource>` and move `resolve` into it; make
+   both fronts derive from it and remove the old public entries in the same
+   commit. *(Applied for both no-scope `resolve` entries; `construct` remains.)*
+   Gate: depth chains, object sizes, full suite.
 2. **Move the minimal-context decision into the layer.** Replace the static-only
    public `resolve` fast path with a policy query the layer uses, so there is
-   one entry. Gate: static codegen probe and object sizes.
+   one entry. *(Applied: the minimal-context decision moved with the static
+   resolve body.)* Gate: static codegen probe and object sizes.
 3. **Move the construct tree.** Fold `construct`, `construct_mixed_request`, and
    `construct_rvalue_request` into the layer's construct variant, with the
    static/runtime/mixed differences as the constants above. Gate: behavior

@@ -115,8 +115,10 @@ class detail::runtime_container_impl<static_bindings<Registrations...>,
           static_bindings<Registrations...>, ParentContainer, RuntimeConfig>>,
       public detail::container_selection<detail::runtime_container_impl<
           static_bindings<Registrations...>, ParentContainer, RuntimeConfig>>,
-      public detail::container_operations<detail::runtime_container_impl<
-          static_bindings<Registrations...>, ParentContainer, RuntimeConfig>>,
+      public detail::container_operations<
+          detail::runtime_container_impl<static_bindings<Registrations...>,
+                                         ParentContainer, RuntimeConfig>,
+          true>,
       // Empty bindings leave an empty base, so the object does not grow.
       private std::conditional_t<
           (sizeof...(Registrations) != 0),
@@ -133,7 +135,7 @@ class detail::runtime_container_impl<static_bindings<Registrations...>,
             typename FriendContainer, typename FriendContext>
   friend R resolve_missing_request(FriendContainer &, construction_scope,
                                    FriendContext &, LookupKey);
-  template <typename> friend class container_operations;
+  template <typename, bool> friend class container_operations;
 
 public:
   using static_bindings_type = static_bindings<Registrations...>;
@@ -729,7 +731,7 @@ private:
   }
 
 public:
-  using detail::container_operations<self_type>::resolve;
+  using detail::container_operations<self_type, true>::resolve;
 
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
             typename R = request_result_t<T, true>>

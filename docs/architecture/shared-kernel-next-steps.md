@@ -877,8 +877,9 @@ forwarding adapters, the construct dispatch, the storage slots, and conversion
 path slices 1-2. Both sources carry the protocol names: `static_registry`
 exposes `resolve_named`, `collect`, and `fixed_count`; the runtime store exposes
 `resolve_named`, `collect`, and `count`. The static source's singular resolve no
-longer branches on collections. `container_operations<Self>` now owns the
-runtime/mixed `resolve` entry.
+longer branches on collections. `container_operations<Self, RuntimeSource>` now
+owns both no-scope `resolve` entries, including the static minimal-context
+decision.
 
 What remains is the rest of the decision layer:
 
@@ -891,11 +892,12 @@ What remains is the rest of the decision layer:
 The next commit should finish the operations layer and replace the static
 resolve entry with it, not wrap it:
 
-1. Add `container_operations<Self>` and move `resolve` and `construct` into it;
-   make both front-ends derive from it and remove the old public entries in the
-   same commit. *(Runtime/mixed `resolve` moved; the static key-typed resolve
-   and `construct` remain.)*
+1. Add `container_operations<Self, RuntimeSource>` and move `resolve` and
+   `construct` into it; make both front-ends derive from it and remove the old
+   public entries in the same commit. *(Both resolve entries moved; `construct`
+   remains.)*
 2. Move the static minimal-context fast path into the layer as a policy query.
+   *(Applied with the static resolve body.)*
 3. Fold the construct tree into the layer's construct variant.
 4. Move `invoke` and the collection entry points last.
 

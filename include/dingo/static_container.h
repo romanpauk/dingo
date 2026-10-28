@@ -11,6 +11,7 @@
 #include <dingo/binding/container_selection.h>
 #include <dingo/container.h>
 #include <dingo/container_collections.h>
+#include <dingo/container_operations.h>
 #include <dingo/factory/invoke.h>
 #include <dingo/lookup/container_lookup_definition.h>
 #include <dingo/static/binding.h>
@@ -98,9 +99,12 @@ class static_container_impl<static_bindings<Registrations...>, ParentContainer,
           static_bindings<Registrations...>, !std::is_void_v<ParentContainer>>,
       public container_collections<static_container_impl<
           static_bindings<Registrations...>, ParentContainer, ContainerTraits>>,
-      public container_selection<
+      public container_selection<static_container_impl<
+          static_bindings<Registrations...>, ParentContainer, ContainerTraits>>,
+      public container_operations<
           static_container_impl<static_bindings<Registrations...>,
-                                ParentContainer, ContainerTraits>> {
+                                ParentContainer, ContainerTraits>,
+          false> {
 public:
   using static_bindings_type = static_bindings<Registrations...>;
   using context_static_bindings_type = static_bindings_cat_t<
@@ -125,6 +129,7 @@ private:
   friend R resolve_missing_request(FriendContainer &, construction_scope,
                                    FriendContext &, LookupKey);
   template <typename> friend class container_selection;
+  template <typename, bool> friend class container_operations;
 
   template <typename Request, typename Key>
   using selection_t =
@@ -301,53 +306,7 @@ public:
   explicit static_container_impl(Parent *parent)
       : parent_(container_implementation_of(parent)) {}
 
-  template <typename T, typename Key = key_type<none_t>,
-            typename R = request_result_t<T, true>>
-  R resolve() {
-    using lookup_key_type =
-        decltype(detail::make_lookup_key(type_selector<Key>{}));
-    return resolve<T, lookup_key_type, R>(
-        detail::make_lookup_key(type_selector<Key>{}));
-  }
-
-  template <typename T, typename LookupKey,
-            typename R = request_result_t<T, true>,
-            typename = typename resolve_request_check<request_type<T, false>, R,
-                                                      LookupKey>::type,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(LookupKey key) {
-    using lookup_request = request_type<T, true>;
-    using request = request_type<T, false>;
-    using policy =
-        detail::resolution_policy<T, LookupKey, static_bindings_type,
-                                  detail::resolution_mode::compile_time>;
-    return policy::template resolve<R>(
-        [&](auto) -> R {
-          if constexpr (!collection_traits<R>::is_collection) {
-            if constexpr (uses_static_minimal_context_v<request, R,
-                                                        LookupKey>) {
-              using selected =
-                  typename static_registry_type::template selection<
-                      typename lookup_request::lookup_type, LookupKey>;
-              static_resolution_context_t<request, R, LookupKey> context;
-              return static_registry_.template resolve_binding<
-                  typename lookup_request::lookup_type, R, selected>(
-                  ephemeral_scope, context, *this);
-            }
-          }
-          context_type context;
-          return selection_type::template resolve<request, R>(
-              ephemeral_scope, context, *this, key);
-        },
-        [&](auto tag) -> R {
-          using selected_policy = typename decltype(tag)::policy;
-          return selected_policy::lift_type::make(
-              resolve<
-                  typename selected_policy::inner_type, LookupKey,
-                  request_result_t<typename selected_policy::inner_type, true>>(
-                  key));
-        });
-  }
+  using detail::container_operations<self_type, false>::resolve;
 
   template <typename T, bool RemoveRvalueReferences, typename Context,
             typename LookupKey,
