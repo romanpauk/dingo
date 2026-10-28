@@ -113,12 +113,11 @@ private:
   using selection_type = container_selection<self_type>;
 
   static constexpr bool has_parent_v = !std::is_void_v<ParentContainer>;
-  using graph_type_ = graph_analysis<static_bindings_type>;
   using parent_container_type = container_implementation_t<ParentContainer>;
   using state_type = static_registry_state<Registrations...>;
   using context_type = static_context<context_static_bindings_type>;
-  using index_entries_ = detail::normalize_lookup_definitions_t<
-      detail::container_lookup_definition_type_t<ContainerTraits>>;
+  using registration_checks =
+      detail::static_registration_checks<static_bindings_type, ContainerTraits>;
 
   template <typename Policy, bool MayAutoConstruct, bool StaticError,
             typename Request, typename LookupKey, typename R,
@@ -268,31 +267,23 @@ public:
 
   using rtti_type = typename ContainerTraits::rtti_type;
 
-  static_assert(static_bindings_type::valid,
+  static_assert(registration_checks::valid,
                 "static_container requires a valid compile-time bindings "
                 "source");
-  static_assert(detail::key_value_bindings_are_declared<
-                    typename static_bindings_type::interface_bindings,
-                    index_entries_>::value,
+  static_assert(registration_checks::key_values_declared,
                 "static_container fixed dingo::key_type<Key, Value> bindings "
                 "require associative<Key, Interface, one> or "
                 "associative<Key, Interface, many>");
-  static_assert(detail::key_value_bindings_are_unique<
-                    typename static_bindings_type::interface_bindings,
-                    index_entries_>::value,
+  static_assert(registration_checks::key_values_unique,
                 "static_container fixed runtime-key lookup bindings must be "
                 "unique for one lookups and unique by storage for many "
                 "lookups");
-  static_assert(graph_type_::resolvable,
+  static_assert(registration_checks::graph_resolvable,
                 "static_container requires a resolvable compile-time binding "
                 "graph");
-  static_assert((binding_factory_is_default_constructible<
-                     binding_model<Registrations>>::value &&
-                 ...),
+  static_assert(registration_checks::factories_constructible,
                 "static_container requires default-constructible factories");
-  static_assert((binding_storage_is_default_constructible<
-                     binding_model<Registrations>>::value &&
-                 ...),
+  static_assert(registration_checks::storage_constructible,
                 "static_container requires default-constructible storage "
                 "objects");
 

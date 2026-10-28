@@ -276,8 +276,9 @@ graph, and no amount of runtime/static unification substitutes for it.
 
 `static_container_impl` repeats the public operations of
 `runtime_container_impl`: `resolve_parent`, `resolve_missing`, `unresolved`, the
-collection relays, the construct branch tree, and the registration requirement
-`static_assert` block. The shared engine under `binding/` covers selection and
+collection relays, and the construct branch tree. The registration conditions
+are now shared through `static_registration_checks`; each container keeps its
+own diagnostic wording. The shared engine under `binding/` covers selection and
 execution, not the outer operations. The target design and its slices already
 exist in [Shared-Kernel Next Steps](shared-kernel-next-steps.md); this review
 agrees with the sequencing there, in particular that the unified entry must
@@ -461,6 +462,21 @@ rejected: the per-index condition traits added boilerplate and read worse than
 the chain. See [Conversion Path](conversion-path.md#evaluation).
 
 Verification: full build, 39/39 tests, `check`, and `includes-check`.
+
+### Step 6: registration checks
+
+`static_registration_checks` now owns the six conditions both container shapes
+assert: valid bindings, declared and unique key values, a resolvable graph, and
+default-constructible factories and storage. `static_registration_requirements`
+and `static_container_impl` keep their own `static_assert` messages, which the
+literal tests pin, but the conditions are defined once.
+
+This is the first shared piece of the container front-ends. The outer operations
+and the source protocol remain; see
+[Shared-Kernel Next Steps](shared-kernel-next-steps.md).
+
+Verification: full build, 39/39 tests (including the literal diagnostic tests),
+`check`, and `includes-check`.
 
 ## Non-Goals
 
