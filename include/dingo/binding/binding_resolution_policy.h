@@ -122,41 +122,6 @@ R resolve_combined_selection(const PrimarySelection &primary, Context &context,
   throw make_type_ambiguous_exception<Request>(context);
 }
 
-template <typename ErrorRequest, typename ResolveRequest = ErrorRequest,
-          typename Context, typename Sources>
-ResolveRequest resolve_from_binding_sources(Context &context,
-                                            Sources &sources) {
-  auto selection = sources.select();
-  if (selection.ambiguous()) {
-    throw make_type_ambiguous_exception<ErrorRequest>(context);
-  }
-
-  return sources.template resolve<ResolveRequest>(context, selection);
-}
-
-template <typename SelectedSource, typename MissingSource>
-struct selected_binding_sources {
-  SelectedSource &selected;
-  MissingSource &missing;
-
-  decltype(auto) select() { return selected.select(); }
-
-  template <typename Request, typename Context, typename Selection>
-  decltype(auto) resolve(Context &context, Selection selection) {
-    if (selection.found()) {
-      return selected.template resolve<Request>(context, selection);
-    }
-    return missing.template resolve<Request>(context);
-  }
-};
-
-template <typename SelectedSource, typename MissingSource>
-selected_binding_sources<SelectedSource, MissingSource>
-make_selected_binding_sources(SelectedSource &selected,
-                              MissingSource &missing) {
-  return {selected, missing};
-}
-
 } // namespace dingo::detail
 
 #ifdef _MSC_VER

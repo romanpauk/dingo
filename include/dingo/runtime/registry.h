@@ -348,15 +348,6 @@ protected:
     return detail::convert_resolved_binding<Request>(result.address);
   }
 
-  template <typename Request, typename LookupKey>
-  auto source_resolve(construction_scope scope, runtime_selection selection,
-                      runtime_context_type &context, const LookupKey &) ->
-      typename Request::interface_type {
-    return resolve_named<typename Request::lookup_type,
-                         typename Request::interface_type>(selection, scope,
-                                                           context);
-  }
-
   template <typename T, typename Fn, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   std::size_t collect(runtime_bindings_state *state, T &results,
@@ -681,39 +672,6 @@ protected:
   };
 
 protected:
-  template <typename Request, typename LookupKey>
-  struct selected_runtime_binding {
-    registry_type &registry;
-    LookupKey &key;
-    construction_scope scope;
-
-    decltype(auto) select() {
-      return registry.template select_binding<typename Request::value_type,
-                                              typename Request::exact_type>(
-          key);
-    }
-
-    template <typename ResolveRequest, typename Selection>
-    decltype(auto) resolve(runtime_context_type &context, Selection selection) {
-      return registry.template source_resolve<Request>(scope, selection,
-                                                       context, key);
-    }
-  };
-  template <typename Request, bool MayAutoConstruct, typename LookupKey>
-  struct missing_runtime_binding {
-    registry_type &registry;
-    LookupKey &key;
-    construction_scope scope;
-
-    template <typename ResolveRequest>
-    request_result_t<ResolveRequest> resolve(runtime_context_type &context) {
-      using result_type = request_result_t<ResolveRequest>;
-      return registry.template source_missing<Request, MayAutoConstruct,
-                                              LookupKey, result_type>(
-          scope, context, key);
-    }
-  };
-
   template <typename Request, bool MayAutoConstruct, typename LookupKey,
             typename R = typename Request::lookup_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
@@ -973,24 +931,6 @@ private:
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-  template <typename Request, bool MayAutoConstruct, typename LookupKey,
-            typename R = typename Request::lookup_type>
-  R resolve_impl(construction_scope scope, runtime_context_type &context,
-                 LookupKey key) {
-    static_assert(detail::is_lookup_key_v<LookupKey>);
-    using Type = typename Request::value_type;
-    static_assert(!std::is_const_v<Type>);
-
-    using lookup_key_type = LookupKey;
-    selected_runtime_binding<Request, lookup_key_type> selected{*this, key,
-                                                                scope};
-    missing_runtime_binding<Request, MayAutoConstruct, lookup_key_type> missing{
-        *this, key, scope};
-    auto sources = detail::make_selected_binding_sources(selected, missing);
-    return detail::resolve_from_binding_sources<typename Request::lookup_type,
-                                                R>(context, sources);
-  }
-
   template <typename Request>
   decltype(auto) auto_construct(construction_scope scope,
                                 runtime_context_type &context) {
@@ -1012,15 +952,25 @@ private:
   R resolve(construction_scope scope, runtime_context_type &context,
             LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
-    return resolve_impl<request,
-                        detail::is_runtime_auto_constructible_dependency_v<
-                            typename request::user_type>>(scope, context,
-                                                          std::move(key));
+    using interface_type = typename request::interface_type;
+    auto selected =
+        this->template select_binding<typename request::value_type,
+                                      typename request::exact_type>(key);
+    if (selected.status == detail::binding_status::ambiguous) {
+      throw detail::make_type_ambiguous_exception<
+          typename request::lookup_type>(context);
+    }
+    if (selected.status == detail::binding_status::found) {
+      return this->template resolve_named<typename request::lookup_type,
+                                          interface_type>(selected, scope,
+                                                          context);
+    }
+    return this->template source_missing<
+        request,
+        detail::is_runtime_auto_constructible_dependency_v<
+            typename request::user_type>,
+        LookupKey, interface_type>(scope, context, std::move(key));
   }
-
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
 
   parent_container_type *parent_ = nullptr;
 

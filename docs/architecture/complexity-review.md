@@ -484,6 +484,14 @@ construct rules. Only the state/move policy remains. See
 Verification: full build, 39/39 tests (including the literal diagnostic tests),
 `check`, and `includes-check`.
 
+### Follow-up: registry resolve dispatch
+
+The registry's three-argument dependency resolve used a parallel
+selected/missing source pair plus policy adapters. It now selects once, calls
+`resolve_named` on a hit, and calls `source_missing` on a miss; the two source
+structs and the adapters are gone. The miss rule and auto-construction stay. The
+registry lost 50 lines and the policy header 35.
+
 ## Non-Goals
 
 - No big-bang reimplementation. The transaction, storage, graph, and generated
