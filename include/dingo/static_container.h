@@ -335,12 +335,7 @@ public:
 
   using detail::container_operations<self_type, false>::construct;
 
-  template <typename Signature = void, typename Callable>
-  auto invoke(Callable &&callable) {
-    context_type context;
-    return detail::container_invoke<Signature>(
-        context, *this, ephemeral_scope, std::forward<Callable>(callable));
-  }
+  using detail::container_operations<self_type, false>::invoke;
 
 private:
   template <typename T, typename LookupKey, typename Context, typename... Args>

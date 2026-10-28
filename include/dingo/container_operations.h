@@ -15,6 +15,7 @@
 #include <dingo/base/construction_scope.h>
 #include <dingo/base/none.h>
 #include <dingo/factory/constructor.h>
+#include <dingo/factory/invoke.h>
 #include <dingo/runtime/context.h>
 #include <dingo/static/construction.h>
 #include <dingo/static/resolution_policy.h>
@@ -262,6 +263,20 @@ public:
         auto type_guard = context.template track_type<request_value_type>();
         return factory.template construct<R>(ephemeral_scope, context, self());
       }
+    }
+  }
+
+  template <typename Signature = void, typename Callable>
+  auto invoke(Callable &&callable) {
+    if constexpr (RuntimeSource) {
+      return execute_transaction(self().runtime_storage(), [&](auto &context) {
+        return detail::container_invoke<Signature>(
+            context, self(), ephemeral_scope, std::forward<Callable>(callable));
+      });
+    } else {
+      typename Self::context_type context;
+      return detail::container_invoke<Signature>(
+          context, self(), ephemeral_scope, std::forward<Callable>(callable));
     }
   }
 

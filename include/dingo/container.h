@@ -786,15 +786,7 @@ private:
   }
 
 public:
-  template <typename Signature = void, typename Callable>
-  auto invoke(Callable &&callable) {
-    return execute_transaction(runtime_registry_.runtime(),
-                               [&](runtime_context_type &context) {
-                                 return detail::container_invoke<Signature>(
-                                     context, *this, ephemeral_scope,
-                                     std::forward<Callable>(callable));
-                               });
-  }
+  using detail::container_operations<self_type, true>::invoke;
 
   template <typename Request, typename IdType>
   detail::binding_status binding_status(IdType &&id) {
