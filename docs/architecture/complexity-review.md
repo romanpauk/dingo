@@ -192,12 +192,10 @@ the aliases alone.
 
 ## 3. Rules With More Than One Encoding
 
-- **Route precedence** — four encodings: `conversion_kind`
-  ([type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)),
-  the fallback-candidate chain in the same file, the step list
-  ([resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)),
-  and storage pairing
-  ([type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)).
+- **Route precedence** — the `conversion_kind` enum, the
+  `conversion_fallback_candidate` specializations, and the necessary-condition
+  walk still encode the order. Storage pairing no longer does: it reads the
+  selected path's properties. See [Conversion Path](conversion-path.md).
 - **"Exact binding, else normalized binding"** — `static/bindings.h` (list form
   and choice form), `runtime/selection.h`, and `container.h`'s
   `has_static_construct_v`.
@@ -322,7 +320,7 @@ Each step is independently reviewable. Steps 1–4 change no behavior.
    see [Applied Changes](#applied-changes).)* Gate: `object_sizes.cpp`, resolve
    probes.
 5. **Single conversion-path source of truth** (§3), coordinated with the wrapper
-   semantics model in `spec/`. *(Slice 1 applied — see
+   semantics model in `spec/`. *(Slices 1–2 applied; slice 3 remains — see
    [Conversion Path](conversion-path.md).)* Gate: model baseline, behavior and
    type-table outcomes unchanged, declared baseline update only if a behavior
    change is intended.
@@ -445,6 +443,23 @@ outside the header, and both keep their spelling.
 
 Verification: full build, 39/39 tests (including `object_sizes.cpp`),
 `resolve-check`, `check`, and `includes-check`.
+
+### Step 5: conversion path (slices 1-2)
+
+`detail::conversion_properties` exposes `produces_object_address` and
+`identity_copy` on the selected conversion. Storage pairing now asks the
+pointer, reference, and value paths instead of re-deriving the default rules,
+and `shared_object_resolutions` takes its conversion from the same path. The
+re-derived predicates and `default_object_conversion_t` are gone.
+
+The object-route matrix in `test/registration/object_routes.cpp` is the
+differential check: it covers plain types, pointers, wrappers, alternatives,
+arrays, custom wrappers, and all four scopes.
+
+Slice 3, merging the three encodings of the fallback order, remains. See
+[Conversion Path](conversion-path.md).
+
+Verification: full build, 39/39 tests, `check`, and `includes-check`.
 
 ## Non-Goals
 

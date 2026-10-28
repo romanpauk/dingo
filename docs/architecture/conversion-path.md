@@ -1,6 +1,7 @@
 # Conversion Path
 
-Status: design note, slice 1 applied. No behavior is changed by this page.
+Status: design note, slices 1 and 2 applied. No behavior is changed by this
+page.
 
 Slice 1 added `detail::conversion_properties` in
 [type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h):
@@ -9,7 +10,14 @@ Slice 1 added `detail::conversion_properties` in
 [object_routes.cpp](../../test/registration/object_routes.cpp) uses the trait
 for its shared-route soundness checks across the plain, pointer, wrapper,
 alternative, array, and custom-wrapper matrix, replacing the local copies of the
-same two predicates. Slices 2 and 3 below remain.
+same two predicates.
+
+Slice 2 switched storage pairing to the trait: `is_default_object_request` and
+`is_default_value_request` now ask the selected pointer, reference, and value
+paths, and `shared_object_resolutions` takes its conversion from the same path.
+`is_object_address_candidate_v`, `is_default_object_route`,
+`is_value_copy_candidate_v`, `is_default_value_route`, and
+`default_object_conversion_t` are gone. Slice 3 below remains.
 
 [Conversion Model](conversion-model.md) describes how a request is selected and
 executed today. This page records the one structural duplication left in that

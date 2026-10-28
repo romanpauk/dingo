@@ -461,128 +461,68 @@ public:
 // Every other conversion (wrappers, alternatives, arrays, retained or custom
 // conversions) selects its object by its own rule and keeps a route per
 // category.
-// The object a pointer target and a source share, when the source is an lvalue
-// or a pointer that the target is convertible from.
+// The selected conversion decides whether a route reaches an object the source
+// already holds and whether its value is the identity copy of that object.
 template <typename Target, typename Source>
-inline constexpr bool is_object_address_candidate_v =
-    std::is_pointer_v<Target> &&
-    !std::is_array_v<std::remove_pointer_t<Target>> &&
-    !std::is_pointer_v<std::remove_cv_t<std::remove_pointer_t<Target>>> &&
-    (std::is_lvalue_reference_v<Source>
-         ? (!std::is_array_v<std::remove_reference_t<Source>> &&
-            !std::is_pointer_v<
-                std::remove_cv_t<std::remove_reference_t<Source>>> &&
-            std::is_convertible_v<std::remove_reference_t<Source> *, Target> &&
-            // An alternative source selects its alternative, unless the object
-            // is the alternative itself.
-            (!is_alternative_type_v<std::remove_reference_t<Source>> ||
-             std::is_same_v<
-                 std::remove_cv_t<std::remove_pointer_t<Target>>,
-                 std::remove_cv_t<std::remove_reference_t<Source>>>) &&
-            // A direct conversion has priority over taking the address.
-            !std::is_constructible_v<Target, Source> &&
-            !std::is_constructible_v<Target,
-                                     const std::remove_reference_t<Source> &>)
-         : (std::is_pointer_v<Source> &&
-            !std::is_void_v<std::remove_pointer_t<Source>> &&
-            std::is_convertible_v<Source, Target>));
+inline constexpr bool reaches_object_address_v = conversion_properties<
+    type_conversion_path_t<Target, Source, borrow>>::produces_object_address;
 
 template <typename Target, typename Source>
-constexpr bool is_default_object_route() {
-  bool result = false;
-  if constexpr (is_object_address_candidate_v<Target, Source>) {
-    using object = std::remove_pointer_t<Target>;
-    if constexpr (std::is_lvalue_reference_v<Source>) {
-      using source = std::remove_cv_t<std::remove_reference_t<Source>>;
-      result = is_default_type_conversion<
-                   type_conversion_traits<Target, source>>::value &&
-               is_default_type_conversion<
-                   type_conversion_traits<object &, source>>::value;
-    } else {
-      using pointee = std::remove_cv_t<std::remove_pointer_t<Source>>;
-      result = is_default_type_conversion<
-                   type_conversion_traits<Target, Source>>::value &&
-               is_default_type_conversion<
-                   type_conversion_traits<object &, pointee>>::value;
-    }
-  }
-  return result;
-}
+inline constexpr bool is_identity_copy_v = conversion_properties<
+    type_conversion_path_t<Target, Source, borrow>>::identity_copy;
+
+// A pointer target can share an object route only when the source is an lvalue
+// or a pointer; the selected path decides everything else.
+template <typename Target, typename Source>
+inline constexpr bool is_object_route_candidate_v =
+    std::is_pointer_v<Target> &&
+    (std::is_lvalue_reference_v<Source> ||
+     std::is_pointer_v<std::remove_reference_t<Source>>);
 
 // A pointer request pairs with the reference request of the same object when
-// the route of the pointer request is the default object route.
+// both selected routes reach the object the source holds.
 template <typename Interface, typename Storage, typename Pointer>
 constexpr bool is_default_object_request() {
-  using source = std::remove_cv_t<std::remove_pointer_t<std::remove_reference_t<
-      typename storage_source_traits<Storage>::borrowed_type>>>;
-  if constexpr (type_traits<source>::enabled &&
+  using source_type =
+      std::remove_cv_t<std::remove_pointer_t<std::remove_reference_t<
+          typename storage_source_traits<Storage>::borrowed_type>>>;
+  if constexpr (type_traits<source_type>::enabled &&
                 !type_traits<std::remove_cv_t<Interface>>::enabled &&
                 !type_traits<std::remove_pointer_t<Pointer>>::enabled) {
     // The object of a wrapper source is reached through the wrapper traits,
     // unless the published object is a wrapper itself.
     return false;
   } else {
-    return is_default_object_route<
-        storage_resolution_target_t<Pointer, Interface, Storage, false>,
-        storage_resolution_source_t<Storage, borrow>>();
-  }
-}
-
-// The value request that copies an object is served by the object route when
-// the copy is the identity copy of the object: the value is the stored object
-// itself, copied from an lvalue source or from the pointee of a pointer source
-// by the default conversions. Every other value (derived to base copies,
-// wrapper and alternative conversions, custom conversions) keeps a route of its
-// own.
-// The value a pointer target and a source share, when the value is copied from
-// an lvalue source or from the pointee of a pointer source.
-template <typename Target, typename Source>
-inline constexpr bool is_value_copy_candidate_v =
-    std::is_pointer_v<Target> &&
-    !std::is_pointer_v<std::remove_cv_t<std::remove_pointer_t<Target>>> &&
-    !std::is_array_v<std::remove_cv_t<std::remove_pointer_t<Target>>> &&
-    (std::is_lvalue_reference_v<Source>
-         ? (std::is_same_v<std::remove_cv_t<std::remove_pointer_t<Target>>,
-                           std::remove_cv_t<std::remove_reference_t<Source>>> &&
-            !std::is_volatile_v<std::remove_reference_t<Source>>)
-         : (std::is_pointer_v<Source> &&
-            std::is_same_v<std::remove_cv_t<std::remove_pointer_t<Target>>,
-                           std::remove_cv_t<std::remove_pointer_t<Source>>> &&
-            !std::is_volatile_v<std::remove_pointer_t<Source>> &&
-            // A pointer source is copied from its pointee unless the value is
-            // constructed from the pointer or selects its source by a
-            // structure of its own.
-            !is_alternative_type_v<std::remove_pointer_t<Source>> &&
-            !type_traits<
-                std::remove_cv_t<std::remove_pointer_t<Source>>>::enabled &&
-            !std::is_constructible_v<
-                std::remove_cv_t<std::remove_pointer_t<Target>>, Source>));
-
-template <typename Target, typename Source>
-constexpr bool is_default_value_route() {
-  bool result = false;
-  if constexpr (is_value_copy_candidate_v<Target, Source>) {
-    using value = std::remove_cv_t<std::remove_pointer_t<Target>>;
-    if constexpr (std::is_lvalue_reference_v<Source>) {
-      result = is_copy_constructible_v<value> &&
-               is_default_type_conversion<
-                   type_conversion_traits<value, value>>::value;
+    using target =
+        storage_resolution_target_t<Pointer, Interface, Storage, false>;
+    using source = storage_resolution_source_t<Storage, borrow>;
+    if constexpr (!is_object_route_candidate_v<target, source>) {
+      return false;
     } else {
-      result = is_copy_constructible_v<value> &&
-               is_default_type_conversion<
-                   type_conversion_traits<value, value>>::value &&
-               is_default_type_conversion<
-                   type_conversion_traits<value, Source>>::value;
+      using object = std::remove_pointer_t<target>;
+      if constexpr (std::is_lvalue_reference_v<source>) {
+        return reaches_object_address_v<target, source> &&
+               reaches_object_address_v<object &, source>;
+      } else {
+        using pointee = std::remove_cv_t<
+            std::remove_pointer_t<std::remove_reference_t<source>>>;
+        return reaches_object_address_v<target, source> &&
+               reaches_object_address_v<object &,
+                                        std::add_lvalue_reference_t<pointee>>;
+      }
     }
   }
-  return result;
 }
 
+// The pointer request also serves the copy of its object when the value route
+// is that object's identity copy.
 template <typename Interface, typename Storage, typename Pointer>
 constexpr bool is_default_value_request() {
-  return is_default_value_route<
-      storage_resolution_target_t<Pointer, Interface, Storage, false>,
-      storage_resolution_source_t<Storage, borrow>>();
+  using target =
+      storage_resolution_target_t<Pointer, Interface, Storage, false>;
+  using value = std::remove_cv_t<std::remove_pointer_t<target>>;
+  using source = storage_resolution_source_t<Storage, borrow>;
+  return is_copy_constructible_v<value> && is_identity_copy_v<value, source>;
 }
 
 // Splits the requests of a storage that has an object into the pointer requests
@@ -660,15 +600,9 @@ public:
 };
 
 // The route that serves both the reference and the pointer request of an
-// object, and the copy of the object when it is a value route as well. It is
-// the default conversion of the source to the object address, which needs no
-// conversion planning.
-template <typename Target, typename Source>
-using default_object_conversion_t =
-    std::conditional_t<std::is_lvalue_reference_v<Source>,
-                       address_type_conversion<Target, Source>,
-                       traits_type_conversion<Target, Source>>;
-
+// object, and the copy of the object when it is a value route as well. Its
+// conversion is the one the selected path already names; pairing does not plan
+// it a second time.
 template <typename Pointers, typename Interface, typename Storage,
           bool ServesValue>
 struct shared_object_resolutions;
@@ -682,11 +616,11 @@ private:
 
   // The target of a route is formed once and named by the route.
   template <typename Target>
-  using route_of =
-      resolution<Target,
-                 type_resolution<Target, source,
-                                 default_object_conversion_t<Target, source>>,
-                 true, ServesValue>;
+  using route_of = resolution<
+      Target,
+      type_resolution<Target, source,
+                      type_conversion_path_t<Target, source, borrow>>,
+      true, ServesValue>;
 
 public:
   using type = type_list<route_of<
