@@ -193,3 +193,9 @@ wrapper form.
 The current implementation is intentionally narrow: the conversions object is
 closer to an expanded variant of cached conversion instances than to a general
 conversion graph.
+
+## See Also
+
+[Conversion Path](conversion-path.md) records the remaining duplication between
+the selected conversion and storage pairing, and the target shape for removing
+it.

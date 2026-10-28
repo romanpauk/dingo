@@ -20,6 +20,9 @@ Read these pages in order for the full picture:
   wrapper, storage exposure policy, or conversion.
 - [Conversion Model](conversion-model.md): how Dingo chooses value, reference,
   pointer, and wrapper conversions at resolution time.
+- [Conversion Path](conversion-path.md): the design note for deriving route
+  properties once from the selected conversion instead of re-deriving them in
+  storage pairing.
 - [Coverage Model](coverage-model.md): capability rows, the claims over them,
   operator classes, and what completeness means.
 - [Test Corpus Retirement](retired-corpus.md): what replaced the retired the
