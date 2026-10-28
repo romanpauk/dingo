@@ -396,15 +396,14 @@ private:
   template <typename Request, typename R = typename Request::result_type>
   R construct_runtime_resolved_request(construction_scope scope,
                                        runtime_context_type &context) {
-    try {
-      return resolve_request<Request>(scope, context);
-    } catch (const type_not_convertible_exception &) {
-      using request_value_type = typename Request::value_type;
-      auto &&value =
-          resolve_request<request_type<request_value_type>>(scope, context);
-      return type_traits<std::decay_t<typename Request::user_type>>::make(
-          std::forward<decltype(value)>(value));
-    }
+    using user_type = typename Request::user_type;
+    using request_value_type = typename Request::value_type;
+    return ::dingo::construct_resolved_request<user_type>(
+        [&]() -> R { return resolve_request<Request>(scope, context); },
+        [&]() {
+          return resolve_request<request_type<request_value_type>>(scope,
+                                                                   context);
+        });
   }
 
   template <typename Request,
@@ -447,19 +446,17 @@ private:
   R construct_resolved_request(construction_scope scope,
                                runtime_context_type &context) {
     using user_type = typename Request::user_type;
-    try {
-      return selection_type::template resolve<Request, R>(
-          scope, context, *this, detail::no_lookup_key());
-    } catch (const type_not_convertible_exception &) {
-      using request_value_type = typename Request::value_type;
-      using normalized = request_type<request_value_type>;
-      auto &&value =
-          selection_type::template resolve<normalized,
-                                           typename normalized::lookup_type>(
+    using normalized = request_type<typename Request::value_type>;
+    return ::dingo::construct_resolved_request<user_type>(
+        [&]() -> R {
+          return selection_type::template resolve<Request, R>(
               scope, context, *this, detail::no_lookup_key());
-      return type_traits<std::decay_t<user_type>>::make(
-          std::forward<decltype(value)>(value));
-    }
+        },
+        [&]() {
+          return selection_type::template resolve<
+              normalized, typename normalized::lookup_type>(
+              scope, context, *this, detail::no_lookup_key());
+        });
   }
 
   template <typename Request,

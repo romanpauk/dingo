@@ -201,9 +201,10 @@ the aliases alone.
 - **"Exact binding, else normalized binding"** — `static/bindings.h` (list form
   and choice form), `runtime/selection.h`, and `container.h`'s
   `has_static_construct_v`.
-- **"Try exact, on `type_not_convertible` retry normalized and `make`"** —
-  `binding_resolution.h` exports a generic helper, yet `container.h` spells the
-  same pattern four more times.
+- **"Try exact, on `type_not_convertible` retry normalized and `make`"** — the
+  rule lived in `binding_resolution.h` as a helper and in `container.h` four
+  more times. It now has one implementation; `container.h` calls the helper. See
+  [Applied Changes](#applied-changes).
 - **Status merging** — `resolve_binding` is wrapped by `resolve_binding_status`
   and `resolve_combined_selection`, and `container.h::binding_status` merges
   static and runtime states again.
@@ -418,6 +419,10 @@ The transaction helpers are member function templates rather than local lambdas:
 a non-generic lambda body is instantiated whenever the enclosing `construct` is,
 which would instantiate the static path for runtime-only containers. The
 templates instantiate only when called.
+
+The two remaining manual retry bodies in `container.h` now call the shared
+`construct_resolved_request` helper, so the "exact, then normalized" rule exists
+once.
 
 Verification: full build, 39/39 tests, `check` (including `includes-tidy` with
 the suppression removed), and `includes-check`.
