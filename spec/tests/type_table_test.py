@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from spec.gen.shared.validation import validate_catalog
-from spec.gen.resolution.type_matrix import (
+from spec.gen.resolution.type_table import (
     BASE_SHAPES,
     SHAPES,
     build_rows,
@@ -25,7 +25,7 @@ from spec.gen.resolution.type_matrix import (
 )
 
 
-def test_type_matrix_product_is_complete() -> None:
+def test_type_table_product_is_complete() -> None:
     validate()
     rows = build_rows()
     assert rows
@@ -36,7 +36,7 @@ def test_type_matrix_product_is_complete() -> None:
         assert set(row["reasons"]) == {shape.name for shape in SHAPES}
 
 
-def test_type_matrix_derives_wrapper_shapes() -> None:
+def test_type_table_derives_wrapper_shapes() -> None:
     cpp_types = {shape.cpp_type for shape in SHAPES}
     assert {
         "int",
@@ -62,7 +62,7 @@ def test_type_matrix_derives_wrapper_shapes() -> None:
     }
 
 
-def test_type_matrix_forms_are_instantiables() -> None:
+def test_type_table_forms_are_instantiables() -> None:
     for row in build_rows():
         assert row["type"]
         assert row["constructor"]
@@ -137,8 +137,8 @@ def test_unsupported_shapes_get_a_route_rule() -> None:
 
 
 def test_render_names_every_form(tmp_path: Path) -> None:
-    content = render(tmp_path / "type_matrix.cpp")
-    assert content == render(tmp_path / "type_matrix.cpp")
+    content = render(tmp_path / "type_table.cpp")
+    assert content == render(tmp_path / "type_table.cpp")
     for row in build_rows():
         assert f"namespace {row['path']}" in content
 

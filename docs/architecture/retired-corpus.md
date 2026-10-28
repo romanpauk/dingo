@@ -1,16 +1,16 @@
-# Matrix Retirement
+# Test Corpus Retirement
 
-The generated `test/matrix` corpus has been retired. It was a product of
-registration modes, scopes, stored types, exposed types, resolved types, and
-container shapes, which made it enormous and made "is this covered" answerable
-only by counting rows.
+The previously generated cross-product corpus under `test/` has been retired. It
+combined registration modes, scopes, stored types, exposed types, resolved
+types, and container shapes, which made it enormous and made "is this covered"
+answerable only by counting rows.
 
 This page records what replaced it, so the mapping is not lost with the code.
 The model itself is described in [Coverage Model](coverage-model.md).
 
 ## Structure
 
-The matrix's features were regrouped by mechanism rather than by name. Features
+The retired features were regrouped by mechanism rather than by name. Features
 that share a mechanism share a family; features that only looked similar keep
 separate families; features whose rows the atom probes already execute need no
 family at all.
@@ -23,7 +23,7 @@ resolution/runtime/<configuration>/<scope>/<storage>/
 
 resolution/runtime/global/construct/<argument>/<shape>.cpp
 resolution/runtime/global/invoke/<shape>/<traits>.cpp
-resolution/runtime/global/producer/<form>.cpp
+resolution/runtime/global/producer/<pair>.cpp
 resolution/runtime/global/collection.cpp
 resolution/runtime/global/cyclical.cpp
 resolution/runtime/global/conversion/<case>.cpp
@@ -38,7 +38,7 @@ classification/constructor/<backend>/<mode>/<shape>.cpp
 
 ## Feature mapping
 
-| matrix feature | replacement | granularity | | --- | --- | --- | |
+| retired feature | replacement | granularity | | --- | --- | --- | |
 `resolve_concrete`, `resolve_wrapper`, `resolve_unique_wrapper` | row probes |
 one row per form, binding, request, traits | | `nested_wrappers` | row probes
 (`shared_ptr<shared_ptr<T>>`, `unique_ptr<unique_ptr<T>>`, …) | already rows | |
@@ -48,7 +48,7 @@ with the interface binding | one row | | `resolve_keyed` | row probes with the
 keyed binding | one row | | `construct`, `construct_invoke` |
 `global/construct/<argument>/<shape>` | 16 types x 5 shapes | | invoke family |
 `global/invoke/<shape>` plus the `invoke` claim column | 19 shapes | |
-`factory_override` | `global/producer/<form>` | 6 forms x producers x 3 claims |
+`factory_override` | `global/producer/<pair>` | 6 pairs x producers x 3 claims |
 | `resolve_collection`, `resolve_keyed_collection`, `construct_collection` |
 `global/collection` | 5 cases x 2 modes | | `resolve_indexed` | the indexed
 configuration (`runtime/indexed/...`) | one row set per key type | |
@@ -59,21 +59,20 @@ configuration (`runtime/indexed/...`) | one row set per key type | |
 cases | | `custom_allocator`, `custom_rtti` | `runtime/<trait>` configuration |
 one case each | | shared-cyclical graphs | `global/cyclical` | 3 modes x storage
 representations | | conversion parity | `global/conversion` | 6 cases plus
-front-end parity | | `constructor_detection` | `classification/constructor` | 2
+front-end parity | | constructor detection | `classification/constructor` | 2
 backends x 2 modes x 15 shapes | | scenarios | the family owning the mechanism |
 one named case per regression |
 
 ## What is gone
 
-- `test/matrix`, its axes, fixtures, scenarios, templates, generator, and
-  generator test;
-- `test/matrix/model_coverage.py`, which was the parity gate while features
-  moved;
-- `spec/legacy`, the request and binding algebra that only the matrix consumed.
+- the generated corpus under `test/`: its axes, fixtures, scenarios, templates,
+  generator, and generator test;
+- its coverage manifest, which was the parity gate while features moved;
+- the legacy request/binding algebra that only that corpus consumed.
 
 ## What replaced the parity gate
 
-The matrix generator test proved that a feature was not dropped before its
+The retired generator test proved that a feature was not dropped before its
 replacement existed. That job is now split:
 
 - `claim-check` compares `resolve`, `construct`, and `invoke` on every row and

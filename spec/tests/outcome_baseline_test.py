@@ -13,10 +13,10 @@ from pathlib import Path
 
 import pytest
 
-from spec.report.baseline import build_outcomes, compare, read_behavior, read_matrix
+from spec.report.baseline import build_outcomes, compare, read_behavior, read_types
 
 
-def write_matrix(path: Path, rows: list[dict[str, object]]) -> None:
+def write_table(path: Path, rows: list[dict[str, object]]) -> None:
     path.write_text(
         "\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8"
     )
@@ -28,10 +28,10 @@ def write_behavior(path: Path, rows: list[dict[str, object]]) -> None:
     )
 
 
-def test_matrix_rows_are_keyed_by_form_and_shape(tmp_path: Path) -> None:
-    matrix = tmp_path / "matrix.json"
-    write_matrix(
-        matrix,
+def test_table_rows_are_keyed_by_form_and_shape(tmp_path: Path) -> None:
+    table = tmp_path / "table.json"
+    write_table(
+        table,
         [
             {
                 "scope": "shared",
@@ -44,13 +44,13 @@ def test_matrix_rows_are_keyed_by_form_and_shape(tmp_path: Path) -> None:
             }
         ],
     )
-    rows = read_matrix(matrix)
+    rows = read_types(table)
     assert rows["shared/plain/value"]["direct"] is True
     assert rows["shared/plain/value"]["reason"] == "-"
 
 
-def test_duplicate_matrix_rows_are_rejected(tmp_path: Path) -> None:
-    matrix = tmp_path / "matrix.json"
+def test_duplicate_table_rows_are_rejected(tmp_path: Path) -> None:
+    table = tmp_path / "table.json"
     row = {
         "scope": "shared",
         "form": "plain",
@@ -60,16 +60,16 @@ def test_duplicate_matrix_rows_are_rejected(tmp_path: Path) -> None:
         "top_level": True,
         "reason": "-",
     }
-    write_matrix(matrix, [row, row])
+    write_table(table, [row, row])
     with pytest.raises(ValueError):
-        read_matrix(matrix)
+        read_types(table)
 
 
 def test_behavior_rows_are_actual_runtime_outcomes(tmp_path: Path) -> None:
-    matrix = tmp_path / "matrix.json"
+    table = tmp_path / "table.json"
     behavior = tmp_path / "behavior.json"
-    write_matrix(
-        matrix,
+    write_table(
+        table,
         [
             {
                 "scope": "shared",
@@ -99,8 +99,8 @@ def test_behavior_rows_are_actual_runtime_outcomes(tmp_path: Path) -> None:
             }
         ],
     )
-    outcomes = build_outcomes(matrix, behavior)
-    assert outcomes["matrix"]["shared/plain/value"]["top_level"] is True
+    outcomes = build_outcomes(table, behavior)
+    assert outcomes["types"]["shared/plain/value"]["top_level"] is True
     row = outcomes["behavior"]["shared_plain_runtime"]
     assert row["result"] == "ok"
     assert row["constructions"] == 1
@@ -132,7 +132,7 @@ def test_behavior_report_requires_a_result(tmp_path: Path) -> None:
 
 def test_compare_reports_added_removed_and_changed_rows() -> None:
     baseline = {
-        "matrix": {
+        "types": {
             "shared/plain/value": {
                 "direct": True,
                 "lifted": False,
@@ -149,7 +149,7 @@ def test_compare_reports_added_removed_and_changed_rows() -> None:
         "behavior": {},
     }
     current = {
-        "matrix": {
+        "types": {
             "shared/plain/value": {
                 "direct": True,
                 "lifted": False,
@@ -166,17 +166,17 @@ def test_compare_reports_added_removed_and_changed_rows() -> None:
         "behavior": {},
     }
     differences = compare(baseline, current)
-    assert "+ matrix shared/plain/new" in differences
-    assert "- matrix shared/plain/old" in differences
+    assert "+ types shared/plain/new" in differences
+    assert "- types shared/plain/old" in differences
     assert any(
-        difference.startswith("~ matrix shared/plain/value")
+        difference.startswith("~ types shared/plain/value")
         for difference in differences
     )
 
 
 def test_identical_outcomes_have_no_differences() -> None:
     baseline = {
-        "matrix": {
+        "types": {
             "shared/plain/value": {
                 "direct": True,
                 "lifted": False,

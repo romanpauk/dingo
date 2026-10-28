@@ -303,8 +303,8 @@ def render(report: dict[str, object]) -> str:
         "## Path-extended shapes",
         "",
         f"{len(report['extended_shapes'])} supported shapes are outside the "
-        "bounded depth-2 catalog. `emit/matrix.py` merges them into the "
-        "compile-time matrix.",
+        "bounded depth-2 catalog. `emit/table.py` merges them into the "
+        "compile-time table.",
         "",
         "| shape | type |",
         "| --- | --- |",

@@ -40,6 +40,6 @@ MOVE_ONLY = LeafTraits("move_only", "move_only_tracked", copyable=False, movable
 TRAITS = (COPYABLE, MOVE_ONLY)
 TRAITS_BY_NAME = {traits.name: traits for traits in TRAITS}
 
-# The default keeps the existing path domain single-trait. The trait matrix
+# The default keeps the existing path domain single-trait. The trait table
 # classifies the same domain once per entry of TRAITS.
 DEFAULT_TRAITS = COPYABLE

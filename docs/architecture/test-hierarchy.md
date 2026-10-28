@@ -117,13 +117,13 @@ resolution | | `keyed` | keyed resolution | | `const` | const storage resolution
 `resolution/runtime/<scope>/<storage>/annotated` | | `keyed_cases` |
 `resolution/runtime/<scope>/<storage>/keyed` | | `const_cases` |
 `resolution/runtime/<scope>/<storage>/const` | | `interface_runtime` |
-`resolution/runtime/<scope>/<storage>/interface` | | `binding_matrix` |
+`resolution/runtime/<scope>/<storage>/interface` | | `binding_table` |
 `registration/static_asserts/<scope>/<storage>/binding` | | `storage policies` |
 `classification/<scope>/<form>/storage` | | `route_probes` |
-`classification/<scope>/<form>/route` | | `type_matrix` / `trait_matrix` |
+`classification/<scope>/<form>/route` | | `type_table` / `trait_table` |
 `classification/<scope>/<form>/route` | | `wrapper_properties` |
 `classification/global/wrapper` | | `selection_rules` |
-`classification/global/selection` | | constructor detection matrix |
+`classification/global/selection` | | constructor detection table |
 `classification/global/constructor/<backend>/<mode>/<shape>` |
 
 ## Migration order
@@ -131,7 +131,7 @@ resolution | | `keyed` | keyed resolution | | `const` | const storage resolution
 1. Done: the resolve probe lives under `resolution/runtime/…` and its path is
    the outcome and manifest identity.
 2. Done: `classification/constructor/…` is the first classification slice.
-3. Done: `binding_matrix` lives under `registration/static_asserts/…`, one file
+3. Done: `binding_table` lives under `registration/static_asserts/…`, one file
    per storage.
 4. Move `storage policies`, `selection_rules`, `wrapper_properties`, and the
    route matrices to `classification/…`.

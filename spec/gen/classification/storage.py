@@ -12,7 +12,7 @@ The catalog owns the scope policies and the storage forms. This module derives
 each form's exposure from the scope and form capabilities, then renders one
 assertion per form. A missing form, a changed exposure, or a form that stops
 publishing a request list fails to compile instead of silently dropping out of
-the matrix.
+the table.
 
 This is intentionally a coverage generator, not a code multiplier: it emits one
 assertion per form and one consumer to instantiate them.

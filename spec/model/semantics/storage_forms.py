@@ -8,7 +8,7 @@
 
 """The scope/form storage product and its supported subset.
 
-Families iterate the same product: route probes, the type matrix, type
+Families iterate the same product: route probes, the type table, type
 behavior, and behavior all consume every supported pair. Keeping the iteration
 here means the "is this storage form publishable" question has one answer.
 """

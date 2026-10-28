@@ -14,11 +14,11 @@ set(DINGO_BEHAVIOR_MODEL_GENERATOR
     "spec.gen.resolution.behavior")
 set(DINGO_INTERFACE_MODEL_GENERATOR
     "spec.gen.resolution.interface")
-set(DINGO_TYPE_MATRIX_GENERATOR
-    "spec.gen.resolution.type_matrix")
-set(DINGO_TRAIT_MATRIX_GENERATOR
-    "spec.gen.resolution.trait_matrix")
-set(DINGO_BINDING_MATRIX_GENERATOR
+set(DINGO_TYPE_TABLE_GENERATOR
+    "spec.gen.resolution.type_table")
+set(DINGO_TRAIT_TABLE_GENERATOR
+    "spec.gen.resolution.trait_table")
+set(DINGO_BINDING_TABLE_GENERATOR
     "spec.gen.registration.binding")
 set(DINGO_TYPE_BEHAVIOR_GENERATOR
     "spec.gen.resolution.type_behavior")
@@ -74,12 +74,12 @@ set(DINGO_BEHAVIOR_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/behavior_cases.cpp.j2")
 set(DINGO_INTERFACE_MODEL_TEMPLATE
     "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/interface_routes.cpp.j2")
-set(DINGO_TYPE_MATRIX_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/type_matrix.cpp.j2")
-set(DINGO_TRAIT_MATRIX_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/trait_matrix.cpp.j2")
-set(DINGO_BINDING_MATRIX_TEMPLATE
-    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/binding_matrix.cpp.j2")
+set(DINGO_TYPE_TABLE_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/type_table.cpp.j2")
+set(DINGO_TRAIT_TABLE_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/trait_table.cpp.j2")
+set(DINGO_BINDING_TABLE_TEMPLATE
+    "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/binding_table.cpp.j2")
 set(DINGO_TYPE_BEHAVIOR_TEMPLATE
     "${PROJECT_SOURCE_DIR}/spec/gen/shared/templates/type_behavior.cpp.j2")
 set(DINGO_PROPERTY_MODEL_TEMPLATE
@@ -140,13 +140,13 @@ set(DINGO_ROUTE_MANIFEST
     "${DINGO_CLASSIFICATION_DIR}/route-manifest.json")
 set(DINGO_INTERFACE_MODEL_TEST_SOURCE
     "${DINGO_RESOLVE_DIR}/resolution/static_asserts/global/interface/interface_routes.cpp")
-set(DINGO_TYPE_MATRIX_TEST_SOURCE
-    "${DINGO_RESOLVE_DIR}/resolution/static_asserts/global/matrix/type_matrix.cpp")
-set(DINGO_TRAIT_MATRIX_TEST_SOURCE
-    "${DINGO_RESOLVE_DIR}/resolution/static_asserts/global/matrix/trait_matrix.cpp")
+set(DINGO_TYPE_TABLE_TEST_SOURCE
+    "${DINGO_RESOLVE_DIR}/resolution/static_asserts/global/type_table.cpp")
+set(DINGO_TRAIT_TABLE_TEST_SOURCE
+    "${DINGO_RESOLVE_DIR}/resolution/static_asserts/global/trait_table.cpp")
 set(DINGO_REGISTRATION_DIR
     "${CMAKE_CURRENT_BINARY_DIR}/generated")
-set(DINGO_BINDING_MATRIX_MANIFEST
+set(DINGO_BINDING_TABLE_MANIFEST
     "${DINGO_REGISTRATION_DIR}/registration-manifest.json")
 set(DINGO_PROPERTY_MANIFEST
     "${DINGO_CLASSIFICATION_DIR}/property-manifest.json")
@@ -170,7 +170,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/spec/gen/families/property.py"
     "${PROJECT_SOURCE_DIR}/spec/gen/families/route.py"
     "${PROJECT_SOURCE_DIR}/spec/gen/families/storage.py"
-    "${PROJECT_SOURCE_DIR}/spec/gen/matrix.py"
+    "${PROJECT_SOURCE_DIR}/spec/gen/table.py"
     "${PROJECT_SOURCE_DIR}/spec/gen/resolve.py"
     "${PROJECT_SOURCE_DIR}/spec/gen/detection_constructor.py"
     "${PROJECT_SOURCE_DIR}/spec/gen/families/factory.py"
@@ -213,7 +213,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/spec/tests/grammar_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/keyed_cases_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/interface_runtime_test.py"
-    "${PROJECT_SOURCE_DIR}/spec/tests/binding_matrix_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/binding_table_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/interface_routes_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/outcome_baseline_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/paths_test.py"
@@ -225,7 +225,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/spec/tests/selection_rules_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/storage_facts_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/type_behavior_test.py"
-    "${PROJECT_SOURCE_DIR}/spec/tests/type_matrix_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/type_table_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/collection_cases_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/indexed_cases_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/construct_cases_test.py"
@@ -233,7 +233,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/spec/tests/factory_cases_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/resolve_cases_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/resolve_report_test.py"
-    "${PROJECT_SOURCE_DIR}/spec/tests/trait_matrix_test.py"
+    "${PROJECT_SOURCE_DIR}/spec/tests/trait_table_test.py"
     "${PROJECT_SOURCE_DIR}/spec/tests/wrapper_semantics_test.py"
     "${DINGO_MODEL_TEMPLATE}"
     "${DINGO_SCOPES_TEMPLATE}"
@@ -241,8 +241,8 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_ROUTE_MODEL_TEMPLATE}"
     "${DINGO_BEHAVIOR_MODEL_TEMPLATE}"
     "${DINGO_INTERFACE_MODEL_TEMPLATE}"
-    "${DINGO_TYPE_MATRIX_TEMPLATE}"
-    "${DINGO_TRAIT_MATRIX_TEMPLATE}"
+    "${DINGO_TYPE_TABLE_TEMPLATE}"
+    "${DINGO_TRAIT_TABLE_TEMPLATE}"
     "${DINGO_RESOLVE_TEMPLATE}"
     "${DINGO_CLASSIFICATION_CONSTRUCTOR_TEMPLATE}"
     "${DINGO_TYPE_BEHAVIOR_TEMPLATE}"
@@ -341,42 +341,42 @@ if(NOT DINGO_INTERFACE_MODEL_GENERATOR_RESULT EQUAL 0)
 endif()
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
-        ${DINGO_TYPE_MATRIX_GENERATOR}
-        --out ${DINGO_TYPE_MATRIX_TEST_SOURCE}
+        ${DINGO_TYPE_TABLE_GENERATOR}
+        --out ${DINGO_TYPE_TABLE_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-    RESULT_VARIABLE DINGO_TYPE_MATRIX_GENERATOR_RESULT)
-if(NOT DINGO_TYPE_MATRIX_GENERATOR_RESULT EQUAL 0)
+    RESULT_VARIABLE DINGO_TYPE_TABLE_GENERATOR_RESULT)
+if(NOT DINGO_TYPE_TABLE_GENERATOR_RESULT EQUAL 0)
     message(FATAL_ERROR
-        "Failed to generate the type matrix: "
-        "${DINGO_TYPE_MATRIX_GENERATOR_RESULT}")
+        "Failed to generate the type table: "
+        "${DINGO_TYPE_TABLE_GENERATOR_RESULT}")
 endif()
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
-        ${DINGO_TRAIT_MATRIX_GENERATOR}
-        --out ${DINGO_TRAIT_MATRIX_TEST_SOURCE}
+        ${DINGO_TRAIT_TABLE_GENERATOR}
+        --out ${DINGO_TRAIT_TABLE_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-    RESULT_VARIABLE DINGO_TRAIT_MATRIX_GENERATOR_RESULT)
-if(NOT DINGO_TRAIT_MATRIX_GENERATOR_RESULT EQUAL 0)
+    RESULT_VARIABLE DINGO_TRAIT_TABLE_GENERATOR_RESULT)
+if(NOT DINGO_TRAIT_TABLE_GENERATOR_RESULT EQUAL 0)
     message(FATAL_ERROR
-        "Failed to generate the leaf trait matrix: "
-        "${DINGO_TRAIT_MATRIX_GENERATOR_RESULT}")
+        "Failed to generate the leaf trait table: "
+        "${DINGO_TRAIT_TABLE_GENERATOR_RESULT}")
 endif()
 
 file(MAKE_DIRECTORY ${DINGO_REGISTRATION_DIR})
 execute_process(
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
-        ${DINGO_BINDING_MATRIX_GENERATOR}
+        ${DINGO_BINDING_TABLE_GENERATOR}
         --out-dir ${DINGO_REGISTRATION_DIR}
-        --manifest ${DINGO_BINDING_MATRIX_MANIFEST}
+        --manifest ${DINGO_BINDING_TABLE_MANIFEST}
         --include ${PROJECT_SOURCE_DIR}/include
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-    RESULT_VARIABLE DINGO_BINDING_MATRIX_GENERATOR_RESULT)
-if(NOT DINGO_BINDING_MATRIX_GENERATOR_RESULT EQUAL 0)
+    RESULT_VARIABLE DINGO_BINDING_TABLE_GENERATOR_RESULT)
+if(NOT DINGO_BINDING_TABLE_GENERATOR_RESULT EQUAL 0)
     message(FATAL_ERROR
-        "Failed to generate the binding matrix: "
-        "${DINGO_BINDING_MATRIX_GENERATOR_RESULT}")
+        "Failed to generate the binding table: "
+        "${DINGO_BINDING_TABLE_GENERATOR_RESULT}")
 endif()
 file(GLOB_RECURSE DINGO_REGISTRATION_SOURCES CONFIGURE_DEPENDS
     "${DINGO_REGISTRATION_DIR}/registration/static_asserts/*/*/*.cpp")
@@ -753,19 +753,19 @@ add_custom_target(generated-check
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
-        ${DINGO_TYPE_MATRIX_GENERATOR}
-        --out ${DINGO_TYPE_MATRIX_TEST_SOURCE}
+        ${DINGO_TYPE_TABLE_GENERATOR}
+        --out ${DINGO_TYPE_TABLE_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
-        ${DINGO_TRAIT_MATRIX_GENERATOR}
-        --out ${DINGO_TRAIT_MATRIX_TEST_SOURCE}
+        ${DINGO_TRAIT_TABLE_GENERATOR}
+        --out ${DINGO_TRAIT_TABLE_TEST_SOURCE}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
-        ${DINGO_BINDING_MATRIX_GENERATOR}
+        ${DINGO_BINDING_TABLE_GENERATOR}
         --out-dir ${DINGO_REGISTRATION_DIR}
-        --manifest ${DINGO_BINDING_MATRIX_MANIFEST}
+        --manifest ${DINGO_BINDING_TABLE_MANIFEST}
         --include ${PROJECT_SOURCE_DIR}/include
         --check
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
@@ -834,7 +834,7 @@ add_executable(dingo_model_test
 )
 target_link_libraries(dingo_model_test dingo::dingo gtest_main)
 target_include_directories(dingo_model_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-# The type matrix moved to the resolution/static-asserts phase.
+# The type table moved to the resolution/static-asserts phase.
 set(DINGO_BEHAVIOR_REPORT_ARGS "")
 foreach(behavior_source ${DINGO_BEHAVIOR_SOURCES})
     file(RELATIVE_PATH behavior_relative
@@ -907,15 +907,15 @@ set_tests_properties(dingo_classification_test PROPERTIES
 
 add_executable(dingo_resolution_static_asserts_test
     ${DINGO_INTERFACE_MODEL_TEST_SOURCE}
-    ${DINGO_TYPE_MATRIX_TEST_SOURCE}
-    ${DINGO_TRAIT_MATRIX_TEST_SOURCE}
+    ${DINGO_TYPE_TABLE_TEST_SOURCE}
+    ${DINGO_TRAIT_TABLE_TEST_SOURCE}
     ${DINGO_ROUTE_SOURCES})
 target_link_libraries(dingo_resolution_static_asserts_test dingo::dingo gtest_main)
 target_include_directories(dingo_resolution_static_asserts_test PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_definitions(dingo_resolution_static_asserts_test PRIVATE
-    DINGO_TYPE_MATRIX_REPORT="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.md"
-    DINGO_TYPE_MATRIX_JSON="${CMAKE_CURRENT_BINARY_DIR}/type-matrix.json")
+    DINGO_TYPE_TABLE_REPORT="${CMAKE_CURRENT_BINARY_DIR}/type-table.md"
+    DINGO_TYPE_TABLE_JSON="${CMAKE_CURRENT_BINARY_DIR}/type-table.json")
 add_test(NAME dingo_resolution_static_asserts_test
     COMMAND dingo_resolution_static_asserts_test)
 set_tests_properties(dingo_resolution_static_asserts_test PROPERTIES
@@ -971,7 +971,7 @@ add_custom_target(resolve-check
 add_test(NAME dingo_model_baseline_test
     COMMAND ${DINGO_UV_RUN_COMMAND} python -m
         spec.report.baseline check
-        --matrix ${CMAKE_CURRENT_BINARY_DIR}/type-matrix.json
+        --types ${CMAKE_CURRENT_BINARY_DIR}/type-table.json
         ${DINGO_BEHAVIOR_REPORT_ARGS}
         --baseline ${PROJECT_SOURCE_DIR}/test/baselines/model.json)
 set_tests_properties(dingo_model_baseline_test PROPERTIES
@@ -1093,58 +1093,58 @@ target_compile_options(dingo_unit_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj
 # Force-include windows.h to each test to make sure library builds with windows.h included
 target_compile_options(dingo_unit_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
 
-add_custom_target(dingo_matrix_test
-    DEPENDS ${DINGO_MATRIX_TEST_TARGETS})
+add_custom_target(dingo_table_test
+    DEPENDS ${DINGO_TABLE_TEST_TARGETS})
 
-function(dingo_configure_matrix_compile_target DINGO_MATRIX_TARGET)
-    target_link_libraries(${DINGO_MATRIX_TARGET}
+function(dingo_configure_table_compile_target DINGO_TABLE_TARGET)
+    target_link_libraries(${DINGO_TABLE_TARGET}
         PRIVATE dingo::dingo gtest_main)
-    target_include_directories(${DINGO_MATRIX_TARGET}
+    target_include_directories(${DINGO_TABLE_TARGET}
         PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_compile_options(${DINGO_MATRIX_TARGET} PRIVATE
+    target_compile_options(${DINGO_TABLE_TARGET} PRIVATE
         $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
-    target_compile_options(${DINGO_MATRIX_TARGET} PRIVATE
+    target_compile_options(${DINGO_TABLE_TARGET} PRIVATE
         $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
 endfunction()
 
-foreach(DINGO_MATRIX_TEST_TARGET IN LISTS DINGO_MATRIX_TEST_TARGETS)
-    add_executable(${DINGO_MATRIX_TEST_TARGET}
-        ${${DINGO_MATRIX_TEST_TARGET}_SOURCES}
-        ${DINGO_MATRIX_TEST_HEADERS}
+foreach(DINGO_TABLE_TEST_TARGET IN LISTS DINGO_TABLE_TEST_TARGETS)
+    add_executable(${DINGO_TABLE_TEST_TARGET}
+        ${${DINGO_TABLE_TEST_TARGET}_SOURCES}
+        ${DINGO_TABLE_TEST_HEADERS}
     )
-    add_test(NAME ${DINGO_MATRIX_TEST_TARGET}
-        COMMAND ${DINGO_MATRIX_TEST_TARGET})
-    if(DINGO_MATRIX_TEST_AFTER_BUILD)
-        add_custom_command(TARGET ${DINGO_MATRIX_TEST_TARGET} POST_BUILD
+    add_test(NAME ${DINGO_TABLE_TEST_TARGET}
+        COMMAND ${DINGO_TABLE_TEST_TARGET})
+    if(DINGO_TABLE_TEST_AFTER_BUILD)
+        add_custom_command(TARGET ${DINGO_TABLE_TEST_TARGET} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E env
                 ASAN_OPTIONS=use_sigaltstack=false
-                $<TARGET_FILE:${DINGO_MATRIX_TEST_TARGET}>
-            COMMENT "Running ${DINGO_MATRIX_TEST_TARGET}"
+                $<TARGET_FILE:${DINGO_TABLE_TEST_TARGET}>
+            COMMENT "Running ${DINGO_TABLE_TEST_TARGET}"
             USES_TERMINAL
             VERBATIM)
     endif()
-    set_tests_properties(${DINGO_MATRIX_TEST_TARGET}
+    set_tests_properties(${DINGO_TABLE_TEST_TARGET}
         PROPERTIES LABELS "runtime")
-    dingo_configure_matrix_compile_target(${DINGO_MATRIX_TEST_TARGET})
+    dingo_configure_table_compile_target(${DINGO_TABLE_TEST_TARGET})
 
-    set(DINGO_MATRIX_DIAGNOSTIC_INDEX 0)
-    foreach(DINGO_MATRIX_ISOLATED_SOURCE IN LISTS
-            ${DINGO_MATRIX_TEST_TARGET}_ISOLATED_SOURCES)
-        math(EXPR DINGO_MATRIX_DIAGNOSTIC_INDEX
-            "${DINGO_MATRIX_DIAGNOSTIC_INDEX} + 1")
-        string(REPLACE "dingo_matrix_test_" "dingo_matrix_diag_"
-            DINGO_MATRIX_DIAGNOSTIC_PREFIX ${DINGO_MATRIX_TEST_TARGET})
-        set(DINGO_MATRIX_DIAGNOSTIC_TARGET
-            "${DINGO_MATRIX_DIAGNOSTIC_PREFIX}_${DINGO_MATRIX_DIAGNOSTIC_INDEX}")
+    set(DINGO_TABLE_DIAGNOSTIC_INDEX 0)
+    foreach(DINGO_TABLE_ISOLATED_SOURCE IN LISTS
+            ${DINGO_TABLE_TEST_TARGET}_ISOLATED_SOURCES)
+        math(EXPR DINGO_TABLE_DIAGNOSTIC_INDEX
+            "${DINGO_TABLE_DIAGNOSTIC_INDEX} + 1")
+        string(REPLACE "dingo_table_test_" "dingo_table_diag_"
+            DINGO_TABLE_DIAGNOSTIC_PREFIX ${DINGO_TABLE_TEST_TARGET})
+        set(DINGO_TABLE_DIAGNOSTIC_TARGET
+            "${DINGO_TABLE_DIAGNOSTIC_PREFIX}_${DINGO_TABLE_DIAGNOSTIC_INDEX}")
         message(STATUS
-            "${DINGO_MATRIX_DIAGNOSTIC_TARGET}: "
-            "${DINGO_MATRIX_ISOLATED_SOURCE}")
-        add_library(${DINGO_MATRIX_DIAGNOSTIC_TARGET} OBJECT
-            "${DINGO_MATRIX_ISOLATED_SOURCE}")
-        dingo_configure_matrix_compile_target(
-            ${DINGO_MATRIX_DIAGNOSTIC_TARGET})
-        target_sources(${DINGO_MATRIX_TEST_TARGET} PRIVATE
-            $<TARGET_OBJECTS:${DINGO_MATRIX_DIAGNOSTIC_TARGET}>)
+            "${DINGO_TABLE_DIAGNOSTIC_TARGET}: "
+            "${DINGO_TABLE_ISOLATED_SOURCE}")
+        add_library(${DINGO_TABLE_DIAGNOSTIC_TARGET} OBJECT
+            "${DINGO_TABLE_ISOLATED_SOURCE}")
+        dingo_configure_table_compile_target(
+            ${DINGO_TABLE_DIAGNOSTIC_TARGET})
+        target_sources(${DINGO_TABLE_TEST_TARGET} PRIVATE
+            $<TARGET_OBJECTS:${DINGO_TABLE_DIAGNOSTIC_TARGET}>)
     endforeach()
 endforeach()
 

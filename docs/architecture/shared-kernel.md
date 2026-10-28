@@ -1,7 +1,8 @@
 # Shared Kernel And Generated Coverage
 
-Status: historical design note. The `test/matrix` corpus this document refers to
-has been retired; see [Matrix Retirement](matrix-migration.md).
+Status: historical design note. The the generated test corpus corpus this
+document refers to has been retired; see
+[Test Corpus Retirement](retired-corpus.md).
 
 This page describes a design for removing the duplicated runtime and
 compile-time implementations without replacing the library with a second
@@ -144,7 +145,7 @@ Implemented twice:
 - cycle detection: a compile-time DFS in `static/graph.h`, and a recursion guard
   keyed by binding address at runtime.
 
-That split explains the behavioral differences the matrix has to encode today:
+That split explains the behavioral differences the table has to encode today:
 external storage, duplicate handling, empty collections, auto-construction,
 static ambiguity, runtime-key support, and container movability. It also
 explains why a change in one path can pass its tests while the other path stays
@@ -153,9 +154,9 @@ wrong.
 The same problem appears inside the storage and conversion tables. A scope
 declares its policy once, but individual `(scope, form)` forms and conversion
 routes are still C++ specializations. Each specialization is correct only if its
-author remembers the form, writes its route, and adds it to the matrix. The
-matrix keeps a separate, hand-curated approximation of the same table, so the
-test model and the library can drift independently.
+author remembers the form, writes its route, and adds it to the table. The table
+keeps a separate, hand-curated approximation of the same table, so the test
+model and the library can drift independently.
 
 ## What Failed Before
 
@@ -355,7 +356,7 @@ specialization per form.
 ### Catalog
 
 Add `spec/` as the single declarative catalog shared by the library generator
-and the matrix generator. The catalog is typed Python records, not C++ text. The
+and the table generator. The catalog is typed Python records, not C++ text. The
 first records are:
 
 ```python
@@ -395,7 +396,7 @@ The generator emits:
   of rows and that every row names a known operation;
 - a coverage manifest mapping every row to at least one test case or one
   compile-fail probe;
-- matrix axes, features, and capability tags derived from the same rows;
+- table axes, features, and capability tags derived from the same rows;
 - test shards and compile-fail cases into the build directory.
 
 The generated headers are committed because Dingo is header-only and consumers
@@ -415,8 +416,8 @@ There are three distinct correctness levels.
 2. **Extension points.** User-specialized traits (`type_conversion_traits`,
    wrapper traits, lookup definitions, factories, collections, RTTI) remain
    hand-written by design. The generator emits one compile probe per documented
-   extension point and the matrix exercises every built-in member through it.
-   The generator cannot make a user's specialization correct, but it can make a
+   extension point and the table exercises every built-in member through it. The
+   generator cannot make a user's specialization correct, but it can make a
    missing or untested built-in path impossible to miss.
 3. **Behavior.** The catalog also drives a small reference evaluator used by the
    tests. It computes the expected outcome for each row, including which
@@ -441,7 +442,7 @@ representative, and the generator enforces a coverage invariant:
   mode;
 - boundary forms (empty, unavailable, ambiguous, non-copyable, non-movable,
   runtime key, parent/local) are declared as their own classes;
-- shards are sized by the current matrix batching limits, so adding a form does
+- shards are sized by the current table batching limits, so adding a form does
   not recompile the world.
 
 This is coverage by construction without a combinatorial build.
@@ -462,10 +463,10 @@ The implemented model uses that split directly:
   it is spelled. The catalog includes const, references, pointers, optional,
   owning handles, owning array handles, arrays, and variants. The test-only
   custom families add one cross-wrapper pair each, so custom optional, unique,
-  shared, and variant wrappers run through the same generated matrix and
-  behavior suites. The route rules (`copy_out`, `borrow`, `move`, `take`,
-  `wrap`, `share`, `adopt`, `decay`, `select_alternative`, ...) derive the first
-  rule that blocks a request and name it in the report. Every derived shape is
+  shared, and variant wrappers run through the same generated table and behavior
+  suites. The route rules (`copy_out`, `borrow`, `move`, `take`, `wrap`,
+  `share`, `adopt`, `decay`, `select_alternative`, ...) derive the first rule
+  that blocks a request and name it in the report. Every derived shape is
   applied to every storable form through the real resolution kernel. The report
   has the direct route, the lifted request, the top-level verdict, the blocking
   rule, and the published route targets. A request for a wrapper the form does
@@ -483,10 +484,10 @@ The implemented model uses that split directly:
   block. The catalog runs in two translation units: the runtime container and
   the static container for every statically bindable form (`external` is
   runtime-only). The shape catalog and the top-level verdict are shared with the
-  matrix, so the executable set is derived rather than maintained separately.
+  table, so the executable set is derived rather than maintained separately.
   This is the foundation for deriving behavior and decorator cases from shapes
   instead of listing supported requests by hand.
-- **The matrix keeps the scenarios that a form catalog cannot express**:
+- **The table keeps the scenarios that a form catalog cannot express**:
   constructor detection, invocation, dependency graphs, collections, keys,
   annotations, parent containers, caching, transactions, error paths, custom
   RTTI and allocators. Those are not derivable from a scope/form product.
@@ -495,14 +496,14 @@ Compile cost is measured per translation unit with
 [`tools/cost/tu_report.py`](../../tools/cost/tu_report.py) and the `test-cost`
 target. On the development host the model units compile in roughly one second
 each, except the behavior unit, which is the largest and is the first candidate
-for a form-based split. The generated matrix units dominate compile time (one
-matrix shard has exceeded twenty seconds) because they instantiate many distinct
+for a form-based split. The generated table units dominate compile time (one
+table shard has exceeded twenty seconds) because they instantiate many distinct
 types per unit, not because of header parsing. Reducing distinct instantiations,
 and sharding by instantiation cost rather than line count, is the effective
 lever; precompiled headers were measured here and did not pay for themselves
 because CMake builds one per test target.
 
-### Matrix Migration Order
+### Table Migration Order
 
 Anything that is a function of the scope/form catalog belongs in the generated
 model suites. In priority order:
@@ -513,7 +514,7 @@ model suites. In priority order:
    now model-owned.
 2. **Plain registration rows**: one stored type, direct value/reference/pointer
    request, no wrapper, key, or feature. These are fully covered by behavior
-   classes and can leave the matrix product.
+   classes and can leave the table product.
 3. **Forms already covered behaviorally**: variant, optional, pointer, bounded
    array, unique/shared handles, array handles. The shared and unique variant
    wrapper values are behavior-tested, so both `variant_value` rows are dropped;
@@ -530,18 +531,18 @@ model suites. In priority order:
    interfaces on one binding, and a copyable interface value. Interface route
    probes instantiate the real resolution kernel, assert exact
    value/object/rvalue route counts, and require every published target to be
-   reachable from both request matchers with satisfied scope access. The matrix
+   reachable from both request matchers with satisfied scope access. The table
    interface surface is therefore fully model-covered: `resolve_interface` and
    `resolve_unique_wrapper` produce no executables, and their exposure axis
-   members are declared model-covered in the matrix manifest. Annotation recipes
+   members are declared model-covered in the table manifest. Annotation recipes
    now cover shared annotated concrete values (plain, shared pointer, optional,
    pointer storage), annotated interface references, pointers, shared handles,
    and handle references, and external annotated value, reference, pointer, and
    shared-handle registrations. Negative cases refuse unannotated and wrong-tag
-   requests and reject duplicate annotated registration. The matrix annotation
+   requests and reject duplicate annotated registration. The table annotation
    rows are fully model-covered, so `annotated` produces no executable.
 6. **Keys, collections, local bindings.** Add model axes only if the generated
-   product stays compact; otherwise keep them in the matrix.
+   product stays compact; otherwise keep them in the table.
 
 Do **not** migrate constructor detection, invocation and dependency
 provisioning, dependency compositions, shared-cyclical graphs, or the imperative
@@ -549,12 +550,11 @@ parent/runtime regression scenarios. They describe behavior that is not a
 function of a scope/form pair.
 
 Each step should land with a coverage manifest: the model declares the forms it
-covers, the matrix declares the registration rows it still owns, and a test
-fails when the union no longer covers the catalog. That makes the removal
-incremental and safe. `model_coverage.py` was that manifest while the matrix
-existed: `FEATURE_RESTRICTIONS` lists the dropped rows with the model forms that
-justify them, and the generator test fails if any claimed form loses its
-behavior class.
+covers, the table declares the registration rows it still owns, and a test fails
+when the union no longer covers the catalog. That makes the removal incremental
+and safe. `model_coverage.py` was that manifest while the table existed:
+`FEATURE_RESTRICTIONS` lists the dropped rows with the model forms that justify
+them, and the generator test fails if any claimed form loses its behavior class.
 
 Behavior copy and move counts are not hand-written per form. Each behavior case
 declares a request class, and the generator derives the minimum count from it:
@@ -649,7 +649,7 @@ Build a small cost harness that records, for `master`:
 - per-header preprocessed size and `includes-compile` time trend;
 - instantiation counts from Clang `-ftime-trace` for a few scaling programs;
 - benchmark results and allocation counts.
-- the matrix/behavior outcome baseline, updated only with a declared reason.
+- the table/behavior outcome baseline, updated only with a declared reason.
 
 The harness is only useful if it is stable. Gate on deterministic counts and
 sizes; track wall time as a trend, not a hard failure.
@@ -678,7 +678,7 @@ separate. Delete the duplicated static materialization and cache ladder.
 Status: in progress. The storage scope policies are generated into
 `include/dingo/storage/scopes.gen.h`; the storage scope/form pairs and selection
 policies are generated as coverage probes. The remaining route forms and the
-matrix consumption still need to move to the catalog.
+table consumption still need to move to the catalog.
 
 Move the built-in `(scope, form)` and route forms into the catalog. Emit the
 tables and coverage assertions, then replace the per-form specializations one
@@ -692,9 +692,9 @@ group at a time:
 
 Each group lands with its generated tests and its cost comparison.
 
-### Step 4: Generate Matrix Inputs
+### Step 4: Generate Table Inputs
 
-Make the matrix consume the catalog directly for scopes, forms, routes, modes,
+Make the table consume the catalog directly for scopes, forms, routes, modes,
 and capability tags. Delete the hand-curated approximations. Keep the
 hand-written C++ fixtures and policies; they are test code, not duplicated
 semantics.
@@ -732,8 +732,8 @@ step, so the tree never contains two supported implementations.
 
 ## Open Decisions
 
-- The exact home of the catalog: extend `test/matrix/axes` into a shared
-  `spec/`, or keep the matrix model and add a library-facing projection. The
+- The exact home of the catalog: extend the generated corpus axes into a shared
+  `spec/`, or keep the table model and add a library-facing projection. The
   design prefers the former because two catalogs will drift.
 - Whether a runtime key value over a static table is part of the first pass or a
   declared follow-up. The selection algebra makes it a source property, not a

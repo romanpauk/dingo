@@ -55,13 +55,13 @@ def _key(case) -> tuple[str, str, object, str] | None:
 def _compile_keys() -> set[tuple[str, str, object, str]]:
     from spec.gen.registration.binding import build_rows as binding_rows
     from spec.gen.resolution.const import build_rows as const_rows
-    from spec.gen.resolution.type_matrix import SHAPES, build_rows as matrix_rows
-    from spec.gen.resolution.trait_matrix import build_rows as trait_rows
+    from spec.gen.resolution.type_table import SHAPES, build_rows as table_rows
+    from spec.gen.resolution.trait_table import build_rows as trait_rows
 
     keys = set()
-    # The type matrix is the copyable leaf's shape oracle. The trait matrix
+    # The type table is the copyable leaf's shape oracle. The trait table
     # adds the move-only answer and the per-shape binary probes.
-    for row in matrix_rows():
+    for row in table_rows():
         for shape in SHAPES:
             keys.add((row["scope"], row["form"], shape.name, "copyable"))
     for row in trait_rows():

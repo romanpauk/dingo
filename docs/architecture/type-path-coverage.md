@@ -121,7 +121,7 @@ The report contains:
 The report is the map for the next extension step. A family with a large
 `unmodeled` count is a model gap; a family with a large `unsupported` count is a
 library/route limitation. The “path-extended shapes” table is the set that
-`type_matrix.py` merges into the compile-time matrix, so every supported path is
+`type_table.py` merges into the compile-time table, so every supported path is
 generated as a form row.
 
 ## Current gap
@@ -150,7 +150,7 @@ The report compares the supported set with what the generated C++ suites
 exercise:
 
 - 2,041 supported paths over both traits (1,092 copyable, 949 move-only);
-- 2,041 covered by the compile-time type/binding matrices, the trait matrix, and
+- 2,041 covered by the compile-time type/binding matrices, the trait table, and
   const probes;
 - 1,955 covered by the runtime shape, behavior, annotated, keyed, interface, and
   const probes;
@@ -180,7 +180,7 @@ from a value also copies, while a const pointee on a stored or adopted handle
 does not. `emit/traits.py` builds every supported form for both leaves and
 asserts the move-only route set is the copyable set minus the copying routes.
 `build/paths.md` includes per-trait outcome and rule tables next to the copyable
-aggregate tables. `emit/behavior.py` runs the same shape matrix once per trait:
+aggregate tables. `emit/behavior.py` runs the same shape table once per trait:
 the shape leaf is rebased, the copy-requiring guards compile out for the
 move-only fixture, and both the runtime and static containers are exercised. The
 request-based runtime families (`behavior_cases`, `annotated_cases`,
@@ -191,14 +191,14 @@ domain.
 
 The 110 path-extended shapes are mostly access forms around composed objects:
 `optional<T> &`, `shared_ptr<T> *`, `variant<const T, long> &`, and arrays of
-wrapped pointers. They are merged into the type matrix, so the compile-time
-matrix and the runtime behavior suite consume them instead of keeping a separate
+wrapped pointers. They are merged into the type table, so the compile-time table
+and the runtime behavior suite consume them instead of keeping a separate
 hand-written list.
 
-The type matrix now enumerates **222 shapes** over 32 forms (**7,104 probes**),
-and the binding matrix adds **586** compile-time registration probes (copyable
+The type table now enumerates **222 shapes** over 32 forms (**7,104 probes**),
+and the binding table adds **586** compile-time registration probes (copyable
 and move-only). The behavior outcome baseline has **183** rows (95 copyable, 88
-move-only). The matrix baseline records the shape removals from rejecting const
+move-only). The table baseline records the shape removals from rejecting const
 rvalue requests.
 
 ## Test generation
@@ -213,13 +213,13 @@ The supported paths feed two layers:
   the behavior harness. The class table explains why the representative covers
   the rest.
 
-The unannotated supported paths are consumed by `emit/matrix.py` and
+The unannotated supported paths are consumed by `emit/table.py` and
 `emit/behavior.py`. Annotated paths are emitted by `emit/families/annotated.py`,
 const-qualified storage by `emit/families/const.py`, direct-leaf keyed paths by
 `emit/families/keyed.py`, and direct interface paths by
 `emit/families/interface_runtime.py`. Wrapped keyed conversions are outside the
 keyed capability; wrapped interface paths and consuming-scope interface paths
-remain the next emission targets. The matrix already has `full` and `portable`
+remain the next emission targets. The table already has `full` and `portable`
 profiles; the path model gives the same split without keeping two sets of axes.
 
 ## Extending the domain

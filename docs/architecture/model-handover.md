@@ -21,7 +21,7 @@ The tree is green:
 - `dingo_registration_test`: 158 tests
 - `dingo_registration_runtime_test`: 6 tests
 - `generated-check`: passes
-- `ctest`: 38/38 passed (the retired matrix executables are gone)
+- `ctest`: 38/38 passed (the retired table executables are gone)
 - `resolve-check`: 274 tests, report written to `build/test/resolve-gaps.md`
   (2,009 calls, 772 overclaims)
 - `claim-check`: report written to `build/test/claim-gaps.md`; `construct` 899
@@ -51,10 +51,10 @@ Supported by binding (copyable / move-only):
 
 The runtime-tested count is a key mapping, not an execution log. The request
 based families (`behavior_cases`, `annotated`, `keyed`, `const`, and the
-interface families) call `resolve` per row. The concrete shape matrix guards
-each probe with `lifted_request_supported`; when the model overclaims a shape
-the block compiles out, but `report/coverage.py` still maps the key. Comparing
-the supported concrete keys with `build/test/type-matrix.json` shows 253 of 487
+interface families) call `resolve` per row. The concrete shape table guards each
+probe with `lifted_request_supported`; when the model overclaims a shape the
+block compiles out, but `report/coverage.py` still maps the key. Comparing the
+supported concrete keys with `build/test/type-table.json` shows 253 of 487
 copyable keys (354 of 730 copyable cases, 313 of 651 move-only cases) have no
 library route. The next coverage step is to either tighten `derive_route` for
 those nested shapes or have `type_behavior` log the probes it actually executes.
@@ -86,7 +86,7 @@ The model now lives in packages under `spec`:
 grammar/      type grammar, C++ type algebra, storage forms, wrappers
 domain/       stored types -> request closure -> binding projections -> cases
 semantics/    support rules, capabilities, routes, extended shapes, gaps
-emit/         C++ generators, templates, compile binding matrix
+emit/         C++ generators, templates, compile binding table
 report/       coverage report, outcome baseline
 tests/        pytest suite
 ```
@@ -108,7 +108,7 @@ grammar -> domain -> semantics -> emit -> report
 - `grammar/catalog.py` — scopes, storage forms, `FormConstructor`, `Factory`.
 - `grammar/storage.py` — `StoragePath`, `storable`, const helpers.
 - `grammar/traits.py` — `LeafTraits`, `COPYABLE`, `MOVE_ONLY`; the leaf
-  copy/move dimension used by the trait matrix.
+  copy/move dimension used by the trait table.
 - `grammar/bindings.py` — `Binding` and binding projections.
 
 ### Domain
@@ -149,15 +149,15 @@ combinations. The earlier global-list model overclaimed many of them.
 
 ### Emit
 
-- `emit/matrix.py` — concrete compile-time shape matrix.
+- `emit/table.py` — concrete compile-time shape table.
 - `emit/resolve.py` — storage-driven runtime probe. One shard per
   `(scope, form)` form registers each storage once per binding and calls
   `resolve` for every supported case. Outcomes are recorded, not asserted.
-- `emit/traits.py` — copyable/move-only compile-time matrix. It builds each
+- `emit/traits.py` — copyable/move-only compile-time table. It builds each
   supported form for both leaves and asserts the library's move-only route set
   is the copyable set minus the routes that copy the leaf. The copy boundary is
   derived by `semantics/routes/derivation.py:leaf_copy_required`.
-- `emit/binding_matrix.py` — compile-time `dingo::bindings<dingo::bind<...>>`
+- `emit/binding_table.py` — compile-time `dingo::bindings<dingo::bind<...>>`
   probes for annotated/keyed/interface cases.
 - `emit/families/`:
   - `behavior.py` — runtime behavior cases
@@ -176,7 +176,7 @@ combinations. The earlier global-list model overclaimed many of them.
 - `report/resolves.py` — per-storage resolve outcome report. It splits covered
   calls, model overclaims, declared gaps, and stale declarations.
 - `report/coverage.py` — supported vs tested vs declared gaps.
-- `report/baseline.py` — pinned matrix/behavior outcomes.
+- `report/baseline.py` — pinned table/behavior outcomes.
 
 ## Generated C++ suites
 
@@ -201,7 +201,7 @@ Generated files are under `build/test/generated/model/` and are compiled into
 
 - `tests/grammar_test.py` checks constructor registry consistency.
 - `tests/architecture_test.py` checks layer imports.
-- `tests/binding_matrix_test.py` checks compile binding rows are supported.
+- `tests/binding_table_test.py` checks compile binding rows are supported.
 - `tests/keyed_cases_test.py`, `interface_runtime_test.py`,
   `annotated_cases_test.py`, `const_cases_test.py` check each runtime family.
 - `coverage.py` splits untested supported cases into undeclared gaps and
@@ -254,7 +254,7 @@ Done:
 - Every runtime family emits a move-only variant: `behavior_cases`,
   `annotated_cases`, `keyed_cases`, `const_cases`, `interface_runtime`, and the
   shape-level `type_behavior`.
-- `emit/binding_matrix.py` includes move-only registration probes.
+- `emit/binding_table.py` includes move-only registration probes.
 - `Shape.with_leaf()` now rebases the `int` base leaf, so the type-behavior
   guards run real leaf-typed requests instead of compiling out.
 - Coverage keys include the trait; `build/paths.md` has a `## Leaf traits`
@@ -264,7 +264,7 @@ Remaining work:
 
 1. The library's compile-time lift trait still answers for const rvalue requests
    that the runtime container cannot materialize. Rejecting them in the lift
-   layer would let the trait matrix drop its exclusion.
+   layer would let the trait table drop its exclusion.
 2. `report/paths.py` still classifies the copyable domain in its outcome and
    per-family tables; the trait table is aggregated separately. If the model
    needs per-trait rule histograms, iterate both traits there too.
@@ -277,7 +277,7 @@ interface list. The request projection derives
 `annotated<...interface_type..., tag>` for requests and
 `annotated<interface_type, tag>` for registration. Support requires both the
 annotated and interface capabilities to be exposed, and the interface runtime
-family emits the composed rows for both leaf traits. The binding matrix probes
+family emits the composed rows for both leaf traits. The binding table probes
 the composed registration.
 
 ### 3. Raise the per-storage request depth
@@ -290,10 +290,10 @@ bindings, both leaf traits):
 
 Almost all depth-3 growth is concrete (3,971 copyable / 3,541 move-only); keyed,
 annotated, interface, and annotated-interface counts do not change. The type
-matrix, trait matrix, and type-behavior suites would grow from 222 to about
-1,145 shapes (roughly 5x). `type_matrix.cpp` is already the compile-time
-bottleneck, so consider a compile-only depth-3 probe before wiring the new
-shapes into every runtime family.
+table, trait table, and type-behavior suites would grow from 222 to about 1,145
+shapes (roughly 5x). `type_table.cpp` is already the compile-time bottleneck, so
+consider a compile-only depth-3 probe before wiring the new shapes into every
+runtime family.
 
 Before raising it:
 
@@ -319,9 +319,9 @@ Reducing them requires new scenario families, not more generated cases.
 - `behavior.py` still contains scenario-level C++ strings; move them through
   `CppType` / registration plans. The interface and annotation recipes are
   hand-built shape lists, not derived from the ledger.
-- The legacy `test/matrix` generator and its `spec/legacy` algebra are deleted;
-  the model families above are the only generated coverage.
-- `type_matrix.cpp` is the compile-time bottleneck. If it grows, split it into
+- The retired generator under `test/` and its legacy request/binding algebra are
+  deleted; the model families above are the only generated coverage.
+- `type_table.cpp` is the compile-time bottleneck. If it grows, split it into
   multiple translation units.
 - `report/paths.py` outcome and per-family tables still describe only the
   copyable domain; the trait split lives in the coverage table.
@@ -350,10 +350,10 @@ Coverage report:
 Other generators through the dispatcher:
 
 ```bash
-python -m spec matrix --out ...
-python -m spec trait-matrix --out ...
+python -m spec table --out ...
+python -m spec trait-table --out ...
 python -m spec resolve --out-dir ... --manifest ...
-python -m spec binding-matrix --out ...
+python -m spec binding-table --out ...
 python -m spec keyed --out ...
 python -m spec interface-runtime --out ...
 python -m spec annotated --out ...
@@ -374,7 +374,7 @@ Baseline update after an intended model change:
 
 ```bash
 python -m spec.report.baseline update \
-  --matrix build/test/type-matrix.json \
+  --table build/test/type-table.json \
   --behavior build/test/behavior-outcomes.jsonl \
   --baseline test/baselines/model.json \
   --changes test/baselines/model-changes.json \
@@ -386,7 +386,7 @@ python -m spec.report.baseline update \
 The layered package refactor is committed
 (`Split the model generator into layered packages`). The leaf-trait slice is the
 next commit: `grammar/traits.py`, `emit/traits.py`,
-`emit/templates/trait_matrix.cpp.j2`, the associated test, and the CMake wiring.
+`emit/templates/trait_table.cpp.j2`, the associated test, and the CMake wiring.
 
 See also:
 

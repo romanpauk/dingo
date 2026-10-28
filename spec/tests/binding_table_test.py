@@ -25,7 +25,7 @@ from spec.model.grammar.bindings import binding_for
 from spec.model.grammar.traits import TRAITS_BY_NAME
 
 
-def test_binding_matrix_is_non_empty_and_unique() -> None:
+def test_binding_table_is_non_empty_and_unique() -> None:
     validate()
     rows = build_rows()
     assert rows
@@ -36,7 +36,7 @@ def test_binding_matrix_is_non_empty_and_unique() -> None:
     assert len(keys) == len(rows)
 
 
-def test_binding_matrix_rows_are_supported() -> None:
+def test_binding_table_rows_are_supported() -> None:
     from spec.model.semantics.support import classify
 
     for row in build_rows():
@@ -68,7 +68,7 @@ def test_binding_shards_follow_the_registration_hierarchy() -> None:
             )
 
 
-def test_binding_matrix_render_is_deterministic() -> None:
+def test_binding_table_render_is_deterministic() -> None:
     for shard in build_shards()[:4]:
         content = render(shard)
         assert content == render(shard)

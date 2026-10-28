@@ -274,9 +274,9 @@ def test_supported_shapes_are_identified() -> None:
     assert all(shape.name in names for shape in missing)
 
 
-def test_extended_shapes_are_consumed_by_the_type_matrix() -> None:
+def test_extended_shapes_are_consumed_by_the_type_table() -> None:
     from spec.model.semantics.extended_shapes import extended_shapes
-    from spec.gen.resolution.type_matrix import SHAPES
+    from spec.gen.resolution.type_table import SHAPES
 
     names = {shape.name for shape in SHAPES}
     assert {shape.name for shape in extended_shapes()} <= names

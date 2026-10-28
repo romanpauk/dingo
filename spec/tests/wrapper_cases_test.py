@@ -24,5 +24,5 @@ def test_wrapper_cases_use_model_owned_wrappers() -> None:
         content = render(shard)
         assert content == render(shard)
         assert "support/custom_wrappers.h" in content
-        assert "matrix/" not in content
+        assert "table/" not in content
         assert f"TEST({shard.suite}, {shard.name})" in content

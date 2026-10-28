@@ -14,7 +14,7 @@ The rules are a small vocabulary borrowed from the conversion model:
   select_alternative, nested_access, const_copy, target
 
 The library still answers whether a route is published. This module derives the
-first rule that blocks a request and names it, so the matrix report says
+first rule that blocks a request and names it, so the table report says
 "take: a borrowing scope cannot become an owner" instead of "nested wrapper".
 """
 

@@ -8,8 +8,8 @@
 
 """Probe every storage form and request shape once per leaf trait.
 
-Copyability is a property of the leaf, not of the shape. This matrix keeps the
-shape catalog and the storage forms from `emit/matrix.py`, builds each form for
+Copyability is a property of the leaf, not of the shape. This table keeps the
+shape catalog and the storage forms from `emit/table.py`, builds each form for
 a copyable and a move-only leaf, and asks the real resolution kernel whether a
 route is published for either.
 
@@ -32,7 +32,7 @@ from pathlib import Path
 
 from spec.gen.shared.runner import emit, render_template
 from spec.gen.shared.validation import validate_catalog
-from spec.gen.resolution.type_matrix import SHAPES
+from spec.gen.resolution.type_table import SHAPES
 from spec.model.grammar import cpp
 from spec.model.grammar.catalog import ARRAY_STORAGE_FORMS
 from spec.model.grammar.traits import COPYABLE, MOVE_ONLY
@@ -114,8 +114,8 @@ def _check_unique(space: str, names) -> None:
 def validate() -> None:
     rows = build_rows()
     if not rows:
-        raise ValueError("trait matrix must not be empty")
-    _check_unique("trait matrix", (row["name"] for row in rows))
+        raise ValueError("trait table must not be empty")
+    _check_unique("trait table", (row["name"] for row in rows))
     if not SHAPES:
         raise ValueError("shape catalog must not be empty")
     _check_unique("shape catalog", (shape.name for shape in SHAPES))
@@ -127,7 +127,7 @@ def validate() -> None:
 def render(output: Path) -> str:
     validate()
     return render_template(
-        "trait_matrix.cpp.j2",
+        "trait_table.cpp.j2",
         rows=build_rows(),
         copyable=COPYABLE,
         move_only=MOVE_ONLY,

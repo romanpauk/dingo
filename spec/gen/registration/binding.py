@@ -189,7 +189,7 @@ def build_shards() -> tuple[BindingShard, ...]:
 
 
 def render(shard: BindingShard) -> str:
-    return render_template("binding_matrix.cpp.j2", shard=shard)
+    return render_template("binding_table.cpp.j2", shard=shard)
 
 
 def manifest(shards: tuple[BindingShard, ...]) -> str:
@@ -220,10 +220,10 @@ def manifest(shards: tuple[BindingShard, ...]) -> str:
 def validate() -> None:
     shards = build_shards()
     if not shards:
-        raise ValueError("binding matrix must not be empty")
+        raise ValueError("binding table must not be empty")
     paths = [shard.path for shard in shards]
     if len(paths) != len(set(paths)):
-        raise ValueError("binding matrix contains duplicate shards")
+        raise ValueError("binding table contains duplicate shards")
     for shard in shards:
         if not shard.cases:
             raise ValueError(f"shard {shard.path} has no cases")

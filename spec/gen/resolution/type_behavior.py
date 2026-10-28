@@ -8,7 +8,7 @@
 
 """Execute every supported storage-form by request-shape row.
 
-The type matrix says which shapes match. This suite resolves them for real:
+The type table says which shapes match. This suite resolves them for real:
 every top-level shape is exercised against the same registration recipe as the
 behavior forms, identity is checked for stable scopes, owned raw pointers are
 released, and every block must finish with the lifetime balance intact. The
@@ -32,7 +32,7 @@ from spec.model.grammar.catalog import ARRAY_STORAGE_FORMS, RUNTIME_ONLY_SCOPES
 from spec.model.semantics.storage_forms import iter_supported_forms
 from spec.gen.shared.recipe import external_instance, registration
 from spec.gen.shared.validation import validate_catalog
-from spec.gen.resolution.type_matrix import SHAPES, CONSUMING_SCOPES, top_level_safe
+from spec.gen.resolution.type_table import SHAPES, CONSUMING_SCOPES, top_level_safe
 from spec.model.grammar.traits import COPYABLE, MOVE_ONLY, TRAITS, LeafTraits
 
 
@@ -85,7 +85,7 @@ def build_rows(
     for scope, form in iter_supported_forms():
         scope_name = scope.name
         # Forms the behavior model declares as gaps are not registrable in
-        # the container front-end yet; the matrix still classifies them.
+        # the container front-end yet; the table still classifies them.
         if (scope_name, form.name) in BEHAVIOR_GAPS:
             continue
         instance = None

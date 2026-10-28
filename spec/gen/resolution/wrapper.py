@@ -16,7 +16,7 @@ row that unwraps it.
     resolution/runtime/global/wrapper/<case>.cpp
 
 The wrappers live in ``test/support/custom_wrappers.h`` and share nothing with
-the matrix fixtures.
+the table fixtures.
 """
 
 from __future__ import annotations

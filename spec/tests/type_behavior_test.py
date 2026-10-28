@@ -23,7 +23,7 @@ from spec.gen.resolution.type_behavior import (
     render,
     validate,
 )
-from spec.gen.resolution.type_matrix import SHAPES
+from spec.gen.resolution.type_table import SHAPES
 from spec.model.grammar.traits import MOVE_ONLY
 
 

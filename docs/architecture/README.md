@@ -22,8 +22,8 @@ Read these pages in order for the full picture:
   pointer, and wrapper conversions at resolution time.
 - [Coverage Model](coverage-model.md): capability rows, the claims over them,
   operator classes, and what completeness means.
-- [Matrix Retirement](matrix-migration.md): what replaced the retired
-  `test/matrix` corpus, feature by feature.
+- [Test Corpus Retirement](retired-corpus.md): what replaced the retired the
+  generated test corpus corpus, feature by feature.
 
 The public API is centered on three container entry points:
 

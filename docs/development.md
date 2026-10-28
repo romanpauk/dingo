@@ -61,7 +61,7 @@ and `invoke`, and the operator families cover construction shapes, invocation
 shapes, producers, collections, cycles, conversions, and container
 configuration. See the [coverage model](architecture/coverage-model.md).
 
-The hand-written C++ portion is organized by role: `common/` provides matrix
+The hand-written C++ portion is organized by role: `common/` provides table
 plumbing, `containers/` and `fixtures/` define axis inputs, `policies/` contains
 generic row behavior, and `scenarios/` contains complete behavioral and
 regression cases. Axis definitions declare the headers needed by each generated
@@ -75,13 +75,13 @@ The storage and selection models under [`spec/`](../spec) enumerate the built-in
 forms independently of the C++ headers. The generator writes one translation
 unit for the full storage scope-by-form product, one for every selection policy
 and source status, one route probe for every supported storage form, one type
-matrix that applies every request shape to every storable form and writes
-`type-matrix.md`, one interface route probe for storage exposed through
+table that applies every request shape to every storable form and writes
+`type-table.md`, one interface route probe for storage exposed through
 `dingo::interfaces<...>`, one behavior class per supported scope/form form in
 the applicable runtime and static containers, and type behavior units that
 resolve every supported top-level shape through the runtime container and
 through `static_container` for every statically bindable form, checking
-identity, ownership transfer, and the lifetime balance. The type matrix reports
+identity, ownership transfer, and the lifetime balance. The type table reports
 both the direct route, the lifted request, and whether the route is safe at the
 container boundary: lvalue borrows from consuming scopes serve dependents but
 not top-level callers, so those rows are explicit gaps rather than hidden
@@ -236,7 +236,7 @@ It writes `build/cost/current-runtime.json` with the same fields and is meant to
 be compared between revisions, not against the static probe.
 
 The model has its own differential baseline in `test/baselines/model.json`. It
-pins the matrix outcomes and the actual behavior runtime outcomes, including
+pins the table outcomes and the actual behavior runtime outcomes, including
 construction/copy/move/destruction counts and the result or exception class.
 `ctest` runs `python -m spec.report.baseline check` after the model test; an
 intended change is recorded with `update --reason "..."`, which rewrites the

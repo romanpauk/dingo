@@ -40,7 +40,7 @@ fails on an upward import.
   stored as formatting templates. The structural probes instantiate the same
   form with `int` and the behavior suites with their tracked leaf, so the two
   no longer keep parallel catalogs.
-- `emit/families/storage.py` writes `classification/<scope>/<form>/storage.cpp` and enumerates every built-in storage scope by storage form
+- `gen/families/storage.py` writes `classification/<scope>/<form>/storage.cpp` and enumerates every built-in storage scope by storage form
   form. Each scope declares capabilities (consuming, cyclical, pointer source)
   and each form declares its semantic kind and array/handle facts; the exposure
   bits are derived from those capabilities rather than a per-form table. Raw
@@ -50,7 +50,7 @@ fails on an upward import.
   a catalog that is missing or stale. It also generates the committed
   `include/dingo/storage/scopes.gen.h` header, which owns the built-in
   `storage_scope_policy` specializations.
-- `emit/selection.py` enumerates every selection policy and pair of source
+- `gen/selection.py` enumerates every selection policy and pair of source
   statuses. It compares the model against the C++ policy and status enums and
   renders the full rule table as compile-time assertions.
 - `semantics/routes/ledger.py` enumerates every scope, form, and route category with one
@@ -60,12 +60,12 @@ fails on an upward import.
   not part of the type, so no scope can size, construct, or destroy them.
   Unsized shared array handles under `shared_cyclical` are an explicit
   constraint for the same reason.
-- `report/baseline.py` pins the actual matrix outcomes and the actual behavior
+- `report/baseline.py` pins the actual table outcomes and the actual behavior
   runtime outcomes in `test/baselines/model.json`. The behavior report records
   each executed case's counts and result (`ok` or an exception class).
   `check` fails on any difference; `update --reason ...` rewrites the baseline
   and records the declared change in `test/baselines/model-changes.json`.
-- `emit/families/property.py` writes `classification/global/wrapper/<wrapper>.cpp` and generates static assertions that compare the C++ wrapper
+- `gen/families/property.py` writes `classification/global/wrapper/<wrapper>.cpp` and generates static assertions that compare the C++ wrapper
   properties (`is_owning`, `is_sharing`, `is_nullable`, `is_borrowable`,
   `is_array`, `is_variant`, `can_copy_out`, `can_take`) with the Python wrapper
   declarations for every built-in wrapper and the `test_optional`,
@@ -85,7 +85,7 @@ fails on an upward import.
   custom wrapper with the same kind and properties follows the same rule as the
   built-in wrapper it mirrors. A supported form with no matching rule fails
   validation instead of losing its kind coverage.
-- `emit/families/route.py` instantiates the real storage type and resolution list for
+- `gen/families/route.py` instantiates the real storage type and resolution list for
   every supported storage form, including bounded arrays and array handles. It
   checks value, object, and rvalue route availability against the ledger and
   asserts that an unavailable category publishes no route, requires every
@@ -112,9 +112,9 @@ fails on an upward import.
   `nested_access`, `const_copy`, and `target`. The library still answers
   whether a route is published; the rule model names the first rule that blocks
   a request, so the report says `take: a borrowing scope cannot become an owner` instead of a structural category.
-- `emit/matrix.py` composes every shape from the wrapper semantics and applies
+- `gen/resolution/type_table.py` composes every shape from the wrapper semantics and applies
   it to every storable scope/form pair through the real resolution kernel. It
-  writes a `type-matrix.md` report with the direct route, the lifted request,
+  writes a `type-table.md` report with the direct route, the lifted request,
   the top-level verdict, the route rule for every miss, and the published route
   targets per form. Supported rows are answered by the library, not by a
   hand-written case list; the report is the exhaustive support table. The depth
@@ -125,13 +125,13 @@ fails on an upward import.
   A shape that is not a direct target is reported as `lifted` when its value is
   resolvable: value wrappers copy or move their value, and owning handles only
   lift from a consumed value. The report groups misses by rule.
-- `emit/traits.py` builds every supported storage form for a copyable and a
+- `gen/traits.py` builds every supported storage form for a copyable and a
   move-only leaf and asks the resolution kernel whether each shape is
   published. The move-only route set must be a subset of the copyable one and
   must lose exactly the routes that copy the leaf (value copies, const
   pointees promoted from a value, inline wrappers that contain the leaf).
   Borrows, moves, adopted pointers/arrays, and owning-handle copies stay.
-- `emit/resolve.py` generates the storage-driven runtime probe. On disk the
+- `gen/resolve.py` generates the storage-driven runtime probe. On disk the
   hierarchy is `resolution/runtime/<scope>/<storage>/<category>.cpp`; one file is one
   storage path and category (`resolve` today),
   one GTest suite is that path, and one test is one `(trait, binding, request)`.
@@ -147,16 +147,16 @@ fails on an upward import.
   into covered calls, overclaims, declared gaps, and stale declarations. It is
   a report target (`resolve-check`), not part of `check`, while the model is
   being tightened.
-- `emit/detection_constructor.py` generates the first classification slice under
+- `gen/detection_constructor.py` generates the first classification slice under
   `classification/constructor/<shape>.cpp`: constructor arity and kind for
   zero-argument, copy-only, move-only, aggregate, dependency, annotated, and
   move-only array shapes.
-- `emit/binding_matrix.py` emits compile-time `dingo::bindings<dingo::bind<...>>`
+- `gen/registration/binding.py` emits compile-time `dingo::bindings<dingo::bind<...>>`
   instantiations under `registration/static_asserts/<scope>/<storage>/binding.cpp`,
   one file per storage, for both leaf traits. It
   checks the registration composition (scope, storage spelling, annotation,
   interface list, and lookup key); runtime families check the route.
-- `emit/behavior.py` executes the top-level half of that matrix. Every
+- `gen/resolution/behavior.py` executes the top-level half of that table. Every
   supported shape is resolved twice through the same registration recipe as the
   behavior forms, stable scopes are checked for identity, fresh scopes for
   distinctness, owned raw pointers are released according to the transfer
@@ -167,11 +167,11 @@ fails on an upward import.
   copyable and move-only fixtures share the shape catalog, and the
   copy-requiring shapes compile out for the move-only leaf. The shape catalog
   and the top-level verdict come
-  from `emit/matrix.py`, so the suite follows the library instead of listing
+  from `gen/resolution/type_table.py`, so the suite follows the library instead of listing
   supported requests by hand. Unowned or non-transferred pointers are never
   released, and the two consuming lvalue-borrow shapes are emitted as explicit
   top-level gaps rather than silently skipped.
-- `emit/families/interface.py` instantiates the real interface resolution kernel for
+- `gen/families/interface.py` instantiates the real interface resolution kernel for
   storage exposed through `dingo::interfaces<...>`. It checks value, object, and
   rvalue availability and exact route counts, requires every published target to
   be reachable from both request matchers, and checks that the scope access
@@ -179,7 +179,7 @@ fails on an upward import.
   `route_derivation.interface_route_counts`, keyed by the exposed semantic kind and
   whether the interface is a copyable value. Single- and multiple-interface
   bindings are covered.
-- `emit/families/behavior.py` generates one behavior class per supported scope/form
+- `gen/families/behavior.py` generates one behavior class per supported scope/form
   form in the applicable runtime and static containers. Form registration and
   expectations are data: a form comes from `grammar/catalog.py`, and its
   scope/container product is derived from the route ledger. The tests check
@@ -191,7 +191,7 @@ fails on an upward import.
   class (`borrow_value`, `consume_value`, `consume_rvalue`, `reference`,
   `handle`, `array`) instead of being hand-written per form, so a count that
   does not match the request shape fails the build. The external instance and
-  its registration move are derived by `emit/common/recipe.py` from the form's wrapper
+  its registration move are derived by `gen/common/recipe.py` from the form's wrapper
   properties. A consumed raw
   pointer or row pointer transfers ownership to the caller, and its behavior
   case deletes the result before checking the balance. Multi-route forms add
@@ -237,7 +237,7 @@ fails on an upward import.
 - `grammar/traits.py` declares the leaf copy/move traits. A path describes a
   shape; the leaf's special members decide whether a copying route exists.
   Every storage form and request shape is classified once per trait, and
-  `emit/traits.py` asserts the move-only answer is exactly the copyable answer
+  `gen/traits.py` asserts the move-only answer is exactly the copyable answer
   minus the routes that copy the leaf. Every generated runtime family runs
   both leaves; the move-only variant selects the first non-copying route and
   expects zero copies.
@@ -256,7 +256,7 @@ fails on an upward import.
   histograms, binding applicability, a per-leaf-trait coverage table, and the
   comparison between supported paths and the cases the generated C++ suites
   exercise. Its path-extended shapes are
-  merged into the type matrix. The full design is in
+  merged into the type table. The full design is in
   [Type Path Coverage](../../docs/architecture/type-path-coverage.md).
 - `report/resolves.py` compares the per-storage resolve outcomes with the
   generated manifest. An overclaim is a call the model expects that threw; a
@@ -266,8 +266,8 @@ fails on an upward import.
   keyed, interface, and const probes. Every coverage key carries the leaf
   trait. The difference is split into undeclared gaps and declared gaps with
   reasons.
-- `emit/families/annotated.py`, `emit/families/keyed.py`,
-  `emit/families/interface_runtime.py`, and `emit/families/const.py` emit
+- `gen/families/annotated.py`, `gen/families/keyed.py`,
+  `gen/families/interface_runtime.py`, and `gen/families/const.py` emit
   runtime probes. Annotated covers every supported leaf/reference/pointer
   interface, including const storage. Keyed covers every supported direct-leaf
   request; wrapped conversions are outside the keyed capability rather than
@@ -277,17 +277,17 @@ fails on an upward import.
   each registration from the storage form. The report shows the cases that
   remain outside each harness.
 - `semantics/forms.py` owns the scope/form product and its supported subset. The route
-  probes, type matrix, type behavior, and behavior families iterate the same
+  probes, type table, type behavior, and behavior families iterate the same
   form list; "is this form publishable" has one answer.
 - `semantics/gaps.py` is the one exception registry: behavior, interface, annotation,
   and absence-probe exceptions live together with their reasons, so the full
   undeclared-coverage surface is visible in one place and a reason cannot be
   empty.
-- `emit/common/recipe.py` renders the stored type, factory, external instance, runtime
+- `gen/common/recipe.py` renders the stored type, factory, external instance, runtime
   registration, and static binding source for one form. The behavior,
   type-behavior, interface, and annotation families share it, so a form is
   spelled once.
-- `emit/common/runner.py` owns the Jinja environment, output writing, and `--check`
+- `gen/common/runner.py` owns the Jinja environment, output writing, and `--check`
   handling shared by every family. A family module provides `build_rows()` and
   a template name; it does not re-implement the CLI.
 - `templates/` contains logic-free Jinja templates. The Python model computes

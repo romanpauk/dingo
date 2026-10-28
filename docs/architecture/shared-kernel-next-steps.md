@@ -56,7 +56,7 @@ lists, ledgers, interface counts, and static trait expectations | | Model tables
 | `spec/model/semantics/routes/ledger.py` (`OPERATION_KINDS`, `RETENTION`),
 `spec/gen/resolution/interface.py` (`INTERFACE_ROUTES` counts) |
 hand-maintained; const-handle support required 19 ledger edits and five
-interface-count edits | | Shape grammar | `spec/gen/resolution/type_matrix.py`
+interface-count edits | | Shape grammar | `spec/gen/resolution/type_table.py`
 `Shape`/`Constructor` | no variants, no custom wrappers; wrapper properties are
 implied by constructor names | | Lift/direct decision |
 `container::resolve_entry`, the dependency origin overload, `static_container`
@@ -72,10 +72,10 @@ later optional semantic flags in `type_traits` | | A route is a derivation over
 rules | Python `route_rules` model derives operation kind, retention, and
 support reasons | | One engine, three binding times | factor the lift/direct
 policy into one resolution-policy helper with static/runtime backends | |
-Spec-generated expectations | generate matrix/behavior expectations and ledger
+Spec-generated expectations | generate table/behavior expectations and ledger
 data from the rule model | | Contracts | object-size, instantiation-count,
 codegen, and header probes for added routes | | Differential baseline | pinned
-outcome JSON for matrix/behavior, with declared changes | | Wrapper extension by
+outcome JSON for table/behavior, with declared changes | | Wrapper extension by
 semantics | `type_traits` semantic properties consumed by `request_lift` | |
 Variants are first-class tree nodes | add variant shapes and alternative routes
 to the grammar and behavior model |
@@ -98,7 +98,7 @@ Risk: low. Python and generated tests only.
   - The storage-form model (`storage policies` exposure) and the wrapper
     semantics are the rule input; a route is a derivation and the first blocking
     rule names the miss.
-- [x] Replace `type_matrix.Constructor` composition with wrapper-chain
+- [x] Replace `type_table.Constructor` composition with wrapper-chain
   composition. Existing generated C++ spellings are unchanged where the wrapper
   chain spells the same type.
 - [x] Add variant shapes (`std::variant<int, long>`, `optional<variant>`,
@@ -109,14 +109,14 @@ Risk: low. Python and generated tests only.
   `decay: the form does not store a bounded array`,
   `select_alternative: the form does not store a variant`.
 - [x] Keep `SHAPES`/`build_rows` output compatible where possible so the C++
-  matrix and behavior templates change minimally. The direct-support check now
+  table and behavior templates change minimally. The direct-support check now
   asks both the leaf interface and the stored-wrapper interface, because a
   binding publishes both route lists.
 
 Definition of done:
 
 - `SHAPES` is generated from wrapper semantics.
-- `type_matrix` and `type_behavior` still pass against the library.
+- `type_table` and `type_behavior` still pass against the library.
 - The report explains misses by rule, not by structural category.
 - No library changes.
 
@@ -203,10 +203,10 @@ Definition of done:
 
 Risk: low to medium. Test/model expansion.
 
-- [x] Add `std::variant` shapes and alternative requests to the matrix and
+- [x] Add `std::variant` shapes and alternative requests to the table and
   behavior catalog.
 - [x] Add custom wrapper families (`test_optional`, `test_shared`,
-  `test_unique`) to the generated matrix/behavior, not only to hand-written
+  `test_unique`) to the generated table/behavior, not only to hand-written
   tests.
 - [x] Add a custom variant-like wrapper if `alternative_type_traits` supports
   it.
@@ -222,12 +222,12 @@ Definition of done:
 
 Risk: medium. Tooling and CI.
 
-- [x] Record a baseline JSON for matrix/behavior outcomes:
+- [x] Record a baseline JSON for table/behavior outcomes:
   - form/shape, direct/lifted/top-level,
   - result or exception class,
   - construction/copy/move/destruction counts,
   - `sizeof` of containers/bindings.
-  - `type_matrix` writes `build/test/type-matrix.json`; the behavior catalog
+  - `type_table` writes `build/test/type-table.json`; the behavior catalog
     contributes its expected request and count rows.
 - [x] Fail on an undeclared difference; require a declared change entry to
   update the baseline.
@@ -293,7 +293,7 @@ What kept it unmerged:
 - 2026-10-25: plan recorded. No code changes yet.
 - 2026-10-25: Step 1 landed (no library changes).
   - The catalog is now 100 shapes (was 81), including 19 variant shapes.
-  - Matrix: 3,200 rows, 290 supported (194 direct, 96 lifted), 15 variant rows
+  - Table: 3,200 rows, 290 supported (194 direct, 96 lifted), 15 variant rows
     supported; `shared`/`unique`/`external` + `alternative` cover
     `variant_value` and the leaf `value`.
   - Misses are grouped by rule: `take` 801, `decay` 527, `borrow` 484,
@@ -359,23 +359,23 @@ What kept it unmerged:
     family: `test_optional`/`std::optional`, `test_unique`/`std::unique_ptr`,
     `test_shared`/`std::shared_ptr`, and `test_variant`/`std::variant`. The
     built-in cross-product is unchanged, so the custom families add nine shapes
-    instead of multiplying the matrix.
-  - The matrix grows from 3,200 to 3,584 rows (112 shapes); the new supported
+    instead of multiplying the table.
+  - The table grows from 3,200 to 3,584 rows (112 shapes); the new supported
     family rows are 14 `test_optional`, 2 `test_shared`, 2 `test_unique`, and
     the custom variant shapes are correctly reported as unsupported request
     shapes. `std::variant` keeps its 15 supported rows.
-  - `type_matrix` and `type_behavior` include the custom wrapper header;
+  - `type_table` and `type_behavior` include the custom wrapper header;
     `type_behavior` adds identity helpers for the custom families. The static
     suite follows the same `SHAPES` catalog automatically.
   - `wrapper_properties` covers `test_variant` as well; its
     `alternative_type_traits` specialization makes `is_variant_type_v` true.
-  - Generated sizes grow from 5.4 MB to 6.0 MB for the matrix and 1.3 MB to 1.5
+  - Generated sizes grow from 5.4 MB to 6.0 MB for the table and 1.3 MB to 1.5
     MB for the runtime behavior suite; the library cost probe is unchanged.
   - Next: Step 6, contracts and a differential baseline.
 - 2026-10-25: Step 6 landed.
-  - `type_matrix` now writes `build/test/type-matrix.json`. The pinned
-    `test/baselines/model.json` has 3,584 matrix rows and 95 actual behavior
-    rows with construction/copy/move/destruction counts and result classes.
+  - `type_table` now writes `build/test/type-table.json`. The pinned
+    `test/baselines/model.json` has 3,584 table rows and 95 actual behavior rows
+    with construction/copy/move/destruction counts and result classes.
   - `dingo_model_baseline_test` compares after `dingo_model_test`; an undeclared
     difference fails and shows the update command. The declared change log
     starts empty at `test/baselines/model-changes.json`.
@@ -393,7 +393,7 @@ layer into the C++ probes and then the library.
 
 - [x] One shared C++ probe header: `test/support/model_probe.h` owns route-list
   matching, access checks, kind/retention lookup, direct support, and lifted
-  support. The matrix, behavior, route, and interface templates include it
+  support. The table, behavior, route, and interface templates include it
   instead of re-declaring the helpers.
 - [x] Derive `route_derivation.py` from a rule engine over wrapper properties
   and shape categories. The form scripts are gone; the engine selects the first
@@ -489,7 +489,7 @@ behavior tests write `build/test/behavior-outcomes.jsonl` with each executed
 case's counts and result; the two annotation negative tests record
 `exception:dingo::type_not_found_exception`. `report/baseline.py` now reads that
 report instead of the Python expectation table, and the pinned baseline grows to
-95 behavior rows. Generated behavior source, library behavior, and the matrix
+95 behavior rows. Generated behavior source, library behavior, and the table
 outcomes are unchanged apart from the report side effect.
 
 2026-10-25: per-binding resolution routes landed.

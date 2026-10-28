@@ -1,7 +1,7 @@
 # Coverage Model
 
-The space is large because the matrix multiplies independent concerns. The model
-should factor them instead of reproducing the matrix product.
+The space is large because the table multiplies independent concerns. The model
+should factor them instead of reproducing the table product.
 
 ## Operations
 
@@ -34,7 +34,7 @@ Do not build:
 operator x every storage form x every request shape x every binding
 ```
 
-That is the matrix's over-approximation. Factor into:
+That is the table's over-approximation. Factor into:
 
 1. **Atom coverage** — `resolve` over
    `(scope, storage, binding, request shape, traits, container configuration)`.
@@ -263,7 +263,7 @@ The allocator case asserts that bookkeeping allocation happened and that the row
 still resolves; the RTTI case asserts the configured `rtti_type` and the same
 row; the indexed cases assert lookup by key.
 `test/support/model_configuration.h` owns the traits so the probes do not depend
-on the matrix headers.
+on the table headers.
 
 ## Cycles
 
@@ -315,9 +315,9 @@ Coverage is complete when:
    collection uses element bindings, etc.);
 5. the report shows atom coverage and operator coverage separately.
 
-Coverage is **not** complete when every matrix row is reproduced. The matrix is
-a cross-product of these axes; the model's claim is a factorization plus a
-finite set of operator classes.
+Coverage is **not** complete when every table row is reproduced. The table is a
+cross-product of these axes; the model's claim is a factorization plus a finite
+set of operator classes.
 
 ## Consequences for the migration
 
@@ -331,6 +331,6 @@ finite set of operator classes.
   element request.
 - scenario/cyclical/composition families test composition shapes, not storage
   cross-products.
-- A matrix feature can be deleted when its **operator classes** are covered,
-  even if its row count is larger than the model count. The matrix row count is
-  not the completeness criterion.
+- A table feature can be deleted when its **operator classes** are covered, even
+  if its row count is larger than the model count. The table row count is not
+  the completeness criterion.

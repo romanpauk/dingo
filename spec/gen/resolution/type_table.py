@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 #
 
-"""Generate the exhaustive storage-form by request-shape matrix.
+"""Generate the exhaustive storage-form by request-shape table.
 
 The model owns the request-shape catalog and the storage-form product. Every
 form is checked against every shape through the real resolution kernel, and the
@@ -29,7 +29,7 @@ from spec.gen.shared.validation import validate_catalog
 
 # The base shape catalog is a leaf plus a chain of wrapper semantics. The
 # path model adds the supported shapes that the bounded depth-2 catalog does
-# not enumerate, so the compile-time matrix is the consumer of every supported
+# not enumerate, so the compile-time table is the consumer of every supported
 # path.
 from spec.model.grammar.shapes import SHAPES as BASE_SHAPES, Shape
 
@@ -150,9 +150,9 @@ def validate() -> None:
         raise ValueError("shape catalog contains duplicate names")
     rows = build_rows()
     if not rows:
-        raise ValueError("type matrix must not be empty")
+        raise ValueError("type table must not be empty")
     if len({row["path"] for row in rows}) != len(rows):
-        raise ValueError("type matrix contains duplicate forms")
+        raise ValueError("type table contains duplicate forms")
     for row in rows:
         for shape in SHAPES:
             if not row["reasons"][shape.name]:
@@ -163,7 +163,7 @@ def validate() -> None:
 
 def render(output: Path) -> str:
     validate()
-    return render_template("type_matrix.cpp.j2", rows=build_rows(), shapes=SHAPES)
+    return render_template("type_table.cpp.j2", rows=build_rows(), shapes=SHAPES)
 
 
 def main() -> None:

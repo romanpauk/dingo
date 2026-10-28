@@ -9,8 +9,8 @@
 from __future__ import annotations
 
 from spec.model.domain.cases import iter_cases, request_forms
-from spec.gen.resolution.type_matrix import SHAPES
-from spec.gen.resolution.trait_matrix import probe_shape, build_rows, render, validate
+from spec.gen.resolution.type_table import SHAPES
+from spec.gen.resolution.trait_table import probe_shape, build_rows, render, validate
 from spec.model.grammar.bindings import CONCRETE
 from spec.model.grammar.expr import leaf, lvalue_reference, pointer
 from spec.model.grammar.traits import (
@@ -39,7 +39,7 @@ def test_traits_are_a_bounded_pair() -> None:
     assert COPYABLE.cpp != MOVE_ONLY.cpp
 
 
-def test_matrix_is_complete_and_deterministic() -> None:
+def test_table_is_complete_and_deterministic() -> None:
     validate()
     first = build_rows()
     second = build_rows()
@@ -132,9 +132,9 @@ def test_cases_carry_traits() -> None:
     assert {case.traits for case in move_only} == {MOVE_ONLY}
 
 
-def test_rendered_matrix_asserts_both_traits() -> None:
+def test_rendered_table_asserts_both_traits() -> None:
     content = render(None)
-    assert "namespace trait_matrix" in content
+    assert "namespace trait_table" in content
     assert "struct tracked" in content
     assert "struct move_only_tracked" in content
     assert "tracked(const tracked &) = delete" not in content

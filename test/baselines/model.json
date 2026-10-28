@@ -2014,7 +2014,7 @@
       "scope": "unique"
     }
   },
-  "matrix": {
+  "types": {
     "external/alternative/array_lvalue_reference_const_value": {
       "direct": false,
       "lifted": false,

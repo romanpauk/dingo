@@ -8,7 +8,7 @@
 
 """Pin and compare model outcomes.
 
-The matrix probe writes one JSON line per scope/form/shape row. The behavior
+The type table probe writes one JSON line per scope/form/shape row. The behavior
 catalog contributes the expected request and construction/copy/move counts for
 every generated behavior case. Together they are a differential baseline: a
 change is allowed only when the baseline is updated with a declared reason.
@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 
-def read_matrix(path: Path) -> dict[str, dict[str, Any]]:
+def read_types(path: Path) -> dict[str, dict[str, Any]]:
     rows = {}
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip():
@@ -42,7 +42,7 @@ def read_matrix(path: Path) -> dict[str, dict[str, Any]]:
             "reason": str(row["reason"]),
         }
     if not rows:
-        raise ValueError(f"{path}: no matrix rows")
+        raise ValueError(f"{path}: no type-table rows")
     return rows
 
 
@@ -75,7 +75,7 @@ def read_behavior(path: Path) -> dict[str, dict[str, Any]]:
 
 
 def build_outcomes(
-    matrix: Path, behavior: Path | list[Path]
+    types: Path, behavior: Path | list[Path]
 ) -> dict[str, dict[str, dict[str, Any]]]:
     paths = behavior if isinstance(behavior, list) else [behavior]
     rows: dict[str, dict[str, Any]] = {}
@@ -84,7 +84,7 @@ def build_outcomes(
             if key in rows:
                 raise ValueError(f"duplicate behavior row {key} in {path}")
             rows[key] = row
-    return {"matrix": read_matrix(matrix), "behavior": rows}
+    return {"types": read_types(types), "behavior": rows}
 
 
 def diff_outcomes(
@@ -92,7 +92,7 @@ def diff_outcomes(
     current: dict[str, dict[str, dict[str, Any]]],
 ) -> list[str]:
     differences = []
-    for section in ("matrix", "behavior"):
+    for section in ("types", "behavior"):
         baseline_rows = baseline.get(section, {})
         current_rows = current.get(section, {})
         for key in sorted(set(baseline_rows) | set(current_rows)):
@@ -116,10 +116,10 @@ def write_json(path: Path, data: Any) -> None:
 
 
 def record(arguments: argparse.Namespace) -> int:
-    outcomes = build_outcomes(arguments.matrix, arguments.behavior)
+    outcomes = build_outcomes(arguments.types, arguments.behavior)
     write_json(arguments.out, outcomes)
     print(
-        f"recorded {len(outcomes['matrix'])} matrix rows and "
+        f"recorded {len(outcomes['types'])} type-table rows and "
         f"{len(outcomes['behavior'])} behavior rows"
     )
     return 0
@@ -134,7 +134,7 @@ def compare(
 
 def check(arguments: argparse.Namespace) -> int:
     baseline = json.loads(arguments.baseline.read_text(encoding="utf-8"))
-    current = build_outcomes(arguments.matrix, arguments.behavior)
+    current = build_outcomes(arguments.types, arguments.behavior)
     differences = compare(baseline, current)
     if not differences:
         print("model outcomes match the baseline")
@@ -147,7 +147,7 @@ def check(arguments: argparse.Namespace) -> int:
     print(
         "If this is intended, run:\n"
         "  python -m spec.report.baseline update "
-        f"--matrix {arguments.matrix} "
+        f"--types {arguments.types} "
         "--behavior <path> [--behavior <path> ...] "
         f"--baseline {arguments.baseline} "
         "--changes test/baselines/model-changes.json --reason \"...\"",
@@ -159,12 +159,12 @@ def check(arguments: argparse.Namespace) -> int:
 def update(arguments: argparse.Namespace) -> int:
     if not arguments.reason.strip():
         raise SystemExit("an update requires a non-empty --reason")
-    current = build_outcomes(arguments.matrix, arguments.behavior)
+    current = build_outcomes(arguments.types, arguments.behavior)
     if arguments.baseline.exists():
         baseline = json.loads(arguments.baseline.read_text(encoding="utf-8"))
         differences = compare(baseline, current)
     else:
-        differences = [f"+ {section}" for section in ("matrix", "behavior")]
+        differences = [f"+ {section}" for section in ("types", "behavior")]
     write_json(arguments.baseline, current)
     changes = []
     if arguments.changes.exists():
@@ -185,7 +185,7 @@ def main() -> int:
     subparsers = parser.add_subparsers(required=True)
 
     record_parser = subparsers.add_parser("record")
-    record_parser.add_argument("--matrix", type=Path, required=True)
+    record_parser.add_argument("--types", type=Path, required=True)
     record_parser.add_argument(
         "--behavior", type=Path, action="append", required=True
     )
@@ -193,7 +193,7 @@ def main() -> int:
     record_parser.set_defaults(handler=record)
 
     check_parser = subparsers.add_parser("check")
-    check_parser.add_argument("--matrix", type=Path, required=True)
+    check_parser.add_argument("--types", type=Path, required=True)
     check_parser.add_argument(
         "--behavior", type=Path, action="append", required=True
     )
@@ -201,7 +201,7 @@ def main() -> int:
     check_parser.set_defaults(handler=check)
 
     update_parser = subparsers.add_parser("update")
-    update_parser.add_argument("--matrix", type=Path, required=True)
+    update_parser.add_argument("--types", type=Path, required=True)
     update_parser.add_argument(
         "--behavior", type=Path, action="append", required=True
     )
