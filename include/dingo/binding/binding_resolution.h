@@ -498,11 +498,11 @@ DINGO_ALWAYS_INLINE resolved_address resolve_candidate(
 // The typed execution layer after selection: materialize the source, apply the
 // selected resolution, retain conversions, and produce an address or value.
 // Selection, storage ownership, and dispatch stay in the policy base.
-template <typename Policy> class binding_core : public Policy {
+template <typename Policy> class static_binding_core : public Policy {
 public:
   using storage_type = typename Policy::storage_type;
 
-  explicit binding_core(Policy policy) : Policy(std::move(policy)) {}
+  explicit static_binding_core(Policy policy) : Policy(std::move(policy)) {}
 
   template <typename Request, typename Resolution, typename Context>
   void *resolve_address(Context &context) {
@@ -545,20 +545,6 @@ public:
     };
     return this->with_value_source(this->scope, context, storage, activation,
                                    std::move(resolve));
-  }
-
-  template <typename... Resolutions, typename Context>
-  resolved_address
-  resolve_candidates(type_list<Resolutions...>, std::size_t index,
-                     type_descriptor requested_type, Context &context) {
-    auto activation = this->activation();
-    auto materialize = [&](auto &&source) -> resolved_address {
-      return resolve_candidate<storage_type>(
-          type_list<Resolutions...>{}, index, this->scope, activation, context,
-          std::forward<decltype(source)>(source), requested_type,
-          binding_registered_type<storage_type>());
-    };
-    return this->with_source(this->scope, context, std::move(materialize));
   }
 };
 

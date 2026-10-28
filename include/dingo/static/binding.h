@@ -401,7 +401,7 @@ struct static_binding_policy {
 
 template <typename State, typename Host, typename InterfaceBinding>
 struct static_binding_resolver
-    : binding_core<static_binding_policy<
+    : static_binding_core<static_binding_policy<
           State, Host, typename InterfaceBinding::binding_model_type>> {
   using binding_model_type = typename InterfaceBinding::binding_model_type;
   using interface_type = typename InterfaceBinding::interface_type;
@@ -409,7 +409,7 @@ struct static_binding_resolver
   using storage_type = typename binding_model_type::storage_type;
 
   using policy_type = static_binding_policy<State, Host, binding_model_type>;
-  using core_type = binding_core<policy_type>;
+  using core_type = static_binding_core<policy_type>;
 
   static_binding_resolver(State &state, Host &host, construction_scope scope)
       : core_type(policy_type{state, host, scope}) {}
@@ -466,7 +466,7 @@ template <typename T, typename BindingModel, typename State, typename Host,
 decltype(auto) evaluate_static_binding(construction_scope scope, State &state,
                                        Host &host, Context &context) {
   static_binding_policy<State, Host, BindingModel> policy{state, host, scope};
-  binding_core<decltype(policy)> core{policy};
+  static_binding_core<decltype(policy)> core{policy};
   return core.template resolve_value<T>(context);
 }
 

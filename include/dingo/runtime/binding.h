@@ -233,6 +233,7 @@ private:
         state().runtime(), scope, context, std::forward<Args>(args)...);
   }
 
+private:
   State state_;
 
   state_type &state() { return detail::state_ref(state_); }
@@ -295,22 +296,9 @@ private:
 #pragma warning(pop)
 #endif
 
-  struct runtime_binding_policy {
+  struct runtime_resolution_resolver {
     runtime_binding &binding;
     construction_scope scope;
-
-    using storage_type = Storage;
-
-    auto &slot() { return binding.state(); }
-
-    runtime_binding_policy &activation() { return *this; }
-
-    template <typename T, typename Context, typename Source>
-    decltype(auto) construct_conversion(construction_scope construction,
-                                        Context &context, Source &&source) {
-      return binding.template construct_conversion<T>(
-          construction, context, std::forward<Source>(source));
-    }
 
     template <typename T, typename Context, typename Source>
     decltype(auto) retain_conversion(Context &context, Source &&source) {
@@ -318,12 +306,28 @@ private:
           scope, context, std::forward<Source>(source));
     }
 
-    template <typename Context, typename Fn>
-    decltype(auto) with_source(construction_scope source_scope,
-                               Context &context, Fn &&fn) {
-      return binding.with_source(source_scope, context, std::forward<Fn>(fn));
+    template <typename T, typename Context, typename Source>
+    decltype(auto) construct_conversion(construction_scope construction,
+                                        Context &context, Source &&source) {
+      return binding.template construct_conversion<T>(
+          construction, context, std::forward<Source>(source));
     }
   };
+
+  template <typename... Resolutions, typename Context>
+  resolved_address
+  resolve_candidates(construction_scope scope, type_list<Resolutions...>,
+                     std::size_t index, type_descriptor requested_type,
+                     Context &context) {
+    runtime_resolution_resolver resolver{*this, scope};
+    auto materialize = [&](auto &&source) -> resolved_address {
+      return detail::resolve_candidate<Storage>(
+          type_list<Resolutions...>{}, index, scope, resolver, context,
+          std::forward<decltype(source)>(source), requested_type,
+          detail::binding_registered_type<Storage>());
+    };
+    return with_source(scope, context, std::move(materialize));
+  }
 
   void reset_conversion_artifacts() {
     conversion_cache_base::reset_conversions();
@@ -373,9 +377,9 @@ public:
   template <typename T, typename Context, typename Source>
   decltype(auto) retain_conversion(construction_scope scope, Context &context,
                                    Source &&source) {
-    runtime_binding_policy policy{*this, scope};
+    runtime_resolution_resolver resolver{*this, scope};
     return detail::retain_binding_conversion<T>(
-        scope, get_storage(), policy, context, std::forward<Source>(source));
+        scope, get_storage(), resolver, context, std::forward<Source>(source));
   }
 
 #ifdef _MSC_VER
@@ -405,11 +409,9 @@ public:
                 .what());
       }
 
-      runtime_binding_policy policy{binding, scope};
-      detail::binding_core<runtime_binding_policy> core{policy};
-      auto result =
-          core.resolve_candidates(request_resolutions{}, resolution_index,
-                                  request.requested_type, context);
+      auto result = binding.resolve_candidates(scope, request_resolutions{},
+                                               resolution_index,
+                                               request.requested_type, context);
       // Request caching is intentionally stricter than conversion caching and
       // is published with transaction rollback tracking.
       if constexpr (Storage::conversions::is_stable) {

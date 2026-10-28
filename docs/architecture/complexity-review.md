@@ -501,6 +501,15 @@ materialization preamble, and the retain decision are written once. The
 `source_lifetime` vocabulary that was removed as unused in step 1 now has its
 intended use.
 
+### Follow-up: binding core split
+
+`binding_core` exposed four methods: the runtime used one and the static path
+used three. It is now `static_binding_core` with the static three;
+`runtime_binding` owns `resolve_candidates` directly. The old
+`runtime_binding_policy` shell became a two-hook resolver that only carries the
+resolution scope into the operation templates. There is no shared core left to
+mislead.
+
 ## Non-Goals
 
 - No big-bang reimplementation. The transaction, storage, graph, and generated
