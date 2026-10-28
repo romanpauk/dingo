@@ -39,6 +39,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote
 
+DECLARATION_SPAN = re.compile(
+    r"^\s*(?:template\s*<[^;{}]*>\s*)?"
+    r"(?:struct|class|enum(?:\s*class)?|union|using)\s+([A-Za-z_]\w*)",
+    re.MULTILINE,
+)
+FUNCTION_SPAN = re.compile(
+    r"^(?:([A-Za-z_][\w:<>,\s\*&]*?)\b(\w+)\s*\([^;{}]*\)\s*(?:const\s*)?)\{",
+    re.MULTILINE,
+)
+VARIABLE_SPAN = re.compile(
+    r"^(?:template\s*<[^;{}]*>\s*)?(?:inline\s+|static\s+)*constexpr\s+"
+    r"[\w:<>,&\*\s]+?\b([A-Za-z_]\w*)\s*(?:=|\{)",
+    re.MULTILINE,
+)
+ENTRY_HEADERS = ("container.h", "runtime_container.h", "static_container.h")
+
 DECLARATION = re.compile(
     r"^\s*(?:template\s*<[^;{}]*>\s*)?"
     r"(?:struct|class|enum(?:\s+class)?|union|using)\s+([A-Za-z_]\w*)",
@@ -131,6 +147,7 @@ class Client:
         return json.loads(self.process.stdout.read(length))
 
     def open(self, path: Path) -> None:
+        path = path.resolve()
         if path in self.opened:
             return
         self.opened.add(path)
@@ -151,10 +168,80 @@ def uri(path: Path) -> str:
     return "file://" + quote(str(path))
 
 
+@dataclass(frozen=True)
+class Span:
+    name: str
+    start: int
+    end: int
+
+
+def spans(text: str) -> list[Span]:
+    """Declaration and namespace-scope function bodies with their offsets."""
+    rows: list[Span] = []
+    for match in DECLARATION_SPAN.finditer(text):
+        brace = text.find("{", match.end())
+        semicolon = text.find(";", match.end())
+        if brace == -1 or (semicolon != -1 and semicolon < brace):
+            rows.append(
+                Span(match.group(1), match.start(), semicolon + 1 if semicolon != -1 else len(text))
+            )
+            continue
+        depth = 0
+        end = brace
+        while end < len(text):
+            if text[end] == "{":
+                depth += 1
+            elif text[end] == "}":
+                depth -= 1
+                if depth == 0:
+                    end += 1
+                    break
+            end += 1
+        rows.append(Span(match.group(1), match.start(), end))
+    for match in VARIABLE_SPAN.finditer(text):
+        semicolon = text.find(";", match.end())
+        rows.append(
+            Span(match.group(1), match.start(), semicolon + 1 if semicolon != -1 else len(text))
+        )
+    for match in FUNCTION_SPAN.finditer(text):
+        brace = text.find("{", match.end() - 1)
+        depth = 0
+        end = brace
+        while end < len(text):
+            if text[end] == "{":
+                depth += 1
+            elif text[end] == "}":
+                depth -= 1
+                if depth == 0:
+                    end += 1
+                    break
+            end += 1
+        rows.append(Span(match.group(2), match.start(), end))
+    return sorted(rows, key=lambda span: span.start)
+
+
+def enclosing(spans_of_file: list[Span], offset: int) -> Span | None:
+    """The innermost span containing the offset."""
+    best: Span | None = None
+    for span in spans_of_file:
+        if span.start <= offset < span.end:
+            if best is None or (span.start >= best.start and span.end <= best.end):
+                best = span
+    return best
+
+
+def offset_of(text: str, line: int, character: int) -> int:
+    start = 0
+    for _ in range(line):
+        start = text.index("\n", start) + 1
+    return start + character
+
+
 def declarations(root: Path) -> list[Declaration]:
     rows: list[Declaration] = []
     seen: set[tuple[Path, str]] = set()
     for header in sorted(root.rglob("*.h")):
+        header = header.resolve()
         text = header.read_text(encoding="utf-8")
         for match in DECLARATION.finditer(text):
             name = match.group(1)
@@ -167,10 +254,26 @@ def declarations(root: Path) -> list[Declaration]:
                 continue
             seen.add((header, name))
             rows.append(Declaration(header, name, line, character))
+        for match in VARIABLE_SPAN.finditer(text):
+            name = match.group(1)
+            start = match.start(1)
+            if (header, name) in seen:
+                continue
+            seen.add((header, name))
+            rows.append(
+                Declaration(
+                    header,
+                    name,
+                    text.count("\n", 0, start),
+                    start - (text.rfind("\n", 0, start) + 1),
+                )
+            )
     return rows
 
 
-def references(client: Client, declaration: Declaration) -> int | None:
+def references(
+    client: Client, declaration: Declaration
+) -> list[dict[str, object]] | None:
     response = client.request(
         "textDocument/references",
         {
@@ -186,7 +289,13 @@ def references(client: Client, declaration: Declaration) -> int | None:
     if response is None or "result" not in response:
         return None
     result = response["result"]
-    return len(result) if isinstance(result, list) else None
+    return result if isinstance(result, list) else None
+
+
+def path_of(uri_text: str) -> Path:
+    from urllib.parse import unquote
+
+    return Path(unquote(uri_text.removeprefix("file://")))
 
 
 def main() -> None:
@@ -230,14 +339,23 @@ def main() -> None:
 
     unreferenced: list[Declaration] = []
     unknown = 0
+
+    def is_root_file(path: Path) -> bool:
+        try:
+            relative = path.resolve().relative_to(repository)
+        except ValueError:
+            return False
+        if relative.parts[0] in {"test", "examples"}:
+            return True
+        return relative.parts[0] == "include" and path.name in ENTRY_HEADERS
+
     for index, declaration in enumerate(rows, start=1):
-        count = references(client, declaration)
-        if count is None:
+        locations = references(client, declaration)
+        if locations is None:
             unknown += 1
-        elif count <= 1:
+            continue
+        if len(locations) <= 1:
             unreferenced.append(declaration)
-            if arguments.show_live:
-                print(f"0 {declaration.path}:{declaration.line} {declaration.name}")
         if index % 100 == 0:
             print(f"# {index}/{len(rows)}", file=sys.stderr)
     client.close()
@@ -247,12 +365,12 @@ def main() -> None:
         print("| header | declaration |")
         print("| --- | --- |")
         for declaration in unreferenced:
-            path = declaration.path.as_posix()
             try:
                 path = str(declaration.path.relative_to(repository))
             except ValueError:
-                pass
+                path = declaration.path.as_posix()
             print(f"| `{path}` | `{declaration.name}` |")
+
     if unknown:
         print(f"\n{unknown} declarations could not be queried", file=sys.stderr)
 
