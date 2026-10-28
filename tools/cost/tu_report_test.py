@@ -55,6 +55,18 @@ def test_rewrite_output_appends_a_missing_output(tmp_path: Path) -> None:
     ]
 
 
+def test_rewrite_output_keeps_escaped_quotes_in_arguments(tmp_path: Path) -> None:
+    command = 'c++ -DDEFINE=\\"value\\" -c source.cpp'
+    assert rewrite_output(command, tmp_path / "unit.o") == [
+        "c++",
+        '-DDEFINE="value"',
+        "-c",
+        "source.cpp",
+        "-o",
+        str(tmp_path / "unit.o"),
+    ]
+
+
 def test_summarize_reports_total_and_extremes() -> None:
     rows = [
         {"seconds_min": 1.0, "object_size": 100},

@@ -26,10 +26,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import statistics
 import subprocess
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -52,7 +54,7 @@ def select(
 
 def rewrite_output(command: str, output: Path) -> list[str]:
     """Return the command's argument list with its object output redirected."""
-    arguments = command.split()
+    arguments = shlex.split(command)
     try:
         index = arguments.index("-o")
     except ValueError:
@@ -131,10 +133,21 @@ def run(arguments: argparse.Namespace) -> int:
     entries = select(load_commands(compile_commands), arguments.filter)
     if not entries:
         raise SystemExit(f"no translation units matched {arguments.filter}")
-    rows = [
-        measure(entry, arguments.repetitions, compile_commands.parent)
-        for entry in entries
-    ]
+    directory = compile_commands.parent
+    if arguments.jobs > 1:
+        # Object sizes stay deterministic; the timings are contended and only
+        # useful as a rough throughput trend.
+        with ThreadPoolExecutor(max_workers=arguments.jobs) as executor:
+            rows = list(
+                executor.map(
+                    lambda entry: measure(entry, arguments.repetitions, directory),
+                    entries,
+                )
+            )
+    else:
+        rows = [
+            measure(entry, arguments.repetitions, directory) for entry in entries
+        ]
     report(rows, arguments.limit)
     data = {"summary": summarize(rows), "translation_units": rows}
     if arguments.out is not None:
@@ -160,6 +173,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--repetitions", type=int, default=1, help="compile each unit N times"
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        help="compile N units concurrently (timings become contended)",
     )
     parser.add_argument(
         "--limit", type=int, default=20, help="rows to print from the top"
