@@ -235,15 +235,17 @@ private:
         scope, context, detail::binding_collection_append{}, std::move(key));
   }
 
-  // The request itself if its binding publishes it, otherwise fallback.
-  template <typename Request, typename R, typename Selection, typename Fallback>
-  R resolve_exact_or(Selection, construction_scope scope,
-                     runtime_context_type &context, Fallback &&fallback) {
+  // The request itself if its binding publishes it, otherwise its normalized
+  // value.
+  template <typename Request, typename R, typename Selection>
+  R resolve_exact_or_normalized(Selection, construction_scope scope,
+                                runtime_context_type &context) {
     try {
       return resolve<Request, R>(scope, context, *this,
                                  detail::no_lookup_key());
     } catch (const type_not_convertible_exception &) {
-      return fallback(0);
+      return detail::request_resolution::resolve_normalized<Request, R>(
+          *this, scope, context);
     }
   }
 

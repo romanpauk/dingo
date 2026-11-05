@@ -33,21 +33,6 @@
 namespace dingo {
 namespace detail {
 
-template <typename Context> struct retained_frame_scope {
-  explicit retained_frame_scope(Context &context) : context_(context) {
-    context_.push_frame(&frame_);
-  }
-
-  ~retained_frame_scope() { context_.pop_frame(); }
-
-  retained_frame_scope(const retained_frame_scope &) = delete;
-  retained_frame_scope &operator=(const retained_frame_scope &) = delete;
-
-private:
-  Context &context_;
-  typename Context::frame_type frame_;
-};
-
 template <typename T> T convert_resolved_binding(resolved_address result) {
   using result_type = std::remove_reference_t<T>;
   using value_type = std::remove_cv_t<result_type>;

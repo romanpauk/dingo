@@ -7,123 +7,84 @@
 
 #pragma once
 
+#include <dingo/base/config.h>
 #include <dingo/context/context_base.h>
-#include <dingo/static/graph.h>
+#include <dingo/memory/arena_allocator.h>
+#include <dingo/memory/object_store.h>
 
-#include <array>
-#include <cassert>
 #include <cstddef>
 #include <new>
+#include <type_traits>
+#include <utility>
 
 namespace dingo {
 
-template <typename StaticRegistry> class static_context_backend {
-  using execution_traits =
-      detail::basic_static_execution_traits<StaticRegistry>;
-  static constexpr std::size_t frame_capacity_ =
-      execution_traits::max_retained_frame_depth + 1;
-  static constexpr std::size_t destructible_capacity_ =
-      execution_traits::max_destructible_slots;
-  static constexpr std::size_t temporary_slot_capacity_ =
-      execution_traits::max_temporary_slots;
-  static constexpr std::size_t temporary_slot_size_ =
-      execution_traits::max_temporary_size == 0
-          ? 1
-          : execution_traits::max_temporary_size;
-  static constexpr std::size_t temporary_slot_align_ =
-      execution_traits::max_temporary_align == 0
-          ? alignof(std::max_align_t)
-          : execution_traits::max_temporary_align;
+// The memory of a static resolution: the instances it constructs live until
+// the context ends. Nothing outlives the context, so there is no transaction to
+// roll back. A trivially destructible instance that fits is placed in a buffer
+// of the context, which a resolution compiles away; any other lives in an
+// arena made on its first use.
+class static_context_backend {
+  using arena_type = inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE>;
+  static constexpr std::size_t buffer_size = DINGO_CONTEXT_ARENA_BUFFER_SIZE;
 
 public:
   static constexpr bool is_transactional = false;
 
-  // Retained resolutions construct a local frame of this type, sized for the
-  // whole context graph, so a registry resolving through a context whose
-  // bindings extend its own (a static parent under a child) pushes a frame of
-  // exactly the type the context stores.
-  using frame_type =
-      detail::static_context_frame<destructible_capacity_,
-                                   temporary_slot_capacity_,
-                                   temporary_slot_size_, temporary_slot_align_>;
-
-  static_context_backend() { frames_[0] = &frame_; }
-
+  static_context_backend() = default;
   ~static_context_backend() {
-    while (frame_count_ != 0) {
-      frames_[--frame_count_]->reset();
+    if (arena_ != nullptr) {
+      release();
     }
   }
 
   static_context_backend(const static_context_backend &) = delete;
   static_context_backend &operator=(const static_context_backend &) = delete;
 
-  // Nothing a static resolution constructs outlives its context, so there is
-  // no transaction to roll back.
   void on_rollback(void (*)(void *, void *) noexcept, void *,
                    void * = nullptr) noexcept {}
 
   void add_runtime_destructor(void *, void (*)(void *) noexcept) noexcept {}
 
-  void push_frame(frame_type *frame) {
-    assert(frame_count_ < frames_.size());
-    frames_[frame_count_++] = frame;
-  }
-
-  void pop_frame() {
-    assert(frame_count_ != 0);
-    --frame_count_;
-  }
-
 protected:
   template <typename T, typename ConstructFn>
   T &construct_storage(construction_scope, ConstructFn &&construct_fn) {
-    auto *instance = allocate_temporary_storage<T>();
-    std::forward<ConstructFn>(construct_fn)(instance);
-    if constexpr (!std::is_trivially_destructible_v<T>) {
-      register_destructor(instance);
+    if constexpr (std::is_trivially_destructible_v<T> &&
+                  sizeof(T) <= buffer_size &&
+                  alignof(T) <= alignof(std::max_align_t)) {
+      const std::size_t offset = (used_ + alignof(T) - 1) & ~(alignof(T) - 1);
+      if (offset + sizeof(T) <= buffer_size) {
+        used_ = offset + sizeof(T);
+        void *ptr = buffer_ + offset;
+        std::forward<ConstructFn>(construct_fn)(ptr);
+        return *std::launder(static_cast<T *>(ptr));
+      }
     }
-    return *instance;
+    return construct_in_arena<T>(std::forward<ConstructFn>(construct_fn));
   }
 
 private:
-  template <typename T> T *allocate_temporary_storage() {
-    static_assert(sizeof(T) <= temporary_slot_size_,
-                  "static_context temporary size must fit the compile-time "
-                  "temporary slot bound");
-    static_assert(alignof(T) <= temporary_slot_align_,
-                  "static_context temporary alignment must fit the "
-                  "compile-time temporary slot bound");
-    static_assert(temporary_slot_capacity_ != 0,
-                  "static_context requires at least one compile-time "
-                  "temporary slot for this resolution path");
-
-    auto *fixed = active_frame().template try_allocate_temporary<T>();
-    assert(fixed != nullptr);
-    return fixed;
+  template <typename T, typename ConstructFn>
+  DINGO_NOINLINE T &construct_in_arena(ConstructFn &&construct_fn) {
+    if (arena_ == nullptr) {
+      arena_ = new (&arena_storage_) arena_type();
+    }
+    return store_.template construct_at<T>(
+        *arena_, std::forward<ConstructFn>(construct_fn));
   }
 
-  auto &active_frame() {
-    assert(frame_count_ != 0);
-    return *frames_[frame_count_ - 1];
+  DINGO_NOINLINE void release() noexcept {
+    store_.destroy(*arena_);
+    arena_->~arena_type();
   }
 
-  template <typename T> void register_destructor(T *instance) {
-    static_assert(!std::is_trivially_destructible_v<T>);
-    active_frame().add_destructor(instance, &destructor<T>);
-  }
-
-  template <typename T> static void destructor(void *ptr) {
-    reinterpret_cast<T *>(ptr)->~T();
-  }
-
-  std::array<frame_type *, frame_capacity_> frames_{};
-  std::size_t frame_count_ = 1;
-  frame_type frame_;
+  alignas(std::max_align_t) unsigned char buffer_[buffer_size];
+  std::size_t used_ = 0;
+  alignas(arena_type) unsigned char arena_storage_[sizeof(arena_type)];
+  arena_type *arena_ = nullptr;
+  detail::object_store<arena<>> store_;
 };
 
-template <typename StaticRegistry>
-using static_context =
-    resolution_context<static_context_backend<StaticRegistry>>;
+using static_context = resolution_context<static_context_backend>;
 
 } // namespace dingo

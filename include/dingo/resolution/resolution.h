@@ -19,14 +19,6 @@ struct type_resolution;
 template <typename Operation>
 using operation_cache_types_t = typename Operation::cache_types;
 
-template <typename Operation, typename Storage>
-using operation_temporary_types_t =
-    typename Operation::template temporary_types<Storage>;
-
-template <typename Operation>
-inline constexpr bool operation_requires_source_retention_v =
-    Operation::requires_source_retention;
-
 template <typename Source, typename Target,
           bool SourcePointer = std::is_pointer_v<std::remove_cv_t<Source>>,
           bool TargetPointer = std::is_pointer_v<std::remove_cv_t<Target>>>
@@ -92,17 +84,5 @@ template <typename Resolutions, typename Storage>
 using resolution_cache_types_t =
     typename resolution_cache_types<Resolutions, Storage>::type;
 
-template <typename Resolutions, typename Storage>
-struct resolution_temporary_types;
-
-template <typename Storage, typename... Resolutions>
-struct resolution_temporary_types<type_list<Resolutions...>, Storage> {
-  using type = type_list_unique_t<type_list_cat_t<operation_temporary_types_t<
-      typename Resolutions::operation, Storage>...>>;
-};
-
-template <typename Resolutions, typename Storage>
-using resolution_temporary_types_t =
-    typename resolution_temporary_types<Resolutions, Storage>::type;
 } // namespace detail
 } // namespace dingo

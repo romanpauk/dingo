@@ -92,8 +92,8 @@ struct is_constant_count<std::integral_constant<std::size_t, Count>>
 //   requests the host does not bind
 // - count_collection<R>(key) and construct_request_collection<R>(scope,
 //   context, key), for hosts that construct collections
-// - resolve_exact_or<Request, R>(selection, scope, context, fallback): the
-//   request itself if its binding publishes it, otherwise fallback
+// - resolve_exact_or_normalized<Request, R>(selection, scope, context): the
+//   request itself if its binding publishes it, otherwise resolve_normalized
 //
 // The origin of a request is the container it entered through; it answers the
 // requests that no container of the chain binds.
@@ -152,60 +152,44 @@ struct request_resolution {
 
   // construct<T>() of a container. A bound type resolves, as its normalized
   // value when its binding does not publish the request itself; an unbound
-  // type is constructed by the factory.
+  // type is constructed by the factory. The paths are separate functions: the
+  // one a static selection does not take is never instantiated.
   template <typename Request, typename R, typename Host, typename Context,
             typename Factory>
-  static R construct(Host &host, construction_scope scope, Context &context,
-                     Factory &factory) {
-    using user_type = typename Request::user_type;
+  DINGO_ALWAYS_INLINE static R construct(Host &host, construction_scope scope,
+                                         Context &context, Factory &factory) {
     using value_type = typename Request::value_type;
-    using normalized = request_type<value_type>;
-    auto key = no_lookup_key();
-    auto unbound = [&](auto) -> R {
-      if constexpr (construct_factory_request_v<user_type>) {
-        auto type_guard = context.template track_type<value_type>();
-        return factory.template construct<R>(scope, context, host);
-      } else if constexpr (rvalue_request_requires_explicit_conversion_v<
-                               user_type>) {
-        throw_missing_rvalue_conversion<user_type>(false, context);
-      } else {
-        return resolve<Request, R>(host, scope, context, host, key);
-      }
-    };
     if constexpr (!std::is_same_v<Factory, constructor<value_type>>) {
-      return unbound(0);
+      return construct_unbound<Request, R>(host, scope, context, factory);
     } else {
+      auto key = no_lookup_key();
       auto exact = host.template select_request<Request>(key);
-      auto value = host.template select_request<normalized>(key);
-      auto bound = [&](auto) -> R {
-        if constexpr (rvalue_request_requires_explicit_conversion_v<
-                          user_type>) {
-          throw_missing_rvalue_conversion<user_type>(is_bound(value), context);
-        } else if constexpr (construct_normalized_request_v<user_type>) {
-          return host.template resolve_exact_or<Request, R>(
-              exact, scope, context, [&](auto) -> R {
-                auto &&instance =
-                    resolve<normalized, typename normalized::lookup_type>(
-                        host, scope, context, host, key);
-                return type_traits<std::decay_t<user_type>>::make(
-                    std::forward<decltype(instance)>(instance));
-              });
-        } else {
-          return resolve<Request, R>(host, scope, context, host, key);
-        }
-      };
+      auto value = host.template select_request<request_type<value_type>>(key);
       if constexpr (is_runtime_binding_selection<decltype(exact)>::value) {
         if (is_bound(exact) || is_bound(value)) {
-          return bound(0);
+          return construct_bound<Request, R>(host, exact, is_bound(value),
+                                             scope, context);
         }
-        return unbound(0);
+        return construct_unbound<Request, R>(host, scope, context, factory);
       } else if constexpr (decltype(is_bound(exact))::value ||
                            decltype(is_bound(value))::value) {
-        return bound(0);
+        return construct_bound<Request, R>(host, exact, is_bound(value), scope,
+                                           context);
       } else {
-        return unbound(0);
+        return construct_unbound<Request, R>(host, scope, context, factory);
       }
     }
+  }
+
+  // The normalized value of a request, made into the requested wrapper.
+  template <typename Request, typename R, typename Host, typename Context>
+  static R resolve_normalized(Host &host, construction_scope scope,
+                              Context &context) {
+    using normalized = request_type<typename Request::value_type>;
+    auto &&instance = resolve<normalized, typename normalized::lookup_type>(
+        host, scope, context, host, no_lookup_key());
+    return type_traits<std::decay_t<typename Request::user_type>>::make(
+        std::forward<decltype(instance)>(instance));
   }
 
   // A request that no container of the chain binds. A collection is
@@ -238,6 +222,38 @@ struct request_resolution {
   }
 
 private:
+  template <typename Request, typename R, typename Host, typename Selection,
+            typename Context>
+  static R construct_bound(Host &host, Selection &exact, bool value_bound,
+                           construction_scope scope, Context &context) {
+    using user_type = typename Request::user_type;
+    if constexpr (rvalue_request_requires_explicit_conversion_v<user_type>) {
+      throw_missing_rvalue_conversion<user_type>(value_bound, context);
+    } else if constexpr (construct_normalized_request_v<user_type>) {
+      return host.template resolve_exact_or_normalized<Request, R>(exact, scope,
+                                                                   context);
+    } else {
+      return resolve<Request, R>(host, scope, context, host, no_lookup_key());
+    }
+  }
+
+  template <typename Request, typename R, typename Host, typename Context,
+            typename Factory>
+  static R construct_unbound(Host &host, construction_scope scope,
+                             Context &context, Factory &factory) {
+    using user_type = typename Request::user_type;
+    if constexpr (construct_factory_request_v<user_type>) {
+      auto type_guard =
+          context.template track_type<typename Request::value_type>();
+      return factory.template construct<R>(scope, context, host);
+    } else if constexpr (rvalue_request_requires_explicit_conversion_v<
+                             user_type>) {
+      throw_missing_rvalue_conversion<user_type>(false, context);
+    } else {
+      return resolve<Request, R>(host, scope, context, host, no_lookup_key());
+    }
+  }
+
   template <typename Request, typename R, bool Collection, typename Host,
             typename Context, typename Origin, typename LookupKey>
   static R resolve_unbound(Host &host, construction_scope scope,
@@ -342,7 +358,7 @@ public:
 
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
             typename R = request_result_t<T, true>>
-  R construct(Factory factory = Factory()) {
+  DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {
     return self().with_context([&](auto &context) -> R {
       return request_resolution::construct<request_type<T>, R>(
           self(), ephemeral_scope, context, factory);

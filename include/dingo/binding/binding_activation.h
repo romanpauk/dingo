@@ -310,9 +310,8 @@ template <typename Cell, typename Dependencies> struct binding_activation {
   // Materializes the storage and passes its source to fn.
   //
   // An address request (an lvalue reference or a pointer) of a storage that
-  // yields a value places the value in the context. A static context keeps a
-  // retained source in a frame of its own.
-  template <typename Request, typename Operation, typename Context, typename Fn>
+  // yields a value places the value in the context.
+  template <typename Request, typename Context, typename Fn>
   decltype(auto) with_source(Context &context, Fn &&fn) {
     auto &storage = cell.storage();
     [[maybe_unused]] auto guard = materialization_traits::template make_guard<
@@ -331,17 +330,6 @@ template <typename Cell, typename Dependencies> struct binding_activation {
       auto source = lvalue_source<source_type>(value);
       return std::forward<Fn>(fn)(source);
     } else {
-      constexpr bool retains =
-          operation_requires_source_retention_v<Operation> &&
-          !std::is_same_v<std::remove_cv_t<Context>, no_dependency_context>;
-      if constexpr (retains) {
-        if (materialization_traits::retains_source(storage)) {
-          retained_frame_scope<Context> frame_scope(context);
-          return std::forward<Fn>(fn)(
-              materialization_traits::materialize_source(
-                  persistent_scope, context, storage, dependencies));
-        }
-      }
       return std::forward<Fn>(fn)(materialization_traits::materialize_source(
           scope, context, storage, dependencies));
     }
@@ -378,26 +366,24 @@ template <typename Cell, typename Dependencies> struct binding_activation {
   // chain.
   template <typename Request, typename Resolution, typename Context>
   decltype(auto) resolve_request_address(Context &context) {
-    return with_source<Request, typename Resolution::operation>(
-        context, [&](auto &&source) {
-          return resolve_address<Resolution>(
-              context, std::forward<decltype(source)>(source),
-              describe_type<Request>());
-        });
+    return with_source<Request>(context, [&](auto &&source) {
+      return resolve_address<Resolution>(context,
+                                         std::forward<decltype(source)>(source),
+                                         describe_type<Request>());
+    });
   }
 
   // Passes the instance of a resolution selected at compile time to fn.
   template <typename Request, typename Resolution, typename Context,
             typename Fn>
   decltype(auto) consume_request(Context &context, Fn &&fn) {
-    return with_source<Request, typename Resolution::operation>(
-        context, [&](auto &&source) -> decltype(auto) {
-          auto &&instance =
-              apply<Resolution>(context, std::forward<decltype(source)>(source),
-                                describe_type<Request>());
-          return consume_resolved_binding<Request>(
-              std::forward<decltype(instance)>(instance), std::forward<Fn>(fn));
-        });
+    return with_source<Request>(context, [&](auto &&source) -> decltype(auto) {
+      auto &&instance =
+          apply<Resolution>(context, std::forward<decltype(source)>(source),
+                            describe_type<Request>());
+      return consume_resolved_binding<Request>(
+          std::forward<decltype(instance)>(instance), std::forward<Fn>(fn));
+    });
   }
 
 private:

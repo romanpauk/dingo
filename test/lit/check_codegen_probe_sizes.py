@@ -18,6 +18,7 @@ PROBE_LIMITS = {
     },
     "probe_static_resolution_shared_config": {
         "default": 0x90,
+        "clang": 0xc8,
         "clang_arm64": 0xd0,
         "gcc14": 0xB0,
         "gcc14_arm64": 0xD0,

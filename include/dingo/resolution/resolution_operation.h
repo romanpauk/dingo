@@ -59,35 +59,10 @@ Target convert_type(Source &&source) {
   return convert_type<Target>(std::forward<Source>(source), conversion{});
 }
 
-template <typename T>
-using resolution_object_t = std::remove_cv_t<
-    std::conditional_t<std::is_pointer_v<std::remove_reference_t<T>>,
-                       std::remove_pointer_t<std::remove_reference_t<T>>,
-                       std::remove_reference_t<T>>>;
-
 template <typename Target, typename Source, typename Conversion>
 struct type_resolution {
-private:
-  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
-
-  template <typename Storage>
-  using stored_type =
-      std::remove_cv_t<std::remove_reference_t<typename Storage::type>>;
-
-public:
   using source_type = Source;
   using cache_types = typename Conversion::cache_types;
-
-  template <typename Storage>
-  using temporary_types =
-      std::conditional_t<!Storage::conversions::is_stable &&
-                             !std::is_reference_v<Target> &&
-                             !std::is_pointer_v<Target> &&
-                             !std::is_same_v<target_type, stored_type<Storage>>,
-                         type_list<target_type>, type_list<>>;
-
-  static constexpr bool requires_source_retention =
-      !std::is_same_v<resolution_object_t<Target>, resolution_object_t<Source>>;
 
   template <typename Storage, typename Resolver, typename Context,
             typename MaterializedSource>

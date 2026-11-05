@@ -189,7 +189,7 @@ private:
                 typename state_type::cell_type,
                 std::remove_reference_t<decltype(container)> &>;
             activation_type activation{state.cell(), container, scope};
-            return activation.template with_source<void, void>(
+            return activation.template with_source<void>(
                 context, [&](auto &&source) -> resolved_address {
                   return detail::resolve_indexed_address(
                       activation, context,

@@ -35,66 +35,6 @@ template <typename T>
 inline constexpr bool is_runtime_context_v =
     is_runtime_context<std::remove_cv_t<std::remove_reference_t<T>>>::value;
 
-struct context_destructible {
-  void *instance;
-  void (*dtor)(void *);
-};
-
-template <std::size_t DestructibleCapacity,
-          std::size_t TemporarySlotCapacity = 0,
-          std::size_t TemporarySlotSize = 1,
-          std::size_t TemporarySlotAlign = alignof(std::max_align_t)>
-struct static_context_frame {
-  static constexpr std::size_t destructible_capacity_ = DestructibleCapacity;
-  static constexpr std::size_t temporary_slot_capacity_ = TemporarySlotCapacity;
-  static constexpr std::size_t temporary_storage_capacity_ =
-      temporary_slot_capacity_ == 0 ? 1 : temporary_slot_capacity_;
-
-  static_context_frame() = default;
-  ~static_context_frame() { reset(); }
-
-  static_context_frame(const static_context_frame &) = delete;
-  static_context_frame &operator=(const static_context_frame &) = delete;
-
-  void reset() {
-    while (destructible_count_ != 0) {
-      auto &destructible = destructibles_[--destructible_count_];
-      destructible.dtor(destructible.instance);
-    }
-    temporary_count_ = 0;
-  }
-
-  void add_destructor(void *instance, void (*dtor)(void *)) {
-    assert(destructible_count_ < destructible_capacity_);
-    destructibles_[destructible_count_++] = {instance, dtor};
-  }
-
-  void *try_allocate_temporary(std::size_t size, std::size_t alignment) {
-    if constexpr (temporary_slot_capacity_ == 0) {
-      return nullptr;
-    } else {
-      if (size > TemporarySlotSize || alignment > TemporarySlotAlign) {
-        return nullptr;
-      }
-      if (temporary_count_ >= temporary_slot_capacity_) {
-        return nullptr;
-      }
-      return &temporary_slots_[temporary_count_++];
-    }
-  }
-
-  template <typename T> T *try_allocate_temporary() {
-    return reinterpret_cast<T *>(try_allocate_temporary(sizeof(T), alignof(T)));
-  }
-
-  std::array<context_destructible, destructible_capacity_> destructibles_{};
-  std::size_t destructible_count_ = 0;
-  std::array<aligned_storage_t<TemporarySlotSize, TemporarySlotAlign>,
-             temporary_storage_capacity_>
-      temporary_slots_{};
-  std::size_t temporary_count_ = 0;
-};
-
 class context_path_state {
 public:
   template <typename T> detail::resolving_frame track_type();

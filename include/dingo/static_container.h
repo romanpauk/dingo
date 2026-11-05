@@ -46,43 +46,6 @@ namespace detail {
 
 struct static_container_no_dependency_diagnostics {};
 
-template <typename... Bindings> struct static_bindings_cat;
-
-template <> struct static_bindings_cat<> {
-  using type = static_bindings<>;
-};
-
-template <typename... Registrations>
-struct static_bindings_cat<static_bindings<Registrations...>> {
-  using type = static_bindings<Registrations...>;
-};
-
-template <typename... FirstRegistrations, typename... SecondRegistrations,
-          typename... Tail>
-struct static_bindings_cat<static_bindings<FirstRegistrations...>,
-                           static_bindings<SecondRegistrations...>, Tail...>
-    : static_bindings_cat<
-          static_bindings<FirstRegistrations..., SecondRegistrations...>,
-          Tail...> {};
-
-template <typename... Bindings>
-using static_bindings_cat_t = typename static_bindings_cat<Bindings...>::type;
-
-template <typename Container, typename = void>
-struct static_container_context_bindings {
-  using type = static_bindings<>;
-};
-
-template <typename Container>
-struct static_container_context_bindings<
-    Container, std::void_t<typename Container::context_static_bindings_type>> {
-  using type = typename Container::context_static_bindings_type;
-};
-
-template <typename Container>
-using static_container_context_bindings_t =
-    typename static_container_context_bindings<Container>::type;
-
 template <typename StaticRegistry, bool HasParent>
 struct static_container_dependency_diagnostics_base;
 
@@ -112,16 +75,13 @@ class static_container_impl<static_bindings<Registrations...>, ParentContainer,
           static_bindings<Registrations...>, !std::is_void_v<ParentContainer>> {
 public:
   using static_bindings_type = static_bindings<Registrations...>;
-  using context_static_bindings_type = static_bindings_cat_t<
-      static_bindings_type,
-      static_container_context_bindings_t<ParentContainer>>;
 
 private:
   static constexpr bool has_parent_v = !std::is_void_v<ParentContainer>;
-  using graph_type_ = graph_analysis<static_bindings_type, has_parent_v>;
+  using graph_type_ = graph_analysis<static_bindings_type>;
   using parent_container_type = container_implementation_t<ParentContainer>;
   using storage_type = static_binding_storage<Registrations...>;
-  using context_type = static_context<context_static_bindings_type>;
+  using context_type = static_context;
   using index_entries_ = detail::normalize_lookup_definitions_t<
       detail::container_lookup_definition_type_t<ContainerTraits>>;
 
@@ -257,7 +217,8 @@ public:
     }
   }
 
-  template <typename Fn> decltype(auto) with_context(Fn &&fn) {
+  template <typename Fn>
+  DINGO_ALWAYS_INLINE decltype(auto) with_context(Fn &&fn) {
     context_type context;
     return std::forward<Fn>(fn)(context);
   }
@@ -304,7 +265,7 @@ private:
   friend class container_interface<static_container_impl>;
 
   template <typename Request, typename R, typename LookupKey>
-  R resolve_entry(LookupKey key) {
+  DINGO_ALWAYS_INLINE R resolve_entry(LookupKey key) {
     static_assert(detail::is_static_lookup_key_v<LookupKey>,
                   "static_container fixed runtime-key request requires "
                   "dingo::key_type<Key, Value>");
@@ -320,11 +281,11 @@ private:
     }
   }
 
-  // The request itself if its binding publishes it, otherwise fallback.
-  template <typename Request, typename R, typename Selection, typename Context,
-            typename Fallback>
-  R resolve_exact_or(Selection, construction_scope scope, Context &context,
-                     Fallback &&fallback) {
+  // The request itself if its binding publishes it, otherwise its normalized
+  // value.
+  template <typename Request, typename R, typename Selection, typename Context>
+  R resolve_exact_or_normalized(Selection, construction_scope scope,
+                                Context &context) {
     constexpr bool exact = [] {
       if constexpr (Selection::status == binding_status::found) {
         return binding_supports_request_v<typename Request::user_type,
@@ -337,7 +298,8 @@ private:
       return request_resolution::resolve<Request, R>(*this, scope, context,
                                                      *this, no_lookup_key());
     } else {
-      return fallback(0);
+      return request_resolution::resolve_normalized<Request, R>(*this, scope,
+                                                                context);
     }
   }
 
