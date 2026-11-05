@@ -129,7 +129,7 @@ struct runtime_domain_dependency {
   int value;
 };
 
-struct runtime_domain_traits : dynamic_container_traits {
+struct runtime_domain_traits : runtime_container_traits {
   using lookup_definition_type = lookups<base<many, ordered>>;
 };
 
@@ -151,7 +151,7 @@ struct runtime_domain_second_service {
 
 struct runtime_domain_retry_service {};
 
-struct runtime_domain_array_traits : dynamic_container_traits {
+struct runtime_domain_array_traits : runtime_container_traits {
   using lookup_definition_type = lookups<
       associative<std::size_t, runtime_domain_dependency, one, array<1>>>;
 };
@@ -190,7 +190,7 @@ struct runtime_domain_typed_dependency {
 
 struct runtime_domain_typed_key {};
 
-struct runtime_domain_collection_traits : dynamic_container_traits {
+struct runtime_domain_collection_traits : runtime_container_traits {
   using lookup_definition_type = lookups<
       associative<std::size_t, runtime_domain_associative_dependency, many,
                   ordered>,

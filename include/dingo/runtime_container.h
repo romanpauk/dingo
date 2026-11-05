@@ -24,11 +24,11 @@ namespace dingo {
 // The runtime container. Registered bindings, registration containers and
 // child containers point back at the resolve front-end, so it lives at a
 // stable heap address and runtime_container moves by transferring ownership.
-template <typename ContainerTraits = dynamic_container_traits,
+template <typename ContainerTraits = runtime_container_traits,
           typename Allocator = typename ContainerTraits::allocator_type,
           typename ParentContainer = void>
 class runtime_container {
-  static_assert(detail::is_runtime_container_traits_v<ContainerTraits>,
+  static_assert(detail::is_container_traits_v<ContainerTraits>,
                 "runtime_container requires runtime container traits");
 
 public:

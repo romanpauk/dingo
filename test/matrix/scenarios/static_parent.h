@@ -130,8 +130,8 @@ inline void exercise_runtime_child_static_parent() {
       dingo::bind<dingo::scope<dingo::shared>, dingo::storage<parent_config>>>;
   dingo::static_container<parent_bindings> parent;
   using child_type =
-      dingo::runtime_container<dingo::dynamic_container_traits,
-                               dingo::dynamic_container_traits::allocator_type,
+      dingo::runtime_container<dingo::runtime_container_traits,
+                               dingo::runtime_container_traits::allocator_type,
                                decltype(parent)>;
 
   child_type fallback_child(&parent);

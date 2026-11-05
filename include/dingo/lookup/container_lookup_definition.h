@@ -60,5 +60,18 @@ container_implementation_t<T> *container_implementation_of(T *container) {
   return container_implementation<T>::get(container);
 }
 
+// Whether T is a container traits type: it names an allocator, an rtti and
+// optionally lookup definitions. Both containers take one.
+template <typename T, typename = void>
+struct is_container_traits : std::false_type {};
+
+template <typename T>
+struct is_container_traits<
+    T, std::void_t<typename T::rtti_type, typename T::allocator_type,
+                   container_lookup_definition_type_t<T>>> : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_container_traits_v = is_container_traits<T>::value;
+
 } // namespace detail
 } // namespace dingo

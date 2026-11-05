@@ -42,7 +42,7 @@ template <typename LocalBindings> struct graph_local_bindings {
 };
 
 template <typename... LocalRegistrations>
-struct graph_local_bindings<static_bindings<LocalRegistrations...>> {
+struct graph_local_bindings<static_registry<LocalRegistrations...>> {
   using type = static_registry_bindings_t<LocalRegistrations...>;
 };
 

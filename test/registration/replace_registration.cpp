@@ -67,7 +67,7 @@ struct exporter {
   explicit exporter(notifier &) { throw std::runtime_error("exporter"); }
 };
 
-struct replacing_traits : dynamic_container_traits {
+struct replacing_traits : runtime_container_traits {
   using duplicate_registration_policy = replace_until_resolved;
 };
 

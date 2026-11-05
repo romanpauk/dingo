@@ -24,8 +24,8 @@ struct {{ case.suite }}_{{ case.name }}_case {
 
     template <typename Function>
     static void with_container(Function&& function) {
-{% if case.static_bindings %}
-        using static_bindings = {{ case.static_bindings }};
+{% if case.static_registry %}
+        using static_registry = {{ case.static_registry }};
 {% endif %}
         {{ case.container_type }} container;
 {% for line in case.setup_lines %}

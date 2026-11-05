@@ -20,7 +20,7 @@
 #include <utility>
 
 namespace dingo {
-template <typename... Registrations> struct static_bindings;
+template <typename... Registrations> struct static_registry;
 template <typename T> struct storage {
   using type = T;
   template <typename U> using rebind_t = storage<U>;
@@ -59,7 +59,7 @@ template <typename... Args> struct dependencies {
 };
 
 template <typename... Args> struct bindings {
-  using type = static_bindings<Args...>;
+  using type = static_registry<Args...>;
   template <typename U> using rebind_t = bindings<U>;
 };
 
@@ -68,8 +68,8 @@ template <> struct bindings<void> {
   template <typename U> using rebind_t = bindings<U>;
 };
 
-template <typename... Args> struct bindings<static_bindings<Args...>> {
-  using type = static_bindings<Args...>;
+template <typename... Args> struct bindings<static_registry<Args...>> {
+  using type = static_registry<Args...>;
   template <typename U> using rebind_t = bindings<U>;
 };
 
@@ -80,8 +80,8 @@ template <typename... Args> struct static_bindings_source<bindings<Args...>> {
 };
 
 template <typename... Args>
-struct static_bindings_source<static_bindings<Args...>> {
-  using type = static_bindings<Args...>;
+struct static_bindings_source<static_registry<Args...>> {
+  using type = static_registry<Args...>;
 };
 
 template <typename T>
@@ -425,7 +425,7 @@ template <typename Bindings> struct is_empty_bindings : std::false_type {};
 template <> struct is_empty_bindings<::dingo::bindings<>> : std::true_type {};
 
 template <>
-struct is_empty_bindings<::dingo::bindings<static_bindings<>>>
+struct is_empty_bindings<::dingo::bindings<static_registry<>>>
     : std::true_type {};
 
 template <typename Bindings>

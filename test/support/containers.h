@@ -31,15 +31,15 @@ struct dynamic_container_with_static_rtti_traits {
   using lookup_definition_type = std::tuple<>;
 };
 
-struct dynamic_container_variant_traits : dingo::dynamic_container_traits {};
+struct dynamic_container_variant_traits : dingo::runtime_container_traits {};
 
 #if defined(DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION)
 using container_types =
-    ::testing::Types<dingo::container<dingo::dynamic_container_traits>>;
+    ::testing::Types<dingo::container<dingo::runtime_container_traits>>;
 #else
 using container_types = ::testing::Types<
     dingo::container<dingo::static_container_traits>,
-    dingo::container<dingo::dynamic_container_traits>,
+    dingo::container<dingo::runtime_container_traits>,
     dingo::container<static_container_with_dynamic_rtti_traits>,
     dingo::container<static_container_variant_traits>,
     dingo::container<dynamic_container_with_static_rtti_traits>,

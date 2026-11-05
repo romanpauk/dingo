@@ -19,7 +19,7 @@ template <size_t N> struct Processor : IProcessor {};
 int main() {
   using namespace dingo;
   ////
-  struct container_traits : dynamic_container_traits {
+  struct container_traits : runtime_container_traits {
     using lookup_definition_type = lookups<collection<IProcessor>>;
   };
 

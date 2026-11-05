@@ -29,9 +29,9 @@ The same policies are used by both registration modes:
 container<> runtime_container;
 runtime_container.register_type<scope<shared>, storage<config>>();
 
-using static_bindings =
+using static_registry =
     bindings<bind<scope<shared>, storage<config>>>;
-static_container<static_bindings> compile_time_container;
+static_container<static_registry> compile_time_container;
 ```
 
 Runtime registration is mutable container configuration. Compile-time bindings
@@ -628,7 +628,7 @@ struct IProcessor {
 
 template <size_t N> struct Processor : IProcessor {};
 
-struct container_traits : dynamic_container_traits {
+struct container_traits : runtime_container_traits {
   using lookup_definition_type = lookups<collection<IProcessor>>;
 };
 
@@ -693,7 +693,7 @@ private:
   std::map<std::type_index, std::unique_ptr<ProcessorBase>> processors_;
 };
 
-struct traits : dingo::dynamic_container_traits {
+struct traits : dingo::runtime_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::collection<ProcessorBase>>;
 };

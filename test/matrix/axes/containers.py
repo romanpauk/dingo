@@ -48,7 +48,7 @@ CONTAINERS = (
     container(
         name="static_container",
         modes=frozenset({"static"}),
-        container_type="dingo::static_container<static_bindings>",
+        container_type="dingo::static_container<static_registry>",
         provides=frozenset(
             {
                 "explicit_dependencies_container",
@@ -115,7 +115,7 @@ CONTAINERS = (
     container(
         name="container_allocator",
         modes=frozenset({"runtime"}),
-        container_type="dingo::container<dingo::dynamic_container_traits, test_allocator<char>>",
+        container_type="dingo::container<dingo::runtime_container_traits, test_allocator<char>>",
         provides=frozenset({"custom_allocator_container"}),
         headers=("matrix/containers/allocator.h",),
     ),

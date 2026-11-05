@@ -24,26 +24,26 @@ template <typename Cardinality> struct unkeyed_lookup_route_traits;
 
 template <>
 struct unkeyed_lookup_route_traits<dingo::one>
-    : dingo::dynamic_container_traits {
+    : dingo::runtime_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::single<element_interface>>;
 };
 
 template <>
 struct unkeyed_lookup_route_traits<dingo::many>
-    : dingo::dynamic_container_traits {
+    : dingo::runtime_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::collection<element_interface>>;
 };
 
 template <typename Cardinality>
-struct typed_lookup_route_traits : dingo::dynamic_container_traits {
+struct typed_lookup_route_traits : dingo::runtime_container_traits {
   using lookup_definition_type = dingo::lookups<
       dingo::typed<lookup_route_key, element_interface, Cardinality>>;
 };
 
 template <typename Cardinality>
-struct key_value_lookup_route_traits : dingo::dynamic_container_traits {
+struct key_value_lookup_route_traits : dingo::runtime_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::associative<int, element_interface, Cardinality>>;
 };

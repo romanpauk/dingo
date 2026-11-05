@@ -59,25 +59,25 @@ struct routing_pipeline {
   routing_processor &processor;
 };
 
-struct dual_interface_routing_traits : dingo::dynamic_container_traits {
+struct dual_interface_routing_traits : dingo::runtime_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::associative<int, routing_processor>,
                      dingo::associative<int, routing_animal>>;
 };
 
-struct pipeline_routing_traits : dingo::dynamic_container_traits {
+struct pipeline_routing_traits : dingo::runtime_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::associative<int, routing_source>,
                      dingo::associative<int, routing_processor>>;
 };
 
-struct multiple_key_routing_traits : dingo::dynamic_container_traits {
+struct multiple_key_routing_traits : dingo::runtime_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::associative<int, routing_processor>,
                      dingo::associative<std::string, routing_processor>>;
 };
 
-struct indexed_and_normal_routing_traits : dingo::dynamic_container_traits {
+struct indexed_and_normal_routing_traits : dingo::runtime_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::associative<int, routing_processor>>;
 };

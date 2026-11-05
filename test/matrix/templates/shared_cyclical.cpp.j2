@@ -12,8 +12,8 @@ namespace dingo::matrix {
 {% for case in cases %}
 {% if case.supported %}
 void run_{{ case.suite }}_{{ case.name }}() {
-{% if case.static_bindings %}
-    using static_bindings = {{ case.static_bindings }};
+{% if case.static_registry %}
+    using static_registry = {{ case.static_registry }};
 {% endif %}
     {{ case.container_type }} container;
 {% for line in case.setup_lines %}

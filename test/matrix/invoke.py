@@ -67,7 +67,7 @@ class InvokeRow:
 class GeneratedInvokeCase:
     name: str
     container_type: str
-    static_bindings: str | None
+    static_registry: str | None
     setup_lines: tuple[str, ...]
     policy: str
     system_headers: tuple[str, ...]
@@ -195,7 +195,7 @@ def generate_invoke_rows(
                         not in callable_spec.supported_containers
                     ):
                         continue
-                    if mode.name == "static" and not plan.static_bindings:
+                    if mode.name == "static" and not plan.static_registry:
                         raise RuntimeError(
                             f"invoke provisioning {provisioning.name} has no "
                             "static bindings"
@@ -259,7 +259,7 @@ def _make_case(row: InvokeRow) -> GeneratedInvokeCase:
     return GeneratedInvokeCase(
         name=row.name,
         container_type=row.container.container_type,
-        static_bindings=registration.static_bindings,
+        static_registry=registration.static_registry,
         setup_lines=registration.setup_lines,
         policy=row.callable.policy,
         system_headers=tuple(

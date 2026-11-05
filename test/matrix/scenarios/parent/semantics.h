@@ -22,7 +22,7 @@ struct parent_null_element {
   virtual ~parent_null_element() = default;
 };
 
-struct parent_null_traits : dingo::dynamic_container_traits {
+struct parent_null_traits : dingo::runtime_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::collection<parent_null_element>>;
 };
@@ -48,7 +48,7 @@ template <int Id> struct parent_cached_service_impl : parent_cached_service {
   int id() const override { return Id; }
 };
 
-struct parent_keyed_cache_traits : dingo::dynamic_container_traits {
+struct parent_keyed_cache_traits : dingo::runtime_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::associative<std::size_t, parent_cached_service>>;
 };
@@ -92,7 +92,7 @@ struct parent_diagnostic_consumer {
                         dingo::key_type<std::size_t, 7>>) {}
 };
 
-struct parent_diagnostic_traits : dingo::dynamic_container_traits {
+struct parent_diagnostic_traits : dingo::runtime_container_traits {
   using lookup_definition_type = dingo::lookups<
       dingo::associative<std::size_t, parent_diagnostic_dependency>>;
 };
@@ -128,7 +128,7 @@ void assert_parent_keyed_diagnostics() {
 struct parent_mutation_trigger {};
 struct parent_keyed_mutation_service {};
 
-struct parent_keyed_mutation_traits : dingo::dynamic_container_traits {
+struct parent_keyed_mutation_traits : dingo::runtime_container_traits {
   using lookup_definition_type = dingo::lookups<
       dingo::associative<std::size_t, parent_keyed_mutation_service>>;
 };
@@ -169,7 +169,7 @@ struct parent_mutation_processor {
 
 struct parent_mutation_processor_impl : parent_mutation_processor {};
 
-struct parent_mutation_collection_traits : dingo::dynamic_container_traits {
+struct parent_mutation_collection_traits : dingo::runtime_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::collection<parent_mutation_processor>>;
 };

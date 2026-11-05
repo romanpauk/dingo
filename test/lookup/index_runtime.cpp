@@ -18,7 +18,7 @@ TEST(index_test, explicit_lookup_resolves_with_custom_container_allocator) {
     int id() const override { return 11; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type = lookups<associative<std::string, animal>>;
   };
 
@@ -65,7 +65,7 @@ TEST(index_test, key_value_lookup_backend_uses_rebound_allocator) {
   struct dog : animal {
     int id() const override { return 11; }
   };
-  struct small_key_traits : dynamic_container_traits {
+  struct small_key_traits : runtime_container_traits {
     using lookup_definition_type = lookups<associative<small_key, animal>>;
   };
 
@@ -84,7 +84,7 @@ TEST(index_test, key_value_lookup_backend_uses_rebound_allocator) {
 
   ASSERT_EQ(small_state.deallocations, small_state.allocations);
 
-  struct large_key_traits : dynamic_container_traits {
+  struct large_key_traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<allocator_visible_key, animal>>;
   };
@@ -120,7 +120,7 @@ TEST(index_test, indexed_container_releases_rebound_allocator_storage) {
     int id() const override { return 2; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<std::size_t, processor, many>>;
   };
@@ -160,7 +160,7 @@ TEST(index_test, associative_many_allows_multiple_values_per_key_value) {
     int id() const override { return 3; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<std::size_t, processor, many>>;
   };

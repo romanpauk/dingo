@@ -24,7 +24,7 @@ int main() {
   using namespace dingo;
   ////
   // Declare traits with a std::string based lookup
-  struct container_traits : dynamic_container_traits {
+  struct container_traits : runtime_container_traits {
     using lookup_definition_type = lookups<associative<std::string, IAnimal>>;
   };
 

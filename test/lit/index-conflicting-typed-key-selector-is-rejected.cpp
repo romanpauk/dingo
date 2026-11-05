@@ -11,7 +11,7 @@ struct animal {
 
 struct dog : animal {};
 
-struct traits : dingo::dynamic_container_traits {
+struct traits : dingo::runtime_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::typed<std::size_t, animal, dingo::one>,
                      dingo::typed<std::size_t, animal, dingo::many>>;

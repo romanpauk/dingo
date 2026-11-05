@@ -117,7 +117,7 @@ bool operator!=(const parent_tracking_allocator<T> &lhs,
   return !(lhs == rhs);
 }
 
-struct parent_allocator_traits : dingo::dynamic_container_traits {
+struct parent_allocator_traits : dingo::runtime_container_traits {
   using allocator_type = parent_tracking_allocator<char>;
 };
 

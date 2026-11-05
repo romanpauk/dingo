@@ -89,7 +89,7 @@ class GeneratedDependencyCompositionCase:
     suite: str
     name: str
     container_type: str
-    static_bindings: str | None
+    static_registry: str | None
     setup_lines: tuple[str, ...]
     policy: str
     system_headers: tuple[str, ...]
@@ -1022,7 +1022,7 @@ def _make_case(
         suite=f"dependency_composition_{row.operation.name}",
         name=row.name,
         container_type=row.container.container_type,
-        static_bindings=registration.static_bindings,
+        static_registry=registration.static_registry,
         setup_lines=registration.setup_lines,
         policy=(
             f"{row.operation.policy}<"

@@ -2501,7 +2501,7 @@ def test_registration_placement_is_explicit(rows: tuple[MatrixRow, ...]) -> None
 
     plan = build_registration_plan(row.scope, row.stored_type, exposed_type)
 
-    assert len(plan.static_bindings) == 2
+    assert len(plan.static_registry) == 2
     assert len(plan.runtime_setup) == 2
 
 
@@ -2524,7 +2524,7 @@ def test_registration_recipe_renders_every_mode(
     static = render_registration_plan("static", plan, context="test recipe")
     runtime = render_registration_plan("runtime", plan, context="test recipe")
 
-    assert static.static_bindings == (
+    assert static.static_registry == (
         "dingo::bindings<dingo::bind<"
         f"{scope.type_name}, arbitrary_storage, arbitrary_factory>>"
     )
@@ -2533,7 +2533,7 @@ def test_registration_recipe_renders_every_mode(
         "container.template register_type<"
         f"{scope.type_name}, arbitrary_storage, arbitrary_factory>();"
     )
-    assert runtime.static_bindings is None
+    assert runtime.static_registry is None
     assert runtime.setup_lines == (runtime_registration,)
 
 
@@ -2559,7 +2559,7 @@ def test_registration_recipe_renders_external_runtime_storage(
 
     runtime = render_registration_plan("runtime", plan, context="external recipe")
 
-    assert runtime.static_bindings is None
+    assert runtime.static_registry is None
     assert runtime.setup_lines == (
         "arbitrary_type external_value{};",
         "container.template register_type<dingo::scope<dingo::external>, "

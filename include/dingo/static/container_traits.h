@@ -28,31 +28,19 @@ class static_container;
 
 namespace detail {
 
-template <typename T, typename = void>
-struct is_static_container_traits : std::false_type {};
-
-template <typename T>
-struct is_static_container_traits<
-    T, std::void_t<container_lookup_definition_type_t<T>,
-                   typename T::allocator_type, typename T::rtti_type>>
-    : std::true_type {};
-
-template <typename T>
-inline constexpr bool is_static_container_traits_v =
-    is_static_container_traits<T>::value;
-
-template <typename T, typename = void> struct static_container_traits {
+// The traits a static container takes from its parent: those of a parent
+// container, or the default static traits.
+template <typename T, typename = void> struct container_traits_of {
   using type = ::dingo::static_container_traits;
 };
 
 template <typename T>
-struct static_container_traits<T,
-                               std::void_t<typename T::container_traits_type>> {
+struct container_traits_of<T, std::void_t<typename T::container_traits_type>> {
   using type = typename T::container_traits_type;
 };
 
 template <typename T>
-using static_container_traits_t = typename static_container_traits<T>::type;
+using container_traits_of_t = typename container_traits_of<T>::type;
 
 } // namespace detail
 } // namespace dingo

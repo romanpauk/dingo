@@ -41,7 +41,7 @@ class CaseLines:
 
 @dataclass(frozen=True, slots=True)
 class RegistrationPlan:
-    static_bindings: tuple[str, ...]
+    static_registry: tuple[str, ...]
     runtime_setup: tuple[str, ...]
 
 
@@ -58,7 +58,7 @@ class RegistrationRecipe:
 
 @dataclass(frozen=True, slots=True)
 class RenderedRegistrationPlan:
-    static_bindings: str | None
+    static_registry: str | None
     setup_lines: tuple[str, ...]
 
 
@@ -313,7 +313,7 @@ def build_registration_plan_from_recipe(
     runtime_specs = tuple(spec for spec in specs if spec.include_in_runtime)
 
     return RegistrationPlan(
-        static_bindings=tuple(
+        static_registry=tuple(
             render_static_binding(recipe, spec) for spec in static_specs
         ),
         runtime_setup=(
@@ -350,15 +350,15 @@ def render_registration_plan(
     context: str,
 ) -> RenderedRegistrationPlan:
     if mode == "static":
-        if not plan.static_bindings:
+        if not plan.static_registry:
             raise RuntimeError(f"{context} has no static bindings")
         return RenderedRegistrationPlan(
-            static_bindings=bindings_type(plan.static_bindings),
+            static_registry=bindings_type(plan.static_registry),
             setup_lines=(),
         )
     if mode == "runtime":
         return RenderedRegistrationPlan(
-            static_bindings=None,
+            static_registry=None,
             setup_lines=plan.runtime_setup,
         )
     raise RuntimeError(f"{context} has unknown registration mode: {mode}")

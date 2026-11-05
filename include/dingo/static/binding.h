@@ -34,7 +34,7 @@
 namespace dingo {
 namespace detail {
 
-template <typename... Registrations> class static_binding_storage;
+template <typename... Registrations> class static_bindings_state;
 
 template <typename Registration> struct binding_cell_slot {
   binding_cell_t<detail::binding_model<Registration>> cell;
@@ -57,8 +57,8 @@ struct local_binding_scope_slot {};
 
 template <typename Registration, typename... LocalRegistrations>
 struct local_binding_scope_slot<Registration,
-                                static_bindings<LocalRegistrations...>> {
-  static_binding_storage<LocalRegistrations...> scope;
+                                static_registry<LocalRegistrations...>> {
+  static_bindings_state<LocalRegistrations...> scope;
 };
 
 template <typename Request, typename Resolutions>
@@ -163,10 +163,10 @@ template <typename Host, typename LocalBindings> struct static_dependencies {
 };
 
 template <typename Host, typename... LocalRegistrations>
-struct static_dependencies<Host, static_bindings<LocalRegistrations...>> {
+struct static_dependencies<Host, static_registry<LocalRegistrations...>> {
   using type =
-      local_binding_router<static_binding_storage<LocalRegistrations...>,
-                           static_bindings<LocalRegistrations...>, Host>;
+      local_binding_router<static_bindings_state<LocalRegistrations...>,
+                           static_registry<LocalRegistrations...>, Host>;
 };
 
 // The resolution of a request selected at compile time.
@@ -182,7 +182,7 @@ struct static_request_resolution
 // The storage of a static binding set, and the resolution of its bindings.
 // Local bindings of a registration keep their own storage in a slot.
 template <typename... Registrations>
-class static_binding_storage
+class static_bindings_state
     : private binding_cell_slot<Registrations>...,
       private local_binding_scope_slot<Registrations>... {
 public:

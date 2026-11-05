@@ -60,7 +60,7 @@ class GeneratedSharedCyclicalCase:
     suite: str
     name: str
     container_type: str
-    static_bindings: str | None
+    static_registry: str | None
     setup_lines: tuple[str, ...]
     a_type: str
     b_type: str
@@ -199,7 +199,7 @@ def _make_case(row: SharedCyclicalRow) -> GeneratedSharedCyclicalCase:
             suite="shared_cyclical",
             name=row.name,
             container_type="",
-            static_bindings=None,
+            static_registry=None,
             setup_lines=(),
             a_type=a_type,
             b_type=b_type,
@@ -267,7 +267,7 @@ def _make_case(row: SharedCyclicalRow) -> GeneratedSharedCyclicalCase:
         suite="shared_cyclical",
         name=row.name,
         container_type=_container_type(row),
-        static_bindings=registration.static_bindings,
+        static_registry=registration.static_registry,
         setup_lines=registration.setup_lines,
         a_type=a_type,
         b_type=b_type,

@@ -62,7 +62,7 @@ template <int Id> struct nested_processor_impl : nested_processor {
   int id() const override { return Id; }
 };
 
-struct nested_container_traits : dingo::dynamic_container_traits {
+struct nested_container_traits : dingo::runtime_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::collection<nested_processor>>;
 };

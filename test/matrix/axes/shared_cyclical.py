@@ -29,7 +29,7 @@ SHARED_CYCLICAL_CONTAINERS = (
     SharedCyclicalContainer(
         name="static_container",
         container_types=(
-            ("static", "dingo::static_container<static_bindings>"),
+            ("static", "dingo::static_container<static_registry>"),
         ),
         headers=("matrix/containers/static.h",),
     ),

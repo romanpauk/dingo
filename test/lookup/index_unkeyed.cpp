@@ -37,7 +37,7 @@ TEST(index_test, base_many_enumerates_implicit_unkeyed_collection_entries) {
     int id() const override { return 2; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type = lookups<base<many, ordered>>;
   };
 
@@ -64,7 +64,7 @@ TEST(index_test, base_uses_configured_backend_for_default_index) {
     int id() const override { return 3; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<base<one, test_ordered_base_backend>>;
   };
@@ -95,7 +95,7 @@ TEST(index_test, collection_alias_behaves_like_no_key_many_lookup) {
 
   static_assert(std::is_same_v<collection<processor>, collection<processor>>);
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type = lookups<collection<processor>>;
   };
 

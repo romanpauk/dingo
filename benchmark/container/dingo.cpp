@@ -167,7 +167,7 @@ static void resolve_container_external(benchmark::State &state) {
 template <typename Setup, typename Resolve>
 static void resolve_container_cold(benchmark::State &state, Setup setup,
                                    Resolve resolve) {
-  using container_type = dingo::container<dingo::dynamic_container_traits>;
+  using container_type = dingo::container<dingo::runtime_container_traits>;
   constexpr size_t batch_size = 64;
   size_t count = 0;
   for (auto _ : state) {
@@ -377,28 +377,28 @@ static void register_type_arena_10(benchmark::State &state) {
 }
 
 BENCHMARK_TEMPLATE(resolve_container_unique_int,
-                   dingo::dynamic_container_traits)
+                   dingo::runtime_container_traits)
     ->UseRealTime();
 BENCHMARK_TEMPLATE(resolve_container_unique_string,
-                   dingo::dynamic_container_traits)
+                   dingo::runtime_container_traits)
     ->UseRealTime();
 
-BENCHMARK_TEMPLATE(resolve_container_shared, dingo::dynamic_container_traits)
+BENCHMARK_TEMPLATE(resolve_container_shared, dingo::runtime_container_traits)
     ->UseRealTime();
 
 BENCHMARK_TEMPLATE(resolve_container_shared_ptr,
-                   dingo::dynamic_container_traits)
+                   dingo::runtime_container_traits)
     ->UseRealTime();
 
 BENCHMARK_TEMPLATE(resolve_container_shared_ptr_conversion_storage,
-                   dingo::dynamic_container_traits)
+                   dingo::runtime_container_traits)
     ->UseRealTime();
 
 BENCHMARK_TEMPLATE(resolve_container_shared_ptr_conversion_resolver,
-                   dingo::dynamic_container_traits)
+                   dingo::runtime_container_traits)
     ->UseRealTime();
 
-BENCHMARK_TEMPLATE(resolve_container_external, dingo::dynamic_container_traits)
+BENCHMARK_TEMPLATE(resolve_container_external, dingo::runtime_container_traits)
     ->UseRealTime();
 
 BENCHMARK(resolve_container_cold_external)->Iterations(100)->UseManualTime();
@@ -420,20 +420,20 @@ BENCHMARK_TEMPLATE(finish_runtime_transaction, false)
 BENCHMARK(commit_runtime_transaction)->Apply(transaction_action_counts);
 
 BENCHMARK_TEMPLATE(register_type,
-                   dingo::container<dingo::dynamic_container_traits>)
+                   dingo::container<dingo::runtime_container_traits>)
     ->UseRealTime();
 
 BENCHMARK_TEMPLATE(register_type_arena,
-                   dingo::container<dingo::dynamic_container_traits,
+                   dingo::container<dingo::runtime_container_traits,
                                     dingo::arena_allocator<char>>)
     ->UseRealTime();
 
 BENCHMARK_TEMPLATE(register_type_10,
-                   dingo::container<dingo::dynamic_container_traits>)
+                   dingo::container<dingo::runtime_container_traits>)
     ->UseRealTime();
 
 BENCHMARK_TEMPLATE(register_type_arena_10,
-                   dingo::container<dingo::dynamic_container_traits,
+                   dingo::container<dingo::runtime_container_traits,
                                     dingo::arena_allocator<char>>)
     ->UseRealTime();
 } // namespace

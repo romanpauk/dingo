@@ -50,14 +50,14 @@ struct static_container_dependency_diagnostics_base;
 
 template <typename... Registrations>
 struct static_container_dependency_diagnostics_base<
-    static_bindings<Registrations...>, false>
+    static_registry<Registrations...>, false>
     : static_registry_dependency_diagnostics<
-          typename static_bindings<Registrations...>::interface_bindings,
+          typename static_registry<Registrations...>::interface_bindings,
           binding_model<Registrations>...> {};
 
 template <typename... Registrations>
 struct static_container_dependency_diagnostics_base<
-    static_bindings<Registrations...>, true>
+    static_registry<Registrations...>, true>
     : static_container_no_dependency_diagnostics {};
 
 template <typename StaticRegistry, typename ParentContainer = void,
@@ -66,20 +66,20 @@ class static_container_impl;
 
 template <typename ParentContainer, typename ContainerTraits,
           typename... Registrations>
-class static_container_impl<static_bindings<Registrations...>, ParentContainer,
+class static_container_impl<static_registry<Registrations...>, ParentContainer,
                             ContainerTraits>
     : public container_interface<static_container_impl<
-          static_bindings<Registrations...>, ParentContainer, ContainerTraits>>,
+          static_registry<Registrations...>, ParentContainer, ContainerTraits>>,
       private static_container_dependency_diagnostics_base<
-          static_bindings<Registrations...>, !std::is_void_v<ParentContainer>> {
+          static_registry<Registrations...>, !std::is_void_v<ParentContainer>> {
 public:
-  using static_bindings_type = static_bindings<Registrations...>;
+  using static_bindings_type = static_registry<Registrations...>;
 
 private:
   static constexpr bool has_parent_v = !std::is_void_v<ParentContainer>;
   using graph_type_ = graph_model<static_bindings_type>;
   using parent_container_type = container_implementation_t<ParentContainer>;
-  using storage_type = static_binding_storage<Registrations...>;
+  using storage_type = static_bindings_state<Registrations...>;
   using context_type = static_context;
   using index_entries_ = detail::normalize_lookup_definitions_t<
       detail::container_lookup_definition_type_t<ContainerTraits>>;

@@ -23,7 +23,7 @@ regardless of storage type. Declare `collection<I>` when an interface is meant
 to have multiple unkeyed implementations:
 
 ```c++
-struct container_traits : dynamic_container_traits {
+struct container_traits : runtime_container_traits {
   using lookup_definition_type = lookups<collection<IProcessor>>;
 };
 ```
@@ -37,7 +37,7 @@ Runtime-keyed lookups use `associative<K, I>` for unique bindings and
 `associative<K, I, many>` for keyed collections:
 
 ```c++
-struct container_traits : dynamic_container_traits {
+struct container_traits : runtime_container_traits {
   using lookup_definition_type =
       lookups<associative<std::size_t, IProcessor>,
                 associative<std::string, IHandler, many>>;
@@ -56,7 +56,7 @@ built-in backend tags are:
 For example:
 
 ```c++
-struct container_traits : dynamic_container_traits {
+struct container_traits : runtime_container_traits {
   using lookup_definition_type =
       lookups<associative<std::size_t, IProcessor, many, unordered>,
               associative<MessageId, IHandler, one, array<32>>>;
@@ -82,7 +82,7 @@ is allocated lazily when a child first registers a local binding.
 Typed-key registrations can also use explicit lookups:
 
 ```c++
-struct container_traits : dynamic_container_traits {
+struct container_traits : runtime_container_traits {
   using lookup_definition_type =
       lookups<typed<Primary, IProcessor, one>>;
 };
@@ -195,7 +195,7 @@ struct Dog : IAnimal {};
 struct Cat : IAnimal {};
 
 // Declare traits with a std::string based lookup
-struct container_traits : dynamic_container_traits {
+struct container_traits : runtime_container_traits {
   using lookup_definition_type = lookups<associative<std::string, IAnimal>>;
 };
 
@@ -500,7 +500,7 @@ registration win until it is first used, which suits tests that start from the
 application's registrations and swap a few services for fakes:
 
 ```c++
-struct test_traits : dynamic_container_traits {
+struct test_traits : runtime_container_traits {
   using duplicate_registration_policy = replace_until_resolved;
 };
 
@@ -572,7 +572,7 @@ Example code included from
 ```c++
 // Define a container with user-provided allocator type
 std::allocator<char> alloc;
-container<dingo::dynamic_container_traits, std::allocator<char>>
+container<dingo::runtime_container_traits, std::allocator<char>>
     container(alloc);
 ```
 

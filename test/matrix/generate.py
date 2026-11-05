@@ -116,7 +116,7 @@ class GeneratedCase:
     suite: str
     name: str
     container_type: str
-    static_bindings: str | None
+    static_registry: str | None
     setup_lines: tuple[str, ...]
     policy: str
     system_headers: tuple[str, ...]
@@ -332,7 +332,7 @@ def materialize_row(
     rejected: Counter[RejectionReason],
 ) -> MatrixRow | None:
     plan = plan_for_candidate(candidate, cache)
-    if candidate.mode.name == "static" and not plan.static_bindings:
+    if candidate.mode.name == "static" and not plan.static_registry:
         raise RuntimeError(f"static row {case_name(candidate)} has no bindings")
 
     lines = select_case_lines(candidate)
@@ -593,7 +593,7 @@ def make_case(row: MatrixRow) -> GeneratedCase:
         suite=row.feature.name,
         name=row.name,
         container_type=row.container.container_type,
-        static_bindings=registration.static_bindings,
+        static_registry=registration.static_registry,
         setup_lines=registration.setup_lines,
         policy=row.lines.policy,
         system_headers=tuple(

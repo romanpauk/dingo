@@ -71,7 +71,7 @@ template <int Id> struct move_processor_impl : move_processor {
   int id() const override { return Id; }
 };
 
-struct move_collection_traits : dingo::dynamic_container_traits {
+struct move_collection_traits : dingo::runtime_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::collection<move_processor>>;
 };
@@ -143,9 +143,9 @@ using movable_container_types = ::testing::Types<
     dingo::container<>, dingo::container<dingo::static_container_traits>,
     dingo::container<static_container_with_dynamic_rtti_traits>,
     dingo::container<dynamic_container_with_static_rtti_traits>,
-    dingo::container<dingo::dynamic_container_traits,
+    dingo::container<dingo::runtime_container_traits,
                      move_test_allocator<char>>,
-    dingo::container<dingo::dynamic_container_traits, std::allocator<char>,
+    dingo::container<dingo::runtime_container_traits, std::allocator<char>,
                      move_parent_container>,
     dingo::runtime_container<>>;
 
@@ -291,7 +291,7 @@ TEST(container_move_test, builder_hands_container_to_host) {
 }
 
 using move_child_container_types = ::testing::Types<
-    dingo::container<dingo::dynamic_container_traits, std::allocator<char>,
+    dingo::container<dingo::runtime_container_traits, std::allocator<char>,
                      move_parent_container>>;
 
 template <typename Child>

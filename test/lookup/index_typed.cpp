@@ -22,7 +22,7 @@ TEST(index_test, typed_key_many_populates_custom_collections) {
     int id() const override { return 2; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<typed<processor_key, processor, many>>;
   };
@@ -56,7 +56,7 @@ TEST(index_test, base_many_enumerates_implicit_typed_key_collection_entries) {
     int id() const override { return 2; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type = lookups<base<many, ordered>>;
   };
 

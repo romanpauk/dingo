@@ -369,7 +369,7 @@ struct remove_shadowed_bindings<type_list<InterfaceBindings...>,
 template <typename BindingModel, typename InterfaceBindings,
           typename... LocalRegistrations>
 struct effective_interface_bindings<BindingModel, InterfaceBindings,
-                                    static_bindings<LocalRegistrations...>> {
+                                    static_registry<LocalRegistrations...>> {
 private:
   using local_interface_bindings = type_list_cat_t<typename binding_expansion<
       binding_model<LocalRegistrations>>::interface_bindings...>;
@@ -436,7 +436,7 @@ struct static_registry_dependency_diagnostics
 
 } // namespace detail
 
-template <typename... Registrations> struct static_bindings {
+template <typename... Registrations> struct static_registry {
   using interface_bindings =
       detail::static_registry_bindings_t<Registrations...>;
 
