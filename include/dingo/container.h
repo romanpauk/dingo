@@ -50,13 +50,16 @@
 
 namespace dingo {
 
-// The resolve front-end of a runtime container. It owns the root runtime
-// registry and answers the requests the registry does not: parent fallback,
-// auto-construction and the error paths.
+// The resolve front-end of a runtime container. It is the root runtime
+// registry and adds what a root answers beyond its bindings: the parent
+// fallback, auto-construction, and the transaction and cache of a request.
 template <typename ContainerTraits, typename Allocator,
           typename ParentContainer>
 class detail::runtime_container_impl
-    : public detail::runtime_registration_api<detail::runtime_container_impl<
+    : public runtime_registry<ContainerTraits, Allocator, void,
+                              detail::runtime_container_impl<
+                                  ContainerTraits, Allocator, ParentContainer>>,
+      public detail::runtime_registration_api<detail::runtime_container_impl<
           ContainerTraits, Allocator, ParentContainer>>,
       public detail::container_interface<detail::runtime_container_impl<
           ContainerTraits, Allocator, ParentContainer>> {
@@ -93,26 +96,18 @@ private:
     return detail::has_lookup<parent_container_type, Lookup, LookupKey>();
   }
 
-  template <typename T, typename Fn, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection(construction_scope scope,
-                         runtime_context_type &context, Fn &&fn,
-                         LookupKey key) {
-    return runtime_registry_.template construct_collection<T>(
-        scope, context, std::forward<Fn>(fn), std::move(key));
-  }
+  using runtime_base::construct_collection;
 
 public:
-  runtime_container_impl()
-      : runtime_registry_(detail::runtime_data_owner, this) {}
+  runtime_container_impl() : runtime_base(detail::runtime_data_owner, this) {}
 
   explicit runtime_container_impl(allocator_type alloc)
-      : runtime_registry_(detail::runtime_data_owner, this, alloc) {}
+      : runtime_base(detail::runtime_data_owner, this, alloc) {}
 
   runtime_container_impl(parent_container_type *parent,
                          const allocator_type &alloc = allocator_type())
-      : runtime_registry_(detail::runtime_data_owner, this, alloc),
-        parent_(parent) {}
+      : runtime_base(detail::runtime_data_owner, this, alloc), parent_(parent) {
+  }
 
   // Resolved instances reference each other by address and runtime bindings
   // point back at the container, so it cannot move. runtime_container moves by
@@ -134,12 +129,10 @@ private:
   R resolve_entry(LookupKey key) {
     using interface_type = typename Request::interface_type;
     if constexpr (is_cacheable<Request, R>()) {
-      auto selected = select_request<Request>(key);
-      auto result =
-          runtime_registry_.template lookup_cache<interface_type>(selected);
+      auto selected = this->template select_request<Request>(key);
+      auto result = this->template lookup_cache<interface_type>(selected);
       if (result.hit) {
-        return runtime_registry_.template resolve_cached<interface_type, R>(
-            result);
+        return this->template resolve_cached<interface_type, R>(result);
       }
       return with_context([&](runtime_context_type &context) -> R {
         return detail::request_resolution::resolve<Request, R>(
@@ -154,7 +147,13 @@ private:
   }
 
 public:
+  // The registry base and the registration and resolution interfaces declare
+  // some of the same names; these are the ones a container exposes.
+  using detail::container_interface<self_type>::construct;
   using detail::container_interface<self_type>::resolve;
+  using detail::runtime_registration_api<self_type>::register_type;
+  using detail::runtime_registration_api<self_type>::register_type_collection;
+  using runtime_base::get_allocator;
   using detail::container_interface<self_type>::construct_collection;
   using detail::container_interface<self_type>::count_collection;
 
@@ -168,15 +167,14 @@ public:
   }
 
   template <typename Fn> decltype(auto) with_context(Fn &&fn) {
-    return execute_transaction(runtime_registry_.runtime(),
-                               std::forward<Fn>(fn));
+    return execute_transaction(this->runtime(), std::forward<Fn>(fn));
   }
 
   template <typename Request, typename IdType>
   detail::binding_status binding_status(IdType &&id) {
     using request = request_type<Request>;
     auto key = detail::make_lookup_key(std::forward<IdType>(id));
-    auto status = runtime_registry_.template binding_status<
+    auto status = runtime_base::template binding_status<
         typename request::value_type, typename request::exact_type>(key);
     if constexpr (parent_serves<typename request::lookup_type,
                                 decltype(key)>()) {
@@ -187,47 +185,13 @@ public:
     return status;
   }
 
-  template <typename T, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t count_collection(LookupKey key) {
-    return runtime_registry_.template count_collection<T>(key);
-  }
+  using runtime_base::count_collection;
 
 private:
   friend struct detail::request_resolution;
   friend class detail::container_interface<self_type>;
 
-  template <typename Request, typename LookupKey>
-  auto select_request(const LookupKey &key) {
-    return runtime_registry_.template select_binding<
-        typename Request::value_type, typename Request::exact_type>(key);
-  }
-
-  template <typename Request, typename R>
-  R resolve_selected(typename runtime_registry_type::runtime_selection selected,
-                     construction_scope scope, runtime_context_type &context) {
-    return runtime_registry_
-        .template resolve_binding<typename Request::interface_type, R>(
-            selected, scope, context);
-  }
-
-  template <typename Request>
-  [[noreturn]] void ambiguous(runtime_context_type &context) {
-    throw detail::make_type_ambiguous_exception<typename Request::lookup_type>(
-        context);
-  }
-
   parent_container_type *parent() { return parent_; }
-
-  template <typename R, typename LookupKey>
-  R construct_request_collection(construction_scope scope,
-                                 runtime_context_type &context, LookupKey key) {
-    // Collections are constructed in the active resolve context. Routing
-    // no-key collections through scalar registry resolution would bypass
-    // registered collection factories and re-enter missing-binding fallback.
-    return construct_collection<R>(
-        scope, context, detail::binding_collection_append{}, std::move(key));
-  }
 
   // The request itself if its binding publishes it, otherwise its normalized
   // value.
@@ -255,7 +219,7 @@ private:
   DINGO_NOINLINE R resolve_nested(construction_scope scope,
                                   runtime_context_type &context, Origin &origin,
                                   LookupKey key) {
-    return execute_transaction(runtime_registry_.runtime(), context,
+    return execute_transaction(this->runtime(), context,
                                [&](runtime_context_type &local_context) -> R {
                                  return resolve<Request, R>(
                                      scope, local_context, origin,
@@ -283,7 +247,7 @@ public:
                                 runtime_context_type &context, Origin &origin,
                                 LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
-    if (context.owns(runtime_registry_.runtime())) {
+    if (context.owns(this->runtime())) {
       return resolve<request, R>(scope, context, origin, std::move(key));
     }
     return resolve_nested<request, R>(scope, context, origin, std::move(key));
@@ -301,11 +265,10 @@ public:
 private:
   friend class detail::runtime_registration_api<self_type>;
 
-  runtime_registry_type &binding_store() { return runtime_registry_; }
+  runtime_registry_type &binding_store() { return *this; }
 
   self_type &runtime_registration_parent() { return *this; }
 
-  runtime_registry_type runtime_registry_;
   parent_container_type *parent_ = nullptr;
 };
 

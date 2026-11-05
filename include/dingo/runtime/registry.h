@@ -1202,10 +1202,10 @@ protected:
 
   parent_container_type *parent() { return parent_; }
 
+  // The root registry is the base of its container; a registration container
+  // reaches the root through its parents.
   resolve_root_type *resolve_root() {
-    if constexpr (std::is_same_v<resolve_root_type, registry_type>) {
-      return this;
-    } else if constexpr (std::is_base_of_v<registry_type, resolve_root_type>) {
+    if constexpr (std::is_base_of_v<registry_type, resolve_root_type>) {
       return static_cast<resolve_root_type *>(this);
     } else if constexpr (std::is_same_v<parent_container_type,
                                         resolve_root_type>) {
@@ -1216,19 +1216,11 @@ protected:
     }
   }
 
-  const resolve_root_type *resolve_root() const {
-    return const_cast<registry_type *>(this)->resolve_root();
-  }
-
 protected:
   // Lookup misses are answered by the parent chain instead of failing at
   // compile time when the registry is not the resolve root.
   static constexpr bool lookup_may_miss() {
-    if constexpr (std::is_same_v<void, ParentRegistry>) {
-      return false;
-    } else {
-      return !std::is_base_of_v<registry_type, resolve_root_type>;
-    }
+    return !std::is_void_v<ParentRegistry>;
   }
 
   template <typename Value, typename Exact, typename LookupKey,
@@ -1521,8 +1513,7 @@ private:
   R resolve_selected(runtime_selection selection, construction_scope scope,
                      runtime_context_type &context) {
     return store_type::template resolve_binding<
-        typename Request::lookup_type, typename Request::interface_type>(
-        selection, scope, context);
+        typename Request::interface_type, R>(selection, scope, context);
   }
 
   template <typename Request>
@@ -1535,8 +1526,7 @@ private:
   // root registry has none.
   template <typename Lookup, typename LookupKey>
   static constexpr bool parent_serves() {
-    return !std::is_same_v<void, ParentRegistry> &&
-           !std::is_base_of_v<registry_type, resolve_root_type>;
+    return lookup_may_miss();
   }
 
   template <typename R, typename LookupKey>
