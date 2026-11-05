@@ -78,12 +78,6 @@ template <typename T> struct runtime_binding_state_traits {
   static T &ref(T &state) { return state; }
 };
 
-template <typename T> struct runtime_binding_state_traits<std::shared_ptr<T>> {
-  using state_type = T;
-
-  static T &ref(std::shared_ptr<T> &state) { return *state; }
-};
-
 template <typename T> struct runtime_binding_state_traits<T *> {
   using state_type = T;
 
@@ -193,7 +187,7 @@ private:
           [&](auto &container) -> resolved_address {
             using activation_type = detail::binding_activation<
                 typename state_type::cell_type,
-                std::remove_reference_t<decltype(container)> &, true>;
+                std::remove_reference_t<decltype(container)> &>;
             activation_type activation{state.cell(), container, scope};
             return activation.template with_source<void, void>(
                 context, [&](auto &&source) -> resolved_address {

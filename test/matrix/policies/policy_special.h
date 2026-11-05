@@ -21,14 +21,15 @@ template <typename Type, int Expected> struct local_value_ref {
   }
 };
 
+// Local collection entries shadow the entries of the host.
 template <typename Type> struct local_collection_ref {
   template <typename Container> static void check(Container &container) {
     auto &resolved = container.template resolve<Type &>();
-    ASSERT_EQ(resolved.count, 2u);
-    ASSERT_EQ(resolved.sum, 1);
+    ASSERT_EQ(resolved.count, 1u);
+    ASSERT_EQ(resolved.sum, 0);
     auto constructed = container.template construct<Type>();
-    ASSERT_EQ(constructed.count, 2u);
-    ASSERT_EQ(constructed.sum, 1);
+    ASSERT_EQ(constructed.count, 1u);
+    ASSERT_EQ(constructed.sum, 0);
   }
 };
 

@@ -153,17 +153,17 @@ TEST(cache_test, stable_storage_trait_requires_explicit_stability) {
 
 TEST(cache_test, conversion_cache_reuses_value_until_reset) {
   conversion_cache<type_list<cache_value>> cache;
-  cache_owner owner;
+  tracked_cache_context owner;
 
-  auto &first = cache.construct<cache_value>(persistent_scope, owner, 1);
-  auto &again = cache.construct<cache_value>(persistent_scope, owner, 2);
+  auto &first = cache.construct<cache_value>(owner, 1);
+  auto &again = cache.construct<cache_value>(owner, 2);
 
   EXPECT_EQ(std::addressof(again), std::addressof(first));
   EXPECT_EQ(again.value, 1);
   ASSERT_EQ(owner.values.size(), 1u);
 
   cache.reset();
-  auto &after_reset = cache.construct<cache_value>(persistent_scope, owner, 3);
+  auto &after_reset = cache.construct<cache_value>(owner, 3);
 
   EXPECT_NE(std::addressof(after_reset), std::addressof(first));
   EXPECT_EQ(after_reset.value, 3);
@@ -174,13 +174,13 @@ TEST(cache_test, tracked_conversion_clears_slot_on_rollback) {
   conversion_cache<cache_value> cache;
   tracked_cache_context context;
 
-  auto &first = cache.construct_tracked<cache_value>(context, 1);
-  auto &again = cache.construct_tracked<cache_value>(context, 2);
+  auto &first = cache.construct<cache_value>(context, 1);
+  auto &again = cache.construct<cache_value>(context, 2);
   EXPECT_EQ(std::addressof(again), std::addressof(first));
   ASSERT_EQ(context.values.size(), 1u);
 
   context.rollback();
-  auto &after_rollback = cache.construct_tracked<cache_value>(context, 3);
+  auto &after_rollback = cache.construct<cache_value>(context, 3);
 
   EXPECT_NE(std::addressof(after_rollback), std::addressof(first));
   EXPECT_EQ(after_rollback.value, 3);

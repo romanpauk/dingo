@@ -8,16 +8,21 @@
 #pragma once
 
 #include <dingo/base/complete_type.h>
+#include <dingo/base/config.h>
 #include <dingo/base/construction_scope.h>
 #include <dingo/base/exceptions.h>
 #include <dingo/base/none.h>
 #include <dingo/binding/binding_collection.h>
+#include <dingo/binding/binding_resolution.h>
 #include <dingo/binding/binding_selection.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/type/auto_constructible.h>
 #include <dingo/type/collection_traits.h>
+#include <dingo/type/dependency_traits.h>
 #include <dingo/type/key.h>
+#include <dingo/type/normalized_type.h>
+#include <dingo/type/type_traits.h>
 
 #include <cstddef>
 #include <type_traits>
@@ -30,63 +35,29 @@
 
 namespace dingo::detail {
 
-// The request entry points both containers spell the same way. A container
-// provides construct_collection<T>(fn, lookup_key), count_collection<T>(lookup_
-// key) and with_context(fn), which runs fn with a fresh resolution context.
-template <typename Container> class container_interface {
-  template <typename Collection, typename Fn>
-  using collection_insert_invocable =
-      std::is_invocable<Fn &, Collection &,
-                        typename collection_traits<Collection>::resolve_type>;
+// Whether a request that no container binds may be constructed in place.
+// Keep constructibility queries in the non-reference specialization. MSVC
+// otherwise evaluates its constructibility intrinsics for incomplete reference
+// targets while instantiating the dispatch trait.
+template <typename T,
+          bool IsNormalized =
+              std::is_same_v<request_value_t<T>, std::decay_t<T>>,
+          bool IsReference = std::is_reference_v<T>>
+struct may_auto_construct : std::false_type {};
 
-  Container &self() { return static_cast<Container &>(*this); }
+template <typename T>
+struct may_auto_construct<T, true, false>
+    : std::bool_constant<std::is_move_constructible_v<std::decay_t<T>> ||
+                         std::is_copy_constructible_v<std::decay_t<T>>> {};
 
-public:
-  template <typename T> T construct_collection() {
-    return self().template construct_collection<T>(binding_collection_append{},
-                                                   no_lookup_key());
-  }
+template <typename T>
+struct may_auto_construct<T, true, true>
+    : std::bool_constant<std::is_lvalue_reference_v<T> &&
+                         std::is_const_v<std::remove_reference_t<T>> &&
+                         is_auto_constructible<std::decay_t<T>>::value> {};
 
-  template <typename T, typename Arg,
-            std::enable_if_t<!is_lookup_key_v<std::decay_t<Arg>>, int> = 0>
-  T construct_collection(Arg &&arg) {
-    if constexpr (collection_insert_invocable<T, std::decay_t<Arg>>::value) {
-      return self().template construct_collection<T>(std::forward<Arg>(arg),
-                                                     no_lookup_key());
-    } else {
-      return self().template construct_collection<T>(
-          binding_collection_append{}, make_lookup_key(std::forward<Arg>(arg)));
-    }
-  }
-
-  template <typename T, typename Fn, typename IdType,
-            std::enable_if_t<!is_lookup_key_v<std::decay_t<IdType>>, int> = 0>
-  T construct_collection(Fn &&fn, IdType &&id) {
-    return self().template construct_collection<T>(
-        std::forward<Fn>(fn), make_lookup_key(std::forward<IdType>(id)));
-  }
-
-  template <typename T> std::size_t count_collection() {
-    return self().template count_collection<T>(no_lookup_key());
-  }
-
-  template <typename T, typename Key> std::size_t count_collection() {
-    return self().template count_collection<T>(
-        make_lookup_key(type_selector<Key>{}));
-  }
-
-  template <typename Signature = void, typename Callable>
-  auto invoke(Callable &&callable) {
-    using callable_type = std::remove_cv_t<std::remove_reference_t<Callable>>;
-    using dispatch_signature =
-        callable_dispatch_signature_t<Signature, callable_type>;
-    return self().with_context([&](auto &context) {
-      auto type_guard = context.template track_type<callable_type>();
-      return callable_invoke<dispatch_signature>::construct(
-          std::forward<Callable>(callable), ephemeral_scope, context, self());
-    });
-  }
-};
+template <typename T>
+inline constexpr bool may_auto_construct_v = may_auto_construct<T>::value;
 
 template <typename Selection>
 struct is_runtime_binding_selection : std::false_type {};
@@ -94,6 +65,16 @@ struct is_runtime_binding_selection : std::false_type {};
 template <typename Binding>
 struct is_runtime_binding_selection<runtime_binding_selection<Binding>>
     : std::true_type {};
+
+// A static selection carries its status in its type.
+template <typename Selection>
+constexpr auto is_bound(const Selection &selection) {
+  if constexpr (is_runtime_binding_selection<Selection>::value) {
+    return selection.status != binding_status::not_found;
+  } else {
+    return std::bool_constant<Selection::status != binding_status::not_found>{};
+  }
+}
 
 template <typename Count> struct is_constant_count : std::false_type {};
 
@@ -111,6 +92,8 @@ struct is_constant_count<std::integral_constant<std::size_t, Count>>
 //   requests the host does not bind
 // - count_collection<R>(key) and construct_request_collection<R>(scope,
 //   context, key), for hosts that construct collections
+// - resolve_exact_or<Request, R>(selection, scope, context, fallback): the
+//   request itself if its binding publishes it, otherwise fallback
 //
 // The origin of a request is the container it entered through; it answers the
 // requests that no container of the chain binds.
@@ -124,8 +107,8 @@ struct request_resolution {
   // A no-key collection that is bound as a type resolves as that binding.
   // Otherwise the collection is constructed from the bindings of its element,
   // and a host without any is answered by the parent or the origin.
-  template <typename Request, typename R, bool MayAutoConstruct, typename Host,
-            typename Context, typename Origin, typename LookupKey>
+  template <typename Request, typename R, typename Host, typename Context,
+            typename Origin, typename LookupKey>
   static R resolve(Host &host, construction_scope scope, Context &context,
                    Origin &origin, LookupKey key) {
     constexpr bool collection = collection_traits<R>::is_collection;
@@ -134,16 +117,16 @@ struct request_resolution {
                                               key);
     } else {
       auto selection = host.template select_request<Request>(key);
-      return resolve < Request, R, MayAutoConstruct && !collection,
-             collection > (host, selection, scope, context, origin, key);
+      return resolve<Request, R, collection>(host, selection, scope, context,
+                                             origin, key);
     }
   }
 
   // A selection resolves its binding. A miss of a collection request
   // constructs the collection when the host constructs collections.
-  template <typename Request, typename R, bool MayAutoConstruct,
-            bool Collection = false, typename Host, typename Selection,
-            typename Context, typename Origin, typename LookupKey>
+  template <typename Request, typename R, bool Collection = false,
+            typename Host, typename Selection, typename Context,
+            typename Origin, typename LookupKey>
   static R resolve(Host &host, Selection selection, construction_scope scope,
                    Context &context, Origin &origin, LookupKey &key) {
     if constexpr (is_runtime_binding_selection<Selection>::value) {
@@ -154,29 +137,94 @@ struct request_resolution {
         return host.template resolve_selected<Request, R>(selection, scope,
                                                           context);
       }
-      return resolve_unbound<Request, R, MayAutoConstruct, Collection>(
-          host, scope, context, origin, key);
+      return resolve_unbound<Request, R, Collection>(host, scope, context,
+                                                     origin, key);
     } else if constexpr (Selection::status == binding_status::found) {
       return host.template resolve_selected<Request, R>(selection, scope,
                                                         context);
     } else if constexpr (Selection::status == binding_status::ambiguous) {
       host.template ambiguous<Request>(context);
     } else {
-      return resolve_unbound<Request, R, MayAutoConstruct, Collection>(
-          host, scope, context, origin, key);
+      return resolve_unbound<Request, R, Collection>(host, scope, context,
+                                                     origin, key);
     }
   }
 
-  // Constructs a type that no container of the chain binds, when the request
-  // may construct it, through the root container of the chain.
-  template <typename Request, bool MayAutoConstruct, typename R,
-            typename Context, typename Root, typename LookupKey>
-  static R construct_unbound(construction_scope scope, Context &context,
-                             Root &root, const LookupKey &key) {
+  // construct<T>() of a container. A bound type resolves, as its normalized
+  // value when its binding does not publish the request itself; an unbound
+  // type is constructed by the factory.
+  template <typename Request, typename R, typename Host, typename Context,
+            typename Factory>
+  static R construct(Host &host, construction_scope scope, Context &context,
+                     Factory &factory) {
+    using user_type = typename Request::user_type;
     using value_type = typename Request::value_type;
-    if constexpr (MayAutoConstruct &&
-                  is_auto_constructible<
-                      std::decay_t<typename Request::user_type>>::value) {
+    using normalized = request_type<value_type>;
+    auto key = no_lookup_key();
+    auto unbound = [&](auto) -> R {
+      if constexpr (construct_factory_request_v<user_type>) {
+        auto type_guard = context.template track_type<value_type>();
+        return factory.template construct<R>(scope, context, host);
+      } else if constexpr (rvalue_request_requires_explicit_conversion_v<
+                               user_type>) {
+        throw_missing_rvalue_conversion<user_type>(false, context);
+      } else {
+        return resolve<Request, R>(host, scope, context, host, key);
+      }
+    };
+    if constexpr (!std::is_same_v<Factory, constructor<value_type>>) {
+      return unbound(0);
+    } else {
+      auto exact = host.template select_request<Request>(key);
+      auto value = host.template select_request<normalized>(key);
+      auto bound = [&](auto) -> R {
+        if constexpr (rvalue_request_requires_explicit_conversion_v<
+                          user_type>) {
+          throw_missing_rvalue_conversion<user_type>(is_bound(value), context);
+        } else if constexpr (construct_normalized_request_v<user_type>) {
+          return host.template resolve_exact_or<Request, R>(
+              exact, scope, context, [&](auto) -> R {
+                auto &&instance =
+                    resolve<normalized, typename normalized::lookup_type>(
+                        host, scope, context, host, key);
+                return type_traits<std::decay_t<user_type>>::make(
+                    std::forward<decltype(instance)>(instance));
+              });
+        } else {
+          return resolve<Request, R>(host, scope, context, host, key);
+        }
+      };
+      if constexpr (is_runtime_binding_selection<decltype(exact)>::value) {
+        if (is_bound(exact) || is_bound(value)) {
+          return bound(0);
+        }
+        return unbound(0);
+      } else if constexpr (decltype(is_bound(exact))::value ||
+                           decltype(is_bound(value))::value) {
+        return bound(0);
+      } else {
+        return unbound(0);
+      }
+    }
+  }
+
+  // A request that no container of the chain binds. A collection is
+  // constructed empty if the host declares its lookup; a type is constructed
+  // through the root container of the chain, when the request may construct
+  // it.
+  template <typename Request, bool MayAutoConstruct, typename R, typename Host,
+            typename Root, typename Context, typename LookupKey>
+  static R unresolved(Host &host, Root &root, construction_scope scope,
+                      Context &context, const LookupKey &key) {
+    using value_type = typename Request::value_type;
+    if constexpr (collection_traits<R>::is_collection) {
+      if constexpr (default_collection_append_v<R>) {
+        return host.template construct_request_collection<R>(scope, context,
+                                                             key);
+      }
+    } else if constexpr (MayAutoConstruct &&
+                         is_auto_constructible<std::decay_t<
+                             typename Request::user_type>>::value) {
       if constexpr (constructor<value_type>::kind ==
                     constructor_kind::concrete) {
         static_assert(is_complete<value_type>::value,
@@ -190,16 +238,16 @@ struct request_resolution {
   }
 
 private:
-  template <typename Request, typename R, bool MayAutoConstruct,
-            bool Collection, typename Host, typename Context, typename Origin,
-            typename LookupKey>
+  template <typename Request, typename R, bool Collection, typename Host,
+            typename Context, typename Origin, typename LookupKey>
   static R resolve_unbound(Host &host, construction_scope scope,
                            Context &context, Origin &origin, LookupKey &key) {
     if constexpr (Collection) {
       return construct_collection<Request, R>(host, scope, context, origin,
                                               key);
     } else {
-      return resolve_missing<Request, R, MayAutoConstruct,
+      return resolve_missing<Request, R,
+                             may_auto_construct_v<typename Request::user_type>,
                              typename Request::lookup_type>(
           host, scope, context, origin, key);
     }
@@ -260,6 +308,88 @@ private:
     }
     return origin.template unresolved<Request, MayAutoConstruct, LookupKey, R>(
         scope, context, key);
+  }
+};
+
+// The request entry points of both containers. A container provides
+// resolve_entry<Request, R>(lookup_key), construct_collection<T>(fn,
+// lookup_key), count_collection<T>(lookup_key) and with_context(fn), which
+// runs fn with a fresh resolution context, and is the host of
+// request_resolution.
+template <typename Container> class container_interface {
+  template <typename Collection, typename Fn>
+  using collection_insert_invocable =
+      std::is_invocable<Fn &, Collection &,
+                        typename collection_traits<Collection>::resolve_type>;
+
+  Container &self() { return static_cast<Container &>(*this); }
+
+public:
+  template <typename T, typename IdType = none_t,
+            typename R = request_result_t<T, true>,
+            std::enable_if_t<!is_lookup_key_v<std::decay_t<IdType>>, int> = 0>
+  DINGO_ALWAYS_INLINE R resolve(IdType &&id = IdType()) {
+    return self().template resolve_entry<request_type<T>, R>(
+        make_lookup_key(std::forward<IdType>(id)));
+  }
+
+  template <typename T, typename LookupKey,
+            typename R = request_result_t<T, true>,
+            std::enable_if_t<is_lookup_key_v<LookupKey>, int> = 0>
+  DINGO_ALWAYS_INLINE R resolve(LookupKey key) {
+    return self().template resolve_entry<request_type<T>, R>(std::move(key));
+  }
+
+  template <typename T, typename Factory = constructor<normalized_type_t<T>>,
+            typename R = request_result_t<T, true>>
+  R construct(Factory factory = Factory()) {
+    return self().with_context([&](auto &context) -> R {
+      return request_resolution::construct<request_type<T>, R>(
+          self(), ephemeral_scope, context, factory);
+    });
+  }
+
+  template <typename T> T construct_collection() {
+    return self().template construct_collection<T>(binding_collection_append{},
+                                                   no_lookup_key());
+  }
+
+  template <typename T, typename Arg,
+            std::enable_if_t<!is_lookup_key_v<std::decay_t<Arg>>, int> = 0>
+  T construct_collection(Arg &&arg) {
+    if constexpr (collection_insert_invocable<T, std::decay_t<Arg>>::value) {
+      return self().template construct_collection<T>(std::forward<Arg>(arg),
+                                                     no_lookup_key());
+    } else {
+      return self().template construct_collection<T>(
+          binding_collection_append{}, make_lookup_key(std::forward<Arg>(arg)));
+    }
+  }
+
+  template <typename T, typename Fn, typename IdType,
+            std::enable_if_t<!is_lookup_key_v<std::decay_t<IdType>>, int> = 0>
+  T construct_collection(Fn &&fn, IdType &&id) {
+    return self().template construct_collection<T>(
+        std::forward<Fn>(fn), make_lookup_key(std::forward<IdType>(id)));
+  }
+
+  template <typename T, typename IdType = none_t,
+            std::enable_if_t<!is_lookup_key_v<std::decay_t<IdType>>, int> = 0>
+  std::size_t count_collection(IdType &&id = IdType()) {
+    return self().template count_collection<T>(
+        make_lookup_key(std::forward<IdType>(id)));
+  }
+
+  template <typename Signature = void, typename Callable>
+  auto invoke(Callable &&callable) {
+    using callable_type = std::remove_cv_t<std::remove_reference_t<Callable>>;
+    using dispatch_signature =
+        callable_dispatch_signature_t<Signature, callable_type>;
+    return self().with_context([&](auto &context) {
+      auto type_guard = context.template track_type<callable_type>();
+      return callable_invoke<dispatch_signature>::construct(
+          std::forward<Callable>(callable), ephemeral_scope, context, self());
+    });
   }
 };
 

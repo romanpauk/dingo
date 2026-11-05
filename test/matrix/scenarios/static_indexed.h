@@ -107,8 +107,8 @@ inline void assert_static_indexed_many_resolution() {
 
   ASSERT_EQ(
       (container
-           .template count_collection<std::vector<static_indexed_processor *>,
-                                      dingo::key_type<std::size_t, 7>>()),
+           .template count_collection<std::vector<static_indexed_processor *>>(
+               dingo::key_type<std::size_t, 7>{})),
       2U);
   ASSERT_EQ(processors.size(), 2U);
   ASSERT_EQ(processors[0]->id(), 0);

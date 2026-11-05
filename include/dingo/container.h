@@ -88,10 +88,6 @@ public:
   using lookup_definition_type = typename runtime_base::lookup_definition_type;
 
 private:
-  template <typename T>
-  static constexpr bool runtime_auto_constructible_v =
-      detail::is_runtime_auto_constructible_dependency_v<T>;
-
   // The parent answers only the lookups it declares.
   template <typename Lookup, typename LookupKey>
   static constexpr bool parent_serves() {
@@ -106,58 +102,6 @@ private:
                          LookupKey key) {
     return runtime_registry_.template construct_collection<T>(
         scope, context, std::forward<Fn>(fn), std::move(key));
-  }
-
-  template <typename Request, typename R = typename Request::result_type>
-  R construct_resolved_request(construction_scope scope,
-                               runtime_context_type &context) {
-    using user_type = typename Request::user_type;
-    try {
-      return resolve<Request, R, runtime_auto_constructible_v<user_type>>(
-          scope, context, *this, detail::no_lookup_key());
-    } catch (const type_not_convertible_exception &) {
-      using request_value_type = typename Request::value_type;
-      using normalized = request_type<request_value_type>;
-      auto &&value =
-          resolve<normalized, typename normalized::lookup_type, true>(
-              scope, context, *this, detail::no_lookup_key());
-      return type_traits<std::decay_t<user_type>>::make(
-          std::forward<decltype(value)>(value));
-    }
-  }
-
-  template <typename Request,
-            typename Factory = constructor<typename Request::value_type>,
-            typename R = typename Request::result_type>
-  R construct_request(construction_scope scope, runtime_context_type &context,
-                      Factory factory = Factory()) {
-    using user_type = typename Request::user_type;
-    using request_value_type = typename Request::value_type;
-    constexpr bool may_auto = runtime_auto_constructible_v<user_type>;
-
-    if constexpr (std::is_same_v<Factory, constructor<request_value_type>>) {
-      auto key = detail::no_lookup_key();
-      if (binding_status<typename Request::lookup_type>(key) !=
-          detail::binding_status::not_found) {
-        if constexpr (!construct_normalized_request_v<user_type> ||
-                      ::dingo::rvalue_request_requires_explicit_conversion_v<
-                          user_type>) {
-          return resolve<Request, R, may_auto>(scope, context, *this, key);
-        } else {
-          return construct_resolved_request<Request, R>(scope, context);
-        }
-      }
-    }
-
-    if constexpr (construct_factory_request_v<user_type>) {
-      return factory.template construct<R>(scope, context, *this);
-    } else if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
-                             user_type>) {
-      ::dingo::throw_missing_rvalue_conversion<user_type>(false, context);
-    } else {
-      auto key = detail::no_lookup_key();
-      return resolve<Request, R, may_auto>(scope, context, *this, key);
-    }
   }
 
 public:
@@ -195,8 +139,6 @@ private:
   template <typename Request, typename R, typename LookupKey>
   R resolve_entry(LookupKey key) {
     using interface_type = typename Request::interface_type;
-    // MSVC's pre-C++20 lambda processor does not treat an enclosing constexpr
-    // local as a constant expression, so the constant is spelled in place.
     if constexpr (is_cacheable<Request, R>()) {
       auto selected = select_request<Request>(key);
       auto result =
@@ -206,9 +148,7 @@ private:
             result);
       }
       return with_context([&](runtime_context_type &context) -> R {
-        return detail::request_resolution::resolve<
-            Request, R,
-            runtime_auto_constructible_v<typename Request::user_type>>(
+        return detail::request_resolution::resolve<Request, R>(
             *this, selected, ephemeral_scope, context, *this, key);
       });
     } else {
@@ -220,32 +160,7 @@ private:
   }
 
 public:
-  template <typename T, typename IdType = none_t,
-            typename R = request_result_t<T, true>,
-            std::enable_if_t<!detail::is_lookup_key_v<IdType>, int> = 0>
-  DINGO_ALWAYS_INLINE R resolve(IdType &&id = IdType()) {
-    using request = request_type<T>;
-    auto key = detail::make_lookup_key(std::forward<IdType>(id));
-    return resolve_entry<request, R>(std::move(key));
-  }
-
-  template <typename T, typename LookupKey,
-            typename R = request_result_t<T, true>,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  DINGO_ALWAYS_INLINE R resolve(LookupKey key) {
-    using request = request_type<T>;
-    return resolve_entry<request, R>(std::move(key));
-  }
-
-  template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-            typename R = request_result_t<T, true>>
-  DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {
-    return with_context([&](runtime_context_type &context) -> R {
-      return construct_request<request_type<T>, Factory, R>(
-          ephemeral_scope, context, std::move(factory));
-    });
-  }
-
+  using detail::container_interface<self_type>::resolve;
   using detail::container_interface<self_type>::construct_collection;
   using detail::container_interface<self_type>::count_collection;
 
@@ -278,15 +193,6 @@ public:
     return status;
   }
 
-  template <typename T, typename Fn, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t append_collection(construction_scope scope, T &results,
-                                runtime_context_type &context, Fn &&fn,
-                                LookupKey key) {
-    return runtime_registry_.template append_collection<T>(
-        scope, results, context, std::forward<Fn>(fn), std::move(key));
-  }
-
   template <typename T, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   std::size_t count_collection(LookupKey key) {
@@ -295,6 +201,7 @@ public:
 
 private:
   friend struct detail::request_resolution;
+  friend class detail::container_interface<self_type>;
 
   template <typename Request, typename LookupKey>
   auto select_request(const LookupKey &key) {
@@ -328,25 +235,33 @@ private:
         scope, context, detail::binding_collection_append{}, std::move(key));
   }
 
-  template <typename Request, typename R,
-            bool MayAutoConstruct =
-                runtime_auto_constructible_v<typename Request::user_type>,
-            typename Origin, typename LookupKey,
+  // The request itself if its binding publishes it, otherwise fallback.
+  template <typename Request, typename R, typename Selection, typename Fallback>
+  R resolve_exact_or(Selection, construction_scope scope,
+                     runtime_context_type &context, Fallback &&fallback) {
+    try {
+      return resolve<Request, R>(scope, context, *this,
+                                 detail::no_lookup_key());
+    } catch (const type_not_convertible_exception &) {
+      return fallback(0);
+    }
+  }
+
+  template <typename Request, typename R, typename Origin, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(construction_scope scope, runtime_context_type &context,
             Origin &origin, LookupKey key) {
-    return detail::request_resolution::resolve<Request, R, MayAutoConstruct>(
+    return detail::request_resolution::resolve<Request, R>(
         *this, scope, context, origin, std::move(key));
   }
 
-  template <typename Request, typename R, bool MayAutoConstruct,
-            typename Origin, typename LookupKey>
+  template <typename Request, typename R, typename Origin, typename LookupKey>
   DINGO_NOINLINE R resolve_nested(construction_scope scope,
                                   runtime_context_type &context, Origin &origin,
                                   LookupKey key) {
     return execute_transaction(runtime_registry_.runtime(), context,
                                [&](runtime_context_type &local_context) -> R {
-                                 return resolve<Request, R, MayAutoConstruct>(
+                                 return resolve<Request, R>(
                                      scope, local_context, origin,
                                      std::move(key));
                                });
@@ -372,13 +287,10 @@ public:
                                 runtime_context_type &context, Origin &origin,
                                 LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
-    constexpr bool may_auto = runtime_auto_constructible_v<T>;
     if (context.owns(runtime_registry_.runtime())) {
-      return resolve<request, R, may_auto>(scope, context, origin,
-                                           std::move(key));
+      return resolve<request, R>(scope, context, origin, std::move(key));
     }
-    return resolve_nested<request, R, may_auto>(scope, context, origin,
-                                                std::move(key));
+    return resolve_nested<request, R>(scope, context, origin, std::move(key));
   }
 
   template <typename Request, bool MayAutoConstruct, typename LookupKey,
@@ -386,20 +298,8 @@ public:
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R unresolved(construction_scope scope, runtime_context_type &context,
                LookupKey key) {
-    if constexpr (collection_traits<R>::is_collection) {
-      if constexpr (detail::default_collection_append_v<R>) {
-        return construct_collection<R>(scope, context,
-                                       detail::binding_collection_append{},
-                                       std::move(key));
-      } else {
-        throw detail::make_type_not_found_exception<
-            typename Request::lookup_type>(context, key);
-      }
-    } else {
-      return detail::request_resolution::construct_unbound<Request,
-                                                           MayAutoConstruct, R>(
-          scope, context, *this, key);
-    }
+    return detail::request_resolution::unresolved<Request, MayAutoConstruct, R>(
+        *this, *this, scope, context, key);
   }
 
 private:

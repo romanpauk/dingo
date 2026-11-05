@@ -23,20 +23,12 @@ template <> struct conversion_cache<> {
   void reset() {}
 };
 
+// A conversion constructed once and kept until the cache is reset or the
+// transaction that constructed it rolls back.
 template <typename T> struct conversion_cache_entry {
-  template <typename Owner, typename... Args>
-  T &construct(construction_scope scope, Owner &owner, Args &&...args) {
-    if (value_ == nullptr) {
-      value_ = std::addressof(
-          owner.template construct<T>(scope, std::forward<Args>(args)...));
-    }
-    return *value_;
-  }
-
   template <typename Context, typename... Args>
-  T &construct_tracked(Context &context, Args &&...args) {
+  T &construct(Context &context, Args &&...args) {
     if (value_ == nullptr) {
-      assert(value_ == nullptr);
       auto *created = std::addressof(context.template construct<T>(
           persistent_scope, std::forward<Args>(args)...));
       context.on_rollback(
@@ -56,15 +48,9 @@ template <typename T> struct conversion_cache_entry {
 
 template <typename... Types>
 struct conversion_cache : conversion_cache_entry<Types>... {
-  template <typename T, typename Owner, typename... Args>
-  T &construct(construction_scope scope, Owner &owner, Args &&...args) {
-    return static_cast<conversion_cache_entry<T> &>(*this).construct(
-        scope, owner, std::forward<Args>(args)...);
-  }
-
   template <typename T, typename Context, typename... Args>
-  T &construct_tracked(Context &context, Args &&...args) {
-    return static_cast<conversion_cache_entry<T> &>(*this).construct_tracked(
+  T &construct(Context &context, Args &&...args) {
+    return static_cast<conversion_cache_entry<T> &>(*this).construct(
         context, std::forward<Args>(args)...);
   }
 

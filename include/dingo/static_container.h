@@ -25,7 +25,6 @@
 #include <dingo/static/context.h>
 #include <dingo/static/graph.h>
 #include <dingo/static/registry.h>
-#include <dingo/static/resolution.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/collection_traits.h>
 #include <dingo/type/dependency.h>
@@ -209,31 +208,7 @@ public:
   explicit static_container_impl(Parent *parent)
       : parent_(container_implementation_of(parent)) {}
 
-  template <typename T, typename Key = key_type<none_t>,
-            typename R = request_result_t<T, true>>
-  R resolve() {
-    using lookup_key_type =
-        decltype(detail::make_lookup_key(type_selector<Key>{}));
-    return resolve<T, lookup_key_type, R>(
-        detail::make_lookup_key(type_selector<Key>{}));
-  }
-
-  template <typename T, typename LookupKey,
-            typename R = request_result_t<T, true>,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(LookupKey key) {
-    using lookup_request = request_type<T, true>;
-    using request = request_type<T, false>;
-    if constexpr (uses_static_minimal_context_v<request, R, LookupKey>) {
-      no_dependency_context context;
-      return resolve_bound<typename lookup_request::lookup_type, R, LookupKey>(
-          ephemeral_scope, context);
-    } else {
-      context_type context;
-      return request_resolution::resolve<request, R, false>(
-          *this, ephemeral_scope, context, *this, key);
-    }
-  }
+  using container_interface<static_container_impl>::resolve;
 
   template <typename T, bool RemoveRvalueReferences, typename Context,
             typename LookupKey,
@@ -251,79 +226,8 @@ public:
   R resolve(construction_scope scope, Context &context, Origin &origin,
             LookupKey key) {
     return request_resolution::resolve<request_type<T, RemoveRvalueReferences>,
-                                       R, false>(*this, scope, context, origin,
-                                                 std::move(key));
-  }
-
-  template <typename T, typename IdType, typename R = request_result_t<T, true>,
-            std::enable_if_t<!detail::is_lookup_key_v<IdType>, int> = 0>
-  R resolve(IdType &&id) {
-    auto key = detail::make_lookup_key(std::forward<IdType>(id));
-    using lookup_key_type = decltype(key);
-    if constexpr (detail::is_static_lookup_key_v<lookup_key_type>) {
-      return resolve<T, lookup_key_type, R>(std::move(key));
-    } else {
-      static_assert(detail::dependent_false_v<T, lookup_key_type>,
-                    "static_container fixed runtime-key request requires "
-                    "dingo::key_type<Key, Value>");
-    }
-  }
-
-  template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-            typename R = request_result_t<T, true>>
-  R construct(Factory factory = Factory()) {
-    return construct_request<request_type<T>, Factory, R>(std::move(factory));
-  }
-
-private:
-  template <typename Request,
-            typename Factory = constructor<typename Request::value_type>,
-            typename R = typename Request::result_type>
-  R construct_request(Factory factory = Factory()) {
-    using user_type = typename Request::user_type;
-    using request_value_type = typename Request::value_type;
-    using interface_type = typename Request::interface_type;
-    if constexpr (std::is_same_v<Factory, constructor<request_value_type>>) {
-      using selection = typename static_bindings_type::template selection<
-          binding_dependency_interface_t<interface_type>,
-          binding_dependency_key_t<interface_type>>;
-      using normalized_selection =
-          typename static_bindings_type::template selection<
-              request_value_type, detail::no_lookup_key_t>;
-      constexpr bool has_exact_binding =
-          selection::status != binding_status::not_found;
-      constexpr bool has_normalized_binding =
-          normalized_selection::status != binding_status::not_found;
-      if constexpr (has_exact_binding) {
-        using binding = typename selection::binding_type;
-        if constexpr (binding_supports_request_v<user_type, binding>) {
-          return resolve<user_type>();
-        }
-      }
-
-      if constexpr (has_exact_binding || has_normalized_binding) {
-        if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
-                          user_type>) {
-          context_type context;
-          ::dingo::throw_missing_rvalue_conversion<user_type>(
-              has_normalized_binding, context);
-        } else if constexpr (construct_normalized_request_v<user_type>) {
-          return construct_static_binding_value<user_type,
-                                                normalized_selection>(
-              [&]() { return resolve<request_value_type>(); });
-        } else {
-          return resolve<user_type>();
-        }
-      } else {
-        context_type context;
-        auto type_guard = context.template track_type<request_value_type>();
-        return factory.template construct<R>(ephemeral_scope, context, *this);
-      }
-    } else {
-      context_type context;
-      auto type_guard = context.template track_type<request_value_type>();
-      return factory.template construct<R>(ephemeral_scope, context, *this);
-    }
+                                       R>(*this, scope, context, origin,
+                                          std::move(key));
   }
 
 public:
@@ -356,15 +260,6 @@ public:
   template <typename Fn> decltype(auto) with_context(Fn &&fn) {
     context_type context;
     return std::forward<Fn>(fn)(context);
-  }
-
-  template <typename T, typename Fn, typename Context, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t append_collection(construction_scope scope, T &results,
-                                Context &context, Fn &&fn, LookupKey) {
-    return storage_
-        .template append_collection<T, LookupKey, static_bindings_type>(
-            scope, results, *this, context, std::forward<Fn>(fn));
   }
 
   template <typename T, typename LookupKey,
@@ -406,6 +301,45 @@ public:
 
 private:
   friend struct detail::request_resolution;
+  friend class container_interface<static_container_impl>;
+
+  template <typename Request, typename R, typename LookupKey>
+  R resolve_entry(LookupKey key) {
+    static_assert(detail::is_static_lookup_key_v<LookupKey>,
+                  "static_container fixed runtime-key request requires "
+                  "dingo::key_type<Key, Value>");
+    if constexpr (uses_static_minimal_context_v<Request, R, LookupKey>) {
+      no_dependency_context context;
+      return resolve_bound<
+          typename request_type<typename Request::user_type, true>::lookup_type,
+          R, LookupKey>(ephemeral_scope, context);
+    } else {
+      context_type context;
+      return request_resolution::resolve<Request, R>(*this, ephemeral_scope,
+                                                     context, *this, key);
+    }
+  }
+
+  // The request itself if its binding publishes it, otherwise fallback.
+  template <typename Request, typename R, typename Selection, typename Context,
+            typename Fallback>
+  R resolve_exact_or(Selection, construction_scope scope, Context &context,
+                     Fallback &&fallback) {
+    constexpr bool exact = [] {
+      if constexpr (Selection::status == binding_status::found) {
+        return binding_supports_request_v<typename Request::user_type,
+                                          typename Selection::binding_type>;
+      } else {
+        return false;
+      }
+    }();
+    if constexpr (exact) {
+      return request_resolution::resolve<Request, R>(*this, scope, context,
+                                                     *this, no_lookup_key());
+    } else {
+      return fallback(0);
+    }
+  }
 
   template <typename Request, typename LookupKey>
   auto select_request(const LookupKey &) {

@@ -180,7 +180,8 @@ Dependencies are selected with the following rules:
 - local-only singular match: selected
 - local and host both provide the same singular binding: local wins
 - host-only singular match: selected
-- collection request: merge local and host results
+- collection request: the local entries if there are any, otherwise the host
+  entries
 
 ## Parent Containers And Auto Construction
 

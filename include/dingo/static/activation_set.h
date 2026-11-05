@@ -215,8 +215,8 @@ template <typename Request, typename InterfaceBinding>
 inline constexpr bool binding_supports_request_v =
     binding_supports_request<Request, InterfaceBinding>::value;
 
-// The dependencies of a static binding resolve through its local bindings
-// first, then through the host.
+// The dependencies of a static binding resolve through its local bindings if
+// they bind the request, otherwise through the host.
 template <typename LocalStorage, typename LocalBindings, typename Host>
 struct local_binding_router {
   LocalStorage &local;
@@ -229,33 +229,27 @@ struct local_binding_router {
                          LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
     using R = typename request::result_type;
-    if constexpr (collection_traits<R>::is_collection) {
-      using collection_type = collection_traits<R>;
-      R results;
-      auto append = [](auto &values, auto &&value) {
-        collection_type::add(values, std::forward<decltype(value)>(value));
-      };
-      const auto local_count =
-          local.template append_collection<R, LookupKey, LocalBindings>(
-              scope, results, host, context, append);
-      const auto host_count = host.template append_collection<R>(
-          scope, results, context, append, key);
-      if (local_count + host_count == 0) {
-        throw detail::make_collection_type_not_found_exception<
-            R, typename collection_type::resolve_type>();
-      }
-      return results;
-    } else {
-      using selection =
-          typename LocalBindings::template selection<R, LookupKey>;
-      if constexpr (selection::status == detail::binding_status::found) {
-        return local.template resolve<typename selection::binding_type, R>(
-            scope, host, context);
+    constexpr bool collection = collection_traits<R>::is_collection;
+    constexpr bool bound_locally = [] {
+      if constexpr (collection) {
+        return static_collection_binding_count<LocalBindings, R, LookupKey>() !=
+               0;
       } else {
-        return host.template resolve<typename request::user_type,
-                                     request::removes_rvalue_references>(
-            scope, context, std::move(key));
+        return LocalBindings::template selection<R, LookupKey>::status ==
+               binding_status::found;
       }
+    }();
+    if constexpr (!bound_locally) {
+      return host.template resolve<typename request::user_type,
+                                   request::removes_rvalue_references>(
+          scope, context, std::move(key));
+    } else if constexpr (collection) {
+      return local.template construct_collection<R, LookupKey, LocalBindings>(
+          scope, host, context);
+    } else {
+      return local.template resolve<typename LocalBindings::template selection<
+                                        R, LookupKey>::binding_type,
+                                    R>(scope, host, context);
     }
   }
 };
@@ -414,12 +408,12 @@ private:
         typename static_dependencies<Host, typename model::bindings_type>::type;
     auto &cell = static_cast<binding_cell_slot<registration> &>(*this).cell;
     if constexpr (std::is_reference_v<dependencies>) {
-      return binding_activation<binding_cell_t<model>, dependencies, false>{
-          cell, host, scope};
+      return binding_activation<binding_cell_t<model>, dependencies>{cell, host,
+                                                                     scope};
     } else {
       auto &local =
           static_cast<local_binding_scope_slot<registration> &>(*this).scope;
-      return binding_activation<binding_cell_t<model>, dependencies, false>{
+      return binding_activation<binding_cell_t<model>, dependencies>{
           cell, {local, host}, scope};
     }
   }

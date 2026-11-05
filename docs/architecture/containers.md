@@ -68,8 +68,8 @@ resolved from the parent graph. A static container's parent is a static
 container.
 
 Local `bindings<...>` on a static binding declare a child graph for that
-binding's dependencies. Singular resolution checks the local bindings before the
-host bindings, while collection resolution merges local and host matches.
+binding's dependencies. They shadow the host bindings: a request the local
+bindings answer, singular or collection, does not reach the host.
 
 ## Direct Construction
 

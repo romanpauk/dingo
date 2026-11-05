@@ -104,10 +104,6 @@ using size_keyed_binding =
 using size_single_owner =
     size_probe_registry::owner<type_list<size_interface>, size_storage,
                                size_binding_state, none_t>;
-using size_shared_state_owner =
-    size_probe_registry::owner<type_list<size_interface, size_implementation>,
-                               size_storage,
-                               std::shared_ptr<size_binding_state>, none_t>;
 using size_multi_interface_registration =
     type_registration<scope<shared>,
                       storage<std::shared_ptr<size_multi_implementation>>,
@@ -126,10 +122,6 @@ using size_multi_interface_state =
 using size_multi_interface_pointer_state_owner = size_probe_registry::owner<
     typename size_multi_interface_model::interface_types,
     size_multi_interface_storage, size_multi_interface_state *, none_t>;
-using size_multi_interface_shared_state_owner = size_probe_registry::owner<
-    typename size_multi_interface_model::interface_types,
-    size_multi_interface_storage, std::shared_ptr<size_multi_interface_state>,
-    none_t>;
 
 using size_type_index = typename size_registry_type::rtti_type::type_index;
 using size_type_map_value = size_probe_registry::runtime_lookup_value;
@@ -237,10 +229,6 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
                                            64);
     expect_size_at_most<size_multi_interface_pointer_state_owner>(
         "multi-interface pointer-state binding owner", 80);
-    expect_size_at_most<size_multi_interface_shared_state_owner>(
-        "multi-interface shared-state binding owner", 96);
-    expect_size_at_most<size_shared_state_owner>(
-        "single-interface shared-state binding owner", 64);
 
     expect_size_at_most<size_probe_registry::runtime_lookup_binding_view>(
         "runtime lookup binding view", 8);

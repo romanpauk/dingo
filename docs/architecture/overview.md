@@ -156,8 +156,8 @@ At a high level, Dingo runs this sequence:
 7. The matched resolution operation converts that materialized source into the
    requested `T`.
 
-Registration child bindings take precedence for singular requests, and
-collection requests merge the child's matches with the root container.
+Registration child bindings and static local bindings take precedence over the
+container they extend, for singular and collection requests alike.
 
 The pieces above are not independent extension systems. They cooperate in one
 pipeline.

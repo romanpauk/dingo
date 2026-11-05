@@ -167,19 +167,16 @@ public:
 
   storage_type &storage() { return storage_; }
 
-  // A cached conversion outlives the request. Tracked, it is forgotten again
-  // when the transaction that constructed it rolls back.
-  template <typename T, bool Tracked, typename Context, typename... Args>
+  // A cached conversion outlives the request; it is forgotten again when the
+  // transaction that constructed it rolls back.
+  template <typename T, typename Context, typename... Args>
   T &construct_conversion(construction_scope scope, Context &context,
                           Args &&...args) {
-    if constexpr (!has_conversion_cache) {
-      return context.template construct<T>(scope, std::forward<Args>(args)...);
-    } else if constexpr (Tracked) {
-      return conversions().template construct_tracked<T>(
-          context, std::forward<Args>(args)...);
-    } else {
-      return conversions().template construct<T>(scope, context,
+    if constexpr (has_conversion_cache) {
+      return conversions().template construct<T>(context,
                                                  std::forward<Args>(args)...);
+    } else {
+      return context.template construct<T>(scope, std::forward<Args>(args)...);
     }
   }
 
@@ -277,11 +274,10 @@ void *result_address(construction_scope scope, Context &context, T &&instance) {
 //
 // Dependencies is what the factory of the binding receives as its container:
 // a container reference, or a value that routes requests through the local
-// bindings of a static registration first. A tracked activation belongs to a
-// runtime transaction: it rolls back what a failed resolution left in the
-// cell.
-template <typename Cell, typename Dependencies, bool Tracked>
-struct binding_activation {
+// bindings of a static registration first. In a runtime transaction the
+// activation tracks what it leaves in the cell, so that a failed transaction
+// rolls it back.
+template <typename Cell, typename Dependencies> struct binding_activation {
   using storage_type = typename Cell::storage_type;
   using owner_type = std::remove_reference_t<Dependencies>;
   using materialization_traits =
@@ -295,8 +291,8 @@ struct binding_activation {
   template <typename T, typename Context, typename Source>
   decltype(auto) construct_conversion(construction_scope construction,
                                       Context &context, Source &&source) {
-    return cell.template construct_conversion<T, Tracked>(
-        construction, context, std::forward<Source>(source));
+    return cell.template construct_conversion<T>(construction, context,
+                                                 std::forward<Source>(source));
   }
 
   template <typename T, typename Context, typename Source>
@@ -314,39 +310,15 @@ struct binding_activation {
   // Materializes the storage and passes its source to fn.
   //
   // An address request (an lvalue reference or a pointer) of a storage that
-  // yields a value places the value in the context. A runtime context keeps a
-  // source that unresolved storage retains in the transaction; a tracked
-  // activation also resets the cell when the transaction fails or, once
-  // sealed, when its runtime is destroyed. A static context keeps a retained
-  // source in a frame of its own.
+  // yields a value places the value in the context. A static context keeps a
+  // retained source in a frame of its own.
   template <typename Request, typename Operation, typename Context, typename Fn>
   decltype(auto) with_source(Context &context, Fn &&fn) {
     auto &storage = cell.storage();
     [[maybe_unused]] auto guard = materialization_traits::template make_guard<
         leaf_type_t<typename storage_type::type>>(context, storage);
-    if constexpr (Tracked) {
-      static_assert(is_runtime_context_v<Context>,
-                    "a tracked activation resolves in a runtime transaction");
-      if constexpr (materialization_traits::can_retain_source) {
-        if (materialization_traits::retains_source(storage)) {
-          context.on_rollback(cell.resets_storage_on_failure()
-                                  ? +[](void *self, void *) noexcept {
-                                      static_cast<Cell *>(self)->reset(true);
-                                    }
-                                  : +[](void *self, void *) noexcept {
-                                      static_cast<Cell *>(self)->reset(false);
-                                    },
-                              std::addressof(cell));
-          auto result = with_runtime_source(persistent_scope, context,
-                                            std::forward<Fn>(fn));
-          context.add_runtime_destructor(
-              std::addressof(cell), +[](void *self) noexcept {
-                static_cast<Cell *>(self)->reset(true);
-              });
-          return result;
-        }
-      }
-      return with_runtime_source(scope, context, std::forward<Fn>(fn));
+    if constexpr (is_runtime_context_v<Context>) {
+      return with_transaction_source(context, std::forward<Fn>(fn));
     } else if constexpr ((std::is_lvalue_reference_v<Request> ||
                           std::is_pointer_v<Request>) &&
                          materializes_value_source_v<storage_type, Context,
@@ -358,8 +330,6 @@ struct binding_activation {
           scope, storage.resolve(scope, context, dependencies));
       auto source = lvalue_source<source_type>(value);
       return std::forward<Fn>(fn)(source);
-    } else if constexpr (is_runtime_context_v<Context>) {
-      return with_runtime_source(scope, context, std::forward<Fn>(fn));
     } else {
       constexpr bool retains =
           operation_requires_source_retention_v<Operation> &&
@@ -431,6 +401,51 @@ struct binding_activation {
   }
 
 private:
+  // A runtime context keeps a retained source in the transaction; the cell is
+  // reset when the transaction fails or, once sealed, when its runtime is
+  // destroyed.
+  template <typename Context, typename Fn>
+  decltype(auto) with_transaction_source(Context &context, Fn &&fn) {
+    if constexpr (materialization_traits::can_retain_source) {
+      if (materialization_traits::retains_source(cell.storage())) {
+        context.on_rollback(cell.resets_storage_on_failure()
+                                ? +[](void *self, void *) noexcept {
+                                    static_cast<Cell *>(self)->reset(true);
+                                  }
+                                : +[](void *self, void *) noexcept {
+                                    static_cast<Cell *>(self)->reset(false);
+                                  },
+                            std::addressof(cell));
+        return invoke_then(
+            [&]() -> decltype(auto) {
+              return with_runtime_source(persistent_scope, context,
+                                         std::forward<Fn>(fn));
+            },
+            [&] {
+              context.add_runtime_destructor(
+                  std::addressof(cell), +[](void *self) noexcept {
+                    static_cast<Cell *>(self)->reset(true);
+                  });
+            });
+      }
+    }
+    return with_runtime_source(scope, context, std::forward<Fn>(fn));
+  }
+
+  // Runs after once fn has succeeded and returns what fn returned.
+  template <typename Fn, typename After>
+  static std::invoke_result_t<Fn &> invoke_then(Fn &&fn, After &&after) {
+    using result_type = std::invoke_result_t<Fn &>;
+    if constexpr (std::is_void_v<result_type>) {
+      fn();
+      after();
+    } else {
+      result_type result = fn();
+      after();
+      return std::forward<result_type>(result);
+    }
+  }
+
   // A runtime context places a source it retains in the transaction, as it
   // does every source of a persistent request.
   template <typename Context, typename Fn>
