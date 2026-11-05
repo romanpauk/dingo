@@ -14,7 +14,7 @@
 
 namespace dingo {
 
-template <typename StaticRegistry> class static_context;
+template <typename Backend> class resolution_context;
 
 namespace detail {
 
@@ -34,9 +34,9 @@ inline constexpr bool is_constructor_v<constructor<Ts...>> = true;
 template <typename Context>
 inline constexpr bool checks_declared_cycles_v = false;
 
-template <typename StaticRegistry>
-inline constexpr bool checks_declared_cycles_v<static_context<StaticRegistry>> =
-    true;
+template <typename Backend>
+inline constexpr bool checks_declared_cycles_v<resolution_context<Backend>> =
+    !Backend::is_transactional;
 
 template <>
 inline constexpr bool checks_declared_cycles_v<no_dependency_context> = true;

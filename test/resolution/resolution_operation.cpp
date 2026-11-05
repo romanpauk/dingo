@@ -79,7 +79,7 @@ struct alternative_storage {
   using resolved_type = alternative_type &;
 };
 
-struct resolution_context {};
+struct fake_resolution_context {};
 
 struct destructor_order_value {
   destructor_order_value(int init, std::vector<int> &target_order)
@@ -108,7 +108,7 @@ TEST(resolution_operation_test,
   alternative_type value(std::in_place_type<alternative_a>, 7);
   alternative_factory lvalue_factory{value};
   alternative_pointer_factory pointer_factory{&value};
-  resolution_context context;
+  fake_resolution_context context;
 
   using reference_operation =
       detail::type_resolution<unrelated_alternative &, alternative_type &,
@@ -198,8 +198,8 @@ TEST(resolution_operation_test,
   static_assert(conversion::available);
 
   source value;
-  resolution_context resolver;
-  resolution_context context;
+  fake_resolution_context resolver;
+  fake_resolution_context context;
   auto converted = detail::type_conversion<conversion>::apply(
       resolver, context, value, describe_type<target>(),
       describe_type<source>());
@@ -215,8 +215,8 @@ TEST(resolution_operation_test,
       detail::storage<shared, array_type, array_type,
                       destructor_order_array_factory,
                       detail::conversions<shared, array_type, array_type>>;
-  resolution_context context;
-  resolution_context container;
+  fake_resolution_context context;
+  fake_resolution_context container;
 
   storage_type storage(destructor_order_array_factory{&order});
   storage.resolve(persistent_scope, context, container);

@@ -61,7 +61,7 @@ class detail::runtime_container_impl
           ContainerTraits, Allocator, ParentContainer>>,
       public detail::container_interface<detail::runtime_container_impl<
           ContainerTraits, Allocator, ParentContainer>> {
-  template <typename> friend class runtime_context;
+  template <typename> friend class ::dingo::resolution_context;
 
   using self_type = detail::runtime_container_impl<ContainerTraits, Allocator,
                                                    ParentContainer>;

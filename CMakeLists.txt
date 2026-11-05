@@ -150,6 +150,7 @@ if(DINGO_DEVELOPMENT_MODE)
         runtime/runtime_binding.h
         storage/interface_storage_traits.h
         context/context_base.h
+        context/resolution_context.h
         runtime/context.h
         static/context.h
         rtti/static_provider.h

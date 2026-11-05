@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/context/context_base.h>
+#include <dingo/context/resolution_context.h>
 #include <dingo/static/graph.h>
 
 #include <array>
@@ -17,8 +17,7 @@
 
 namespace dingo {
 
-template <typename StaticRegistry>
-class static_context : public detail::context_path_state {
+template <typename StaticRegistry> class static_context_backend {
   using execution_traits =
       detail::basic_static_execution_traits<StaticRegistry>;
   static constexpr std::size_t frame_capacity_ =
@@ -37,6 +36,8 @@ class static_context : public detail::context_path_state {
           : execution_traits::max_temporary_align;
 
 public:
+  static constexpr bool is_transactional = false;
+
   // Retained resolutions construct a local frame of this type, sized for the
   // whole context graph, so a registry resolving through a context whose
   // bindings extend its own (a static parent under a child) pushes a frame of
@@ -46,67 +47,23 @@ public:
                                    temporary_slot_capacity_,
                                    temporary_slot_size_, temporary_slot_align_>;
 
-  static_context() { frames_[0] = &frame_; }
+  static_context_backend() { frames_[0] = &frame_; }
 
-  ~static_context() {
+  ~static_context_backend() {
     while (frame_count_ != 0) {
       frames_[--frame_count_]->reset();
     }
   }
 
-  template <typename T, typename Container>
-  T resolve(construction_scope scope, Container &container) {
-    if constexpr (detail::is_selected_v<T>) {
-      using request_type = detail::selected_type_t<T>;
-      using selector_type = detail::selected_selector_t<T>;
-      if constexpr (detail::is_type_selector_v<selector_type>) {
-        using selector_key_type = detail::type_selector_type_t<selector_type>;
-        return T(container.template resolve<request_type, false>(
-            scope, *this,
-            detail::make_lookup_key(
-                detail::type_selector<selector_key_type>{})));
-      } else {
-        static_assert(detail::is_value_selector_v<selector_type>);
-        return T(container.template resolve<request_type, false>(
-            scope, *this, detail::make_lookup_key(selector_type{})));
-      }
-    } else {
-      return container.template resolve<T, false>(scope, *this,
-                                                  detail::no_lookup_key());
-    }
-  }
+  static_context_backend(const static_context_backend &) = delete;
+  static_context_backend &operator=(const static_context_backend &) = delete;
 
-  template <typename T, typename DetectionMode, typename Container>
-  T construct(construction_scope scope, Container &container) {
-    using temporary_type = normalized_type_t<T>;
+  // Nothing a static resolution constructs outlives its context, so there is
+  // no transaction to roll back.
+  void on_rollback(void (*)(void *, void *) noexcept, void *,
+                   void * = nullptr) noexcept {}
 
-    auto *instance = allocate_temporary_storage<temporary_type>();
-    constructor_detection<temporary_type, DetectionMode>()
-        .template construct<temporary_type>(instance, scope, *this, container);
-    if constexpr (!std::is_trivially_destructible_v<temporary_type>) {
-      register_destructor(instance);
-    }
-
-    if constexpr (std::is_lvalue_reference_v<T>) {
-      return *instance;
-    } else {
-      return std::move(*instance);
-    }
-  }
-
-  template <typename T, typename... Args>
-  T &construct(construction_scope, Args &&...args) {
-    auto *instance = allocate_temporary_storage<T>();
-    new (instance) T(std::forward<Args>(args)...);
-    if constexpr (!std::is_trivially_destructible_v<T>) {
-      register_destructor(instance);
-    }
-    return *instance;
-  }
-
-  template <typename T> T *allocate() {
-    return allocate_temporary_storage<T>();
-  }
+  void add_runtime_destructor(void *, void (*)(void *) noexcept) noexcept {}
 
   void push_frame(frame_type *frame) {
     assert(frame_count_ < frames_.size());
@@ -116,6 +73,17 @@ public:
   void pop_frame() {
     assert(frame_count_ != 0);
     --frame_count_;
+  }
+
+protected:
+  template <typename T, typename ConstructFn>
+  T &construct_storage(construction_scope, ConstructFn &&construct_fn) {
+    auto *instance = allocate_temporary_storage<T>();
+    std::forward<ConstructFn>(construct_fn)(instance);
+    if constexpr (!std::is_trivially_destructible_v<T>) {
+      register_destructor(instance);
+    }
+    return *instance;
   }
 
 private:
@@ -153,5 +121,9 @@ private:
   std::size_t frame_count_ = 1;
   frame_type frame_;
 };
+
+template <typename StaticRegistry>
+using static_context =
+    resolution_context<static_context_backend<StaticRegistry>>;
 
 } // namespace dingo

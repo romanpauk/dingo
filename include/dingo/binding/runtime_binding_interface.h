@@ -16,8 +16,6 @@
 #include <cassert>
 
 namespace dingo {
-template <typename Allocator> class runtime_context;
-
 template <typename RTTI> struct instance_request {
   using type_index = typename RTTI::type_index;
 

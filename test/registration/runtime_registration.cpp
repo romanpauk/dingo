@@ -437,7 +437,7 @@ TEST(type_registration_test,
       container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
       runtime_transaction transaction(runtime, scratch);
       {
-        runtime_context context(scratch, transaction);
+        runtime_context<std::allocator<char>> context(scratch, transaction);
         (void)context.construct<runtime_arena_tracker>(ephemeral_scope, &events,
                                                        1);
         (void)context.construct<runtime_arena_tracker>(persistent_scope,
@@ -465,7 +465,7 @@ TEST(type_registration_test,
     runtime_transaction transaction(runtime, scratch);
     {
       dingo::container<> container;
-      runtime_context context(scratch, transaction);
+      runtime_context<std::allocator<char>> context(scratch, transaction);
 
       runtime_policy_detected_tracker::next_value = 1;
       (void)context.construct<runtime_policy_detected_tracker &,
@@ -499,7 +499,7 @@ TEST(type_registration_test,
   container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
   runtime_transaction transaction(runtime, scratch);
   dingo::container<> container;
-  runtime_context context(scratch, transaction);
+  runtime_context<std::allocator<char>> context(scratch, transaction);
 
   auto value = context.construct<copy_only_value, detail::constructor_shape>(
       ephemeral_scope, container);
@@ -518,7 +518,7 @@ TEST(type_registration_test, runtime_context_explicit_scopes_are_independent) {
     container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
     runtime_transaction transaction(runtime, scratch);
     {
-      runtime_context context(scratch, transaction);
+      runtime_context<std::allocator<char>> context(scratch, transaction);
       const auto retained = persistent_scope;
       const auto temporary = ephemeral_scope;
       (void)context.construct<runtime_arena_tracker>(retained, &events, 2);
@@ -539,7 +539,7 @@ TEST(type_registration_test,
   container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
   runtime_transaction transaction(runtime, scratch);
   {
-    runtime_context context(scratch, transaction);
+    runtime_context<std::allocator<char>> context(scratch, transaction);
     (void)context.construct<runtime_scoped_source_dependency>(ephemeral_scope);
     transaction.commit();
   }
@@ -555,7 +555,7 @@ TEST(type_registration_test,
   {
     runtime_transaction transaction(runtime, scratch);
     {
-      runtime_context context(scratch, transaction);
+      runtime_context<std::allocator<char>> context(scratch, transaction);
       (void)context.construct<runtime_scoped_source_dependency>(
           ephemeral_scope);
     }
@@ -572,7 +572,7 @@ TEST(type_registration_test,
   {
     runtime_transaction transaction(runtime, scratch);
     {
-      runtime_context context(scratch, transaction);
+      runtime_context<std::allocator<char>> context(scratch, transaction);
       (void)context.construct<runtime_arena_tracker>(ephemeral_scope, &events,
                                                      1);
       context.on_rollback(

@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/context/context_base.h>
+#include <dingo/context/resolution_context.h>
 #include <dingo/memory/object_store.h>
 #include <dingo/runtime/transaction.h>
 
@@ -17,14 +17,16 @@
 
 namespace dingo {
 
-template <typename Allocator>
-class runtime_context : public detail::context_path_state {
+template <typename Allocator> class runtime_context_backend {
   using transaction_type = runtime_transaction<Allocator>;
 
 public:
+  static constexpr bool is_transactional = true;
+
   class transaction_scope {
   public:
-    transaction_scope(runtime_context &context, transaction_type &transaction)
+    transaction_scope(runtime_context_backend &context,
+                      transaction_type &transaction)
         : context_(std::addressof(context)), previous_(context.transaction_) {
       context_->transaction_ = std::addressof(transaction);
     }
@@ -37,54 +39,18 @@ public:
     transaction_scope &operator=(transaction_scope &&) = delete;
 
   private:
-    runtime_context *context_;
+    runtime_context_backend *context_;
     transaction_type *previous_;
   };
 
-  runtime_context(arena<> &scratch, transaction_type &transaction)
+  runtime_context_backend(arena<> &scratch, transaction_type &transaction)
       : scratch_(std::addressof(scratch)),
         transaction_(std::addressof(transaction)) {}
 
-  ~runtime_context() noexcept { ephemeral_store_.destroy(*scratch_); }
+  ~runtime_context_backend() noexcept { ephemeral_store_.destroy(*scratch_); }
 
-  runtime_context(const runtime_context &) = delete;
-  runtime_context &operator=(const runtime_context &) = delete;
-
-  template <typename T, typename... Args>
-  T &construct(construction_scope scope, Args &&...args) {
-    return construct_with_scope<T>(
-        scope, [&](void *ptr) { new (ptr) T(std::forward<Args>(args)...); });
-  }
-
-// Resolution selects failure paths at runtime. For some instantiations MSVC
-// proves construction cannot return and reports the following delivery code as
-// unreachable even though the instantiated path is not selected.
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable : 4702)
-#endif
-  template <typename T, typename DetectionMode, typename Container>
-  T construct(construction_scope scope, Container &container) {
-    using temporary_type = normalized_type_t<T>;
-    auto &instance =
-        construct_with_scope<temporary_type>(scope, [&](void *ptr) {
-          constructor_detection<temporary_type, DetectionMode>()
-              .template construct<temporary_type>(ptr, scope, *this, container);
-        });
-
-    if constexpr (std::is_lvalue_reference_v<T>) {
-      return instance;
-    } else if constexpr (!std::is_rvalue_reference_v<T> &&
-                         std::is_copy_constructible_v<temporary_type> &&
-                         !std::is_move_constructible_v<temporary_type>) {
-      return static_cast<const temporary_type &>(instance);
-    } else {
-      return std::move(instance);
-    }
-  }
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
+  runtime_context_backend(const runtime_context_backend &) = delete;
+  runtime_context_backend &operator=(const runtime_context_backend &) = delete;
 
   void on_rollback(void (*fn)(void *, void *) noexcept, void *first,
                    void *second = nullptr) {
@@ -103,32 +69,9 @@ public:
     transaction_->add_runtime_destructor(instance, dtor);
   }
 
-  template <typename T, typename Container>
-  T resolve(construction_scope scope, Container &container) {
-    if constexpr (detail::is_selected_v<T>) {
-      using request_type = detail::selected_type_t<T>;
-      using selector_type = detail::selected_selector_t<T>;
-      if constexpr (detail::is_type_selector_v<selector_type>) {
-        using selector_key_type = detail::type_selector_type_t<selector_type>;
-        return T(container.template resolve<request_type, false>(
-            scope, *this,
-            detail::make_lookup_key(
-                detail::type_selector<selector_key_type>{})));
-      } else {
-        static_assert(detail::is_value_selector_v<selector_type>);
-        return T(container.template resolve<request_type, false>(
-            scope, *this, detail::make_lookup_key(selector_type{})));
-      }
-    } else {
-      return container.template resolve<T, false>(scope, *this,
-                                                  detail::no_lookup_key());
-    }
-  }
-
-private:
+protected:
   template <typename T, typename ConstructFn>
-  T &construct_with_scope(construction_scope scope,
-                          ConstructFn &&construct_fn) {
+  T &construct_storage(construction_scope scope, ConstructFn &&construct_fn) {
     if (scope.is_persistent()) {
       return *transaction_->template construct_persistent_with<T>(
           std::forward<ConstructFn>(construct_fn));
@@ -138,10 +81,14 @@ private:
         *scratch_, std::forward<ConstructFn>(construct_fn));
   }
 
+private:
   arena<> *scratch_;
   detail::object_store<arena<>> ephemeral_store_;
   transaction_type *transaction_;
 };
+
+template <typename Allocator>
+using runtime_context = resolution_context<runtime_context_backend<Allocator>>;
 
 namespace detail {
 

@@ -27,24 +27,15 @@
 #endif
 
 namespace dingo {
-template <typename StaticRegistry> class static_context;
-template <typename Allocator> class runtime_context;
-
 namespace detail {
 
 template <typename T> struct is_static_context : std::false_type {};
-
-template <typename StaticRegistry>
-struct is_static_context<static_context<StaticRegistry>> : std::true_type {};
 
 template <typename T>
 inline constexpr bool is_static_context_v =
     is_static_context<std::remove_cv_t<std::remove_reference_t<T>>>::value;
 
 template <typename T> struct is_runtime_context : std::false_type {};
-
-template <typename Allocator>
-struct is_runtime_context<runtime_context<Allocator>> : std::true_type {};
 
 template <typename T>
 inline constexpr bool is_runtime_context_v =
