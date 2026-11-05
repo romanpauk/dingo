@@ -7,16 +7,19 @@
 
 #include "type_registration_common.h"
 
-TEST(type_registration_test, get_type) {
+TEST(type_registration_test, registration_arg) {
   struct A {};
-  using list = type_list<storage<A>, factory<A>, interfaces<A, A>>;
-  using storage_type = detail::get_type_t<storage<void>, list>;
+  using storage_type = detail::registration_arg_t<storage<void>, storage<A>,
+                                                  factory<A>, interfaces<A, A>>;
   static_assert(std::is_same_v<storage_type, storage<A>>);
 
-  using factory_type = detail::get_type_t<factory<void>, list>;
+  using factory_type = detail::registration_arg_t<factory<void>, storage<A>,
+                                                  factory<A>, interfaces<A, A>>;
   static_assert(std::is_same_v<factory_type, factory<A>>);
 
-  using interface_type = detail::get_type_t<interfaces<void>, list>;
+  using interface_type =
+      detail::registration_arg_t<interfaces<void>, storage<A>, factory<A>,
+                                 interfaces<A, A>>;
   static_assert(std::is_same_v<interface_type, interfaces<A, A>>);
 }
 
