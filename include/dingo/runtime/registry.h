@@ -14,7 +14,7 @@
 #include <dingo/binding/binding_collection.h>
 #include <dingo/binding/binding_model.h>
 #include <dingo/binding/binding_selection.h>
-#include <dingo/binding/request_resolution.h>
+#include <dingo/binding/container_interface.h>
 #include <dingo/factory/callable.h>
 #include <dingo/lookup/lookup.h>
 #include <dingo/lookup/operations.h>
@@ -1517,7 +1517,6 @@ protected:
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R unresolved(construction_scope scope, runtime_context_type &context,
                const LookupKey &key) {
-    using Type = typename Request::value_type;
     using user_type = typename Request::user_type;
     using lookup_key_type = std::decay_t<LookupKey>;
 
@@ -1543,19 +1542,10 @@ protected:
                   collection_traits<R>::is_collection) {
       return this->template construct_collection<R>(
           scope, context, detail::binding_collection_append{}, key);
-    } else if constexpr (MayAutoConstruct &&
-                         is_auto_constructible<
-                             std::decay_t<user_type>>::value) {
-      if constexpr (constructor<Type>::kind ==
-                    detail::constructor_kind::concrete) {
-        return auto_construct<Request>(scope, context);
-      } else {
-        throw detail::make_type_not_found_exception<
-            typename Request::lookup_type>(context, key);
-      }
     } else {
-      throw detail::make_type_not_found_exception<
-          typename Request::lookup_type>(context, key);
+      return detail::request_resolution::construct_unbound<Request,
+                                                           MayAutoConstruct, R>(
+          scope, context, *resolve_root(), key);
     }
   }
 
@@ -1801,20 +1791,6 @@ private:
     return false;
   }
 
-  template <typename Request>
-  decltype(auto) auto_construct(construction_scope scope,
-                                runtime_context_type &context) {
-    using Type = typename Request::value_type;
-
-    static_assert(is_complete<Type>::value,
-                  "auto-construction requires a complete type");
-
-    using type_detection = detail::constructor_shape;
-    return context
-        .template construct<typename Request::interface_type, type_detection>(
-            scope, *resolve_root());
-  }
-
   template <typename T, bool RemoveRvalueReferences, typename LookupKey,
             typename R =
                 typename request_type<T, RemoveRvalueReferences>::lookup_type,
@@ -1822,11 +1798,12 @@ private:
   R resolve(construction_scope scope, runtime_context_type &context,
             LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
+    auto selection = select_request<request>(key);
     return detail::request_resolution::resolve<
         request, typename request::interface_type,
         detail::is_runtime_auto_constructible_dependency_v<
-            typename request::user_type>>(*this, scope, context, *this,
-                                          std::move(key));
+            typename request::user_type>>(*this, selection, scope, context,
+                                          *this, key);
   }
 
 #ifdef _MSC_VER

@@ -14,7 +14,6 @@
 #include <dingo/binding/binding_resolution.h>
 #include <dingo/binding/binding_selection.h>
 #include <dingo/binding/container_interface.h>
-#include <dingo/binding/request_resolution.h>
 #include <dingo/container_base.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/constructor.h>
@@ -105,24 +104,8 @@ private:
   T construct_collection(construction_scope scope,
                          runtime_context_type &context, Fn &&fn,
                          LookupKey key) {
-    using collection_type = collection_traits<T>;
-    using resolve_type = typename collection_type::resolve_type;
-
-    static_assert(collection_type::is_collection,
-                  "missing collection_traits specialization for type T");
-
-    const std::size_t total = count_collection<T>(key);
-    // A declared collection lookup with no rows is a valid empty collection.
-    if (total == 0 &&
-        !runtime_registry_.template has_explicit_collection_lookup<T>(key)) {
-      throw detail::make_collection_type_not_found_exception<T, resolve_type>();
-    }
-
-    T results;
-    collection_type::reserve(results, total);
-    runtime_registry_.template append_collection<T>(scope, results, context, fn,
-                                                    std::move(key));
-    return results;
+    return runtime_registry_.template construct_collection<T>(
+        scope, context, std::forward<Fn>(fn), std::move(key));
   }
 
   template <typename Request, typename R = typename Request::result_type>
@@ -207,45 +190,31 @@ private:
            !collection_traits<R>::is_collection;
   }
 
-  template <typename Request, typename R>
-  DINGO_NOINLINE R
-  resolve_selected(typename runtime_registry_type::runtime_selection selected) {
-    using interface_type = typename Request::interface_type;
-    return with_context([&](runtime_context_type &context) -> R {
-      return runtime_registry_.template resolve_binding<interface_type, R>(
-          selected, ephemeral_scope, context);
-    });
-  }
-
+  // A request that may be cached reads the cache of its selected binding
+  // before it enters a transaction.
   template <typename Request, typename R, typename LookupKey>
   R resolve_entry(LookupKey key) {
     using interface_type = typename Request::interface_type;
+    // MSVC's pre-C++20 lambda processor does not treat an enclosing constexpr
+    // local as a constant expression, so the constant is spelled in place.
     if constexpr (is_cacheable<Request, R>()) {
-      auto selected = runtime_registry_.template select_binding<
-          typename Request::value_type, typename Request::exact_type>(key);
+      auto selected = select_request<Request>(key);
       auto result =
           runtime_registry_.template lookup_cache<interface_type>(selected);
       if (result.hit) {
         return runtime_registry_.template resolve_cached<interface_type, R>(
             result);
       }
-      if (selected.status == detail::binding_status::found) {
-        return resolve_selected<Request, R>(selected);
-      }
       return with_context([&](runtime_context_type &context) -> R {
-        // MSVC's pre-C++20 lambda processor does not treat an enclosing
-        // constexpr local as a constant expression, so spell it here.
-        return resolve<
+        return detail::request_resolution::resolve<
             Request, R,
             runtime_auto_constructible_v<typename Request::user_type>>(
-            selected, ephemeral_scope, context, *this, std::move(key));
+            *this, selected, ephemeral_scope, context, *this, key);
       });
     } else {
       return with_context([&](runtime_context_type &context) -> R {
-        return resolve<
-            Request, R,
-            runtime_auto_constructible_v<typename Request::user_type>>(
-            ephemeral_scope, context, *this, std::move(key));
+        return resolve<Request, R>(ephemeral_scope, context, *this,
+                                   std::move(key));
       });
     }
   }
@@ -350,11 +319,6 @@ private:
   parent_container_type *parent() { return parent_; }
 
   template <typename R, typename LookupKey>
-  std::size_t collection_count(const LookupKey &key) {
-    return count_collection<R>(key);
-  }
-
-  template <typename R, typename LookupKey>
   R construct_request_collection(construction_scope scope,
                                  runtime_context_type &context, LookupKey key) {
     // Collections are constructed in the active resolve context. Routing
@@ -364,16 +328,6 @@ private:
         scope, context, detail::binding_collection_append{}, std::move(key));
   }
 
-  template <typename Request, typename R, bool MayAutoConstruct,
-            typename Origin, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(typename runtime_registry_type::runtime_selection selected,
-            construction_scope scope, runtime_context_type &context,
-            Origin &origin, LookupKey key) {
-    return detail::request_resolution::resolve<Request, R, MayAutoConstruct>(
-        *this, selected, scope, context, origin, key);
-  }
-
   template <typename Request, typename R,
             bool MayAutoConstruct =
                 runtime_auto_constructible_v<typename Request::user_type>,
@@ -381,13 +335,8 @@ private:
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(construction_scope scope, runtime_context_type &context,
             Origin &origin, LookupKey key) {
-    if constexpr (collection_traits<R>::is_collection) {
-      return detail::request_resolution::resolve_collection<Request, R>(
-          *this, scope, context, origin, std::move(key));
-    } else {
-      return detail::request_resolution::resolve<Request, R, MayAutoConstruct>(
-          *this, scope, context, origin, std::move(key));
-    }
+    return detail::request_resolution::resolve<Request, R, MayAutoConstruct>(
+        *this, scope, context, origin, std::move(key));
   }
 
   template <typename Request, typename R, bool MayAutoConstruct,
@@ -437,9 +386,6 @@ public:
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R unresolved(construction_scope scope, runtime_context_type &context,
                LookupKey key) {
-    using Type = typename Request::value_type;
-    using user_type = typename Request::user_type;
-
     if constexpr (collection_traits<R>::is_collection) {
       if constexpr (detail::default_collection_append_v<R>) {
         return construct_collection<R>(scope, context,
@@ -449,23 +395,10 @@ public:
         throw detail::make_type_not_found_exception<
             typename Request::lookup_type>(context, key);
       }
-    } else if constexpr (MayAutoConstruct &&
-                         is_auto_constructible<
-                             std::decay_t<user_type>>::value) {
-      if constexpr (constructor<Type>::kind ==
-                    detail::constructor_kind::concrete) {
-        static_assert(is_complete<Type>::value,
-                      "auto-construction requires a complete type");
-        using type_detection = detail::constructor_shape;
-        return context.template construct<typename Request::interface_type,
-                                          type_detection>(scope, *this);
-      } else {
-        throw detail::make_type_not_found_exception<
-            typename Request::lookup_type>(context, key);
-      }
     } else {
-      throw detail::make_type_not_found_exception<
-          typename Request::lookup_type>(context, key);
+      return detail::request_resolution::construct_unbound<Request,
+                                                           MayAutoConstruct, R>(
+          scope, context, *this, key);
     }
   }
 

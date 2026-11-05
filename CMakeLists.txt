@@ -97,9 +97,7 @@ if(DINGO_DEVELOPMENT_MODE)
         binding/binding_resolution.h
         binding/binding_selection.h
         binding/binding_activation.h
-        binding/binding_cell.h
         binding/container_interface.h
-        binding/request_resolution.h
         type/dependency.h
         factory/factory_traits.h
         type/key.h
@@ -153,7 +151,6 @@ if(DINGO_DEVELOPMENT_MODE)
         runtime/runtime_binding.h
         storage/interface_storage_traits.h
         context/context_base.h
-        context/resolution_context.h
         runtime/context.h
         static/context.h
         rtti/static_provider.h

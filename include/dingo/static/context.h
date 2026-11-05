@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/context/resolution_context.h>
+#include <dingo/context/context_base.h>
 #include <dingo/static/graph.h>
 
 #include <array>

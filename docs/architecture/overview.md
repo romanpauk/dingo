@@ -93,7 +93,7 @@ are normalized internally through the static registry path under
 ### Factory And Storage
 
 Both containers keep the state of a registration in a binding cell,
-[include/dingo/binding/binding_cell.h](../../include/dingo/binding/binding_cell.h):
+[include/dingo/binding/binding_activation.h](../../include/dingo/binding/binding_activation.h):
 the storage object and the conversion cache its interfaces share. A static
 container holds one cell per registration inline. A runtime binding holds its
 cell in `runtime_binding_state` from

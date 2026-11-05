@@ -10,7 +10,6 @@
 #include <dingo/base/config.h>
 
 #include <dingo/binding/binding_activation.h>
-#include <dingo/binding/binding_cell.h>
 #include <dingo/binding/binding_resolution.h>
 #include <dingo/binding/runtime_binding_interface.h>
 #include <dingo/runtime/container_runtime.h>
@@ -22,91 +21,36 @@
 #include <type_traits>
 
 namespace dingo {
-namespace detail {
-template <bool Stable>
-class runtime_binding_base : private cache::state<Stable> {
-protected:
-  cache::entry *binding_cache_slot() noexcept { return cache_state::slot(); }
-
-private:
-  using cache_state = cache::state<Stable>;
-};
-
-} // namespace detail
-
+// The state of a runtime registration: its binding cell, the request cache of
+// its interfaces and the child container its factory resolves through once
+// the registration creates one.
 template <typename Owner, typename InstanceContainer, typename Cell,
           typename RegistrationParent = typename Owner::parent_container_type>
 class runtime_binding_state
-    : private detail::runtime_binding_base<
+    : private detail::cache::state<
           detail::cache::is_stable_storage_v<typename Cell::storage_type>> {
-  using storage_type = typename Cell::storage_type;
-
 public:
   using cell_type = Cell;
-  using owner_type = Owner;
   using container_type = InstanceContainer;
-  using instance_container_type = InstanceContainer;
-  using resolution_container_type = InstanceContainer;
-  using registration_parent_type = RegistrationParent;
-  using allocator_type = typename Owner::allocator_type;
-  using runtime_type = container_runtime<allocator_type>;
-  using runtime_context_type = runtime_context<allocator_type>;
-  using parent_container_type = registration_parent_type;
 
   template <typename... Args>
-  explicit runtime_binding_state(owner_type *owner, Args &&...args)
+  explicit runtime_binding_state(Owner *owner, Args &&...args)
       : owner_(owner), cell_(std::forward<Args>(args)...) {}
 
-  runtime_type &runtime() { return owner().runtime(); }
-  parent_container_type *parent() {
-    if constexpr (std::is_same_v<registration_parent_type,
-                                 typename owner_type::parent_container_type>) {
-      return owner().parent();
-    } else {
-      return owner()
-          .template runtime_registration_parent<registration_parent_type>();
-    }
-  }
-  allocator_type &get_allocator() { return owner().get_allocator(); }
   cell_type &cell() { return cell_; }
-  storage_type &storage() { return cell_.storage(); }
-  detail::cache::entry *cache_slot() noexcept {
-    return state_base::binding_cache_slot();
-  }
+  typename Cell::storage_type &storage() { return cell_.storage(); }
+  detail::cache::entry *cache_slot() noexcept { return this->slot(); }
+
   InstanceContainer &container() {
     if (!instance_container_) {
-      instance_container_ = construct_container<InstanceContainer>();
+      instance_container_ = std::addressof(
+          owner_->runtime().template construct<InstanceContainer>(
+              parent(), owner_->get_allocator()));
     }
     return *instance_container_;
   }
 
-  template <bool TrackRollback = true>
-  InstanceContainer &container(runtime_context_type &context) {
-    if (!instance_container_) {
-      assert(instance_container_ == nullptr);
-      auto *created = construct_container<InstanceContainer>(context);
-      if constexpr (TrackRollback) {
-        context.on_rollback(
-            +[](void *self, void *) noexcept {
-              static_cast<runtime_binding_state *>(self)->instance_container_ =
-                  nullptr;
-            },
-            this);
-      }
-      instance_container_ = created;
-    }
-    return *instance_container_;
-  }
-
-  template <bool TrackRollback = true>
-  InstanceContainer &resolution_container(runtime_context_type &context) {
-    return container<TrackRollback>(context);
-  }
-
-  template <bool TrackRollback = true, typename Fn>
-  decltype(auto) with_resolution_container(runtime_context_type &context,
-                                           Fn &&fn) {
-    (void)context;
+  template <typename Fn> decltype(auto) with_resolution_container(Fn &&fn) {
     if (instance_container_ != nullptr) {
       return fn(*instance_container_);
     }
@@ -114,25 +58,16 @@ public:
   }
 
 private:
-  using state_base = detail::runtime_binding_base<
-      detail::cache::is_stable_storage_v<storage_type>>;
-
-  owner_type &owner() {
-    assert(owner_ != nullptr);
-    return *owner_;
+  RegistrationParent *parent() {
+    if constexpr (std::is_same_v<RegistrationParent,
+                                 typename Owner::parent_container_type>) {
+      return owner_->parent();
+    } else {
+      return owner_->template runtime_registration_parent<RegistrationParent>();
+    }
   }
 
-  template <typename T> T *construct_container(runtime_context_type &context) {
-    return std::addressof(context.template construct<T>(
-        persistent_scope, parent(), get_allocator()));
-  }
-
-  template <typename T> T *construct_container() {
-    return std::addressof(
-        runtime().template construct<T>(parent(), get_allocator()));
-  }
-
-  owner_type *owner_ = nullptr;
+  Owner *owner_ = nullptr;
   cell_type cell_;
   InstanceContainer *instance_container_ = nullptr;
 };
@@ -255,7 +190,7 @@ private:
 
       auto &state = binding.state();
       auto result = state.with_resolution_container(
-          context, [&](auto &container) -> resolved_address {
+          [&](auto &container) -> resolved_address {
             using activation_type = detail::binding_activation<
                 typename state_type::cell_type,
                 std::remove_reference_t<decltype(container)> &, true>;

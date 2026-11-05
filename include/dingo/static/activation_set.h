@@ -10,7 +10,6 @@
 #include <dingo/base/exceptions.h>
 #include <dingo/base/type_descriptor.h>
 #include <dingo/binding/binding_activation.h>
-#include <dingo/binding/binding_cell.h>
 #include <dingo/binding/binding_collection.h>
 #include <dingo/binding/binding_model.h>
 #include <dingo/binding/binding_resolution.h>
@@ -250,9 +249,8 @@ struct local_binding_router {
       using selection =
           typename LocalBindings::template selection<R, LookupKey>;
       if constexpr (selection::status == detail::binding_status::found) {
-        return local
-            .template resolver<typename selection::binding_type>(scope, host)
-            .template resolve<R>(context);
+        return local.template resolve<typename selection::binding_type, R>(
+            scope, host, context);
       } else {
         return host.template resolve<typename request::user_type,
                                      request::removes_rvalue_references>(
@@ -262,124 +260,74 @@ struct local_binding_router {
   }
 };
 
-template <typename State, typename Host, typename BindingModel,
-          typename LocalBindings = typename BindingModel::bindings_type>
-struct static_binding_dependencies {
+template <typename Host, typename LocalBindings> struct static_dependencies {
   using type = Host &;
-
-  static type make(State &, Host &host) { return host; }
 };
 
-template <typename State, typename Host, typename BindingModel,
-          typename... LocalRegistrations>
-struct static_binding_dependencies<State, Host, BindingModel,
-                                   static_bindings<LocalRegistrations...>> {
+template <typename Host, typename... LocalRegistrations>
+struct static_dependencies<Host, static_bindings<LocalRegistrations...>> {
   using type =
       local_binding_router<static_binding_storage<LocalRegistrations...>,
                            static_bindings<LocalRegistrations...>, Host>;
-
-  static type make(State &state, Host &host) {
-    return {state.template get_local_scope_for_model<BindingModel>(), host};
-  }
 };
 
-// Resolves one interface of a static binding: selects the resolution of a
-// request at compile time and applies it through a binding activation.
-template <typename State, typename Host, typename InterfaceBinding>
-struct static_binding_resolver {
-  using binding_model_type = typename InterfaceBinding::binding_model_type;
-  using storage_type = typename binding_model_type::storage_type;
-  using dependencies_type =
-      static_binding_dependencies<State, Host, binding_model_type>;
-  using activation_type =
-      binding_activation<binding_cell_t<binding_model_type>,
-                         typename dependencies_type::type, false>;
-
-  State &state;
-  Host &host;
-  construction_scope scope;
-
-  static constexpr type_descriptor registered_type() {
-    return describe_type<typename storage_type::type>();
-  }
-
-  template <typename Request, typename Context>
-  Request resolve(Context &context) {
-    static_assert(is_runtime_context_v<Context> ||
-                      binding_supports_request_v<Request, InterfaceBinding>,
-                  "static resolution cannot satisfy a request the storage "
-                  "does not publish");
-    using matched_resolution =
-        typename binding_supports_request<Request, InterfaceBinding>::type;
-    if constexpr (std::is_void_v<matched_resolution>) {
-      throw detail::make_type_not_convertible_exception(
-          describe_type<Request>(), registered_type(), context);
-    } else if constexpr (!std::is_reference_v<Request> &&
-                         !std::is_pointer_v<Request>) {
-      auto activation = make_activation();
-      return activation.template consume_request<Request, matched_resolution>(
-          context, [](auto &&instance) -> Request {
-            return Request(std::forward<decltype(instance)>(instance));
-          });
-    } else {
-      auto activation = make_activation();
-      return detail::convert_resolved_binding<Request>(
-          activation
-              .template resolve_request_address<Request, matched_resolution>(
-                  context));
-    }
-  }
-
-  template <typename Request, typename Context, typename Fn>
-  decltype(auto) consume(Context &context, Fn &&fn) {
-    static_assert(is_runtime_context_v<Context> ||
-                      binding_supports_request_v<Request, InterfaceBinding>,
-                  "static resolution cannot satisfy a request the storage "
-                  "does not publish");
-    using matched_resolution =
-        typename binding_supports_request<Request, InterfaceBinding>::type;
-
-    if constexpr (!std::is_void_v<matched_resolution>) {
-      auto activation = make_activation();
-      return activation.template consume_request<Request, matched_resolution>(
-          context, std::forward<Fn>(fn));
-    } else {
-      throw detail::make_type_not_convertible_exception(
-          describe_type<Request>(), registered_type(), context);
-    }
-  }
-
-private:
-  activation_type make_activation() {
-    return {state.template get_cell_for_model<binding_model_type>(),
-            dependencies_type::make(state, host), scope};
-  }
+// The resolution of a request selected at compile time.
+template <typename Request, typename InterfaceBinding, typename Context>
+struct static_request_resolution
+    : binding_supports_request<Request, InterfaceBinding> {
+  static_assert(is_runtime_context_v<Context> ||
+                    binding_supports_request_v<Request, InterfaceBinding>,
+                "static resolution cannot satisfy a request the storage "
+                "does not publish");
 };
 
-// The storage of a static binding set, and the resolution entry points over
-// it. Local bindings of a registration keep their own storage in a slot.
+// The storage of a static binding set, and the resolution of its bindings.
+// Local bindings of a registration keep their own storage in a slot.
 template <typename... Registrations>
 class static_binding_storage
     : private binding_cell_slot<Registrations>...,
       private local_binding_scope_slot<Registrations>... {
 public:
-  template <typename BindingModel> auto &get_cell_for_model() {
-    return static_cast<
-               binding_cell_slot<typename BindingModel::registration_type> &>(
-               *this)
-        .cell;
+  // Selects the resolution of a request at compile time and applies it
+  // through a binding activation.
+  template <typename InterfaceBinding, typename Request, typename Host,
+            typename Context>
+  Request resolve(construction_scope scope, Host &host, Context &context) {
+    if constexpr (!std::is_reference_v<Request> &&
+                  !std::is_pointer_v<Request>) {
+      return consume<InterfaceBinding, Request>(
+          scope, host, context, [](auto &&instance) -> Request {
+            return Request(std::forward<decltype(instance)>(instance));
+          });
+    } else {
+      using resolution =
+          typename static_request_resolution<Request, InterfaceBinding,
+                                             Context>::type;
+      if constexpr (std::is_void_v<resolution>) {
+        not_convertible<Request, InterfaceBinding>(context);
+      } else {
+        return convert_resolved_binding<Request>(
+            activation<InterfaceBinding>(scope, host)
+                .template resolve_request_address<Request, resolution>(
+                    context));
+      }
+    }
   }
 
-  template <typename BindingModel> auto &get_local_scope_for_model() {
-    return static_cast<local_binding_scope_slot<
-        typename BindingModel::registration_type> &>(*this)
-        .scope;
-  }
-
-  template <typename InterfaceBinding, typename Host>
-  auto resolver(construction_scope scope, Host &host) {
-    return static_binding_resolver<static_binding_storage, Host,
-                                   InterfaceBinding>{*this, host, scope};
+  template <typename InterfaceBinding, typename Request, typename Host,
+            typename Context, typename Fn>
+  decltype(auto) consume(construction_scope scope, Host &host, Context &context,
+                         Fn &&fn) {
+    using resolution =
+        typename static_request_resolution<Request, InterfaceBinding,
+                                           Context>::type;
+    if constexpr (std::is_void_v<resolution>) {
+      not_convertible<Request, InterfaceBinding>(context);
+    } else {
+      return activation<InterfaceBinding>(scope, host)
+          .template consume_request<Request, resolution>(context,
+                                                         std::forward<Fn>(fn));
+    }
   }
 
   template <typename T, typename LookupKey, typename Bindings, typename Host,
@@ -398,15 +346,13 @@ public:
 
     dingo::for_each(interface_bindings{}, [&](auto binding_iterator) {
       using binding = typename decltype(binding_iterator)::type;
-      auto binding_resolver = resolver<binding>(scope, host);
       if constexpr (is_copy_constructible_v<resolve_type> &&
                     !std::is_reference_v<resolve_type>) {
-        binding_resolver.template consume<resolve_type>(
-            context, [&](auto &&value) {
-              fn(results, std::forward<decltype(value)>(value));
-            });
+        consume<binding, resolve_type>(scope, host, context, [&](auto &&value) {
+          fn(results, std::forward<decltype(value)>(value));
+        });
       } else {
-        fn(results, binding_resolver.template resolve<resolve_type>(context));
+        fn(results, resolve<binding, resolve_type>(scope, host, context));
       }
     });
     return type_list_size_v<interface_bindings>;
@@ -457,6 +403,33 @@ public:
                                  std::forward<decltype(value)>(value));
           });
     }
+  }
+
+private:
+  template <typename InterfaceBinding, typename Host>
+  auto activation(construction_scope scope, Host &host) {
+    using model = typename InterfaceBinding::binding_model_type;
+    using registration = typename model::registration_type;
+    using dependencies =
+        typename static_dependencies<Host, typename model::bindings_type>::type;
+    auto &cell = static_cast<binding_cell_slot<registration> &>(*this).cell;
+    if constexpr (std::is_reference_v<dependencies>) {
+      return binding_activation<binding_cell_t<model>, dependencies, false>{
+          cell, host, scope};
+    } else {
+      auto &local =
+          static_cast<local_binding_scope_slot<registration> &>(*this).scope;
+      return binding_activation<binding_cell_t<model>, dependencies, false>{
+          cell, {local, host}, scope};
+    }
+  }
+
+  template <typename Request, typename InterfaceBinding, typename Context>
+  [[noreturn]] static void not_convertible(Context &context) {
+    throw make_type_not_convertible_exception(
+        describe_type<Request>(),
+        describe_type<typename InterfaceBinding::storage_type::type>(),
+        context);
   }
 };
 

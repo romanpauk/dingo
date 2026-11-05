@@ -85,7 +85,7 @@ uses its `lookup_type`, `interface_type`, `result_type`, `value_type`, and
 each path.
 
 Both containers resolve a request with the algorithm in
-[include/dingo/binding/request_resolution.h](../../include/dingo/binding/request_resolution.h).
+[include/dingo/binding/container_interface.h](../../include/dingo/binding/container_interface.h).
 The sequence is:
 
 1. The runtime container checks the request cache of the selected binding.

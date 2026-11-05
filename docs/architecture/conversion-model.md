@@ -183,7 +183,7 @@ again.
 ## Conversion Cache
 
 Shared and external resolution can preserve conversion objects through
-[include/dingo/binding/binding_cell.h](../../include/dingo/binding/binding_cell.h)
+[include/dingo/binding/binding_activation.h](../../include/dingo/binding/binding_activation.h)
 and
 [include/dingo/resolution/conversion_cache.h](../../include/dingo/resolution/conversion_cache.h).
 
