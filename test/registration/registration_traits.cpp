@@ -20,8 +20,6 @@
 namespace conversion_compatibility_test {
 struct source {};
 struct target {};
-struct borrowed_value {};
-struct non_borrowable_wrapper {};
 struct declared_source {};
 struct declared_target {};
 struct owning_source {
@@ -113,115 +111,79 @@ struct type_conversion_traits<conversion_compatibility_test::customized_value,
   }
 };
 
-template <>
-struct type_traits<conversion_compatibility_test::non_borrowable_wrapper> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = false;
-  static constexpr bool is_value_borrowable = false;
-  static constexpr bool is_owning_handle = false;
-
-  template <typename> static constexpr bool is_handle_rebindable = false;
-  template <typename> static constexpr bool is_rebindable = false;
-
-  static conversion_compatibility_test::borrowed_value &
-  borrow(conversion_compatibility_test::non_borrowable_wrapper &);
-};
-
 template <> struct type_traits<conversion_compatibility_test::owning_source> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = false;
-  static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = true;
-
-  template <typename> static constexpr bool is_handle_rebindable = false;
-  template <typename> static constexpr bool is_rebindable = false;
 };
 
 template <> struct type_traits<conversion_compatibility_test::pointer_like> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = true;
 
   using value_type = int;
 
   template <typename>
   using rebind_t = conversion_compatibility_test::pointer_like;
-  template <typename> static constexpr bool is_handle_rebindable = false;
-  template <typename> static constexpr bool is_rebindable = false;
 };
 
 template <>
 struct type_traits<conversion_compatibility_test::observer_pointer> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = false;
 
   using value_type = int;
 
   template <typename>
   using rebind_t = conversion_compatibility_test::observer_pointer;
-  template <typename> static constexpr bool is_handle_rebindable = false;
-  template <typename> static constexpr bool is_rebindable = false;
 };
 
 template <>
 struct type_traits<conversion_compatibility_test::converted_observer_pointer> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = false;
 
   using value_type = int;
 
   template <typename>
   using rebind_t = conversion_compatibility_test::converted_observer_pointer;
-  template <typename> static constexpr bool is_handle_rebindable = false;
-  template <typename> static constexpr bool is_rebindable = false;
 };
 
 template <>
 struct type_traits<conversion_compatibility_test::safe_observer_pointer> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = false;
 
   using value_type = long;
 
   template <typename>
   using rebind_t = conversion_compatibility_test::safe_observer_pointer;
-  template <typename> static constexpr bool is_handle_rebindable = false;
-  template <typename> static constexpr bool is_rebindable = false;
 };
 
 template <> struct type_traits<conversion_compatibility_test::consuming_owner> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = true;
 
   using value_type = int;
 
   template <typename>
   using rebind_t = conversion_compatibility_test::consuming_owner;
-  template <typename> static constexpr bool is_handle_rebindable = false;
-  template <typename> static constexpr bool is_rebindable = false;
 };
 
 template <> struct type_traits<conversion_compatibility_test::copying_owner> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = true;
 
   using value_type = int;
 
   template <typename>
   using rebind_t = conversion_compatibility_test::copying_owner;
-  template <typename> static constexpr bool is_handle_rebindable = false;
-  template <typename> static constexpr bool is_rebindable = false;
 };
 
 template <>
@@ -369,9 +331,6 @@ TEST(type_registration_test, conversion_availability_uses_source_access) {
   static_assert(detail::is_type_conversion_available_v<
                 conversion_compatibility_test::target,
                 const conversion_compatibility_test::source &>);
-  static_assert(!detail::is_type_conversion_available_v<
-                conversion_compatibility_test::borrowed_value,
-                conversion_compatibility_test::non_borrowable_wrapper &>);
   static_assert(detail::is_type_conversion_available_v<
                 conversion_compatibility_test::declared_target,
                 conversion_compatibility_test::declared_source &&>);

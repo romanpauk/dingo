@@ -17,25 +17,45 @@ Specialize `type_traits` in
 [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h) when
 introducing a new wrapper or handle type.
 
-`type_traits` defines wrapper semantics:
+A specialization derives from the semantics of the wrapper and provides its
+operations. The standard wrappers are specialized the same way, so a user
+wrapper takes part in conversions and storage exactly as `std::unique_ptr` or
+`std::optional` does:
 
-- whether the type participates in Dingo's wrapper machinery
-- whether it behaves like a pointer-like handle
-- whether it owns the pointee
-- how to get or borrow the underlying object
-- how to reset it
-- how to rebind it to a different leaf type
-- whether Dingo may resolve references through it
-- how wrapper-shaped resolution should behave for that type
+```cpp
+template <typename T>
+struct type_traits<my_handle<T>> : semantics::shared_owner {
+  using value_type = T;
+  template <typename U> using rebind_t = my_handle<U>;
 
-If Dingo needs to understand a wrapper's shape, start here.
+  static T *get(const my_handle<T> &handle) { return handle.get(); }
+  static T &borrow(const my_handle<T> &handle) { return *handle; }
+  static bool empty(const my_handle<T> &handle) { return !handle; }
 
-Set `is_owning_handle` to `true` for adopting or shared-ownership handles and to
-`false` for observers. Dingo does not create an owning handle from a borrowed
-non-owning source through a default conversion. This rule applies to the leaf
-handle conversion. Alternative and optional-style conversions first select or
-unwrap their contained conversion, then inherit its `borrow` or `consume`
-requirement.
+  template <typename... Args> static my_handle<T> make(Args &&...args);
+};
+```
+
+The semantics are:
+
+- `semantics::observer`: a handle to an object it does not own, such as a raw
+  pointer
+- `semantics::sole_owner`: the sole owner of an object, such as
+  `std::unique_ptr`; it also declares `share_t<U>`, the sharing handle its
+  object can be handed to
+- `semantics::shared_owner`: a handle sharing ownership, such as
+  `std::shared_ptr`
+- `semantics::optional_value`: a value that holds an object or none, such as
+  `std::optional`
+
+The semantics say whether the wrapper is pointer-like and whether it owns its
+element, and they select the storage form, which decides the requests each scope
+publishes for the wrapper. A wrapper whose element can be borrowed as an object
+declares `borrow`; an owning handle without it holds an array. Dingo does not
+create an owning handle from a borrowed non-owning source through a default
+conversion. This rule applies to the leaf handle conversion. Alternative and
+optional-style conversions first select or unwrap their contained conversion,
+then inherit its `borrow` or `consume` requirement.
 
 An optional-style wrapper provides `value_type`, `get`, `empty`, `wrap`, and
 `make_empty`. These operations let Dingo preserve an empty source and construct
@@ -67,8 +87,9 @@ publishes for each `storage_form`), and
 [include/dingo/storage/storage_scope_policy.h](../../include/dingo/storage/storage_scope_policy.h)
 generates `storage_traits` and `storage_materialization_traits` from it. A
 (scope, form) cell that deviates from that rule specializes
-`detail::storage_cell`. A custom wrapper that the built-in forms do not classify
-still specializes `storage_traits` directly, as in the extension example below.
+`detail::storage_cell`. A wrapper is classified into a form by its semantics, so
+a custom wrapper needs no `storage_traits` of its own. `storage_traits` remains
+a specialization point for a shape the forms do not describe.
 
 Put a result shape in `value_types` when it is copied from borrowed storage;
 Dingo exposes it only when the resolved type is copy constructible. Put `T&&` in
@@ -116,11 +137,14 @@ That test adds:
 - `test_unique<T>`
 - `test_optional<T>`
 
-and then specializes the exact traits Dingo needs:
+and then specializes the traits Dingo needs:
 
-- `type_traits` for wrapper semantics
-- `storage_traits` for scope-specific exposure
-- `type_conversion_traits` for conversion availability and execution
+- `type_traits` for the semantics and operations of each wrapper
+- `type_conversion_traits` for the conversion between handles of different
+  elements
+
+Their definitions are in
+[test/support/custom_wrappers.h](../../test/support/custom_wrappers.h).
 
 That file is worth treating as executable documentation.
 

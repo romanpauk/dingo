@@ -13,6 +13,7 @@
 #include <dingo/base/type_list.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/rebind_type.h>
+#include <dingo/type/type_conversion_traits.h>
 #include <dingo/type/type_traits.h>
 
 #include <type_traits>
@@ -22,7 +23,9 @@ namespace detail {
 template <typename Source, typename Target>
 inline constexpr bool is_handle_rebindable_v =
     type_traits<Source>::enabled && type_traits<Source>::is_pointer_like &&
-    type_traits<Source>::template is_handle_rebindable<Target>;
+    (std::is_constructible_v<Target, Source> ||
+     !is_default_type_conversion<
+         type_conversion_traits<Target, Source>>::value);
 } // namespace detail
 
 template <typename Storage, typename Interface>

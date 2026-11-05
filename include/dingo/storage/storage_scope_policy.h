@@ -201,112 +201,115 @@ template <typename T, size_t N> struct storage_form_traits<T[N]> {
   };
 };
 
-template <typename Array, typename Deleter>
-struct storage_form_traits<std::unique_ptr<Array, Deleter>,
-                           std::enable_if_t<std::is_array_v<Array> &&
-                                            (std::extent_v<Array, 0> == 0)>> {
-  static constexpr storage_form form = storage_form::unique_array_handle;
+// A wrapper is classified by its semantics; the lists of a form are those of
+// any wrapper of the form, the standard ones and a user's alike. The element
+// of an array handle cannot be borrowed as an object.
+template <typename Wrapper, typename = void> struct wrapper_semantics {
+  using type = void;
+};
 
+template <typename Wrapper>
+struct wrapper_semantics<
+    Wrapper, std::void_t<typename type_traits<Wrapper>::semantics>> {
+  using type = typename type_traits<Wrapper>::semantics;
+};
+
+template <typename Wrapper,
+          typename Semantics = typename wrapper_semantics<Wrapper>::type,
+          bool Borrowable = is_value_borrowable_v<Wrapper>>
+struct wrapper_storage_form {
+  static constexpr storage_form form = storage_form::unknown;
+};
+
+template <typename Wrapper>
+struct storage_form_traits<Wrapper,
+                           std::enable_if_t<type_traits<Wrapper>::enabled &&
+                                            !std::is_pointer_v<Wrapper>>>
+    : wrapper_storage_form<Wrapper> {};
+
+template <typename Wrapper, typename U>
+using wrapper_element_t =
+    wrapper_rebind_leaf_t<typename type_traits<Wrapper>::value_type, U>;
+
+// The sharing handle of the element U of a sole owner.
+template <typename Wrapper, typename U>
+using shared_handle_t = typename type_traits<Wrapper>::template share_t<
+    wrapper_element_t<Wrapper, U>>;
+
+template <typename Wrapper, bool Array> struct owner_storage_form_base {
   template <typename U> struct borrowed {
   private:
-    using handle_type =
-        wrapper_rebind_leaf_t<std::unique_ptr<Array, Deleter>, U>;
+    using handle = wrapper_rebind_leaf_t<Wrapper, U>;
+    using types = wrapper_storage_types<handle>;
 
   public:
-    using value_types = type_list<>;
-    using lvalue_reference_types = type_list<handle_type &>;
-    using pointer_types = typename smart_array_pointer_types<
-        handle_type, std::remove_extent_t<Array>, U>::type;
+    using lvalue_reference_types =
+        std::conditional_t<Array, type_list<handle &>,
+                           typename types::lvalue_reference_types>;
+    using pointer_types = std::conditional_t<
+        Array,
+        typename smart_array_pointer_types<
+            handle, typename type_traits<Wrapper>::value_type, U>::type,
+        typename types::pointer_types>;
+    using copyable_value_types = typename types::copyable_value_types;
+  };
+};
+
+template <typename Wrapper, bool Borrowable>
+struct wrapper_storage_form<Wrapper, semantics::sole_owner, Borrowable> {
+  static constexpr storage_form form = Borrowable
+                                           ? storage_form::unique_handle
+                                           : storage_form::unique_array_handle;
+
+  template <typename U>
+  struct borrowed
+      : owner_storage_form_base<Wrapper, !Borrowable>::template borrowed<U> {
+    using value_types =
+        std::conditional_t<Borrowable, type_list<U>, type_list<>>;
   };
 
   template <typename U> struct consumed {
     using rvalue_reference_types =
-        type_list<wrapper_rebind_leaf_t<std::unique_ptr<Array, Deleter>, U> &&,
-                  wrapper_rebind_leaf_t<std::shared_ptr<Array>, U> &&>;
+        type_list<wrapper_rebind_leaf_t<Wrapper, U> &&,
+                  shared_handle_t<Wrapper, U> &&>;
   };
 };
 
-template <typename T, typename Deleter>
-struct storage_form_traits<std::unique_ptr<T, Deleter>,
-                           std::enable_if_t<!std::is_array_v<T>>> {
-  static constexpr storage_form form = storage_form::unique_handle;
+template <typename Wrapper, bool Borrowable>
+struct wrapper_storage_form<Wrapper, semantics::shared_owner, Borrowable> {
+  static constexpr storage_form form = Borrowable
+                                           ? storage_form::shared_handle
+                                           : storage_form::shared_array_handle;
 
-  template <typename U> struct borrowed {
-  private:
-    using types = wrapper_storage_types<
-        wrapper_rebind_leaf_t<std::unique_ptr<T, Deleter>, U>>;
-
-  public:
-    using value_types = type_list<U>;
-    using lvalue_reference_types = typename types::lvalue_reference_types;
-    using pointer_types = typename types::pointer_types;
+  template <typename U>
+  struct borrowed
+      : owner_storage_form_base<Wrapper, !Borrowable>::template borrowed<U> {
+    using value_types = std::conditional_t<
+        Borrowable,
+        type_list_unique_t<type_list_cat_t<
+            type_list<U>, typename owner_storage_form_base<Wrapper, false>::
+                              template borrowed<U>::copyable_value_types>>,
+        type_list<wrapper_rebind_leaf_t<Wrapper, U>>>;
   };
 
   template <typename U> struct consumed {
     using rvalue_reference_types =
-        type_list<wrapper_rebind_leaf_t<std::unique_ptr<T, Deleter>, U> &&,
-                  std::shared_ptr<wrapper_rebind_leaf_t<T, U>> &&>;
+        type_list<wrapper_rebind_leaf_t<Wrapper, U> &&>;
   };
 };
 
-template <typename Array>
-struct storage_form_traits<std::shared_ptr<Array>,
-                           std::enable_if_t<std::is_array_v<Array> &&
-                                            (std::extent_v<Array, 0> == 0)>> {
-  static constexpr storage_form form = storage_form::shared_array_handle;
-
-  template <typename U> struct borrowed {
-  private:
-    using handle_type = wrapper_rebind_leaf_t<std::shared_ptr<Array>, U>;
-
-  public:
-    using value_types = type_list<handle_type>;
-    using lvalue_reference_types = type_list<handle_type &>;
-    using pointer_types = typename smart_array_pointer_types<
-        handle_type, std::remove_extent_t<Array>, U>::type;
-  };
-
-  template <typename U> struct consumed {
-    using rvalue_reference_types =
-        type_list<wrapper_rebind_leaf_t<std::shared_ptr<Array>, U> &&>;
-  };
-};
-
-template <typename T>
-struct storage_form_traits<std::shared_ptr<T>,
-                           std::enable_if_t<!std::is_array_v<T>>> {
-  static constexpr storage_form form = storage_form::shared_handle;
-
-  template <typename U> struct borrowed {
-  private:
-    using types =
-        wrapper_storage_types<wrapper_rebind_leaf_t<std::shared_ptr<T>, U>>;
-
-  public:
-    using value_types = type_list_unique_t<
-        type_list_cat_t<type_list<U>, typename types::copyable_value_types>>;
-    using lvalue_reference_types = typename types::lvalue_reference_types;
-    using pointer_types = typename types::pointer_types;
-  };
-
-  template <typename U> struct consumed {
-    using rvalue_reference_types =
-        type_list<wrapper_rebind_leaf_t<std::shared_ptr<T>, U> &&>;
-  };
-};
-
-template <typename T> struct storage_form_traits<std::optional<T>> {
+template <typename Wrapper>
+struct wrapper_storage_form<Wrapper, semantics::optional_value, true> {
   static constexpr storage_form form = storage_form::optional;
 
   template <typename U> struct borrowed {
     using value_types = type_list<U>;
-    using lvalue_reference_types =
-        type_list<U &, exact_lookup<std::optional<T>> &>;
-    using pointer_types = type_list<U *, exact_lookup<std::optional<T>> *>;
+    using lvalue_reference_types = type_list<U &, exact_lookup<Wrapper> &>;
+    using pointer_types = type_list<U *, exact_lookup<Wrapper> *>;
   };
 
   template <typename U> struct consumed {
-    using rvalue_reference_types = type_list<std::optional<T> &&>;
+    using rvalue_reference_types = type_list<Wrapper &&>;
   };
 };
 

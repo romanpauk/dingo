@@ -426,9 +426,9 @@ Constructor deduction is intentionally useful, not magical. The main limits are:
   forward-declared `T` as long as the type is already registered
 - constructing another type can still depend on a forward-declared `T&` or `T*`;
   the dependency is looked up, not auto-constructed
-- reference-style wrapper values only participate in the reference-based
-  deduction path when the wrapper opts in through
-  `type_traits<T>::is_reference_resolvable`
+- wrapper values only participate in the reference-based deduction path when
+  their element can be borrowed, that is when their `type_traits` declares
+  `borrow`
 - automatic detection does not perform structural signature recovery when nested
   wrapper or alternative conversions make a constructor probe ambiguous; provide
   the exact signature with `factory<constructor<T(Args...)>>`

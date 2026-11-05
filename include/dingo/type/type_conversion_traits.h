@@ -348,8 +348,8 @@ struct borrows_value_wrapper<
     std::void_t<decltype(type_traits<std::remove_cv_t<std::remove_reference_t<
                              Type>>>::borrow(std::declval<Type>()))>>
     : std::bool_constant<
-          type_traits<std::remove_cv_t<std::remove_reference_t<Type>>>::
-              is_value_borrowable &&
+          is_value_borrowable_v<
+              std::remove_cv_t<std::remove_reference_t<Type>>> &&
           is_value_wrapper_type_v<
               decltype(type_traits<std::remove_cv_t<std::remove_reference_t<
                            Type>>>::borrow(std::declval<Type>()))>> {};
@@ -635,8 +635,8 @@ template <typename Target, typename Source, typename Access>
 struct borrowed_type_conversion_candidate<
     Target, Source, Access,
     std::enable_if_t<
-        type_traits<std::remove_cv_t<std::remove_reference_t<Source>>>::
-            is_value_borrowable,
+        is_value_borrowable_v<
+            std::remove_cv_t<std::remove_reference_t<Source>>>,
         std::void_t<
             decltype(type_traits<std::remove_cv_t<std::remove_reference_t<
                          Source>>>::borrow(std::declval<Source>()))>>> {
@@ -1023,8 +1023,7 @@ constexpr std::size_t first_conversion_fallback() {
                            std::remove_reference_t<Source>>> &&
                        !std::is_pointer_v<Target>) {
     return 6;
-  } else if constexpr (Index <= 7 &&
-                       type_traits<source_type>::is_value_borrowable) {
+  } else if constexpr (Index <= 7 && is_value_borrowable_v<source_type>) {
     return 7;
   } else if constexpr (Index <= 8 &&
                        (std::is_lvalue_reference_v<Target> ||

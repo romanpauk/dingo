@@ -108,8 +108,8 @@ struct deduced_interface_types<
     Type,
     std::enable_if_t<
         type_traits<std::remove_cv_t<std::remove_reference_t<Type>>>::enabled &&
-        type_traits<std::remove_cv_t<std::remove_reference_t<Type>>>::
-            is_value_borrowable>> {
+        is_value_borrowable_v<
+            std::remove_cv_t<std::remove_reference_t<Type>>>>> {
 private:
   using value_type = std::remove_cv_t<std::remove_reference_t<Type>>;
 
@@ -316,8 +316,8 @@ struct deduced_interface_type<
         !std::is_same_v<typename ScopeType::type, unique> &&
         type_traits<
             std::remove_cv_t<std::remove_reference_t<StorageType>>>::enabled &&
-        type_traits<std::remove_cv_t<std::remove_reference_t<StorageType>>>::
-            is_value_borrowable &&
+        is_value_borrowable_v<
+            std::remove_cv_t<std::remove_reference_t<StorageType>>> &&
         is_alternative_type_v<std::remove_cv_t<leaf_type_t<StorageType>>>>> {
   using type =
       ::dingo::interfaces<typename ::dingo::detail::deduced_interface_types<

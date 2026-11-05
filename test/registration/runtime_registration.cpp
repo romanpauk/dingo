@@ -30,18 +30,12 @@ template <typename T>
 struct type_traits<runtime_registration_test::observer_pointer<T>> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = false;
 
   using value_type = T;
 
   template <typename U>
   using rebind_t = runtime_registration_test::observer_pointer<U>;
-  template <typename> static constexpr bool is_handle_rebindable = false;
-
-  template <typename Target>
-  static constexpr bool is_rebindable =
-      std::is_same_v<std::remove_cv_t<Target>, rebind_t<T>>;
 };
 } // namespace dingo
 

@@ -33,8 +33,8 @@ struct alternative_provides_interface<
     Alternative, Interface,
     std::enable_if_t<type_traits<std::remove_cv_t<
                          std::remove_reference_t<Alternative>>>::enabled &&
-                     type_traits<std::remove_cv_t<std::remove_reference_t<
-                         Alternative>>>::is_value_borrowable>>
+                     is_value_borrowable_v<std::remove_cv_t<
+                         std::remove_reference_t<Alternative>>>>>
     : std::bool_constant<
           std::is_same_v<
               std::remove_cv_t<std::remove_reference_t<Alternative>>,

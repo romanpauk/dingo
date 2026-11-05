@@ -14,13 +14,9 @@ namespace dingo {
 template <> struct type_traits<wrapper> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = false;
-  static constexpr bool is_value_borrowable = true;
   static constexpr bool is_owning_handle = false;
 
   using value_type = int;
-
-  template <typename> static constexpr bool is_handle_rebindable = false;
-  template <typename> static constexpr bool is_rebindable = false;
 
   static int &borrow(wrapper &source) { return source.value; }
 };
