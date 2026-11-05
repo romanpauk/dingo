@@ -13,6 +13,7 @@
 #include <dingo/binding/binding_resolution.h>
 #include <dingo/binding/binding_selection.h>
 #include <dingo/binding/container_interface.h>
+#include <dingo/binding/request_resolution.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/factory/invoke.h>
@@ -215,19 +216,6 @@ private:
       uses_static_minimal_context_v<Request, Result, LookupKey>,
       no_dependency_context, context_type>;
 
-  template <typename Request, typename Context, typename Origin,
-            typename LookupKey,
-            typename R = request_result_t<typename Request::user_type,
-                                          Request::removes_rvalue_references>,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve_parent(construction_scope scope, Context &context, Origin &origin,
-                   LookupKey key) {
-    using user_type = typename Request::user_type;
-    return parent_
-        ->template resolve<user_type, Request::removes_rvalue_references>(
-            scope, context, origin, key);
-  }
-
   template <typename Lookup, typename Result, typename LookupKey,
             typename Context>
   decltype(auto) resolve_bound(construction_scope scope, Context &context) {
@@ -299,24 +287,11 @@ public:
   R resolve(LookupKey key) {
     using lookup_request = request_type<T, true>;
     using request = request_type<T, false>;
-    if constexpr (!collection_traits<R>::is_collection) {
-      if constexpr (uses_static_minimal_context_v<request, R, LookupKey>) {
-        static_resolution_context_t<request, R, LookupKey> context;
-        return resolve_bound<typename lookup_request::lookup_type, R,
-                             LookupKey>(ephemeral_scope, context);
-      }
-    }
-    if constexpr (collection_traits<R>::is_collection) {
-      context_type context;
-      return resolve_request<request, R>(ephemeral_scope, context, *this, key);
+    if constexpr (uses_static_minimal_context_v<request, R, LookupKey>) {
+      static_resolution_context_t<request, R, LookupKey> context;
+      return resolve_bound<typename lookup_request::lookup_type, R, LookupKey>(
+          ephemeral_scope, context);
     } else {
-      if constexpr (has_parent_v && resolve_status_v<request, LookupKey> ==
-                                        binding_status::not_found) {
-        if (parent_) {
-          context_type context;
-          return resolve_parent<request>(ephemeral_scope, context, *this, key);
-        }
-      }
       context_type context;
       return resolve_request<request, R>(ephemeral_scope, context, *this, key);
     }
@@ -339,44 +314,8 @@ public:
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(construction_scope scope, Context &context, Origin &origin,
             LookupKey key) {
-    using lookup_request = request_type<T, true>;
-    using request = request_type<T, RemoveRvalueReferences>;
-    if constexpr (!collection_traits<R>::is_collection) {
-      using selection = typename static_bindings_type::template selection<
-          typename lookup_request::lookup_type, LookupKey>;
-      if constexpr (selection::status == binding_status::found) {
-        using binding = typename selection::binding_type;
-        using binding_model_type = typename binding::binding_model_type;
-        if constexpr (binding_supports_request_v<R, binding> &&
-                      (std::is_reference_v<R> || std::is_pointer_v<R>) &&
-                      stored_request_identity_v<
-                          R, typename binding_model_type::storage_type> &&
-                      factory_without_dependencies_v<
-                          typename binding_model_type::factory_type>) {
-          return resolve_bound<typename lookup_request::lookup_type, R,
-                               LookupKey>(scope, context);
-        }
-      }
-    }
-    if constexpr (collection_traits<R>::is_collection) {
-      if constexpr (has_parent_v && collection_count_v<R, LookupKey> == 0) {
-        if (parent_) {
-          return resolve_parent<request>(scope, context, origin, key);
-        }
-        return origin.template unresolved<request, false, LookupKey, R>(
-            scope, context, key);
-      } else {
-        return resolve_request<request, R>(scope, context, origin, key);
-      }
-    } else {
-      if constexpr (has_parent_v && resolve_status_v<request, LookupKey> ==
-                                        binding_status::not_found) {
-        if (parent_) {
-          return resolve_parent<request>(scope, context, origin, key);
-        }
-      }
-      return resolve_request<request, R>(scope, context, origin, key);
-    }
+    return resolve_request<request_type<T, RemoveRvalueReferences>, R>(
+        scope, context, origin, std::move(key));
   }
 
   template <typename T, typename IdType, typename R = request_result_t<T, true>,
@@ -507,9 +446,11 @@ public:
         scope, context, *this, detail::no_lookup_key());
   }
 
+  // A request that no container of the chain binds. Without a parent, the
+  // request of the static container itself cannot be bound at run time.
   template <typename Request, bool MayAutoConstruct, typename LookupKey,
             typename R = typename Request::lookup_type,
-            bool StaticError = false, typename Context,
+            bool StaticError = !has_parent_v, typename Context,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R unresolved(construction_scope scope, Context &context, LookupKey key) {
     (void)MayAutoConstruct;
@@ -517,6 +458,9 @@ public:
       (void)scope;
       (void)context;
       (void)key;
+      static_assert(!StaticError || dependent_false_v<Request, LookupKey>,
+                    "static container cannot construct a collection for an "
+                    "unbound type");
       using resolve_type = typename collection_traits<R>::resolve_type;
       throw make_collection_type_not_found_exception<R, resolve_type>();
     } else {
@@ -533,46 +477,61 @@ public:
   }
 
 private:
+  friend struct detail::request_resolution;
+
   template <typename Request, typename R, typename Context, typename Origin,
             typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve_request(construction_scope scope, Context &context, Origin &origin,
                     LookupKey key) {
     if constexpr (collection_traits<R>::is_collection) {
-      if constexpr (has_parent_v && collection_count_v<R, LookupKey> == 0) {
-        if (parent_) {
-          return resolve_parent<Request>(scope, context, origin,
-                                         std::move(key));
-        }
-        return origin.template unresolved<Request, false, LookupKey, R>(
-            scope, context, key);
-      } else {
-        return storage_
-            .template construct_collection<R, LookupKey, static_bindings_type>(
-                scope, *this, context);
-      }
+      return request_resolution::resolve_collection<Request, R>(
+          *this, scope, context, origin, std::move(key));
     } else {
-      using lookup_type = typename Request::lookup_type;
-      constexpr auto status = resolve_status_v<Request, LookupKey>;
-      if constexpr (status == binding_status::found) {
-        return resolve_bound<lookup_type, typename Request::interface_type,
-                             LookupKey>(scope, context);
-      } else if constexpr (status == binding_status::ambiguous) {
-        static_assert(status != binding_status::ambiguous,
-                      "static_container cannot resolve an ambiguously bound "
-                      "type");
-      } else {
-        if constexpr (has_parent_v) {
-          if (parent_) {
-            return resolve_parent<Request>(scope, context, origin,
-                                           std::move(key));
-          }
-        }
-        return origin
-            .template unresolved<Request, false, LookupKey, R, !has_parent_v>(
-                scope, context, key);
-      }
+      return request_resolution::resolve<Request, R, false>(
+          *this, scope, context, origin, std::move(key));
     }
+  }
+
+  template <typename Request, typename LookupKey>
+  auto select_request(const LookupKey &) {
+    return selection_t<typename Request::lookup_type, LookupKey>{};
+  }
+
+  template <typename Request, typename R, typename Selection, typename Context>
+  decltype(auto) resolve_selected(Selection &, construction_scope scope,
+                                  Context &context) {
+    return storage_
+        .template resolver<typename Selection::binding_type>(scope, *this)
+        .template resolve<typename Request::interface_type>(context);
+  }
+
+  template <typename Request, typename Context>
+  [[noreturn]] void ambiguous(Context &context) {
+    static_assert(dependent_false_v<Request, Context>,
+                  "static_container cannot resolve an ambiguously bound type");
+    throw make_type_ambiguous_exception<typename Request::lookup_type>(context);
+  }
+
+  template <typename Lookup, typename LookupKey>
+  static constexpr bool parent_serves() {
+    return has_parent_v;
+  }
+
+  parent_container_type *parent() { return parent_; }
+
+  template <typename R, typename LookupKey>
+  auto collection_count(const LookupKey &) {
+    return std::integral_constant<std::size_t,
+                                  collection_count_v<R, LookupKey>>{};
+  }
+
+  template <typename R, typename Context, typename LookupKey>
+  R construct_request_collection(construction_scope scope, Context &context,
+                                 LookupKey) {
+    return storage_
+        .template construct_collection<R, LookupKey, static_bindings_type>(
+            scope, *this, context);
   }
 
 private:

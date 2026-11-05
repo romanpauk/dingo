@@ -14,6 +14,7 @@
 #include <dingo/binding/binding_resolution.h>
 #include <dingo/binding/binding_selection.h>
 #include <dingo/binding/container_interface.h>
+#include <dingo/binding/request_resolution.h>
 #include <dingo/container_base.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/constructor.h>
@@ -122,17 +123,6 @@ private:
     runtime_registry_.template append_collection<T>(scope, results, context, fn,
                                                     std::move(key));
     return results;
-  }
-
-  template <typename Request, typename Origin, typename LookupKey,
-            typename R = typename Request::lookup_type,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve_parent(construction_scope scope, runtime_context_type &context,
-                   Origin &origin, LookupKey key) {
-    using user_type = typename Request::user_type;
-    return parent_
-        ->template resolve<user_type, Request::removes_rvalue_references>(
-            scope, context, origin, std::move(key));
   }
 
   template <typename Request, typename R = typename Request::result_type>
@@ -335,67 +325,53 @@ public:
   }
 
 private:
+  friend struct detail::request_resolution;
+
+  template <typename Request, typename LookupKey>
+  auto select_request(const LookupKey &key) {
+    return runtime_registry_.template select_binding<
+        typename Request::value_type, typename Request::exact_type>(key);
+  }
+
+  template <typename Request, typename R>
+  R resolve_selected(typename runtime_registry_type::runtime_selection selected,
+                     construction_scope scope, runtime_context_type &context) {
+    return runtime_registry_
+        .template resolve_binding<typename Request::interface_type, R>(
+            selected, scope, context);
+  }
+
+  template <typename Request>
+  [[noreturn]] void ambiguous(runtime_context_type &context) {
+    throw detail::make_type_ambiguous_exception<typename Request::lookup_type>(
+        context);
+  }
+
+  parent_container_type *parent() { return parent_; }
+
+  template <typename R, typename LookupKey>
+  std::size_t collection_count(const LookupKey &key) {
+    return count_collection<R>(key);
+  }
+
+  template <typename R, typename LookupKey>
+  R construct_request_collection(construction_scope scope,
+                                 runtime_context_type &context, LookupKey key) {
+    // Collections are constructed in the active resolve context. Routing
+    // no-key collections through scalar registry resolution would bypass
+    // registered collection factories and re-enter missing-binding fallback.
+    return construct_collection<R>(
+        scope, context, detail::binding_collection_append{}, std::move(key));
+  }
+
   template <typename Request, typename R, bool MayAutoConstruct,
             typename Origin, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(typename runtime_registry_type::runtime_selection selected,
             construction_scope scope, runtime_context_type &context,
             Origin &origin, LookupKey key) {
-    if (selected.status == detail::binding_status::ambiguous) {
-      throw detail::make_type_ambiguous_exception<
-          typename Request::lookup_type>(context);
-    }
-    if (selected.status == detail::binding_status::found) {
-      return runtime_registry_
-          .template resolve_binding<typename Request::interface_type, R>(
-              selected, scope, context);
-    }
-    if constexpr (parent_serves<typename Request::lookup_type, LookupKey>()) {
-      if (parent_) {
-        return resolve_parent<Request>(scope, context, origin, key);
-      }
-    }
-    return origin.template unresolved<Request, MayAutoConstruct, LookupKey, R>(
-        scope, context, key);
-  }
-
-  template <typename Request, typename R, typename Origin, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve_collection(construction_scope scope, runtime_context_type &context,
-                       Origin &origin, LookupKey key) {
-    if constexpr (detail::is_no_lookup_key_v<LookupKey>) {
-      auto selected = runtime_registry_.template select_binding<
-          typename Request::value_type, typename Request::exact_type>(key);
-      if (selected.status == detail::binding_status::ambiguous) {
-        throw detail::make_type_ambiguous_exception<
-            typename Request::lookup_type>(context);
-      }
-      if (selected.status == detail::binding_status::found) {
-        return runtime_registry_
-            .template resolve_binding<typename Request::interface_type, R>(
-                selected, scope, context);
-      }
-    }
-    if (count_collection<R>(key) == 0) {
-      if constexpr (parent_serves<typename collection_traits<R>::resolve_type,
-                                  LookupKey>()) {
-        if (parent_) {
-          return resolve_parent<Request>(scope, context, origin, key);
-        }
-      }
-      return origin.template unresolved<Request, false, LookupKey, R>(
-          scope, context, key);
-    }
-    // Collections are constructed in the active resolve context.  Routing
-    // no-key collections through scalar registry resolution would bypass
-    // registered collection factories and re-enter missing-binding fallback.
-    if constexpr (detail::default_collection_append_v<R>) {
-      return construct_collection<R>(
-          scope, context, detail::binding_collection_append{}, std::move(key));
-    } else {
-      return origin.template unresolved<Request, false, LookupKey, R>(
-          scope, context, key);
-    }
+    return detail::request_resolution::resolve<Request, R, MayAutoConstruct>(
+        *this, selected, scope, context, origin, key);
   }
 
   template <typename Request, typename R,
@@ -406,13 +382,11 @@ private:
   R resolve(construction_scope scope, runtime_context_type &context,
             Origin &origin, LookupKey key) {
     if constexpr (collection_traits<R>::is_collection) {
-      return resolve_collection<Request, R>(scope, context, origin,
-                                            std::move(key));
+      return detail::request_resolution::resolve_collection<Request, R>(
+          *this, scope, context, origin, std::move(key));
     } else {
-      auto selected = runtime_registry_.template select_binding<
-          typename Request::value_type, typename Request::exact_type>(key);
-      return resolve<Request, R, MayAutoConstruct>(selected, scope, context,
-                                                   origin, std::move(key));
+      return detail::request_resolution::resolve<Request, R, MayAutoConstruct>(
+          *this, scope, context, origin, std::move(key));
     }
   }
 

@@ -84,38 +84,37 @@ uses its `lookup_type`, `interface_type`, `result_type`, `value_type`, and
 `exact_type` members instead of recomputing request-derived type aliases along
 each path.
 
+Both containers resolve a request with the algorithm in
+[include/dingo/binding/request_resolution.h](../../include/dingo/binding/request_resolution.h).
 The sequence is:
 
-1. Check the cache if container caching is enabled.
-2. Use the normalized type request and lookup key to find the matching runtime
-   and/or static binding set.
-3. Apply the container's selection rules:
-   - runtime-only singular match: selected
-   - static-only singular match: selected
-   - runtime and static both provide the same singular binding: ambiguous
-   - collection request: merge both sources
-4. Build an `instance_request` for the requested lookup type and descriptor.
-5. Call the matching runtime factory entry point or static resolution path for
-   the requested form and convert the result back to `T`.
+1. The runtime container checks the request cache of the selected binding.
+2. The container selects the bindings of the normalized type request and lookup
+   key. A static selection is a type, so its status is known at compile time; a
+   runtime selection is a value.
+3. The algorithm continues by status:
+   - one binding: resolve it
+   - several bindings: ambiguous, a `type_ambiguous_exception` at run time or a
+     compile-time error in a static container
+   - no binding: the parent container, if it declares the lookup, and otherwise
+     the container the request entered through, which may construct the type
+4. A collection request without a key resolves a binding of the collection type
+   first. Otherwise the collection is constructed from the bindings of its
+   element, and a container without any falls back as in step 3.
+5. A selected binding applies its resolution through a binding activation. A
+   static container selects the resolution at compile time; a runtime binding
+   matches the requested type descriptor in its `instance_request`.
 
 [include/dingo/binding/runtime_binding_interface.h](../../include/dingo/binding/runtime_binding_interface.h)
-defines the request object the container passes to the factory. The object
+defines the request object the runtime container passes to a binding. The object
 stores:
 
 - the lookup type index
 - the requested type descriptor
 
-The container then chooses the appropriate factory entry point:
-
-- `get_value(...)`
-- `get_lvalue_reference(...)`
-- `get_rvalue_reference(...)`
-- `get_pointer(...)`
-
-The runtime and static paths share the same core selection and per-binding
-resolution vocabulary under
-[include/dingo/binding/](../../include/dingo/binding), even though their
-registration/storage backends differ.
+The containers differ in their binding table and their selection, not in the
+algorithm: registration child containers, the runtime container and the static
+container all provide the same hooks to it.
 
 ### Atomic Container Changes
 

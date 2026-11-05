@@ -99,6 +99,7 @@ if(DINGO_DEVELOPMENT_MODE)
         binding/binding_activation.h
         binding/binding_cell.h
         binding/container_interface.h
+        binding/request_resolution.h
         type/dependency.h
         factory/factory_traits.h
         type/key.h

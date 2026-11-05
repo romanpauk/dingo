@@ -14,6 +14,7 @@
 #include <dingo/binding/binding_collection.h>
 #include <dingo/binding/binding_model.h>
 #include <dingo/binding/binding_selection.h>
+#include <dingo/binding/request_resolution.h>
 #include <dingo/factory/callable.h>
 #include <dingo/lookup/lookup.h>
 #include <dingo/lookup/operations.h>
@@ -1770,26 +1771,34 @@ private:
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-  template <typename Request, bool MayAutoConstruct, typename LookupKey,
-            typename R = typename Request::lookup_type>
-  R resolve_impl(construction_scope scope, runtime_context_type &context,
-                 LookupKey key) {
-    static_assert(detail::is_lookup_key_v<LookupKey>);
-    using Type = typename Request::value_type;
-    static_assert(!std::is_const_v<Type>);
+  friend struct detail::request_resolution;
 
-    auto selection = select_binding<Type, typename Request::exact_type>(key);
-    if (selection.ambiguous()) {
-      throw detail::make_type_ambiguous_exception<
-          typename Request::lookup_type>(context);
-    }
-    if (selection.found()) {
-      return store_type::template resolve_binding<
-          typename Request::lookup_type, typename Request::interface_type>(
-          selection, scope, context);
-    }
-    return unresolved<Request, MayAutoConstruct, LookupKey,
-                      request_result_t<R>>(scope, context, key);
+  template <typename Request, typename LookupKey>
+  runtime_selection select_request(const LookupKey &key) {
+    static_assert(!std::is_const_v<typename Request::value_type>);
+    return select_binding<typename Request::value_type,
+                          typename Request::exact_type>(key);
+  }
+
+  template <typename Request, typename R>
+  R resolve_selected(runtime_selection selection, construction_scope scope,
+                     runtime_context_type &context) {
+    return store_type::template resolve_binding<
+        typename Request::lookup_type, typename Request::interface_type>(
+        selection, scope, context);
+  }
+
+  template <typename Request>
+  [[noreturn]] void ambiguous(runtime_context_type &context) {
+    throw detail::make_type_ambiguous_exception<typename Request::lookup_type>(
+        context);
+  }
+
+  // A registration container answers its misses through unresolved(), which
+  // walks the parent chain itself.
+  template <typename Lookup, typename LookupKey>
+  static constexpr bool parent_serves() {
+    return false;
   }
 
   template <typename Request>
@@ -1813,10 +1822,11 @@ private:
   R resolve(construction_scope scope, runtime_context_type &context,
             LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
-    return resolve_impl<request,
-                        detail::is_runtime_auto_constructible_dependency_v<
-                            typename request::user_type>>(scope, context,
-                                                          std::move(key));
+    return detail::request_resolution::resolve<
+        request, typename request::interface_type,
+        detail::is_runtime_auto_constructible_dependency_v<
+            typename request::user_type>>(*this, scope, context, *this,
+                                          std::move(key));
   }
 
 #ifdef _MSC_VER
