@@ -234,13 +234,13 @@ TEST(type_registration_test, registration_specialization) {
         : allocator_(parent->get_allocator()), runtime_(allocator_),
           parent_(parent) {}
 
-    container_runtime<allocator_type> &runtime() { return runtime_; }
+    runtime_memory<allocator_type> &runtime() { return runtime_; }
     parent_container_type *parent() { return parent_; }
     allocator_type &get_allocator() { return allocator_; }
 
   private:
     allocator_type allocator_;
-    container_runtime<allocator_type> runtime_;
+    runtime_memory<allocator_type> runtime_;
     parent_container_type *parent_;
   };
 

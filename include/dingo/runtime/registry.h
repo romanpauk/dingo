@@ -21,10 +21,10 @@
 #include <dingo/memory/allocator.h>
 #include <dingo/registration/requirements.h>
 #include <dingo/runtime/binding.h>
-#include <dingo/runtime/container_runtime.h>
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>
 #include <dingo/runtime/lookup_index.h>
+#include <dingo/runtime/memory.h>
 #include <dingo/runtime/registration_api.h>
 #include <dingo/runtime/transaction.h>
 #include <dingo/storage/interface_storage_traits.h>
@@ -124,7 +124,7 @@ struct runtime_registry_data {
     return scope_states[scope - 1];
   }
 
-  container_runtime<Allocator> runtime;
+  runtime_memory<Allocator> runtime;
   BindingsState bindings;
   std::vector<scope_state_type *, scope_pointer_allocator> scope_states;
 };
@@ -940,7 +940,7 @@ class DINGO_EMPTY_BASES runtime_registry
   static constexpr bool OwnsRuntimeData = std::is_void_v<ParentRegistry>;
   using resolve_root_type = ResolveRoot;
   using container_type = resolve_root_type;
-  using runtime_type = container_runtime<Allocator>;
+  using runtime_type = runtime_memory<Allocator>;
   using typename store_type::runtime_binding_interface_type;
   using typename store_type::runtime_context_type;
   using typename store_type::runtime_selection;
@@ -1014,7 +1014,7 @@ public:
   }
 
 protected:
-  container_runtime<allocator_type> &runtime() {
+  runtime_memory<allocator_type> &runtime() {
     return shared_runtime_data().runtime;
   }
 

@@ -17,7 +17,7 @@
 #include <dingo/rtti/rtti.h>
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/runtime/binding.h>
-#include <dingo/runtime/container_runtime.h>
+#include <dingo/runtime/memory.h>
 #include <dingo/runtime/transaction.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/interface_storage_traits.h>

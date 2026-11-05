@@ -9,7 +9,7 @@
 
 #include <dingo/memory/arena_allocator.h>
 #include <dingo/memory/object_store.h>
-#include <dingo/runtime/container_runtime.h>
+#include <dingo/runtime/memory.h>
 
 #include <cassert>
 #include <cstddef>
@@ -26,7 +26,7 @@ namespace dingo {
 #endif
 
 template <typename Allocator> class runtime_transaction {
-  using runtime_type = container_runtime<Allocator>;
+  using runtime_type = runtime_memory<Allocator>;
 
   struct action_link {
     action_link(action_link *previous_node,
@@ -95,7 +95,7 @@ public:
       : parent_(runtime.active_transaction()),
         runtime_(std::addressof(runtime)), checkpoint_(runtime.mark()) {
     static_assert(alignof(runtime_transaction) > 1,
-                  "container_runtime stores its sealed flag in the low bit of "
+                  "runtime_memory stores its sealed flag in the low bit of "
                   "the active transaction pointer");
     if (parent_ == nullptr) {
       new (std::addressof(actions_.state)) action_state(scratch);

@@ -7,8 +7,8 @@
 
 #include <dingo/container.h>
 #include <dingo/memory/arena_allocator.h>
-#include <dingo/runtime/container_runtime.h>
 #include <dingo/runtime/context.h>
+#include <dingo/runtime/memory.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
@@ -41,7 +41,7 @@ struct transaction_fixture {
 
   allocator_type allocator;
   dingo::inline_arena<512> scratch;
-  dingo::container_runtime<allocator_type> runtime{allocator};
+  dingo::runtime_memory<allocator_type> runtime{allocator};
   dingo::runtime_transaction<allocator_type> transaction{runtime, scratch};
 };
 
@@ -217,7 +217,7 @@ static void resolve_container_cold_external_value(benchmark::State &state) {
 
 static void empty_runtime_transaction(benchmark::State &state) {
   std::allocator<char> allocator;
-  dingo::container_runtime<std::allocator<char>> runtime(allocator);
+  dingo::runtime_memory<std::allocator<char>> runtime(allocator);
   for (auto _ : state) {
     dingo::execute_transaction(runtime, [&](auto &context) {
       benchmark::DoNotOptimize(runtime);
@@ -229,7 +229,7 @@ static void empty_runtime_transaction(benchmark::State &state) {
 
 static void runtime_transaction_barrier(benchmark::State &state) {
   std::allocator<char> allocator;
-  dingo::container_runtime<std::allocator<char>> runtime(allocator);
+  dingo::runtime_memory<std::allocator<char>> runtime(allocator);
   for (auto _ : state) {
     benchmark::DoNotOptimize(runtime);
     benchmark::ClobberMemory();
@@ -271,7 +271,7 @@ static void transaction_action_counts(benchmark::internal::Benchmark *value) {
 static void commit_runtime_transaction(benchmark::State &state) {
   using allocator_type = std::allocator<char>;
   allocator_type allocator;
-  dingo::container_runtime<allocator_type> runtime(allocator);
+  dingo::runtime_memory<allocator_type> runtime(allocator);
   for (auto _ : state) {
     dingo::inline_arena<512> scratch;
     dingo::runtime_transaction transaction(runtime, scratch);

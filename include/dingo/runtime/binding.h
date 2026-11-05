@@ -12,8 +12,8 @@
 #include <dingo/binding/binding_activation.h>
 #include <dingo/binding/binding_resolution.h>
 #include <dingo/binding/runtime_binding_interface.h>
-#include <dingo/runtime/container_runtime.h>
 #include <dingo/runtime/context.h>
+#include <dingo/runtime/memory.h>
 #include <dingo/type/rebind_type.h>
 
 #include <cassert>

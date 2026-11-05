@@ -133,6 +133,7 @@ if(DINGO_DEVELOPMENT_MODE)
         runtime/container_traits.h
         runtime/registration_api.h
         runtime/lookup_index.h
+        runtime/memory.h
         runtime/registry.h
         runtime/transaction.h
         static_container.h

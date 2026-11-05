@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 //
 
-#include <dingo/runtime/container_runtime.h>
+#include <dingo/runtime/memory.h>
 #include <dingo/runtime/transaction.h>
 
 #include <gtest/gtest.h>
@@ -106,7 +106,7 @@ TEST(runtime_transaction_test,
   std::vector<int> events;
   {
     arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-    container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+    runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
     runtime.construct<runtime_arena_tracker>(&events, 0);
     events.clear();
 
@@ -132,7 +132,7 @@ TEST(runtime_transaction_test,
   std::vector<int> events;
   {
     arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-    container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+    runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
     runtime.construct<runtime_arena_tracker>(&events, 1);
     {
       runtime_transaction transaction(runtime, scratch);
@@ -151,7 +151,7 @@ TEST(runtime_transaction_test,
      runtime_transaction_first_action_stays_in_inline_arena) {
   std::vector<int> events;
   inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
   {
     runtime_transaction transaction(runtime, scratch);
     transaction.on_rollback([&events]() noexcept { events.push_back(1); });
@@ -167,7 +167,7 @@ TEST(runtime_transaction_test,
      runtime_transaction_nontrivial_action_stays_in_inline_arena) {
   std::vector<int> events;
   inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
   {
     runtime_transaction transaction(runtime, scratch);
     transaction.on_rollback(runtime_transaction_tracked_action(&events, 1, 10));
@@ -183,7 +183,7 @@ TEST(runtime_transaction_test,
      runtime_transaction_destroys_action_states_after_rollback_callbacks) {
   std::vector<int> events;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
   {
     runtime_transaction transaction(runtime, scratch);
     transaction.on_rollback(runtime_transaction_tracked_action(&events, 1, 10));
@@ -198,8 +198,8 @@ TEST(runtime_transaction_test,
   std::vector<int> events;
   arena<> outer_scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
   arena<> inner_scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> outer_runtime(std::allocator<char>{});
-  container_runtime<std::allocator<char>> inner_runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> outer_runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> inner_runtime(std::allocator<char>{});
 
   {
     runtime_transaction outer(outer_runtime, outer_scratch);
@@ -220,7 +220,7 @@ TEST(runtime_transaction_test,
   std::vector<int> events;
   arena<> outer_scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
   arena<> inner_scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
 
   {
     runtime_transaction outer(runtime, outer_scratch);
@@ -242,7 +242,7 @@ TEST(runtime_transaction_test,
   std::vector<int> events;
   arena<> outer_scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
   arena<> inner_scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
   runtime_transaction outer(runtime, outer_scratch);
   outer.construct_persistent<runtime_arena_tracker>(&events, 1);
 
@@ -260,7 +260,7 @@ TEST(runtime_transaction_test,
      runtime_transaction_rollback_preserves_reverse_action_order) {
   std::vector<int> events;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
   {
     runtime_transaction transaction(runtime, scratch);
     for (int value = 1; value != 40; ++value) {
@@ -279,7 +279,7 @@ TEST(runtime_transaction_test,
      runtime_transaction_accepts_move_only_capturing_lambda) {
   std::vector<int> events;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
   {
     runtime_transaction transaction(runtime, scratch);
     auto value = std::make_unique<int>(42);
@@ -297,7 +297,7 @@ TEST(runtime_transaction_test,
   runtime_arena_tracker *slot = nullptr;
   {
     arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-    container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+    runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
     {
       runtime_transaction transaction(runtime, scratch);
       auto *created =
@@ -320,7 +320,7 @@ TEST(runtime_transaction_test,
   runtime_ordered_persistent *slot = nullptr;
   {
     arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-    container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+    runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
     bool installed_alive = false;
     {
       runtime_transaction transaction(runtime, scratch);
@@ -344,7 +344,7 @@ TEST(runtime_transaction_test,
   runtime_arena_tracker *slot = nullptr;
   {
     arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-    container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+    runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
     {
       runtime_transaction transaction(runtime, scratch);
       auto *created =
@@ -367,7 +367,7 @@ TEST(runtime_transaction_test,
   std::vector<int> events;
   {
     arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-    container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+    runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
     bool persistent_alive = false;
     {
       runtime_transaction transaction(runtime, scratch);
@@ -392,7 +392,7 @@ TEST(runtime_transaction_test,
 TEST(runtime_transaction_test, rollback_actions_run_only_on_rollback) {
   std::vector<int> events;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
 
   {
     runtime_transaction transaction(runtime, scratch);
@@ -412,7 +412,7 @@ TEST(runtime_transaction_test,
      rollback_processes_action_installed_by_rollback_callback) {
   std::vector<int> events;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
 
   {
     runtime_transaction transaction(runtime, scratch);
@@ -430,7 +430,7 @@ TEST(runtime_transaction_test,
   std::vector<int> events;
   arena<> outer_scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
   arena<> inner_scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
 
   {
     runtime_transaction outer(runtime, outer_scratch);
@@ -449,7 +449,7 @@ TEST(runtime_transaction_test, repeated_finish_calls_are_harmless) {
   int committed_rollbacks = 0;
   int rollbacks = 0;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
 
   {
     runtime_transaction transaction(runtime, scratch);
@@ -475,7 +475,7 @@ TEST(runtime_transaction_test,
      construct_persistent_with_registers_destructor_for_rollback) {
   std::vector<int> events;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
 
   {
     runtime_transaction transaction(runtime, scratch);
@@ -491,7 +491,7 @@ TEST(runtime_transaction_test,
 
 TEST(runtime_transaction_test, runtime_is_unsealed_until_sealed) {
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
   EXPECT_FALSE(runtime.sealed());
 
   runtime_transaction transaction(runtime, scratch);
@@ -505,7 +505,7 @@ TEST(runtime_transaction_test, sealing_keeps_the_transaction_chain_intact) {
   std::vector<int> events;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
   {
-    container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+    runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
 
     runtime_transaction outer(runtime, scratch);
     EXPECT_TRUE(outer.outermost());
@@ -533,7 +533,7 @@ TEST(runtime_transaction_test, sealing_keeps_the_transaction_chain_intact) {
 
 TEST(runtime_transaction_test, seal_survives_transaction_rollback) {
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
   runtime.seal();
   {
     runtime_transaction transaction(runtime, scratch);
