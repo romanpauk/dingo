@@ -838,19 +838,6 @@ public:
                          unavailable_type_conversion>;
 };
 
-template <typename... Conversions> struct select_type_conversion;
-
-template <> struct select_type_conversion<> {
-  using type = unavailable_type_conversion;
-};
-
-template <typename Head, typename... Tail>
-struct select_type_conversion<Head, Tail...> {
-  using type =
-      std::conditional_t<Head::available, Head,
-                         typename select_type_conversion<Tail...>::type>;
-};
-
 template <typename Conversion, typename Access>
 using conversion_for_access_t = std::conditional_t<
     Conversion::available &&
@@ -1128,61 +1115,6 @@ struct conversion_fallback_candidate<9, Target, Source, Access, Direct> {
   using type = unavailable_type_conversion;
 };
 
-// Returns the first candidate at or after Index whose necessary conditions
-// hold. These are necessary conditions only: the candidate still performs its
-// complete validity check before it can win. Skipped candidates cannot be
-// available, so the walk never has to instantiate them.
-template <std::size_t Index, typename Target, typename Source, typename Direct>
-constexpr std::size_t first_conversion_fallback() {
-  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
-  using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
-  using target_array = std::conditional_t<std::is_pointer_v<Target>,
-                                          std::remove_pointer_t<Target>,
-                                          std::remove_reference_t<Target>>;
-
-  if constexpr (Index <= 0 && !std::is_reference_v<Target> &&
-                !std::is_pointer_v<Target> &&
-                is_alternative_type_v<target_type>) {
-    return 0;
-  } else if constexpr (Index <= 1 && is_alternative_type_v<source_type> &&
-                       !std::is_volatile_v<std::remove_reference_t<Source>>) {
-    return 1;
-  } else if constexpr (Index <= 2 && !std::is_reference_v<Target> &&
-                       !std::is_pointer_v<Target> &&
-                       is_value_wrapper_type_v<target_type>) {
-    return 2;
-  } else if constexpr (Index <= 3 &&
-                       std::is_pointer_v<std::remove_reference_t<Source>> &&
-                       ((std::is_lvalue_reference_v<Target> &&
-                         std::is_array_v<std::remove_reference_t<Target>>) ||
-                        (std::is_pointer_v<Target> &&
-                         std::is_array_v<target_array>))) {
-    return 3;
-  } else if constexpr (Index <= 4 && Direct::can_take_address) {
-    return 4;
-  } else if constexpr (Index <= 5 && std::is_pointer_v<Target> &&
-                       std::is_lvalue_reference_v<Source>) {
-    return 5;
-  } else if constexpr (Index <= 6 &&
-                       std::is_pointer_v<std::remove_reference_t<Source>> &&
-                       !std::is_void_v<std::remove_pointer_t<
-                           std::remove_reference_t<Source>>> &&
-                       !std::is_pointer_v<Target>) {
-    return 6;
-  } else if constexpr (Index <= 7 && is_value_borrowable_v<source_type>) {
-    return 7;
-  } else if constexpr (Index <= 8 &&
-                       (std::is_lvalue_reference_v<Target> ||
-                        std::is_pointer_v<Target>) &&
-                       type_traits<
-                           retained_conversion_type_t<Target>>::enabled &&
-                       !std::is_array_v<retained_conversion_type_t<Target>>) {
-    return 8;
-  } else {
-    return 9;
-  }
-}
-
 // Keep later recursive candidates incomplete until every earlier conversion
 // has failed; merely naming all candidates instantiates all of their paths.
 template <std::size_t Index, typename Target, typename Source, typename Access,
@@ -1200,9 +1132,8 @@ template <std::size_t Index, typename Target, typename Source, typename Access,
           typename Direct, typename Candidate>
 struct select_conversion_fallback<Index, Target, Source, Access, Direct,
                                   Candidate, false> {
-  using type = typename select_conversion_fallback<
-      first_conversion_fallback<Index + 1, Target, Source, Direct>(), Target,
-      Source, Access, Direct>::type;
+  using type = typename select_conversion_fallback<Index + 1, Target, Source,
+                                                   Access, Direct>::type;
 };
 
 template <typename Target, typename Source, typename Access, typename Direct,
@@ -1215,9 +1146,8 @@ struct select_conversion_fallback<9, Target, Source, Access, Direct, Candidate,
 template <typename Target, typename Source, typename Access, typename Direct>
 struct type_conversion_path_impl<Target, Source, Access, Direct, true> {
 public:
-  using type = typename select_conversion_fallback<
-      first_conversion_fallback<0, Target, Source, Direct>(), Target, Source,
-      Access, Direct>::type;
+  using type = typename select_conversion_fallback<0, Target, Source, Access,
+                                                   Direct>::type;
   static constexpr bool available = type::available;
 };
 
