@@ -65,8 +65,6 @@ public:
     arena_.rewind(point.arena);
   }
 
-  void commit(checkpoint) {}
-
   // Set once the first resolve succeeds. Registrations that would replace a
   // lookup are refused from then on.
   bool sealed() const noexcept { return (state_ & sealed_bit) != 0; }

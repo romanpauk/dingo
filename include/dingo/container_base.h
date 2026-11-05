@@ -46,7 +46,6 @@ private:
 public:
   using container_traits_type = ContainerTraits;
   using allocator_type = Allocator;
-  using registry_type = typename implementation_type::registry_type;
   using parent_container_type =
       std::conditional_t<std::is_same_v<void, ParentContainer>,
                          runtime_container, ParentContainer>;

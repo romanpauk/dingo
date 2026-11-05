@@ -79,7 +79,6 @@ public:
       std::conditional_t<std::is_void_v<ParentContainer>, self_type,
                          detail::container_implementation_t<ParentContainer>>;
   using runtime_registry_type = runtime_base;
-  using registry_type = runtime_base;
   using container_type = self_type;
   using container_traits_type = typename runtime_base::container_traits_type;
   using allocator_type = typename runtime_base::allocator_type;
@@ -122,10 +121,6 @@ public:
   runtime_container_impl(self_type &&) = delete;
   self_type &operator=(const self_type &) = delete;
   self_type &operator=(self_type &&) = delete;
-
-  self_type &container() { return *this; }
-
-  const self_type &container() const { return *this; }
 
 private:
   template <typename Request, typename R> static constexpr bool is_cacheable() {

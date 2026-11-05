@@ -94,8 +94,7 @@ struct tracked_cache_context : cache_owner {
 
 template <bool Enabled>
 struct exposed_cache_state : detail::cache::state<Enabled> {
-  using detail::cache::state<Enabled>::get;
-  using detail::cache::state<Enabled>::set;
+  using detail::cache::state<Enabled>::slot;
 };
 
 struct stable_storage {
@@ -124,22 +123,14 @@ TEST(cache_test, request_traits_and_keys_distinguish_cached_types) {
   EXPECT_NE(detail::cache::key<int &>(), detail::cache::key<const int &>());
 }
 
-TEST(cache_test, state_stores_entries_only_when_enabled) {
+TEST(cache_test, state_has_a_slot_only_when_enabled) {
   detail::cache::entry entry{detail::cache::key<int *>(), nullptr};
   exposed_cache_state<true> enabled;
   exposed_cache_state<false> disabled;
 
-  EXPECT_EQ(enabled.get(), nullptr);
-  enabled.set(std::addressof(entry));
-  ASSERT_NE(enabled.get(), nullptr);
-  EXPECT_NE(enabled.get(), std::addressof(entry));
-  EXPECT_EQ(enabled.get()->key, entry.key);
-  EXPECT_EQ(enabled.get()->address, entry.address);
-  enabled.set(nullptr);
-  EXPECT_EQ(enabled.get(), nullptr);
-
-  disabled.set(nullptr);
-  EXPECT_EQ(disabled.get(), nullptr);
+  ASSERT_NE(enabled.slot(), nullptr);
+  EXPECT_EQ(enabled.slot()->key, nullptr);
+  EXPECT_EQ(disabled.slot(), nullptr);
 
   static_assert(sizeof(exposed_cache_state<true>) == sizeof(entry));
   static_assert(std::is_empty_v<exposed_cache_state<false>>);

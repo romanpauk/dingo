@@ -42,13 +42,7 @@ template <bool Enabled> class state;
 
 template <> class state<true> {
 protected:
-  entry *get() noexcept { return entry_.key != nullptr ? &entry_ : nullptr; }
-
   entry *slot() noexcept { return &entry_; }
-
-  void set(const entry *value) noexcept {
-    entry_ = value != nullptr ? *value : entry{};
-  }
 
 private:
   entry entry_{};
@@ -56,11 +50,6 @@ private:
 
 template <> class state<false> {
 protected:
-  entry *get() noexcept { return nullptr; }
   entry *slot() noexcept { return nullptr; }
-  void set(const entry *value) noexcept {
-    assert(value == nullptr);
-    (void)value;
-  }
 };
 } // namespace dingo::detail::cache

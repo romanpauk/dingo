@@ -27,21 +27,11 @@ template <typename Source> class rvalue_source {
 public:
   using value_type = Source;
 
-  template <
-      typename Value,
-      typename = std::enable_if_t<
-          std::is_constructible_v<Source, Value &&> &&
-          !std::is_same_v<std::remove_cv_t<std::remove_reference_t<Value>>,
-                          rvalue_source>>>
-  explicit rvalue_source(Value &&value) {
-    new (&storage_) Source(std::forward<Value>(value));
-    initialized_ = true;
-  }
-
+  // The source exists once the builder returns; a builder that throws leaves
+  // nothing to destroy.
   template <typename Builder>
   explicit rvalue_source(std::in_place_t, Builder &&builder) {
     builder(&storage_);
-    initialized_ = true;
   }
 
   rvalue_source(const rvalue_source &) = delete;
@@ -49,11 +39,7 @@ public:
   rvalue_source(rvalue_source &&) = delete;
   rvalue_source &operator=(rvalue_source &&) = delete;
 
-  ~rvalue_source() {
-    if (initialized_) {
-      destroy_object_value(get());
-    }
-  }
+  ~rvalue_source() { destroy_object_value(get()); }
 
   Source *get_ptr() {
     return std::launder(reinterpret_cast<Source *>(&storage_));
@@ -74,7 +60,6 @@ public:
 
 private:
   alignas(Source) std::byte storage_[sizeof(Source)];
-  bool initialized_ = false;
 };
 
 template <typename Source> struct lvalue_source {
@@ -202,13 +187,6 @@ struct materialized_source_traits<pointer_source<Source>> {
 template <typename Source, typename Builder>
 rvalue_source<Source> make_rvalue_source(std::in_place_t, Builder &&builder) {
   return rvalue_source<Source>(std::in_place, std::forward<Builder>(builder));
-}
-
-template <typename Source>
-auto make_rvalue_source(Source &&source)
-    -> rvalue_source<std::remove_cv_t<std::remove_reference_t<Source>>> {
-  using value_type = std::remove_cv_t<std::remove_reference_t<Source>>;
-  return rvalue_source<value_type>(std::forward<Source>(source));
 }
 
 template <typename Source>

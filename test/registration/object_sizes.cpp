@@ -40,7 +40,8 @@ struct size_multi_implementation : size_interface, size_second_interface {};
 
 struct size_dependency {};
 
-using size_registry_type = typename container<>::registry_type;
+using size_registry_type = typename detail::container_implementation_t<
+    container<>>::runtime_registry_type;
 
 using size_service_proxy =
     decltype(std::declval<container<> &>()

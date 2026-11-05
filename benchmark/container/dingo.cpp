@@ -236,20 +236,15 @@ static void runtime_transaction_barrier(benchmark::State &state) {
   }
 }
 
-template <bool Commit, bool RollbackActions>
+template <bool Commit>
 static void finish_runtime_transaction(benchmark::State &state) {
   constexpr size_t batch_size = 64;
   for (auto _ : state) {
     std::array<transaction_fixture, batch_size> transactions;
     for (auto &fixture : transactions) {
       for (int64_t action = 0; action != state.range(0); ++action) {
-        if constexpr (RollbackActions) {
-          fixture.transaction.on_rollback(
-              []() noexcept { benchmark::ClobberMemory(); });
-        } else {
-          fixture.transaction.on_commit(
-              []() noexcept { benchmark::ClobberMemory(); });
-        }
+        fixture.transaction.on_rollback(
+            []() noexcept { benchmark::ClobberMemory(); });
       }
     }
 
@@ -414,15 +409,11 @@ BENCHMARK(resolve_container_cold_shared)->Iterations(100)->UseManualTime();
 BENCHMARK(resolve_container_cold_dependency)->Iterations(100)->UseManualTime();
 BENCHMARK(empty_runtime_transaction);
 BENCHMARK(runtime_transaction_barrier);
-BENCHMARK_TEMPLATE(finish_runtime_transaction, true, true)
+BENCHMARK_TEMPLATE(finish_runtime_transaction, true)
     ->Apply(transaction_action_counts)
     ->Iterations(500)
     ->UseManualTime();
-BENCHMARK_TEMPLATE(finish_runtime_transaction, true, false)
-    ->Apply(transaction_action_counts)
-    ->Iterations(500)
-    ->UseManualTime();
-BENCHMARK_TEMPLATE(finish_runtime_transaction, false, true)
+BENCHMARK_TEMPLATE(finish_runtime_transaction, false)
     ->Apply(transaction_action_counts)
     ->Iterations(500)
     ->UseManualTime();

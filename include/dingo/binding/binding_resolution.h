@@ -143,22 +143,6 @@ template <typename Request, typename Context>
   throw detail::make_type_not_found_exception<Request>(context);
 }
 
-template <typename Request, typename ResolveExact, typename ResolveNormalized>
-request_result_t<Request, true>
-construct_resolved_request(ResolveExact &&resolve_exact,
-                           ResolveNormalized &&resolve_normalized) {
-  try {
-    return std::forward<ResolveExact>(resolve_exact)();
-  } catch (const type_not_convertible_exception &) {
-    if constexpr (can_construct_from_normalized_request_v<Request>) {
-      auto &&value = std::forward<ResolveNormalized>(resolve_normalized)();
-      return type_traits<std::decay_t<Request>>::make(
-          std::forward<decltype(value)>(value));
-    } else {
-      throw;
-    }
-  }
-}
 } // namespace dingo
 
 #ifdef _MSC_VER

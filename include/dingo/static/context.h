@@ -44,8 +44,6 @@ public:
   void on_rollback(void (*)(void *, void *) noexcept, void *,
                    void * = nullptr) noexcept {}
 
-  void add_runtime_destructor(void *, void (*)(void *) noexcept) noexcept {}
-
 protected:
   template <typename T, typename ConstructFn>
   T &construct_storage(construction_scope, ConstructFn &&construct_fn) {

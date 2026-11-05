@@ -43,8 +43,6 @@ public:
 
   const type_descriptor *active_type() const;
 
-  const type_descriptor *parent_type() const;
-
   void append_type_path(std::string &message) const;
 
 protected:
@@ -101,13 +99,6 @@ inline const type_descriptor *context_path_state::active_type() const {
                                             : nullptr;
 }
 
-inline const type_descriptor *context_path_state::parent_type() const {
-  return active_resolving_frame_ != nullptr &&
-                 active_resolving_frame_->parent_ != nullptr
-             ? &active_resolving_frame_->parent_->type_
-             : nullptr;
-}
-
 inline void context_path_state::append_type_path(std::string &message) const {
   std::vector<type_descriptor> names;
   for (auto *frame = active_resolving_frame_; frame != nullptr;
@@ -135,12 +126,12 @@ template <typename T> detail::resolving_frame context_path_state::track_type() {
 
 // The resolution context of both containers. The backend provides the memory
 // of the instances a resolution constructs, construct_storage<T>(scope, fn),
-// and the hooks a transactional resolution reports to: on_rollback and
-// add_runtime_destructor. A backend without a transaction ignores them.
+// and on_rollback, the hook a transactional resolution reports to; a backend
+// without a transaction ignores it. A runtime backend also keeps the
+// destructors a resolution adds with add_runtime_destructor.
 template <typename Backend>
 class resolution_context : public detail::context_path_state, public Backend {
 public:
-  using backend_type = Backend;
   using Backend::Backend;
 
   resolution_context() = default;

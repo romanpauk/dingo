@@ -38,8 +38,8 @@ Examples:
 
 Rebinding means keeping the outer handle shape while swapping the leaf type.
 
-The operation is `rebind_leaf_t<T, U>`: it replaces the leaf with `U` and
-keeps every wrapper, reference and pointer around it.
+The operation is `rebind_leaf_t<T, U>`: it replaces the leaf with `U` and keeps
+every wrapper, reference and pointer around it.
 
 This is what lets Dingo talk about "the same handle shape over another leaf
 type" without hardcoding every wrapper combination.

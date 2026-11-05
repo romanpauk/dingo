@@ -101,48 +101,6 @@ struct runtime_transaction_tracked_action {
   int destroy_value;
 };
 
-struct runtime_transaction_reentrant_tracked_action {
-  runtime_transaction_reentrant_tracked_action(
-      test_runtime_transaction *init_transaction, std::vector<int> *init_events,
-      int init_action_value, int init_destroy_value, bool init_install_action)
-      : transaction(init_transaction), events(init_events),
-        action_value(init_action_value), destroy_value(init_destroy_value),
-        install_action(init_install_action) {}
-
-  runtime_transaction_reentrant_tracked_action(
-      runtime_transaction_reentrant_tracked_action &&other) noexcept
-      : transaction(other.transaction), events(other.events),
-        action_value(other.action_value), destroy_value(other.destroy_value),
-        install_action(other.install_action) {
-    other.events = nullptr;
-  }
-
-  runtime_transaction_reentrant_tracked_action(
-      const runtime_transaction_reentrant_tracked_action &) = delete;
-  runtime_transaction_reentrant_tracked_action &
-  operator=(const runtime_transaction_reentrant_tracked_action &) = delete;
-
-  ~runtime_transaction_reentrant_tracked_action() {
-    if (events != nullptr) {
-      events->push_back(destroy_value);
-    }
-  }
-
-  void operator()() noexcept {
-    events->push_back(action_value);
-    if (install_action) {
-      transaction->on_commit(runtime_transaction_reentrant_tracked_action(
-          transaction, events, 3, 30, false));
-    }
-  }
-
-  test_runtime_transaction *transaction;
-  std::vector<int> *events;
-  int action_value;
-  int destroy_value;
-  bool install_action;
-};
-
 TEST(runtime_transaction_test,
      runtime_transaction_rollback_allows_following_committed_allocation) {
   std::vector<int> events;
@@ -190,20 +148,6 @@ TEST(runtime_transaction_test,
 }
 
 TEST(runtime_transaction_test,
-     runtime_transaction_destroys_action_states_after_commit_callbacks) {
-  std::vector<int> events;
-  arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
-  runtime_transaction transaction(runtime, scratch);
-
-  transaction.on_commit(runtime_transaction_tracked_action(&events, 1, 10));
-  transaction.on_commit(runtime_transaction_tracked_action(&events, 2, 20));
-  transaction.commit();
-
-  EXPECT_EQ(events, (std::vector<int>{2, 1, 20, 10}));
-}
-
-TEST(runtime_transaction_test,
      runtime_transaction_first_action_stays_in_inline_arena) {
   std::vector<int> events;
   inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
@@ -236,40 +180,6 @@ TEST(runtime_transaction_test,
 }
 
 TEST(runtime_transaction_test,
-     runtime_transaction_processes_action_installed_by_completion) {
-  std::vector<int> events;
-  events.reserve(2);
-  arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
-  runtime_transaction transaction(runtime, scratch);
-
-  transaction.on_commit([&transaction, &events]() noexcept {
-    events.push_back(1);
-    transaction.on_commit([&events]() noexcept { events.push_back(2); });
-  });
-  transaction.commit();
-
-  EXPECT_EQ(events, (std::vector<int>{1, 2}));
-}
-
-TEST(runtime_transaction_test,
-     runtime_transaction_defers_reentrant_action_state_destruction) {
-  std::vector<int> events;
-  events.reserve(6);
-  arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
-  runtime_transaction transaction(runtime, scratch);
-
-  transaction.on_commit(runtime_transaction_reentrant_tracked_action(
-      &transaction, &events, 1, 10, false));
-  transaction.on_commit(runtime_transaction_reentrant_tracked_action(
-      &transaction, &events, 2, 20, true));
-  transaction.commit();
-
-  EXPECT_EQ(events, (std::vector<int>{2, 3, 1, 30, 20, 10}));
-}
-
-TEST(runtime_transaction_test,
      runtime_transaction_destroys_action_states_after_rollback_callbacks) {
   std::vector<int> events;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
@@ -280,64 +190,6 @@ TEST(runtime_transaction_test,
     transaction.on_rollback(runtime_transaction_tracked_action(&events, 2, 20));
   }
 
-  EXPECT_EQ(events, (std::vector<int>{2, 1, 20, 10}));
-}
-
-TEST(runtime_transaction_test, runtime_transaction_action_state_finishes_once) {
-  std::vector<int> events;
-  {
-    arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-    container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
-    {
-      runtime_transaction transaction(runtime, scratch);
-      transaction.on_finish(runtime_transaction_tracked_action(&events, 4, 5));
-    }
-    {
-      runtime_transaction transaction(runtime, scratch);
-      transaction.on_finish(runtime_transaction_tracked_action(&events, 6, 7));
-      transaction.commit();
-    }
-  }
-
-  EXPECT_EQ(events, (std::vector<int>{4, 5, 6, 7}));
-}
-
-TEST(runtime_transaction_test,
-     runtime_transaction_commit_preserves_reverse_action_order) {
-  std::vector<int> events;
-  arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
-  runtime_transaction transaction(runtime, scratch);
-
-  for (int value = 1; value != 40; ++value) {
-    transaction.on_commit(
-        [&events, value]() noexcept { events.push_back(value); });
-  }
-  transaction.commit();
-
-  ASSERT_EQ(events.size(), 39u);
-  for (int value = 39; value != 0; --value) {
-    EXPECT_EQ(events[39 - value], value);
-  }
-}
-
-TEST(runtime_transaction_test,
-     nested_runtime_transaction_commit_is_provisional_until_root_commit) {
-  std::vector<int> events;
-  arena<> outer_scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  arena<> inner_scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
-  runtime_transaction outer(runtime, outer_scratch);
-  outer.on_commit(runtime_transaction_tracked_action(&events, 1, 10));
-
-  {
-    runtime_transaction inner(runtime, inner_scratch);
-    inner.on_commit(runtime_transaction_tracked_action(&events, 2, 20));
-    inner.commit();
-  }
-
-  EXPECT_TRUE(events.empty());
-  outer.commit();
   EXPECT_EQ(events, (std::vector<int>{2, 1, 20, 10}));
 }
 
@@ -354,13 +206,13 @@ TEST(runtime_transaction_test,
     outer.on_rollback([&events]() noexcept { events.push_back(1); });
 
     runtime_transaction inner(inner_runtime, inner_scratch);
-    inner.on_commit([&events]() noexcept { events.push_back(2); });
+    inner.on_rollback([&events]() noexcept { events.push_back(2); });
     inner.commit();
 
-    EXPECT_EQ(events, (std::vector<int>{2}));
+    EXPECT_TRUE(events.empty());
   }
 
-  EXPECT_EQ(events, (std::vector<int>{2, 1}));
+  EXPECT_EQ(events, (std::vector<int>{1}));
 }
 
 TEST(runtime_transaction_test,
@@ -428,13 +280,13 @@ TEST(runtime_transaction_test,
   std::vector<int> events;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
   container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
-  runtime_transaction transaction(runtime, scratch);
-
-  auto value = std::make_unique<int>(42);
-  transaction.on_commit([&events, value = std::move(value)]() noexcept {
-    events.push_back(*value);
-  });
-  transaction.commit();
+  {
+    runtime_transaction transaction(runtime, scratch);
+    auto value = std::make_unique<int>(42);
+    transaction.on_rollback([&events, value = std::move(value)]() noexcept {
+      events.push_back(*value);
+    });
+  }
 
   EXPECT_EQ(events, (std::vector<int>{42}));
 }
@@ -453,14 +305,13 @@ TEST(runtime_transaction_test,
       ASSERT_EQ(slot, nullptr);
       transaction.on_rollback([&slot]() noexcept { slot = nullptr; });
       slot = created;
-      transaction.on_finish([&events]() noexcept { events.push_back(3); });
     }
 
     EXPECT_EQ(slot, nullptr);
-    EXPECT_EQ(events, (std::vector<int>{3, 2}));
+    EXPECT_EQ(events, (std::vector<int>{2}));
   }
 
-  EXPECT_EQ(events, (std::vector<int>{3, 2}));
+  EXPECT_EQ(events, (std::vector<int>{2}));
 }
 
 TEST(runtime_transaction_test,
@@ -501,15 +352,14 @@ TEST(runtime_transaction_test,
       ASSERT_EQ(slot, nullptr);
       transaction.on_rollback([&slot]() noexcept { slot = nullptr; });
       slot = created;
-      transaction.on_finish([&events]() noexcept { events.push_back(3); });
       transaction.commit();
     }
 
     ASSERT_NE(slot, nullptr);
-    EXPECT_EQ(events, (std::vector<int>{3}));
+    EXPECT_TRUE(events.empty());
   }
 
-  EXPECT_EQ(events, (std::vector<int>{3, 2}));
+  EXPECT_EQ(events, (std::vector<int>{2}));
 }
 
 TEST(runtime_transaction_test,
@@ -530,7 +380,7 @@ TEST(runtime_transaction_test,
       auto destroy_observer = [observer]() noexcept {
         observer->~runtime_scratch_observer();
       };
-      transaction.on_finish(destroy_observer);
+      transaction.on_rollback(destroy_observer);
     }
 
     EXPECT_EQ(events, (std::vector<int>{7, 70}));
@@ -539,34 +389,23 @@ TEST(runtime_transaction_test,
   EXPECT_EQ(events, (std::vector<int>{7, 70}));
 }
 
-TEST(runtime_transaction_test, actions_run_only_for_the_matching_outcome) {
-  std::vector<int> commit_events;
-  std::vector<int> rollback_events;
+TEST(runtime_transaction_test, rollback_actions_run_only_on_rollback) {
+  std::vector<int> events;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
   container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
 
   {
     runtime_transaction transaction(runtime, scratch);
-    transaction.on_commit(
-        [&commit_events]() noexcept { commit_events.push_back(1); });
-    transaction.on_rollback(
-        [&commit_events]() noexcept { commit_events.push_back(2); });
-    transaction.on_finish(
-        [&commit_events]() noexcept { commit_events.push_back(3); });
+    transaction.on_rollback([&events]() noexcept { events.push_back(1); });
     transaction.commit();
   }
+  EXPECT_TRUE(events.empty());
+
   {
     runtime_transaction transaction(runtime, scratch);
-    transaction.on_commit(
-        [&rollback_events]() noexcept { rollback_events.push_back(1); });
-    transaction.on_rollback(
-        [&rollback_events]() noexcept { rollback_events.push_back(2); });
-    transaction.on_finish(
-        [&rollback_events]() noexcept { rollback_events.push_back(3); });
+    transaction.on_rollback([&events]() noexcept { events.push_back(2); });
   }
-
-  EXPECT_EQ(commit_events, (std::vector<int>{3, 1}));
-  EXPECT_EQ(rollback_events, (std::vector<int>{3, 2}));
+  EXPECT_EQ(events, (std::vector<int>{2}));
 }
 
 TEST(runtime_transaction_test,
@@ -593,43 +432,43 @@ TEST(runtime_transaction_test,
   arena<> inner_scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
   container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
 
-  runtime_transaction outer(runtime, outer_scratch);
-  outer.on_commit([&events]() noexcept { events.push_back(1); });
   {
-    runtime_transaction inner(runtime, inner_scratch);
-    inner.on_commit([&events]() noexcept { events.push_back(2); });
-    inner.on_rollback([&events]() noexcept { events.push_back(3); });
-  }
+    runtime_transaction outer(runtime, outer_scratch);
+    outer.on_rollback([&events]() noexcept { events.push_back(1); });
+    {
+      runtime_transaction inner(runtime, inner_scratch);
+      inner.on_rollback([&events]() noexcept { events.push_back(2); });
+    }
 
-  EXPECT_EQ(events, (std::vector<int>{3}));
-  outer.commit();
-  EXPECT_EQ(events, (std::vector<int>{3, 1}));
+    EXPECT_EQ(events, (std::vector<int>{2}));
+  }
+  EXPECT_EQ(events, (std::vector<int>{2, 1}));
 }
 
 TEST(runtime_transaction_test, repeated_finish_calls_are_harmless) {
-  int commit_finishes = 0;
-  int rollback_finishes = 0;
+  int committed_rollbacks = 0;
+  int rollbacks = 0;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
   container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
 
   {
     runtime_transaction transaction(runtime, scratch);
-    transaction.on_finish([&commit_finishes]() noexcept { ++commit_finishes; });
+    transaction.on_rollback(
+        [&committed_rollbacks]() noexcept { ++committed_rollbacks; });
     transaction.commit();
     transaction.commit();
     transaction.rollback();
   }
   {
     runtime_transaction transaction(runtime, scratch);
-    transaction.on_finish(
-        [&rollback_finishes]() noexcept { ++rollback_finishes; });
+    transaction.on_rollback([&rollbacks]() noexcept { ++rollbacks; });
     transaction.rollback();
     transaction.rollback();
     transaction.commit();
   }
 
-  EXPECT_EQ(commit_finishes, 1);
-  EXPECT_EQ(rollback_finishes, 1);
+  EXPECT_EQ(committed_rollbacks, 0);
+  EXPECT_EQ(rollbacks, 1);
 }
 
 TEST(runtime_transaction_test,

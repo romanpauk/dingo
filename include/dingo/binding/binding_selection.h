@@ -23,7 +23,6 @@ enum class binding_status {
 template <binding_status Status, typename Binding = void>
 struct binding_choice {
   static constexpr binding_status status = Status;
-  static constexpr bool found = Status == binding_status::found;
   using binding_type = Binding;
 };
 
@@ -57,10 +56,6 @@ template <typename Binding> struct runtime_binding_selection {
   Binding *binding = nullptr;
 
   constexpr bool found() const { return status == binding_status::found; }
-
-  constexpr bool ambiguous() const {
-    return status == binding_status::ambiguous;
-  }
 
   static constexpr runtime_binding_selection found(Binding &binding) {
     return {binding_status::found, &binding};
