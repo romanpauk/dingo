@@ -70,19 +70,16 @@ struct size_probe_registry : size_registry_type {
   using typename base_type::lookup_index_entries;
   using typename base_type::runtime_binding_value;
   using typename base_type::runtime_bindings_state;
-  using typename base_type::runtime_lookup_binding_view;
   using typename base_type::runtime_lookup_value;
   using typename base_type::runtime_scope_state;
 
-  template <typename Interface, typename Storage, typename BindingState,
-            typename LookupKey>
+  template <typename Interface, typename Storage, typename BindingState>
   using binding = typename base_type::template runtime_registration_binding_t<
-      Interface, Storage, BindingState, LookupKey>;
+      Interface, Storage, BindingState>;
 
-  template <typename Interfaces, typename Storage, typename BindingState,
-            typename LookupKey>
+  template <typename Interfaces, typename Storage, typename BindingState>
   using owner = typename base_type::template runtime_binding_value_owner_t<
-      Interfaces, Storage, BindingState, LookupKey>;
+      Interfaces, Storage, BindingState>;
 };
 
 using size_registration =
@@ -98,13 +95,10 @@ using size_binding_state =
     runtime_binding_state<size_registry_type, size_instance_container,
                           detail::binding_cell_t<size_model>>;
 using size_binding = size_probe_registry::binding<size_interface, size_storage,
-                                                  size_binding_state, none_t>;
-using size_keyed_binding =
-    size_probe_registry::binding<size_interface, size_storage,
-                                 size_binding_state, key_type<size_dependency>>;
+                                                  size_binding_state>;
 using size_single_owner =
     size_probe_registry::owner<type_list<size_interface>, size_storage,
-                               size_binding_state, none_t>;
+                               size_binding_state>;
 using size_multi_interface_registration =
     type_registration<scope<shared>,
                       storage<std::shared_ptr<size_multi_implementation>>,
@@ -122,7 +116,7 @@ using size_multi_interface_state =
                           detail::binding_cell_t<size_multi_interface_model>>;
 using size_multi_interface_pointer_state_owner = size_probe_registry::owner<
     typename size_multi_interface_model::interface_types,
-    size_multi_interface_storage, size_multi_interface_state *, none_t>;
+    size_multi_interface_storage, size_multi_interface_state *>;
 
 using size_type_index = typename size_registry_type::rtti_type::type_index;
 using size_type_map_value = size_probe_registry::runtime_lookup_value;
@@ -231,8 +225,6 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
     expect_size_at_most<size_multi_interface_pointer_state_owner>(
         "multi-interface pointer-state binding owner", 80);
 
-    expect_size_at_most<size_probe_registry::runtime_lookup_binding_view>(
-        "runtime lookup binding view", 8);
     expect_size_at_most<size_probe_registry::runtime_binding_value>(
         "runtime binding value base", 1);
     expect_size_at_most<size_probe_registry::runtime_lookup_value>(
@@ -255,13 +247,10 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
                 sizeof(void *) *
                     type_list_size_v<size_multi_interface_cache_types>);
   static_assert(sizeof(size_base_lookup_key) == sizeof(size_type_index) * 2);
-  static_assert(sizeof(size_probe_registry::runtime_lookup_binding_view) ==
-                sizeof(void *));
   static_assert(std::is_empty_v<size_probe_registry::runtime_binding_value>);
-  static_assert(std::is_same_v<size_binding, size_keyed_binding>);
   static_assert(std::is_same_v<size_single_owner, size_binding>);
-  static_assert(sizeof(size_probe_registry::runtime_lookup_value) >=
-                sizeof(size_probe_registry::runtime_lookup_binding_view));
+  static_assert(sizeof(size_probe_registry::runtime_lookup_value) ==
+                sizeof(void *));
   static_assert(sizeof(size_instance_container) <= sizeof(void *) * 2);
 }
 
