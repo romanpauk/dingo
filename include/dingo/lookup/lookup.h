@@ -95,21 +95,13 @@ struct normalize_lookup_definition<::dingo::base<Cardinality, Backend>> {
   using type = type_list<>;
 };
 
-template <typename DefinitionList> struct normalize_lookup_definitions;
+template <typename Definitions> struct normalize_lookup_definitions;
 
 template <typename... Definitions>
-struct normalize_lookup_definitions<type_list<Definitions...>> {
+struct normalize_lookup_definitions<::dingo::lookups<Definitions...>> {
   using type = type_list_cat_t<
       typename normalize_lookup_definition<Definitions>::type...>;
 };
-
-template <> struct normalize_lookup_definitions<std::tuple<>> {
-  using type = type_list<>;
-};
-
-template <typename... Definitions>
-struct normalize_lookup_definitions<::dingo::lookups<Definitions...>>
-    : normalize_lookup_definitions<type_list<Definitions...>> {};
 
 template <typename Definitions>
 using normalize_lookup_definitions_t =

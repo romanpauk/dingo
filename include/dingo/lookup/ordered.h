@@ -16,34 +16,6 @@
 #include <utility>
 
 namespace dingo {
-namespace detail {
-
-template <typename Key, typename Value, typename Compare,
-          typename StorageAllocator, typename Allocator>
-struct lookup_storage_factory<std::map<Key, Value, Compare, StorageAllocator>,
-                              Allocator> {
-  using storage_type = std::map<Key, Value, Compare, StorageAllocator>;
-
-  static storage_type make(Allocator &allocator) {
-    return storage_type(
-        Compare{}, make_lookup_storage_allocator<StorageAllocator>(allocator));
-  }
-};
-
-template <typename Key, typename Value, typename Compare,
-          typename StorageAllocator, typename Allocator>
-struct lookup_storage_factory<
-    std::multimap<Key, Value, Compare, StorageAllocator>, Allocator> {
-  using storage_type = std::multimap<Key, Value, Compare, StorageAllocator>;
-
-  static storage_type make(Allocator &allocator) {
-    return storage_type(
-        Compare{}, make_lookup_storage_allocator<StorageAllocator>(allocator));
-  }
-};
-
-} // namespace detail
-
 struct ordered {
   template <typename Key, typename Value, typename Cardinality,
             typename Allocator>

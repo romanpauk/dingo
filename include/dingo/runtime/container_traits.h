@@ -8,10 +8,10 @@
 #pragma once
 
 #include <dingo/lookup/container_lookup_definition.h>
+#include <dingo/lookup/tags.h>
 #include <dingo/rtti/typeid_provider.h>
 
 #include <memory>
-#include <tuple>
 #include <type_traits>
 
 namespace dingo {
@@ -27,7 +27,7 @@ struct replace_until_resolved {};
 struct runtime_container_traits {
   using rtti_type = rtti<typeid_provider>;
   using allocator_type = std::allocator<char>;
-  using lookup_definition_type = std::tuple<>;
+  using lookup_definition_type = lookups<>;
   using duplicate_registration_policy = reject_duplicates;
 };
 

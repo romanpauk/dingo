@@ -20,7 +20,7 @@ namespace dingo::matrix {
 struct custom_rtti_container_traits {
   using rtti_type = dingo::rtti<dingo::static_provider>;
   using allocator_type = std::allocator<char>;
-  using lookup_definition_type = std::tuple<>;
+  using lookup_definition_type = dingo::lookups<>;
 };
 
 } // namespace dingo::matrix

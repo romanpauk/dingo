@@ -8,6 +8,7 @@
 #pragma once
 
 #include <memory>
+#include <type_traits>
 
 namespace dingo::detail {
 
@@ -20,13 +21,23 @@ StorageAllocator make_lookup_storage_allocator(Allocator &allocator) {
   return StorageAllocator(allocator);
 }
 
-template <typename Storage, typename Allocator> struct lookup_storage_factory {
-  static Storage make(Allocator &allocator) { return Storage(allocator); }
-};
+template <typename Storage, typename = void>
+struct has_allocator_type : std::false_type {};
 
+template <typename Storage>
+struct has_allocator_type<Storage,
+                          std::void_t<typename Storage::allocator_type>>
+    : std::true_type {};
+
+// A standard container is constructed from the container's allocator rebound
+// to its element; any other storage takes the allocator itself.
 template <typename Storage, typename Allocator>
 Storage make_lookup_storage(Allocator &allocator) {
-  return lookup_storage_factory<Storage, Allocator>::make(allocator);
+  if constexpr (has_allocator_type<Storage>::value) {
+    return Storage(typename Storage::allocator_type(allocator));
+  } else {
+    return Storage(allocator);
+  }
 }
 
 } // namespace dingo::detail

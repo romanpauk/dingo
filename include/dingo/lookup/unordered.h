@@ -16,39 +16,6 @@
 #include <utility>
 
 namespace dingo {
-namespace detail {
-
-template <typename Key, typename Value, typename Hash, typename Equal,
-          typename StorageAllocator, typename Allocator>
-struct lookup_storage_factory<
-    std::unordered_map<Key, Value, Hash, Equal, StorageAllocator>, Allocator> {
-  using storage_type =
-      std::unordered_map<Key, Value, Hash, Equal, StorageAllocator>;
-
-  static storage_type make(Allocator &allocator) {
-    return storage_type(
-        0, Hash{}, Equal{},
-        make_lookup_storage_allocator<StorageAllocator>(allocator));
-  }
-};
-
-template <typename Key, typename Value, typename Hash, typename Equal,
-          typename StorageAllocator, typename Allocator>
-struct lookup_storage_factory<
-    std::unordered_multimap<Key, Value, Hash, Equal, StorageAllocator>,
-    Allocator> {
-  using storage_type =
-      std::unordered_multimap<Key, Value, Hash, Equal, StorageAllocator>;
-
-  static storage_type make(Allocator &allocator) {
-    return storage_type(
-        0, Hash{}, Equal{},
-        make_lookup_storage_allocator<StorageAllocator>(allocator));
-  }
-};
-
-} // namespace detail
-
 struct unordered {
   template <typename Key, typename Value, typename Cardinality,
             typename Allocator>

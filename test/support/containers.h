@@ -16,19 +16,19 @@
 struct static_container_with_dynamic_rtti_traits {
   using rtti_type = dingo::rtti<dingo::typeid_provider>;
   using allocator_type = std::allocator<char>;
-  using lookup_definition_type = std::tuple<>;
+  using lookup_definition_type = dingo::lookups<>;
 };
 
 struct static_container_variant_traits {
   using rtti_type = dingo::rtti<dingo::static_provider>;
   using allocator_type = std::allocator<char>;
-  using lookup_definition_type = std::tuple<>;
+  using lookup_definition_type = dingo::lookups<>;
 };
 
 struct dynamic_container_with_static_rtti_traits {
   using rtti_type = dingo::rtti<dingo::static_provider>;
   using allocator_type = std::allocator<char>;
-  using lookup_definition_type = std::tuple<>;
+  using lookup_definition_type = dingo::lookups<>;
 };
 
 struct dynamic_container_variant_traits : dingo::runtime_container_traits {};

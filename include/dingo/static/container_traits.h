@@ -8,11 +8,11 @@
 #pragma once
 
 #include <dingo/lookup/container_lookup_definition.h>
+#include <dingo/lookup/tags.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/rtti/static_provider.h>
 
 #include <memory>
-#include <tuple>
 #include <type_traits>
 
 namespace dingo {
@@ -20,7 +20,7 @@ namespace dingo {
 struct static_container_traits {
   using rtti_type = rtti<static_provider>;
   using allocator_type = std::allocator<char>;
-  using lookup_definition_type = std::tuple<>;
+  using lookup_definition_type = lookups<>;
 };
 
 template <typename StaticSource, typename ParentContainer = void>
