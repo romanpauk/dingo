@@ -13,6 +13,11 @@
 #include <type_traits>
 
 namespace dingo {
+namespace detail {
+template <typename T>
+using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
+} // namespace detail
+
 template <typename... Types> struct type_list {};
 template <typename T> struct type_list_iterator {
   using type = T;

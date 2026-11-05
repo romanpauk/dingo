@@ -338,15 +338,23 @@ template <typename Type>
 using array_like_exact_interface_type_t =
     typename array_like_exact_interface_type<Type>::type;
 
-template <typename Type, typename U, typename = void>
-struct wrapper_rebind_leaf {
+// To with the const and volatile qualifiers of From.
+template <typename From, typename To> struct copy_cv {
 private:
   using const_type =
-      std::conditional_t<std::is_const_v<Type>, std::add_const_t<U>, U>;
+      std::conditional_t<std::is_const_v<From>, std::add_const_t<To>, To>;
 
 public:
-  using type = std::conditional_t<std::is_volatile_v<Type>,
+  using type = std::conditional_t<std::is_volatile_v<From>,
                                   std::add_volatile_t<const_type>, const_type>;
+};
+
+template <typename From, typename To>
+using copy_cv_t = typename copy_cv<From, To>::type;
+
+template <typename Type, typename U, typename = void>
+struct wrapper_rebind_leaf {
+  using type = copy_cv_t<Type, U>;
 };
 
 template <typename Type, size_t N, typename U>

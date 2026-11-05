@@ -144,8 +144,7 @@ struct traits_type_conversion
   template <typename Resolver, typename Context, typename Actual>
   static Target apply(Resolver &, Context &, Actual &&source, type_descriptor,
                       type_descriptor) {
-    using traits = type_conversion_traits<
-        Target, std::remove_cv_t<std::remove_reference_t<Actual>>>;
+    using traits = type_conversion_traits<Target, remove_cvref_t<Actual>>;
     if constexpr (std::is_same_v<Argument, Source>) {
       return static_cast<Target>(traits::convert(std::forward<Actual>(source)));
     } else {
@@ -218,8 +217,7 @@ struct pointer_access_type_conversion
   static Target apply(Resolver &, Context &, Actual &&source, type_descriptor,
                       type_descriptor) {
     return static_cast<Target>(
-        type_traits<std::remove_cv_t<std::remove_reference_t<Actual>>>::get(
-            source));
+        type_traits<remove_cvref_t<Actual>>::get(source));
   }
 };
 
@@ -243,11 +241,10 @@ struct borrowed_type_conversion : conversion_step<Target, Source, Conversion> {
   static decltype(auto) apply(Resolver &resolver, Context &context,
                               Actual &&source, type_descriptor requested,
                               type_descriptor registered) {
-    return Conversion::apply(
-        resolver, context,
-        type_traits<std::remove_cv_t<std::remove_reference_t<Actual>>>::borrow(
-            std::forward<Actual>(source)),
-        requested, registered);
+    return Conversion::apply(resolver, context,
+                             type_traits<remove_cvref_t<Actual>>::borrow(
+                                 std::forward<Actual>(source)),
+                             requested, registered);
   }
 };
 
@@ -286,11 +283,9 @@ struct wrapper_type_conversion : conversion_step<Target, Source, Conversion> {
   template <typename Resolver, typename Context, typename Actual>
   static Target apply(Resolver &resolver, Context &context, Actual &&source,
                       type_descriptor requested, type_descriptor registered) {
-    using target =
-        type_traits<std::remove_cv_t<std::remove_reference_t<Target>>>;
+    using target = type_traits<remove_cvref_t<Target>>;
     if constexpr (UnwrapSource) {
-      using source_traits =
-          type_traits<std::remove_cv_t<std::remove_reference_t<Actual>>>;
+      using source_traits = type_traits<remove_cvref_t<Actual>>;
       if (source_traits::empty(source)) {
         return target::make_empty();
       }
@@ -318,10 +313,9 @@ struct target_alternative_type_conversion
   template <typename Resolver, typename Context, typename Actual>
   static Target apply(Resolver &resolver, Context &context, Actual &&source,
                       type_descriptor requested, type_descriptor registered) {
-    return type_traits<std::remove_cv_t<std::remove_reference_t<Target>>>::
-        template wrap<Selected>(Conversion::apply(resolver, context,
-                                                  std::forward<Actual>(source),
-                                                  requested, registered));
+    return type_traits<remove_cvref_t<Target>>::template wrap<Selected>(
+        Conversion::apply(resolver, context, std::forward<Actual>(source),
+                          requested, registered));
   }
 };
 
@@ -366,8 +360,7 @@ private:
                                      type_descriptor registered) {
     using conversion = typename Branch::conversion;
     if constexpr (conversion::available) {
-      using source_traits =
-          type_traits<std::remove_cv_t<std::remove_reference_t<Actual>>>;
+      using source_traits = type_traits<remove_cvref_t<Actual>>;
       if (auto *value =
               source_traits::template get<typename Branch::alternative_type>(
                   source)) {
@@ -390,27 +383,13 @@ private:
   }
 };
 
-template <typename From, typename To> struct copy_cv {
-private:
-  using const_type =
-      std::conditional_t<std::is_const_v<From>, std::add_const_t<To>, To>;
-
-public:
-  using type = std::conditional_t<std::is_volatile_v<From>,
-                                  std::add_volatile_t<const_type>, const_type>;
-};
-
-template <typename From, typename To>
-using copy_cv_t = typename copy_cv<From, To>::type;
-
 // The route from Source to Target that Access allows. A pair with a custom
 // type_conversion_traits takes only its conversion; any other pair takes the
 // first of the default conversions and structural candidates that is
 // available.
-template <
-    typename Target, typename Source, typename Access = consume,
-    bool Default = is_default_type_conversion<type_conversion_traits<
-        Target, std::remove_cv_t<std::remove_reference_t<Source>>>>::value>
+template <typename Target, typename Source, typename Access = consume,
+          bool Default = is_default_type_conversion<
+              type_conversion_traits<Target, remove_cvref_t<Source>>>::value>
 struct type_conversion_path;
 
 template <typename Alternative, typename Source>
@@ -428,7 +407,7 @@ inline constexpr bool is_value_wrapper_type_v = is_optional_type_v<Type>;
 
 template <typename Target>
 inline constexpr bool is_structural_conversion_target_v = [] {
-  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
+  using target_type = remove_cvref_t<Target>;
   return !std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
          (is_alternative_type_v<target_type> ||
           is_value_wrapper_type_v<target_type>);
@@ -439,15 +418,12 @@ struct borrows_value_wrapper : std::false_type {};
 
 template <typename Type>
 struct borrows_value_wrapper<
-    Type,
-    std::void_t<decltype(type_traits<std::remove_cv_t<std::remove_reference_t<
-                             Type>>>::borrow(std::declval<Type>()))>>
-    : std::bool_constant<
-          is_value_borrowable_v<
-              std::remove_cv_t<std::remove_reference_t<Type>>> &&
-          is_value_wrapper_type_v<
-              decltype(type_traits<std::remove_cv_t<std::remove_reference_t<
-                           Type>>>::borrow(std::declval<Type>()))>> {};
+    Type, std::void_t<decltype(type_traits<remove_cvref_t<Type>>::borrow(
+              std::declval<Type>()))>>
+    : std::bool_constant<is_value_borrowable_v<remove_cvref_t<Type>> &&
+                         is_value_wrapper_type_v<
+                             decltype(type_traits<remove_cvref_t<Type>>::borrow(
+                                 std::declval<Type>()))>> {};
 
 template <typename Type>
 inline constexpr bool borrows_value_wrapper_v =
@@ -561,8 +537,7 @@ struct alternative_type_conversion_branches<Target, Source, Access,
 
 template <typename Target, typename Source, typename Access,
           bool IsAlternative =
-              is_alternative_type_v<
-                  std::remove_cv_t<std::remove_reference_t<Source>>> &&
+              is_alternative_type_v<remove_cvref_t<Source>> &&
               !std::is_volatile_v<std::remove_reference_t<Source>>>
 struct source_alternative_type_conversion {
   using type = unavailable_type_conversion;
@@ -571,8 +546,8 @@ struct source_alternative_type_conversion {
 template <typename Target, typename Source, typename Access>
 struct source_alternative_type_conversion<Target, Source, Access, true> {
 private:
-  using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
-  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
+  using source_type = remove_cvref_t<Source>;
+  using target_type = remove_cvref_t<Target>;
   using alternatives = std::conditional_t<
       std::is_reference_v<Target> || std::is_pointer_v<Target>,
       alternative_type_alternatives_t<source_type>,
@@ -645,10 +620,10 @@ using retained_conversion_type_t = std::remove_cv_t<
 template <typename Target, typename Source>
 struct pointer_access_type_conversion_candidate<
     Target, Source,
-    std::void_t<decltype(type_traits<std::remove_cv_t<std::remove_reference_t<
-                             Source>>>::get(std::declval<Source>()))>> {
+    std::void_t<decltype(type_traits<remove_cvref_t<Source>>::get(
+        std::declval<Source>()))>> {
 private:
-  using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
+  using source_type = remove_cvref_t<Source>;
   using result_type =
       decltype(type_traits<source_type>::get(std::declval<Source>()));
 
@@ -665,13 +640,11 @@ template <typename Target, typename Source, typename Access>
 struct borrowed_type_conversion_candidate<
     Target, Source, Access,
     std::enable_if_t<
-        is_value_borrowable_v<
-            std::remove_cv_t<std::remove_reference_t<Source>>>,
-        std::void_t<
-            decltype(type_traits<std::remove_cv_t<std::remove_reference_t<
-                         Source>>>::borrow(std::declval<Source>()))>>> {
+        is_value_borrowable_v<remove_cvref_t<Source>>,
+        std::void_t<decltype(type_traits<remove_cvref_t<Source>>::borrow(
+            std::declval<Source>()))>>> {
 private:
-  using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
+  using source_type = remove_cvref_t<Source>;
   using borrowed_source =
       decltype(type_traits<source_type>::borrow(std::declval<Source>()));
   using next =
@@ -742,7 +715,7 @@ template <typename Target, typename Source, typename Access,
           bool UsesDefaultConversion>
 constexpr basic_conversion_kind basic_conversion_selected() {
   using kind = basic_conversion_kind;
-  using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
+  using source_type = remove_cvref_t<Source>;
   using source_pointer = std::add_pointer_t<std::remove_reference_t<Source>>;
   constexpr bool borrows = std::is_lvalue_reference_v<Source> &&
                            access_satisfies<Access, borrow>::value;
@@ -816,13 +789,12 @@ template <typename Target, typename Source, typename Access,
           bool Structural = is_structural_conversion_target_v<Target>>
 struct direct_type_conversion {
 private:
-  using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
+  using source_type = remove_cvref_t<Source>;
   using traits = type_conversion_traits<Target, source_type>;
   using const_source = std::add_lvalue_reference_t<
       std::add_const_t<std::remove_reference_t<Source>>>;
   static constexpr bool takes_ownership =
-      type_traits<std::remove_cv_t<std::remove_reference_t<Target>>>::
-          is_owning_handle &&
+      type_traits<remove_cvref_t<Target>>::is_owning_handle &&
       !type_traits<source_type>::is_owning_handle;
   static constexpr bool borrows =
       direct_conversion_borrows<Target, Source, traits, takes_ownership>();
@@ -853,9 +825,7 @@ using direct_fallback =
 template <typename Target, typename Source, typename Access>
 struct custom_type_conversion {
 private:
-  using traits =
-      type_conversion_traits<Target,
-                             std::remove_cv_t<std::remove_reference_t<Source>>>;
+  using traits = type_conversion_traits<Target, remove_cvref_t<Source>>;
   using required_access =
       typename custom_conversion_access<traits, Source>::type;
   static constexpr bool converts =

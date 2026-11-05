@@ -26,9 +26,6 @@ struct no_materialization_scope {};
 } // namespace detail
 
 namespace detail {
-template <typename T>
-using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
-
 template <typename Storage>
 using storage_source_type_t =
     std::remove_reference_t<typename Storage::resolved_type>;

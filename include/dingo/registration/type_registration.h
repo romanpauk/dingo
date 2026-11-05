@@ -99,18 +99,15 @@ template <typename... Args> struct dependencies<type_list<Args...>> {
 
 namespace detail {
 template <typename Type, typename = void> struct deduced_interface_types {
-  using type = type_list<std::remove_cv_t<std::remove_reference_t<Type>>>;
+  using type = type_list<remove_cvref_t<Type>>;
 };
 
 template <typename Type>
 struct deduced_interface_types<
-    Type,
-    std::enable_if_t<
-        type_traits<std::remove_cv_t<std::remove_reference_t<Type>>>::enabled &&
-        is_value_borrowable_v<
-            std::remove_cv_t<std::remove_reference_t<Type>>>>> {
+    Type, std::enable_if_t<type_traits<remove_cvref_t<Type>>::enabled &&
+                           is_value_borrowable_v<remove_cvref_t<Type>>>> {
 private:
-  using value_type = std::remove_cv_t<std::remove_reference_t<Type>>;
+  using value_type = remove_cvref_t<Type>;
 
 public:
   using type =
@@ -121,10 +118,9 @@ public:
 
 template <typename Type>
 struct deduced_interface_types<
-    Type, std::enable_if_t<is_alternative_type_v<
-              std::remove_cv_t<std::remove_reference_t<Type>>>>> {
+    Type, std::enable_if_t<is_alternative_type_v<remove_cvref_t<Type>>>> {
 private:
-  using value_type = std::remove_cv_t<std::remove_reference_t<Type>>;
+  using value_type = remove_cvref_t<Type>;
 
   template <typename Alternatives> struct alternatives_interface_types;
 
@@ -251,11 +247,10 @@ struct deduced_interface_type {
 template <typename StorageType, typename ScopeType>
 struct deduced_interface_type<
     StorageType, ScopeType,
-    std::enable_if_t<is_alternative_type_v<
-        std::remove_cv_t<std::remove_reference_t<StorageType>>>>> {
+    std::enable_if_t<is_alternative_type_v<remove_cvref_t<StorageType>>>> {
   using type =
       ::dingo::interfaces<typename ::dingo::detail::deduced_interface_types<
-          std::remove_cv_t<std::remove_reference_t<StorageType>>>::type>;
+          remove_cvref_t<StorageType>>::type>;
 };
 
 template <typename StorageType, typename ScopeType>
@@ -263,10 +258,8 @@ struct deduced_interface_type<
     StorageType, ScopeType,
     std::enable_if_t<
         !scope_consumes_v<typename ScopeType::type> &&
-        type_traits<
-            std::remove_cv_t<std::remove_reference_t<StorageType>>>::enabled &&
-        is_value_borrowable_v<
-            std::remove_cv_t<std::remove_reference_t<StorageType>>> &&
+        type_traits<remove_cvref_t<StorageType>>::enabled &&
+        is_value_borrowable_v<remove_cvref_t<StorageType>> &&
         is_alternative_type_v<std::remove_cv_t<leaf_type_t<StorageType>>>>> {
   using type =
       ::dingo::interfaces<typename ::dingo::detail::deduced_interface_types<
