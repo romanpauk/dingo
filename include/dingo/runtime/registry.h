@@ -1408,7 +1408,10 @@ private:
     static_assert(storage_tag_is_complete,
                   "registered storage tag must be complete; include the "
                   "corresponding dingo/storage header");
-    if constexpr (storage_tag_is_complete) {
+    if constexpr (!storage_tag_is_complete) {
+      return store_type::template invalid_registration_return<
+          instance_container_type>();
+    } else {
       using storage_type = typename binding_model::storage_type;
       using registration_requirements = typename binding_model::requirements;
       using registration_key = typename binding_model::key_type;
@@ -1419,56 +1422,35 @@ private:
           runtime_binding_state<registry_type, instance_container_type,
                                 detail::binding_cell_t<binding_model>, Parent>;
 
-      if constexpr (registration_requirements::valid &&
-                    type_list_size_v<interface_types> == 1) {
+      if constexpr (!registration_requirements::valid) {
+        return store_type::template invalid_registration_return<
+            instance_container_type>();
+      } else {
         if constexpr (sizeof...(KeyValueArgs) > 0) {
           store_type::template validate_supplied_runtime_registration_keys<
               interface_types, KeyValueArgs...>();
         }
-        using interface_type = type_list_head_t<interface_types>;
-
-        using owner_type =
-            runtime_binding_value_owner_t<interface_types, storage_type,
-                                          runtime_binding_state_type,
-                                          registration_key>;
-        static constexpr bool shared_owner =
-            sizeof...(KeyValueArgs) > 0 &&
-            type_list_size_v<
-                runtime_lookup_entries_for_interface_t<interface_type>> > 1;
-
-        if constexpr (!is_none_v<std::decay_t<Arg>>) {
+        if constexpr (type_list_size_v<interface_types> == 1) {
+          using interface_type = type_list_head_t<interface_types>;
+          using owner_type =
+              runtime_binding_value_owner_t<interface_types, storage_type,
+                                            runtime_binding_state_type,
+                                            registration_key>;
+          static constexpr bool shared_owner =
+              sizeof...(KeyValueArgs) > 0 &&
+              type_list_size_v<
+                  runtime_lookup_entries_for_interface_t<interface_type>> > 1;
           return commit_binding<shared_owner, interface_type, storage_type,
                                 owner_type>(
               parent, registration_key{},
               std::forward_as_tuple(std::forward<KeyValueArgs>(key_values)...),
               std::forward<Arg>(arg));
         } else {
-          return commit_binding<shared_owner, interface_type, storage_type,
-                                owner_type>(
-              parent, registration_key{},
-              std::forward_as_tuple(std::forward<KeyValueArgs>(key_values)...));
-        }
-      } else {
-        if constexpr (registration_requirements::valid) {
-          if constexpr (sizeof...(KeyValueArgs) > 0) {
-            store_type::template validate_supplied_runtime_registration_keys<
-                interface_types, KeyValueArgs...>();
-          }
           inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
           runtime_transaction_type transaction(runtime(), scratch);
           auto &state = ensure_runtime_bindings(transaction, parent);
-          runtime_binding_state_type *data = nullptr;
-          if constexpr (!is_none_v<std::decay_t<Arg>>) {
-            data =
-                transaction
-                    .template construct_persistent<runtime_binding_state_type>(
-                        this, std::forward<Arg>(arg));
-          } else {
-            data =
-                transaction
-                    .template construct_persistent<runtime_binding_state_type>(
-                        this);
-          }
+          auto *data = construct_binding<runtime_binding_state_type>(
+              transaction, std::forward<Arg>(arg));
 
           using owner_type =
               runtime_binding_value_owner_t<interface_types, storage_type,
@@ -1476,7 +1458,6 @@ private:
                                             registration_key>;
           auto &binding_owner =
               *transaction.template construct_persistent<owner_type>(data);
-          auto *binding_result = std::addressof(binding_owner);
           shared_lookup_value_factory<owner_type> value_factory{
               std::addressof(binding_owner)};
 
@@ -1487,29 +1468,36 @@ private:
                 key_values...);
           });
           transaction.commit();
-          return container_proxy<owner_type>(binding_result);
-        } else {
-          return store_type::template invalid_registration_return<
-              instance_container_type>();
+          return container_proxy<owner_type>(std::addressof(binding_owner));
         }
       }
+    }
+  }
+
+  // Constructs a binding in the transaction, from the registered factory
+  // argument when there is one.
+  template <typename T, typename Arg>
+  T *construct_binding(runtime_transaction_type &transaction, Arg &&arg) {
+    if constexpr (is_none_v<std::decay_t<Arg>>) {
+      (void)arg;
+      return transaction.template construct_persistent<T>(this);
     } else {
-      return store_type::template invalid_registration_return<
-          instance_container_type>();
+      return transaction.template construct_persistent<T>(
+          this, std::forward<Arg>(arg));
     }
   }
 
   template <bool SharedOwner, typename TypeInterface, typename TypeStorage,
             typename Owner, typename Parent, typename LookupKey,
-            typename KeyValueTuple, typename... Args>
+            typename KeyValueTuple, typename Arg>
   DINGO_NOINLINE container_proxy<Owner>
   commit_binding(Parent *parent, LookupKey lookup_key,
-                 KeyValueTuple &&key_values, Args &&...args) {
+                 KeyValueTuple &&key_values, Arg &&arg) {
     inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
     runtime_transaction_type transaction(runtime(), scratch);
     auto &state = ensure_runtime_bindings(transaction, parent);
-    auto &binding_owner = *transaction.template construct_persistent<Owner>(
-        this, std::forward<Args>(args)...);
+    auto &binding_owner =
+        *construct_binding<Owner>(transaction, std::forward<Arg>(arg));
     auto *binding_result = std::addressof(binding_owner);
     using route = lookup_index_route<TypeInterface, LookupKey>;
     constexpr bool uses_singular_base_lookup =
