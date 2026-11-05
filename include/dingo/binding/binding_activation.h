@@ -183,24 +183,11 @@ public:
 
   void reset_conversions() noexcept { conversions().reset(); }
 
-  // Whether a failed transaction must also return the storage to its
-  // unresolved state.
-  bool resets_storage_on_failure() const {
-    if constexpr (storage_can_reset<storage_type>::value) {
-      return !storage_.is_resolved();
-    } else {
-      return false;
-    }
-  }
-
-  void reset(bool reset_storage) noexcept {
+  // Returns the cell to its unresolved state.
+  void reset() noexcept {
     reset_conversions();
     if constexpr (storage_can_reset<storage_type>::value) {
-      if (reset_storage) {
-        storage_.reset();
-      }
-    } else {
-      (void)reset_storage;
+      storage_.reset();
     }
   }
 
@@ -382,14 +369,13 @@ private:
   decltype(auto) with_transaction_source(Context &context, Fn &&fn) {
     if constexpr (materialization_traits::retains_unresolved_source) {
       if (materialization_traits::retains_source(cell.storage())) {
-        context.on_rollback(cell.resets_storage_on_failure()
-                                ? +[](void *self, void *) noexcept {
-                                    static_cast<Cell *>(self)->reset(true);
-                                  }
-                                : +[](void *self, void *) noexcept {
-                                    static_cast<Cell *>(self)->reset(false);
-                                  },
-                            std::addressof(cell));
+        // A source is retained only while the storage is unresolved, so a
+        // failed transaction returns the storage to that state.
+        context.on_rollback(
+            +[](void *self, void *) noexcept {
+              static_cast<Cell *>(self)->reset();
+            },
+            std::addressof(cell));
         return invoke_then(
             [&]() -> decltype(auto) {
               return with_runtime_source(persistent_scope, context,
@@ -398,7 +384,7 @@ private:
             [&] {
               context.add_runtime_destructor(
                   std::addressof(cell), +[](void *self) noexcept {
-                    static_cast<Cell *>(self)->reset(true);
+                    static_cast<Cell *>(self)->reset();
                   });
             });
       }
@@ -426,20 +412,17 @@ private:
   decltype(auto) with_runtime_source(construction_scope construction,
                                      Context &context, Fn &&fn) {
     auto &storage = cell.storage();
-    const bool retains = materialization_traits::retains_source(storage);
     if constexpr (materialization_traits::consumes) {
-      const bool persistent = retains || construction.is_persistent();
+      const bool persistent = construction.is_persistent();
       auto &source = materialization_traits::materialize_source_in_context(
-          persistent ? persistent_scope : construction, context, storage,
-          dependencies);
+          construction, context, storage, dependencies);
       if (persistent) {
         return std::forward<Fn>(fn)(source);
       }
       return std::forward<Fn>(fn)(std::move(source));
     } else {
       return std::forward<Fn>(fn)(materialization_traits::materialize_source(
-          retains ? persistent_scope : construction, context, storage,
-          dependencies));
+          construction, context, storage, dependencies));
     }
   }
 };

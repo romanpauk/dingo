@@ -22,46 +22,29 @@ namespace dingo::detail {
 template <typename Value, typename Cardinality, typename Allocator>
 class static_key_lookup_storage;
 
+// The one value of a static key, found through a pointer to it.
 template <typename Value, typename Allocator>
 class static_key_lookup_storage<Value, ::dingo::one, Allocator> {
 public:
-  class iterator {
-  public:
-    iterator() = default;
-
-    Value &operator*() const { return *owner_->value_; }
-
-    bool operator==(const iterator &other) const {
-      return owner_ == other.owner_;
-    }
-
-    bool operator!=(const iterator &other) const { return !(*this == other); }
-
-  private:
-    friend class static_key_lookup_storage;
-
-    explicit iterator(static_key_lookup_storage *owner) : owner_(owner) {}
-
-    static_key_lookup_storage *owner_ = nullptr;
-  };
+  using iterator = Value *;
 
   explicit static_key_lookup_storage(Allocator &) {}
 
-  iterator find(::dingo::none_t) { return value_ ? iterator(this) : end(); }
+  iterator find(::dingo::none_t) { return value_ ? &*value_ : end(); }
 
-  iterator end() { return iterator(); }
+  iterator end() { return nullptr; }
 
   template <typename Inserted>
   std::pair<iterator, bool> try_emplace(::dingo::none_t, Inserted &&value) {
     if (value_) {
-      return {iterator(this), false};
+      return {&*value_, false};
     }
     value_.emplace(std::forward<Inserted>(value));
-    return {iterator(this), true};
+    return {&*value_, true};
   }
 
   void erase(iterator handle) {
-    if (handle.owner_ == this) {
+    if (value_ && handle == &*value_) {
       value_.reset();
     }
   }

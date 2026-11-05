@@ -26,40 +26,17 @@ public:
     return self().binding_store().get_allocator();
   }
 
-  template <typename... TypeArgs> auto register_type() {
-    return self().binding_store().template prepare_binding<TypeArgs...>(
-        &self().runtime_registration_parent(), none_t{});
-  }
-
-  template <typename... TypeArgs, typename Arg,
-            std::enable_if_t<!detail::is_runtime_registration_key_arg_v<Arg>,
-                             int> = 0>
-  auto register_type(Arg &&arg) {
-    return self().binding_store().template prepare_binding<TypeArgs...>(
-        &self().runtime_registration_parent(), std::forward<Arg>(arg));
-  }
-
-  template <typename... TypeArgs, typename... KeyArgs,
-            std::enable_if_t<
-                (sizeof...(KeyArgs) > 0 &&
-                 detail::are_runtime_registration_key_args_v<KeyArgs...>),
-                int> = 0>
-  auto register_type(KeyArgs &&...keys) {
-    return self().binding_store().template prepare_binding<TypeArgs...>(
-        &self().runtime_registration_parent(), none_t{},
-        std::forward<KeyArgs>(keys)...);
-  }
-
-  template <typename... TypeArgs, typename Arg, typename... KeyArgs,
-            std::enable_if_t<
-                (sizeof...(KeyArgs) > 0 &&
-                 !detail::is_runtime_registration_key_arg_v<Arg> &&
-                 detail::are_runtime_registration_key_args_v<KeyArgs...>),
-                int> = 0>
-  auto register_type(Arg &&arg, KeyArgs &&...keys) {
-    return self().binding_store().template prepare_binding<TypeArgs...>(
-        &self().runtime_registration_parent(), std::forward<Arg>(arg),
-        std::forward<KeyArgs>(keys)...);
+  // Registers TypeArgs, built by an optional factory argument and found by
+  // the runtime key values that follow it.
+  template <typename... TypeArgs, typename... Args>
+  auto register_type(Args &&...args) {
+    if constexpr (are_runtime_registration_key_args_v<Args...>) {
+      return self().binding_store().template prepare_binding<TypeArgs...>(
+          &self().runtime_registration_parent(), none_t{},
+          std::forward<Args>(args)...);
+    } else {
+      return register_with_argument<TypeArgs...>(std::forward<Args>(args)...);
+    }
   }
 
   template <typename... TypeArgs, typename Fn>
@@ -76,6 +53,17 @@ public:
   template <typename... TypeArgs> auto register_type_collection() {
     return register_type_collection<TypeArgs...>(
         detail::binding_collection_append{});
+  }
+
+private:
+  template <typename... TypeArgs, typename Arg, typename... KeyArgs>
+  auto register_with_argument(Arg &&arg, KeyArgs &&...keys) {
+    static_assert(are_runtime_registration_key_args_v<KeyArgs...>,
+                  "register_type takes a factory argument followed by "
+                  "runtime key values");
+    return self().binding_store().template prepare_binding<TypeArgs...>(
+        &self().runtime_registration_parent(), std::forward<Arg>(arg),
+        std::forward<KeyArgs>(keys)...);
   }
 };
 
