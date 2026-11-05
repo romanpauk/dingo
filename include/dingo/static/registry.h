@@ -159,8 +159,8 @@ struct indexed_binding_selection<
 template <typename Interface, typename LookupKey, typename InterfaceBindings,
           bool UseIndex = is_no_lookup_key_v<LookupKey>>
 struct binding_selection {
-  using type =
-      static_binding_t<bindings_t<Interface, LookupKey, InterfaceBindings>>;
+  using type = static_binding_choice_t<
+      bindings_t<Interface, LookupKey, InterfaceBindings>>;
 };
 
 template <typename Interface, typename LookupKey, typename InterfaceBindings>

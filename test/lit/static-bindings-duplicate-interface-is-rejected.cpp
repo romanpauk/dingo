@@ -20,7 +20,7 @@ using source = dingo::bindings<
 using registry_type = typename source::type;
 using lookup_key_type =
     dingo::detail::make_lookup_key_t<dingo::key_type<duplicate_key>>;
-using selection = dingo::detail::static_binding_t<
+using selection = dingo::detail::static_binding_choice_t<
     typename registry_type::template bindings<interface, lookup_key_type>>;
 
 static_assert(registry_type::valid);
