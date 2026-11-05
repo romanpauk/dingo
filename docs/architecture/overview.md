@@ -25,9 +25,9 @@ detection, factory traits | | 4 | `context/` | resolution context base and
 recursion guard | | 5 | `storage/` | storage tags, scope policies, storage
 exposure traits | | 6 | `registration/` | registration options, requirements | |
 7 | `binding/` | binding model, selection and resolution shared by runtime and
-static | | 8 | `runtime/`, `static/` | runtime registry and static registry,
-graph and activation | | 9 | `dingo/*.h` | `container`, `runtime_container`,
-`static_container`, `container_base` |
+static | | 8 | `runtime/`, `static/` | the runtime and the static container,
+their registries, bindings, contexts and traits, and the static graph | | 9 |
+`dingo/*.h` | `runtime_container` (also named `container`), `static_container` |
 
 ## Main Owners
 
@@ -35,12 +35,11 @@ graph and activation | | 9 | `dingo/*.h` | `container`, `runtime_container`,
 
 The public entry points are:
 
-- [include/dingo/container.h](../../include/dingo/container.h): combined
-  container
 - [include/dingo/runtime_container.h](../../include/dingo/runtime_container.h):
-  the same runtime container under its explicit name
+  the runtime container, `runtime_container<>`, also named `container<>`
 - [include/dingo/static_container.h](../../include/dingo/static_container.h):
-  static container
+  the static container, `static_container<bindings<...>>`
+- [include/dingo/container.h](../../include/dingo/container.h): both
 
 `container<>` holds runtime registrations and `static_container<bindings<...>>`
 holds compile-time bindings. A container uses one registration mode.
@@ -97,7 +96,7 @@ Both containers keep the state of a registration in a binding cell,
 the storage object and the conversion cache its interfaces share. A static
 container holds one cell per registration inline. A runtime binding holds its
 cell in `runtime_binding_state` from
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h),
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h),
 together with the child container used to resolve constructor dependencies.
 
 The storage classes under [include/dingo/storage/](../../include/dingo/storage)
@@ -173,5 +172,5 @@ For the core path in source order, start here:
 - [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
-- [include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
+- [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)
 - [include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)

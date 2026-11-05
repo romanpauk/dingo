@@ -7,7 +7,7 @@ backends, then meet at the shared binding selection and resolution model.
 ## Runtime Registration
 
 The public API starts at `container::register_type<...>()` in
-[include/dingo/container.h](../../include/dingo/container.h).
+[include/dingo/runtime/registration_api.h](../../include/dingo/runtime/registration_api.h).
 
 `prepare_binding(...)` does three important things:
 
@@ -60,8 +60,8 @@ Registration may expose a type through one or more interfaces. The stored type
 does not always have to match the interface spelling exactly.
 
 One notable optimization in
-[include/dingo/container.h](../../include/dingo/container.h) rewrites the stored
-leaf type to the interface leaf type when:
+[include/dingo/binding/binding_model.h](../../include/dingo/binding/binding_model.h)
+rewrites the stored leaf type to the interface leaf type when:
 
 - there is exactly one exposed interface
 - the interface has a virtual destructor
@@ -73,8 +73,8 @@ temporary conversions.
 ## Resolution
 
 The public `resolve<T>()` path is also in
-[include/dingo/container.h](../../include/dingo/container.h). At that boundary
-Dingo normalizes two independent request descriptions:
+[include/dingo/runtime/container.h](../../include/dingo/runtime/container.h). At
+that boundary Dingo normalizes two independent request descriptions:
 
 - The type request becomes `request_type<T, RemoveRvalueReferences>`.
 - The key request becomes the result of `make_lookup_key(...)`.
@@ -141,8 +141,7 @@ container cannot be rolled back.
 ## Factory Path
 
 The binding state in
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
-owns:
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h) owns:
 
 - a binding cell with the storage object and its cached conversions
 - a lightweight child-container view for constructor injection
@@ -190,7 +189,7 @@ If a factory is not found locally, the container can delegate to its parent.
 If the requested type is unmanaged, unwrapped, and marked as auto-constructible,
 the container can still build it directly through constructor deduction. That
 behavior also lives in
-[include/dingo/container.h](../../include/dingo/container.h).
+[include/dingo/runtime/container.h](../../include/dingo/runtime/container.h).
 
 The deduction logic itself lives in
 [include/dingo/factory/constructor_detection.h](../../include/dingo/factory/constructor_detection.h).
@@ -219,11 +218,11 @@ recursion guard.
 
 These files are useful while reading this flow:
 
-- [include/dingo/container.h](../../include/dingo/container.h)
+- [include/dingo/runtime/container.h](../../include/dingo/runtime/container.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
 - [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
-- [include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
+- [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)
 - [include/dingo/binding/runtime_binding_interface.h](../../include/dingo/binding/runtime_binding_interface.h)
 - [include/dingo/factory/constructor_detection.h](../../include/dingo/factory/constructor_detection.h)

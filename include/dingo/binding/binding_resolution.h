@@ -11,7 +11,7 @@
 #include <dingo/base/type_descriptor.h>
 #include <dingo/binding/binding_selection.h>
 #include <dingo/binding/runtime_binding_interface.h>
-#include <dingo/context/context_base.h>
+#include <dingo/context/resolution_context.h>
 #include <dingo/resolution/resolution_operation.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/annotated.h>

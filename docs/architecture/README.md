@@ -22,9 +22,9 @@ Read these pages in order for the full picture:
 The public API is centered on three container entry points:
 
 ```text
-include/dingo/container.h          -> combined public container
-include/dingo/runtime_container.h  -> runtime-only facade
-include/dingo/static_container.h   -> static-only facade
+include/dingo/runtime_container.h  -> runtime_container, also named container
+include/dingo/static_container.h   -> static_container
+include/dingo/container.h          -> both
 ```
 
 Below those headers, the architecture is centered on one resolution flow fed by

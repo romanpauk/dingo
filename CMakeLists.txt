@@ -102,7 +102,8 @@ if(DINGO_DEVELOPMENT_MODE)
         factory/factory_traits.h
         type/key.h
         base/none.h
-        static/activation_set.h
+        static/binding.h
+        static/container.h
         static/container_traits.h
         base/exceptions.h
         factory/callable.h
@@ -128,6 +129,7 @@ if(DINGO_DEVELOPMENT_MODE)
         registration/constructor.h
         registration/type_registration.h
         runtime_container.h
+        runtime/container.h
         runtime/container_traits.h
         runtime/registration_api.h
         runtime/lookup_index.h
@@ -147,9 +149,9 @@ if(DINGO_DEVELOPMENT_MODE)
         resolution/conversion_cache.h
         resolution/conversion_resolution.h
         binding/runtime_binding_interface.h
-        runtime/runtime_binding.h
+        runtime/binding.h
         storage/interface_storage_traits.h
-        context/context_base.h
+        context/resolution_context.h
         runtime/context.h
         static/context.h
         rtti/static_provider.h

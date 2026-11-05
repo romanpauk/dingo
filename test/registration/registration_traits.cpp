@@ -7,7 +7,7 @@
 
 #include "type_registration_common.h"
 
-#include <dingo/static/activation_set.h>
+#include <dingo/static/binding.h>
 
 #include "support/custom_wrappers.h"
 #include "support/resolution_test_types.h"

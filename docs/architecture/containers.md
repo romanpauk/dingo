@@ -6,12 +6,16 @@ This page documents the current public container model.
 
 The top-level include set is intentionally small:
 
-- [include/dingo/container.h](../../include/dingo/container.h): runtime
-  container
 - [include/dingo/runtime_container.h](../../include/dingo/runtime_container.h):
-  the same runtime container under its explicit name
+  the runtime container, `runtime_container<>`, also named `container<>`
 - [include/dingo/static_container.h](../../include/dingo/static_container.h):
-  static container
+  the static container, `static_container<bindings<...>>`
+- [include/dingo/container.h](../../include/dingo/container.h): both
+
+Each container keeps its implementation in its own directory under the same file
+names: `runtime/container.h` and `static/container.h` for the container,
+`registry.h` for its bindings, `binding.h` for a binding, `context.h` for its
+resolution context and `container_traits.h` for its traits.
 
 Everything else is either runtime/static implementation detail or shared core.
 
