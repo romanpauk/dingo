@@ -487,3 +487,39 @@ TEST(static_bindings_source_test,
 
   EXPECT_EQ(container.resolve<consumer>().values.size(), 2u);
 }
+
+namespace {
+struct auto_config {};
+
+// Unbound and auto-constructible: an aggregate of a bound dependency.
+struct auto_consumer {
+  auto_config &config;
+};
+
+struct auto_service {
+  explicit auto_service(auto_consumer consumer) : config(&consumer.config) {}
+
+  auto_config *config;
+};
+} // namespace
+
+TEST(static_bindings_source_test,
+     container_auto_constructs_unbound_auto_constructible_type) {
+  dingo::static_container<
+      dingo::bindings<dingo::bind<scope<shared>, storage<auto_config>>>>
+      container;
+
+  auto consumer = container.resolve<auto_consumer>();
+  EXPECT_EQ(&consumer.config, &container.resolve<auto_config &>());
+}
+
+TEST(static_bindings_source_test,
+     container_auto_constructs_unbound_dependency) {
+  dingo::static_container<
+      dingo::bindings<dingo::bind<scope<shared>, storage<auto_config>>,
+                      dingo::bind<scope<unique>, storage<auto_service>>>>
+      container;
+
+  EXPECT_EQ(container.resolve<auto_service>().config,
+            &container.resolve<auto_config &>());
+}

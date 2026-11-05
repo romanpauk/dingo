@@ -421,6 +421,9 @@ Constructor deduction is intentionally useful, not magical. The main limits are:
   `resolve<T>()` only auto-constructs plain types when they are aggregates or
   explicitly opted in through `is_auto_constructible<T>`
 - opting a type into auto-construction does not bypass ambiguity checks
+- the runtime and the static container auto-construct alike; a static container
+  without a parent rejects at compile time a request it can neither bind nor
+  auto-construct
 - auto-construction requires `T` to be complete
 - borrowed requests such as `resolve<T&>()` and `resolve<T*>()` can use a
   forward-declared `T` as long as the type is already registered

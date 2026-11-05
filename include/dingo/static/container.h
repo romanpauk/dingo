@@ -229,14 +229,14 @@ public:
                                   collection_count_v<T, LookupKey>>{};
   }
 
-  // A request that no container of the chain binds. Without a parent, the
-  // request of the static container itself cannot be bound at run time.
+  // A request that no container of the chain binds. It is auto-constructed as
+  // in the runtime container when it may be; without a parent, any other
+  // request of the static container is rejected at compile time.
   template <typename Request, bool MayAutoConstruct, typename LookupKey,
             typename R = typename Request::lookup_type,
             bool StaticError = !has_parent_v, typename Context,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R unresolved(construction_scope scope, Context &context, LookupKey key) {
-    (void)MayAutoConstruct;
     if constexpr (collection_traits<R>::is_collection) {
       (void)scope;
       (void)context;
@@ -247,15 +247,20 @@ public:
       using resolve_type = typename collection_traits<R>::resolve_type;
       throw make_collection_type_not_found_exception<R, resolve_type>();
     } else {
-      (void)scope;
-      (void)context;
-      (void)key;
-      if constexpr (StaticError) {
-        static_assert(dependent_false_v<Request, LookupKey>,
-                      "static_container cannot resolve an unbound type");
-      } else {
-        throw make_type_not_found_exception<typename Request::lookup_type>();
-      }
+      using value_type = typename Request::value_type;
+      constexpr bool constructible = [] {
+        if constexpr (MayAutoConstruct &&
+                      is_auto_constructible<
+                          std::decay_t<typename Request::user_type>>::value) {
+          return constructor<value_type>::kind == constructor_kind::concrete;
+        } else {
+          return false;
+        }
+      }();
+      static_assert(!StaticError || constructible,
+                    "static_container cannot resolve an unbound type");
+      return request_resolution::unresolved<Request, MayAutoConstruct, R>(
+          *this, *this, scope, context, key);
     }
   }
 
