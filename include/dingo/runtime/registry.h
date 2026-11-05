@@ -433,11 +433,6 @@ protected:
             rtti_type::template get_type_index<key_type>()};
   }
 
-  template <typename Interface, typename KeyDomain, typename Cardinality>
-  using static_key_lookup_entry_t =
-      detail::selected_lookup_entry_with_cardinality_t<
-          Interface, KeyDomain, Cardinality, normalized_lookup_entries>;
-
   template <typename LookupEntry> struct runtime_lookup_entry_traits {
     static constexpr bool is_key_value = false;
     using interface_type = void;
@@ -564,63 +559,33 @@ protected:
     });
   }
 
-  template <typename Interface, typename KeyDefinition, typename = void>
-  struct lookup_index_route_impl;
-
-  template <typename Interface, typename KeyDefinition>
-  struct lookup_index_route_impl<
-      Interface, KeyDefinition,
-      std::enable_if_t<
-          detail::is_static_lookup_key_definition_v<KeyDefinition>>> {
-    using interface_type = Interface;
-    using normalized_interface = normalized_type_t<Interface>;
-    using key_domain = KeyDefinition;
-    using one_lookup_entry =
-        static_key_lookup_entry_t<normalized_interface, key_domain,
-                                  ::dingo::one>;
-    using many_lookup_entry =
-        static_key_lookup_entry_t<normalized_interface, key_domain,
-                                  ::dingo::many>;
-    // The one definition of the key domain, else its many definition, else
-    // the base index.
-    using lookup_entry = std::conditional_t<
-        !std::is_void_v<one_lookup_entry>, one_lookup_entry,
-        std::conditional_t<!std::is_void_v<many_lookup_entry>,
-                           many_lookup_entry, base_lookup_entry>>;
-    static constexpr bool has_explicit_lookup = false;
-    static constexpr bool has_explicit_collection_lookup =
-        std::is_same_v<lookup_entry, many_lookup_entry>;
-  };
-
-  template <typename Interface, typename KeyDefinition>
-  struct lookup_index_route_impl<
-      Interface, KeyDefinition,
-      std::enable_if_t<
-          !detail::is_static_lookup_key_definition_v<KeyDefinition>>> {
-    using normalized_interface = normalized_type_t<Interface>;
-    using key_domain = KeyDefinition;
-    using lookup_entry =
-        detail::selected_lookup_entry_t<normalized_interface, key_domain,
-                                        normalized_lookup_entries>;
-    using selected_cardinality =
-        typename lookup_entry_cardinality<lookup_entry>::type;
-    static constexpr bool has_explicit_lookup = !std::is_void_v<lookup_entry>;
-    static constexpr bool has_explicit_collection_lookup =
-        has_explicit_lookup &&
-        std::is_same_v<selected_cardinality, ::dingo::many>;
-  };
-
-  template <typename Interface, typename Key>
-  struct lookup_index_route
-      : lookup_index_route_impl<Interface,
-                                typename std::decay_t<Key>::definition_type> {
+  // The index a lookup of an interface by a key goes to: the definition of the
+  // key domain for the interface, or the base index for a static key without
+  // one.
+  template <typename Interface, typename Key> struct lookup_index_route {
+  private:
     using key_definition = typename std::decay_t<Key>::definition_type;
-    using base = lookup_index_route_impl<Interface, key_definition>;
-    using entry = typename base::lookup_entry;
+    using explicit_entry =
+        detail::selected_lookup_entry_t<normalized_type_t<Interface>,
+                                        key_definition,
+                                        normalized_lookup_entries>;
+    static constexpr bool is_static_key =
+        detail::is_static_lookup_key_definition_v<key_definition>;
+
+  public:
+    using entry =
+        std::conditional_t<is_static_key && std::is_void_v<explicit_entry>,
+                           base_lookup_entry, explicit_entry>;
+    static constexpr bool has_explicit_lookup =
+        !is_static_key && !std::is_void_v<explicit_entry>;
+    static constexpr bool has_explicit_collection_lookup =
+        !std::is_void_v<explicit_entry> &&
+        std::is_same_v<typename lookup_entry_cardinality<explicit_entry>::type,
+                       ::dingo::many>;
 
     static decltype(auto) key(const Key &key) {
       if constexpr (std::is_same_v<entry, base_lookup_entry>) {
-        return base_typed_key_lookup_key<typename base::interface_type, Key>();
+        return base_typed_key_lookup_key<Interface, Key>();
       } else {
         return detail::lookup_backend_key(key);
       }
