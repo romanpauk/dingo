@@ -92,29 +92,6 @@ template <> struct scope_traits<shared_cyclical> {
       detail::shared_cyclical_storage<Type, StoredType, Factory, Conversions>;
 };
 
-template <typename Base, typename Derived> struct is_virtual_base {
-#if defined(__GNUG__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Winaccessible-base"
-#endif
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4250)
-#endif
-  struct Test : Derived, virtual Base {};
-#if defined(__GNUG__)
-#pragma GCC diagnostic pop
-#endif
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
-  // If this equals, it means Base is already a virtual base of Derived
-  static constexpr bool value = sizeof(Test) == sizeof(Derived);
-};
-
-template <typename Base, typename Derived>
-static constexpr bool is_virtual_base_v = is_virtual_base<Base, Derived>::value;
-
 namespace detail {
 template <typename Context, typename = void>
 struct has_on_rollback : std::false_type {};
@@ -124,14 +101,6 @@ struct has_on_rollback<
     Context, std::void_t<decltype(std::declval<Context &>().on_rollback(
                  std::declval<void (*)(void *, void *) noexcept>(),
                  std::declval<void *>()))>> : std::true_type {};
-
-// Disallow virtual bases as interfaces as in cyclical storage, we can't
-// properly calculate the cast when the object is not constructed
-template <typename Type, typename StoredType, typename Factory,
-          typename Conversions, typename Derived, typename Base>
-struct storage_interface_requirements<
-    shared_cyclical_storage<Type, StoredType, Factory, Conversions>, Derived,
-    Base> : std::bool_constant<!is_virtual_base_v<Base, Derived>> {};
 
 template <typename Type, typename Factory,
           bool IsTriviallyDestructible = std::is_trivially_destructible_v<Type>>

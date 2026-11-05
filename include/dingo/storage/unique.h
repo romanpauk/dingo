@@ -17,6 +17,7 @@
 #include <dingo/type/normalized_type.h>
 
 #include <optional>
+#include <type_traits>
 
 namespace dingo {
 struct unique {};
@@ -85,34 +86,15 @@ public:
   using factory_type = Factory;
   using type = Type;
   using stored_type = StoredType;
-  using resolved_type = Type;
+  // A bounded array is resolved as a pointer to its first element.
+  using resolved_type = std::conditional_t<(std::extent_v<Type> > 0),
+                                           std::remove_extent_t<Type> *, Type>;
   using tag_type = unique;
 
   template <typename Context, typename Container>
   decltype(auto) resolve(construction_scope scope, Context &context,
                          Container &container) {
     return Factory::template construct<Type>(scope, context, container);
-  }
-};
-
-template <typename Type, size_t N, typename StoredType, typename Factory,
-          typename Conversions>
-class unique_storage<Type[N], StoredType, Factory, Conversions> : Factory {
-public:
-  template <typename... Args>
-  unique_storage(Args &&...args) : Factory(std::forward<Args>(args)...) {}
-
-  using conversions = Conversions;
-  using factory_type = Factory;
-  using type = Type[N];
-  using stored_type = StoredType;
-  using resolved_type = Type *;
-  using tag_type = unique;
-
-  template <typename Context, typename Container>
-  decltype(auto) resolve(construction_scope scope, Context &context,
-                         Container &container) {
-    return Factory::template construct<Type[N]>(scope, context, container);
   }
 };
 } // namespace detail

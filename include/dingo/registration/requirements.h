@@ -22,6 +22,29 @@ namespace dingo {
 template <typename... Args> struct interfaces;
 
 namespace detail {
+template <typename Base, typename Derived> struct is_virtual_base {
+#if defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winaccessible-base"
+#endif
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4250)
+#endif
+  struct Test : Derived, virtual Base {};
+#if defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+  // Adding Base as a virtual base does not grow a Derived that has it.
+  static constexpr bool value = sizeof(Test) == sizeof(Derived);
+};
+
+template <typename Base, typename Derived>
+inline constexpr bool is_virtual_base_v = is_virtual_base<Base, Derived>::value;
+
 template <typename Alternative, typename Interface, typename = void>
 struct alternative_provides_interface
     : std::bool_constant<std::is_same_v<
@@ -127,12 +150,15 @@ struct interface_registration_requirements {
       std::is_convertible_v<normalized_type *, normalized_interface_type *> ||
       is_alternative_type_interface;
 
+  // A scope whose bindings may take part in a cycle publishes an object before
+  // it is constructed, when the address of a virtual base cannot be computed
+  // yet.
   static constexpr bool storage_supported = [] {
-    if constexpr (std::is_same_v<normalized_type, normalized_interface_type>) {
-      return true;
+    if constexpr (!std::is_same_v<normalized_type, normalized_interface_type> &&
+                  scope_allows_cycles_v<typename Storage::tag_type>) {
+      return !is_virtual_base_v<normalized_interface_type, normalized_type>;
     } else {
-      return storage_interface_requirements_v<Storage, normalized_type,
-                                              normalized_interface_type>;
+      return true;
     }
   }();
 
