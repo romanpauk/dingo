@@ -451,30 +451,31 @@ public:
                             Interface, Storage, consume>>;
 };
 
-// The reference and pointer routes of a storage.
+// The reference and the pointer routes of a storage.
 template <typename Interface, typename Storage>
-struct binding_object_resolutions {
-private:
-  using conversions = typename Storage::conversions;
-  using interface_routes = interface_resolutions<Interface, Storage>;
+struct binding_reference_resolutions {
+  using type = type_list_merge_t<
+      typename interface_resolutions<Interface,
+                                     Storage>::lvalue_reference_resolutions,
+      storage_resolutions_t<
+          typename Storage::conversions::lvalue_reference_types, Interface,
+          Storage, borrow>>;
+};
 
-public:
-  using type = type_list_cat_t<
-      type_list_merge_t<
-          typename interface_routes::lvalue_reference_resolutions,
-          storage_resolutions_t<typename conversions::lvalue_reference_types,
-                                Interface, Storage, borrow>>,
-      type_list_merge_t<
-          typename interface_routes::pointer_resolutions,
-          storage_resolutions_t<typename conversions::pointer_types, Interface,
-                                Storage, borrow>>>;
+template <typename Interface, typename Storage>
+struct binding_pointer_resolutions {
+  using type = type_list_merge_t<
+      typename interface_resolutions<Interface, Storage>::pointer_resolutions,
+      storage_resolutions_t<typename Storage::conversions::pointer_types,
+                            Interface, Storage, borrow>>;
 };
 
 template <typename Interface, typename Shape> struct shape_resolutions {
   using value_resolutions =
       typename binding_value_resolutions<Interface, Shape>::type;
-  using object_resolutions =
-      typename binding_object_resolutions<Interface, Shape>::type;
+  using object_resolutions = type_list_cat_t<
+      typename binding_reference_resolutions<Interface, Shape>::type,
+      typename binding_pointer_resolutions<Interface, Shape>::type>;
   using rvalue_reference_resolutions =
       typename binding_rvalue_reference_resolutions<Interface, Shape>::type;
   // Target forms are disjoint across the value, object, and rvalue-reference

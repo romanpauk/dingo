@@ -64,32 +64,6 @@ struct local_binding_scope_slot<Registration,
 template <typename Request, typename Resolutions>
 struct matching_binding_resolution;
 
-// A stable default leaf request always selects the canonical runtime_type
-// storage route, so avoid constructing and searching every published route.
-template <typename Request, typename BindingModel>
-inline constexpr bool binding_has_direct_default_leaf_resolution_v = [] {
-  using request = unwrapped_static_request_t<Request>;
-  using request_value = std::remove_reference_t<request>;
-  using request_leaf = std::remove_cv_t<std::remove_pointer_t<request_value>>;
-  using stored_leaf = typename BindingModel::stored_leaf_type;
-  using conversions = typename BindingModel::conversions_type;
-  constexpr bool publishes_request_category = [] {
-    if constexpr (std::is_lvalue_reference_v<request>) {
-      return type_list_contains_v<runtime_type &,
-                                  typename conversions::lvalue_reference_types>;
-    } else if constexpr (std::is_pointer_v<request_value>) {
-      return type_list_contains_v<runtime_type *,
-                                  typename conversions::pointer_types>;
-    } else {
-      return false;
-    }
-  }();
-  return binding_uses_default_conversions_v<BindingModel> &&
-         conversions::is_stable && publishes_request_category &&
-         std::is_same_v<stored_leaf, std::remove_cv_t<stored_leaf>> &&
-         std::is_same_v<request_leaf, stored_leaf>;
-}();
-
 template <typename Request>
 struct matching_binding_resolution<Request, type_list<>> {
   using type = void;
@@ -107,8 +81,7 @@ public:
 };
 
 // Resolution target shapes are disjoint, so static lookup only needs to form
-// the category that can match the request. Reference and pointer requests are
-// served by the same object routes.
+// the category that can match the request.
 template <typename Request, typename Interface, typename Storage,
           typename RequestType =
               std::remove_cv_t<unwrapped_static_request_t<Request>>>
@@ -122,8 +95,8 @@ template <typename Request, typename Interface, typename Storage,
           typename RequestType>
 struct request_binding_resolutions<Request, Interface, Storage, RequestType &> {
   using type =
-      typename binding_object_resolutions<Interface,
-                                          storage_shape_t<Storage>>::type;
+      typename binding_reference_resolutions<Interface,
+                                             storage_shape_t<Storage>>::type;
 };
 
 template <typename Request, typename Interface, typename Storage,
@@ -138,32 +111,9 @@ template <typename Request, typename Interface, typename Storage,
           typename RequestType>
 struct request_binding_resolutions<Request, Interface, Storage, RequestType *> {
   using type =
-      typename binding_object_resolutions<Interface,
-                                          storage_shape_t<Storage>>::type;
+      typename binding_pointer_resolutions<Interface,
+                                           storage_shape_t<Storage>>::type;
 };
-
-template <typename Request, typename Interface, typename BindingModel,
-          bool Direct = binding_has_direct_default_leaf_resolution_v<
-              Request, BindingModel>>
-struct binding_request_resolutions
-    : request_binding_resolutions<Request, Interface,
-                                  typename BindingModel::storage_type> {};
-
-// The route of a stable default leaf request is the route the storage publishes
-// for the leaf in the category of the request.
-template <typename Request, typename Interface, typename Storage>
-struct direct_default_leaf_request_resolution {
-  using type = type_list<typename storage_resolution<
-      std::conditional_t<
-          std::is_lvalue_reference_v<unwrapped_static_request_t<Request>>,
-          runtime_type &, runtime_type *>,
-      Interface, storage_shape_t<Storage>, borrow, false>::type>;
-};
-
-template <typename Request, typename Interface, typename BindingModel>
-struct binding_request_resolutions<Request, Interface, BindingModel, true>
-    : direct_default_leaf_request_resolution<
-          Request, Interface, typename BindingModel::storage_type> {};
 
 template <typename Request, typename InterfaceBinding>
 struct binding_supports_request {
@@ -173,8 +123,8 @@ private:
   using raw_interface_type = typename annotated_traits<interface_type>::type;
   using storage_type = typename binding_model_type::storage_type;
   using resolutions =
-      typename binding_request_resolutions<Request, raw_interface_type,
-                                           binding_model_type>::type;
+      typename request_binding_resolutions<Request, raw_interface_type,
+                                           storage_type>::type;
 
 public:
   using type = typename matching_binding_resolution<Request, resolutions>::type;

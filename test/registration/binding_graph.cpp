@@ -307,14 +307,12 @@ TEST(static_execution_traits_test,
 }
 
 TEST(static_execution_traits_test,
-     default_stable_leaf_requests_skip_resolution_discovery) {
+     default_stable_leaf_requests_select_their_category_route) {
   struct payload {};
   struct service_interface {
     virtual ~service_interface() = default;
   };
   struct service : service_interface {};
-  struct custom_conversions
-      : detail::conversions<shared, std::shared_ptr<payload>, runtime_type> {};
 
   using wrapped_registration =
       dingo::bind<scope<shared>, storage<std::shared_ptr<payload>>>;
@@ -349,12 +347,6 @@ TEST(static_execution_traits_test,
       typename detail::matching_binding_resolution<service_interface *,
                                                    converted_resolutions>::type;
 
-  using custom_registration =
-      dingo::bind<scope<shared>, storage<std::shared_ptr<payload>>,
-                  conversions<custom_conversions>>;
-  using custom_model = detail::binding_model<custom_registration>;
-  using unstable_registration = dingo::bind<scope<unique>, storage<payload>>;
-  using unstable_model = detail::binding_model<unstable_registration>;
   using array_registration = dingo::bind<scope<shared>, storage<payload[2]>>;
   using array_model = detail::binding_model<array_registration>;
   using array_binding = detail::binding<payload, array_model>;
@@ -364,24 +356,6 @@ TEST(static_execution_traits_test,
   using array_pointer_match = typename detail::matching_binding_resolution<
       payload *, array_pointer_resolutions>::type;
 
-  static_assert(
-      detail::binding_has_direct_default_leaf_resolution_v<payload &,
-                                                           wrapped_model>);
-  static_assert(
-      detail::binding_has_direct_default_leaf_resolution_v<const payload &,
-                                                           wrapped_model>);
-  static_assert(
-      detail::binding_has_direct_default_leaf_resolution_v<payload *,
-                                                           wrapped_model>);
-  static_assert(
-      detail::binding_has_direct_default_leaf_resolution_v<service_interface *,
-                                                           converted_model>);
-  static_assert(
-      !detail::binding_has_direct_default_leaf_resolution_v<payload,
-                                                            wrapped_model>);
-  static_assert(
-      !detail::binding_has_direct_default_leaf_resolution_v<payload &&,
-                                                            wrapped_model>);
   static_assert(std::is_same_v<typename detail::binding_supports_request<
                                    payload &, wrapped_binding>::type,
                                wrapped_match>);
@@ -395,18 +369,6 @@ TEST(static_execution_traits_test,
       std::is_same_v<typename detail::binding_supports_request<
                          service_interface *, converted_binding>::type,
                      converted_match>);
-  static_assert(
-      !detail::binding_has_direct_default_leaf_resolution_v<payload &,
-                                                            custom_model>);
-  static_assert(
-      !detail::binding_has_direct_default_leaf_resolution_v<payload &,
-                                                            unstable_model>);
-  static_assert(
-      !detail::binding_has_direct_default_leaf_resolution_v<payload &,
-                                                            array_model>);
-  static_assert(
-      detail::binding_has_direct_default_leaf_resolution_v<payload *,
-                                                           array_model>);
   static_assert(!detail::binding_supports_request_v<payload &, array_binding>);
   static_assert(std::is_same_v<typename detail::binding_supports_request<
                                    payload *, array_binding>::type,
