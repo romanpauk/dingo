@@ -174,18 +174,26 @@ inline constexpr bool is_copy_constructible_v =
     copy_constructible_traits<T>::value;
 
 namespace detail {
-template <typename T, typename = void>
-struct is_alternative_type : std::false_type {};
+// Whether the type_traits of T declare Semantics.
+template <typename T, typename Semantics, typename = void>
+struct has_semantics : std::false_type {};
 
-template <typename T>
-struct is_alternative_type<T, std::void_t<typename type_traits<T>::semantics>>
-    : std::is_same<typename type_traits<T>::semantics,
-                   semantics::alternative_value> {};
+template <typename T, typename Semantics>
+struct has_semantics<T, Semantics,
+                     std::void_t<typename type_traits<T>::semantics>>
+    : std::is_same<typename type_traits<T>::semantics, Semantics> {};
 } // namespace detail
 
 template <typename T>
 inline constexpr bool is_alternative_type_v =
-    detail::is_alternative_type<std::remove_cv_t<T>>::value;
+    detail::has_semantics<std::remove_cv_t<T>,
+                          semantics::alternative_value>::value;
+
+// An optional value: a wrapper that holds one element or none.
+template <typename T>
+inline constexpr bool is_optional_type_v =
+    detail::has_semantics<std::remove_cv_t<std::remove_reference_t<T>>,
+                          semantics::optional_value>::value;
 
 namespace detail {
 template <typename List, typename Selected> struct type_list_count;

@@ -76,16 +76,6 @@ struct is_default_type_conversion<Traits,
                                   std::void_t<decltype(Traits::is_default)>>
     : std::bool_constant<Traits::is_default> {};
 
-template <typename T, typename = void>
-struct has_value_type : std::false_type {};
-
-template <typename T>
-struct has_value_type<T, std::void_t<typename type_traits<T>::value_type>>
-    : std::true_type {};
-
-template <typename T>
-inline constexpr bool has_value_type_v = has_value_type<T>::value;
-
 struct unavailable_access {};
 struct missing_access {};
 
@@ -434,11 +424,7 @@ using alternative_source_t =
                        qualified_alternative_t<Alternative, Source> &&>;
 
 template <typename Type>
-inline constexpr bool is_value_wrapper_type_v = [] {
-  using type = std::remove_cv_t<std::remove_reference_t<Type>>;
-  return type_traits<type>::enabled && !type_traits<type>::is_pointer_like &&
-         has_value_type_v<type>;
-}();
+inline constexpr bool is_value_wrapper_type_v = is_optional_type_v<Type>;
 
 template <typename Target>
 inline constexpr bool is_structural_conversion_target_v = [] {
@@ -488,165 +474,90 @@ using compose_wrapper_type_conversion_t =
     typename compose_wrapper_type_conversion<Target, Source, Conversion,
                                              UnwrapSource>::type;
 
-template <typename Target, typename Source, typename Access, typename = void>
+// An alternative type built from the source as the alternative overload
+// resolution selects.
+template <typename Target, typename Source, typename Access,
+          bool Enabled = is_structural_conversion_target_v<Target> &&
+                         is_alternative_type_v<Target>,
+          typename = void>
 struct target_alternative_type_conversion_candidate {
   using type = unavailable_type_conversion;
 };
 
 template <typename Target, typename Source, typename Access>
 struct target_alternative_type_conversion_candidate<
-    Target, Source, Access,
-    std::void_t<typename type_traits<std::remove_cv_t<std::remove_reference_t<
-                    Target>>>::template selected_type<Source>,
-                decltype(type_traits<
-                         std::remove_cv_t<std::remove_reference_t<Target>>>::
-                             template wrap<typename type_traits<
-                                 std::remove_cv_t<std::remove_reference_t<
-                                     Target>>>::template selected_type<Source>>(
-                                 std::declval<
-                                     typename type_traits<std::remove_cv_t<
-                                         std::remove_reference_t<Target>>>::
-                                         template selected_type<Source>>()))>> {
+    Target, Source, Access, true,
+    std::void_t<typename type_traits<
+        std::remove_cv_t<Target>>::template selected_type<Source>>> {
 private:
-  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
-  using selected =
-      typename type_traits<target_type>::template selected_type<Source>;
+  using selected = typename type_traits<
+      std::remove_cv_t<Target>>::template selected_type<Source>;
   using conversion =
       typename type_conversion_path<selected, Source, Access>::type;
 
 public:
   using type = std::conditional_t<
-      !std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
-          is_alternative_type_v<target_type> && conversion::available,
+      conversion::available,
       converted_construction<target_alternative_type_conversion<
           Target, Source, selected, conversion>>,
       unavailable_type_conversion>;
 };
 
+// The element of an optional source, with the value category of the source.
+template <typename Source, bool Unwrap = is_value_wrapper_type_v<Source>>
+struct wrapper_element_source {
+  using type = Source;
+};
+
+template <typename Source> struct wrapper_element_source<Source, true> {
+  using type =
+      alternative_source_t<typename type_traits<std::remove_cv_t<
+                               std::remove_reference_t<Source>>>::value_type,
+                           Source>;
+};
+
+// An optional value made of the converted source, or of the converted element
+// of an optional source.
 template <typename Target, typename Source, typename Access,
-          bool UnwrapSource = is_value_wrapper_type_v<Source>, typename = void>
+          bool Enabled = is_structural_conversion_target_v<Target> &&
+                         is_value_wrapper_type_v<Target>>
 struct target_wrapper_type_conversion_candidate {
   using type = unavailable_type_conversion;
 };
 
 template <typename Target, typename Source, typename Access>
-struct target_wrapper_type_conversion_candidate<
-    Target, Source, Access, false,
-    std::void_t<
-        typename type_traits<
-            std::remove_cv_t<std::remove_reference_t<Target>>>::value_type,
-        decltype(type_traits<
-                 std::remove_cv_t<std::remove_reference_t<Target>>>::
-                     wrap(
-                         std::declval<typename type_traits<std::remove_cv_t<
-                             std::remove_reference_t<Target>>>::value_type>())),
-        decltype(type_traits<std::remove_cv_t<
-                     std::remove_reference_t<Target>>>::make_empty())>> {
+struct target_wrapper_type_conversion_candidate<Target, Source, Access, true> {
 private:
-  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
-  using value_type = typename type_traits<target_type>::value_type;
-  using conversion =
-      typename type_conversion_path<value_type, Source, Access>::type;
+  static constexpr bool unwrap = is_value_wrapper_type_v<Source>;
+  using conversion = typename type_conversion_path<
+      typename type_traits<std::remove_cv_t<Target>>::value_type,
+      typename wrapper_element_source<Source>::type, Access>::type;
 
 public:
   using type = std::conditional_t<
-      !std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
-          is_value_wrapper_type_v<target_type> &&
-          !borrows_value_wrapper_v<Source> && conversion::available,
-      compose_wrapper_type_conversion_t<Target, Source, conversion, false>,
+      (unwrap || !borrows_value_wrapper_v<Source>) && conversion::available,
+      compose_wrapper_type_conversion_t<Target, Source, conversion, unwrap>,
       unavailable_type_conversion>;
 };
 
-template <typename Target, typename Source, typename Access>
-struct target_wrapper_type_conversion_candidate<
-    Target, Source, Access, true,
-    std::void_t<
-        typename type_traits<
-            std::remove_cv_t<std::remove_reference_t<Target>>>::value_type,
-        typename type_traits<
-            std::remove_cv_t<std::remove_reference_t<Source>>>::value_type,
-        decltype(type_traits<
-                 std::remove_cv_t<std::remove_reference_t<Target>>>::
-                     wrap(
-                         std::declval<typename type_traits<std::remove_cv_t<
-                             std::remove_reference_t<Target>>>::value_type>())),
-        decltype(type_traits<std::remove_cv_t<
-                     std::remove_reference_t<Target>>>::make_empty()),
-        decltype(type_traits<
-                 std::remove_cv_t<std::remove_reference_t<Source>>>::
-                     empty(std::declval<const std::remove_cv_t<
-                               std::remove_reference_t<Source>> &>())),
-        decltype(type_traits<
-                 std::remove_cv_t<std::remove_reference_t<Source>>>::
-                     get(std::declval<std::remove_reference_t<Source> &>()))>> {
-private:
-  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
-  using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
-  using value_type = typename type_traits<target_type>::value_type;
-  using source_value_type =
-      copy_cv_t<std::remove_reference_t<Source>,
-                typename type_traits<source_type>::value_type>;
-  using source_value =
-      std::conditional_t<std::is_lvalue_reference_v<Source>,
-                         source_value_type &, source_value_type &&>;
-  using conversion =
-      typename type_conversion_path<value_type, source_value, Access>::type;
-
-public:
-  using type = std::conditional_t<
-      !std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
-          is_value_wrapper_type_v<target_type> && conversion::available,
-      compose_wrapper_type_conversion_t<Target, Source, conversion, true>,
-      unavailable_type_conversion>;
-};
-
+// The converted alternative a source alternative type holds: any of them for
+// a reference or pointer target, otherwise the target itself when it is an
+// alternative exactly once.
 template <typename Target, typename Source, typename Access,
-          typename Alternative>
-using alternative_type_conversion_branch_t = alternative_type_conversion_branch<
-    Alternative,
-    typename type_conversion_path<
-        Target, alternative_source_t<Alternative, Source>, Access>::type>;
-
-template <
-    typename Target, typename Source, typename Access, typename Alternatives,
-    bool Borrows = std::is_reference_v<Target> || std::is_pointer_v<Target>>
-struct alternative_type_conversion_candidate;
+          typename Alternatives>
+struct alternative_type_conversion_branches;
 
 template <typename Target, typename Source, typename Access,
           typename... Alternatives>
-struct alternative_type_conversion_candidate<Target, Source, Access,
-                                             type_list<Alternatives...>, true> {
+struct alternative_type_conversion_branches<Target, Source, Access,
+                                            type_list<Alternatives...>> {
   using type = alternative_type_conversion<
       Target, Source,
-      type_list<alternative_type_conversion_branch_t<Target, Source, Access,
-                                                     Alternatives>...>>;
+      type_list<alternative_type_conversion_branch<
+          Alternatives, typename type_conversion_path<
+                            Target, alternative_source_t<Alternatives, Source>,
+                            Access>::type>...>>;
 };
-
-template <typename Target, typename Source, typename Access, typename Selected,
-          bool HasSelected =
-              (alternative_type_count<
-                   std::remove_cv_t<std::remove_reference_t<Source>>,
-                   Selected>::value == 1)>
-struct selected_alternative_type_conversion {
-  using type = unavailable_type_conversion;
-};
-
-template <typename Target, typename Source, typename Access, typename Selected>
-struct selected_alternative_type_conversion<Target, Source, Access, Selected,
-                                            true> {
-  using type = alternative_type_conversion<
-      Target, Source,
-      type_list<alternative_type_conversion_branch_t<Target, Source, Access,
-                                                     Selected>>>;
-};
-
-template <typename Target, typename Source, typename Access,
-          typename... Alternatives>
-struct alternative_type_conversion_candidate<Target, Source, Access,
-                                             type_list<Alternatives...>, false>
-    : selected_alternative_type_conversion<
-          Target, Source, Access,
-          std::remove_cv_t<std::remove_reference_t<Target>>> {};
 
 template <typename Target, typename Source, typename Access,
           bool IsAlternative =
@@ -658,11 +569,22 @@ struct source_alternative_type_conversion {
 };
 
 template <typename Target, typename Source, typename Access>
-struct source_alternative_type_conversion<Target, Source, Access, true>
-    : alternative_type_conversion_candidate<
-          Target, Source, Access,
-          alternative_type_alternatives_t<
-              std::remove_cv_t<std::remove_reference_t<Source>>>> {};
+struct source_alternative_type_conversion<Target, Source, Access, true> {
+private:
+  using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
+  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
+  using alternatives = std::conditional_t<
+      std::is_reference_v<Target> || std::is_pointer_v<Target>,
+      alternative_type_alternatives_t<source_type>,
+      std::conditional_t<
+          alternative_type_count<source_type, target_type>::value == 1,
+          type_list<target_type>, type_list<>>>;
+
+public:
+  using type =
+      typename alternative_type_conversion_branches<Target, Source, Access,
+                                                    alternatives>::type;
+};
 
 template <typename Target, typename Source, typename Access, typename = void>
 struct borrowed_type_conversion_candidate {
