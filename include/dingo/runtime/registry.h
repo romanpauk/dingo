@@ -1376,8 +1376,7 @@ private:
   }
 
   template <typename T, bool RemoveRvalueReferences, typename LookupKey,
-            typename R =
-                typename request_type<T, RemoveRvalueReferences>::lookup_type,
+            typename R = request_result_t<T, RemoveRvalueReferences>,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(construction_scope scope, runtime_context_type &context,
             LookupKey key) {
@@ -1387,15 +1386,13 @@ private:
 
   template <typename T, bool RemoveRvalueReferences, typename Origin,
             typename LookupKey,
-            typename R =
-                typename request_type<T, RemoveRvalueReferences>::lookup_type,
+            typename R = request_result_t<T, RemoveRvalueReferences>,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(construction_scope scope, runtime_context_type &context,
             Origin &origin, LookupKey key) {
-    using request = request_type<T, RemoveRvalueReferences>;
     return detail::request_resolution::resolve<
-        request, typename request::interface_type>(*this, scope, context,
-                                                   origin, std::move(key));
+        request_type<T, RemoveRvalueReferences>, R>(*this, scope, context,
+                                                    origin, std::move(key));
   }
 
 #ifdef _MSC_VER

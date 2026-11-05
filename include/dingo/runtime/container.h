@@ -136,8 +136,8 @@ private:
       });
     } else {
       return with_context([&](runtime_context_type &context) -> R {
-        return resolve<Request, R>(ephemeral_scope, context, *this,
-                                   std::move(key));
+        return detail::request_resolution::resolve<Request, R>(
+            *this, ephemeral_scope, context, *this, std::move(key));
       });
     }
   }
@@ -194,60 +194,38 @@ private:
   R resolve_exact_or_normalized(Selection, construction_scope scope,
                                 runtime_context_type &context) {
     try {
-      return resolve<Request, R>(scope, context, *this,
-                                 detail::no_lookup_key());
+      return detail::request_resolution::resolve<Request, R>(
+          *this, scope, context, *this, detail::no_lookup_key());
     } catch (const type_not_convertible_exception &) {
       return detail::request_resolution::resolve_normalized<Request, R>(
           *this, scope, context);
     }
   }
 
-  template <typename Request, typename R, typename Origin, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(construction_scope scope, runtime_context_type &context,
-            Origin &origin, LookupKey key) {
-    return detail::request_resolution::resolve<Request, R>(
-        *this, scope, context, origin, std::move(key));
+  // A request in a context of another runtime opens a transaction of this one.
+  template <typename Request, typename R, typename Origin, typename LookupKey>
+  DINGO_ALWAYS_INLINE R resolve_request(construction_scope scope,
+                                        runtime_context_type &context,
+                                        Origin &origin, LookupKey key) {
+    if (context.owns(this->runtime())) {
+      return detail::request_resolution::resolve<Request, R>(
+          *this, scope, context, origin, std::move(key));
+    }
+    return resolve_nested<Request, R>(scope, context, origin, std::move(key));
   }
-
   template <typename Request, typename R, typename Origin, typename LookupKey>
   DINGO_NOINLINE R resolve_nested(construction_scope scope,
                                   runtime_context_type &context, Origin &origin,
                                   LookupKey key) {
-    return execute_transaction(this->runtime(), context,
-                               [&](runtime_context_type &local_context) -> R {
-                                 return resolve<Request, R>(
-                                     scope, local_context, origin,
-                                     std::move(key));
-                               });
+    return execute_transaction(
+        this->runtime(), context,
+        [&](runtime_context_type &local_context) -> R {
+          return detail::request_resolution::resolve<Request, R>(
+              *this, scope, local_context, origin, std::move(key));
+        });
   }
 
 public:
-  template <typename T, bool RemoveRvalueReferences, typename LookupKey,
-            typename R =
-                typename request_type<T, RemoveRvalueReferences>::lookup_type,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  DINGO_ALWAYS_INLINE R resolve(construction_scope scope,
-                                runtime_context_type &context, LookupKey key) {
-    return resolve<T, RemoveRvalueReferences>(scope, context, *this,
-                                              std::move(key));
-  }
-
-  template <typename T, bool RemoveRvalueReferences, typename Origin,
-            typename LookupKey,
-            typename R =
-                typename request_type<T, RemoveRvalueReferences>::lookup_type,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  DINGO_ALWAYS_INLINE R resolve(construction_scope scope,
-                                runtime_context_type &context, Origin &origin,
-                                LookupKey key) {
-    using request = request_type<T, RemoveRvalueReferences>;
-    if (context.owns(this->runtime())) {
-      return resolve<request, R>(scope, context, origin, std::move(key));
-    }
-    return resolve_nested<request, R>(scope, context, origin, std::move(key));
-  }
-
   template <typename Request, bool MayAutoConstruct, typename LookupKey,
             typename R = typename Request::lookup_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>

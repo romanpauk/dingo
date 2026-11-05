@@ -356,6 +356,30 @@ public:
     return self().template resolve_entry<request_type<T>, R>(std::move(key));
   }
 
+  // A dependency of a factory, resolved in the context of the request that
+  // constructs it. Origin is the container the request started at; the host
+  // resolves the request through resolve_request.
+  template <typename T, bool RemoveRvalueReferences, typename Context,
+            typename LookupKey,
+            typename R = request_result_t<T, RemoveRvalueReferences>,
+            std::enable_if_t<is_lookup_key_v<LookupKey>, int> = 0>
+  DINGO_ALWAYS_INLINE R resolve(construction_scope scope, Context &context,
+                                LookupKey key) {
+    return resolve<T, RemoveRvalueReferences>(scope, context, self(),
+                                              std::move(key));
+  }
+
+  template <typename T, bool RemoveRvalueReferences, typename Context,
+            typename Origin, typename LookupKey,
+            typename R = request_result_t<T, RemoveRvalueReferences>,
+            std::enable_if_t<is_lookup_key_v<LookupKey>, int> = 0>
+  DINGO_ALWAYS_INLINE R resolve(construction_scope scope, Context &context,
+                                Origin &origin, LookupKey key) {
+    return self()
+        .template resolve_request<request_type<T, RemoveRvalueReferences>, R>(
+            scope, context, origin, std::move(key));
+  }
+
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
             typename R = request_result_t<T, true>>
   DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {

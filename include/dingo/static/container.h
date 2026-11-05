@@ -169,24 +169,12 @@ public:
 
   using container_interface<static_container_impl>::resolve;
 
-  template <typename T, bool RemoveRvalueReferences, typename Context,
-            typename LookupKey,
-            typename R = request_result_t<T, RemoveRvalueReferences>,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(construction_scope scope, Context &context, LookupKey key) {
-    return resolve<T, RemoveRvalueReferences>(scope, context, *this,
-                                              std::move(key));
-  }
-
-  template <typename T, bool RemoveRvalueReferences, typename Context,
-            typename Origin, typename LookupKey,
-            typename R = request_result_t<T, RemoveRvalueReferences>,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(construction_scope scope, Context &context, Origin &origin,
-            LookupKey key) {
-    return request_resolution::resolve<request_type<T, RemoveRvalueReferences>,
-                                       R>(*this, scope, context, origin,
-                                          std::move(key));
+  template <typename Request, typename R, typename Context, typename Origin,
+            typename LookupKey>
+  R resolve_request(construction_scope scope, Context &context, Origin &origin,
+                    LookupKey key) {
+    return request_resolution::resolve<Request, R>(*this, scope, context,
+                                                   origin, std::move(key));
   }
 
 public:
