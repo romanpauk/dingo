@@ -27,8 +27,6 @@ template <typename... Args> using bind = type_registration<Args...>;
 
 namespace detail {
 
-template <typename StaticBindings, typename State> class static_registry;
-
 enum class dependency_resolution_status {
   resolved,
   missing,

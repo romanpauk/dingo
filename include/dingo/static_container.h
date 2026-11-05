@@ -118,7 +118,7 @@ private:
   static constexpr bool has_parent_v = !std::is_void_v<ParentContainer>;
   using graph_type_ = graph_analysis<static_bindings_type, has_parent_v>;
   using parent_container_type = container_implementation_t<ParentContainer>;
-  using state_type = static_storage_state<Registrations...>;
+  using storage_type = static_binding_storage<Registrations...>;
   using context_type = static_context<context_static_bindings_type>;
   using index_entries_ = detail::normalize_lookup_definitions_t<
       detail::container_lookup_definition_type_t<ContainerTraits>>;
@@ -230,9 +230,15 @@ private:
             scope, context, origin, key);
   }
 
+  template <typename Lookup, typename Result, typename LookupKey,
+            typename Context>
+  decltype(auto) resolve_bound(construction_scope scope, Context &context) {
+    using binding = typename selection_t<Lookup, LookupKey>::binding_type;
+    return storage_.template resolver<binding>(scope, *this)
+        .template resolve<Result>(context);
+  }
+
 public:
-  using static_registry_type =
-      static_registry<static_bindings_type, state_type>;
   using container_traits_type = ContainerTraits;
   using rtti_type = typename ContainerTraits::rtti_type;
 
@@ -297,12 +303,9 @@ public:
     using request = request_type<T, false>;
     if constexpr (!collection_traits<R>::is_collection) {
       if constexpr (uses_static_minimal_context_v<request, R, LookupKey>) {
-        using selected = typename static_registry_type::template selection<
-            typename lookup_request::lookup_type, LookupKey>;
         static_resolution_context_t<request, R, LookupKey> context;
-        return static_registry_.template resolve_binding<
-            typename lookup_request::lookup_type, R, selected>(ephemeral_scope,
-                                                               context, *this);
+        return resolve_bound<typename lookup_request::lookup_type, R,
+                             LookupKey>(ephemeral_scope, context);
       }
     }
     if constexpr (collection_traits<R>::is_collection) {
@@ -352,11 +355,8 @@ public:
                           R, typename binding_model_type::storage_type> &&
                       factory_without_dependencies_v<
                           typename binding_model_type::factory_type>) {
-          using selected = typename static_registry_type::template selection<
-              typename lookup_request::lookup_type, LookupKey>;
-          return static_registry_.template resolve_binding<
-              typename lookup_request::lookup_type, R, selected>(scope, context,
-                                                                 *this);
+          return resolve_bound<typename lookup_request::lookup_type, R,
+                               LookupKey>(scope, context);
         }
       }
     }
@@ -470,8 +470,9 @@ private:
   T construct_collection_static(construction_scope scope, Context &context,
                                 Args &&...args) {
     if constexpr (detail::is_static_lookup_key_v<LookupKey>) {
-      return static_registry_.template construct_collection<T, LookupKey>(
-          scope, *this, context, std::forward<Args>(args)...);
+      return storage_
+          .template construct_collection<T, LookupKey, static_bindings_type>(
+              scope, *this, context, std::forward<Args>(args)...);
     } else {
       static_assert(detail::dependent_false_v<T, LookupKey>,
                     "static_container fixed runtime-key collection request "
@@ -553,8 +554,9 @@ public:
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   std::size_t append_collection(construction_scope scope, T &results,
                                 Context &context, Fn &&fn, LookupKey) {
-    return static_registry_.template append_collection<T, LookupKey>(
-        scope, results, *this, context, std::forward<Fn>(fn));
+    return storage_
+        .template append_collection<T, LookupKey, static_bindings_type>(
+            scope, results, *this, context, std::forward<Fn>(fn));
   }
 
   template <typename T> std::size_t count_collection() {
@@ -568,7 +570,7 @@ public:
   template <typename T, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   std::size_t count_collection(LookupKey) {
-    return static_registry_.template count_collection<T, LookupKey>();
+    return collection_count_v<T, LookupKey>;
   }
 
   template <typename T, bool RemoveRvalueReferences, typename Context,
@@ -621,19 +623,16 @@ private:
         return origin.template unresolved<Request, false, LookupKey, R>(
             scope, context, key);
       } else {
-        return static_registry_.template construct_collection<R, LookupKey>(
-            scope, *this, context);
+        return storage_
+            .template construct_collection<R, LookupKey, static_bindings_type>(
+                scope, *this, context);
       }
     } else {
       using lookup_type = typename Request::lookup_type;
       constexpr auto status = resolve_status_v<Request, LookupKey>;
       if constexpr (status == binding_status::found) {
-        using selected =
-            typename static_registry_type::template selection<lookup_type,
-                                                              LookupKey>;
-        return static_registry_.template resolve_binding<
-            lookup_type, typename Request::interface_type, selected>(
-            scope, context, *this);
+        return resolve_bound<lookup_type, typename Request::interface_type,
+                             LookupKey>(scope, context);
       } else if constexpr (status == binding_status::ambiguous) {
         static_assert(status != binding_status::ambiguous,
                       "static_container cannot resolve an ambiguously bound "
@@ -653,7 +652,7 @@ private:
   }
 
 private:
-  static_registry_type static_registry_;
+  storage_type storage_;
   parent_container_type *parent_ = nullptr;
 };
 
