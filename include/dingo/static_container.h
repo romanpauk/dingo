@@ -12,6 +12,7 @@
 #include <dingo/binding/binding_collection.h>
 #include <dingo/binding/binding_resolution.h>
 #include <dingo/binding/binding_selection.h>
+#include <dingo/binding/container_interface.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/factory/invoke.h>
@@ -106,7 +107,9 @@ template <typename ParentContainer, typename ContainerTraits,
           typename... Registrations>
 class static_container_impl<static_bindings<Registrations...>, ParentContainer,
                             ContainerTraits>
-    : private static_container_dependency_diagnostics_base<
+    : public container_interface<static_container_impl<
+          static_bindings<Registrations...>, ParentContainer, ContainerTraits>>,
+      private static_container_dependency_diagnostics_base<
           static_bindings<Registrations...>, !std::is_void_v<ParentContainer>> {
 public:
   using static_bindings_type = static_bindings<Registrations...>;
@@ -122,11 +125,6 @@ private:
   using context_type = static_context<context_static_bindings_type>;
   using index_entries_ = detail::normalize_lookup_definitions_t<
       detail::container_lookup_definition_type_t<ContainerTraits>>;
-
-  template <typename Collection, typename Fn>
-  using collection_insert_invocable =
-      std::is_invocable<Fn &, Collection &,
-                        typename collection_traits<Collection>::resolve_type>;
 
   template <typename Request, typename Key>
   using selection_t =
@@ -453,26 +451,25 @@ private:
   }
 
 public:
-  template <typename Signature = void, typename Callable>
-  auto invoke(Callable &&callable) {
-    using callable_type = std::remove_cv_t<std::remove_reference_t<Callable>>;
-    using dispatch_signature =
-        callable_dispatch_signature_t<Signature, callable_type>;
+  using container_interface<static_container_impl>::construct_collection;
+  using container_interface<static_container_impl>::count_collection;
 
-    context_type context;
-    auto type_guard = context.template track_type<callable_type>();
-    return callable_invoke<dispatch_signature>::construct(
-        std::forward<Callable>(callable), ephemeral_scope, context, *this);
-  }
-
-private:
-  template <typename T, typename LookupKey, typename Context, typename... Args>
-  T construct_collection_static(construction_scope scope, Context &context,
-                                Args &&...args) {
+  template <typename T, typename Fn, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  T construct_collection(Fn &&fn, LookupKey) {
     if constexpr (detail::is_static_lookup_key_v<LookupKey>) {
-      return storage_
-          .template construct_collection<T, LookupKey, static_bindings_type>(
-              scope, *this, context, std::forward<Args>(args)...);
+      return with_context([&](context_type &context) -> T {
+        if constexpr (std::is_same_v<std::decay_t<Fn>,
+                                     binding_collection_append>) {
+          return storage_.template construct_collection<T, LookupKey,
+                                                        static_bindings_type>(
+              ephemeral_scope, *this, context);
+        } else {
+          return storage_.template construct_collection<T, LookupKey,
+                                                        static_bindings_type>(
+              ephemeral_scope, *this, context, std::forward<Fn>(fn));
+        }
+      });
     } else {
       static_assert(detail::dependent_false_v<T, LookupKey>,
                     "static_container fixed runtime-key collection request "
@@ -480,74 +477,9 @@ private:
     }
   }
 
-public:
-  template <typename T> T construct_collection() {
+  template <typename Fn> decltype(auto) with_context(Fn &&fn) {
     context_type context;
-    return construct_collection<T>(ephemeral_scope, context,
-                                   detail::no_lookup_key());
-  }
-
-  template <typename T, typename Fn,
-            std::enable_if_t<
-                !detail::is_lookup_key_v<std::decay_t<Fn>> &&
-                    !detail::is_key_value_v<Fn> &&
-                    collection_insert_invocable<T, std::decay_t<Fn>>::value,
-                int> = 0>
-  T construct_collection(Fn &&fn) {
-    context_type context;
-    return construct_collection<T>(ephemeral_scope, context,
-                                   std::forward<Fn>(fn),
-                                   detail::no_lookup_key());
-  }
-
-  template <typename T, typename Context, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection(construction_scope scope, Context &context,
-                         LookupKey) {
-    return construct_collection_static<T, LookupKey>(scope, context);
-  }
-
-  template <typename T, typename IdType,
-            std::enable_if_t<!detail::is_lookup_key_v<IdType> &&
-                                 !collection_insert_invocable<
-                                     T, std::decay_t<IdType>>::value,
-                             int> = 0>
-  T construct_collection(IdType &&id) {
-    context_type context;
-    return construct_collection<T>(
-        ephemeral_scope, context,
-        detail::make_lookup_key(std::forward<IdType>(id)));
-  }
-
-  template <typename T, typename Fn, typename IdType,
-            std::enable_if_t<!detail::is_lookup_key_v<IdType>, int> = 0>
-  T construct_collection(Fn &&fn, IdType &&id) {
-    context_type context;
-    return construct_collection<T>(
-        ephemeral_scope, context, std::forward<Fn>(fn),
-        detail::make_lookup_key(std::forward<IdType>(id)));
-  }
-
-  template <typename T, typename Fn, typename Context, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection(construction_scope scope, Context &context, Fn &&fn,
-                         LookupKey) {
-    return construct_collection_static<T, LookupKey>(scope, context,
-                                                     std::forward<Fn>(fn));
-  }
-
-  template <typename T, typename Fn, typename Context>
-  std::size_t append_collection(construction_scope scope, T &results,
-                                Context &context, Fn &&fn) {
-    return append_collection<T>(scope, results, context, std::forward<Fn>(fn),
-                                detail::no_lookup_key());
-  }
-
-  template <typename T, typename Key, typename Fn, typename Context>
-  std::size_t append_collection(construction_scope scope, T &results,
-                                Context &context, Fn &&fn) {
-    return append_collection<T>(scope, results, context, std::forward<Fn>(fn),
-                                detail::make_lookup_key(type_selector<Key>{}));
+    return std::forward<Fn>(fn)(context);
   }
 
   template <typename T, typename Fn, typename Context, typename LookupKey,
@@ -557,14 +489,6 @@ public:
     return storage_
         .template append_collection<T, LookupKey, static_bindings_type>(
             scope, results, *this, context, std::forward<Fn>(fn));
-  }
-
-  template <typename T> std::size_t count_collection() {
-    return count_collection<T>(detail::no_lookup_key());
-  }
-
-  template <typename T, typename Key> std::size_t count_collection() {
-    return count_collection<T>(detail::make_lookup_key(type_selector<Key>{}));
   }
 
   template <typename T, typename LookupKey,

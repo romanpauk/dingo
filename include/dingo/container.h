@@ -13,6 +13,7 @@
 #include <dingo/binding/binding_collection.h>
 #include <dingo/binding/binding_resolution.h>
 #include <dingo/binding/binding_selection.h>
+#include <dingo/binding/container_interface.h>
 #include <dingo/container_base.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/constructor.h>
@@ -57,6 +58,8 @@ template <typename ContainerTraits, typename Allocator,
           typename ParentContainer>
 class detail::runtime_container_impl
     : public detail::runtime_registration_api<detail::runtime_container_impl<
+          ContainerTraits, Allocator, ParentContainer>>,
+      public detail::container_interface<detail::runtime_container_impl<
           ContainerTraits, Allocator, ParentContainer>> {
   template <typename> friend class runtime_context;
 
@@ -218,11 +221,10 @@ private:
   DINGO_NOINLINE R
   resolve_selected(typename runtime_registry_type::runtime_selection selected) {
     using interface_type = typename Request::interface_type;
-    return execute_transaction(
-        runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
-          return runtime_registry_.template resolve_binding<interface_type, R>(
-              selected, ephemeral_scope, context);
-        });
+    return with_context([&](runtime_context_type &context) -> R {
+      return runtime_registry_.template resolve_binding<interface_type, R>(
+          selected, ephemeral_scope, context);
+    });
   }
 
   template <typename Request, typename R, typename LookupKey>
@@ -240,23 +242,21 @@ private:
       if (selected.status == detail::binding_status::found) {
         return resolve_selected<Request, R>(selected);
       }
-      return execute_transaction(
-          runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
-            // MSVC's pre-C++20 lambda processor does not treat an enclosing
-            // constexpr local as a constant expression, so spell it here.
-            return resolve<
-                Request, R,
-                runtime_auto_constructible_v<typename Request::user_type>>(
-                selected, ephemeral_scope, context, *this, std::move(key));
-          });
+      return with_context([&](runtime_context_type &context) -> R {
+        // MSVC's pre-C++20 lambda processor does not treat an enclosing
+        // constexpr local as a constant expression, so spell it here.
+        return resolve<
+            Request, R,
+            runtime_auto_constructible_v<typename Request::user_type>>(
+            selected, ephemeral_scope, context, *this, std::move(key));
+      });
     } else {
-      return execute_transaction(
-          runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
-            return resolve<
-                Request, R,
-                runtime_auto_constructible_v<typename Request::user_type>>(
-                ephemeral_scope, context, *this, std::move(key));
-          });
+      return with_context([&](runtime_context_type &context) -> R {
+        return resolve<
+            Request, R,
+            runtime_auto_constructible_v<typename Request::user_type>>(
+            ephemeral_scope, context, *this, std::move(key));
+      });
     }
   }
 
@@ -281,70 +281,27 @@ public:
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
             typename R = request_result_t<T, true>>
   DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {
-    return execute_transaction(
-        runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
-          return construct_request<request_type<T>, Factory, R>(
-              ephemeral_scope, context, std::move(factory));
-        });
+    return with_context([&](runtime_context_type &context) -> R {
+      return construct_request<request_type<T>, Factory, R>(
+          ephemeral_scope, context, std::move(factory));
+    });
   }
 
-  template <typename T> T construct_collection() {
-    return construct_collection<T>(detail::no_lookup_key());
-  }
-
-  template <
-      typename T, typename Fn,
-      std::enable_if_t<!detail::is_lookup_key_v<std::decay_t<Fn>>, int> = 0>
-  T construct_collection(Fn &&fn) {
-    return construct_collection<T>(std::forward<Fn>(fn),
-                                   detail::no_lookup_key());
-  }
-
-  template <typename T, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection(LookupKey key) {
-    return construct_collection<T>(detail::binding_collection_append{},
-                                   std::move(key));
-  }
+  using detail::container_interface<self_type>::construct_collection;
+  using detail::container_interface<self_type>::count_collection;
 
   template <typename T, typename Fn, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   T construct_collection(Fn &&fn, LookupKey key) {
-    return execute_transaction(
-        runtime_registry_.runtime(), [&](runtime_context_type &context) -> T {
-          return construct_collection<T>(ephemeral_scope, context,
-                                         std::forward<Fn>(fn), std::move(key));
-        });
+    return with_context([&](runtime_context_type &context) -> T {
+      return construct_collection<T>(ephemeral_scope, context,
+                                     std::forward<Fn>(fn), std::move(key));
+    });
   }
 
-  template <typename T, typename Key> T construct_collection(key_type<Key>) {
-    return construct_collection<T>(detail::make_lookup_key(key_type<Key>{}));
-  }
-
-  template <typename T, typename Fn, typename Key>
-  T construct_collection(Fn &&fn, key_type<Key>) {
-    return construct_collection<T>(std::forward<Fn>(fn),
-                                   detail::make_lookup_key(key_type<Key>{}));
-  }
-
-  template <typename T, typename Fn> T construct_collection(Fn &&fn, none_t) {
-    return construct_collection<T>(std::forward<Fn>(fn),
-                                   detail::no_lookup_key());
-  }
-
-  template <typename Signature = void, typename Callable>
-  auto invoke(Callable &&callable) {
-    using callable_type = std::remove_cv_t<std::remove_reference_t<Callable>>;
-    using dispatch_signature =
-        detail::callable_dispatch_signature_t<Signature, callable_type>;
-
-    return execute_transaction(
-        runtime_registry_.runtime(), [&](runtime_context_type &context) {
-          auto type_guard = context.template track_type<callable_type>();
-          return detail::callable_invoke<dispatch_signature>::construct(
-              std::forward<Callable>(callable), ephemeral_scope, context,
-              *this);
-        });
+  template <typename Fn> decltype(auto) with_context(Fn &&fn) {
+    return execute_transaction(runtime_registry_.runtime(),
+                               std::forward<Fn>(fn));
   }
 
   template <typename Request, typename IdType>
@@ -369,14 +326,6 @@ public:
                                 LookupKey key) {
     return runtime_registry_.template append_collection<T>(
         scope, results, context, std::forward<Fn>(fn), std::move(key));
-  }
-
-  template <typename T> std::size_t count_collection() {
-    return count_collection<T>(detail::no_lookup_key());
-  }
-
-  template <typename T, typename Key> std::size_t count_collection() {
-    return count_collection<T>(detail::make_lookup_key(type_selector<Key>{}));
   }
 
   template <typename T, typename LookupKey,
