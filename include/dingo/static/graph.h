@@ -91,20 +91,6 @@ struct graph_type_index_in<Binding, type_list<Universe...>>
     : std::integral_constant<std::size_t,
                              graph_type_index<Binding, Universe...>()> {};
 
-// A dependency request that selects a unique binding of the host bindings by
-// interface alone is looked up in the host binding index. Missing and
-// ambiguous requests have no binding.
-template <typename Lookup, typename Tag, typename = void>
-struct graph_lookup_hit {
-  static constexpr std::size_t index = graph_npos;
-};
-
-template <typename Lookup, typename Tag>
-struct graph_lookup_hit<Lookup, Tag,
-                        std::void_t<decltype(Lookup::select(Tag{}))>> {
-  static constexpr std::size_t index = decltype(Lookup::select(Tag{}))::index;
-};
-
 // ---------------------------------------------------------------------------
 // Structure: flags and dependency edges of every node.
 // ---------------------------------------------------------------------------
@@ -124,64 +110,18 @@ template <std::size_t Vertices, std::size_t Edges> struct graph_structure {
   std::array<std::size_t, Edges> edges;
 };
 
-// The requests of a binding are the declared dependencies, or the ones detected
-// from its factory when none are declared.
-template <typename Model,
-          bool Declared = !std::is_void_v<binding_dependencies_t<Model>>>
-struct graph_requests {
-  using type = binding_dependencies_t<Model>;
-};
-
-template <typename Model> struct graph_requests<Model, false> {
-  using type =
-      typename factory_traits<typename Model::factory_type>::dependencies;
-};
-
-template <typename Request> constexpr bool graph_request_is_collection() {
-  return collection_traits<
-      binding_dependency_interface_t<Request>>::is_collection;
-}
+// The edges of a binding are the bindings of its dependencies, resolved
+// against the host bindings and the local bindings of its model: void, which is
+// no node, for a dependency without exactly one binding.
+template <typename Host, typename Binding>
+using graph_edges_t =
+    resolved_dependency_bindings_t<typename Binding::binding_model_type, Host>;
 
 constexpr std::size_t graph_slot_count(void *) { return 0; }
 
 template <typename... Dependencies>
 constexpr std::size_t graph_slot_count(type_list<Dependencies...> *) {
   return sizeof...(Dependencies);
-}
-
-template <typename Host, typename Request>
-constexpr std::size_t graph_request_slots() {
-  if constexpr (graph_request_is_collection<Request>()) {
-    using dependency = binding_dependency_interface_t<Request>;
-    return binding_count_v<
-        normalized_type_t<typename collection_traits<dependency>::resolve_type>,
-        binding_dependency_key_t<Request>, Host>;
-  } else {
-    return 1;
-  }
-}
-
-template <typename Host> constexpr std::size_t graph_requests_slots(void *) {
-  return 0;
-}
-
-template <typename Host, typename... Requests>
-constexpr std::size_t graph_requests_slots(type_list<Requests...> *) {
-  return (std::size_t{0} + ... + graph_request_slots<Host, Requests>());
-}
-
-// Number of edges of a binding: one per matching binding of its requests,
-// resolved against the host bindings and the local bindings of its model.
-template <typename Host, typename Binding>
-constexpr std::size_t graph_node_slots() {
-  using model = typename Binding::binding_model_type;
-  if constexpr (std::is_void_v<typename model::bindings_type>) {
-    return graph_requests_slots<Host>(
-        static_cast<typename graph_requests<model>::type *>(nullptr));
-  } else {
-    return graph_slot_count(
-        static_cast<resolved_dependency_bindings_t<model, Host> *>(nullptr));
-  }
 }
 
 template <typename Universe, std::size_t Edges>
@@ -197,61 +137,18 @@ constexpr void graph_write_bindings(type_list<Dependencies...> *,
   (void)at;
 }
 
-template <typename Host, typename Universe, typename Request, std::size_t Edges>
-constexpr void graph_write_request(std::array<std::size_t, Edges> &edges,
-                                   std::size_t at) {
-  using dependency = binding_dependency_interface_t<Request>;
-  using key = binding_dependency_key_t<Request>;
-
-  if constexpr (graph_request_is_collection<Request>()) {
-    graph_write_bindings<Universe>(
-        static_cast<bindings_t<normalized_type_t<typename collection_traits<
-                                   dependency>::resolve_type>,
-                               key, Host> *>(nullptr),
-        edges, at);
-  } else if constexpr (is_no_lookup_key_v<key>) {
-    edges[at] = graph_lookup_hit<binding_lookup_index<Host>,
-                                 binding_lookup_tag<dependency, key>>::index;
-  } else {
-    edges[at] =
-        graph_type_index_in<binding_t<dependency, key, Host>, Universe>::value;
-  }
-}
-
-template <typename Host, typename Universe, std::size_t Edges>
-constexpr void graph_write_requests(void *, std::array<std::size_t, Edges> &,
-                                    std::size_t) {}
-
-template <typename Host, typename Universe, typename... Requests,
-          std::size_t Edges>
-constexpr void graph_write_requests(type_list<Requests...> *,
-                                    std::array<std::size_t, Edges> &edges,
-                                    std::size_t at) {
-  ((graph_write_request<Host, Universe, Requests>(edges, at),
-    at += graph_request_slots<Host, Requests>()),
-   ...);
-  (void)edges;
-  (void)at;
-}
-
 template <typename Host, typename Universe, typename Binding,
           std::size_t Vertices, std::size_t Edges>
 constexpr void graph_add_vertex(graph_structure<Vertices, Edges> &structure,
                                 std::size_t &edge, std::size_t vertex) {
-  using model = typename Binding::binding_model_type;
-  using requests = typename graph_requests<model>::type;
-
-  constexpr std::size_t slots = graph_node_slots<Host, Binding>();
+  using edges_type = graph_edges_t<Host, Binding>;
+  constexpr std::size_t slots =
+      graph_slot_count(static_cast<edges_type *>(nullptr));
   structure.vertices[vertex] = graph_vertex{
-      scope_allows_cycles_v<typename model::storage_tag>, edge, slots};
-  if constexpr (std::is_void_v<typename model::bindings_type>) {
-    graph_write_requests<Host, Universe>(static_cast<requests *>(nullptr),
-                                         structure.edges, edge);
-  } else {
-    graph_write_bindings<Universe>(
-        static_cast<resolved_dependency_bindings_t<model, Host> *>(nullptr),
-        structure.edges, edge);
-  }
+      scope_allows_cycles_v<typename Binding::binding_model_type::storage_tag>,
+      edge, slots};
+  graph_write_bindings<Universe>(static_cast<edges_type *>(nullptr),
+                                 structure.edges, edge);
   edge += slots;
 }
 
@@ -259,7 +156,8 @@ template <typename Host, typename... Bindings>
 constexpr auto graph_make_structure(type_list<Bindings...>) {
   using universe = type_list<Bindings...>;
   constexpr std::size_t edges =
-      (std::size_t{0} + ... + graph_node_slots<Host, Bindings>());
+      (std::size_t{0} + ... +
+       graph_slot_count(static_cast<graph_edges_t<Host, Bindings> *>(nullptr)));
 
   graph_structure<sizeof...(Bindings), edges> structure{};
   std::size_t vertex = 0;

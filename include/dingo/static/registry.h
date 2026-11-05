@@ -93,20 +93,9 @@ inline constexpr size_t binding_count_v =
 
 template <typename Interface, typename LookupKey> struct binding_lookup_tag {};
 
-template <size_t Index, typename InterfaceBinding> struct binding_lookup_hit {
-  using type = InterfaceBinding;
-  static constexpr size_t index = Index;
-};
-
-// The result of a lookup that no binding answers. It carries the no-binding
-// index of the static graph.
-struct binding_lookup_miss {
-  static constexpr size_t index = static_cast<size_t>(-1);
-};
-
 template <size_t Index, typename InterfaceBinding>
 struct binding_lookup_index_entry {
-  static binding_lookup_hit<Index, InterfaceBinding>
+  static found_binding_choice_t<InterfaceBinding>
       select(binding_lookup_tag<typename InterfaceBinding::interface_type,
                                 typename InterfaceBinding::key_type>);
 };
@@ -122,21 +111,13 @@ struct binding_lookup_index_impl<type_list<InterfaceBindings...>,
                                  std::index_sequence<Indexes...>>
     : binding_lookup_index_entry<Indexes, InterfaceBindings>... {
   using binding_lookup_index_entry<Indexes, InterfaceBindings>::select...;
-  static binding_lookup_miss select(...);
+  static missing_binding_choice_t select(...);
 };
 
 template <typename InterfaceBindings>
 using binding_lookup_index = binding_lookup_index_impl<
     InterfaceBindings,
     std::make_index_sequence<type_list_size_v<InterfaceBindings>>>;
-
-template <typename Hit> struct indexed_binding_choice {
-  using type = found_binding_choice_t<typename Hit::type>;
-};
-
-template <> struct indexed_binding_choice<binding_lookup_miss> {
-  using type = missing_binding_choice_t;
-};
 
 // The bindings of a lookup without a key are indexed by interface, so the
 // choice is read from the overload set instead of counting the matches of every
@@ -151,10 +132,10 @@ template <typename Interface, typename LookupKey, typename InterfaceBindings>
 struct indexed_binding_selection<
     Interface, LookupKey, InterfaceBindings,
     std::void_t<decltype(binding_lookup_index<InterfaceBindings>::select(
-        binding_lookup_tag<Interface, std::decay_t<LookupKey>>{}))>>
-    : indexed_binding_choice<
-          decltype(binding_lookup_index<InterfaceBindings>::select(
-              binding_lookup_tag<Interface, std::decay_t<LookupKey>>{}))> {};
+        binding_lookup_tag<Interface, std::decay_t<LookupKey>>{}))>> {
+  using type = decltype(binding_lookup_index<InterfaceBindings>::select(
+      binding_lookup_tag<Interface, std::decay_t<LookupKey>>{}));
+};
 
 template <typename Interface, typename LookupKey, typename InterfaceBindings,
           bool UseIndex = is_no_lookup_key_v<LookupKey>>
