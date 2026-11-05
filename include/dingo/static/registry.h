@@ -437,8 +437,6 @@ struct static_registry_dependency_diagnostics
 } // namespace detail
 
 template <typename... Registrations> struct static_bindings {
-  using registration_types = type_list<Registrations...>;
-  using binding_models = type_list<detail::binding_model<Registrations>...>;
   using interface_bindings =
       detail::static_registry_bindings_t<Registrations...>;
 
@@ -521,18 +519,6 @@ public:
 
   template <typename Interface, typename LookupKey>
   using binding = typename selection<Interface, LookupKey>::binding_type;
-
-  template <typename Interface>
-  using model =
-      typename binding<Interface, detail::no_lookup_key_t>::binding_model_type;
-
-  template <typename Interface>
-  using dependencies = typename model<Interface>::dependencies_type::type;
-
-  template <typename Interface>
-  using dependency_bindings =
-      detail::resolved_dependency_bindings_t<model<Interface>,
-                                             interface_bindings>;
 };
 
 } // namespace dingo

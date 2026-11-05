@@ -28,15 +28,6 @@ class static_container;
 
 namespace detail {
 
-template <typename T> struct is_static_bindings : std::false_type {};
-
-template <typename... Registrations>
-struct is_static_bindings<static_bindings<Registrations...>> : std::true_type {
-};
-
-template <typename T>
-inline constexpr bool is_static_bindings_v = is_static_bindings<T>::value;
-
 template <typename T, typename = void>
 struct is_static_container_traits : std::false_type {};
 

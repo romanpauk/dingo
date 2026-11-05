@@ -17,7 +17,6 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <tuple>
 #include <type_traits>
 #include <utility>
 
@@ -33,47 +32,6 @@ namespace detail {
 // (dependency lists) are templates.
 
 inline constexpr std::size_t graph_npos = static_cast<std::size_t>(-1);
-
-// ---------------------------------------------------------------------------
-// Type-level introspection of a graph, used by static_graph.
-// ---------------------------------------------------------------------------
-
-template <typename Binding, typename DependencyBindings> struct graph_node {
-  using binding_type = Binding;
-  using dependency_bindings = DependencyBindings;
-};
-
-template <typename InterfaceBinding, typename StaticRegistry>
-struct static_graph_node {
-  using type = graph_node<InterfaceBinding,
-                          resolved_dependency_bindings_t<
-                              typename InterfaceBinding::binding_model_type,
-                              typename StaticRegistry::interface_bindings>>;
-};
-
-template <typename StaticRegistry>
-struct static_graph_node<void, StaticRegistry> {
-  using type = void;
-};
-
-template <typename InterfaceBinding, typename StaticRegistry>
-using static_graph_node_t =
-    typename static_graph_node<InterfaceBinding, StaticRegistry>::type;
-
-template <typename InterfaceBindings, typename StaticRegistry>
-struct static_graph_nodes {
-  using type = void;
-};
-
-template <typename... InterfaceBindings, typename StaticRegistry>
-struct static_graph_nodes<type_list<InterfaceBindings...>, StaticRegistry> {
-  using type =
-      type_list<static_graph_node_t<InterfaceBindings, StaticRegistry>...>;
-};
-
-template <typename InterfaceBindings, typename StaticRegistry>
-using static_graph_nodes_t =
-    typename static_graph_nodes<InterfaceBindings, StaticRegistry>::type;
 
 // ---------------------------------------------------------------------------
 // Numbering of the bindings of a graph.
@@ -157,10 +115,6 @@ struct graph_lookup_hit<Lookup, Tag,
 struct graph_vertex {
   // The scope of the binding allows it to take part in a cycle.
   bool cyclical;
-  // The binding model declares its dependency requests.
-  bool requests_known;
-  // The requests are declared or can be detected from the factory.
-  bool dependencies_known;
   std::size_t edge_begin;
   std::size_t edge_count;
 };
@@ -288,10 +242,8 @@ constexpr void graph_add_vertex(graph_structure<Vertices, Edges> &structure,
   using requests = typename graph_requests<model>::type;
 
   constexpr std::size_t slots = graph_node_slots<Host, Binding>();
-  structure.vertices[vertex] =
-      graph_vertex{scope_allows_cycles_v<typename model::storage_tag>,
-                   !std::is_void_v<binding_dependencies_t<model>>,
-                   !std::is_void_v<requests>, edge, slots};
+  structure.vertices[vertex] = graph_vertex{
+      scope_allows_cycles_v<typename model::storage_tag>, edge, slots};
   if constexpr (std::is_void_v<typename model::bindings_type>) {
     graph_write_requests<Host, Universe>(static_cast<requests *>(nullptr),
                                          structure.edges, edge);
@@ -319,19 +271,8 @@ constexpr auto graph_make_structure(type_list<Bindings...>) {
 }
 
 // ---------------------------------------------------------------------------
-// Topology: resolvability, cycles and topological order.
+// Resolvability: every cycle is made of bindings whose scopes allow it.
 // ---------------------------------------------------------------------------
-
-template <std::size_t Vertices> struct graph_topology {
-  // False when some cycle contains a binding whose scope does not allow it.
-  bool resolvable;
-  // A legal cycle (of scopes that allow it) was reached before the traversal
-  // ended.
-  bool contains_cycle;
-  std::size_t order_size;
-  // Reachable nodes with dependencies before dependents.
-  std::array<std::size_t, Vertices> order;
-};
 
 constexpr unsigned char graph_unvisited = 0;
 constexpr unsigned char graph_visiting = 1;
@@ -357,22 +298,19 @@ graph_cycle_is_legal(const graph_structure<Vertices, Edges> &structure,
   return true;
 }
 
-// Depth-first traversal from the first `roots` nodes in order. An illegal cycle
-// ends the traversal.
+// Depth-first traversal from the first `roots` nodes, which ends at the first
+// cycle containing a binding whose scope does not allow it.
 template <std::size_t Vertices, std::size_t Edges>
-constexpr graph_topology<Vertices>
-graph_sort(const graph_structure<Vertices, Edges> &structure,
-           std::size_t roots) {
-  graph_topology<Vertices> topology{true, false, 0, {}};
+constexpr bool
+graph_resolvable(const graph_structure<Vertices, Edges> &structure,
+                 std::size_t roots) {
   std::array<unsigned char, Vertices> state{};
   std::array<std::size_t, Vertices> stack{};
   std::array<std::size_t, Vertices> cursor{};
-
   for (std::size_t root = 0; root < roots; ++root) {
     if (state[root] != graph_unvisited) {
       continue;
     }
-
     std::size_t depth = 1;
     state[root] = graph_visiting;
     stack[0] = root;
@@ -382,90 +320,23 @@ graph_sort(const graph_structure<Vertices, Edges> &structure,
       const graph_vertex &vertex = structure.vertices[node];
       if (cursor[depth - 1] == vertex.edge_begin + vertex.edge_count) {
         state[node] = graph_visited;
-        topology.order[topology.order_size++] = node;
         --depth;
         continue;
       }
-
       const std::size_t next = structure.edges[cursor[depth - 1]++];
       if (next == graph_npos || state[next] == graph_visited) {
         continue;
       }
       if (state[next] == graph_visiting) {
         if (!graph_cycle_is_legal(structure, stack, depth, next)) {
-          topology.resolvable = false;
-          return topology;
+          return false;
         }
-        topology.contains_cycle = true;
         continue;
       }
-
       state[next] = graph_visiting;
       stack[depth] = next;
       cursor[depth] = structure.vertices[next].edge_begin;
       ++depth;
-    }
-  }
-  return topology;
-}
-
-// Nodes reachable from the dependencies of `from`, and `from` itself when it
-// is `included`.
-template <std::size_t Vertices, std::size_t Edges>
-constexpr std::array<bool, Vertices>
-graph_reachable(const graph_structure<Vertices, Edges> &structure,
-                std::size_t from, bool included) {
-  std::array<bool, Vertices> reachable{};
-  std::array<std::size_t, Vertices + 1> stack{};
-  std::size_t depth = 1;
-  reachable[from] = included;
-  stack[0] = from;
-  while (depth != 0) {
-    const graph_vertex &vertex = structure.vertices[stack[--depth]];
-    for (std::size_t i = 0; i < vertex.edge_count; ++i) {
-      const std::size_t next = structure.edges[vertex.edge_begin + i];
-      if (next != graph_npos && !reachable[next]) {
-        reachable[next] = true;
-        stack[depth++] = next;
-      }
-    }
-  }
-  return reachable;
-}
-
-template <std::size_t Vertices, std::size_t Edges>
-constexpr bool
-graph_dependencies_bound(const graph_structure<Vertices, Edges> &structure,
-                         const graph_vertex &vertex) {
-  for (std::size_t i = 0; i < vertex.edge_count; ++i) {
-    if (structure.edges[vertex.edge_begin + i] == graph_npos) {
-      return false;
-    }
-  }
-  return vertex.dependencies_known;
-}
-
-// True when every binding reachable from `start` has its dependencies bound
-// and no reachable cycle contains a binding whose scope does not allow it.
-template <std::size_t Vertices, std::size_t Edges>
-constexpr bool
-graph_binding_resolvable(const graph_structure<Vertices, Edges> &structure,
-                         std::size_t start) {
-  if (start == graph_npos) {
-    return false;
-  }
-
-  const std::array<bool, Vertices> reachable =
-      graph_reachable(structure, start, true);
-  for (std::size_t node = 0; node < Vertices; ++node) {
-    if (!reachable[node]) {
-      continue;
-    }
-    // A binding lies on a cycle when it is reachable from its own dependencies.
-    if (!graph_dependencies_bound(structure, structure.vertices[node]) ||
-        (!structure.vertices[node].cyclical &&
-         graph_reachable(structure, node, false)[node])) {
-      return false;
     }
   }
   return true;
@@ -475,129 +346,14 @@ graph_binding_resolvable(const graph_structure<Vertices, Edges> &structure,
 // Graph of a static registry.
 // ---------------------------------------------------------------------------
 
-// Structure and topology of a registry. It does not read the costs, so
-// checking that a graph is resolvable never instantiates them.
+// The graph of a registry and whether it is resolvable.
 template <typename StaticRegistry> struct graph_model {
   using host_bindings = typename StaticRegistry::interface_bindings;
   using universe = typename graph_universe<host_bindings>::type;
-
-  static constexpr std::size_t root_count = type_list_size_v<host_bindings>;
   static constexpr auto structure =
       graph_make_structure<host_bindings>(universe{});
-  static constexpr auto topology = graph_sort(structure, root_count);
-};
-
-template <typename StaticRegistry,
-          bool Acyclic = graph_model<StaticRegistry>::topology.resolvable &&
-                         !graph_model<StaticRegistry>::topology.contains_cycle>
-struct graph_topological_bindings {
-  using type = void;
-};
-
-// MSVC does not see a pack used only inside a subscript of a static member,
-// so the index is read through a variable template.
-template <typename StaticRegistry, std::size_t Position>
-inline constexpr std::size_t graph_topological_index_v =
-    graph_model<StaticRegistry>::topology.order[Position];
-
-template <typename StaticRegistry, typename... Universe,
-          std::size_t... Position>
-auto graph_topological_list(type_list<Universe...>,
-                            std::index_sequence<Position...>)
-    -> type_list<std::tuple_element_t<
-        graph_topological_index_v<StaticRegistry, Position>,
-        std::tuple<Universe...>>...>;
-
-template <typename StaticRegistry>
-struct graph_topological_bindings<StaticRegistry, true> {
-  using type = decltype(graph_topological_list<StaticRegistry>(
-      typename graph_model<StaticRegistry>::universe{},
-      std::make_index_sequence<
-          graph_model<StaticRegistry>::topology.order_size>{}));
-};
-
-template <typename StaticRegistry>
-using graph_topological_bindings_t =
-    typename graph_topological_bindings<StaticRegistry>::type;
-
-template <typename Binding, typename StaticRegistry>
-inline constexpr bool static_binding_resolvable_v = graph_binding_resolvable(
-    graph_model<StaticRegistry>::structure,
-    graph_type_index_in<Binding,
-                        typename graph_model<StaticRegistry>::universe>::value);
-
-template <typename StaticRegistry>
-constexpr bool graph_bindings_resolvable(void *) {
-  return false;
-}
-
-template <typename StaticRegistry, typename... Bindings>
-constexpr bool graph_bindings_resolvable(type_list<Bindings...> *) {
-  return (static_binding_resolvable_v<Bindings, StaticRegistry> && ...);
-}
-
-template <typename Bindings, typename StaticRegistry>
-inline constexpr bool static_bindings_resolvable_v =
-    graph_bindings_resolvable<StaticRegistry>(static_cast<Bindings *>(nullptr));
-
-template <typename StaticRegistry> struct graph_analysis {
   static constexpr bool resolvable =
-      graph_model<StaticRegistry>::topology.resolvable;
-  static constexpr bool contains_cycle =
-      graph_model<StaticRegistry>::topology.contains_cycle;
-  static constexpr bool acyclic = resolvable && !contains_cycle;
+      graph_resolvable(structure, type_list_size_v<host_bindings>);
 };
-
 } // namespace detail
-
-template <typename StaticSource, typename = void> struct static_graph;
-
-template <typename StaticSource>
-struct static_graph<StaticSource,
-                    std::void_t<static_bindings_source_t<StaticSource>>>
-    : static_graph<static_bindings_source_t<StaticSource>, void> {};
-
-template <typename... Registrations>
-struct static_graph<static_bindings<Registrations...>, void>
-    : private detail::static_registry_dependency_diagnostics<
-          typename static_bindings<Registrations...>::interface_bindings,
-          detail::binding_model<Registrations>...> {
-  using static_registry_type = static_bindings<Registrations...>;
-  using interface_bindings = typename static_registry_type::interface_bindings;
-  using nodes =
-      detail::static_graph_nodes_t<interface_bindings, static_registry_type>;
-
-  static_assert(static_registry_type::valid,
-                "static_graph requires a valid compile-time bindings source");
-
-  static constexpr bool resolvable =
-      detail::graph_analysis<static_registry_type>::resolvable;
-  static constexpr bool contains_cycle =
-      detail::graph_analysis<static_registry_type>::contains_cycle;
-  static constexpr bool acyclic =
-      detail::graph_analysis<static_registry_type>::acyclic;
-  using topological_bindings =
-      detail::graph_topological_bindings_t<static_registry_type>;
-  using topological_nodes =
-      detail::static_graph_nodes_t<topological_bindings, static_registry_type>;
-
-  template <typename Interface>
-  using binding =
-      typename static_registry_type::template binding<Interface,
-                                                      detail::no_lookup_key_t>;
-
-  template <typename Interface>
-  using node =
-      detail::static_graph_node_t<binding<Interface>, static_registry_type>;
-
-  template <typename Interface>
-  using dependency_bindings =
-      typename static_registry_type::template dependency_bindings<Interface>;
-
-  template <typename Interface>
-  using dependency_nodes =
-      detail::static_graph_nodes_t<dependency_bindings<Interface>,
-                                   static_registry_type>;
-};
-
 } // namespace dingo

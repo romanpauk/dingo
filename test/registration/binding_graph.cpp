@@ -19,7 +19,7 @@
 
 using namespace dingo;
 
-TEST(static_graph_test, exposes_dependency_nodes_and_topological_order) {
+TEST(static_graph_test, resolves_an_acyclic_graph) {
   struct config {};
   struct service_interface {
     virtual ~service_interface() = default;
@@ -39,28 +39,8 @@ TEST(static_graph_test, exposes_dependency_nodes_and_topological_order) {
                                          dependencies<service_interface &>>;
   using source =
       dingo::bindings<config_binding, service_binding, controller_binding>;
-  using graph = static_graph<source>;
 
-  static_assert(graph::resolvable);
-  static_assert(graph::acyclic);
-  static_assert(
-      std::is_same_v<typename graph::dependency_nodes<config>, type_list<>>);
-  static_assert(
-      std::is_same_v<typename graph::dependency_nodes<service_interface>,
-                     type_list<typename graph::node<config>>>);
-  static_assert(
-      std::is_same_v<typename graph::dependency_nodes<controller>,
-                     type_list<typename graph::node<service_interface>>>);
-  static_assert(std::is_same_v<
-                typename graph::topological_bindings,
-                type_list<typename graph::template binding<config>,
-                          typename graph::template binding<service_interface>,
-                          typename graph::template binding<controller>>>);
-  static_assert(
-      std::is_same_v<typename graph::topological_nodes,
-                     type_list<typename graph::node<config>,
-                               typename graph::node<service_interface>,
-                               typename graph::node<controller>>>);
+  static_assert(detail::graph_model<typename source::type>::resolvable);
 }
 
 TEST(static_graph_test,
@@ -71,13 +51,9 @@ TEST(static_graph_test,
   using a_binding = dingo::bind<scope<shared>, storage<a>, dependencies<b &>>;
   using b_binding = dingo::bind<scope<shared>, storage<b>, dependencies<a &>>;
   using source = dingo::bindings<a_binding, b_binding>;
-  using graph = static_graph<source>;
 
   static_assert(source::type::valid);
-  static_assert(!graph::resolvable);
-  static_assert(!graph::acyclic);
-  static_assert(std::is_same_v<typename graph::topological_bindings, void>);
-  static_assert(std::is_same_v<typename graph::topological_nodes, void>);
+  static_assert(!detail::graph_model<typename source::type>::resolvable);
 }
 
 TEST(static_graph_test,
@@ -93,18 +69,9 @@ TEST(static_graph_test,
   using owner_binding =
       dingo::bind<scope<shared>, storage<owner>, dependencies<a &>>;
   using source = dingo::bindings<a_binding, b_binding, owner_binding>;
-  using graph = static_graph<source>;
 
   static_assert(source::type::valid);
-  static_assert(graph::resolvable);
-  static_assert(!graph::acyclic);
-  static_assert(graph::contains_cycle);
-  static_assert(std::is_void_v<typename graph::topological_bindings>);
-  static_assert(
-      detail::static_binding_resolvable_v<
-          typename source::type::template binding<owner,
-                                                  detail::no_lookup_key_t>,
-          typename source::type>);
+  static_assert(detail::graph_model<typename source::type>::resolvable);
 }
 
 TEST(static_graph_test,
@@ -116,15 +83,9 @@ TEST(static_graph_test,
       dingo::bind<scope<shared_cyclical>, storage<a>, dependencies<b &>>;
   using b_binding = dingo::bind<scope<shared>, storage<b>, dependencies<a &>>;
   using source = dingo::bindings<a_binding, b_binding>;
-  using graph = static_graph<source>;
 
   static_assert(source::type::valid);
-  static_assert(!graph::resolvable);
-  static_assert(!graph::acyclic);
-  static_assert(
-      !detail::static_binding_resolvable_v<
-          typename source::type::template binding<a, detail::no_lookup_key_t>,
-          typename source::type>);
+  static_assert(!detail::graph_model<typename source::type>::resolvable);
 }
 
 TEST(static_graph_test,
@@ -139,8 +100,7 @@ TEST(static_graph_test,
   using source = dingo::bindings<a_binding, b_binding>;
 
   static_assert(source::type::valid);
-  static_assert(!detail::graph_analysis<typename source::type>::acyclic);
-  static_assert(!detail::graph_analysis<typename source::type>::resolvable);
+  static_assert(!detail::graph_model<typename source::type>::resolvable);
 }
 
 TEST(static_execution_traits_test,
@@ -274,11 +234,14 @@ TEST(static_graph_test, annotated_bindings_reuse_compile_time_bindings_lookup) {
                   interfaces<annotated<service, service_tag>>,
                   dependencies<annotated<config &, config_tag>>>;
   using source = dingo::bindings<config_binding, service_binding>;
-  using graph = static_graph<source>;
 
-  static_assert(graph::acyclic);
-  static_assert(
-      std::is_same_v<
-          typename graph::dependency_nodes<annotated<service, service_tag>>,
-          type_list<typename graph::node<annotated<config, config_tag>>>>);
+  static_assert(detail::graph_model<typename source::type>::resolvable);
+  static_assert(std::is_same_v<
+                detail::resolved_dependency_bindings_t<
+                    typename source::type::template binding<
+                        annotated<service, service_tag>,
+                        detail::no_lookup_key_t>::binding_model_type,
+                    typename source::type::interface_bindings>,
+                type_list<typename source::type::template binding<
+                    annotated<config, config_tag>, detail::no_lookup_key_t>>>);
 }
