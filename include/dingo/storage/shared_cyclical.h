@@ -341,21 +341,21 @@ public:
       // address. Rebound shared_ptr interface handles therefore belong
       // to the storage too and must roll back with the instance if the
       // first resolve throws.
+      //
+      // A failed construction is undone here; a context that keeps a
+      // transaction also undoes the publication when it rolls back later.
+      // The static context does not, so it relies on the local guard alone.
       if constexpr (has_on_rollback<Context>::value) {
         context.on_rollback(
             +[](void *self, void *) noexcept {
               static_cast<shared_cyclical_storage *>(self)->reset();
             },
             this);
-        instance_.resolve(context);
-        instance_.construct(scope, context, container);
-      } else {
-        local_rollback_guard rollback(this);
-        instance_.resolve(context);
-        instance_.construct(scope, context, container);
-        rollback.release();
       }
-      return instance_.get();
+      local_rollback_guard rollback(this);
+      instance_.resolve(context);
+      instance_.construct(scope, context, container);
+      rollback.release();
     }
     return instance_.get();
   }

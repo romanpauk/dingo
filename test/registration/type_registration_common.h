@@ -557,12 +557,15 @@ struct runtime_cyclical_rollback_implementation
     if (should_throw) {
       throw std::runtime_error("cyclical construction failed");
     }
+    ++constructions;
   }
 
   static bool should_throw;
+  static int constructions;
 };
 
 bool runtime_cyclical_rollback_implementation::should_throw = true;
+int runtime_cyclical_rollback_implementation::constructions = 0;
 
 struct runtime_cyclical_rollback_consumer {
   explicit runtime_cyclical_rollback_consumer(

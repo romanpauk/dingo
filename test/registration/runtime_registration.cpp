@@ -10,6 +10,7 @@
 #include "support/containers.h"
 #include "support/custom_wrappers.h"
 #include "support/resolution_test_types.h"
+#include <dingo/static_container.h>
 
 #include <variant>
 
@@ -392,6 +393,33 @@ TEST(type_registration_test,
       container
           .resolve<std::shared_ptr<runtime_cyclical_rollback_interface> &>();
   EXPECT_NE(resolved.get(), nullptr);
+}
+
+TEST(type_registration_test,
+     failed_first_static_shared_cyclical_resolve_rolls_back_publication) {
+  runtime_cyclical_rollback_implementation::should_throw = true;
+
+  dingo::static_container<dingo::bindings<dingo::bind<
+      scope<shared_cyclical>,
+      storage<std::shared_ptr<runtime_cyclical_rollback_implementation>>,
+      interfaces<runtime_cyclical_rollback_interface,
+                 runtime_cyclical_rollback_implementation>>>>
+      container;
+
+  EXPECT_THROW(
+      (container
+           .resolve<std::shared_ptr<runtime_cyclical_rollback_interface> &>()),
+      std::runtime_error);
+
+  runtime_cyclical_rollback_implementation::should_throw = false;
+  const int constructions =
+      runtime_cyclical_rollback_implementation::constructions;
+  auto &resolved =
+      container
+          .resolve<std::shared_ptr<runtime_cyclical_rollback_interface> &>();
+  EXPECT_NE(resolved.get(), nullptr);
+  EXPECT_EQ(runtime_cyclical_rollback_implementation::constructions,
+            constructions + 1);
 }
 
 TEST(type_registration_test,
