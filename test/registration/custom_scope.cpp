@@ -71,7 +71,7 @@ namespace {
 template <typename Container> void expect_counted_values(Container &container) {
   constructions = 0;
   EXPECT_EQ(container.template resolve<counted_value>().value, 7);
-  EXPECT_EQ(container.template resolve<counted_value>().value, 7);
+  EXPECT_EQ(container.template resolve<counted_value &&>().value, 7);
   EXPECT_EQ(constructions, 2);
 }
 } // namespace
