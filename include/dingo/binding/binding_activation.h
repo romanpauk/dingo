@@ -14,6 +14,7 @@
 #include <dingo/resolution/cache.h>
 #include <dingo/resolution/conversion_cache.h>
 #include <dingo/resolution/resolution_operation.h>
+#include <dingo/storage/scope_traits.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/annotated.h>
 
@@ -226,18 +227,6 @@ struct has_storage_resolve_conversion<
             std::declval<Context &>(), std::declval<Source>()))>>
     : std::true_type {};
 
-template <typename Traits, typename Context, typename Storage, typename Owner,
-          typename = void>
-struct has_context_materialize_source : std::false_type {};
-
-template <typename Traits, typename Context, typename Storage, typename Owner>
-struct has_context_materialize_source<
-    Traits, Context, Storage, Owner,
-    std::void_t<decltype(Traits::materialize_source_in_context(
-        std::declval<construction_scope>(), std::declval<Context &>(),
-        std::declval<Storage &>(), std::declval<Owner &>()))>>
-    : std::true_type {};
-
 // Whether the storage yields its instance by value rather than by reference.
 template <typename Storage, typename Context, typename Owner>
 inline constexpr bool materializes_value_source_v = [] {
@@ -281,8 +270,7 @@ template <typename Cell, typename Dependencies> struct binding_activation {
   using storage_type = typename Cell::storage_type;
   using owner_type = std::remove_reference_t<Dependencies>;
   using materialization_traits =
-      storage_materialization_traits<typename storage_type::tag_type,
-                                     typename storage_type::type>;
+      scope_materialization<typename storage_type::tag_type>;
 
   Cell &cell;
   Dependencies dependencies;
@@ -392,7 +380,7 @@ private:
   // destroyed.
   template <typename Context, typename Fn>
   decltype(auto) with_transaction_source(Context &context, Fn &&fn) {
-    if constexpr (materialization_traits::can_retain_source) {
+    if constexpr (materialization_traits::retains_unresolved_source) {
       if (materialization_traits::retains_source(cell.storage())) {
         context.on_rollback(cell.resets_storage_on_failure()
                                 ? +[](void *self, void *) noexcept {
@@ -439,9 +427,7 @@ private:
                                      Context &context, Fn &&fn) {
     auto &storage = cell.storage();
     const bool retains = materialization_traits::retains_source(storage);
-    if constexpr (has_context_materialize_source<materialization_traits,
-                                                 Context, storage_type,
-                                                 owner_type>::value) {
+    if constexpr (materialization_traits::consumes) {
       const bool persistent = retains || construction.is_persistent();
       auto &source = materialization_traits::materialize_source_in_context(
           persistent ? persistent_scope : construction, context, storage,

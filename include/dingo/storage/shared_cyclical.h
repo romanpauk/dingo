@@ -34,9 +34,6 @@ class shared_cyclical_storage;
 // Cells of shared_cyclical, which publishes the leaf U and a shared_ptr<U>
 // directly, whatever the registered shape.
 template <storage_form Form, typename U> struct shared_cyclical_requests {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = false;
-
   using value_types = type_list<>;
   using lvalue_reference_types = type_list<U &>;
   using rvalue_reference_types = type_list<>;
@@ -45,9 +42,6 @@ template <storage_form Form, typename U> struct shared_cyclical_requests {
 
 template <typename U>
 struct shared_cyclical_requests<storage_form::shared_handle, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = false;
-
   using value_types = type_list<std::shared_ptr<U>>;
   using lvalue_reference_types = type_list<U &, std::shared_ptr<U> &>;
   using rvalue_reference_types = type_list<>;

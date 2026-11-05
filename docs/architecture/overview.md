@@ -115,7 +115,7 @@ owns the conversion-facing resolution flow of both containers. It is responsible
 for:
 
 - asking storage to `resolve(...)` its native source shape
-- applying guard and closure scope through `storage_materialization_traits`
+- applying guard and closure scope as the `scope_traits` of the scope say
 - constructing cached conversion objects for shared and external cases
 - rolling back what a failed runtime transaction left in the cell
 

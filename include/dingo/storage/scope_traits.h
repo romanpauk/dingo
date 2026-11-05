@@ -354,9 +354,6 @@ private:
                              typename form::template consumed<U>>;
 
 public:
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = policy::is_stable;
-
   using value_types =
       std::conditional_t<exposes_any(exposed, storage_exposure::value),
                          typename borrowed::value_types, type_list<>>;
@@ -384,14 +381,25 @@ struct scope_requests<StorageTag, Form, Type, U,
                           StorageTag>::template requests<Form, Type, U>>>
     : scope_traits<StorageTag>::template requests<Form, Type, U> {};
 
-template <typename StorageTag, typename Type, typename U>
-struct storage_traits<StorageTag, Type, U,
-                      std::enable_if_t<has_storage_cell_v<StorageTag, Type>>>
-    : scope_requests<StorageTag, storage_form_traits<Type>::form, Type, U> {};
+struct no_scope_requests {};
 
-// The requests a registration publishes when it declares no conversions.
+template <typename StorageTag, typename Stored, typename U>
+struct stored_type_requests
+    : std::conditional_t<
+          has_storage_cell_v<StorageTag, Stored>,
+          scope_requests<StorageTag, storage_form_traits<Stored>::form, Stored,
+                         U>,
+          no_scope_requests> {
+  static_assert(has_storage_cell_v<StorageTag, Stored>,
+                "the scope does not store this type");
+  static constexpr bool is_stable = scope_traits<StorageTag>::is_stable;
+};
+
+// The requests a registration publishes when it declares no conversions: the
+// request lists its scope publishes for the form of the stored type.
 template <typename StorageTag, typename Type, typename U>
-struct conversions : type_storage_traits<StorageTag, Type, U> {};
+struct conversions : stored_type_requests<StorageTag, remove_cvref_t<Type>, U> {
+};
 } // namespace detail
 
 namespace detail {
@@ -405,36 +413,56 @@ inline constexpr bool materialization_guard_enabled_v<
     materialization_guard::none, Storage, Context> = false;
 } // namespace detail
 
-template <typename StorageTag, typename Type>
-struct storage_materialization_traits<
-    StorageTag, Type, std::enable_if_t<scope_traits<StorageTag>::enabled>> {
+namespace detail {
+// How a binding materializes the instance of its storage, derived from the
+// scope_traits of its scope.
+template <typename StorageTag> struct scope_materialization {
 private:
   using policy = scope_traits<StorageTag>;
+  static_assert(policy::enabled,
+                "a scope tag requires a dingo::scope_traits specialization");
+
+  template <typename Storage, typename Context, typename Container>
+  using source_t = remove_cvref_t<decltype(std::declval<Storage &>().resolve(
+      std::declval<construction_scope>(), std::declval<Context &>(),
+      std::declval<Container &>()))>;
+
+  // Constructs the value the storage produces in place.
+  template <typename Context, typename Storage, typename Container>
+  static auto source_builder(construction_scope scope, Context &context,
+                             Storage &storage, Container &container) {
+    return [&, scope](void *ptr) {
+      new (ptr) source_t<Storage, Context, Container>(
+          storage.resolve(scope, context, container));
+    };
+  }
 
 public:
-  static constexpr bool can_retain_source = policy::retains_unresolved_source;
+  // A scope that consumes its instances produces a value for every request.
+  static constexpr bool consumes = policy::consumes;
+  static constexpr bool retains_unresolved_source =
+      policy::retains_unresolved_source;
 
   template <typename Leaf, typename Context, typename Storage>
   static auto make_guard([[maybe_unused]] Context &context,
                          [[maybe_unused]] const Storage &storage) {
-    if constexpr (!detail::materialization_guard_enabled_v<policy::guard,
-                                                           Storage, Context>) {
-      return detail::no_materialization_scope();
+    if constexpr (!materialization_guard_enabled_v<policy::guard, Storage,
+                                                   Context>) {
+      return no_materialization_scope();
     } else if constexpr (policy::guard ==
                          materialization_guard::while_unresolved) {
-      return detail::recursion_guard_wrapper<Leaf>(context, &storage,
-                                                   !storage.is_resolved());
+      return recursion_guard_wrapper<Leaf>(context, &storage,
+                                           !storage.is_resolved());
     } else {
-      return detail::recursion_guard<Leaf>(context, &storage);
+      return recursion_guard<Leaf>(context, &storage);
     }
   }
 
+  // Only unresolved storage can retain source or dependency state; once
+  // resolved, materialization reads from stable storage.
   template <typename Storage>
   static bool retains_source([[maybe_unused]] const Storage &storage) {
     if constexpr (policy::retains_unresolved_source) {
-      // Only unresolved storage can retain source/dependency state. Once the
-      // instance is resolved, later materialization reads from stable storage
-      // and does not need new persistent source data.
       return !storage.is_resolved();
     } else {
       return false;
@@ -445,33 +473,24 @@ public:
   static auto materialize_source(construction_scope scope, Context &context,
                                  Storage &storage, Container &container) {
     if constexpr (policy::consumes) {
-      using source_type =
-          std::remove_cv_t<std::remove_reference_t<decltype(storage.resolve(
-              scope, context, container))>>;
-      return detail::make_rvalue_source<source_type>(
-          std::in_place, [&](void *ptr) {
-            new (ptr) source_type(storage.resolve(scope, context, container));
-          });
+      return make_rvalue_source<source_t<Storage, Context, Container>>(
+          std::in_place, source_builder(scope, context, storage, container));
     } else {
-      return detail::make_resolved_source(
-          storage.resolve(scope, context, container));
+      return make_resolved_source(storage.resolve(scope, context, container));
     }
   }
 
-  // Only a scope that consumes its source can place it in the context.
-  template <typename Context, typename Storage, typename Container,
-            bool Consumes = policy::consumes,
-            typename = std::enable_if_t<Consumes>>
+  // The source of a consuming scope, placed in the context.
+  template <typename Context, typename Storage, typename Container>
   static auto &materialize_source_in_context(construction_scope scope,
                                              Context &context, Storage &storage,
                                              Container &container) {
-    using source_type =
-        std::remove_cv_t<std::remove_reference_t<decltype(storage.resolve(
-            scope, context, container))>>;
-    return context.template construct<detail::rvalue_source<source_type>>(
-        scope, std::in_place, [&](void *ptr) {
-          new (ptr) source_type(storage.resolve(scope, context, container));
-        });
+    static_assert(policy::consumes);
+    return context.template construct<
+        rvalue_source<source_t<Storage, Context, Container>>>(
+        scope, std::in_place,
+        source_builder(scope, context, storage, container));
   }
 };
+} // namespace detail
 } // namespace dingo

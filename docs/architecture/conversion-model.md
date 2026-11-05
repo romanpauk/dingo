@@ -17,6 +17,7 @@ The full conversion behavior is spread across a few layers:
 
 The important source files are:
 
+- [include/dingo/storage/scope_traits.h](../../include/dingo/storage/scope_traits.h)
 - [include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
 - [include/dingo/binding/runtime_binding_interface.h](../../include/dingo/binding/runtime_binding_interface.h)
 - [include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
@@ -24,9 +25,10 @@ The important source files are:
 
 ## Storage Exposure
 
-`type_storage_traits` lists are generated from the `scope_traits` of the scope
-and the form of the stored type, which its `type_traits` semantics decide. They
-list the result forms a stored object may service:
+The request lists of a registration, `detail::conversions`, are generated from
+the `scope_traits` of the scope and the form of the stored type, which its
+`type_traits` semantics decide. A form the scope does not store is rejected. The
+lists name the result forms a stored object may service:
 
 - `value_types`
 - `lvalue_reference_types`

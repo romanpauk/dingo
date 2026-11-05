@@ -21,66 +21,11 @@
 #include <type_traits>
 
 namespace dingo {
-template <typename...> inline constexpr bool always_false_v = false;
-
 namespace detail {
-struct no_materialization_scope {
-  no_materialization_scope() = default;
-};
+struct no_materialization_scope {};
 } // namespace detail
 
-template <typename StorageTag, typename Type, typename = void>
-struct storage_materialization_traits {
-  static constexpr bool can_retain_source = false;
-
-  template <typename Leaf, typename Context, typename Storage>
-  static auto make_guard(Context &, const Storage &) {
-    static_assert(always_false_v<StorageTag, Type>,
-                  "storage_materialization_traits must be specialized for "
-                  "this storage tag");
-  }
-
-  template <typename Storage> static bool retains_source(const Storage &) {
-    static_assert(always_false_v<StorageTag, Type>,
-                  "storage_materialization_traits must be specialized for "
-                  "this storage tag");
-    return false;
-  }
-
-  template <typename Context, typename Storage, typename Container>
-  static auto materialize_source(Context &, Storage &, Container &) {
-    static_assert(always_false_v<StorageTag, Type>,
-                  "storage_materialization_traits must be specialized for "
-                  "this storage tag");
-  }
-};
-
 namespace detail {
-// The requests a scope publishes for a stored type and a leaf U, generated
-// from the scope_traits of the scope.
-template <typename StorageTag, typename Type, typename U, typename = void>
-struct storage_traits {
-  static constexpr bool enabled = false;
-  static constexpr bool is_stable = false;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<>;
-};
-
-template <typename StorageTag, typename Type, typename U>
-struct storage_traits<StorageTag, const Type, U>
-    : storage_traits<StorageTag, Type, U> {};
-
-template <typename StorageTag, typename Type, typename U>
-struct storage_traits<StorageTag, Type &, U>
-    : storage_traits<StorageTag, Type, U> {};
-
-template <typename StorageTag, typename Type, typename U>
-struct storage_traits<StorageTag, const Type &, U>
-    : storage_traits<StorageTag, Type, U> {};
-
 template <typename T>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 
@@ -480,12 +425,4 @@ using binding_resolutions =
 
 } // namespace detail
 
-template <typename StorageTag, typename Type, typename U, typename = void>
-struct type_storage_traits;
-
-template <typename StorageTag, typename Type, typename U>
-struct type_storage_traits<
-    StorageTag, Type, U,
-    std::enable_if_t<detail::storage_traits<StorageTag, Type, U>::enabled>>
-    : detail::storage_traits<StorageTag, Type, U> {};
 } // namespace dingo

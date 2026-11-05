@@ -81,11 +81,16 @@ template <typename Registration> struct binding_model_impl<Registration, true> {
   static constexpr bool valid = requirements::valid;
 };
 
+// A scope tag is usable once it is complete and specializes scope_traits.
+template <typename Tag>
+inline constexpr bool scope_tag_is_usable_v =
+    (!requires_complete_type_v<Tag> || is_complete_v<Tag>) &&
+    scope_traits<Tag>::enabled;
+
 template <typename Registration>
 using binding_model = binding_model_impl<
     Registration,
-    !requires_complete_type_v<typename Registration::scope_type::type> ||
-        is_complete_v<typename Registration::scope_type::type>>;
+    scope_tag_is_usable_v<typename Registration::scope_type::type>>;
 
 template <typename BindingModel, typename InterfaceList>
 struct binding_expansion_impl;

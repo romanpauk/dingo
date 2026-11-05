@@ -1371,8 +1371,9 @@ private:
     static constexpr bool storage_tag_is_complete =
         binding_model::storage_tag_is_complete;
     static_assert(storage_tag_is_complete,
-                  "registered storage tag must be complete; include the "
-                  "corresponding dingo/storage header");
+                  "registered storage tag must be complete and specialize "
+                  "dingo::scope_traits; include the corresponding "
+                  "dingo/storage header");
     if constexpr (!storage_tag_is_complete) {
       return store_type::template invalid_registration_return<
           instance_container_type>();
