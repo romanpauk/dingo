@@ -82,37 +82,20 @@ public:
 
 // Resolution target shapes are disjoint, so static lookup only needs to form
 // the category that can match the request.
-template <typename Request, typename Interface, typename Storage,
-          typename RequestType =
-              std::remove_cv_t<unwrapped_static_request_t<Request>>>
+template <typename RequestType>
+inline constexpr request_category static_request_category_v =
+    std::is_lvalue_reference_v<RequestType> ? request_category::lvalue_reference
+    : std::is_rvalue_reference_v<RequestType>
+        ? request_category::rvalue_reference
+    : std::is_pointer_v<RequestType> ? request_category::pointer
+                                     : request_category::value;
+
+template <typename Request, typename Interface, typename Storage>
 struct request_binding_resolutions {
   using type =
-      typename binding_value_resolutions<Interface,
-                                         storage_shape_t<Storage>>::type;
-};
-
-template <typename Request, typename Interface, typename Storage,
-          typename RequestType>
-struct request_binding_resolutions<Request, Interface, Storage, RequestType &> {
-  using type =
-      typename binding_reference_resolutions<Interface,
-                                             storage_shape_t<Storage>>::type;
-};
-
-template <typename Request, typename Interface, typename Storage,
-          typename RequestType>
-struct request_binding_resolutions<Request, Interface, Storage,
-                                   RequestType &&> {
-  using type = typename binding_rvalue_reference_resolutions<
-      Interface, storage_shape_t<Storage>>::type;
-};
-
-template <typename Request, typename Interface, typename Storage,
-          typename RequestType>
-struct request_binding_resolutions<Request, Interface, Storage, RequestType *> {
-  using type =
-      typename binding_pointer_resolutions<Interface,
-                                           storage_shape_t<Storage>>::type;
+      category_resolutions_t<static_request_category_v<std::remove_cv_t<
+                                 unwrapped_static_request_t<Request>>>,
+                             Interface, storage_shape_t<Storage>>;
 };
 
 template <typename Request, typename InterfaceBinding>

@@ -291,127 +291,127 @@ template <typename Source, typename Interface, typename Access>
 struct wrapper_resolution_if<true, Source, Interface, Access>
     : wrapper_resolution_traits<Source, Interface, Access> {};
 
-template <typename Interface, typename Storage> struct interface_resolutions {
-private:
-  using conversions = typename Storage::conversions;
-  using source = storage_source_traits<Storage>;
-  using interface_type = std::remove_cv_t<Interface>;
-  using borrowed_interface_type =
-      typename source::template interface_type<interface_type>;
-  static constexpr bool interface_is_resolvable =
-      type_traits<interface_type>::enabled &&
-      !std::is_pointer_v<interface_type>;
-
-  template <bool Enabled, typename Target, typename SourceType, typename Access>
-  using if_convertible =
-      typename interface_resolution_if<Enabled && interface_is_resolvable,
-                                       Target, Target, SourceType,
-                                       Access>::type;
-
-  using borrowed_interface_value =
-      if_convertible<type_list_size_v<typename conversions::value_types> != 0,
-                     interface_type, typename source::borrowed_type, borrow>;
-  using consumed_interface_value = if_convertible<
-      type_list_size_v<typename conversions::rvalue_reference_types> != 0,
-      interface_type, typename source::consumed_type, consume>;
-  using consumed_interface_rvalue = typename interface_resolution_if<
-      interface_is_resolvable &&
-          type_list_size_v<typename conversions::rvalue_reference_types> != 0,
-      interface_type &&, interface_type, typename source::consumed_type,
-      consume>::type;
-  using borrowed_interface_reference = if_convertible<
-      type_list_size_v<typename conversions::lvalue_reference_types> != 0,
-      borrowed_interface_type &, typename source::borrowed_type, borrow>;
-  using borrowed_interface_pointer =
-      if_convertible<type_list_size_v<typename conversions::pointer_types> != 0,
-                     borrowed_interface_type *, typename source::borrowed_type,
-                     borrow>;
-
-public:
-  using value_resolutions =
-      type_list_cat_t<borrowed_interface_value, consumed_interface_value>;
-  using lvalue_reference_resolutions = borrowed_interface_reference;
-  using rvalue_reference_resolutions = consumed_interface_rvalue;
-  using pointer_resolutions = borrowed_interface_pointer;
+// The categories of requests a storage publishes resolutions for.
+enum class request_category {
+  value,
+  lvalue_reference,
+  rvalue_reference,
+  pointer
 };
 
-template <typename Interface, typename Storage> struct wrapper_resolutions {
-private:
-  using conversions = typename Storage::conversions;
-  using source = storage_source_traits<Storage>;
+// The interface a storage resolves directly, as opposed to the requests it
+// publishes.
+template <typename Interface, typename Storage> struct interface_target {
+  using type = std::remove_cv_t<Interface>;
+  using borrowed_type =
+      typename storage_source_traits<Storage>::template interface_type<type>;
+  static constexpr bool resolvable =
+      type_traits<type>::enabled && !std::is_pointer_v<type>;
+};
 
-  using borrowed_composition = typename wrapper_resolution_if<
-      type_list_size_v<typename conversions::value_types> != 0,
-      typename source::borrowed_type, Interface, borrow>::type;
-  using consumed_composition = typename wrapper_resolution_if<
-      type_list_size_v<typename conversions::rvalue_reference_types> != 0,
-      typename source::consumed_type, Interface, consume>::type;
+// The requests, access, interface target and source of a category of
+// reference or pointer requests.
+template <request_category Category, typename Interface, typename Storage>
+struct object_category;
 
-public:
-  using value_resolutions =
-      type_list_cat_t<borrowed_composition, consumed_composition>;
+template <typename Interface, typename Storage>
+struct object_category<request_category::lvalue_reference, Interface, Storage> {
+  using requests = typename Storage::conversions::lvalue_reference_types;
+  using access = borrow;
+  using target = typename interface_target<Interface, Storage>::borrowed_type &;
+  using conversion_target = target;
+  using source = typename storage_source_traits<Storage>::borrowed_type;
 };
 
 template <typename Interface, typename Storage>
-struct binding_value_resolutions {
+struct object_category<request_category::pointer, Interface, Storage> {
+  using requests = typename Storage::conversions::pointer_types;
+  using access = borrow;
+  using target = typename interface_target<Interface, Storage>::borrowed_type *;
+  using conversion_target = target;
+  using source = typename storage_source_traits<Storage>::borrowed_type;
+};
+
+template <typename Interface, typename Storage>
+struct object_category<request_category::rvalue_reference, Interface, Storage> {
+  using requests = typename Storage::conversions::rvalue_reference_types;
+  using access = consume;
+  using target = typename interface_target<Interface, Storage>::type &&;
+  using conversion_target = typename interface_target<Interface, Storage>::type;
+  using source = typename storage_source_traits<Storage>::consumed_type;
+};
+
+// The routes of a category: the interface route, when the storage publishes
+// any request of the category, and the routes of the requests it publishes.
+template <request_category Category, typename Interface, typename Storage>
+struct category_resolutions {
+private:
+  using category = object_category<Category, Interface, Storage>;
+  using requests = typename category::requests;
+
+public:
+  using type = type_list_merge_t<
+      typename interface_resolution_if<
+          interface_target<Interface, Storage>::resolvable &&
+              type_list_size_v<requests> != 0,
+          typename category::target, typename category::conversion_target,
+          typename category::source, typename category::access>::type,
+      storage_resolutions_t<requests, Interface, Storage,
+                            typename category::access>>;
+};
+
+// A value is converted from the borrowed and the consumed source alike, into
+// the interface or into a wrapper of it.
+template <typename Interface, typename Storage>
+struct category_resolutions<request_category::value, Interface, Storage> {
 private:
   using conversions = typename Storage::conversions;
-  using interface_values =
-      typename interface_resolutions<Interface, Storage>::value_resolutions;
-  using wrapper_values =
-      typename wrapper_resolutions<Interface, Storage>::value_resolutions;
+  using source = storage_source_traits<Storage>;
+  using target = interface_target<Interface, Storage>;
+  static constexpr bool borrows =
+      type_list_size_v<typename conversions::value_types> != 0;
+  static constexpr bool consumes =
+      type_list_size_v<typename conversions::rvalue_reference_types> != 0;
+
+  using interface_values = type_list_cat_t<
+      typename interface_resolution_if<
+          target::resolvable && borrows, typename target::type,
+          typename target::type, typename source::borrowed_type, borrow>::type,
+      typename interface_resolution_if<
+          target::resolvable && consumes, typename target::type,
+          typename target::type, typename source::consumed_type,
+          consume>::type>;
+  using wrapper_values = type_list_cat_t<
+      typename wrapper_resolution_if<borrows, typename source::borrowed_type,
+                                     Interface, borrow>::type,
+      typename wrapper_resolution_if<consumes, typename source::consumed_type,
+                                     Interface, consume>::type>;
   using stored_values = storage_resolutions_t<typename conversions::value_types,
                                               Interface, Storage, borrow>;
   using consumed_values =
       storage_resolutions_t<typename conversions::rvalue_reference_types,
                             Interface, Storage, consume, true>;
-  using converted_values = type_list_merge_t<interface_values, wrapper_values>;
-  using published_values = type_list_merge_t<stored_values, consumed_values>;
 
 public:
-  using type = type_list_merge_t<converted_values, published_values>;
+  using type =
+      type_list_merge_t<type_list_merge_t<interface_values, wrapper_values>,
+                        type_list_merge_t<stored_values, consumed_values>>;
 };
 
-template <typename Interface, typename Storage>
-struct binding_rvalue_reference_resolutions {
-private:
-  using conversions = typename Storage::conversions;
-
-public:
-  using type = type_list_merge_t<
-      typename interface_resolutions<Interface,
-                                     Storage>::rvalue_reference_resolutions,
-      storage_resolutions_t<typename conversions::rvalue_reference_types,
-                            Interface, Storage, consume>>;
-};
-
-// The reference and the pointer routes of a storage.
-template <typename Interface, typename Storage>
-struct binding_reference_resolutions {
-  using type = type_list_merge_t<
-      typename interface_resolutions<Interface,
-                                     Storage>::lvalue_reference_resolutions,
-      storage_resolutions_t<
-          typename Storage::conversions::lvalue_reference_types, Interface,
-          Storage, borrow>>;
-};
-
-template <typename Interface, typename Storage>
-struct binding_pointer_resolutions {
-  using type = type_list_merge_t<
-      typename interface_resolutions<Interface, Storage>::pointer_resolutions,
-      storage_resolutions_t<typename Storage::conversions::pointer_types,
-                            Interface, Storage, borrow>>;
-};
+template <request_category Category, typename Interface, typename Storage>
+using category_resolutions_t =
+    typename category_resolutions<Category, Interface, Storage>::type;
 
 template <typename Interface, typename Shape> struct shape_resolutions {
   using value_resolutions =
-      typename binding_value_resolutions<Interface, Shape>::type;
+      category_resolutions_t<request_category::value, Interface, Shape>;
   using object_resolutions = type_list_cat_t<
-      typename binding_reference_resolutions<Interface, Shape>::type,
-      typename binding_pointer_resolutions<Interface, Shape>::type>;
+      category_resolutions_t<request_category::lvalue_reference, Interface,
+                             Shape>,
+      category_resolutions_t<request_category::pointer, Interface, Shape>>;
   using rvalue_reference_resolutions =
-      typename binding_rvalue_reference_resolutions<Interface, Shape>::type;
+      category_resolutions_t<request_category::rvalue_reference, Interface,
+                             Shape>;
   // Target forms are disjoint across the value, object, and rvalue-reference
   // categories, so concatenating their already-unique lists cannot duplicate
   // a resolution.
