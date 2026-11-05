@@ -115,7 +115,7 @@ TEST(resolution_operation_test,
                               detail::type_conversion_path_t<
                                   unrelated_alternative &, alternative_type &>>;
   ASSERT_THROW((reference_operation::apply<alternative_storage>(
-                   lvalue_factory, context, detail::make_lvalue_source(value),
+                   lvalue_factory, context, detail::make_resolved_source(value),
                    describe_type<unrelated_alternative &>(),
                    describe_type<alternative_type>())),
                type_not_convertible_exception);
@@ -126,7 +126,7 @@ TEST(resolution_operation_test,
                                   unrelated_alternative *, alternative_type *>>;
   ASSERT_THROW(
       (pointer_operation::apply<alternative_storage>(
-          pointer_factory, context, detail::make_pointer_source(&value),
+          pointer_factory, context, detail::make_resolved_source(&value),
           describe_type<unrelated_alternative *>(),
           describe_type<alternative_type *>())),
       type_not_convertible_exception);

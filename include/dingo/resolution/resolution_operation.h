@@ -21,21 +21,6 @@
 
 namespace dingo {
 namespace detail {
-template <typename MaterializedSource>
-using materialized_source_traits_t = materialized_source_traits<
-    std::remove_cv_t<std::remove_reference_t<MaterializedSource>>>;
-
-template <typename MaterializedSource>
-decltype(auto) materialized_value(MaterializedSource &&source) {
-  return materialized_source_traits_t<MaterializedSource>::value(
-      std::forward<MaterializedSource>(source));
-}
-
-template <typename MaterializedSource>
-decltype(auto) materialized_reference(MaterializedSource &&source) {
-  return materialized_source_traits_t<MaterializedSource>::reference(source);
-}
-
 struct empty_conversion_context {};
 
 template <typename Target, typename Conversion, typename Source>
@@ -73,19 +58,15 @@ struct type_resolution {
       throw make_type_not_convertible_exception(requested_type,
                                                 registered_type);
     } else if constexpr (std::is_lvalue_reference_v<Source>) {
-      return Conversion::apply(resolver, context,
-                               materialized_reference(source), requested_type,
+      return Conversion::apply(resolver, context, *source, requested_type,
                                registered_type);
     } else if constexpr (std::is_rvalue_reference_v<Source>) {
-      return Conversion::apply(
-          resolver, context,
-          static_cast<Source>(materialized_reference(source)), requested_type,
-          registered_type);
+      return Conversion::apply(resolver, context, static_cast<Source>(*source),
+                               requested_type, registered_type);
     } else {
-      return Conversion::apply(
-          resolver, context,
-          materialized_value(std::forward<MaterializedSource>(source)),
-          requested_type, registered_type);
+      return Conversion::apply(resolver, context,
+                               std::forward<MaterializedSource>(source).get(),
+                               requested_type, registered_type);
     }
   }
 };

@@ -23,6 +23,9 @@
 
 namespace dingo {
 namespace detail {
+// The source of a resolution: a value it owns, an lvalue it borrows, or a
+// pointer it borrows. Each yields its instance with get() and a reference to
+// it with *source; an owned value is moved out of an rvalue source.
 template <typename Source> class rvalue_source {
 public:
   using value_type = Source;
@@ -41,25 +44,19 @@ public:
 
   ~rvalue_source() { destroy_object_value(get()); }
 
-  Source *get_ptr() {
-    return std::launder(reinterpret_cast<Source *>(&storage_));
-  }
-  const Source *get_ptr() const {
-    return std::launder(reinterpret_cast<const Source *>(&storage_));
-  }
-
-  Source &get() & { return *get_ptr(); }
-  const Source &get() const & { return *get_ptr(); }
-  Source get() && { return std::move(*get_ptr()); }
+  Source &get() & { return *pointer(); }
+  const Source &get() const & { return *pointer(); }
+  Source get() && { return std::move(*pointer()); }
 
   Source &operator*() { return get(); }
   const Source &operator*() const { return get(); }
 
-  Source *operator->() { return get_ptr(); }
-  const Source *operator->() const { return get_ptr(); }
-
 private:
-  alignas(Source) std::byte storage_[sizeof(Source)];
+  Source *pointer() const {
+    return std::launder(reinterpret_cast<Source *>(&storage_));
+  }
+
+  alignas(Source) mutable std::byte storage_[sizeof(Source)];
 };
 
 template <typename Source> struct lvalue_source {
@@ -67,17 +64,8 @@ template <typename Source> struct lvalue_source {
 
   explicit lvalue_source(Source &source) : value_(std::addressof(source)) {}
 
-  Source &get() { return *value_; }
-  const Source &get() const { return *value_; }
-
-  Source *get_ptr() { return value_; }
-  const Source *get_ptr() const { return value_; }
-
-  Source &operator*() { return get(); }
-  const Source &operator*() const { return get(); }
-
-  Source *operator->() { return get_ptr(); }
-  const Source *operator->() const { return get_ptr(); }
+  Source &get() const { return *value_; }
+  Source &operator*() const { return *value_; }
 
 private:
   Source *value_;
@@ -88,100 +76,11 @@ template <typename Source> struct pointer_source {
 
   explicit pointer_source(Source *source) : value_(source) {}
 
-  Source *get() { return value_; }
-  const Source *get() const { return value_; }
-
-  Source &operator*() { return *value_; }
-  const Source &operator*() const { return *value_; }
-
-  Source *operator->() { return value_; }
-  const Source *operator->() const { return value_; }
+  Source *get() const { return value_; }
+  Source &operator*() const { return *value_; }
 
 private:
   Source *value_;
-};
-
-template <typename MaterializedSource> struct materialized_source_traits;
-
-template <typename Source>
-struct materialized_source_traits<rvalue_source<Source>> {
-  using value_type = Source;
-  static constexpr bool reference_like = false;
-
-  template <typename ActualSource>
-  static decltype(auto) value(ActualSource &&source) {
-    return std::forward<ActualSource>(source).get();
-  }
-
-  static Source &reference(rvalue_source<Source> &source) {
-    return source.get();
-  }
-
-  static const Source &reference(const rvalue_source<Source> &source) {
-    return source.get();
-  }
-
-  static Source *pointer(rvalue_source<Source> &source) {
-    return source.get_ptr();
-  }
-
-  static const Source *pointer(const rvalue_source<Source> &source) {
-    return source.get_ptr();
-  }
-};
-
-template <typename Source>
-struct materialized_source_traits<lvalue_source<Source>> {
-  using value_type = Source;
-  static constexpr bool reference_like = true;
-
-  template <typename ActualSource>
-  static decltype(auto) value(ActualSource &&source) {
-    return std::forward<ActualSource>(source).get();
-  }
-
-  static Source &reference(lvalue_source<Source> &source) {
-    return source.get();
-  }
-
-  static const Source &reference(const lvalue_source<Source> &source) {
-    return source.get();
-  }
-
-  static Source *pointer(lvalue_source<Source> &source) {
-    return source.get_ptr();
-  }
-
-  static const Source *pointer(const lvalue_source<Source> &source) {
-    return source.get_ptr();
-  }
-};
-
-template <typename Source>
-struct materialized_source_traits<pointer_source<Source>> {
-  using value_type = Source;
-  static constexpr bool reference_like = true;
-
-  template <typename ActualSource>
-  static decltype(auto) value(ActualSource &&source) {
-    return std::forward<ActualSource>(source).get();
-  }
-
-  static Source &reference(pointer_source<Source> &source) {
-    return *source.get();
-  }
-
-  static const Source &reference(const pointer_source<Source> &source) {
-    return *source.get();
-  }
-
-  static Source *pointer(pointer_source<Source> &source) {
-    return source.get();
-  }
-
-  static const Source *pointer(const pointer_source<Source> &source) {
-    return source.get();
-  }
 };
 
 template <typename Source, typename Builder>
@@ -190,25 +89,14 @@ rvalue_source<Source> make_rvalue_source(std::in_place_t, Builder &&builder) {
 }
 
 template <typename Source>
-lvalue_source<Source> make_lvalue_source(Source &source) {
+lvalue_source<Source> make_resolved_source(Source &source) {
   return lvalue_source<Source>(source);
 }
 
 template <typename Source>
-pointer_source<Source> make_pointer_source(Source *source) {
+pointer_source<Source> make_resolved_source(Source *source) {
   return pointer_source<Source>(source);
 }
-
-template <typename Source>
-lvalue_source<Source> make_resolved_source(Source &source) {
-  return make_lvalue_source(source);
-}
-
-template <typename Source>
-pointer_source<Source> make_resolved_source(Source *source) {
-  return make_pointer_source(source);
-}
-
 } // namespace detail
 } // namespace dingo
 
