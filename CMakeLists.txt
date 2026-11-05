@@ -89,6 +89,7 @@ if(DINGO_DEVELOPMENT_MODE)
 
     set(DINGO_SOURCE_FILES
         base/config.h
+        static/diagnostics.h
         static/graph.h
         static/registry.h
         container.h

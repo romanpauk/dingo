@@ -22,6 +22,7 @@
 #include <dingo/static/binding.h>
 #include <dingo/static/container_traits.h>
 #include <dingo/static/context.h>
+#include <dingo/static/diagnostics.h>
 #include <dingo/static/graph.h>
 #include <dingo/static/registry.h>
 #include <dingo/type/annotated.h>
