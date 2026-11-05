@@ -74,22 +74,26 @@ void append_text_part(std::string &message, Text &&text) {
   message += std::forward<Text>(text);
 }
 
-inline void append_text(std::string &) {}
-
-template <typename First, typename... Rest>
-void append_text(std::string &message, First &&first, Rest &&...rest) {
-  append_text_part(message, std::forward<First>(first));
-  append_text(message, std::forward<Rest>(rest)...);
+template <typename... Parts>
+void append_text(std::string &message, Parts &&...parts) {
+  (append_text_part(message, std::forward<Parts>(parts)), ...);
 }
 
+// The resolution path that led to the failing request.
 template <typename Context>
 void append_type_path_text(std::string &message, const Context &context) {
   if (context.has_type_path()) {
-    std::string resolution_path;
-    context.append_type_path(resolution_path);
     message += " (required by ";
-    message += resolution_path;
+    context.append_type_path(message);
     message += ")";
+  }
+}
+
+// The type whose construction made the failing request.
+template <typename Context>
+void append_active_type_text(std::string &message, const Context &context) {
+  if (auto *active_type = context.active_type()) {
+    append_text(message, " (required by ", *active_type, ")");
   }
 }
 
@@ -138,12 +142,7 @@ template <typename Request, typename Context>
 type_ambiguous_exception make_type_ambiguous_exception(const Context &context) {
   std::string message = "type resolution is ambiguous: ";
   append_type_name(message, describe_type<Request>());
-  if (auto *active_type = context.active_type()) {
-    message += " (required by ";
-    append_type_name(message, *active_type);
-    message += ")";
-  }
-
+  append_active_type_text(message, context);
   return type_ambiguous_exception(std::move(message));
 }
 
@@ -151,10 +150,7 @@ inline type_not_convertible_exception
 make_type_not_convertible_exception(type_descriptor target_type,
                                     type_descriptor source_type) {
   std::string message = "type is not convertible to ";
-  append_type_name(message, target_type);
-  message += " from ";
-  append_type_name(message, source_type);
-
+  append_text(message, target_type, " from ", source_type);
   return type_not_convertible_exception(std::move(message));
 }
 
@@ -164,16 +160,8 @@ make_type_not_convertible_exception(type_descriptor target_type,
                                     type_descriptor source_type,
                                     const Context &context) {
   std::string message = "type is not convertible to ";
-  append_type_name(message, target_type);
-  message += " from ";
-  append_type_name(message, source_type);
-
-  if (auto *active_type = context.active_type()) {
-    message += " (required by ";
-    append_type_name(message, *active_type);
-    message += ")";
-  }
-
+  append_text(message, target_type, " from ", source_type);
+  append_active_type_text(message, context);
   return type_not_convertible_exception(std::move(message));
 }
 

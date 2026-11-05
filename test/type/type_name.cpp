@@ -168,9 +168,6 @@ TEST(type_name_test, functor_operator_type_name) {
       {"void", "callable::", "*", expected_type_name_value(), "&", "const"});
 }
 
-static_assert(detail::type_name_find("abcdef", "cd") == 2);
-static_assert(detail::type_name_find("abcdef", "gh") ==
-              detail::type_name_not_found);
 static_assert(!detail::raw_type_name<type_name_test_types::value>().empty());
 
 } // namespace

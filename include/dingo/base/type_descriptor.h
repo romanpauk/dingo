@@ -76,29 +76,6 @@ constexpr bool same_type_shape(type_descriptor lhs, type_descriptor rhs) {
   return same_type_shape(*lhs.pointee, *rhs.pointee);
 }
 
-constexpr size_t type_name_not_found = static_cast<size_t>(-1);
-
-constexpr size_t type_name_find(std::string_view haystack,
-                                std::string_view needle, size_t offset = 0) {
-  if (needle.empty()) {
-    return offset <= haystack.size() ? offset : type_name_not_found;
-  }
-
-  for (size_t i = offset; i + needle.size() <= haystack.size(); ++i) {
-    size_t j = 0;
-    for (; j < needle.size(); ++j) {
-      if (haystack[i + j] != needle[j]) {
-        break;
-      }
-    }
-    if (j == needle.size()) {
-      return i;
-    }
-  }
-
-  return type_name_not_found;
-}
-
 template <typename T> constexpr std::string_view wrapped_type_name() {
 #if defined(__clang__) || defined(__GNUC__)
   return __PRETTY_FUNCTION__;
@@ -109,46 +86,37 @@ template <typename T> constexpr std::string_view wrapped_type_name() {
 #endif
 }
 
-constexpr std::string_view wrapped_type_name_prefix() {
+// The text a compiler's signature puts before and after T.
 #if defined(__clang__)
-  return "[T = ";
+inline constexpr std::string_view wrapped_type_name_prefix = "[T = ";
+inline constexpr std::string_view wrapped_type_name_suffix = "]";
 #elif defined(__GNUC__)
-  return "with T = ";
+inline constexpr std::string_view wrapped_type_name_prefix = "with T = ";
+inline constexpr std::string_view wrapped_type_name_suffix = ";";
 #elif defined(_MSC_VER)
-  return "wrapped_type_name<";
+inline constexpr std::string_view wrapped_type_name_prefix =
+    "wrapped_type_name<";
+inline constexpr std::string_view wrapped_type_name_suffix = ">(void)";
 #else
-  return "";
+inline constexpr std::string_view wrapped_type_name_prefix = "";
+inline constexpr std::string_view wrapped_type_name_suffix = "";
 #endif
-}
-
-constexpr std::string_view wrapped_type_name_suffix() {
-#if defined(__clang__)
-  return "]";
-#elif defined(__GNUC__)
-  return ";";
-#elif defined(_MSC_VER)
-  return ">(void)";
-#else
-  return "";
-#endif
-}
 
 // Compiler type-name signatures have fixed text around T. Locate that text
 // once instead of repeating two constexpr linear searches for every type.
 constexpr auto wrapped_type_name_sample = wrapped_type_name<void>();
 constexpr auto wrapped_type_name_prefix_pos =
-    type_name_find(wrapped_type_name_sample, wrapped_type_name_prefix());
+    wrapped_type_name_sample.find(wrapped_type_name_prefix);
 
-static_assert(wrapped_type_name_prefix_pos != type_name_not_found,
+static_assert(wrapped_type_name_prefix_pos != std::string_view::npos,
               "failed to parse compiler type name prefix");
 
 constexpr auto wrapped_type_name_start =
-    wrapped_type_name_prefix_pos + wrapped_type_name_prefix().size();
-constexpr auto wrapped_type_name_suffix_pos =
-    type_name_find(wrapped_type_name_sample, wrapped_type_name_suffix(),
-                   wrapped_type_name_start);
+    wrapped_type_name_prefix_pos + wrapped_type_name_prefix.size();
+constexpr auto wrapped_type_name_suffix_pos = wrapped_type_name_sample.find(
+    wrapped_type_name_suffix, wrapped_type_name_start);
 
-static_assert(wrapped_type_name_suffix_pos != type_name_not_found,
+static_assert(wrapped_type_name_suffix_pos != std::string_view::npos,
               "failed to parse compiler type name suffix");
 
 constexpr auto wrapped_type_name_trailer_size =

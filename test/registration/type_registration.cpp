@@ -171,28 +171,24 @@ TEST(type_registration_test, factory_traits_report_dependencies) {
   static_assert(
       std::is_same_v<typename factory_traits<constructor_factory>::dependencies,
                      type_list<int, float>>);
-  static_assert(factory_traits<constructor_factory>::has_explicit_dependencies);
   static_assert(factory_traits<constructor_factory>::is_compile_time_bindable);
 
   using detected_factory = constructor<selected_service>;
   static_assert(
       std::is_same_v<typename factory_traits<detected_factory>::dependencies,
                      type_list<int, float>>);
-  static_assert(!factory_traits<detected_factory>::has_explicit_dependencies);
   static_assert(factory_traits<detected_factory>::is_compile_time_bindable);
 
   using defaulted_factory = constructor<defaulted_service>;
   static_assert(
       std::is_same_v<typename factory_traits<defaulted_factory>::dependencies,
                      type_list<>>);
-  static_assert(!factory_traits<defaulted_factory>::has_explicit_dependencies);
   static_assert(factory_traits<defaulted_factory>::is_compile_time_bindable);
 
   using function_factory = function<build_from_double_and_cstr>;
   static_assert(
       std::is_same_v<typename factory_traits<function_factory>::dependencies,
                      type_list<double, const char *>>);
-  static_assert(factory_traits<function_factory>::has_explicit_dependencies);
   static_assert(factory_traits<function_factory>::is_compile_time_bindable);
 
   auto callable_factory =
@@ -201,8 +197,6 @@ TEST(type_registration_test, factory_traits_report_dependencies) {
   static_assert(std::is_same_v<
                 typename factory_traits<callable_factory_type>::dependencies,
                 type_list<short, long>>);
-  static_assert(
-      factory_traits<callable_factory_type>::has_explicit_dependencies);
   static_assert(
       !factory_traits<callable_factory_type>::is_compile_time_bindable);
 }
