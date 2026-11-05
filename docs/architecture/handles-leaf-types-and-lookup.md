@@ -38,10 +38,8 @@ Examples:
 
 Rebinding means keeping the outer handle shape while swapping the leaf type.
 
-The main operations are:
-
-- `rebind_type_t<T, U>`: replace the wrapped type with `U`
-- `rebind_leaf_t<T, U>`: replace only the leaf while preserving the outer shape
+The operation is `rebind_leaf_t<T, U>`: it replaces the leaf with `U` and
+keeps every wrapper, reference and pointer around it.
 
 This is what lets Dingo talk about "the same handle shape over another leaf
 type" without hardcoding every wrapper combination.
@@ -52,8 +50,8 @@ Dingo usually does not look up factories by the exact requested type spelling.
 Instead it converts the request into a lookup form that replaces the leaf with
 `runtime_type`.
 
-That operation is `lookup_type_t<T>` in
-[include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h).
+That operation is `request_lookup_type_t<T>` in
+[include/dingo/binding/runtime_binding_interface.h](../../include/dingo/binding/runtime_binding_interface.h).
 
 The point of this step is to match requests by shape:
 

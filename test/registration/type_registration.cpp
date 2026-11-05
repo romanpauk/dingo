@@ -245,14 +245,12 @@ TEST(type_registration_test, registration_specialization) {
   };
 
   using shared_registration = type_registration<scope<shared>, storage<A>>;
-  using shared_storage = detail::storage<
-      typename shared_registration::scope_type::type,
-      typename shared_registration::storage_type::type,
-      rebind_type_t<
-          typename shared_registration::storage_type::type,
-          normalized_type_t<typename shared_registration::storage_type::type>>,
-      typename shared_registration::factory_type::type,
-      typename shared_registration::conversions_type::type>;
+  using shared_storage =
+      detail::storage<typename shared_registration::scope_type::type,
+                      typename shared_registration::storage_type::type,
+                      typename shared_registration::storage_type::type,
+                      typename shared_registration::factory_type::type,
+                      typename shared_registration::conversions_type::type>;
   using shared_binding_data =
       runtime_binding_state<test_state_owner, test_container,
                             test_binding_cell<A, shared_storage>>;
@@ -261,14 +259,12 @@ TEST(type_registration_test, registration_specialization) {
 
   using shared_ptr_registration =
       type_registration<scope<shared>, storage<std::shared_ptr<A>>>;
-  using shared_ptr_storage = detail::storage<
-      typename shared_ptr_registration::scope_type::type,
-      typename shared_ptr_registration::storage_type::type,
-      rebind_type_t<typename shared_ptr_registration::storage_type::type,
-                    normalized_type_t<
-                        typename shared_ptr_registration::storage_type::type>>,
-      typename shared_ptr_registration::factory_type::type,
-      typename shared_ptr_registration::conversions_type::type>;
+  using shared_ptr_storage =
+      detail::storage<typename shared_ptr_registration::scope_type::type,
+                      typename shared_ptr_registration::storage_type::type,
+                      typename shared_ptr_registration::storage_type::type,
+                      typename shared_ptr_registration::factory_type::type,
+                      typename shared_ptr_registration::conversions_type::type>;
   using shared_ptr_binding_data =
       runtime_binding_state<test_state_owner, test_container,
                             test_binding_cell<A, shared_ptr_storage>>;
@@ -278,14 +274,12 @@ TEST(type_registration_test, registration_specialization) {
 
   using external_registration =
       type_registration<scope<external>, storage<A &>>;
-  using external_storage = detail::storage<
-      typename external_registration::scope_type::type,
-      typename external_registration::storage_type::type,
-      rebind_type_t<typename external_registration::storage_type::type,
-                    normalized_type_t<
-                        typename external_registration::storage_type::type>>,
-      typename external_registration::factory_type::type,
-      typename external_registration::conversions_type::type>;
+  using external_storage =
+      detail::storage<typename external_registration::scope_type::type,
+                      typename external_registration::storage_type::type,
+                      typename external_registration::storage_type::type,
+                      typename external_registration::factory_type::type,
+                      typename external_registration::conversions_type::type>;
   using external_binding_data =
       runtime_binding_state<test_state_owner, test_container,
                             test_binding_cell<A, external_storage>>;
@@ -297,9 +291,7 @@ TEST(type_registration_test, registration_specialization) {
   using external_shared_storage = detail::storage<
       typename external_shared_registration::scope_type::type,
       typename external_shared_registration::storage_type::type,
-      rebind_type_t<typename external_shared_registration::storage_type::type,
-                    normalized_type_t<typename external_shared_registration::
-                                          storage_type::type>>,
+      typename external_shared_registration::storage_type::type,
       typename external_shared_registration::factory_type::type,
       typename external_shared_registration::conversions_type::type>;
   using external_shared_binding_data =

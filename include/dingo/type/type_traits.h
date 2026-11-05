@@ -133,11 +133,6 @@ template <typename T>
 inline constexpr bool is_value_borrowable_v =
     detail::is_value_borrowable<std::remove_cv_t<T>>::value;
 
-template <typename T>
-inline constexpr bool is_pointer_like_type_v =
-    type_traits<T>::enabled && type_traits<T>::is_pointer_like &&
-    !std::is_pointer_v<T>;
-
 template <typename T, typename = void> struct copy_constructible_traits;
 
 namespace detail {
@@ -263,15 +258,6 @@ struct alternative_type_count<Type, Selected,
     : type_list_count<alternative_type_alternatives_t<Type>,
                       std::remove_cv_t<Selected>> {};
 
-template <typename Type, typename = void>
-struct alternative_type_interface_types {};
-
-template <typename Type>
-struct alternative_type_interface_types<
-    Type, std::enable_if_t<is_alternative_type_v<Type>>> {
-  using type = type_list_cat_t<type_list<std::remove_cv_t<Type>>,
-                               alternative_type_alternatives_t<Type>>;
-};
 } // namespace detail
 
 template <typename... Alternatives>
@@ -328,19 +314,6 @@ template <typename T, typename... Args> T *make_dynamic_array(Args &&...args) {
                 "factory or element initializers");
   return new T[sizeof...(Args)]{std::forward<Args>(args)...};
 }
-
-template <typename Type, typename Pointer, typename = void>
-struct has_type_from_pointer : std::false_type {};
-
-template <typename Type, typename Pointer>
-struct has_type_from_pointer<
-    Type, Pointer,
-    std::void_t<decltype(type_traits<Type>::from_pointer(
-        std::declval<Pointer>()))>> : std::true_type {};
-
-template <typename Type, typename Pointer>
-inline constexpr bool has_type_from_pointer_v =
-    has_type_from_pointer<Type, Pointer>::value;
 
 template <typename Type, typename = void>
 struct is_array_like_type : std::is_array<Type> {};

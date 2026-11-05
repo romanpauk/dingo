@@ -251,8 +251,8 @@ struct deduced_interface_type {
 template <typename StorageType, typename ScopeType>
 struct deduced_interface_type<
     StorageType, ScopeType,
-    std::void_t<typename ::dingo::detail::alternative_type_interface_types<
-        std::remove_cv_t<std::remove_reference_t<StorageType>>>::type>> {
+    std::enable_if_t<is_alternative_type_v<
+        std::remove_cv_t<std::remove_reference_t<StorageType>>>>> {
   using type =
       ::dingo::interfaces<typename ::dingo::detail::deduced_interface_types<
           std::remove_cv_t<std::remove_reference_t<StorageType>>>::type>;

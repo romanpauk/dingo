@@ -769,8 +769,6 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   static_assert(std::is_same_v<leaf_type_t<nested_handle>, A>);
   static_assert(std::is_same_v<rebind_leaf_t<nested_handle, I>,
                                std::shared_ptr<std::unique_ptr<I>> &>);
-  static_assert(
-      std::is_same_v<rebind_type_t<nested_handle, I>, std::shared_ptr<I> &>);
   static_assert(std::is_same_v<leaf_type_t<nested_list>, type_list<A, A>>);
   static_assert(std::is_same_v<rebind_leaf_t<nested_list, I>,
                                type_list<std::shared_ptr<std::unique_ptr<I>> &,
@@ -802,22 +800,9 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   static_assert(std::is_same_v<request_lookup_type_t<std::optional<const A *>>,
                                std::optional<const runtime_type *>>);
   using exact_const_optional_pointer = exact_lookup<const std::optional<A>> *;
-  static_assert(std::is_same_v<lookup_type_t<exact_const_optional_pointer>,
-                               std::optional<runtime_type> *>);
   static_assert(std::is_same_v<resolved_type_t<exact_const_optional_pointer,
                                                const std::optional<A> *>,
                                const std::optional<A> *>);
-  using exact_optional_value = exact_lookup<std::optional<A>>;
-  static_assert(std::is_same_v<lookup_type_t<exact_optional_value>,
-                               std::optional<runtime_type>>);
-  using exact_optional_reference = exact_lookup<std::optional<A>> &;
-  static_assert(std::is_same_v<lookup_type_t<exact_optional_reference>,
-                               std::optional<runtime_type> &>);
-  using exact_optional_unique_rvalue =
-      exact_lookup<std::unique_ptr<std::optional<A>>> &&;
-  static_assert(
-      std::is_same_v<lookup_type_t<exact_optional_unique_rvalue>,
-                     std::unique_ptr<std::optional<runtime_type>> &&>);
 
   static_assert(detail::is_resolution_request_v<A, A>);
   static_assert(detail::is_resolution_request_v<A, const A>);

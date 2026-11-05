@@ -71,7 +71,6 @@ struct request_type {
   using exact_type = std::remove_cv_t<std::remove_reference_t<interface_type>>;
 
   static constexpr bool removes_rvalue_references = RemoveRvalueReferences;
-  static constexpr bool is_rvalue_request = std::is_rvalue_reference_v<Request>;
 };
 
 template <typename Request>

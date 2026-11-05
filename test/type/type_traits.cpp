@@ -54,7 +54,6 @@ static_assert(std::is_same_v<request_type<int>::result_type, int>);
 static_assert(std::is_same_v<request_type<int>::value_type, int>);
 static_assert(std::is_same_v<request_type<int>::exact_type, int>);
 static_assert(!request_type<int>::removes_rvalue_references);
-static_assert(!request_type<int>::is_rvalue_request);
 
 static_assert(std::is_same_v<request_type<int &>::lookup_type, int &>);
 static_assert(std::is_same_v<request_type<int &>::interface_type, int &>);
@@ -66,12 +65,10 @@ static_assert(std::is_same_v<request_type<int &&>::interface_type, int &&>);
 static_assert(std::is_same_v<request_type<int &&>::result_type, int &&>);
 static_assert(std::is_same_v<request_type<int &&>::value_type, int>);
 static_assert(std::is_same_v<request_type<int &&>::exact_type, int>);
-static_assert(request_type<int &&>::is_rvalue_request);
 static_assert(std::is_same_v<request_type<int &&, true>::lookup_type, int>);
 static_assert(std::is_same_v<request_type<int &&, true>::interface_type, int>);
 static_assert(std::is_same_v<request_type<int &&, true>::result_type, int>);
 static_assert(request_type<int &&, true>::removes_rvalue_references);
-static_assert(request_type<int &&, true>::is_rvalue_request);
 
 static_assert(std::is_same_v<request_type<int *>::lookup_type, int *>);
 static_assert(std::is_same_v<request_type<int *>::interface_type, int *>);

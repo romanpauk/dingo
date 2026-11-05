@@ -112,14 +112,6 @@ struct is_key_value<key_type<T, Value>>
 template <typename T>
 inline constexpr bool is_key_value_v = is_key_value<std::decay_t<T>>::value;
 
-template <typename Selector> struct key_value_traits;
-
-template <typename T, auto Value> struct key_value_traits<key_type<T, Value>> {
-  using type = T;
-
-  static T make() { return fixed_key_value<T, Value>::make(); }
-};
-
 template <typename T, auto Value>
 struct is_value_selector<key_type<T, Value>> : std::true_type {
   using type = T;
