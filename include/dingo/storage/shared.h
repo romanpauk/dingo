@@ -14,8 +14,8 @@
 #include <dingo/memory/aligned_storage.h>
 #include <dingo/memory/object_lifetime.h>
 #include <dingo/resolution/resolution_operation.h>
+#include <dingo/storage/scope_traits.h>
 #include <dingo/storage/storage.h>
-#include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/normalized_type.h>
 
@@ -24,7 +24,13 @@
 namespace dingo {
 struct shared {};
 
-template <> struct storage_scope_policy<shared> {
+namespace detail {
+template <typename Type, typename StoredType, typename Factory,
+          typename Conversions>
+class shared_storage;
+} // namespace detail
+
+template <> struct scope_traits<shared> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = true;
   static constexpr bool consumes = false;
@@ -36,11 +42,14 @@ template <> struct storage_scope_policy<shared> {
     return storage_exposure::value | storage_exposure::lvalue |
            storage_exposure::pointer;
   }
+
+  template <typename Type, typename StoredType, typename Factory,
+            typename Conversions>
+  using storage =
+      detail::shared_storage<Type, StoredType, Factory, Conversions>;
 };
 
 namespace detail {
-template <typename Type, typename U>
-struct conversions<shared, Type, U> : type_storage_traits<shared, Type, U> {};
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -243,7 +252,7 @@ private:
 
 template <typename Type, typename StoredType, typename Factory,
           typename Conversions>
-class storage<shared, Type, StoredType, Factory, Conversions> {
+class shared_storage {
   // TODO
   // static_assert(std::is_trivially_destructible_v< Type > ==
   // std::is_trivially_destructible_v< storage_instance< Type, shared > >);
@@ -251,7 +260,7 @@ class storage<shared, Type, StoredType, Factory, Conversions> {
 
 public:
   template <typename... Args>
-  storage(Args &&...args) : instance_(std::forward<Args>(args)...) {}
+  shared_storage(Args &&...args) : instance_(std::forward<Args>(args)...) {}
 
   using conversions = Conversions;
   using factory_type = Factory;

@@ -79,6 +79,15 @@ struct optional_value {
   static constexpr bool is_pointer_like = false;
   static constexpr bool is_owning_handle = false;
 };
+
+// A value that holds one of several alternatives, such as std::variant. It is
+// not a wrapper of one element, so it is not enabled as one.
+struct alternative_value {
+  using semantics = alternative_value;
+  static constexpr bool enabled = false;
+  static constexpr bool is_pointer_like = false;
+  static constexpr bool is_owning_handle = false;
+};
 } // namespace semantics
 
 // Makes a type a wrapper. A specialization derives from the semantics of the
@@ -94,6 +103,13 @@ struct optional_value {
 //   share_t<U>     for a sole owner: the sharing handle of the element U
 //   wrap(v), make_empty()
 //                  for an optional value: a wrapper of v, and an empty one
+//
+// An alternative value provides instead
+//
+//   alternatives        the type_list of its alternatives
+//   selected_type<S>    the alternative a source S constructs
+//   wrap<A>(v)          a value holding v as the alternative A
+//   get<A>(value)       the address of the alternative A, or null
 template <typename T, typename = void> struct type_traits {
   static constexpr bool enabled = false;
   static constexpr bool is_pointer_like = false;
@@ -162,13 +178,19 @@ template <typename T>
 inline constexpr bool is_copy_constructible_v =
     copy_constructible_traits<T>::value;
 
-template <typename T, typename = void> struct alternative_type_traits {
-  static constexpr bool enabled = false;
-};
+namespace detail {
+template <typename T, typename = void>
+struct is_alternative_type : std::false_type {};
+
+template <typename T>
+struct is_alternative_type<T, std::void_t<typename type_traits<T>::semantics>>
+    : std::is_same<typename type_traits<T>::semantics,
+                   semantics::alternative_value> {};
+} // namespace detail
 
 template <typename T>
 inline constexpr bool is_alternative_type_v =
-    alternative_type_traits<std::remove_cv_t<T>>::enabled;
+    detail::is_alternative_type<std::remove_cv_t<T>>::value;
 
 namespace detail {
 template <typename List, typename Selected> struct type_list_count;
@@ -192,13 +214,11 @@ struct alternative_type_alternatives {};
 
 template <typename Type>
 struct alternative_type_alternatives<
-    Type, std::enable_if_t<
-              alternative_type_traits<std::remove_cv_t<Type>>::enabled>> {
-  using type =
-      typename alternative_type_traits<std::remove_cv_t<Type>>::alternatives;
+    Type, std::enable_if_t<is_alternative_type_v<Type>>> {
+  using type = typename type_traits<std::remove_cv_t<Type>>::alternatives;
 
   static_assert(!type_list_has_duplicates<type>::value,
-                "alternative_type_traits<T>::alternatives must not contain "
+                "type_traits<T>::alternatives must not contain "
                 "duplicate types");
 };
 
@@ -238,9 +258,8 @@ template <typename Type, typename Selected, typename = void>
 struct alternative_type_count : std::integral_constant<size_t, 0> {};
 
 template <typename Type, typename Selected>
-struct alternative_type_count<
-    Type, Selected,
-    std::enable_if_t<alternative_type_traits<std::remove_cv_t<Type>>::enabled>>
+struct alternative_type_count<Type, Selected,
+                              std::enable_if_t<is_alternative_type_v<Type>>>
     : type_list_count<alternative_type_alternatives_t<Type>,
                       std::remove_cv_t<Selected>> {};
 
@@ -249,17 +268,15 @@ struct alternative_type_interface_types {};
 
 template <typename Type>
 struct alternative_type_interface_types<
-    Type, std::enable_if_t<
-              alternative_type_traits<std::remove_cv_t<Type>>::enabled>> {
+    Type, std::enable_if_t<is_alternative_type_v<Type>>> {
   using type = type_list_cat_t<type_list<std::remove_cv_t<Type>>,
                                alternative_type_alternatives_t<Type>>;
 };
 } // namespace detail
 
 template <typename... Alternatives>
-struct alternative_type_traits<std::variant<Alternatives...>> {
-  static constexpr bool enabled = true;
-
+struct type_traits<std::variant<Alternatives...>>
+    : semantics::alternative_value {
   using alternatives = type_list<Alternatives...>;
 
   template <typename Source>
@@ -287,29 +304,6 @@ template <typename Type, typename Interface>
 inline constexpr bool is_alternative_type_interface_compatible_v =
     detail::alternative_type_count<std::remove_cv_t<Type>,
                                    std::remove_cv_t<Interface>>::value == 1;
-
-template <typename StorageTag, typename Type, typename U, typename = void>
-struct storage_traits {
-  static constexpr bool enabled = false;
-  static constexpr bool is_stable = false;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<>;
-};
-
-template <typename StorageTag, typename Type, typename U>
-struct storage_traits<StorageTag, const Type, U>
-    : storage_traits<StorageTag, Type, U> {};
-
-template <typename StorageTag, typename Type, typename U>
-struct storage_traits<StorageTag, Type &, U>
-    : storage_traits<StorageTag, Type, U> {};
-
-template <typename StorageTag, typename Type, typename U>
-struct storage_traits<StorageTag, const Type &, U>
-    : storage_traits<StorageTag, Type, U> {};
 
 namespace detail {
 template <typename T, typename... Args> T make_nested(Args &&...args);

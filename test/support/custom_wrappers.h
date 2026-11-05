@@ -8,7 +8,7 @@
 #pragma once
 
 #include <dingo/base/exceptions.h>
-#include <dingo/storage/storage_scope_policy.h>
+#include <dingo/storage/scope_traits.h>
 #include <dingo/type/type_conversion_traits.h>
 #include <dingo/type/type_traits.h>
 
@@ -36,6 +36,15 @@ public:
   test_shared() = default;
   explicit test_shared(std::shared_ptr<T> ptr) : ptr_(std::move(ptr)) {}
 
+  // Converts to the handle of a base, as std::shared_ptr does.
+  template <typename U,
+            typename = std::enable_if_t<std::is_convertible_v<U *, T *>>>
+  test_shared(const test_shared<U> &other) : ptr_(other.ptr_) {}
+
+  template <typename U,
+            typename = std::enable_if_t<std::is_convertible_v<U *, T *>>>
+  test_shared(test_shared<U> &&other) : ptr_(std::move(other.ptr_)) {}
+
   template <typename U,
             typename = std::enable_if_t<std::is_convertible_v<U *, T *>>>
   test_shared(test_unique<U> &&other) : ptr_(std::move(other.ptr_)) {}
@@ -47,7 +56,6 @@ public:
 private:
   template <typename> friend class test_shared;
   template <typename> friend class test_unique;
-  template <typename, typename, typename> friend struct type_conversion_traits;
 
   std::shared_ptr<T> ptr_;
 };
@@ -108,9 +116,10 @@ private:
   std::optional<T> value_;
 };
 
-// The test wrappers are described as the standard wrappers are: by their
-// semantics and their operations. Their storage request lists follow from the
-// semantics.
+// The test wrappers are described as the standard wrappers are: one
+// type_traits specialization with their semantics and their operations. Their
+// storage request lists follow from the semantics, and a handle converts to
+// the handle of a base by its converting constructor.
 template <typename T>
 struct type_traits<test_shared<T>> : semantics::shared_owner {
   using value_type = T;
@@ -169,23 +178,6 @@ struct type_traits<test_optional<T>> : semantics::optional_value {
     } else {
       return test_optional<T>(T{std::forward<Args>(args)...});
     }
-  }
-};
-
-template <typename T, typename U>
-struct type_conversion_traits<
-    test_shared<U>, test_shared<T>,
-    std::enable_if_t<std::is_convertible_v<T *, U *>>> {
-  template <typename Source>
-  using required_access =
-      std::conditional_t<std::is_rvalue_reference_v<Source>, consume, borrow>;
-
-  static test_shared<U> convert(const test_shared<T> &source) {
-    return test_shared<U>(std::static_pointer_cast<U>(source.ptr_));
-  }
-
-  static test_shared<U> convert(test_shared<T> &&source) {
-    return test_shared<U>(std::static_pointer_cast<U>(std::move(source.ptr_)));
   }
 };
 

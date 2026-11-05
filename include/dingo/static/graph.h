@@ -11,6 +11,7 @@
 #include <dingo/registration/type_registration.h>
 #include <dingo/resolution/resolution_operation.h>
 #include <dingo/static/registry.h>
+#include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>
 
 #include <algorithm>
@@ -21,10 +22,6 @@
 #include <utility>
 
 namespace dingo {
-
-struct shared;
-struct unique;
-struct shared_cyclical;
 
 namespace detail {
 
@@ -158,7 +155,7 @@ struct graph_lookup_hit<Lookup, Tag,
 // per declared dependency request, graph_npos when the request has no binding,
 // and one edge per matching binding for a collection request.
 struct graph_vertex {
-  // The binding uses shared_cyclical storage and may take part in a cycle.
+  // The scope of the binding allows it to take part in a cycle.
   bool cyclical;
   // The binding model declares its dependency requests.
   bool requests_known;
@@ -292,7 +289,7 @@ constexpr void graph_add_vertex(graph_structure<Vertices, Edges> &structure,
 
   constexpr std::size_t slots = graph_node_slots<Host, Binding>();
   structure.vertices[vertex] =
-      graph_vertex{std::is_same_v<typename model::storage_tag, shared_cyclical>,
+      graph_vertex{scope_allows_cycles_v<typename model::storage_tag>,
                    !std::is_void_v<binding_dependencies_t<model>>,
                    !std::is_void_v<requests>, edge, slots};
   if constexpr (std::is_void_v<typename model::bindings_type>) {
@@ -326,9 +323,10 @@ constexpr auto graph_make_structure(type_list<Bindings...>) {
 // ---------------------------------------------------------------------------
 
 template <std::size_t Vertices> struct graph_topology {
-  // False when some cycle contains a binding that is not shared_cyclical.
+  // False when some cycle contains a binding whose scope does not allow it.
   bool resolvable;
-  // A legal (all shared_cyclical) cycle was reached before the traversal ended.
+  // A legal cycle (of scopes that allow it) was reached before the traversal
+  // ended.
   bool contains_cycle;
   std::size_t order_size;
   // Reachable nodes with dependencies before dependents.
@@ -340,8 +338,8 @@ constexpr unsigned char graph_visiting = 1;
 constexpr unsigned char graph_visited = 2;
 
 // A dependency on the node at the given stack position closes a cycle made of
-// the nodes visited since; it is legal only when all of them are
-// shared_cyclical.
+// the nodes visited since; it is legal only when the scopes of all of them
+// allow cycles.
 template <std::size_t Vertices, std::size_t Edges>
 constexpr bool
 graph_cycle_is_legal(const graph_structure<Vertices, Edges> &structure,
@@ -448,7 +446,7 @@ graph_dependencies_bound(const graph_structure<Vertices, Edges> &structure,
 }
 
 // True when every binding reachable from `start` has its dependencies bound
-// and no reachable cycle contains a binding that is not shared_cyclical.
+// and no reachable cycle contains a binding whose scope does not allow it.
 template <std::size_t Vertices, std::size_t Edges>
 constexpr bool
 graph_binding_resolvable(const graph_structure<Vertices, Edges> &structure,

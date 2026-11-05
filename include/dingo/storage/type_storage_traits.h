@@ -57,29 +57,31 @@ struct storage_materialization_traits {
   }
 };
 
+namespace detail {
+// The requests a scope publishes for a stored type and a leaf U, generated
+// from the scope_traits of the scope.
 template <typename StorageTag, typename Type, typename U, typename = void>
-struct resolution_traits {
+struct storage_traits {
+  static constexpr bool enabled = false;
+  static constexpr bool is_stable = false;
+
   using value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<>;
 };
 
-namespace detail {
-template <typename AccessTraits, typename ResolutionTraits>
-struct combined_storage_types {
-  using value_types = type_list_cat_t<typename AccessTraits::value_types,
-                                      typename ResolutionTraits::value_types>;
-  using lvalue_reference_types =
-      type_list_cat_t<typename AccessTraits::lvalue_reference_types,
-                      typename ResolutionTraits::lvalue_reference_types>;
-  using rvalue_reference_types =
-      type_list_cat_t<typename AccessTraits::rvalue_reference_types,
-                      typename ResolutionTraits::rvalue_reference_types>;
-  using pointer_types =
-      type_list_cat_t<typename AccessTraits::pointer_types,
-                      typename ResolutionTraits::pointer_types>;
-};
+template <typename StorageTag, typename Type, typename U>
+struct storage_traits<StorageTag, const Type, U>
+    : storage_traits<StorageTag, Type, U> {};
+
+template <typename StorageTag, typename Type, typename U>
+struct storage_traits<StorageTag, Type &, U>
+    : storage_traits<StorageTag, Type, U> {};
+
+template <typename StorageTag, typename Type, typename U>
+struct storage_traits<StorageTag, const Type &, U>
+    : storage_traits<StorageTag, Type, U> {};
 
 template <typename T>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
@@ -497,11 +499,6 @@ struct type_storage_traits;
 template <typename StorageTag, typename Type, typename U>
 struct type_storage_traits<
     StorageTag, Type, U,
-    std::enable_if_t<storage_traits<StorageTag, Type, U>::enabled>>
-    : detail::combined_storage_types<storage_traits<StorageTag, Type, U>,
-                                     resolution_traits<StorageTag, Type, U>> {
-public:
-  static constexpr bool is_stable =
-      storage_traits<StorageTag, Type, U>::is_stable;
-};
+    std::enable_if_t<detail::storage_traits<StorageTag, Type, U>::enabled>>
+    : detail::storage_traits<StorageTag, Type, U> {};
 } // namespace dingo

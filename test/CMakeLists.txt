@@ -172,6 +172,7 @@ add_executable(dingo_unit_test
     memory/object_store.cpp
     registration/binding_graph.cpp
     registration/object_sizes.cpp
+    registration/custom_scope.cpp
     registration/registration_traits.cpp
     registration/replace_registration.cpp
     registration/runtime_registration.cpp

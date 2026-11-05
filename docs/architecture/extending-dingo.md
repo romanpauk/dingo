@@ -1,7 +1,11 @@
 # Extending Dingo
 
-Dingo's extensibility is mostly trait-driven. The key is to specialize the trait
-that matches the problem actually being solved.
+Dingo is extended by traits, one per thing being added:
+
+- a wrapper or an alternative type: one `type_traits` specialization
+- a storage scope: a tag type and one `scope_traits` specialization
+- a conversion between two types that no constructor performs: one
+  `type_conversion_traits` specialization
 
 Dingo's container and resolution pipeline do not hard-code a closed list of
 supported wrapper forms. Library support for standard smart pointers, arrays,
@@ -9,7 +13,7 @@ variants, and similar shapes is implemented through the same traits and
 conversion hooks available to external code. Adding support for another wrapper
 or storage shape follows the same path as Dingo's built-in support.
 
-## The Three Main Extension Points
+## The Extension Points
 
 ### 1. `type_traits`
 
@@ -59,53 +63,48 @@ then inherit its `borrow` or `consume` requirement.
 
 An optional-style wrapper provides `value_type`, `get`, `empty`, `wrap`, and
 `make_empty`. These operations let Dingo preserve an empty source and construct
-the target wrapper around the converted contained value. An alternative provides
-`selected_type<Source>` and `wrap<Selected>` so Dingo can apply the same rule to
-the alternative selected by overload resolution.
+the target wrapper around the converted contained value.
 
-### 2. `storage_traits`
+An alternative type, such as `std::variant`, derives from
+`semantics::alternative_value` and provides `alternatives`,
+`selected_type<Source>`, `wrap<Selected>` and `get<Selected>`, so Dingo can
+apply the same rule to the alternative selected by overload resolution.
 
-Specialize `storage_traits` in
-[include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
-when defining which result forms a given storage/scope combination can expose.
+A handle converts to the handle of a base of its element by its converting
+constructor, as `std::shared_ptr` does; such a wrapper needs no other trait.
 
-This trait defines whether a registration can service requests such as:
+### 2. `scope_traits`
 
-- value
-- lvalue reference
-- rvalue reference
-- pointer
-- wrapper-to-wrapper conversion
+A storage scope is a tag type, used as `scope<Tag>`, and one specialization of
+`scope_traits<Tag>` in
+[include/dingo/storage/scope_traits.h](../../include/dingo/storage/scope_traits.h).
+The built-in `unique`, `shared`, `external` and `shared_cyclical` scopes are
+specialized the same way. The specialization declares:
 
-The same wrapper may have different exposure rules under `unique`, `shared`, or
-`external` storage.
+- `enabled`, `is_stable`, `consumes`, `guard` and `retains_unresolved_source`:
+  whether references stay valid, whether a request consumes the instance, the
+  recursion guard, and whether unresolved storage keeps source state
+- `exposed(storage_form)`: which request categories (value, lvalue reference,
+  rvalue reference, pointer) the scope publishes for each form of stored type
+- `storage<Type, StoredType, Factory, Conversions>`: the class that keeps the
+  instance; it provides `resolve`, and `is_resolved` and `reset` when it keeps
+  the instance between requests
+- optionally `requests<Form, Type, U>`: the request lists of a form, when the
+  scope publishes more or other requests than the exposed ones
+- optionally `allows_cycles`: whether its bindings may take part in a dependency
+  cycle
 
-The built-in scopes do not specialize `storage_traits` per wrapper. Each scope
-is described once by a `storage_scope_policy` specialization (stability,
-consumed versus borrowed source, recursion guard, and the request lists it
-publishes for each `storage_form`), and
-[include/dingo/storage/storage_scope_policy.h](../../include/dingo/storage/storage_scope_policy.h)
-generates `storage_traits` and `storage_materialization_traits` from it. A
-(scope, form) cell that deviates from that rule specializes
-`detail::storage_cell`. A wrapper is classified into a form by its semantics, so
-a custom wrapper needs no `storage_traits` of its own. `storage_traits` remains
-a specialization point for a shape the forms do not describe.
-
-Put a result shape in `value_types` when it is copied from borrowed storage;
-Dingo exposes it only when the resolved type is copy constructible. Put `T&&` in
-`rvalue_reference_types` when the storage produces `T` for consumption; Dingo
-derives the corresponding value request when `type_conversion_traits` accepts
-the concrete source category. A consumable result does not also need to appear
-in `value_types`. These declarations are converted into concrete `resolution`
-descriptors, so the downstream resolver no longer has to infer source ownership
-or exact lookup behavior from the request spelling.
+From it Dingo derives the request lists of every stored type and the
+materialization of the scope.
+[test/registration/custom_scope.cpp](../../test/registration/custom_scope.cpp)
+defines a scope outside the library and registers it with both containers.
 
 ### 3. `type_conversion_traits`
 
 Specialize `type_conversion_traits` in
 [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
-when two wrapper types need a concrete conversion step that is not covered by a
-direct converting constructor or pointer cast.
+when two types need a concrete conversion step that is not covered by a direct
+converting constructor or pointer cast.
 
 The `convert` function performs the last-mile "build target wrapper from source
 wrapper" step and is the availability signal. A conversion is available exactly
@@ -137,11 +136,9 @@ That test adds:
 - `test_unique<T>`
 - `test_optional<T>`
 
-and then specializes the traits Dingo needs:
-
-- `type_traits` for the semantics and operations of each wrapper
-- `type_conversion_traits` for the conversion between handles of different
-  elements
+each described by one `type_traits` specialization with its semantics and
+operations; the handles convert to the handles of a base by their converting
+constructors.
 
 Their definitions are in
 [test/support/custom_wrappers.h](../../test/support/custom_wrappers.h).
@@ -150,19 +147,17 @@ That file is worth treating as executable documentation.
 
 ## Interface Storage Rebinding
 
-One extra extension point is
+Registration rebinds a storage handle from a concrete leaf type to an interface
+leaf type when the handle of the interface can be constructed from it, or a
+`type_conversion_traits` specialization converts it; see
 [include/dingo/storage/interface_storage_traits.h](../../include/dingo/storage/interface_storage_traits.h).
-
-The container uses it to decide whether a storage handle can be rebound from a
-concrete leaf type to an interface leaf type. That is the mechanism behind the
-single-interface storage rewrite in registration.
-
-In practice this means the wrapper must be rebindable in a way that preserves
-correct ownership and deletion semantics for interface use.
+It is not a trait to specialize: a wrapper takes part through its converting
+constructor.
 
 ## Good Source Companions
 
 - [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
-- [include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
+- [include/dingo/storage/scope_traits.h](../../include/dingo/storage/scope_traits.h)
 - [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
-- [test/type/type_traits.cpp](../../test/type/type_traits.cpp)
+- [test/support/custom_wrappers.h](../../test/support/custom_wrappers.h)
+- [test/registration/custom_scope.cpp](../../test/registration/custom_scope.cpp)

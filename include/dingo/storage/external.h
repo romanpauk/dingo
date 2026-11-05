@@ -11,15 +11,21 @@
 
 #include <dingo/factory/constructor.h>
 #include <dingo/resolution/resolution_operation.h>
+#include <dingo/storage/scope_traits.h>
 #include <dingo/storage/storage.h>
-#include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/normalized_type.h>
 
 namespace dingo {
 struct external {};
 
-template <> struct storage_scope_policy<external> {
+namespace detail {
+template <typename Type, typename StoredType, typename Factory,
+          typename Conversions>
+class external_storage;
+} // namespace detail
+
+template <> struct scope_traits<external> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = true;
   static constexpr bool consumes = false;
@@ -30,21 +36,14 @@ template <> struct storage_scope_policy<external> {
     return storage_exposure::value | storage_exposure::lvalue |
            storage_exposure::pointer;
   }
+
+  template <typename Type, typename StoredType, typename Factory,
+            typename Conversions>
+  using storage =
+      detail::external_storage<Type, StoredType, Factory, Conversions>;
 };
 
 namespace detail {
-template <typename Type, typename U>
-struct conversions<external, Type, U> : type_storage_traits<external, Type, U> {
-};
-
-template <typename Type, typename U>
-struct conversions<external, Type &, U>
-    : public type_storage_traits<external, Type &, U> {};
-
-template <typename Type, typename U>
-struct conversions<external, Type *, U>
-    : public type_storage_traits<external, Type *, U> {};
-
 template <typename Type, typename StoredType, typename = void>
 class external_storage_instance_impl {
 public:
@@ -118,7 +117,7 @@ private:
 
 template <typename Type, typename StoredType, typename Factory,
           typename Conversions>
-class storage<external, Type, StoredType, Factory, Conversions> {
+class external_storage {
   storage_instance<external, Type, StoredType, void> instance_;
 
 public:
@@ -132,7 +131,7 @@ public:
   using tag_type = external;
 
   template <typename T>
-  storage(T &&instance) : instance_(std::forward<T>(instance)) {}
+  external_storage(T &&instance) : instance_(std::forward<T>(instance)) {}
 
   template <typename Context, typename Container>
   decltype(auto) resolve(construction_scope, Context &, Container &) {

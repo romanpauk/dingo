@@ -13,6 +13,7 @@
 #include <dingo/base/type_list.h>
 #include <dingo/context/recursion_guard.h>
 #include <dingo/resolution/materialized_source.h>
+#include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/type/type_traits.h>
@@ -24,21 +25,20 @@
 #include <type_traits>
 #include <utility>
 
-// A storage scope is described once, by a storage_scope_policy specialization.
-// From the policy this header derives both the request lists storage_traits
-// exposes (policy x form) and the storage_materialization_traits behavior.
+// A storage scope is a tag type and one specialization of scope_traits, which
+// says how the scope stores an instance and which requests it publishes for
+// it. From it this header derives the request lists and the materialization
+// behavior of the scope.
 //
 // Request lists are produced in three steps:
 //   1. storage_form_traits<Type> classifies the registered type into a
 //      storage_form and names the lists the form offers: borrowed lists
 //      (value, lvalue reference, pointer) and consumed lists (rvalue
 //      reference).
-//   2. storage_scope_policy<Scope>::exposed(form) selects which of those lists
-//      the scope publishes.
-//   3. detail::storage_cell<Scope, form, Type, U> turns the selection into the
-//      four lists. A cell that deviates from the rule specializes
-//      detail::storage_cell; those specializations are the complete list of
-//      per-cell deviations.
+//   2. scope_traits<Scope>::exposed(form) selects which of those lists the
+//      scope publishes.
+//   3. The selection becomes the four lists, unless the scope declares the
+//      lists of a form itself as requests<Form, Type, U>.
 
 namespace dingo {
 
@@ -88,9 +88,9 @@ enum class materialization_guard {
   always
 };
 
-// Describes a storage scope.
+// The members of a scope_traits specialization:
 //
-//   enabled                    the tag is a storage scope
+//   enabled                    true
 //   is_stable                  references and pointers handed out remain valid
 //   consumes                   resolution consumes a produced value (an
 //                              rvalue source) instead of borrowing the stored
@@ -100,17 +100,14 @@ enum class materialization_guard {
 //                              across a resolution
 //   exposed(form)              request lists published for a form; none
 //                              disables the form
-template <typename StorageTag> struct storage_scope_policy {
-  static constexpr bool enabled = false;
-  static constexpr bool is_stable = false;
-  static constexpr bool consumes = false;
-  static constexpr materialization_guard guard = materialization_guard::none;
-  static constexpr bool retains_unresolved_source = false;
-
-  static constexpr storage_exposure exposed(storage_form) {
-    return storage_exposure::none;
-  }
-};
+//   storage<Type, StoredType, Factory, Conversions>
+//                              the storage of a registered type: resolve(),
+//                              and is_resolved() and reset() for a scope that
+//                              keeps its instance
+//   requests<Form, Type, U>    optional: the request lists of a form, when
+//                              the scope does not publish the exposed lists of
+//                              the form; detail::scope_rule_requests is the
+//                              default to extend
 
 namespace detail {
 constexpr bool exposes_any(storage_exposure exposed, storage_exposure lists) {
@@ -329,16 +326,21 @@ template <typename Lists> struct consumed_storage_lists<true, Lists> : Lists {};
 
 // A form is stored in a scope if the scope publishes any list for it.
 template <typename StorageTag, typename Type>
-inline constexpr bool has_storage_cell_v =
-    storage_form_traits<Type>::form != storage_form::unknown &&
-    storage_scope_policy<StorageTag>::exposed(
-        storage_form_traits<Type>::form) != storage_exposure::none;
+inline constexpr bool has_storage_cell_v = [] {
+  if constexpr (scope_traits<StorageTag>::enabled) {
+    return storage_form_traits<Type>::form != storage_form::unknown &&
+           scope_traits<StorageTag>::exposed(storage_form_traits<Type>::form) !=
+               storage_exposure::none;
+  } else {
+    return false;
+  }
+}();
 
-// The generic rule: publish the lists of the form that the policy exposes.
+// The generic rule: publish the lists of the form that the scope exposes.
 template <typename StorageTag, typename Type, typename U>
-struct storage_cell_rule {
+struct scope_rule_requests {
 private:
-  using policy = storage_scope_policy<StorageTag>;
+  using policy = scope_traits<StorageTag>;
   using form = storage_form_traits<Type>;
   static constexpr storage_exposure exposed = policy::exposed(form::form);
   static constexpr storage_exposure borrowed_lists = storage_exposure::value |
@@ -371,17 +373,26 @@ public:
                          typename borrowed::pointer_types, type_list<>>;
 };
 
-// A (scope, form) cell. Specialize it for a cell that deviates from the rule.
+// The request lists of a scope for a form: those it declares, or the rule.
+template <typename StorageTag, storage_form Form, typename Type, typename U,
+          typename = void>
+struct scope_requests : scope_rule_requests<StorageTag, Type, U> {};
+
 template <typename StorageTag, storage_form Form, typename Type, typename U>
-struct storage_cell : storage_cell_rule<StorageTag, Type, U> {};
-} // namespace detail
+struct scope_requests<StorageTag, Form, Type, U,
+                      std::void_t<typename scope_traits<
+                          StorageTag>::template requests<Form, Type, U>>>
+    : scope_traits<StorageTag>::template requests<Form, Type, U> {};
 
 template <typename StorageTag, typename Type, typename U>
-struct storage_traits<
-    StorageTag, Type, U,
-    std::enable_if_t<detail::has_storage_cell_v<StorageTag, Type>>>
-    : detail::storage_cell<StorageTag, detail::storage_form_traits<Type>::form,
-                           Type, U> {};
+struct storage_traits<StorageTag, Type, U,
+                      std::enable_if_t<has_storage_cell_v<StorageTag, Type>>>
+    : scope_requests<StorageTag, storage_form_traits<Type>::form, Type, U> {};
+
+// The requests a registration publishes when it declares no conversions.
+template <typename StorageTag, typename Type, typename U>
+struct conversions : type_storage_traits<StorageTag, Type, U> {};
+} // namespace detail
 
 namespace detail {
 // A scope without a guard does not consult the factory of its storage.
@@ -396,10 +407,9 @@ inline constexpr bool materialization_guard_enabled_v<
 
 template <typename StorageTag, typename Type>
 struct storage_materialization_traits<
-    StorageTag, Type,
-    std::enable_if_t<storage_scope_policy<StorageTag>::enabled>> {
+    StorageTag, Type, std::enable_if_t<scope_traits<StorageTag>::enabled>> {
 private:
-  using policy = storage_scope_policy<StorageTag>;
+  using policy = scope_traits<StorageTag>;
 
 public:
   static constexpr bool can_retain_source = policy::retains_unresolved_source;

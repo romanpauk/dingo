@@ -20,7 +20,6 @@
 #include <utility>
 
 namespace dingo {
-struct unique;
 template <typename... Registrations> struct static_bindings;
 template <typename T> struct storage {
   using type = T;
@@ -313,7 +312,7 @@ template <typename StorageType, typename ScopeType>
 struct deduced_interface_type<
     StorageType, ScopeType,
     std::enable_if_t<
-        !std::is_same_v<typename ScopeType::type, unique> &&
+        !scope_consumes_v<typename ScopeType::type> &&
         type_traits<
             std::remove_cv_t<std::remove_reference_t<StorageType>>>::enabled &&
         is_value_borrowable_v<
@@ -328,7 +327,7 @@ template <typename StorageType, typename ScopeType>
 struct deduced_interface_type<
     StorageType, ScopeType,
     std::enable_if_t<
-        !std::is_same_v<typename ScopeType::type, unique> &&
+        !scope_consumes_v<typename ScopeType::type> &&
         type_traits<StorageType>::enabled && !std::is_pointer_v<StorageType> &&
         std::is_array_v<typename type_traits<StorageType>::value_type>>> {
   using type =

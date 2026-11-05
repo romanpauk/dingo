@@ -12,8 +12,8 @@
 #include <dingo/base/type_descriptor.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/memory/aligned_storage.h>
+#include <dingo/storage/scope_traits.h>
 #include <dingo/storage/storage.h>
-#include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/normalized_type.h>
 
@@ -26,8 +26,42 @@
 namespace dingo {
 struct shared_cyclical {};
 
-template <> struct storage_scope_policy<shared_cyclical> {
+namespace detail {
+template <typename Type, typename StoredType, typename Factory,
+          typename Conversions>
+class shared_cyclical_storage;
+
+// Cells of shared_cyclical, which publishes the leaf U and a shared_ptr<U>
+// directly, whatever the registered shape.
+template <storage_form Form, typename U> struct shared_cyclical_requests {
   static constexpr bool enabled = true;
+  static constexpr bool is_stable = false;
+
+  using value_types = type_list<>;
+  using lvalue_reference_types = type_list<U &>;
+  using rvalue_reference_types = type_list<>;
+  using pointer_types = type_list<U *>;
+};
+
+template <typename U>
+struct shared_cyclical_requests<storage_form::shared_handle, U> {
+  static constexpr bool enabled = true;
+  static constexpr bool is_stable = false;
+
+  using value_types = type_list<std::shared_ptr<U>>;
+  using lvalue_reference_types = type_list<U &, std::shared_ptr<U> &>;
+  using rvalue_reference_types = type_list<>;
+  using pointer_types = type_list<U *, std::shared_ptr<U> *>;
+};
+
+template <typename U>
+struct shared_cyclical_requests<storage_form::shared_array_handle, U>
+    : shared_cyclical_requests<storage_form::shared_handle, U> {};
+} // namespace detail
+
+template <> struct scope_traits<shared_cyclical> {
+  static constexpr bool enabled = true;
+  static constexpr bool allows_cycles = true;
   static constexpr bool is_stable = false;
   static constexpr bool consumes = false;
   static constexpr materialization_guard guard = materialization_guard::none;
@@ -54,41 +88,15 @@ template <> struct storage_scope_policy<shared_cyclical> {
     }
     return storage_exposure::none;
   }
+
+  template <storage_form Form, typename Type, typename U>
+  using requests = detail::shared_cyclical_requests<Form, U>;
+
+  template <typename Type, typename StoredType, typename Factory,
+            typename Conversions>
+  using storage =
+      detail::shared_cyclical_storage<Type, StoredType, Factory, Conversions>;
 };
-
-namespace detail {
-// Cells of shared_cyclical, which publishes the leaf U and a shared_ptr<U>
-// directly, whatever the registered shape: every cell deviates from the generic
-// rule, so the scope lists them itself.
-template <storage_form Form, typename U> struct shared_cyclical_cell {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = false;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<U &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *>;
-};
-
-template <typename U>
-struct shared_cyclical_cell<storage_form::shared_handle, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = false;
-
-  using value_types = type_list<std::shared_ptr<U>>;
-  using lvalue_reference_types = type_list<U &, std::shared_ptr<U> &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *, std::shared_ptr<U> *>;
-};
-
-template <typename U>
-struct shared_cyclical_cell<storage_form::shared_array_handle, U>
-    : shared_cyclical_cell<storage_form::shared_handle, U> {};
-
-template <storage_form Form, typename Type, typename U>
-struct storage_cell<shared_cyclical, Form, Type, U>
-    : shared_cyclical_cell<Form, U> {};
-} // namespace detail
 
 template <typename Base, typename Derived> struct is_virtual_base {
 #if defined(__GNUG__)
@@ -114,10 +122,6 @@ template <typename Base, typename Derived>
 static constexpr bool is_virtual_base_v = is_virtual_base<Base, Derived>::value;
 
 namespace detail {
-template <typename Type, typename U>
-struct conversions<shared_cyclical, Type, U>
-    : type_storage_traits<shared_cyclical, Type, U> {};
-
 template <typename Context, typename = void>
 struct has_on_rollback : std::false_type {};
 
@@ -132,7 +136,7 @@ struct has_on_rollback<
 template <typename Type, typename StoredType, typename Factory,
           typename Conversions, typename Derived, typename Base>
 struct storage_interface_requirements<
-    storage<shared_cyclical, Type, StoredType, Factory, Conversions>, Derived,
+    shared_cyclical_storage<Type, StoredType, Factory, Conversions>, Derived,
     Base> : std::bool_constant<!is_virtual_base_v<Base, Derived>> {};
 
 template <typename Type, typename Factory,
@@ -277,7 +281,7 @@ private:
 
 template <typename Type, typename StoredType, typename Factory,
           typename Conversions>
-class storage<shared_cyclical, Type, StoredType, Factory, Conversions> {
+class shared_cyclical_storage {
   struct conversion_entry {
     explicit conversion_entry(type_descriptor key) : descriptor(key) {}
     virtual ~conversion_entry() = default;
@@ -299,7 +303,8 @@ class storage<shared_cyclical, Type, StoredType, Factory, Conversions> {
 
   class local_rollback_guard {
   public:
-    explicit local_rollback_guard(storage *storage) : storage_(storage) {}
+    explicit local_rollback_guard(shared_cyclical_storage *storage)
+        : storage_(storage) {}
     ~local_rollback_guard() {
       if (active_) {
         storage_->reset();
@@ -309,13 +314,14 @@ class storage<shared_cyclical, Type, StoredType, Factory, Conversions> {
     void release() { active_ = false; }
 
   private:
-    storage *storage_;
+    shared_cyclical_storage *storage_;
     bool active_ = true;
   };
 
 public:
   template <typename... Args>
-  storage(Args &&...args) : instance_(std::forward<Args>(args)...) {}
+  shared_cyclical_storage(Args &&...args)
+      : instance_(std::forward<Args>(args)...) {}
 
   using conversions = Conversions;
   using type = Type;
@@ -338,7 +344,7 @@ public:
       if constexpr (has_on_rollback<Context>::value) {
         context.on_rollback(
             +[](void *self, void *) noexcept {
-              static_cast<storage *>(self)->reset();
+              static_cast<shared_cyclical_storage *>(self)->reset();
             },
             this);
         instance_.resolve(context);

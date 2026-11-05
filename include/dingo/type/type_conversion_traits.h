@@ -335,8 +335,7 @@ struct target_alternative_type_conversion
   template <typename Resolver, typename Context, typename Actual>
   static Target apply(Resolver &resolver, Context &context, Actual &&source,
                       type_descriptor requested, type_descriptor registered) {
-    return alternative_type_traits<
-        std::remove_cv_t<std::remove_reference_t<Target>>>::
+    return type_traits<std::remove_cv_t<std::remove_reference_t<Target>>>::
         template wrap<Selected>(Conversion::apply(resolver, context,
                                                   std::forward<Actual>(source),
                                                   requested, registered));
@@ -389,8 +388,8 @@ private:
                                      type_descriptor registered) {
     using conversion = typename Branch::conversion;
     if constexpr (conversion::available) {
-      using source_traits = alternative_type_traits<
-          std::remove_cv_t<std::remove_reference_t<Actual>>>;
+      using source_traits =
+          type_traits<std::remove_cv_t<std::remove_reference_t<Actual>>>;
       if (auto *value =
               source_traits::template get<typename Branch::alternative_type>(
                   source)) {
@@ -535,22 +534,21 @@ struct target_alternative_type_conversion_candidate {
 template <typename Target, typename Source, typename Access>
 struct target_alternative_type_conversion_candidate<
     Target, Source, Access,
-    std::void_t<
-        typename alternative_type_traits<std::remove_cv_t<
-            std::remove_reference_t<Target>>>::template selected_type<Source>,
-        decltype(alternative_type_traits<
-                 std::remove_cv_t<std::remove_reference_t<Target>>>::
-                     template wrap<typename alternative_type_traits<
+    std::void_t<typename type_traits<std::remove_cv_t<std::remove_reference_t<
+                    Target>>>::template selected_type<Source>,
+                decltype(type_traits<
                          std::remove_cv_t<std::remove_reference_t<Target>>>::
-                                       template selected_type<Source>>(
-                         std::declval<
-                             typename alternative_type_traits<std::remove_cv_t<
-                                 std::remove_reference_t<Target>>>::
-                                 template selected_type<Source>>()))>> {
+                             template wrap<typename type_traits<
+                                 std::remove_cv_t<std::remove_reference_t<
+                                     Target>>>::template selected_type<Source>>(
+                                 std::declval<
+                                     typename type_traits<std::remove_cv_t<
+                                         std::remove_reference_t<Target>>>::
+                                         template selected_type<Source>>()))>> {
 private:
   using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
-  using selected = typename alternative_type_traits<
-      target_type>::template selected_type<Source>;
+  using selected =
+      typename type_traits<target_type>::template selected_type<Source>;
   using conversion =
       typename type_conversion_path<selected, Source, Access>::type;
 

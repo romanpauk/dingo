@@ -9,7 +9,7 @@ Dingo resolves requests in two stages:
 
 The full conversion behavior is spread across a few layers:
 
-- `storage_traits` says which target shapes are legal for a storage/scope pair
+- `scope_traits` says which target shapes a scope publishes for a stored type
 - `type_conversion_traits` validates and performs custom type conversions
 - `resolution` records the operation for an allowed source-to-result route
 - `instance_request` carries the lookup type and requested descriptor
@@ -24,10 +24,9 @@ The important source files are:
 
 ## Storage Exposure
 
-`storage_traits` and `resolution_traits` combine into `type_storage_traits`. The
-built-in `storage_traits` lists are generated from a per-scope
-`storage_scope_policy` and the shape of the stored type. That combined type
-lists the result forms a stored object may service:
+`type_storage_traits` lists are generated from the `scope_traits` of the scope
+and the form of the stored type, which its `type_traits` semantics decide. They
+list the result forms a stored object may service:
 
 - `value_types`
 - `lvalue_reference_types`

@@ -161,7 +161,7 @@ if(DINGO_DEVELOPMENT_MODE)
         storage/shared_cyclical.h
         storage/shared.h
         storage/storage.h
-        storage/storage_scope_policy.h
+        storage/scope_traits.h
         storage/type_storage_traits.h
         storage/unique.h
         type/normalized_type.h

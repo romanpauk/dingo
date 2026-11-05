@@ -98,7 +98,7 @@ special-case every supported wrapper combination. Dingo instead factors the
 problem into:
 
 - wrapper semantics in `type_traits`
-- storage exposure in `storage_traits`
+- storage exposure in `scope_traits`
 - the operation carried by the matched `resolution`
 
 The rebinding utilities are what allow those three layers to compose.

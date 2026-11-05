@@ -11,15 +11,23 @@
 
 #include <dingo/factory/constructor.h>
 #include <dingo/factory/factory_traits.h>
+#include <dingo/storage/scope_traits.h>
 #include <dingo/storage/storage.h>
-#include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/normalized_type.h>
+
+#include <optional>
 
 namespace dingo {
 struct unique {};
 
-template <> struct storage_scope_policy<unique> {
+namespace detail {
+template <typename Type, typename StoredType, typename Factory,
+          typename Conversions>
+class unique_storage;
+} // namespace detail
+
+template <> struct scope_traits<unique> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
   static constexpr bool consumes = true;
@@ -46,32 +54,32 @@ template <> struct storage_scope_policy<unique> {
     }
     return storage_exposure::none;
   }
-};
 
-// A plain value is additionally consumable as an optional. This is the only
-// resolution_traits specialization; it applies to the registered type itself,
-// not to a reference to it.
-template <typename Type, typename U>
-struct resolution_traits<
-    unique, Type, U,
-    std::enable_if_t<detail::storage_form_traits<Type>::form ==
-                     storage_form::plain>> {
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<>;
-  using rvalue_reference_types = type_list<std::optional<U> &&>;
-  using pointer_types = type_list<>;
+  // A plain value is additionally consumable as an optional.
+  template <storage_form Form, typename Type, typename U>
+  struct requests : detail::scope_rule_requests<unique, Type, U> {
+    using rvalue_reference_types = std::conditional_t<
+        Form == storage_form::plain,
+        type_list_cat_t<typename detail::scope_rule_requests<
+                            unique, Type, U>::rvalue_reference_types,
+                        type_list<std::optional<U> &&>>,
+        typename detail::scope_rule_requests<unique, Type,
+                                             U>::rvalue_reference_types>;
+  };
+
+  template <typename Type, typename StoredType, typename Factory,
+            typename Conversions>
+  using storage =
+      detail::unique_storage<Type, StoredType, Factory, Conversions>;
 };
 
 namespace detail {
-template <typename Type, typename U>
-struct conversions<unique, Type, U> : type_storage_traits<unique, Type, U> {};
-
 template <typename Type, typename StoredType, typename Factory,
           typename Conversions>
-class storage<unique, Type, StoredType, Factory, Conversions> : Factory {
+class unique_storage : Factory {
 public:
   template <typename... Args>
-  storage(Args &&...args) : Factory(std::forward<Args>(args)...) {}
+  unique_storage(Args &&...args) : Factory(std::forward<Args>(args)...) {}
 
   using conversions = Conversions;
   using factory_type = Factory;
@@ -89,10 +97,10 @@ public:
 
 template <typename Type, size_t N, typename StoredType, typename Factory,
           typename Conversions>
-class storage<unique, Type[N], StoredType, Factory, Conversions> : Factory {
+class unique_storage<Type[N], StoredType, Factory, Conversions> : Factory {
 public:
   template <typename... Args>
-  storage(Args &&...args) : Factory(std::forward<Args>(args)...) {}
+  unique_storage(Args &&...args) : Factory(std::forward<Args>(args)...) {}
 
   using conversions = Conversions;
   using factory_type = Factory;
