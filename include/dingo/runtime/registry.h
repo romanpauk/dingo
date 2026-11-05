@@ -439,16 +439,16 @@ protected:
       detail::selected_lookup_entry_with_cardinality_t<
           Interface, KeyDomain, Cardinality, normalized_lookup_entries>;
 
+  // A static key is looked up by the one definition of its domain, else by its
+  // many definition, else by the base index.
   template <typename Interface, typename KeyDomain>
   using static_key_lookup_cardinality_t = std::conditional_t<
-      std::is_void_v<
-          static_key_lookup_entry_t<Interface, KeyDomain, ::dingo::one>> &&
-          !std::is_void_v<
-              static_key_lookup_entry_t<Interface, KeyDomain, ::dingo::many>>,
-      ::dingo::many,
+      !std::is_void_v<
+          static_key_lookup_entry_t<Interface, KeyDomain, ::dingo::one>>,
+      ::dingo::one,
       std::conditional_t<!std::is_void_v<static_key_lookup_entry_t<
-                             Interface, KeyDomain, ::dingo::one>>,
-                         ::dingo::one, base_lookup_cardinality>>;
+                             Interface, KeyDomain, ::dingo::many>>,
+                         ::dingo::many, base_lookup_cardinality>>;
 
   template <typename LookupEntry> struct runtime_lookup_entry_traits {
     static constexpr bool is_key_value = false;
@@ -465,31 +465,19 @@ protected:
     using key_type = Key;
   };
 
+  // The key-value lookup entries of an interface.
   template <typename TypeInterface, typename Entries>
   struct runtime_lookup_entries_for_interface;
 
-  template <typename TypeInterface>
-  struct runtime_lookup_entries_for_interface<TypeInterface, type_list<>> {
-    using type = type_list<>;
-  };
-
-  template <typename TypeInterface, typename Head, typename... Tail>
+  template <typename TypeInterface, typename... Entries>
   struct runtime_lookup_entries_for_interface<TypeInterface,
-                                              type_list<Head, Tail...>> {
-  private:
-    using head_traits = runtime_lookup_entry_traits<Head>;
-    using tail_type =
-        typename runtime_lookup_entries_for_interface<TypeInterface,
-                                                      type_list<Tail...>>::type;
-    static constexpr bool matches =
-        head_traits::is_key_value &&
-        std::is_same_v<normalized_type_t<TypeInterface>,
-                       typename head_traits::interface_type>;
-
-  public:
-    using type =
-        std::conditional_t<matches, type_list_cat_t<type_list<Head>, tail_type>,
-                           tail_type>;
+                                              type_list<Entries...>> {
+    using type = type_list_cat_t<std::conditional_t<
+        runtime_lookup_entry_traits<Entries>::is_key_value &&
+            std::is_same_v<
+                normalized_type_t<TypeInterface>,
+                typename runtime_lookup_entry_traits<Entries>::interface_type>,
+        type_list<Entries>, type_list<>>...>;
   };
 
   template <typename TypeInterface>
@@ -501,113 +489,61 @@ protected:
   using runtime_registration_arg_traits =
       detail::runtime_registration_key_arg_traits<std::decay_t<Arg>>;
 
+  template <typename Arg>
+  using runtime_registration_arg_interface_t = detail::key_value_interface_t<
+      typename runtime_registration_arg_traits<Arg>::interface_type>;
+
+  // A key value supplies the key of a lookup entry when their keys are the
+  // same: qualified, when it names the interface of the entry, or unqualified.
+  template <typename Entry, typename Arg, bool Qualified>
+  static constexpr bool runtime_registration_arg_keys_entry_v =
+      std::is_same_v<typename runtime_lookup_entry_traits<Entry>::key_type,
+                     typename runtime_registration_arg_traits<Arg>::key_type> &&
+      (Qualified
+           ? std::is_same_v<
+                 typename runtime_lookup_entry_traits<Entry>::interface_type,
+                 runtime_registration_arg_interface_t<Arg>>
+           : std::is_void_v<runtime_registration_arg_interface_t<Arg>>);
+
   template <typename Entry, typename Arg>
-  struct runtime_registration_arg_matches_entry {
-  private:
-    using entry_traits = runtime_lookup_entry_traits<Entry>;
-    using arg_traits = runtime_registration_arg_traits<Arg>;
-    using arg_interface =
-        detail::key_value_interface_t<typename arg_traits::interface_type>;
-
-  public:
-    static constexpr bool value =
-        std::is_same_v<typename entry_traits::key_type,
-                       typename arg_traits::key_type> &&
-        (std::is_void_v<arg_interface> ||
-         std::is_same_v<typename entry_traits::interface_type, arg_interface>);
-  };
-
-  template <typename Entry, typename Arg>
-  struct runtime_registration_arg_matches_qualified_entry {
-  private:
-    using entry_traits = runtime_lookup_entry_traits<Entry>;
-    using arg_traits = runtime_registration_arg_traits<Arg>;
-    using arg_interface =
-        detail::key_value_interface_t<typename arg_traits::interface_type>;
-
-  public:
-    static constexpr bool value =
-        !std::is_void_v<arg_interface> &&
-        std::is_same_v<typename entry_traits::key_type,
-                       typename arg_traits::key_type> &&
-        std::is_same_v<typename entry_traits::interface_type, arg_interface>;
-  };
-
-  template <typename Left, typename Right>
-  struct runtime_registration_args_are_same_key {
-  private:
-    using left_traits = runtime_registration_arg_traits<Left>;
-    using right_traits = runtime_registration_arg_traits<Right>;
-    using left_interface =
-        detail::key_value_interface_t<typename left_traits::interface_type>;
-    using right_interface =
-        detail::key_value_interface_t<typename right_traits::interface_type>;
-
-  public:
-    static constexpr bool value =
-        std::is_same_v<typename left_traits::key_type,
-                       typename right_traits::key_type> &&
-        std::is_same_v<left_interface, right_interface>;
-  };
+  static constexpr bool runtime_registration_arg_matches_entry_v =
+      runtime_registration_arg_keys_entry_v<Entry, Arg, true> ||
+      runtime_registration_arg_keys_entry_v<Entry, Arg, false>;
 
   template <typename Arg, typename... KeyValueArgs>
   static constexpr std::size_t runtime_registration_key_arg_count_v =
       (std::size_t{0} + ... +
-       (runtime_registration_args_are_same_key<Arg, KeyValueArgs>::value ? 1U
-                                                                         : 0U));
-
-  template <typename Key, typename... KeyValueArgs>
-  static constexpr std::size_t
-      unqualified_runtime_registration_key_arg_count_v =
-          (std::size_t{0} + ... +
-           ((std::is_same_v<typename runtime_registration_arg_traits<
-                                KeyValueArgs>::key_type,
-                            Key> &&
-             std::is_void_v<typename runtime_registration_arg_traits<
-                 KeyValueArgs>::interface_type>)
-                ? 1U
-                : 0U));
-
-  template <typename Entry, typename... KeyValueArgs>
-  static constexpr std::size_t qualified_runtime_registration_key_arg_count_v =
-      (std::size_t{0} + ... +
-       (runtime_registration_arg_matches_qualified_entry<Entry,
-                                                         KeyValueArgs>::value
+       (std::is_same_v<typename runtime_registration_arg_traits<Arg>::key_type,
+                       typename runtime_registration_arg_traits<
+                           KeyValueArgs>::key_type> &&
+                std::is_same_v<
+                    runtime_registration_arg_interface_t<Arg>,
+                    runtime_registration_arg_interface_t<KeyValueArgs>>
             ? 1U
             : 0U));
 
-  template <typename Entries, typename Key>
+  template <typename Entries, typename Arg>
   struct runtime_lookup_entry_key_count;
 
-  template <typename Key>
-  struct runtime_lookup_entry_key_count<type_list<>, Key>
-      : std::integral_constant<std::size_t, 0> {};
-
-  template <typename Head, typename... Tail, typename Key>
-  struct runtime_lookup_entry_key_count<type_list<Head, Tail...>, Key>
+  template <typename... Entries, typename Arg>
+  struct runtime_lookup_entry_key_count<type_list<Entries...>, Arg>
       : std::integral_constant<
             std::size_t,
-            (runtime_registration_arg_matches_entry<Head, Key>::value ? 1U
-                                                                      : 0U) +
-                runtime_lookup_entry_key_count<type_list<Tail...>,
-                                               Key>::value> {};
+            (std::size_t{0} + ... +
+             (runtime_registration_arg_matches_entry_v<Entries, Arg> ? 1U
+                                                                     : 0U))> {};
 
   template <typename InterfaceList, typename Arg>
   struct runtime_registration_key_match_count;
 
-  template <typename Arg>
-  struct runtime_registration_key_match_count<type_list<>, Arg>
-      : std::integral_constant<std::size_t, 0> {};
-
-  template <typename Interface, typename... Tail, typename Arg>
-  struct runtime_registration_key_match_count<type_list<Interface, Tail...>,
-                                              Arg>
+  template <typename... Interfaces, typename Arg>
+  struct runtime_registration_key_match_count<type_list<Interfaces...>, Arg>
       : std::integral_constant<
             std::size_t,
-            runtime_lookup_entry_key_count<
-                runtime_lookup_entries_for_interface_t<Interface>, Arg>::value +
-                runtime_registration_key_match_count<type_list<Tail...>,
-                                                     Arg>::value> {};
+            (std::size_t{0} + ... +
+             runtime_lookup_entry_key_count<
+                 runtime_lookup_entries_for_interface_t<Interfaces>,
+                 Arg>::value)> {};
 
   template <typename InterfaceList, typename... KeyValueArgs>
   static constexpr void validate_supplied_runtime_registration_keys() {
@@ -632,14 +568,9 @@ protected:
                   "matching runtime-key lookup definition");
     for_each(Entries{}, [](auto element) {
       using entry_type = typename decltype(element)::type;
-      using key_type =
-          typename runtime_lookup_entry_traits<entry_type>::key_type;
       static_assert(
-          qualified_runtime_registration_key_arg_count_v<entry_type,
-                                                         KeyValueArgs...> +
-                  unqualified_runtime_registration_key_arg_count_v<
-                      key_type, KeyValueArgs...> >=
-              1U,
+          (runtime_registration_arg_matches_entry_v<entry_type, KeyValueArgs> ||
+           ...),
           "runtime-key lookup registration requires a runtime key value for "
           "each declared runtime-key lookup");
     });
@@ -662,20 +593,13 @@ protected:
     using many_lookup_entry =
         static_key_lookup_entry_t<normalized_interface, key_domain,
                                   ::dingo::many>;
-    using selected_cardinality =
-        static_key_lookup_cardinality_t<normalized_interface, key_domain>;
     using lookup_entry = std::conditional_t<
-        std::is_same_v<selected_cardinality, ::dingo::one> &&
-            !std::is_void_v<one_lookup_entry>,
-        one_lookup_entry,
-        std::conditional_t<
-            std::is_same_v<selected_cardinality, ::dingo::many> &&
-                !std::is_void_v<many_lookup_entry>,
-            many_lookup_entry, base_lookup_entry>>;
+        !std::is_void_v<one_lookup_entry>, one_lookup_entry,
+        std::conditional_t<!std::is_void_v<many_lookup_entry>,
+                           many_lookup_entry, base_lookup_entry>>;
     static constexpr bool has_explicit_lookup = false;
     static constexpr bool has_explicit_collection_lookup =
-        std::is_same_v<selected_cardinality, ::dingo::many> &&
-        !std::is_void_v<many_lookup_entry>;
+        std::is_same_v<lookup_entry, many_lookup_entry>;
   };
 
   template <typename Interface, typename KeyDefinition>
@@ -856,41 +780,35 @@ protected:
                                                 std::forward<Fn>(fn));
   }
 
-  template <typename Entry, typename Tuple, std::size_t Index = 0>
-  static decltype(auto) qualified_registration_key_value(Tuple &keys) {
-    using tuple_type = std::remove_reference_t<Tuple>;
-    if constexpr (Index >= std::tuple_size_v<tuple_type>) {
-      return unqualified_registration_key_value<Entry>(keys);
-    } else if constexpr (runtime_registration_arg_matches_qualified_entry<
-                             Entry, std::decay_t<std::tuple_element_t<
-                                        Index, tuple_type>>>::value) {
-      return std::get<Index>(keys).value();
-    } else {
-      return qualified_registration_key_value<Entry, Tuple, Index + 1>(keys);
-    }
-  }
-
-  template <typename Entry, typename Tuple, std::size_t Index = 0>
-  static decltype(auto) unqualified_registration_key_value(Tuple &keys) {
-    using tuple_type = std::remove_reference_t<Tuple>;
-    using key_type = typename runtime_lookup_entry_traits<Entry>::key_type;
-    if constexpr (Index >= std::tuple_size_v<tuple_type>) {
-      static_assert(Index < std::tuple_size_v<tuple_type>,
-                    "missing runtime key value for runtime-key lookup "
-                    "registration");
-    } else {
-      using element_type =
-          std::decay_t<std::tuple_element_t<Index, tuple_type>>;
-      using element_traits = runtime_registration_arg_traits<element_type>;
-      if constexpr (std::is_same_v<typename element_traits::key_type,
-                                   key_type> &&
-                    std::is_void_v<typename element_traits::interface_type>) {
-        return std::get<Index>(keys).value();
-      } else {
-        return unqualified_registration_key_value<Entry, Tuple, Index + 1>(
-            keys);
+  // The index of the key value that supplies the key of an entry: the first
+  // qualified one, else the first unqualified one.
+  template <typename Entry, typename... Args>
+  static constexpr std::size_t registration_key_value_index() {
+    constexpr bool qualified[] = {
+        runtime_registration_arg_keys_entry_v<Entry, Args, true>...};
+    constexpr bool unqualified[] = {
+        runtime_registration_arg_keys_entry_v<Entry, Args, false>...};
+    for (std::size_t index = 0; index < sizeof...(Args); ++index) {
+      if (qualified[index]) {
+        return index;
       }
     }
+    for (std::size_t index = 0; index < sizeof...(Args); ++index) {
+      if (unqualified[index]) {
+        return index;
+      }
+    }
+    return sizeof...(Args);
+  }
+
+  template <typename Entry, typename... Args>
+  static decltype(auto) registration_key_value(std::tuple<Args...> &keys) {
+    constexpr std::size_t index =
+        registration_key_value_index<Entry, std::decay_t<Args>...>();
+    static_assert(index < sizeof...(Args),
+                  "missing runtime key value for runtime-key lookup "
+                  "registration");
+    return std::get<index>(keys).value();
   }
 
   template <typename TypeInterface, typename TypeStorage, typename LookupKey,
@@ -1138,7 +1056,7 @@ protected:
         auto key_value_tuple = std::forward_as_tuple(key_values...);
         auto key_resolver = [&](auto element) -> decltype(auto) {
           using entry_type = typename decltype(element)::type;
-          return qualified_registration_key_value<entry_type>(key_value_tuple);
+          return registration_key_value<entry_type>(key_value_tuple);
         };
         commit_lookup<TypeInterface, TypeStorage, LookupKey>(
             state, value_factory, transaction, key_resolver, lookup_key,
