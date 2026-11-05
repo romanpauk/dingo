@@ -500,7 +500,8 @@ private:
 
   template <typename Interface, typename LookupKey,
             typename Exact = exact_selection_t<Interface, LookupKey>,
-            bool HasExact = Exact::status != detail::binding_status::not_found>
+            bool HasExact =
+                !detail::selects_normalized_interface(Exact::status)>
   struct selected_binding {
     using type = Exact;
   };

@@ -20,6 +20,13 @@ enum class binding_status {
   ambiguous,
 };
 
+// A request selects a binding by its exact interface. Only when no binding has
+// the exact interface does it select by its normalized interface; several
+// bindings of the exact interface make the request ambiguous.
+constexpr bool selects_normalized_interface(binding_status exact) {
+  return exact == binding_status::not_found;
+}
+
 template <binding_status Status, typename Binding = void>
 struct binding_choice {
   static constexpr binding_status status = Status;
@@ -54,8 +61,6 @@ using static_binding_t = typename static_binding<Bindings>::type;
 template <typename Binding> struct runtime_binding_selection {
   binding_status status = binding_status::not_found;
   Binding *binding = nullptr;
-
-  constexpr bool found() const { return status == binding_status::found; }
 
   static constexpr runtime_binding_selection found(Binding &binding) {
     return {binding_status::found, &binding};

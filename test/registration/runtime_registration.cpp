@@ -873,3 +873,44 @@ TEST(type_registration_test,
       container.resolve<runtime_domain_second_array_service &>().value.value,
       22);
 }
+
+namespace {
+struct ambiguity_interface {
+  virtual ~ambiguity_interface() = default;
+  virtual int id() const = 0;
+};
+
+template <int Id> struct ambiguity_implementation : ambiguity_interface {
+  int id() const override { return Id; }
+};
+
+struct ambiguity_traits : runtime_container_traits {
+  using lookup_definition_type = lookups<base<many>>;
+};
+} // namespace
+
+TEST(type_registration_test,
+     ambiguous_exact_interface_does_not_fall_back_to_normalized) {
+  runtime_container<ambiguity_traits> container;
+  container.register_type<scope<shared>,
+                          storage<std::shared_ptr<ambiguity_implementation<1>>>,
+                          interfaces<std::shared_ptr<ambiguity_interface>>>();
+  container.register_type<scope<shared>,
+                          storage<std::shared_ptr<ambiguity_implementation<2>>>,
+                          interfaces<std::shared_ptr<ambiguity_interface>>>();
+  container.register_type<scope<shared>,
+                          storage<std::shared_ptr<ambiguity_implementation<3>>>,
+                          interfaces<ambiguity_interface>>();
+
+  EXPECT_THROW(container.resolve<std::shared_ptr<ambiguity_interface>>(),
+               type_ambiguous_exception);
+}
+
+TEST(type_registration_test, unbound_exact_interface_falls_back_to_normalized) {
+  runtime_container<ambiguity_traits> container;
+  container.register_type<scope<shared>,
+                          storage<std::shared_ptr<ambiguity_implementation<3>>>,
+                          interfaces<ambiguity_interface>>();
+
+  EXPECT_EQ(container.resolve<std::shared_ptr<ambiguity_interface>>()->id(), 3);
+}

@@ -628,7 +628,7 @@ protected:
       auto selection =
           select_binding_at_interface<AllowMiss, LookupKey, Exact>(state, key);
       if constexpr (!std::is_same_v<Value, Exact>) {
-        if (!selection.found()) {
+        if (detail::selects_normalized_interface(selection.status)) {
           selection = select_binding_at_interface<AllowMiss, LookupKey, Value>(
               state, key);
         }
