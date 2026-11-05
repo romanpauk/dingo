@@ -135,6 +135,7 @@ if(DINGO_DEVELOPMENT_MODE)
         runtime/lookup_index.h
         runtime/memory.h
         runtime/registry.h
+        runtime/registry_store.h
         runtime/transaction.h
         static_container.h
         lookup/array.h
