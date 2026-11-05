@@ -350,6 +350,7 @@ dev = [
     { name = "filecheck" },
     { name = "jinja2" },
     { name = "lit" },
+    { name = "lizard" },
     { name = "mdformat" },
     { name = "pytest" },
 ]
@@ -364,6 +365,7 @@ dev = [
     { name = "filecheck", specifier = ">=1.0.3" },
     { name = "jinja2", specifier = ">=3.1.0" },
     { name = "lit", specifier = ">=18.1.8" },
+    { name = "lizard", specifier = ">=1.17" },
     { name = "mdformat" },
     { name = "pytest", specifier = ">=8.0" },
 ]
@@ -568,6 +570,19 @@ wheels = [
 ]
 
 [[package]]
+name = "lizard"
+version = "1.25.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pathspec" },
+    { name = "pygments" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e6/67/0c5fe939ee37df57f415f4fe461a894ae12d18e9fea89705cbd2525967b6/lizard-1.25.0.tar.gz", hash = "sha256:e37e0da72be4fd4a254f511470af2b2f6800128879844b2844695641baa83112", size = 152459, upload-time = "2026-11-02T08:00:04.944Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/90/f9/93b0c4d4d64eb5f126419cee90580b75ee917c4fabe0415c8214907a2bfb/lizard-1.25.0-py2.py3-none-any.whl", hash = "sha256:e82fc8ad93a4c9025f7dad9428bdcfaa8caedfb4358a8ea5860de35a3794626f", size = 163311, upload-time = "2026-11-02T08:00:03.227Z" },
+]
+
+[[package]]
 name = "markdown-it-py"
 version = "4.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -733,6 +748,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d7/f1/e7a6dd94a8d4a5626c03e4e99c87f241ba9e350cd9e6d75123f992427270/packaging-26.2.tar.gz", hash = "sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661", size = 228134, upload-time = "2026-04-24T20:15:23.917Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/df/b2/87e62e8c3e2f4b32e5fe99e0b86d576da1312593b39f47d8ceef365e95ed/packaging-26.2-py3-none-any.whl", hash = "sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e", size = 100195, upload-time = "2026-04-24T20:15:22.081Z" },
+]
+
+[[package]]
+name = "pathspec"
+version = "1.1.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5a/82/42f767fc1c1143d6fd36efb827202a2d997a375e160a71eb2888a925aac1/pathspec-1.1.1.tar.gz", hash = "sha256:17db5ecd524104a120e173814c90367a96a98d07c45b2e10c2f3919fff91bf5a", size = 135180, upload-time = "2026-04-27T01:46:08.907Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f1/d9/7fb5aa316bc299258e68c73ba3bddbc499654a07f151cba08f6153988714/pathspec-1.1.1-py3-none-any.whl", hash = "sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189", size = 57328, upload-time = "2026-04-27T01:46:07.06Z" },
 ]
 
 [[package]]

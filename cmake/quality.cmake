@@ -14,6 +14,14 @@ function(configure_quality_targets out_check_targets)
   )
   list(APPEND check_targets layers-check)
 
+  # A report, not a check: it ranks the headers and never fails.
+  add_custom_target(complexity-report
+    COMMENT "Ranking header complexity"
+    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/tools/complexity.py
+      ${PROJECT_SOURCE_DIR}/include --build-dir ${PROJECT_BINARY_DIR}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+  )
+
   if(NOT DINGO_CLANG_TOOLS_ENABLED)
     add_custom_target(format DEPENDS markdown-format)
     add_custom_target(format-check DEPENDS markdown-format-check)

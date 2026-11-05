@@ -44,8 +44,44 @@ Run a quality target with `cmake --build build -t <target>`.
 - `includes-check`: checks includes on those generated translation units on
   non-Windows builds.
 - `check`: runs all verification targets available on the platform.
+- `complexity-report`: prints where the complexity of the headers is; it is a
+  report and is not part of `check`. See
+  [Complexity Report](#complexity-report).
 
 The development tools are provided by the locked `uv` environment.
+
+## Complexity Report
+
+[`tools/complexity.py`](../tools/complexity.py) ranks the headers to find
+candidates for simplification. Its sections are:
+
+- `functions`: function bodies by cyclomatic complexity, measured by lizard.
+- `headers`: template declarations, specializations, `if constexpr` branches,
+  SFINAE constructs and type definitions per header, and how many of those
+  definitions are named at most once outside their definition.
+- `modules`: non-comment lines per directory under `include/dingo`.
+- `duplicates`: repeated code blocks, found by lizard.
+- `compile`: template instantiation time per template, from clang
+  `-ftime-trace`, for the translation units selected with `--profile`.
+
+The first four sections run by default:
+
+```bash
+uv run tools/complexity.py --top 30
+```
+
+Compile-time profiling reads `compile_commands.json` from the build directory
+and recompiles the selected units with clang:
+
+```bash
+uv run tools/complexity.py --sections modules --build-dir build \
+  --profile test/container/dependency_chain.cpp \
+  --profile test/registration/runtime_registration.cpp
+```
+
+The rankings are heuristics to compare between revisions. A definition named
+once is a candidate for inlining, not a defect, and an instantiation is charged
+its own time, excluding the instantiations nested in it.
 
 ## Generated Matrix Tests
 

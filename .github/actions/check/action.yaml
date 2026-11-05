@@ -37,6 +37,7 @@ runs:
       run: |
         cd "${{ inputs.source_dir }}"
         uv run --locked python tools/release_flow_test.py
+        uv run --locked python tools/complexity_test.py
     - name: Configure
       shell: bash
       run: |
