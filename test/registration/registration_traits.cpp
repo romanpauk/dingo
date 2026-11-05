@@ -296,6 +296,7 @@ using pointer_resolution_targets_t =
 
 template <typename Type> struct fresh_value_storage {
   using type = Type;
+  using resolved_type = Type;
 
   struct conversions {
     static constexpr bool is_stable = true;

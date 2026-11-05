@@ -26,8 +26,6 @@ template <typename...> inline constexpr bool always_false_v = false;
 namespace detail {
 struct no_materialization_scope {
   no_materialization_scope() = default;
-
-  template <typename... Args> explicit no_materialization_scope(Args &&...) {}
 };
 } // namespace detail
 
@@ -86,18 +84,9 @@ struct storage_traits<StorageTag, const Type &, U>
 template <typename T>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 
-template <typename Storage, typename = void> struct storage_source_type {
-  using type = std::remove_reference_t<typename Storage::type>;
-};
-
 template <typename Storage>
-struct storage_source_type<Storage,
-                           std::void_t<typename Storage::resolved_type>> {
-  using type = std::remove_reference_t<typename Storage::resolved_type>;
-};
-
-template <typename Storage>
-using storage_source_type_t = typename storage_source_type<Storage>::type;
+using storage_source_type_t =
+    std::remove_reference_t<typename Storage::resolved_type>;
 
 // The source helpers below read a storage_shape (defined further down).
 template <typename Storage> struct storage_borrow_source {
@@ -124,7 +113,6 @@ private:
                          std::remove_pointer_t<resolved_type>, resolved_type>;
 
 public:
-  using stored_type = stored_value_type;
   using direct_leaf_type =
       std::remove_cv_t<std::remove_pointer_t<stored_value_type>>;
   using borrowed_type = storage_borrow_source_t<Storage>;
@@ -132,7 +120,6 @@ public:
   using qualification_type = resolved_leaf_type;
 
   static constexpr bool is_pointer = std::is_pointer_v<stored_value_type>;
-  static constexpr bool is_const = std::is_const_v<resolved_leaf_type>;
 
   template <typename Interface>
   using interface_type = copy_cv_t<resolved_leaf_type, Interface>;

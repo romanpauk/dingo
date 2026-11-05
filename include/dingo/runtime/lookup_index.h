@@ -45,39 +45,11 @@ public:
     static_key_lookup_storage *owner_ = nullptr;
   };
 
-  class const_iterator {
-  public:
-    const_iterator() = default;
-
-    const Value &operator*() const { return *owner_->value_; }
-
-    bool operator==(const const_iterator &other) const {
-      return owner_ == other.owner_;
-    }
-
-    bool operator!=(const const_iterator &other) const {
-      return !(*this == other);
-    }
-
-  private:
-    friend class static_key_lookup_storage;
-
-    explicit const_iterator(const static_key_lookup_storage *owner)
-        : owner_(owner) {}
-
-    const static_key_lookup_storage *owner_ = nullptr;
-  };
-
   explicit static_key_lookup_storage(Allocator &) {}
 
   iterator find(::dingo::none_t) { return value_ ? iterator(this) : end(); }
 
-  const_iterator find(::dingo::none_t) const {
-    return value_ ? const_iterator(this) : end();
-  }
-
   iterator end() { return iterator(); }
-  const_iterator end() const { return const_iterator(); }
 
   template <typename Inserted>
   std::pair<iterator, bool> try_emplace(::dingo::none_t, Inserted &&value) {
@@ -105,7 +77,6 @@ class static_key_lookup_storage<Value, ::dingo::many, Allocator> {
 
 public:
   using iterator = typename storage_type::iterator;
-  using const_iterator = typename storage_type::const_iterator;
 
   explicit static_key_lookup_storage(Allocator &allocator)
       : values_(make_lookup_storage_allocator<value_allocator>(allocator)) {}
@@ -114,18 +85,9 @@ public:
     return values_.empty() ? values_.end() : values_.begin();
   }
 
-  const_iterator find(::dingo::none_t) const {
-    return values_.empty() ? values_.end() : values_.begin();
-  }
-
   iterator end() { return values_.end(); }
-  const_iterator end() const { return values_.end(); }
 
   std::pair<iterator, iterator> equal_range(::dingo::none_t) {
-    return {values_.begin(), values_.end()};
-  }
-
-  std::pair<const_iterator, const_iterator> equal_range(::dingo::none_t) const {
     return {values_.begin(), values_.end()};
   }
 
