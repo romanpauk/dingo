@@ -473,7 +473,6 @@ inline constexpr bool is_structural_conversion_target_v = [] {
 // failed, no direct conversion can win for these targets.
 struct default_structural_conversion_path {
   static constexpr bool uses_default_conversion = true;
-  static constexpr bool can_take_address = false;
   static constexpr bool available = false;
   using type = unavailable_type_conversion;
 };
@@ -1028,15 +1027,6 @@ private:
                     has_valid_custom_access,
                 "type_conversion_traits specialization must declare "
                 "required_access<Source> as borrow or consume");
-  static constexpr bool takes_address = [] {
-    if constexpr (std::is_pointer_v<Target> &&
-                  std::is_lvalue_reference_v<Source>) {
-      return std::is_convertible_v<
-          std::add_pointer_t<std::remove_reference_t<Source>>, Target>;
-    } else {
-      return false;
-    }
-  }();
   using direct =
       std::conditional_t<has_traits_conversion &&
                              (!uses_default_conversion ||
@@ -1046,108 +1036,85 @@ private:
                          unavailable_type_conversion>;
 
 public:
-  static constexpr bool can_take_address = takes_address;
   using type = conversion_for_access_t<direct, Access>;
   static constexpr bool available = type::available;
 };
 
-template <std::size_t Index, typename Target, typename Source, typename Access,
-          typename Direct>
-struct conversion_fallback_candidate;
+// The address of an lvalue source, for a pointer target it converts to.
+template <typename Target, typename Source, typename Access>
+using address_fallback = std::conditional_t<
+    std::is_pointer_v<Target> && std::is_lvalue_reference_v<Source> &&
+        std::is_convertible_v<
+            std::add_pointer_t<std::remove_reference_t<Source>>, Target>,
+    address_type_conversion<Target, Source>, unavailable_type_conversion>;
 
-template <typename Target, typename Source, typename Access, typename Direct>
-struct conversion_fallback_candidate<0, Target, Source, Access, Direct> {
-  using type =
-      typename target_alternative_type_conversion_candidate<Target, Source,
-                                                            Access>::type;
-};
+template <typename Target, typename Source, typename Access>
+using target_alternative_fallback =
+    typename target_alternative_type_conversion_candidate<Target, Source,
+                                                          Access>::type;
 
-template <typename Target, typename Source, typename Access, typename Direct>
-struct conversion_fallback_candidate<1, Target, Source, Access, Direct> {
-  using type =
-      typename source_alternative_type_conversion<Target, Source, Access>::type;
-};
+template <typename Target, typename Source, typename Access>
+using source_alternative_fallback =
+    typename source_alternative_type_conversion<Target, Source, Access>::type;
 
-template <typename Target, typename Source, typename Access, typename Direct>
-struct conversion_fallback_candidate<2, Target, Source, Access, Direct> {
-  using type = typename target_wrapper_type_conversion_candidate<Target, Source,
-                                                                 Access>::type;
-};
+template <typename Target, typename Source, typename Access>
+using target_wrapper_fallback =
+    typename target_wrapper_type_conversion_candidate<Target, Source,
+                                                      Access>::type;
 
-template <typename Target, typename Source, typename Access, typename Direct>
-struct conversion_fallback_candidate<3, Target, Source, Access, Direct> {
-  using type = typename array_type_conversion_candidate<Target, Source>::type;
-};
+template <typename Target, typename Source, typename Access>
+using array_fallback =
+    typename array_type_conversion_candidate<Target, Source>::type;
 
-template <typename Target, typename Source, typename Access, typename Direct>
-struct conversion_fallback_candidate<4, Target, Source, Access, Direct> {
-  using type = std::conditional_t<Direct::can_take_address,
-                                  address_type_conversion<Target, Source>,
-                                  unavailable_type_conversion>;
-};
+template <typename Target, typename Source, typename Access>
+using pointer_access_fallback =
+    typename pointer_access_type_conversion_candidate<Target, Source>::type;
 
-template <typename Target, typename Source, typename Access, typename Direct>
-struct conversion_fallback_candidate<5, Target, Source, Access, Direct> {
-  using type =
-      typename pointer_access_type_conversion_candidate<Target, Source>::type;
-};
+template <typename Target, typename Source, typename Access>
+using dereference_fallback =
+    typename dereference_type_conversion_candidate<Target, Source,
+                                                   Access>::type;
 
-template <typename Target, typename Source, typename Access, typename Direct>
-struct conversion_fallback_candidate<6, Target, Source, Access, Direct> {
-  using type = typename dereference_type_conversion_candidate<Target, Source,
-                                                              Access>::type;
-};
+template <typename Target, typename Source, typename Access>
+using borrowed_fallback =
+    typename borrowed_type_conversion_candidate<Target, Source, Access>::type;
 
-template <typename Target, typename Source, typename Access, typename Direct>
-struct conversion_fallback_candidate<7, Target, Source, Access, Direct> {
-  using type =
-      typename borrowed_type_conversion_candidate<Target, Source, Access>::type;
-};
+template <typename Target, typename Source, typename Access>
+using retained_fallback =
+    typename retained_type_conversion_candidate<Target, Source, Access>::type;
 
-template <typename Target, typename Source, typename Access, typename Direct>
-struct conversion_fallback_candidate<8, Target, Source, Access, Direct> {
-  using type =
-      typename retained_type_conversion_candidate<Target, Source, Access>::type;
-};
-
-template <typename Target, typename Source, typename Access, typename Direct>
-struct conversion_fallback_candidate<9, Target, Source, Access, Direct> {
-  using type = unavailable_type_conversion;
-};
-
-// Keep later recursive candidates incomplete until every earlier conversion
-// has failed; merely naming all candidates instantiates all of their paths.
-template <std::size_t Index, typename Target, typename Source, typename Access,
-          typename Direct,
-          typename Candidate = conversion_for_access_t<
-              typename conversion_fallback_candidate<Index, Target, Source,
-                                                     Access, Direct>::type,
-              Access>,
-          bool Available = Candidate::available>
+// The first fallback, in order, that is available with the access. A later
+// fallback is named only once every earlier one has failed, so its path is
+// not instantiated before.
+template <typename Target, typename Source, typename Access,
+          template <typename, typename, typename> typename... Fallbacks>
 struct select_conversion_fallback {
-  using type = Candidate;
-};
-
-template <std::size_t Index, typename Target, typename Source, typename Access,
-          typename Direct, typename Candidate>
-struct select_conversion_fallback<Index, Target, Source, Access, Direct,
-                                  Candidate, false> {
-  using type = typename select_conversion_fallback<Index + 1, Target, Source,
-                                                   Access, Direct>::type;
-};
-
-template <typename Target, typename Source, typename Access, typename Direct,
-          typename Candidate>
-struct select_conversion_fallback<9, Target, Source, Access, Direct, Candidate,
-                                  false> {
   using type = unavailable_type_conversion;
+};
+
+template <typename Target, typename Source, typename Access,
+          template <typename, typename, typename> typename Fallback,
+          template <typename, typename, typename> typename... Fallbacks>
+struct select_conversion_fallback<Target, Source, Access, Fallback,
+                                  Fallbacks...> {
+private:
+  using candidate =
+      conversion_for_access_t<Fallback<Target, Source, Access>, Access>;
+
+public:
+  using type = typename std::conditional_t<
+      candidate::available, std::enable_if<true, candidate>,
+      select_conversion_fallback<Target, Source, Access, Fallbacks...>>::type;
 };
 
 template <typename Target, typename Source, typename Access, typename Direct>
 struct type_conversion_path_impl<Target, Source, Access, Direct, true> {
 public:
-  using type = typename select_conversion_fallback<0, Target, Source, Access,
-                                                   Direct>::type;
+  using type = typename select_conversion_fallback<
+      Target, Source, Access, target_alternative_fallback,
+      source_alternative_fallback, target_wrapper_fallback, array_fallback,
+      address_fallback, pointer_access_fallback, dereference_fallback,
+      borrowed_fallback, retained_fallback>::type;
   static constexpr bool available = type::available;
 };
 
