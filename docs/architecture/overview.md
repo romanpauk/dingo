@@ -131,7 +131,6 @@ The shared runtime/static binding and resolution kernel now lives under
 - `binding_model.h`
 - `binding_selection.h`
 - `binding_resolution.h`
-- `binding_resolution_policy.h`
 
 Runtime and static implementation code sits under:
 

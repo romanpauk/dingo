@@ -13,7 +13,6 @@
 #include <dingo/base/type_list.h>
 #include <dingo/binding/binding_collection.h>
 #include <dingo/binding/binding_model.h>
-#include <dingo/binding/binding_resolution_policy.h>
 #include <dingo/binding/binding_selection.h>
 #include <dingo/factory/callable.h>
 #include <dingo/lookup/lookup.h>
@@ -772,20 +771,11 @@ protected:
   }
 
   template <typename Value, typename Exact, bool AllowMiss, typename LookupKey>
-  runtime_selection source_select(runtime_bindings_state *state,
-                                  LookupKey key) {
+  runtime_selection select_binding(runtime_bindings_state *state,
+                                   LookupKey key) {
     static_assert(detail::is_lookup_key_v<LookupKey>);
     return state ? select_binding<Value, Exact, AllowMiss>(*state, key)
                  : runtime_selection::miss();
-  }
-
-  template <typename Request, typename LookupKey>
-  auto source_resolve(construction_scope scope, runtime_selection selection,
-                      runtime_context_type &context, const LookupKey &) ->
-      typename Request::interface_type {
-    return resolve_binding<typename Request::lookup_type,
-                           typename Request::interface_type>(selection, scope,
-                                                             context);
   }
 
   template <typename T, typename LookupKey, typename Fn,
@@ -891,8 +881,8 @@ protected:
     if (ambiguous) {
       return runtime_selection::ambiguity();
     }
-    return detail::make_runtime_selection<runtime_binding_interface_type>(
-        selected ? &selected->binding() : nullptr);
+    return selected ? runtime_selection::found(selected->binding())
+                    : runtime_selection::miss();
   }
 
   template <typename LookupEntry, typename Key>
@@ -1461,7 +1451,7 @@ protected:
   template <typename Value, typename Exact, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   runtime_selection select_binding(LookupKey key) {
-    return store_type::template source_select<Value, Exact, lookup_may_miss()>(
+    return store_type::template select_binding<Value, Exact, lookup_may_miss()>(
         runtime_bindings(), std::move(key));
   }
 
@@ -1521,49 +1511,11 @@ protected:
   };
 
 protected:
-  template <typename Request, typename LookupKey>
-  struct selected_runtime_binding {
-    registry_type &registry;
-    LookupKey &key;
-    construction_scope scope;
-
-    decltype(auto) select() {
-      return registry.template source_select<typename Request::value_type,
-                                             typename Request::exact_type>(key);
-    }
-
-    template <typename ResolveRequest, typename Selection>
-    decltype(auto) resolve(runtime_context_type &context, Selection selection) {
-      return registry.template source_resolve<Request>(scope, selection,
-                                                       context, key);
-    }
-  };
-  template <typename Request, bool MayAutoConstruct, typename LookupKey>
-  struct missing_runtime_binding {
-    registry_type &registry;
-    LookupKey &key;
-    construction_scope scope;
-
-    template <typename ResolveRequest>
-    request_result_t<ResolveRequest> resolve(runtime_context_type &context) {
-      using result_type = request_result_t<ResolveRequest>;
-      return registry.template source_missing<Request, MayAutoConstruct,
-                                              LookupKey, result_type>(
-          scope, context, key);
-    }
-  };
-
-  template <typename Value, typename Exact, typename LookupKey>
-  runtime_selection source_select(LookupKey key) {
-    return store_type::template source_select<Value, Exact, lookup_may_miss()>(
-        runtime_bindings(), std::move(key));
-  }
-
   template <typename Request, bool MayAutoConstruct, typename LookupKey,
             typename R = typename Request::lookup_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R source_missing(construction_scope scope, runtime_context_type &context,
-                   const LookupKey &key) {
+  R unresolved(construction_scope scope, runtime_context_type &context,
+               const LookupKey &key) {
     using Type = typename Request::value_type;
     using user_type = typename Request::user_type;
     using lookup_key_type = std::decay_t<LookupKey>;
@@ -1826,14 +1778,18 @@ private:
     using Type = typename Request::value_type;
     static_assert(!std::is_const_v<Type>);
 
-    using lookup_key_type = LookupKey;
-    selected_runtime_binding<Request, lookup_key_type> selected{*this, key,
-                                                                scope};
-    missing_runtime_binding<Request, MayAutoConstruct, lookup_key_type> missing{
-        *this, key, scope};
-    auto sources = detail::make_selected_binding_sources(selected, missing);
-    return detail::resolve_from_binding_sources<typename Request::lookup_type,
-                                                R>(context, sources);
+    auto selection = select_binding<Type, typename Request::exact_type>(key);
+    if (selection.ambiguous()) {
+      throw detail::make_type_ambiguous_exception<
+          typename Request::lookup_type>(context);
+    }
+    if (selection.found()) {
+      return store_type::template resolve_binding<
+          typename Request::lookup_type, typename Request::interface_type>(
+          selection, scope, context);
+    }
+    return unresolved<Request, MayAutoConstruct, LookupKey,
+                      request_result_t<R>>(scope, context, key);
   }
 
   template <typename Request>
