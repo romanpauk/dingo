@@ -117,7 +117,6 @@ if(DINGO_DEVELOPMENT_MODE)
         factory/constructor_typedef.h
         factory/constructor.h
         factory/function.h
-        factory/invoke.h
         memory/aligned_storage.h
         memory/allocator.h
         memory/arena_allocator.h
@@ -169,7 +168,6 @@ if(DINGO_DEVELOPMENT_MODE)
         type/type_conversion_traits.h
         base/type_descriptor.h
         base/type_list.h
-        base/type_name.h
         type/type_traits.h
         resolution/resolution_operation.h
     )

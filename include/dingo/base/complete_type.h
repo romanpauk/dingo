@@ -28,7 +28,4 @@ template <typename T>
 inline constexpr bool requires_complete_type_v =
     !std::is_void_v<T> && !std::is_function_v<T>;
 } // namespace detail
-
-template <typename T, typename = void>
-struct is_complete : detail::is_complete<T> {};
 } // namespace dingo

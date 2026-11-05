@@ -59,18 +59,7 @@ struct container_sealed_exception : exception {
   using exception::exception;
 };
 
-struct type_index_out_of_range_exception : exception {
-  using exception::exception;
-};
-
-struct virtual_pointer_exception : exception {
-  using exception::exception;
-};
-
 #ifdef _DEBUG
-struct arena_allocation_exception : exception {
-  using exception::exception;
-};
 #endif
 
 namespace detail {
@@ -119,23 +108,6 @@ type_not_found_exception make_type_not_found_exception(const Context &context) {
   return type_not_found_exception(std::move(message));
 }
 
-template <typename Request, typename IdType>
-type_not_found_exception make_type_not_found_exception() {
-  std::string message = "type not found: ";
-  append_text(message, describe_type<Request>(),
-              " (index type: ", describe_type<IdType>(), ")");
-  return type_not_found_exception(std::move(message));
-}
-
-template <typename Request, typename IdType, typename Context>
-type_not_found_exception make_type_not_found_exception(const Context &context) {
-  std::string message = "type not found: ";
-  append_text(message, describe_type<Request>(),
-              " (index type: ", describe_type<IdType>(), ")");
-  append_type_path_text(message, context);
-  return type_not_found_exception(std::move(message));
-}
-
 template <typename Selector>
 void append_lookup_key_text(std::string &message,
                             const lookup_key<Selector> &) {
@@ -160,13 +132,6 @@ type_not_found_exception make_collection_type_not_found_exception() {
   append_text(message, describe_type<Collection>(),
               " (element type: ", describe_type<ResolveType>(), ")");
   return type_not_found_exception(std::move(message));
-}
-
-template <typename Request>
-type_ambiguous_exception make_type_ambiguous_exception() {
-  std::string message = "type resolution is ambiguous: ";
-  append_type_name(message, describe_type<Request>());
-  return type_ambiguous_exception(std::move(message));
 }
 
 template <typename Request, typename Context>
@@ -212,22 +177,12 @@ make_type_not_convertible_exception(type_descriptor target_type,
   return type_not_convertible_exception(std::move(message));
 }
 
-template <typename Type>
-type_recursion_exception make_type_recursion_exception() {
-  std::string message = "recursive dependency detected while constructing: ";
-  append_type_name(message, describe_type<Type>());
-  return type_recursion_exception(std::move(message));
-}
-
 template <typename Type, typename Context>
 type_recursion_exception make_type_recursion_exception(const Context &context) {
   std::string message = "recursive dependency detected: ";
   if (context.has_type_path()) {
-    std::string resolution_path;
-    context.append_type_path(resolution_path);
-    message += resolution_path;
-  }
-  if (!context.has_type_path()) {
+    context.append_type_path(message);
+  } else {
     append_type_name(message, describe_type<Type>());
   }
 
@@ -242,16 +197,6 @@ void append_lookup_already_registered_key_text(std::string &message,
   } else {
     append_text(message, ", key type ", describe_type<Selector>());
   }
-}
-
-template <typename Interface, typename Storage, typename LookupKey>
-lookup_already_registered_exception
-make_lookup_already_registered_exception(const LookupKey &key) {
-  std::string message = "lookup already registered: interface ";
-  append_text(message, describe_type<Interface>(), ", storage ",
-              describe_type<Storage>());
-  append_lookup_already_registered_key_text(message, key);
-  return lookup_already_registered_exception(std::move(message));
 }
 
 template <typename Interface, typename Storage, typename LookupKey,
@@ -291,14 +236,6 @@ make_container_sealed_exception(const LookupKey &key,
           "container sealed by resolve, lookup can not be replaced: "
           "interface ",
           key, backend_key));
-}
-
-template <typename Key>
-type_index_out_of_range_exception
-make_type_index_out_of_range_exception(Key, size_t) {
-  std::string message = "type index out of range: key type ";
-  append_text(message, describe_type<Key>());
-  return type_index_out_of_range_exception(std::move(message));
 }
 
 } // namespace detail

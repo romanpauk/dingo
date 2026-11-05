@@ -10,7 +10,7 @@
 #include "matrix/containers/runtime.h"
 #include "matrix/fixtures/values.h"
 
-#include <dingo/base/type_name.h>
+#include "support/type_name.h"
 
 #include <memory>
 #include <stdexcept>

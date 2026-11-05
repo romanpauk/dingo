@@ -9,14 +9,6 @@
 
 namespace dingo {
 
-TEST(index_test, exception_message_index_out_of_range_negative) {
-  auto e = detail::make_type_index_out_of_range_exception(-1, std::size_t(2));
-
-  std::string expected = "type index out of range: key type ";
-  expected += type_name<int>();
-  ASSERT_STREQ(e.what(), expected.c_str());
-}
-
 TEST(index_test, explicit_lookup_resolves_with_custom_container_allocator) {
   struct animal {
     virtual ~animal() = default;

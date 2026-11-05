@@ -21,8 +21,6 @@ struct type_list_b {};
 struct type_list_c {};
 
 TEST(type_list_test, meta_utilities) {
-  using nested_tuple =
-      std::tuple<type_list_a, std::tuple<type_list_b, type_list_c>>;
   using nested_list =
       type_list<type_list_a, type_list<type_list_b, type_list_c>>;
 
@@ -34,7 +32,6 @@ TEST(type_list_test, meta_utilities) {
   static_assert(type_list_size_v<type_list<>> == 0);
   static_assert(type_list_size_v<nested_list> == 2);
   static_assert(std::is_same_v<type_list_head_t<nested_list>, type_list_a>);
-  static_assert(std::is_same_v<to_type_list_t<nested_tuple>, nested_list>);
   static_assert(!type_list_contains_v<type_list_a, type_list<>>);
   static_assert(type_list_contains_v<type_list_a, nested_list>);
   static_assert(!type_list_contains_v<type_list_c, nested_list>);
@@ -76,37 +73,6 @@ TEST(type_list_test, for_each_visits_types_in_order) {
   bool called = false;
   for_each(type_list<>{}, [&](auto) { called = true; });
   ASSERT_FALSE(called);
-}
-
-TEST(type_list_test, for_type_matches_first_type_only) {
-  using test_rtti = rtti<typeid_provider>;
-
-  int called = 0;
-  const auto matched = for_type<test_rtti>(
-      type_list<type_list_a, type_list_b, type_list_a>{},
-      test_rtti::get_type_index<type_list_a>(), [&](auto type) {
-        ++called;
-        using current = typename decltype(type)::type;
-        ASSERT_TRUE((std::is_same_v<current, type_list_a>));
-      });
-
-  ASSERT_TRUE(matched);
-  ASSERT_EQ(called, 1);
-
-  called = 0;
-  const auto missing = for_type<test_rtti>(
-      type_list<type_list_a, type_list_b>{},
-      test_rtti::get_type_index<type_list_c>(), [&](auto) { ++called; });
-
-  ASSERT_FALSE(missing);
-  ASSERT_EQ(called, 0);
-
-  const auto empty = for_type<test_rtti>(
-      type_list<>{}, test_rtti::get_type_index<type_list_a>(),
-      [&](auto) { ++called; });
-
-  ASSERT_FALSE(empty);
-  ASSERT_EQ(called, 0);
 }
 
 } // namespace

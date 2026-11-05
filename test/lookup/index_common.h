@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/base/type_name.h>
+#include "support/type_name.h"
 #include <dingo/container.h>
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/runtime/lookup_index.h>

@@ -17,7 +17,6 @@
 #include <dingo/container_base.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/constructor.h>
-#include <dingo/factory/invoke.h>
 #include <dingo/lookup/container_lookup_definition.h>
 #include <dingo/lookup/lookup.h>
 #include <dingo/memory/allocator.h>
