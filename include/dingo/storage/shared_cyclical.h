@@ -102,90 +102,41 @@ struct has_on_rollback<
                  std::declval<void (*)(void *, void *) noexcept>(),
                  std::declval<void *>()))>> : std::true_type {};
 
-template <typename Type, typename Factory,
-          bool IsTriviallyDestructible = std::is_trivially_destructible_v<Type>>
-class cyclical_storage_instance_impl;
-
-template <typename Type, typename Factory>
-class cyclical_storage_instance_impl<Type, Factory, false> : Factory {
+// A shared_cyclical instance publishes its address when it is resolved, before
+// the object is constructed, so a cycle can close over it.
+template <typename Type, typename StoredType, typename Factory>
+class storage_instance<shared_cyclical, Type, StoredType, Factory>
+    : Factory, public shared_value<Type> {
 public:
   template <typename... Args>
-  cyclical_storage_instance_impl(Args &&...args)
-      : Factory(std::forward<Args>(args)...) {}
+  storage_instance(Args &&...args) : Factory(std::forward<Args>(args)...) {}
 
-  ~cyclical_storage_instance_impl() { reset(); }
-
-  template <typename Context> Type *resolve(Context &) {
+  Type *resolve() {
     assert(!resolved_);
     resolved_ = true;
     return get();
   }
 
-  Type *get() { return std::launder(reinterpret_cast<Type *>(&instance_)); }
+  Type *get() const { return this->pointer(); }
 
   template <typename Context, typename Container>
-  auto construct(construction_scope scope, Context &context,
+  void construct(construction_scope scope, Context &context,
                  Container &container) {
     assert(resolved_);
-    Factory::template construct<Type *>(&instance_, scope, context, container);
-    constructed_ = true;
+    Factory::template construct<Type *>(this->storage(), scope, context,
+                                        container);
+    this->constructed();
   }
 
   bool empty() const { return !resolved_; }
 
   void reset() {
     resolved_ = false;
-    if (constructed_) {
-      constructed_ = false;
-      std::launder(reinterpret_cast<Type *>(&instance_))->~Type();
-    }
+    shared_value<Type>::reset();
   }
 
 private:
-  dingo::aligned_storage_t<sizeof(Type), alignof(Type)> instance_;
   bool resolved_ = false;
-  bool constructed_ = false;
-};
-
-template <typename Type, typename Factory>
-class cyclical_storage_instance_impl<Type, Factory, true> : Factory {
-public:
-  template <typename... Args>
-  cyclical_storage_instance_impl(Args &&...args)
-      : Factory(std::forward<Args>(args)...) {}
-
-  template <typename Context> Type *resolve(Context &) {
-    assert(!resolved_);
-    resolved_ = true;
-    return get();
-  }
-
-  Type *get() { return std::launder(reinterpret_cast<Type *>(&instance_)); }
-
-  template <typename Context, typename Container>
-  auto construct(construction_scope scope, Context &context,
-                 Container &container) {
-    assert(resolved_);
-    Factory::template construct<Type *>(&instance_, scope, context, container);
-  }
-
-  bool empty() const { return !resolved_; }
-
-  void reset() { resolved_ = false; }
-
-private:
-  dingo::aligned_storage_t<sizeof(Type), alignof(Type)> instance_;
-  bool resolved_ = false;
-};
-
-template <typename Type, typename StoredType, typename Factory>
-class storage_instance<shared_cyclical, Type, StoredType, Factory>
-    : public cyclical_storage_instance_impl<Type, Factory> {
-public:
-  template <typename... Args>
-  storage_instance(Args &&...args)
-      : cyclical_storage_instance_impl<Type, Factory>(
-            std::forward<Args>(args)...) {}
 };
 
 // This path is intentionally std::shared_ptr-specific. We need to publish a
@@ -217,7 +168,7 @@ public:
   template <typename... Args>
   storage_instance(Args &&...args) : Factory(std::forward<Args>(args)...) {}
 
-  template <typename Context> std::shared_ptr<StoredType> &resolve(Context &) {
+  std::shared_ptr<StoredType> &resolve() {
     assert(!instance_);
     instance_.reset(reinterpret_cast<Type *>(new storage_type), deleter());
     return instance_;
@@ -316,7 +267,7 @@ public:
             this);
       }
       local_rollback_guard rollback(this);
-      instance_.resolve(context);
+      instance_.resolve();
       instance_.construct(scope, context, container);
       rollback.release();
     }

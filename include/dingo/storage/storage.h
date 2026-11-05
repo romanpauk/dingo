@@ -9,8 +9,11 @@
 
 #include <dingo/base/config.h>
 #include <dingo/factory/constructor.h>
+#include <dingo/memory/aligned_storage.h>
+#include <dingo/memory/object_lifetime.h>
 #include <dingo/type/normalized_type.h>
 
+#include <new>
 #include <type_traits>
 
 namespace dingo {
@@ -61,6 +64,50 @@ using storage =
 template <typename StorageTag, typename Type, typename StoredType,
           typename Factory>
 class storage_instance;
+
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4324)
+#endif
+
+// The value of a storage instance, constructed in place once. A value that
+// needs destruction is destroyed with the instance; a trivially destructible
+// one keeps the instance trivially destructible.
+template <typename Value, bool = std::is_trivially_destructible_v<Value>>
+class shared_value {
+public:
+  bool empty() const { return !initialized_; }
+
+  void reset() {
+    if (initialized_) {
+      initialized_ = false;
+      destroy_object_value(*pointer());
+    }
+  }
+
+protected:
+  void *storage() const { return &buffer_; }
+  void constructed() { initialized_ = true; }
+
+  Value *pointer() const {
+    return std::launder(reinterpret_cast<Value *>(&buffer_));
+  }
+
+private:
+  mutable aligned_storage_t<sizeof(Value), alignof(Value)> buffer_;
+  bool initialized_ = false;
+};
+
+template <typename Value>
+class shared_value<Value, false> : public shared_value<Value, true> {
+public:
+  shared_value() = default;
+  ~shared_value() { this->reset(); }
+};
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 } // namespace detail
 } // namespace dingo

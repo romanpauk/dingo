@@ -51,175 +51,55 @@ template <> struct scope_traits<shared> {
 
 namespace detail {
 
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable : 4324)
-#endif
-template <typename Type, typename Factory>
-struct storage_instance_base : Factory {
-  template <typename... Args>
-  storage_instance_base(Args &&...args)
-      : Factory(std::forward<Args>(args)...) {}
+template <typename Type, typename StoredType>
+using shared_value_t =
+    std::conditional_t<type_traits<Type>::enabled, StoredType, Type>;
 
-  Type *get() const {
-    return std::launder(reinterpret_cast<Type *>(&instance_));
-  }
+// A shared instance of the registered type, or of the stored type a wrapper
+// converts to. A bounded array is published by its first element.
+template <typename Type, typename StoredType, typename Factory>
+class storage_instance<shared, Type, StoredType, Factory>
+    : Factory, public shared_value<shared_value_t<Type, StoredType>> {
+  static constexpr bool converts = type_traits<Type>::enabled;
+
+public:
+  template <typename... Args>
+  storage_instance(Args &&...args) : Factory(std::forward<Args>(args)...) {}
 
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
   template <typename Context, typename Container>
-  auto construct(construction_scope scope, Context &context,
+  void construct(construction_scope scope, Context &context,
                  Container &container) {
-    assert(!initialized_);
-    Factory::template construct<Type *>(&instance_, scope, context, container);
-    initialized_ = true;
+    assert(this->empty());
+    if constexpr (converts) {
+      new (this->storage())
+          StoredType(detail::convert_type<StoredType, consume>(
+              Factory::template construct<Type>(scope, context, container)));
+    } else if constexpr (std::is_array_v<Type>) {
+      Factory::template construct<Type>(this->storage(), scope, context,
+                                        container);
+    } else {
+      Factory::template construct<Type *>(this->storage(), scope, context,
+                                          container);
+    }
+    this->constructed();
   }
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
 
-  bool empty() const { return !initialized_; }
-
-protected:
-  mutable dingo::aligned_storage_t<sizeof(Type), alignof(Type)> instance_;
-  bool initialized_ = false;
-};
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
-
-template <typename Type, typename Factory,
-          bool IsTriviallyDestructible = std::is_trivially_destructible_v<Type>>
-struct storage_instance_dtor;
-
-template <typename Type, typename Factory>
-struct storage_instance_dtor<Type, Factory, true>
-    : storage_instance_base<Type, Factory> {
-  template <typename... Args>
-  storage_instance_dtor(Args &&...args)
-      : storage_instance_base<Type, Factory>(std::forward<Args>(args)...) {}
-
-  void reset() { this->initialized_ = false; }
-};
-
-template <typename Type, typename Factory>
-struct storage_instance_dtor<Type, Factory, false>
-    : storage_instance_base<Type, Factory> {
-  template <typename... Args>
-  storage_instance_dtor(Args &&...args)
-      : storage_instance_base<Type, Factory>(std::forward<Args>(args)...) {}
-
-  ~storage_instance_dtor() { reset(); }
-
-  void reset() {
-    if (this->initialized_) {
-      this->initialized_ = false;
-      this->get()->~Type();
+  decltype(auto) get() const {
+    if constexpr (converts) {
+      return *this->pointer();
+    } else if constexpr (std::is_array_v<Type>) {
+      return std::addressof((*this->pointer())[0]);
+    } else {
+      return this->pointer();
     }
   }
-};
-
-template <typename Type, typename StoredType, typename Factory, typename = void>
-class shared_storage_instance_impl
-    : public storage_instance_dtor<Type, Factory> {
-public:
-  template <typename... Args>
-  shared_storage_instance_impl(Args &&...args)
-      : storage_instance_dtor<Type, Factory>(std::forward<Args>(args)...) {}
-
-  static_assert(
-      std::is_trivially_destructible_v<Type> ==
-      std::is_trivially_destructible_v<storage_instance_dtor<Type, Factory>>);
-};
-
-template <typename Type, typename StoredType, typename Factory>
-class shared_storage_instance_impl<Type, StoredType, Factory,
-                                   std::enable_if_t<type_traits<Type>::enabled>>
-    : Factory {
-public:
-  template <typename... Args>
-  shared_storage_instance_impl(Args &&...args)
-      : Factory(std::forward<Args>(args)...) {}
-
-  template <typename Context, typename Container>
-  auto construct(construction_scope scope, Context &context,
-                 Container &container) {
-    assert(empty());
-    new (&instance_) StoredType(detail::convert_type<StoredType, consume>(
-        Factory::template construct<Type>(scope, context, container)));
-    initialized_ = true;
-  }
-
-  ~shared_storage_instance_impl() { reset(); }
-
-  StoredType &get() const { return *get_ptr(); }
-
-  void reset() {
-    if (initialized_) {
-      get_ptr()->~StoredType();
-      initialized_ = false;
-    }
-  }
-
-  bool empty() const { return !initialized_; }
-
-private:
-  StoredType *get_ptr() const {
-    return std::launder(reinterpret_cast<StoredType *>(&instance_));
-  }
-
-  mutable aligned_storage_t<sizeof(StoredType), alignof(StoredType)> instance_;
-  bool initialized_ = false;
-};
-
-template <typename Type, typename StoredType, typename Factory>
-class storage_instance<shared, Type, StoredType, Factory>
-    : public shared_storage_instance_impl<Type, StoredType, Factory> {
-public:
-  template <typename... Args>
-  storage_instance(Args &&...args)
-      : shared_storage_instance_impl<Type, StoredType, Factory>(
-            std::forward<Args>(args)...) {}
-};
-
-template <typename Type, size_t N, typename StoredType, typename Factory>
-class storage_instance<shared, Type[N], StoredType, Factory> : Factory {
-public:
-  template <typename... Args>
-  storage_instance(Args &&...args) : Factory(std::forward<Args>(args)...) {}
-
-  ~storage_instance() { reset(); }
-
-  template <typename Context, typename Container>
-  auto construct(construction_scope scope, Context &context,
-                 Container &container) {
-    assert(empty());
-    Factory::template construct<Type[N]>(&instance_, scope, context, container);
-    initialized_ = true;
-  }
-
-  Type *get() const { return std::addressof((*get_array())[0]); }
-
-  void reset() {
-    if (!initialized_) {
-      return;
-    }
-
-    destroy_object_value(*get_array());
-    initialized_ = false;
-  }
-
-  bool empty() const { return !initialized_; }
-
-private:
-  Type (*get_array() const)[N] {
-    return std::launder(reinterpret_cast<Type(*)[N]>(&instance_));
-  }
-
-  mutable aligned_storage_t<sizeof(Type[N]), alignof(Type[N])> instance_;
-  bool initialized_ = false;
 };
 
 template <typename Type, typename StoredType, typename Factory>

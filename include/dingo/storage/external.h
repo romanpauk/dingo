@@ -44,75 +44,51 @@ template <> struct scope_traits<external> {
 };
 
 namespace detail {
-template <typename Type, typename StoredType, typename = void>
-class external_storage_instance_impl {
+// A wrapper given by value is held as its stored type.
+template <typename Type>
+inline constexpr bool external_converts_v =
+    !std::is_reference_v<Type> && !std::is_pointer_v<Type> &&
+    !std::is_array_v<Type> && type_traits<Type>::enabled;
+
+// What an external storage holds: a reference or a pointer to the instance it
+// was given, or the given value, converted to the stored type of a wrapper.
+template <typename Type, typename StoredType>
+using external_held_t =
+    std::conditional_t<external_converts_v<Type>, StoredType,
+                       std::conditional_t<std::is_array_v<Type>, Type &, Type>>;
+
+template <typename Type, typename StoredType>
+class storage_instance<external, Type, StoredType, void> {
+  using held_type = external_held_t<Type, StoredType>;
+  static constexpr bool converts = external_converts_v<Type>;
+
+  template <typename T> static held_type hold(T &&instance) {
+    if constexpr (converts) {
+      return detail::convert_type<StoredType, consume>(
+          std::forward<T>(instance));
+    } else {
+      return std::forward<T>(instance);
+    }
+  }
+
 public:
   template <typename T>
-  external_storage_instance_impl(T &&instance)
-      : instance_(std::forward<T>(instance)) {}
+  storage_instance(T &&instance) : instance_(hold(std::forward<T>(instance))) {}
 
-  Type &get() { return instance_; }
-
-private:
-  Type instance_;
-};
-
-template <typename Type, typename StoredType>
-class external_storage_instance_impl<
-    Type, StoredType, std::enable_if_t<type_traits<Type>::enabled>> {
-public:
-  template <typename T>
-  external_storage_instance_impl(T &&instance)
-      : instance_(detail::convert_type<StoredType, consume>(
-            std::forward<T>(instance))) {}
-
-  StoredType &get() { return instance_; }
+  // An array is published by its first element, a pointer by value and
+  // anything else by reference.
+  decltype(auto) get() {
+    if constexpr (std::is_array_v<Type>) {
+      return &instance_[0];
+    } else if constexpr (std::is_pointer_v<Type>) {
+      return instance_;
+    } else {
+      return (instance_);
+    }
+  }
 
 private:
-  StoredType instance_;
-};
-
-template <typename Type, typename StoredType>
-class storage_instance<external, Type, StoredType, void>
-    : public external_storage_instance_impl<Type, StoredType> {
-public:
-  template <typename T>
-  storage_instance(T &&instance)
-      : external_storage_instance_impl<Type, StoredType>(
-            std::forward<T>(instance)) {}
-};
-
-template <typename Type, size_t N, typename StoredType>
-class storage_instance<external, Type[N], StoredType, void> {
-public:
-  storage_instance(Type (&instance)[N]) : instance_(instance) {}
-
-  Type *get() { return instance_; }
-
-private:
-  Type (&instance_)[N];
-};
-
-template <typename Type, typename StoredType>
-class storage_instance<external, Type &, StoredType, void> {
-public:
-  storage_instance(Type &instance) : instance_(instance) {}
-
-  Type &get() { return instance_; }
-
-private:
-  Type &instance_;
-};
-
-template <typename Type, typename StoredType>
-class storage_instance<external, Type *, StoredType, void> {
-public:
-  storage_instance(Type *instance) : instance_(instance) {}
-
-  Type *get() { return instance_; }
-
-private:
-  Type *instance_;
+  held_type instance_;
 };
 
 template <typename Type, typename StoredType, typename Factory,
