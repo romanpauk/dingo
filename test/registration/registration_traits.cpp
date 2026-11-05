@@ -538,9 +538,9 @@ TEST(type_registration_test, inferred_borrowed_conversion_uses_const_source) {
   source value(17);
   conversion_context resolver;
   conversion_context context;
-  auto result = detail::type_conversion<conversion>::apply(
-      resolver, context, value, describe_type<target>(),
-      describe_type<source>());
+  auto result =
+      conversion::apply(resolver, context, value, describe_type<target>(),
+                        describe_type<source>());
 
   EXPECT_TRUE(result.used_const_source);
   EXPECT_EQ(result.value, 17);
@@ -556,9 +556,9 @@ TEST(type_registration_test, same_type_custom_conversion_is_preserved) {
   value_type value{17};
   conversion_context resolver;
   conversion_context context;
-  auto result = detail::type_conversion<conversion>::apply(
-      resolver, context, value, describe_type<value_type>(),
-      describe_type<value_type>());
+  auto result =
+      conversion::apply(resolver, context, value, describe_type<value_type>(),
+                        describe_type<value_type>());
 
   EXPECT_EQ(result.value, 18);
 }
@@ -574,9 +574,9 @@ TEST(type_registration_test,
   source value(conversion_compatibility_test::owning_source(19));
   conversion_context resolver;
   conversion_context context;
-  auto result = detail::type_conversion<conversion>::apply(
-      resolver, context, value, describe_type<target>(),
-      describe_type<source>());
+  auto result =
+      conversion::apply(resolver, context, value, describe_type<target>(),
+                        describe_type<source>());
 
   ASSERT_NE(result.get(), nullptr);
   EXPECT_TRUE(result.get()->used_const_source);
@@ -595,9 +595,9 @@ TEST(type_registration_test,
   source value(23);
   conversion_context resolver;
   conversion_context context;
-  auto result = detail::type_conversion<conversion>::apply(
-      resolver, context, value, describe_type<target>(),
-      describe_type<source>());
+  auto result =
+      conversion::apply(resolver, context, value, describe_type<target>(),
+                        describe_type<source>());
 
   ASSERT_NE(result.value, nullptr);
   EXPECT_EQ(*result.value, 23);
@@ -614,9 +614,9 @@ TEST(type_registration_test,
   long *source = &value;
   conversion_context resolver;
   conversion_context context;
-  auto result = detail::type_conversion<conversion>::apply(
-      resolver, context, source, describe_type<target>(),
-      describe_type<long *>());
+  auto result =
+      conversion::apply(resolver, context, source, describe_type<target>(),
+                        describe_type<long *>());
 
   EXPECT_EQ(
       std::get<conversion_compatibility_test::safe_observer_pointer>(result)

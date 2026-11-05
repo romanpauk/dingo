@@ -123,9 +123,9 @@ The containers differ only in how they select the resolution of a request: a
 static container selects it at compile time, while a runtime binding matches the
 requested type descriptor at run time.
 
-[include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
+[include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
 contains the last-mile conversion rules from the stored source shape to the
-requested target shape.
+requested target shape; each rule selects and applies its step.
 
 The shared runtime/static binding and resolution kernel now lives under
 [include/dingo/binding/](../../include/dingo/binding):

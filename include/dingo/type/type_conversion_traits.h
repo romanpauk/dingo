@@ -9,6 +9,8 @@
 
 #include <dingo/base/config.h>
 
+#include <dingo/base/exceptions.h>
+#include <dingo/base/type_descriptor.h>
 #include <dingo/base/type_list.h>
 #include <dingo/type/access.h>
 #include <dingo/type/rebind_type.h>
@@ -116,133 +118,235 @@ struct custom_conversion_access<
   using type = typename Traits::template required_access<Source>;
 };
 
+// A conversion is one step of a route from a source to a target: what it
+// requires of its source, borrow or consume, and how it is applied. A step that
+// continues with a nested conversion applies it to the object it reaches.
+// cache_types are the conversions a step retains in its binding.
 struct unavailable_type_conversion {
   static constexpr bool available = false;
   using required_access = unavailable_access;
+  using cache_types = type_list<>;
 };
 
-template <typename Target, typename Source, typename RequiredAccess = borrow,
-          typename Argument = Source>
-struct traits_type_conversion {
+template <typename Target, typename Source, typename RequiredAccess>
+struct conversion_leaf {
   static constexpr bool available = true;
 
   using target_type = Target;
   using source_type = Source;
   using required_access = RequiredAccess;
+  using cache_types = type_list<>;
+};
+
+template <typename Target, typename Source, typename Conversion>
+struct conversion_step {
+  static constexpr bool available = Conversion::available;
+
+  using target_type = Target;
+  using source_type = Source;
+  using conversion = Conversion;
+  using required_access = typename Conversion::required_access;
+  using cache_types = typename Conversion::cache_types;
+};
+
+// The conversion type_conversion_traits declares, called with Argument.
+template <typename Target, typename Source, typename RequiredAccess = borrow,
+          typename Argument = Source>
+struct traits_type_conversion
+    : conversion_leaf<Target, Source, RequiredAccess> {
   using argument_type = Argument;
+
+  template <typename Resolver, typename Context, typename Actual>
+  static Target apply(Resolver &, Context &, Actual &&source, type_descriptor,
+                      type_descriptor) {
+    using traits = type_conversion_traits<
+        Target, std::remove_cv_t<std::remove_reference_t<Actual>>>;
+    if constexpr (std::is_same_v<Argument, Source>) {
+      return static_cast<Target>(traits::convert(std::forward<Actual>(source)));
+    } else {
+      return static_cast<Target>(
+          traits::convert(static_cast<Argument>(source)));
+    }
+  }
 };
 
-template <typename Target, typename Source> struct identity_type_conversion {
-  static constexpr bool available = true;
-
-  using target_type = Target;
-  using source_type = Source;
-  using required_access =
-      std::conditional_t<std::is_rvalue_reference_v<Source>, consume, borrow>;
-};
-
-template <typename Target, typename Source> struct reference_type_conversion {
-  static constexpr bool available = true;
-
-  using target_type = Target;
-  using source_type = Source;
-  using required_access = borrow;
-};
-
-template <typename Target, typename Source> struct address_type_conversion {
-  static constexpr bool available = true;
-
-  using target_type = Target;
-  using source_type = Source;
-  using required_access = borrow;
-};
-
+// The source itself.
 template <typename Target, typename Source>
-struct array_reference_type_conversion {
-  static constexpr bool available = true;
-
-  using target_type = Target;
-  using source_type = Source;
-  using required_access = borrow;
+struct identity_type_conversion
+    : conversion_leaf<Target, Source,
+                      std::conditional_t<std::is_rvalue_reference_v<Source>,
+                                         consume, borrow>> {
+  template <typename Resolver, typename Context, typename Actual>
+  static decltype(auto) apply(Resolver &, Context &, Actual &&source,
+                              type_descriptor, type_descriptor) {
+    return std::forward<Actual>(source);
+  }
 };
 
+// A reference to the source, or to a base of it.
 template <typename Target, typename Source>
-struct array_pointer_type_conversion {
-  static constexpr bool available = true;
-
-  using target_type = Target;
-  using source_type = Source;
-  using required_access = borrow;
+struct reference_type_conversion : conversion_leaf<Target, Source, borrow> {
+  template <typename Resolver, typename Context, typename Actual>
+  static Target &apply(Resolver &, Context &, Actual &&source, type_descriptor,
+                       type_descriptor) {
+    return static_cast<Target &>(source);
+  }
 };
 
+// The address of the source.
 template <typename Target, typename Source>
-struct pointer_access_type_conversion {
-  static constexpr bool available = true;
-
-  using target_type = Target;
-  using source_type = Source;
-  using required_access = borrow;
+struct address_type_conversion : conversion_leaf<Target, Source, borrow> {
+  template <typename Resolver, typename Context, typename Actual>
+  static Target apply(Resolver &, Context &, Actual &&source, type_descriptor,
+                      type_descriptor) {
+    return static_cast<Target>(std::addressof(source));
+  }
 };
 
+// The array a pointer to its first element points to, as a reference.
+template <typename Target, typename Source>
+struct array_reference_type_conversion
+    : conversion_leaf<Target, Source, borrow> {
+  template <typename Resolver, typename Context, typename Actual>
+  static Target apply(Resolver &, Context &, Actual &&source, type_descriptor,
+                      type_descriptor) {
+    return *reinterpret_cast<
+        std::add_pointer_t<std::remove_reference_t<Target>>>(source);
+  }
+};
+
+// The array a pointer to its first element points to, as a pointer.
+template <typename Target, typename Source>
+struct array_pointer_type_conversion : conversion_leaf<Target, Source, borrow> {
+  template <typename Resolver, typename Context, typename Actual>
+  static Target apply(Resolver &, Context &, Actual &&source, type_descriptor,
+                      type_descriptor) {
+    return reinterpret_cast<Target>(source);
+  }
+};
+
+// The address of the element of a wrapper.
+template <typename Target, typename Source>
+struct pointer_access_type_conversion
+    : conversion_leaf<Target, Source, borrow> {
+  template <typename Resolver, typename Context, typename Actual>
+  static Target apply(Resolver &, Context &, Actual &&source, type_descriptor,
+                      type_descriptor) {
+    return static_cast<Target>(
+        type_traits<std::remove_cv_t<std::remove_reference_t<Actual>>>::get(
+            source));
+  }
+};
+
+// The pointee of a pointer.
 template <typename Target, typename Source, typename Conversion>
-struct dereference_type_conversion {
-  static constexpr bool available = Conversion::available;
-
-  using target_type = Target;
-  using source_type = Source;
-  using conversion = Conversion;
-  using required_access = typename Conversion::required_access;
+struct dereference_type_conversion
+    : conversion_step<Target, Source, Conversion> {
+  template <typename Resolver, typename Context, typename Actual>
+  static decltype(auto) apply(Resolver &resolver, Context &context,
+                              Actual &&source, type_descriptor requested,
+                              type_descriptor registered) {
+    return Conversion::apply(resolver, context, *std::forward<Actual>(source),
+                             requested, registered);
+  }
 };
 
+// The element of a wrapper, borrowed.
 template <typename Target, typename Source, typename Conversion>
-struct borrowed_type_conversion {
-  static constexpr bool available = Conversion::available;
-
-  using target_type = Target;
-  using source_type = Source;
-  using conversion = Conversion;
-  using required_access = typename Conversion::required_access;
+struct borrowed_type_conversion : conversion_step<Target, Source, Conversion> {
+  template <typename Resolver, typename Context, typename Actual>
+  static decltype(auto) apply(Resolver &resolver, Context &context,
+                              Actual &&source, type_descriptor requested,
+                              type_descriptor registered) {
+    return Conversion::apply(
+        resolver, context,
+        type_traits<std::remove_cv_t<std::remove_reference_t<Actual>>>::borrow(
+            std::forward<Actual>(source)),
+        requested, registered);
+  }
 };
 
+// An object the binding keeps, converted from the source, that a reference or
+// a pointer request refers to.
 template <typename Target, typename Source, typename Conversion>
-struct retained_type_conversion {
-  static constexpr bool available = Conversion::available;
+struct retained_type_conversion : conversion_step<Target, Source, Conversion> {
+  using retained_type =
+      std::remove_cv_t<std::conditional_t<std::is_pointer_v<Target>,
+                                          std::remove_pointer_t<Target>,
+                                          std::remove_reference_t<Target>>>;
+  using cache_types =
+      type_list_unique_t<type_list_cat_t<type_list<retained_type>,
+                                         typename Conversion::cache_types>>;
 
-  using target_type = Target;
-  using source_type = Source;
-  using conversion = Conversion;
-  using required_access = typename Conversion::required_access;
+  template <typename Resolver, typename Context, typename Actual>
+  static Target apply(Resolver &resolver, Context &context, Actual &&source,
+                      type_descriptor requested, type_descriptor registered) {
+    auto &retained = resolver.template retain_conversion<retained_type>(
+        context,
+        Conversion::apply(resolver, context, std::forward<Actual>(source),
+                          requested, registered));
+    if constexpr (std::is_pointer_v<Target>) {
+      return std::addressof(retained);
+    } else {
+      return retained;
+    }
+  }
 };
 
+// An optional value made of the converted source, or of the converted element
+// of a source optional value.
 template <typename Target, typename Source, typename Conversion,
           bool UnwrapSource>
-struct wrapper_type_conversion {
-  static constexpr bool available = Conversion::available;
-
-  using target_type = Target;
-  using source_type = Source;
-  using conversion = Conversion;
-  using required_access = typename Conversion::required_access;
-  static constexpr bool unwrap_source = UnwrapSource;
+struct wrapper_type_conversion : conversion_step<Target, Source, Conversion> {
+  template <typename Resolver, typename Context, typename Actual>
+  static Target apply(Resolver &resolver, Context &context, Actual &&source,
+                      type_descriptor requested, type_descriptor registered) {
+    using target =
+        type_traits<std::remove_cv_t<std::remove_reference_t<Target>>>;
+    if constexpr (UnwrapSource) {
+      using source_traits =
+          type_traits<std::remove_cv_t<std::remove_reference_t<Actual>>>;
+      if (source_traits::empty(source)) {
+        return target::make_empty();
+      }
+      auto *value = source_traits::get(source);
+      if constexpr (std::is_lvalue_reference_v<Actual>) {
+        return target::wrap(Conversion::apply(resolver, context, *value,
+                                              requested, registered));
+      } else {
+        return target::wrap(Conversion::apply(
+            resolver, context, std::move(*value), requested, registered));
+      }
+    } else {
+      return target::wrap(Conversion::apply(resolver, context,
+                                            std::forward<Actual>(source),
+                                            requested, registered));
+    }
+  }
 };
 
+// An alternative type holding the converted source as Selected.
 template <typename Target, typename Source, typename Selected,
           typename Conversion>
-struct target_alternative_type_conversion {
-  static constexpr bool available = Conversion::available;
-
-  using target_type = Target;
-  using source_type = Source;
+struct target_alternative_type_conversion
+    : conversion_step<Target, Source, Conversion> {
   using selected_type = Selected;
-  using conversion = Conversion;
-  using required_access = typename Conversion::required_access;
+
+  template <typename Resolver, typename Context, typename Actual>
+  static Target apply(Resolver &resolver, Context &context, Actual &&source,
+                      type_descriptor requested, type_descriptor registered) {
+    return alternative_type_traits<
+        std::remove_cv_t<std::remove_reference_t<Target>>>::
+        template wrap<Selected>(Conversion::apply(resolver, context,
+                                                  std::forward<Actual>(source),
+                                                  requested, registered));
+  }
 };
 
-template <typename Conversion> struct converted_construction {
-  static constexpr bool available = Conversion::available;
-
+// Marks a conversion that constructs a new object; it applies as its
+// conversion does.
+template <typename Conversion> struct converted_construction : Conversion {
   using conversion = Conversion;
-  using required_access = typename Conversion::required_access;
 };
 
 template <typename Alternative, typename Conversion>
@@ -254,6 +358,7 @@ struct alternative_type_conversion_branch {
 template <typename Target, typename Source, typename Branches>
 struct alternative_type_conversion;
 
+// The converted alternative a source alternative type holds, tried in order.
 template <typename Target, typename Source, typename... Branches>
 struct alternative_type_conversion<Target, Source, type_list<Branches...>> {
   static constexpr bool available = (Branches::conversion::available || ...);
@@ -263,6 +368,49 @@ struct alternative_type_conversion<Target, Source, type_list<Branches...>> {
   using branches = type_list<Branches...>;
   using required_access =
       alternative_access<typename Branches::conversion::required_access...>;
+  using cache_types = type_list_unique_t<
+      type_list_cat_t<typename Branches::conversion::cache_types...>>;
+
+  // The result of the branch that converts the held alternative is passed
+  // through as that branch produces it.
+  template <typename Resolver, typename Context, typename Actual>
+  static decltype(auto) apply(Resolver &resolver, Context &context,
+                              Actual &&source, type_descriptor requested,
+                              type_descriptor registered) {
+    return apply_branch<Branches...>(
+        resolver, context, std::forward<Actual>(source), requested, registered);
+  }
+
+private:
+  template <typename Branch, typename... Rest, typename Resolver,
+            typename Context, typename Actual>
+  static decltype(auto) apply_branch(Resolver &resolver, Context &context,
+                                     Actual &&source, type_descriptor requested,
+                                     type_descriptor registered) {
+    using conversion = typename Branch::conversion;
+    if constexpr (conversion::available) {
+      using source_traits = alternative_type_traits<
+          std::remove_cv_t<std::remove_reference_t<Actual>>>;
+      if (auto *value =
+              source_traits::template get<typename Branch::alternative_type>(
+                  source)) {
+        if constexpr (std::is_lvalue_reference_v<Actual>) {
+          return conversion::apply(resolver, context, *value, requested,
+                                   registered);
+        } else {
+          return conversion::apply(resolver, context, std::move(*value),
+                                   requested, registered);
+        }
+      }
+    }
+    if constexpr ((Rest::conversion::available || ...)) {
+      return apply_branch<Rest...>(resolver, context,
+                                   std::forward<Actual>(source), requested,
+                                   registered);
+    } else {
+      throw make_type_not_convertible_exception(requested, registered);
+    }
+  }
 };
 
 template <typename From, typename To> struct copy_cv {

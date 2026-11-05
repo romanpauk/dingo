@@ -13,7 +13,7 @@ The full conversion behavior is spread across a few layers:
 - `type_conversion_traits` validates and performs custom type conversions
 - `resolution` records the operation for an allowed source-to-result route
 - `instance_request` carries the lookup type and requested descriptor
-- `resolution_operation` executes the selected route
+- each conversion step of `type_conversion_traits.h` applies itself
 
 The important source files are:
 
@@ -152,9 +152,13 @@ return only an address because they are borrowed by definition.
 [include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
 executes the operation selected during publication. `type_resolution` carries
 the target, source, and conversion types. It extracts the source with the
-published value category and delegates to the selected conversion node. Identity
-conversion forwards an exact source, while a custom trait conversion creates a
-new value.
+published value category and applies the selected conversion. Every conversion
+step in
+[include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
+is one struct: what it requires of its source, `borrow` or `consume`, the
+conversions it retains, and how it is applied; a step that continues with a
+nested conversion applies it to the object it reaches. Identity conversion
+forwards an exact source, while a custom trait conversion creates a new value.
 
 Broadly, the rules cover:
 

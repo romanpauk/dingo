@@ -173,21 +173,16 @@ TEST(resolution_operation_test,
       retained>;
   using construction = detail::converted_construction<selected>;
 
-  static_assert(
-      std::is_same_v<typename detail::conversion_cache_types<borrowed>::type,
-                     type_list<std::shared_ptr<int>>>);
-  static_assert(
-      std::is_same_v<typename detail::conversion_cache_types<alternative>::type,
-                     type_list<std::shared_ptr<int>>>);
-  static_assert(
-      std::is_same_v<typename detail::conversion_cache_types<wrapped>::type,
-                     type_list<std::shared_ptr<int>>>);
-  static_assert(
-      std::is_same_v<typename detail::conversion_cache_types<selected>::type,
-                     type_list<std::shared_ptr<int>>>);
-  static_assert(std::is_same_v<
-                typename detail::conversion_cache_types<construction>::type,
-                type_list<std::shared_ptr<int>>>);
+  static_assert(std::is_same_v<typename borrowed::cache_types,
+                               type_list<std::shared_ptr<int>>>);
+  static_assert(std::is_same_v<typename alternative::cache_types,
+                               type_list<std::shared_ptr<int>>>);
+  static_assert(std::is_same_v<typename wrapped::cache_types,
+                               type_list<std::shared_ptr<int>>>);
+  static_assert(std::is_same_v<typename selected::cache_types,
+                               type_list<std::shared_ptr<int>>>);
+  static_assert(std::is_same_v<typename construction::cache_types,
+                               type_list<std::shared_ptr<int>>>);
 }
 
 TEST(resolution_operation_test,
@@ -200,9 +195,9 @@ TEST(resolution_operation_test,
   source value;
   fake_resolution_context resolver;
   fake_resolution_context context;
-  auto converted = detail::type_conversion<conversion>::apply(
-      resolver, context, value, describe_type<target>(),
-      describe_type<source>());
+  auto converted =
+      conversion::apply(resolver, context, value, describe_type<target>(),
+                        describe_type<source>());
 
   EXPECT_EQ(converted.value, 53);
 }
