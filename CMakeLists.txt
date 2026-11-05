@@ -96,6 +96,8 @@ if(DINGO_DEVELOPMENT_MODE)
         binding/binding_model.h
         binding/binding_resolution.h
         binding/binding_selection.h
+        binding/binding_activation.h
+        binding/binding_cell.h
         binding/container_interface.h
         type/dependency.h
         factory/factory_traits.h

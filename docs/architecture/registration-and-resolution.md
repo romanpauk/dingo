@@ -141,13 +141,15 @@ container cannot be rolled back.
 
 ## Factory Path
 
-The factory implementation in
+The binding state in
 [include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
 owns:
 
-- a storage object
+- a binding cell with the storage object and its cached conversions
 - a lightweight child-container view for constructor injection
-- scope-specific materialization and cached-conversion state
+
+Materialization goes through the binding activation that the static container
+uses as well.
 
 The root container owns the runtime arena and a dense table of lookup states for
 those child views. A child stores only its root pointer and scope ID. Resolution

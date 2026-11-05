@@ -95,7 +95,7 @@ using size_instance_container =
                      container<>, container<>, false>;
 using size_binding_state =
     runtime_binding_state<size_registry_type, size_instance_container,
-                          size_storage>;
+                          detail::binding_cell_t<size_model>>;
 using size_binding = size_probe_registry::binding<size_interface, size_storage,
                                                   size_binding_state, none_t>;
 using size_keyed_binding =
@@ -117,13 +117,12 @@ using size_multi_interface_model =
 using size_multi_interface_storage =
     typename size_multi_interface_model::storage_type;
 using size_multi_interface_cache_types =
-    detail::runtime_binding_cache_types_t<size_interface,
-                                          size_multi_interface_storage>;
+    detail::binding_cache_types_t<size_multi_interface_model>;
 using size_multi_interface_conversion_cache =
     conversion_cache<size_multi_interface_cache_types>;
 using size_multi_interface_state =
     runtime_binding_state<size_registry_type, size_instance_container,
-                          size_multi_interface_storage>;
+                          detail::binding_cell_t<size_multi_interface_model>>;
 using size_multi_interface_pointer_state_owner = size_probe_registry::owner<
     typename size_multi_interface_model::interface_types,
     size_multi_interface_storage, size_multi_interface_state *, none_t>;
@@ -168,7 +167,7 @@ template <typename Registration,
               typename size_registry_type::parent_container_type>
 using size_runtime_state_for = runtime_binding_state<
     size_registry_type, size_instance_container,
-    typename detail::binding_model<Registration>::storage_type,
+    detail::binding_cell_t<detail::binding_model<Registration>>,
     RegistrationParent>;
 
 using size_unique_state = size_runtime_state_for<
@@ -226,8 +225,9 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
         "shared_ptr runtime binding state", 56);
     expect_size_at_most<size_shared_cyclical_state>(
         "shared_cyclical runtime binding state", 56);
+    // The state holds the conversion cache its interfaces share.
     expect_size_at_most<size_multi_interface_state>(
-        "multi-interface runtime binding state", 56);
+        "multi-interface runtime binding state", 72);
     expect_size_at_most<size_multi_interface_conversion_cache>(
         "pointer-backed conversion cache", 16);
     // Runtime bindings keep a direct cache-slot pointer beside the vptr so

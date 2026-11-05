@@ -251,7 +251,8 @@ TEST(type_registration_test, registration_specialization) {
       typename shared_registration::factory_type::type,
       typename shared_registration::conversions_type::type>;
   using shared_binding_data =
-      runtime_binding_state<test_state_owner, test_container, shared_storage>;
+      runtime_binding_state<test_state_owner, test_container,
+                            test_binding_cell<A, shared_storage>>;
   using shared_binding =
       runtime_binding<test_container, A, shared_storage, shared_binding_data>;
 
@@ -267,7 +268,7 @@ TEST(type_registration_test, registration_specialization) {
       typename shared_ptr_registration::conversions_type::type>;
   using shared_ptr_binding_data =
       runtime_binding_state<test_state_owner, test_container,
-                            shared_ptr_storage>;
+                            test_binding_cell<A, shared_ptr_storage>>;
   using shared_ptr_binding =
       runtime_binding<test_container, A, shared_ptr_storage,
                       shared_ptr_binding_data>;
@@ -283,7 +284,8 @@ TEST(type_registration_test, registration_specialization) {
       typename external_registration::factory_type::type,
       typename external_registration::conversions_type::type>;
   using external_binding_data =
-      runtime_binding_state<test_state_owner, test_container, external_storage>;
+      runtime_binding_state<test_state_owner, test_container,
+                            test_binding_cell<A, external_storage>>;
   using external_binding = runtime_binding<test_container, A, external_storage,
                                            external_binding_data>;
 
@@ -299,7 +301,7 @@ TEST(type_registration_test, registration_specialization) {
       typename external_shared_registration::conversions_type::type>;
   using external_shared_binding_data =
       runtime_binding_state<test_state_owner, test_container,
-                            external_shared_storage>;
+                            test_binding_cell<A, external_shared_storage>>;
   using external_shared_binding =
       runtime_binding<test_container, A, external_shared_storage,
                       external_shared_binding_data>;

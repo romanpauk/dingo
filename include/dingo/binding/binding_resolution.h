@@ -12,7 +12,6 @@
 #include <dingo/binding/binding_selection.h>
 #include <dingo/binding/runtime_binding_interface.h>
 #include <dingo/context/context_base.h>
-#include <dingo/resolution/conversion_cache.h>
 #include <dingo/resolution/resolution_operation.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/annotated.h>
@@ -45,49 +44,6 @@ struct has_storage_resolve_conversion<
         decltype(std::declval<Storage &>().template resolve_conversion<T>(
             std::declval<Context &>(), std::declval<Source>()))>>
     : std::true_type {};
-
-template <bool Enabled, typename ConversionTypes>
-struct binding_conversion_cache_base;
-
-template <typename ConversionTypes>
-struct binding_conversion_cache_base<true, ConversionTypes> {
-  template <typename T, typename Context, typename... Args>
-  T &construct_conversion(construction_scope scope, Context &context,
-                          Args &&...args) {
-    return conversions_.template construct<T>(scope, context,
-                                              std::forward<Args>(args)...);
-  }
-
-  template <typename T, typename Owner, typename Context, typename... Args>
-  T &construct_conversion_with(Owner &owner, construction_scope,
-                               Context &context, Args &&...args) {
-    (void)owner;
-    return conversions_.template construct_tracked<T>(
-        context, std::forward<Args>(args)...);
-  }
-
-  void reset_conversions() { conversions_.reset(); }
-
-protected:
-  conversion_cache<ConversionTypes> conversions_;
-};
-
-template <typename ConversionTypes>
-struct binding_conversion_cache_base<false, ConversionTypes> {
-  template <typename T, typename Context, typename... Args>
-  T &construct_conversion(construction_scope scope, Context &context,
-                          Args &&...args) {
-    return context.template construct<T>(scope, std::forward<Args>(args)...);
-  }
-
-  template <typename T, typename Owner, typename Context, typename... Args>
-  T &construct_conversion_with(Owner &, construction_scope scope,
-                               Context &context, Args &&...args) {
-    return construct_conversion<T>(scope, context, std::forward<Args>(args)...);
-  }
-
-  void reset_conversions() {}
-};
 
 template <typename Context> struct retained_frame_scope {
   explicit retained_frame_scope(Context &context) : context_(context) {
@@ -363,19 +319,6 @@ decltype(auto) retain_binding_conversion(construction_scope scope,
   }
 }
 
-template <typename Target, typename Resolver, typename Context,
-          typename MaterializedSource>
-decltype(auto) resolve_binding_value(Resolver &resolver, Context &context,
-                                     MaterializedSource &&source) {
-  using source_type = decltype(std::forward<MaterializedSource>(source).get());
-  using conversion = type_conversion_path_t<Target &, source_type, borrow>;
-  static_assert(conversion::available);
-  return type_conversion<conversion>::apply(
-      resolver, context, std::forward<MaterializedSource>(source).get(),
-      describe_type<Target>(),
-      describe_type<std::remove_reference_t<source_type>>());
-}
-
 template <typename Request, typename Resolution, typename Storage,
           typename Resolver, typename Context, typename MaterializedSource>
 decltype(auto) apply_resolution(Resolver &resolver, Context &context,
@@ -395,40 +338,6 @@ decltype(auto) apply_consumed_resolution(Resolver &resolver, Context &context,
       resolver, context, std::forward<MaterializedSource>(source));
   return consume_resolved_binding<Request>(
       std::forward<decltype(instance)>(instance), std::forward<Fn>(fn));
-}
-
-template <typename Request, typename Resolution, typename Storage,
-          typename Resolver, typename Context, typename Owner, typename Fn>
-decltype(auto) consume_runtime_binding_resolution_request(
-    construction_scope scope, Context &context, Storage &storage, Owner &owner,
-    Resolver &resolver, Fn &&fn) {
-  return with_runtime_binding_source(
-      scope, context, storage, owner, [&](auto &&source) -> decltype(auto) {
-        return apply_consumed_resolution<Request, Resolution, Storage>(
-            resolver, context, std::forward<decltype(source)>(source),
-            std::forward<Fn>(fn));
-      });
-}
-
-template <typename Request, typename Resolution, typename Storage,
-          typename Resolver, typename Context, typename Owner, typename Fn>
-decltype(auto)
-consume_binding_resolution_request(construction_scope scope, Context &context,
-                                   Storage &storage, Owner &owner,
-                                   Resolver &resolver, Fn &&fn) {
-  auto consume = [&](auto &&source) -> decltype(auto) {
-    return apply_consumed_resolution<Request, Resolution, Storage>(
-        resolver, context, std::forward<decltype(source)>(source),
-        std::forward<Fn>(fn));
-  };
-  using operation = typename Resolution::operation;
-  if constexpr (operation_requires_source_retention_v<operation>) {
-    return with_retained_binding_source(scope, context, storage, owner,
-                                        std::move(consume));
-  } else {
-    return with_binding_source(scope, context, storage, owner,
-                               std::move(consume));
-  }
 }
 
 template <typename Target, typename Context, typename Instance>

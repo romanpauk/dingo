@@ -9,6 +9,8 @@
 
 #include <dingo/base/exceptions.h>
 #include <dingo/base/type_descriptor.h>
+#include <dingo/binding/binding_activation.h>
+#include <dingo/binding/binding_cell.h>
 #include <dingo/binding/binding_collection.h>
 #include <dingo/binding/binding_model.h>
 #include <dingo/binding/binding_resolution.h>
@@ -35,11 +37,8 @@ namespace detail {
 
 template <typename... Registrations> class static_binding_storage;
 
-template <typename Registration> struct binding_storage_slot {
-  using binding_model = detail::binding_model<Registration>;
-  using storage_type = typename binding_model::storage_type;
-
-  storage_type storage;
+template <typename Registration> struct binding_cell_slot {
+  binding_cell_t<detail::binding_model<Registration>> cell;
 };
 
 template <typename BindingModel>
@@ -52,108 +51,6 @@ struct binding_storage_is_default_constructible
     : std::bool_constant<std::is_default_constructible_v<
           typename BindingModel::storage_type>> {};
 
-struct no_dependency_context {
-  template <typename T, typename Container> T resolve(Container &) = delete;
-};
-
-template <typename Request, typename StorageType>
-inline constexpr bool stored_request_identity_v = [] {
-  using stored_type = std::remove_cv_t<
-      std::remove_reference_t<typename StorageType::stored_type>>;
-  return std::is_same_v<Request, stored_type> ||
-         std::is_same_v<Request, stored_type &> ||
-         std::is_same_v<Request, const stored_type &> ||
-         std::is_same_v<Request, stored_type *> ||
-         std::is_same_v<Request, const stored_type *>;
-}();
-
-template <typename BindingModel, bool StoredInterfaces, typename... Interfaces>
-struct binding_cache_types_impl;
-
-template <typename BindingModel, typename... Interfaces>
-struct binding_cache_types_impl<BindingModel, false, Interfaces...> {
-private:
-  using storage_type = typename BindingModel::storage_type;
-
-  template <typename Interface>
-  using interface_cache_types = resolution_cache_types_t<
-      typename binding_resolutions<typename annotated_traits<Interface>::type,
-                                   storage_type>::type,
-      storage_shape_t<storage_type>>;
-
-public:
-  using type =
-      type_list_unique_t<type_list_cat_t<interface_cache_types<Interfaces>...>>;
-};
-
-template <typename BindingModel, typename... Interfaces>
-struct binding_cache_types_impl<BindingModel, true, Interfaces...> {
-  using type = type_list<>;
-};
-
-template <typename BindingModel, typename Interfaces>
-struct binding_cache_types;
-
-template <typename BindingModel>
-inline constexpr bool binding_has_cacheless_conversion_shape_v = [] {
-  using conversions = typename BindingModel::conversions_type;
-  return conversions::is_stable &&
-         std::is_same_v<typename conversions::value_types,
-                        type_list<runtime_type>> &&
-         std::is_same_v<typename conversions::lvalue_reference_types,
-                        type_list<runtime_type &>> &&
-         std::is_same_v<typename conversions::rvalue_reference_types,
-                        type_list<>> &&
-         std::is_same_v<typename conversions::pointer_types,
-                        type_list<runtime_type *>>;
-}();
-
-template <typename BindingModel>
-inline constexpr bool binding_uses_default_conversions_v = std::is_same_v<
-    typename BindingModel::conversions_type,
-    detail::conversions<typename BindingModel::storage_tag,
-                        typename BindingModel::registered_storage_type,
-                        runtime_type>>;
-
-template <typename Request, typename BindingModel>
-inline constexpr bool binding_has_cacheless_default_leaf_v =
-    binding_uses_default_conversions_v<BindingModel> &&
-    BindingModel::conversions_type::is_stable &&
-    std::is_same_v<std::remove_cv_t<Request>,
-                   std::remove_cv_t<typename BindingModel::stored_leaf_type>>;
-
-template <typename BindingModel, typename... Interfaces>
-struct binding_cache_types<BindingModel, type_list<Interfaces...>>
-    // Exact stored requests and stable default leaf requests cannot retain an
-    // adapted value, so enumerating every resolution route cannot add a slot.
-    : binding_cache_types_impl<
-          BindingModel,
-          (binding_has_cacheless_conversion_shape_v<BindingModel> &&
-           (stored_request_identity_v<
-                typename annotated_traits<Interfaces>::type,
-                typename BindingModel::storage_type> &&
-            ...)) ||
-              (binding_has_cacheless_default_leaf_v<
-                   typename annotated_traits<Interfaces>::type, BindingModel> &&
-               ...),
-          Interfaces...> {};
-
-template <typename BindingModel>
-using binding_cache_types_t =
-    typename binding_cache_types<BindingModel,
-                                 typename BindingModel::interface_types>::type;
-
-// The cache types are only enumerated for stable conversions; naming them in
-// the primary template would instantiate them for every binding.
-template <typename BindingModel,
-          bool Stable =
-              cache::is_stable_storage_v<typename BindingModel::storage_type>>
-inline constexpr bool has_binding_conversion_cache_v = false;
-
-template <typename BindingModel>
-inline constexpr bool has_binding_conversion_cache_v<BindingModel, true> =
-    type_list_size_v<binding_cache_types_t<BindingModel>> != 0;
-
 template <typename Registration,
           typename BindingsType =
               typename detail::binding_model<Registration>::bindings_type>
@@ -163,72 +60,6 @@ template <typename Registration, typename... LocalRegistrations>
 struct local_binding_scope_slot<Registration,
                                 static_bindings<LocalRegistrations...>> {
   static_binding_storage<LocalRegistrations...> scope;
-};
-
-template <typename Registration, bool Enabled = has_binding_conversion_cache_v<
-                                     detail::binding_model<Registration>>>
-struct binding_conversion_cache_slot;
-
-template <typename Registration, bool Enabled> struct registration_cache_types {
-  using binding_model = detail::binding_model<Registration>;
-  using type = binding_cache_types_t<binding_model>;
-};
-
-template <typename Registration>
-struct registration_cache_types<Registration, false> {
-  using type = type_list<>;
-};
-
-template <typename Registration, bool Enabled>
-using registration_conversion_cache_base = binding_conversion_cache_base<
-    Enabled, typename registration_cache_types<Registration, Enabled>::type>;
-
-template <typename Registration, bool Enabled>
-struct binding_conversion_cache_slot
-    : registration_conversion_cache_base<Registration, Enabled> {
-  using binding_model = detail::binding_model<Registration>;
-  using conversions_type = typename binding_model::storage_type::conversions;
-  using base_type = registration_conversion_cache_base<Registration, Enabled>;
-
-  using base_type::construct_conversion;
-};
-
-template <typename State, typename Host, typename BindingModel>
-struct binding_activation {
-  State &state;
-  Host &host;
-  construction_scope scope;
-
-  // Dependencies of the binding resolve through its local bindings first.
-  template <typename T, bool RemoveRvalueReferences, typename Context,
-            typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  decltype(auto) resolve(construction_scope construction, Context &context,
-                         LookupKey key) {
-    using local_bindings = typename BindingModel::bindings_type;
-    if constexpr (std::is_void_v<local_bindings>) {
-      return host.template resolve<T, RemoveRvalueReferences>(
-          construction, context, std::move(key));
-    } else {
-      return state.template resolve_local_binding<
-          request_type<T, RemoveRvalueReferences>, local_bindings,
-          BindingModel>(construction, host, context, std::move(key));
-    }
-  }
-
-  template <typename T, typename Context>
-  decltype(auto) resolve(Context &context) {
-    return state.template resolve_binding_type<T, BindingModel>(scope, host,
-                                                                context);
-  }
-
-  template <typename T, typename Context, typename Source>
-  decltype(auto) retain_conversion(Context &context, Source &&source) {
-    return detail::retain_binding_conversion<T>(
-        scope, state.template get_storage_for_model<BindingModel>(),
-        state.template get_conversion_cache_for_model<BindingModel>(), context,
-        std::forward<Source>(source));
-  }
 };
 
 template <typename Request, typename Resolutions>
@@ -385,12 +216,84 @@ template <typename Request, typename InterfaceBinding>
 inline constexpr bool binding_supports_request_v =
     binding_supports_request<Request, InterfaceBinding>::value;
 
+// The dependencies of a static binding resolve through its local bindings
+// first, then through the host.
+template <typename LocalStorage, typename LocalBindings, typename Host>
+struct local_binding_router {
+  LocalStorage &local;
+  Host &host;
+
+  template <typename T, bool RemoveRvalueReferences, typename Context,
+            typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  decltype(auto) resolve(construction_scope scope, Context &context,
+                         LookupKey key) {
+    using request = request_type<T, RemoveRvalueReferences>;
+    using R = typename request::result_type;
+    if constexpr (collection_traits<R>::is_collection) {
+      using collection_type = collection_traits<R>;
+      R results;
+      auto append = [](auto &values, auto &&value) {
+        collection_type::add(values, std::forward<decltype(value)>(value));
+      };
+      const auto local_count =
+          local.template append_collection<R, LookupKey, LocalBindings>(
+              scope, results, host, context, append);
+      const auto host_count = host.template append_collection<R>(
+          scope, results, context, append, key);
+      if (local_count + host_count == 0) {
+        throw detail::make_collection_type_not_found_exception<
+            R, typename collection_type::resolve_type>();
+      }
+      return results;
+    } else {
+      using selection =
+          typename LocalBindings::template selection<R, LookupKey>;
+      if constexpr (selection::status == detail::binding_status::found) {
+        return local
+            .template resolver<typename selection::binding_type>(scope, host)
+            .template resolve<R>(context);
+      } else {
+        return host.template resolve<typename request::user_type,
+                                     request::removes_rvalue_references>(
+            scope, context, std::move(key));
+      }
+    }
+  }
+};
+
+template <typename State, typename Host, typename BindingModel,
+          typename LocalBindings = typename BindingModel::bindings_type>
+struct static_binding_dependencies {
+  using type = Host &;
+
+  static type make(State &, Host &host) { return host; }
+};
+
+template <typename State, typename Host, typename BindingModel,
+          typename... LocalRegistrations>
+struct static_binding_dependencies<State, Host, BindingModel,
+                                   static_bindings<LocalRegistrations...>> {
+  using type =
+      local_binding_router<static_binding_storage<LocalRegistrations...>,
+                           static_bindings<LocalRegistrations...>, Host>;
+
+  static type make(State &state, Host &host) {
+    return {state.template get_local_scope_for_model<BindingModel>(), host};
+  }
+};
+
+// Resolves one interface of a static binding: selects the resolution of a
+// request at compile time and applies it through a binding activation.
 template <typename State, typename Host, typename InterfaceBinding>
 struct static_binding_resolver {
   using binding_model_type = typename InterfaceBinding::binding_model_type;
-  using interface_type = typename InterfaceBinding::interface_type;
-  using raw_interface_type = typename annotated_traits<interface_type>::type;
   using storage_type = typename binding_model_type::storage_type;
+  using dependencies_type =
+      static_binding_dependencies<State, Host, binding_model_type>;
+  using activation_type =
+      binding_activation<binding_cell_t<binding_model_type>,
+                         typename dependencies_type::type, false>;
 
   State &state;
   Host &host;
@@ -408,22 +311,22 @@ struct static_binding_resolver {
                   "does not publish");
     using matched_resolution =
         typename binding_supports_request<Request, InterfaceBinding>::type;
-    if constexpr (!std::is_void_v<matched_resolution> &&
-                  !std::is_reference_v<Request> &&
-                  !std::is_pointer_v<Request>) {
-      return consume_request<Request, matched_resolution>(
+    if constexpr (std::is_void_v<matched_resolution>) {
+      throw detail::make_type_not_convertible_exception(
+          describe_type<Request>(), registered_type(), context);
+    } else if constexpr (!std::is_reference_v<Request> &&
+                         !std::is_pointer_v<Request>) {
+      auto activation = make_activation();
+      return activation.template consume_request<Request, matched_resolution>(
           context, [](auto &&instance) -> Request {
             return Request(std::forward<decltype(instance)>(instance));
           });
     } else {
-      void *ptr = nullptr;
-      if constexpr (!std::is_void_v<matched_resolution>) {
-        ptr = resolve_request_address<Request, matched_resolution>(context);
-      } else {
-        throw detail::make_type_not_convertible_exception(
-            describe_type<Request>(), registered_type(), context);
-      }
-      return detail::convert_resolved_binding<Request>(ptr);
+      auto activation = make_activation();
+      return detail::convert_resolved_binding<Request>(
+          activation
+              .template resolve_request_address<Request, matched_resolution>(
+                  context));
     }
   }
 
@@ -437,86 +340,19 @@ struct static_binding_resolver {
         typename binding_supports_request<Request, InterfaceBinding>::type;
 
     if constexpr (!std::is_void_v<matched_resolution>) {
-      return consume_request<Request, matched_resolution>(context,
-                                                          std::forward<Fn>(fn));
+      auto activation = make_activation();
+      return activation.template consume_request<Request, matched_resolution>(
+          context, std::forward<Fn>(fn));
     } else {
       throw detail::make_type_not_convertible_exception(
           describe_type<Request>(), registered_type(), context);
     }
   }
 
-  // The address is deduced: a deduced return type is instantiated at the call
-  // and does not add a level to the template depth of a dependency chain.
-  template <typename Request, typename Resolution, typename Context>
-  decltype(auto) resolve_request_address(Context &context) {
-    using target_type =
-        std::remove_reference_t<typename Resolution::target_type>;
-    using operation = typename Resolution::operation;
-
-    binding_activation<State, Host, binding_model_type> activation{state, host,
-                                                                   scope};
-    auto &&storage = state.template get_storage_for_model<binding_model_type>();
-    auto materialize = [&](auto &&source) -> void * {
-      auto &&instance =
-          detail::apply_resolution<Request, Resolution, storage_type>(
-              activation, context, std::forward<decltype(source)>(source));
-      return detail::result_address<target_type>(
-          scope, context, std::forward<decltype(instance)>(instance));
-    };
-
-    if constexpr ((std::is_lvalue_reference_v<Request> ||
-                   std::is_pointer_v<Request>) &&
-                  detail::materializes_value_source_v<
-                      std::remove_reference_t<decltype(storage)>, Context,
-                      decltype(activation)>) {
-      return detail::with_context_lvalue_source(
-          scope, context, storage, activation, std::move(materialize));
-    } else if constexpr (is_runtime_context_v<Context>) {
-      return detail::with_runtime_binding_source(
-          scope, context, storage, activation, std::move(materialize));
-    } else if constexpr (detail::operation_requires_source_retention_v<
-                             operation> &&
-                         !std::is_same_v<
-                             std::remove_cv_t<std::remove_reference_t<Context>>,
-                             no_dependency_context>) {
-      return detail::with_retained_binding_source(
-          scope, context, storage, activation, std::move(materialize));
-    } else {
-      return detail::with_binding_source(scope, context, storage, activation,
-                                         std::move(materialize));
-    }
-  }
-
-  template <typename Request, typename Resolution, typename Context,
-            typename Fn>
-  decltype(auto) consume_request(Context &context, Fn &&fn) {
-    binding_activation<State, Host, binding_model_type> activation{state, host,
-                                                                   scope};
-    auto &&storage = state.template get_storage_for_model<binding_model_type>();
-    if constexpr ((std::is_lvalue_reference_v<Request> ||
-                   std::is_pointer_v<Request>) &&
-                  detail::materializes_value_source_v<
-                      std::remove_reference_t<decltype(storage)>, Context,
-                      decltype(activation)>) {
-      auto materialize = [&](auto &&source) -> decltype(auto) {
-        auto &&instance =
-            detail::apply_resolution<Request, Resolution, storage_type>(
-                activation, context, std::forward<decltype(source)>(source));
-        return detail::consume_resolved_binding<Request>(
-            std::forward<decltype(instance)>(instance), std::forward<Fn>(fn));
-      };
-      return detail::with_context_lvalue_source(
-          scope, context, storage, activation, std::move(materialize));
-    } else if constexpr (is_runtime_context_v<Context>) {
-      return detail::consume_runtime_binding_resolution_request<Request,
-                                                                Resolution>(
-          scope, context, storage, activation, activation,
-          std::forward<Fn>(fn));
-    } else {
-      return detail::consume_binding_resolution_request<Request, Resolution>(
-          scope, context, storage, activation, activation,
-          std::forward<Fn>(fn));
-    }
+private:
+  activation_type make_activation() {
+    return {state.template get_cell_for_model<binding_model_type>(),
+            dependencies_type::make(state, host), scope};
   }
 };
 
@@ -524,19 +360,14 @@ struct static_binding_resolver {
 // it. Local bindings of a registration keep their own storage in a slot.
 template <typename... Registrations>
 class static_binding_storage
-    : private binding_conversion_cache_slot<Registrations>...,
-      private binding_storage_slot<Registrations>...,
+    : private binding_cell_slot<Registrations>...,
       private local_binding_scope_slot<Registrations>... {
 public:
-  template <typename BindingModel> auto &get_storage_for_model() {
-    return static_cast<binding_storage_slot<
-        typename BindingModel::registration_type> &>(*this)
-        .storage;
-  }
-
-  template <typename BindingModel> auto &get_conversion_cache_for_model() {
-    return static_cast<binding_conversion_cache_slot<
-        typename BindingModel::registration_type> &>(*this);
+  template <typename BindingModel> auto &get_cell_for_model() {
+    return static_cast<
+               binding_cell_slot<typename BindingModel::registration_type> &>(
+               *this)
+        .cell;
   }
 
   template <typename BindingModel> auto &get_local_scope_for_model() {
@@ -549,56 +380,6 @@ public:
   auto resolver(construction_scope scope, Host &host) {
     return static_binding_resolver<static_binding_storage, Host,
                                    InterfaceBinding>{*this, host, scope};
-  }
-
-  template <typename T, typename BindingModel, typename Host, typename Context>
-  decltype(auto) resolve_binding_type(construction_scope scope, Host &host,
-                                      Context &context) {
-    binding_activation<static_binding_storage, Host, BindingModel> activation{
-        *this, host, scope};
-    return detail::with_binding_source(
-        scope, context, get_storage_for_model<BindingModel>(), activation,
-        [&](auto &&source) -> decltype(auto) {
-          return detail::resolve_binding_value<T>(
-              activation, context, std::forward<decltype(source)>(source));
-        });
-  }
-
-  template <typename Request, typename LocalBindings, typename BindingModel,
-            typename LookupKey, typename Host, typename Context,
-            typename R = typename Request::result_type>
-  decltype(auto) resolve_local_binding(construction_scope scope, Host &host,
-                                       Context &context, LookupKey key) {
-    auto &local_scope = get_local_scope_for_model<BindingModel>();
-    if constexpr (collection_traits<R>::is_collection) {
-      using collection_type = collection_traits<R>;
-      R results;
-      auto append = [](auto &values, auto &&value) {
-        collection_type::add(values, std::forward<decltype(value)>(value));
-      };
-      const auto local_count =
-          local_scope.template append_collection<R, LookupKey, LocalBindings>(
-              scope, results, host, context, append);
-      const auto host_count = host.template append_collection<R>(
-          scope, results, context, append, key);
-      if (local_count + host_count == 0) {
-        throw detail::make_collection_type_not_found_exception<
-            R, typename collection_type::resolve_type>();
-      }
-      return results;
-    } else {
-      using selection =
-          typename LocalBindings::template selection<R, LookupKey>;
-      if constexpr (selection::status == detail::binding_status::found) {
-        return local_scope
-            .template resolver<typename selection::binding_type>(scope, host)
-            .template resolve<R>(context);
-      } else {
-        return host.template resolve<typename Request::user_type,
-                                     Request::removes_rvalue_references>(
-            scope, context, std::move(key));
-      }
-    }
   }
 
   template <typename T, typename LookupKey, typename Bindings, typename Host,

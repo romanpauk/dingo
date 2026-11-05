@@ -1633,7 +1633,7 @@ private:
 
       using runtime_binding_state_type =
           runtime_binding_state<registry_type, instance_container_type,
-                                storage_type, Parent>;
+                                detail::binding_cell_t<binding_model>, Parent>;
 
       if constexpr (registration_requirements::valid &&
                     type_list_size_v<interface_types> == 1) {

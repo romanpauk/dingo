@@ -92,17 +92,13 @@ are normalized internally through the static registry path under
 
 ### Factory And Storage
 
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
-wraps a storage object and the child container used to resolve constructor
-dependencies.
-
-The factory owns the conversion-facing interface:
-
-- `get_value(instance_request)`
-- `get_lvalue_reference(instance_request)`
-- `get_rvalue_reference(instance_request)`
-- `get_pointer(instance_request)`
-- scope-specific materialization support
+Both containers keep the state of a registration in a binding cell,
+[include/dingo/binding/binding_cell.h](../../include/dingo/binding/binding_cell.h):
+the storage object and the conversion cache its interfaces share. A static
+container holds one cell per registration inline. A runtime binding holds its
+cell in `runtime_binding_state` from
+[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h),
+together with the child container used to resolve constructor dependencies.
 
 The storage classes under [include/dingo/storage/](../../include/dingo/storage)
 own lifetime policy:
@@ -114,12 +110,18 @@ own lifetime policy:
 
 ### Resolution And Conversion Path
 
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
-now owns the conversion-facing resolution flow. It is responsible for:
+[include/dingo/binding/binding_activation.h](../../include/dingo/binding/binding_activation.h)
+owns the conversion-facing resolution flow of both containers. It is responsible
+for:
 
 - asking storage to `resolve(...)` its native source shape
 - applying guard and closure scope through `storage_materialization_traits`
 - constructing cached conversion objects for shared and external cases
+- rolling back what a failed runtime transaction left in the cell
+
+The containers differ only in how they select the resolution of a request: a
+static container selects it at compile time, while a runtime binding matches the
+requested type descriptor at run time.
 
 [include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
 contains the last-mile conversion rules from the stored source shape to the

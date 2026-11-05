@@ -9,6 +9,8 @@
 
 #include <dingo/base/config.h>
 
+#include <dingo/binding/binding_activation.h>
+#include <dingo/binding/binding_cell.h>
 #include <dingo/binding/binding_resolution.h>
 #include <dingo/binding/runtime_binding_interface.h>
 #include <dingo/runtime/container_runtime.h>
@@ -20,7 +22,6 @@
 #include <type_traits>
 
 namespace dingo {
-// TODO: this is bit convoluted, ideally merge resolver with runtime binding
 namespace detail {
 template <bool Stable>
 class runtime_binding_base : private cache::state<Stable> {
@@ -33,11 +34,15 @@ private:
 
 } // namespace detail
 
-template <typename Owner, typename InstanceContainer, typename Storage,
+template <typename Owner, typename InstanceContainer, typename Cell,
           typename RegistrationParent = typename Owner::parent_container_type>
-class runtime_binding_state : private detail::runtime_binding_base<
-                                  detail::cache::is_stable_storage_v<Storage>> {
+class runtime_binding_state
+    : private detail::runtime_binding_base<
+          detail::cache::is_stable_storage_v<typename Cell::storage_type>> {
+  using storage_type = typename Cell::storage_type;
+
 public:
+  using cell_type = Cell;
   using owner_type = Owner;
   using container_type = InstanceContainer;
   using instance_container_type = InstanceContainer;
@@ -50,7 +55,7 @@ public:
 
   template <typename... Args>
   explicit runtime_binding_state(owner_type *owner, Args &&...args)
-      : owner_(owner), storage_(std::forward<Args>(args)...) {}
+      : owner_(owner), cell_(std::forward<Args>(args)...) {}
 
   runtime_type &runtime() { return owner().runtime(); }
   parent_container_type *parent() {
@@ -63,7 +68,8 @@ public:
     }
   }
   allocator_type &get_allocator() { return owner().get_allocator(); }
-  Storage &storage() { return storage_; }
+  cell_type &cell() { return cell_; }
+  storage_type &storage() { return cell_.storage(); }
   detail::cache::entry *cache_slot() noexcept {
     return state_base::binding_cache_slot();
   }
@@ -108,8 +114,8 @@ public:
   }
 
 private:
-  using state_base =
-      detail::runtime_binding_base<detail::cache::is_stable_storage_v<Storage>>;
+  using state_base = detail::runtime_binding_base<
+      detail::cache::is_stable_storage_v<storage_type>>;
 
   owner_type &owner() {
     assert(owner_ != nullptr);
@@ -127,7 +133,7 @@ private:
   }
 
   owner_type *owner_ = nullptr;
-  Storage storage_;
+  cell_type cell_;
   InstanceContainer *instance_container_ = nullptr;
 };
 
@@ -152,25 +158,6 @@ template <typename T> struct runtime_binding_state_traits<T *> {
 namespace detail {
 template <typename Storage> using registered_type_t = typename Storage::type;
 
-template <typename Type, typename Storage>
-using runtime_binding_cache_types_t =
-    resolution_cache_types_t<typename binding_resolutions<Type, Storage>::type,
-                             storage_shape_t<Storage>>;
-
-template <typename Types>
-static constexpr bool has_runtime_binding_cache_v =
-    type_list_size_v<Types> != 0;
-
-template <typename Storage, typename = void>
-struct runtime_storage_can_reset : std::false_type {};
-
-template <typename Storage>
-struct runtime_storage_can_reset<
-    Storage,
-    std::void_t<decltype(std::declval<Storage &>().reset()),
-                decltype(std::declval<const Storage &>().is_resolved())>>
-    : std::true_type {};
-
 template <typename... Resolutions>
 std::size_t resolution_request_index(type_list<Resolutions...>,
                                      type_descriptor requested_type) {
@@ -183,23 +170,24 @@ std::size_t resolution_request_index(type_list<Resolutions...>,
   return result;
 }
 
-template <typename Storage, typename Resolver, typename Context,
-          typename MaterializedSource, typename... Resolutions>
-resolved_address resolve_request_address_from_source(
-    construction_scope scope, Resolver &resolver, Context &context,
-    MaterializedSource &&source, std::size_t resolution_index,
-    type_list<Resolutions...>, type_descriptor requested_type,
-    type_descriptor registered_type) {
+// Applies the resolution at a run-time index to a source.
+template <typename Activation, typename Context, typename MaterializedSource,
+          typename... Resolutions>
+resolved_address
+resolve_indexed_address(Activation &activation, Context &context,
+                        MaterializedSource &&source,
+                        std::size_t resolution_index, type_list<Resolutions...>,
+                        type_descriptor requested_type) {
   resolved_address result{};
   std::size_t index = 0;
   // Short-circuiting guarantees that exactly one arm forwards the source.
   const bool matched =
       (((resolution_index == index++)
-            ? (result = resolve_address_from_source<Resolutions, Storage>(
-                   scope, resolver, context,
+            ? (result = activation.template resolve_address<Resolutions>(
+                   context,
                    std::forward<MaterializedSource>(
                        source), // NOLINT(bugprone-use-after-move)
-                   requested_type, registered_type),
+                   requested_type),
                true)
             : false) ||
        ...);
@@ -211,19 +199,13 @@ resolved_address resolve_request_address_from_source(
 
 } // namespace detail
 
-// TODO: the container here is just for RTTI, but it is needed to get the
-// inner container type and that is very hard. Perhaps pass RTTI and inner
-// container directly?
+// The erased binding of one interface. It selects the resolution of a request
+// at run time and applies it through a binding activation of its cell.
 template <typename Container, typename Type, typename Storage, typename State>
 class runtime_binding
     : public runtime_binding_interface<
           typename Container::rtti_type,
-          runtime_context<typename Container::allocator_type>>,
-      private detail::binding_conversion_cache_base<
-          Storage::conversions::is_stable &&
-              detail::has_runtime_binding_cache_v<
-                  detail::runtime_binding_cache_types_t<Type, Storage>>,
-          detail::runtime_binding_cache_types_t<Type, Storage>> {
+          runtime_context<typename Container::allocator_type>> {
 public:
   using storage_type = Storage;
   using runtime_context_type =
@@ -233,174 +215,19 @@ public:
   using container_type = typename state_type::container_type;
   using interface_type = Type;
   using rtti_type = typename Container::rtti_type;
-  using type_index = typename rtti_type::type_index;
   using request_type = instance_request<rtti_type>;
   using interface_base =
       runtime_binding_interface<rtti_type, runtime_context_type>;
-  using cache_types = detail::runtime_binding_cache_types_t<Type, Storage>;
-  using resolutions = detail::binding_resolutions<Type, Storage>;
-  using request_resolutions = typename resolutions::type;
-  static constexpr bool has_conversion_cache =
-      detail::has_runtime_binding_cache_v<cache_types>;
-  static constexpr bool uses_cached_conversions =
-      Storage::conversions::is_stable && has_conversion_cache;
-  using materialization_traits =
-      storage_materialization_traits<typename Storage::tag_type,
-                                     typename Storage::type>;
-  using conversion_cache_base =
-      detail::binding_conversion_cache_base<uses_cached_conversions,
-                                            cache_types>;
+  using request_resolutions =
+      typename detail::binding_resolutions<Type, Storage>::type;
 
 private:
-  template <typename T, typename Context, typename... Args>
-  T &construct_conversion(construction_scope scope, Context &context,
-                          Args &&...args) {
-    if constexpr (uses_cached_conversions) {
-      return conversion_cache_base::template construct_conversion_with<T>(
-          state().runtime(), scope, context, std::forward<Args>(args)...);
-    } else {
-      return conversion_cache_base::template construct_conversion<T>(
-          scope, context, std::forward<Args>(args)...);
-    }
-  }
-
-  struct binding_activation {
-    runtime_binding &binding;
-    construction_scope scope;
-
-    template <typename T, typename Context, typename Source>
-    decltype(auto) construct_conversion(construction_scope construction,
-                                        Context &context, Source &&source) {
-      return binding.template construct_conversion<T>(
-          construction, context, std::forward<Source>(source));
-    }
-
-    template <typename T, typename Context, typename Source>
-    decltype(auto) retain_conversion(Context &context, Source &&source) {
-      return binding.template retain_conversion<T>(
-          scope, context, std::forward<Source>(source));
-    }
-  };
-
   State state_;
 
   state_type &state() { return state_traits::ref(state_); }
-  auto &get_storage() { return state().storage(); }
-  template <bool TrackRollback = true, typename Fn>
-  decltype(auto) with_resolution_container(runtime_context_type &context,
-                                           Fn &&fn) {
-    return state().template with_resolution_container<TrackRollback>(
-        context, std::forward<Fn>(fn));
-  }
-
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable : 4702)
-#endif
-  template <typename Context, typename Fn>
-  decltype(auto) with_source(construction_scope scope, Context &context,
-                             Fn &&fn) {
-    if constexpr (materialization_traits::can_retain_source) {
-      if (materialization_traits::retains_source(get_storage())) {
-        // The reset flag is selected by the callback, not carried by it.
-        context.on_rollback(
-            should_reset_storage_on_failure()
-                ? +[](void *self, void *) noexcept {
-                    auto *binding = static_cast<runtime_binding *>(self);
-                    binding->reset_conversion_artifacts();
-                    binding->reset_storage_after_failure(true);
-                  }
-                : +[](void *self, void *) noexcept {
-                    auto *binding = static_cast<runtime_binding *>(self);
-                    binding->reset_conversion_artifacts();
-                    binding->reset_storage_after_failure(false);
-                  },
-            this);
-        auto materialize = [&]() -> decltype(auto) {
-          return with_resolution_container<true>(
-              context, [&](auto &container) -> decltype(auto) {
-                return detail::with_runtime_binding_source(
-                    persistent_scope, context, get_storage(), container,
-                    std::forward<Fn>(fn));
-              });
-        };
-        using result_type = std::invoke_result_t<decltype(materialize) &>;
-        if constexpr (std::is_void_v<result_type>) {
-          materialize();
-          add_retained_source_runtime_reset_destructor(context);
-        } else if constexpr (std::is_reference_v<result_type>) {
-          result_type result = materialize();
-          add_retained_source_runtime_reset_destructor(context);
-          return std::forward<result_type>(result);
-        } else {
-          auto result = materialize();
-          add_retained_source_runtime_reset_destructor(context);
-          return result;
-        }
-      }
-    }
-    return with_resolution_container(
-        context, [&](auto &container) -> decltype(auto) {
-          return detail::with_runtime_binding_source(
-              scope, context, get_storage(), container, std::forward<Fn>(fn));
-        });
-  }
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
-
-  void reset_conversion_artifacts() {
-    conversion_cache_base::reset_conversions();
-  }
-
-  void reset_retained_source_runtime_artifacts() noexcept {
-    reset_conversion_artifacts();
-    reset_storage_after_failure(true);
-  }
-
-  void
-  add_retained_source_runtime_reset_destructor(runtime_context_type &context) {
-    context.add_runtime_destructor(
-        this,
-        &runtime_binding::reset_retained_source_runtime_artifacts_destructor);
-  }
-
-  static void
-  reset_retained_source_runtime_artifacts_destructor(void *ptr) noexcept {
-    reinterpret_cast<runtime_binding *>(ptr)
-        ->reset_retained_source_runtime_artifacts();
-  }
-
-  bool should_reset_storage_on_failure() {
-    if constexpr (detail::runtime_storage_can_reset<Storage>::value) {
-      return !get_storage().is_resolved();
-    } else {
-      return false;
-    }
-  }
-
-  void reset_storage_after_failure(bool reset_storage) {
-    if constexpr (detail::runtime_storage_can_reset<Storage>::value) {
-      if (reset_storage) {
-        get_storage().reset();
-      }
-    } else {
-      (void)reset_storage;
-    }
-  }
 
   static constexpr type_descriptor registered_type() {
     return describe_type<detail::registered_type_t<Storage>>();
-  }
-
-public:
-  template <typename T, typename Context, typename Source>
-  decltype(auto) retain_conversion(construction_scope scope, Context &context,
-                                   Source &&source) {
-    binding_activation activation{*this, scope};
-    return detail::retain_binding_conversion<T>(scope, get_storage(),
-                                                activation, context,
-                                                std::forward<Source>(source));
   }
 
 #ifdef _MSC_VER
@@ -426,14 +253,20 @@ public:
             request.requested_type, registered_type(), context);
       }
 
-      binding_activation activation{binding, scope};
-      auto result = binding.with_source(
-          scope, context, [&](auto &&source) -> resolved_address {
-            return detail::resolve_request_address_from_source<Storage>(
-                scope, activation, context,
-                std::forward<decltype(source)>(source), resolution_index,
-                request_resolutions{}, request.requested_type,
-                registered_type());
+      auto &state = binding.state();
+      auto result = state.with_resolution_container(
+          context, [&](auto &container) -> resolved_address {
+            using activation_type = detail::binding_activation<
+                typename state_type::cell_type,
+                std::remove_reference_t<decltype(container)> &, true>;
+            activation_type activation{state.cell(), container, scope};
+            return activation.template with_source<void, void>(
+                context, [&](auto &&source) -> resolved_address {
+                  return detail::resolve_indexed_address(
+                      activation, context,
+                      std::forward<decltype(source)>(source), resolution_index,
+                      request_resolutions{}, request.requested_type);
+                });
           });
       // Request caching is intentionally stricter than conversion caching and
       // is published with transaction rollback tracking.

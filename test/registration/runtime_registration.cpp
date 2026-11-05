@@ -744,7 +744,7 @@ TEST(type_registration_test,
   } state_owner(&parent);
 
   runtime_binding_state<owner, counting_runtime_binding_container,
-                        counting_runtime_binding_storage>
+                        detail::binding_cell<counting_runtime_binding_storage>>
       state(&state_owner);
 
   EXPECT_EQ(counting_runtime_binding_container::constructions, 0);
