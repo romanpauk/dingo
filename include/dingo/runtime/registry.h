@@ -235,7 +235,6 @@ protected:
       detail::base_lookup_entry<rtti_type,
                                 typename base_lookup_definition::cardinality,
                                 typename base_lookup_definition::backend_type>;
-  using base_lookup_cardinality = typename base_lookup_definition::cardinality;
   using lookup_index_entries = type_list_unique_t<
       type_list_cat_t<normalized_lookup_entries, type_list<base_lookup_entry>>>;
   template <typename LookupEntry>
@@ -439,17 +438,6 @@ protected:
       detail::selected_lookup_entry_with_cardinality_t<
           Interface, KeyDomain, Cardinality, normalized_lookup_entries>;
 
-  // A static key is looked up by the one definition of its domain, else by its
-  // many definition, else by the base index.
-  template <typename Interface, typename KeyDomain>
-  using static_key_lookup_cardinality_t = std::conditional_t<
-      !std::is_void_v<
-          static_key_lookup_entry_t<Interface, KeyDomain, ::dingo::one>>,
-      ::dingo::one,
-      std::conditional_t<!std::is_void_v<static_key_lookup_entry_t<
-                             Interface, KeyDomain, ::dingo::many>>,
-                         ::dingo::many, base_lookup_cardinality>>;
-
   template <typename LookupEntry> struct runtime_lookup_entry_traits {
     static constexpr bool is_key_value = false;
     using interface_type = void;
@@ -593,6 +581,8 @@ protected:
     using many_lookup_entry =
         static_key_lookup_entry_t<normalized_interface, key_domain,
                                   ::dingo::many>;
+    // The one definition of the key domain, else its many definition, else
+    // the base index.
     using lookup_entry = std::conditional_t<
         !std::is_void_v<one_lookup_entry>, one_lookup_entry,
         std::conditional_t<!std::is_void_v<many_lookup_entry>,
@@ -856,28 +846,18 @@ protected:
   }
 
   template <typename TypeInterface, typename TypeStorage, typename LookupKey,
-            typename ValueFactory, typename KeyResolver>
-  void commit_lookup(runtime_bindings_state &, ValueFactory &,
-                     runtime_transaction_type &, KeyResolver &&,
-                     const LookupKey &, type_list<>) {}
-
-  template <typename TypeInterface, typename TypeStorage, typename LookupKey,
-            typename Head, typename... Tail, typename ValueFactory,
-            typename KeyResolver>
+            typename ValueFactory, typename KeyResolver, typename... Entries>
   void commit_lookup(runtime_bindings_state &state, ValueFactory &value_factory,
                      runtime_transaction_type &transaction,
                      KeyResolver &&key_resolver, const LookupKey &lookup_key,
-                     type_list<Head, Tail...>) {
-    static_assert(ValueFactory::shared_owner || sizeof...(Tail) == 0,
+                     type_list<Entries...>) {
+    static_assert(ValueFactory::shared_owner || sizeof...(Entries) <= 1,
                   "unique runtime binding owner can only be inserted into one "
                   "lookup");
-    decltype(auto) key_arg = key_resolver(type_list_iterator<Head>{});
-    insert_lookup<TypeInterface, TypeStorage, LookupKey, Head>(
-        state, value_factory, transaction, lookup_key, key_arg);
-    commit_lookup<TypeInterface, TypeStorage, LookupKey>(
-        state, value_factory, transaction,
-        std::forward<KeyResolver>(key_resolver), lookup_key,
-        type_list<Tail...>{});
+    (insert_lookup<TypeInterface, TypeStorage, LookupKey, Entries>(
+         state, value_factory, transaction, lookup_key,
+         key_resolver(type_list_iterator<Entries>{})),
+     ...);
   }
 
   template <typename LookupEntry, typename Key, typename Binding>
@@ -1004,37 +984,11 @@ protected:
     }
   };
 
-  template <typename TypeInterface, typename TypeStorage, typename LookupKey,
-            typename Cardinality, typename ValueFactory>
-  void commit_static_lookup(runtime_bindings_state &state,
-                            ValueFactory &value_factory,
-                            runtime_transaction_type &transaction,
-                            LookupKey lookup_key) {
-    using key_domain = typename LookupKey::definition_type;
-    using explicit_lookup_entry =
-        static_key_lookup_entry_t<TypeInterface, key_domain, Cardinality>;
-    using route = lookup_index_route<TypeInterface, LookupKey>;
-    using routed_lookup_entry = typename route::entry;
-    using routed_cardinality =
-        typename lookup_entry_cardinality<routed_lookup_entry>::type;
-    if constexpr (!std::is_void_v<explicit_lookup_entry> ||
-                  std::is_same_v<Cardinality, ::dingo::one> ||
-                  std::is_same_v<routed_cardinality, Cardinality>) {
-      static_assert(!std::is_void_v<routed_lookup_entry>);
-      auto key_resolver = [&](auto) { return route::key(lookup_key); };
-      commit_lookup<TypeInterface, TypeStorage, LookupKey>(
-          state, value_factory, transaction, key_resolver, lookup_key,
-          type_list<routed_lookup_entry>{});
-    } else {
-      static_assert(std::is_same_v<Cardinality, ::dingo::one>,
-                    "static-key many lookup registrations require an explicit "
-                    "dingo lookup definition");
-    }
-  }
-
+  // Commits a binding to the lookups of its interface: to each key-value
+  // lookup with its supplied key value, or else to the routed lookup of its
+  // static key.
   template <typename TypeInterface, typename TypeStorage, typename LookupKey,
             typename ValueFactory, typename... KeyValueArgs>
-  // NOLINTNEXTLINE(readability-function-cognitive-complexity)
   void commit_registration(runtime_bindings_state &state,
                            ValueFactory &value_factory,
                            runtime_transaction_type &transaction,
@@ -1042,34 +996,27 @@ protected:
     check_interface_requirements<TypeStorage,
                                  typename annotated_traits<TypeInterface>::type,
                                  typename TypeStorage::type>();
-    ((void)key_values, ...);
-    using key_domain = typename LookupKey::definition_type;
-    using lookup_cardinality_type =
-        static_key_lookup_cardinality_t<TypeInterface, key_domain>;
-
-    if constexpr (sizeof...(KeyValueArgs) > 0) {
-      using lookup_entries =
-          runtime_lookup_entries_for_interface_t<TypeInterface>;
-      if constexpr (type_list_size_v<lookup_entries> > 0) {
-        validate_required_runtime_registration_keys<lookup_entries,
-                                                    KeyValueArgs...>();
-        auto key_value_tuple = std::forward_as_tuple(key_values...);
-        auto key_resolver = [&](auto element) -> decltype(auto) {
-          using entry_type = typename decltype(element)::type;
-          return registration_key_value<entry_type>(key_value_tuple);
-        };
-        commit_lookup<TypeInterface, TypeStorage, LookupKey>(
-            state, value_factory, transaction, key_resolver, lookup_key,
-            lookup_entries{});
-      } else {
-        commit_static_lookup<TypeInterface, TypeStorage, LookupKey,
-                             lookup_cardinality_type>(state, value_factory,
-                                                      transaction, lookup_key);
-      }
+    using lookup_entries =
+        runtime_lookup_entries_for_interface_t<TypeInterface>;
+    if constexpr (sizeof...(KeyValueArgs) > 0 &&
+                  type_list_size_v<lookup_entries> > 0) {
+      validate_required_runtime_registration_keys<lookup_entries,
+                                                  KeyValueArgs...>();
+      auto key_value_tuple = std::forward_as_tuple(key_values...);
+      auto key_resolver = [&](auto element) -> decltype(auto) {
+        using entry_type = typename decltype(element)::type;
+        return registration_key_value<entry_type>(key_value_tuple);
+      };
+      commit_lookup<TypeInterface, TypeStorage, LookupKey>(
+          state, value_factory, transaction, key_resolver, lookup_key,
+          lookup_entries{});
     } else {
-      commit_static_lookup<TypeInterface, TypeStorage, LookupKey,
-                           lookup_cardinality_type>(state, value_factory,
-                                                    transaction, lookup_key);
+      ((void)key_values, ...);
+      using route = lookup_index_route<TypeInterface, LookupKey>;
+      auto key_resolver = [&](auto) { return route::key(lookup_key); };
+      commit_lookup<TypeInterface, TypeStorage, LookupKey>(
+          state, value_factory, transaction, key_resolver, lookup_key,
+          type_list<typename route::entry>{});
     }
   }
 
