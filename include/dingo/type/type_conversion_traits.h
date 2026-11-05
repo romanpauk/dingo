@@ -861,28 +861,25 @@ constexpr basic_conversion_kind basic_conversion_selected() {
   using source_pointer = std::add_pointer_t<std::remove_reference_t<Source>>;
   constexpr bool borrows = std::is_lvalue_reference_v<Source> &&
                            access_satisfies<Access, borrow>::value;
-  if constexpr (!UsesDefaultConversion || std::is_pointer_v<Target>) {
-    return kind::none;
-  } else if constexpr (std::is_lvalue_reference_v<Target>) {
-    if constexpr (borrows &&
-                  std::is_convertible_v<
-                      source_pointer,
-                      std::add_pointer_t<std::remove_reference_t<Target>>>) {
-      return kind::converted;
-    } else {
-      return kind::none;
-    }
-  } else if constexpr (std::is_rvalue_reference_v<Target> ||
-                       std::is_volatile_v<std::remove_reference_t<Source>>) {
-    return kind::none;
-  } else if constexpr (borrows &&
+  constexpr bool defaults = UsesDefaultConversion && !std::is_pointer_v<Target>;
+  // A value target of a non-volatile source.
+  constexpr bool by_value =
+      defaults && !std::is_reference_v<Target> &&
+      !std::is_volatile_v<std::remove_reference_t<Source>>;
+  if constexpr (defaults && std::is_lvalue_reference_v<Target>) {
+    return borrows && std::is_convertible_v<
+                          source_pointer,
+                          std::add_pointer_t<std::remove_reference_t<Target>>>
+               ? kind::converted
+               : kind::none;
+  } else if constexpr (by_value && borrows &&
                        std::is_same_v<std::remove_cv_t<Target>, source_type>) {
     return is_copy_constructible_v<Target> ? kind::identity : kind::none;
-  } else if constexpr (borrows &&
+  } else if constexpr (by_value && borrows &&
                        std::is_convertible_v<source_pointer,
                                              std::add_pointer_t<Target>>) {
     return is_copy_constructible_v<Target> ? kind::reference : kind::none;
-  } else if constexpr (std::is_rvalue_reference_v<Source> &&
+  } else if constexpr (by_value && std::is_rvalue_reference_v<Source> &&
                        std::is_same_v<std::remove_cv_t<Target>, source_type> &&
                        access_satisfies<Access, consume>::value) {
     return std::is_constructible_v<Target, Source> ? kind::identity
