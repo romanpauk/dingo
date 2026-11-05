@@ -35,12 +35,8 @@ struct is_brace_constructible_impl<T, std::void_t<decltype(T{Values...})>,
                                    Values...> : std::true_type {};
 
 template <typename T, auto... Values>
-struct is_brace_constructible
-    : is_brace_constructible_impl<T, void, Values...> {};
-
-template <typename T, auto... Values>
 inline constexpr bool is_brace_constructible_v =
-    is_brace_constructible<T, Values...>::value;
+    is_brace_constructible_impl<T, void, Values...>::value;
 } // namespace detail
 
 // The wrapper semantics a type_traits specialization names. The library knows
@@ -133,45 +129,21 @@ template <typename T>
 inline constexpr bool is_value_borrowable_v =
     detail::is_value_borrowable<std::remove_cv_t<T>>::value;
 
-template <typename T, typename = void> struct copy_constructible_traits;
-
 namespace detail {
-template <typename T, bool IsCollection>
-struct copy_constructible_with_collection {
-  static constexpr bool value = std::is_copy_constructible_v<T>;
-};
-
-template <typename T> struct copy_constructible_with_collection<T, true> {
-  static constexpr bool value = copy_constructible_traits<
-      typename collection_traits<T>::resolve_type>::value;
-};
-
-template <typename T, typename = void> struct copy_constructible_base {
-  using value_type = std::remove_cv_t<std::remove_reference_t<T>>;
-
-  static constexpr bool value = std::is_copy_constructible_v<value_type>;
-};
-
-template <typename T>
-struct copy_constructible_base<
-    T, std::void_t<decltype(collection_traits<std::remove_cv_t<
-                                std::remove_reference_t<T>>>::is_collection)>> {
-  using collection_type =
-      collection_traits<std::remove_cv_t<std::remove_reference_t<T>>>;
-  using value_type = std::remove_cv_t<std::remove_reference_t<T>>;
-
-  static constexpr bool value =
-      copy_constructible_with_collection<value_type,
-                                         collection_type::is_collection>::value;
-};
+// A collection is copied with its elements.
+template <typename T> constexpr bool copy_constructible() {
+  using value_type = remove_cvref_t<T>;
+  if constexpr (collection_traits<value_type>::is_collection) {
+    return copy_constructible<
+        typename collection_traits<value_type>::resolve_type>();
+  } else {
+    return std::is_copy_constructible_v<value_type>;
+  }
+}
 } // namespace detail
 
-template <typename T, typename>
-struct copy_constructible_traits : detail::copy_constructible_base<T> {};
-
 template <typename T>
-inline constexpr bool is_copy_constructible_v =
-    copy_constructible_traits<T>::value;
+inline constexpr bool is_copy_constructible_v = detail::copy_constructible<T>();
 
 namespace detail {
 // Whether the type_traits of T declare Semantics.
@@ -204,14 +176,6 @@ struct type_list_count<type_list<Alternatives...>, Selected>
           size_t,
           (0u + ... + (std::is_same_v<Selected, Alternatives> ? 1u : 0u))> {};
 
-template <typename List> struct type_list_has_duplicates;
-
-template <typename... Alternatives>
-struct type_list_has_duplicates<type_list<Alternatives...>>
-    : std::bool_constant<((type_list_count<type_list<Alternatives...>,
-                                           Alternatives>::value > 1) ||
-                          ...)> {};
-
 template <typename Type, typename = void>
 struct alternative_type_alternatives {};
 
@@ -220,7 +184,8 @@ struct alternative_type_alternatives<
     Type, std::enable_if_t<is_alternative_type_v<Type>>> {
   using type = typename type_traits<std::remove_cv_t<Type>>::alternatives;
 
-  static_assert(!type_list_has_duplicates<type>::value,
+  static_assert(type_list_size_v<type_list_unique_t<type>> ==
+                    type_list_size_v<type>,
                 "type_traits<T>::alternatives must not contain "
                 "duplicate types");
 };
@@ -323,21 +288,6 @@ template <typename T, typename... Args> T *make_dynamic_array(Args &&...args) {
   return new T[sizeof...(Args)]{std::forward<Args>(args)...};
 }
 
-template <typename Type, typename = void>
-struct is_array_like_type : std::is_array<Type> {};
-
-template <typename Type>
-inline constexpr bool is_array_like_type_v = is_array_like_type<Type>::value;
-
-template <typename Type, typename = void>
-struct array_like_exact_interface_type {
-  using type = Type;
-};
-
-template <typename Type>
-using array_like_exact_interface_type_t =
-    typename array_like_exact_interface_type<Type>::type;
-
 // To with the const and volatile qualifiers of From.
 template <typename From, typename To> struct copy_cv {
 private:
@@ -392,7 +342,7 @@ struct smart_array_pointer_types<Handle, T, U,
                 Handle *>;
 };
 
-template <typename Handle, typename = void> struct wrapper_storage_types_impl {
+template <typename Handle, typename = void> struct wrapper_storage_types {
   using lvalue_reference_types = type_list<Handle &>;
   using pointer_types = type_list<Handle *>;
   using copyable_value_types =
@@ -401,15 +351,14 @@ template <typename Handle, typename = void> struct wrapper_storage_types_impl {
 };
 
 template <typename Handle>
-struct wrapper_storage_types_impl<
+struct wrapper_storage_types<
     Handle, std::enable_if_t<type_traits<Handle>::enabled &&
                              type_traits<Handle>::is_pointer_like>> {
 private:
   // Walk the wrapper chain once and collect all derived interface types
   // together instead of recursing over the same chain separately for each
   // result list.
-  using next =
-      wrapper_storage_types_impl<typename type_traits<Handle>::value_type>;
+  using next = wrapper_storage_types<typename type_traits<Handle>::value_type>;
   using copyable_handle_types =
       std::conditional_t<std::is_copy_constructible_v<Handle>,
                          type_list<Handle>, type_list<>>;
@@ -425,43 +374,39 @@ public:
                       typename next::copyable_value_types>;
 };
 
-template <typename Handle>
-using wrapper_storage_types = wrapper_storage_types_impl<Handle>;
-
-// An owning handle whose element cannot be borrowed as an object owns an
-// array.
-template <typename Handle>
-struct is_array_like_type<
-    Handle, std::enable_if_t<type_traits<Handle>::is_owning_handle &&
-                             !is_value_borrowable_v<Handle>>> : std::true_type {
+// An array, or an owning handle whose element cannot be borrowed as an object,
+// which owns an array; its exact interface is the array.
+template <typename Type, typename = void> struct array_like {
+  static constexpr bool value = std::is_array_v<Type>;
+  using exact_interface = Type;
 };
 
 template <typename Handle>
-struct array_like_exact_interface_type<
-    Handle, std::enable_if_t<type_traits<Handle>::is_owning_handle &&
-                             !is_value_borrowable_v<Handle>>> {
-  using type = typename type_traits<Handle>::value_type;
+struct array_like<Handle,
+                  std::enable_if_t<type_traits<Handle>::is_owning_handle &&
+                                   !is_value_borrowable_v<Handle>>> {
+  static constexpr bool value = true;
+  using exact_interface = typename type_traits<Handle>::value_type;
 };
+
+template <typename Type>
+inline constexpr bool is_array_like_type_v = array_like<Type>::value;
+
+template <typename Type>
+using array_like_exact_interface_type_t =
+    typename array_like<Type>::exact_interface;
 } // namespace detail
 
-template <typename T>
-struct type_traits<T *, std::enable_if_t<!std::is_void_v<T>>>
-    : semantics::observer {
+// A pointer observes its pointee, which it borrows unless it is void.
+template <typename T> struct type_traits<T *> : semantics::observer {
   using value_type = T;
   template <typename U> using rebind_t = U *;
 
   static T *get(T *ptr) { return ptr; }
-  static T &borrow(T *ptr) { return *ptr; }
-  static bool empty(T *ptr) { return ptr == nullptr; }
-};
-
-template <typename T>
-struct type_traits<T *, std::enable_if_t<std::is_void_v<T>>>
-    : semantics::observer {
-  using value_type = T;
-  template <typename U> using rebind_t = U *;
-
-  static T *get(T *ptr) { return ptr; }
+  template <typename U = T, typename = std::enable_if_t<!std::is_void_v<U>>>
+  static U &borrow(T *ptr) {
+    return *ptr;
+  }
   static bool empty(T *ptr) { return ptr == nullptr; }
 };
 

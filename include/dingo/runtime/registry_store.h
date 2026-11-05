@@ -429,8 +429,7 @@ protected:
           TypeInterface, normalized_lookup_entries>::type;
 
   template <typename Arg>
-  using runtime_registration_arg_traits =
-      detail::runtime_registration_key_arg_traits<std::decay_t<Arg>>;
+  using runtime_registration_arg_traits = std::decay_t<Arg>;
 
   template <typename Arg>
   using runtime_registration_arg_interface_t = detail::key_value_interface_t<
@@ -441,7 +440,7 @@ protected:
   template <typename Entry, typename Arg, bool Qualified>
   static constexpr bool runtime_registration_arg_keys_entry_v =
       std::is_same_v<typename runtime_lookup_entry_traits<Entry>::key_type,
-                     typename runtime_registration_arg_traits<Arg>::key_type> &&
+                     typename runtime_registration_arg_traits<Arg>::type> &&
       (Qualified
            ? std::is_same_v<
                  typename runtime_lookup_entry_traits<Entry>::interface_type,
@@ -456,9 +455,9 @@ protected:
   template <typename Arg, typename... KeyValueArgs>
   static constexpr std::size_t runtime_registration_key_arg_count_v =
       (std::size_t{0} + ... +
-       (std::is_same_v<typename runtime_registration_arg_traits<Arg>::key_type,
-                       typename runtime_registration_arg_traits<
-                           KeyValueArgs>::key_type> &&
+       (std::is_same_v<
+                typename runtime_registration_arg_traits<Arg>::type,
+                typename runtime_registration_arg_traits<KeyValueArgs>::type> &&
                 std::is_same_v<
                     runtime_registration_arg_interface_t<Arg>,
                     runtime_registration_arg_interface_t<KeyValueArgs>>
@@ -544,7 +543,7 @@ protected:
       if constexpr (std::is_same_v<entry, base_lookup_entry>) {
         return base_typed_key_lookup_key<Interface, Key>();
       } else {
-        return detail::lookup_backend_key(key);
+        return key.backend_key();
       }
     }
   };

@@ -20,50 +20,27 @@ template <typename T, auto... Values> struct key_type;
 template <typename T, typename Interface = void> struct key_value;
 
 namespace detail {
-template <typename T, auto... Values> struct fixed_key_value {
-  static_assert(sizeof...(Values) <= 1,
-                "dingo::key_type<T, V> accepts at most one value");
-};
-
+// The value V of a key_type<T, V> makes the key: V itself, or T{V}.
 template <typename T, auto Value>
-struct is_fixed_key_value_constructible
-    : std::bool_constant<std::is_same_v<std::remove_cv_t<decltype(Value)>, T> ||
-                         is_brace_constructible_v<T, Value>> {};
+inline constexpr bool is_fixed_key_value_constructible_v =
+    std::is_same_v<std::remove_cv_t<decltype(Value)>, T> ||
+    is_brace_constructible_v<T, Value>;
 
 template <typename T, auto Value> constexpr T make_fixed_key_value() {
+  static_assert(is_fixed_key_value_constructible_v<T, Value>,
+                "dingo::key_type<T, V> requires V to be usable as T{V}");
   if constexpr (std::is_same_v<std::remove_cv_t<decltype(Value)>, T>) {
     return Value;
   } else {
     return T{Value};
   }
 }
-
-template <typename T, auto Value> struct fixed_key_value<T, Value> {
-  static_assert(is_fixed_key_value_constructible<T, Value>::value,
-                "dingo::key_type<T, V> requires V to be usable as T{V}");
-
-  static constexpr T make() { return make_fixed_key_value<T, Value>(); }
-};
-
-template <typename T, auto... Values>
-struct is_fixed_key_value_usable : std::false_type {};
-
-template <typename T> struct is_fixed_key_value_usable<T> : std::true_type {};
-
-template <typename T, auto Value>
-struct is_fixed_key_value_usable<T, Value>
-    : is_fixed_key_value_constructible<T, Value> {};
-
-template <typename T, auto... Values>
-inline constexpr bool is_fixed_key_value_usable_v =
-    is_fixed_key_value_usable<T, Values...>::value;
 } // namespace detail
 
 template <typename T, auto... Values> struct key_type {
   static_assert(sizeof...(Values) <= 1,
                 "dingo::key_type<T, V> accepts at most one value");
-  static_assert(sizeof...(Values) > 1 ||
-                    detail::is_fixed_key_value_usable_v<T, Values...>,
+  static_assert((detail::is_fixed_key_value_constructible_v<T, Values> && ...),
                 "dingo::key_type<T, V> requires V to be usable as T{V}");
 
   using type = T;
@@ -92,16 +69,11 @@ private:
 template <typename T> key_value(T &&) -> key_value<std::decay_t<T>>;
 
 namespace detail {
-template <typename T> struct is_typed_key : std::false_type {};
-
+template <typename T> struct is_key_type : std::false_type {};
 template <typename T, auto... Values>
-struct is_typed_key<key_type<T, Values...>>
-    : std::bool_constant<sizeof...(Values) == 0 && !std::is_void_v<T>> {};
-
-template <> struct is_typed_key<key_type<::dingo::none_t>> : std::false_type {};
-
+struct is_key_type<key_type<T, Values...>> : std::true_type {};
 template <typename T>
-inline constexpr bool is_typed_key_v = is_typed_key<std::decay_t<T>>::value;
+inline constexpr bool is_key_type_v = is_key_type<std::decay_t<T>>::value;
 
 template <typename T> struct is_key_value : std::false_type {};
 
@@ -115,7 +87,7 @@ inline constexpr bool is_key_value_v = is_key_value<std::decay_t<T>>::value;
 template <typename T, auto Value>
 struct is_value_selector<key_type<T, Value>> : std::true_type {
   using type = T;
-  static T make() { return fixed_key_value<T, Value>::make(); }
+  static T make() { return make_fixed_key_value<T, Value>(); }
 };
 
 template <typename T>
@@ -125,26 +97,13 @@ template <typename T, typename Interface>
 struct is_runtime_registration_key_arg<::dingo::key_value<T, Interface>>
     : std::bool_constant<!std::is_void_v<T>> {};
 
-template <typename T> struct runtime_registration_key_arg_traits;
-
-template <typename T, typename Interface>
-struct runtime_registration_key_arg_traits<::dingo::key_value<T, Interface>> {
-  using key_type = T;
-  using interface_type = Interface;
-};
-
 template <typename T>
 inline constexpr bool is_runtime_registration_key_arg_v =
     is_runtime_registration_key_arg<std::decay_t<T>>::value;
 
 template <typename... Args>
-struct are_runtime_registration_key_args
-    : std::conjunction<is_runtime_registration_key_arg<std::decay_t<Args>>...> {
-};
-
-template <typename... Args>
 inline constexpr bool are_runtime_registration_key_args_v =
-    are_runtime_registration_key_args<Args...>::value;
+    (is_runtime_registration_key_arg_v<Args> && ...);
 
 template <typename...>
 inline constexpr bool lookup_key_dependent_false_v = false;
@@ -162,14 +121,6 @@ template <typename T> struct is_lookup_key<lookup_key<T>> : std::true_type {};
 template <typename T>
 inline constexpr bool is_lookup_key_v = is_lookup_key<std::decay_t<T>>::value;
 
-template <> struct lookup_key<::dingo::key_type<::dingo::none_t>> {
-  using selector_type = ::dingo::key_type<::dingo::none_t>;
-  using definition_type = lookup_key<::dingo::key_type<::dingo::none_t>>;
-  using backend_key_type = ::dingo::none_t;
-
-  ::dingo::none_t backend_key() const { return {}; }
-};
-
 template <typename T> struct lookup_key<::dingo::key_type<T>> {
   using selector_type = ::dingo::key_type<T>;
   using definition_type = lookup_key<::dingo::key_type<T>>;
@@ -184,7 +135,7 @@ struct lookup_key<::dingo::key_type<T, Value>> {
   using definition_type = lookup_key<::dingo::key_value<T>>;
   using backend_key_type = T;
 
-  constexpr T backend_key() const { return fixed_key_value<T, Value>::make(); }
+  constexpr T backend_key() const { return make_fixed_key_value<T, Value>(); }
 };
 
 template <typename T, typename Interface>
@@ -286,19 +237,9 @@ make_lookup_key(Selector) {
 template <typename T, typename Interface>
 void make_lookup_key(type_selector<::dingo::key_value<T, Interface>>) = delete;
 
-inline lookup_key<::dingo::key_type<::dingo::none_t>>
-make_lookup_key(::dingo::key_type<::dingo::none_t>) {
-  return no_lookup_key();
-}
-
-template <typename T>
-lookup_key<::dingo::key_type<T>> make_lookup_key(::dingo::key_type<T>) {
-  return {};
-}
-
-template <typename T, auto Value>
-lookup_key<::dingo::key_type<T, Value>>
-make_lookup_key(::dingo::key_type<T, Value>) {
+template <typename T, auto... Values>
+lookup_key<::dingo::key_type<T, Values...>>
+make_lookup_key(::dingo::key_type<T, Values...>) {
   return {};
 }
 
@@ -310,8 +251,7 @@ make_lookup_key(::dingo::key_value<T, Interface> key_value) {
 
 template <typename T>
 std::enable_if_t<!std::is_same_v<std::decay_t<T>, ::dingo::none_t> &&
-                     !is_typed_key_v<std::decay_t<T>> &&
-                     !is_key_value_v<std::decay_t<T>> &&
+                     !is_key_type_v<T> && !is_key_value_v<T> &&
                      !is_runtime_registration_key_arg_v<std::decay_t<T>>,
                  lookup_key<::dingo::key_value<std::decay_t<T>>>>
 make_lookup_key(T &&key) {
@@ -319,16 +259,9 @@ make_lookup_key(T &&key) {
       ::dingo::key_value<std::decay_t<T>>(std::forward<T>(key)));
 }
 
-template <typename T> struct make_lookup_key_type {
-  using type = decltype(make_lookup_key(std::declval<T>()));
-};
-
 template <typename T>
-using make_lookup_key_t = typename make_lookup_key_type<std::decay_t<T>>::type;
-
-template <typename Key> decltype(auto) lookup_backend_key(const Key &key) {
-  return key.backend_key();
-}
+using make_lookup_key_t =
+    decltype(make_lookup_key(std::declval<std::decay_t<T>>()));
 
 template <typename LookupKey, typename = void>
 struct is_static_lookup_key : std::false_type {};
