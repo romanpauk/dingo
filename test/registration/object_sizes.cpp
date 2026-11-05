@@ -90,7 +90,7 @@ using size_storage = typename size_model::storage_type;
 using size_instance_container =
     runtime_registry<dynamic_container_traits,
                      typename dynamic_container_traits::allocator_type,
-                     container<>, container<>, false>;
+                     container<>, container<>>;
 using size_binding_state =
     runtime_binding_state<size_registry_type, size_instance_container,
                           detail::binding_cell_t<size_model>>;

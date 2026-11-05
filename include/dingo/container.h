@@ -72,7 +72,7 @@ class detail::runtime_container_impl
   using runtime_context_type =
       runtime_context<typename runtime_base::allocator_type>;
   friend runtime_base;
-  template <typename, typename, typename, typename, bool>
+  template <typename, typename, typename, typename>
   friend class ::dingo::runtime_registry;
 
 public:
@@ -99,15 +99,14 @@ private:
   using runtime_base::construct_collection;
 
 public:
-  runtime_container_impl() : runtime_base(detail::runtime_data_owner, this) {}
+  runtime_container_impl() : runtime_base(this) {}
 
   explicit runtime_container_impl(allocator_type alloc)
-      : runtime_base(detail::runtime_data_owner, this, alloc) {}
+      : runtime_base(this, alloc) {}
 
   runtime_container_impl(parent_container_type *parent,
                          const allocator_type &alloc = allocator_type())
-      : runtime_base(detail::runtime_data_owner, this, alloc), parent_(parent) {
-  }
+      : runtime_base(this, alloc), parent_(parent) {}
 
   // Resolved instances reference each other by address and runtime bindings
   // point back at the container, so it cannot move. runtime_container moves by
@@ -174,8 +173,7 @@ public:
   detail::binding_status binding_status(IdType &&id) {
     using request = request_type<Request>;
     auto key = detail::make_lookup_key(std::forward<IdType>(id));
-    auto status = runtime_base::template binding_status<
-        typename request::value_type, typename request::exact_type>(key);
+    auto status = this->template select_request<request>(key).status;
     if constexpr (parent_serves<typename request::lookup_type,
                                 decltype(key)>()) {
       if (parent_ && status == detail::binding_status::not_found) {
