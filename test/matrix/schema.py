@@ -15,11 +15,6 @@ from enum import Enum
 from pathlib import Path
 
 
-class MixedRegistrationPlacement(Enum):
-    STATIC = "static"
-    RUNTIME = "runtime"
-
-
 class LimitationDisposition(Enum):
     KNOWN_GAP = "known_gap"
     INTENTIONAL_CONSTRAINT = "intentional_constraint"
@@ -72,7 +67,7 @@ class StoredType:
     storage: str
     supported_scopes: frozenset[str]
     provides: frozenset[str]
-    supported_modes: frozenset[str] = frozenset({"runtime", "static", "mixed"})
+    supported_modes: frozenset[str] = frozenset({"runtime", "static"})
     runtime_setup: tuple[str, ...] = ()
     runtime_argument: str | None = None
     factory: str | None = None
@@ -93,10 +88,8 @@ class RegistrationSpec:
     indexed_key: str | None = None
     runtime_setup: tuple[str, ...] = ()
     runtime_argument: str | None = None
-    mixed_placement: MixedRegistrationPlacement = MixedRegistrationPlacement.STATIC
     include_in_static: bool = True
     include_in_runtime: bool = True
-    include_in_mixed: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,8 +100,6 @@ class ExposedType:
     provides: frozenset[str]
     registrations: tuple[RegistrationSpec, ...]
     runtime_prefix: tuple[str, ...] = ()
-    mixed_runtime_prefix: tuple[str, ...] = ()
-    mixed: bool = True
     system_headers: tuple[str, ...] = ()
     headers: tuple[str, ...] = ()
     implemented: bool = True
@@ -121,7 +112,7 @@ class ResolvedType:
     provides: frozenset[str]
     dependency_forms: frozenset[str] = frozenset()
     requires: frozenset[str] = frozenset()
-    supported_modes: frozenset[str] = frozenset({"runtime", "static", "mixed"})
+    supported_modes: frozenset[str] = frozenset({"runtime", "static"})
     policies: tuple[tuple[str, str], ...] = ()
     system_headers: tuple[str, ...] = ()
     headers: tuple[str, ...] = ()

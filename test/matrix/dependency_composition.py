@@ -45,7 +45,6 @@ from schema import (
     DependencyCompositionResolutionLimitation,
     GeneratedExecutable,
     LimitationDisposition,
-    MixedRegistrationPlacement,
     RegistrationSpec,
     ScopeSpec,
 )
@@ -138,8 +137,6 @@ DEPENDENCY_COMPOSITION_CONTAINERS = tuple(
         "runtime_container",
         "container_runtime",
         "static_container",
-        "container_static",
-        "container_mixed",
     )
 )
 
@@ -190,7 +187,6 @@ DEPENDENCY_COMPOSITION_SCOPE_RULES = (
 )
 
 
-_MIXED_ANCHOR_TYPE = "dependency_composition_mixed_anchor"
 DEPENDENCY_COMPOSITION_PROFILES = frozenset({"full", "portable"})
 DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION = 4
 DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT = 12
@@ -269,7 +265,7 @@ def _container_mode(container: ContainerSpec) -> str:
             f"{container.name} must select exactly one registration mode"
         )
     mode = next(iter(container.modes))
-    if mode not in {"runtime", "static", "mixed"}:
+    if mode not in {"runtime", "static"}:
         raise ValueError(
             "dependency composition container "
             f"{container.name} has an unsupported registration mode: {mode}"
@@ -989,7 +985,6 @@ def _make_case(
         interfaces=interfaces,
         factory=factory,
         include_in_runtime=False,
-        include_in_mixed=False,
     )
     if row.scope.name == "external":
         runtime_registration = RegistrationSpec(
@@ -1000,28 +995,13 @@ def _make_case(
                 f"{registration_type}>();",
             ),
             runtime_argument="external_value",
-            mixed_placement=MixedRegistrationPlacement.RUNTIME,
             include_in_static=False,
         )
     else:
         runtime_registration = RegistrationSpec(
             interfaces=interfaces,
-            mixed_placement=MixedRegistrationPlacement.RUNTIME,
             include_in_static=False,
         )
-    anchor_storage = f"dingo::storage<{_MIXED_ANCHOR_TYPE}>"
-    anchor_factory = (
-        "dingo::factory<dingo::function<&make_dependency_composition<"
-        f"{_MIXED_ANCHOR_TYPE}>>>"
-    )
-    mixed_anchor = RegistrationSpec(
-        scope="dingo::scope<dingo::shared>",
-        storage=anchor_storage,
-        interfaces=f"dingo::interfaces<{_MIXED_ANCHOR_TYPE}>",
-        factory=anchor_factory,
-        include_in_static=False,
-        include_in_runtime=False,
-    )
     plan = build_registration_plan_from_recipe(
         RegistrationRecipe(
             scope=row.scope,
@@ -1030,7 +1010,6 @@ def _make_case(
             registrations=(
                 static_registration,
                 runtime_registration,
-                mixed_anchor,
             ),
         )
     )

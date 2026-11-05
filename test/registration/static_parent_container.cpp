@@ -44,21 +44,6 @@ struct parent_temporary {
 } // namespace
 
 TEST(static_parent_container_test,
-     child_dependency_ambiguity_does_not_fall_back_to_parent) {
-  using parent_bindings = bindings<dingo::bind<scope<shared>, storage<config>>>;
-  using child_bindings = bindings<
-      dingo::bind<scope<shared>, storage<child_config>, interfaces<config>>,
-      dingo::bind<scope<shared>, storage<second_child_config>,
-                  interfaces<config>>,
-      dingo::bind<scope<unique>, storage<service>>>;
-
-  container<parent_bindings> parent;
-  container<child_bindings, decltype(parent)> child(&parent);
-
-  EXPECT_THROW(child.resolve<service>(), type_ambiguous_exception);
-}
-
-TEST(static_parent_container_test,
      static_child_context_is_sized_for_parent_temporaries) {
   using parent_bindings =
       bindings<dingo::bind<scope<unique>, storage<parent_temporary>>>;

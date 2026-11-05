@@ -7,14 +7,30 @@
 
 #pragma once
 
-#include <dingo/container.h>
+#include <dingo/base/exceptions.h>
+#include <dingo/base/none.h>
+#include <dingo/binding/binding_collection.h>
+#include <dingo/binding/binding_resolution.h>
+#include <dingo/binding/binding_selection.h>
+#include <dingo/factory/callable.h>
+#include <dingo/factory/constructor.h>
 #include <dingo/factory/invoke.h>
 #include <dingo/lookup/container_lookup_definition.h>
+#include <dingo/lookup/lookup.h>
+#include <dingo/memory/allocator.h>
+#include <dingo/registration/type_registration.h>
 #include <dingo/static/activation_set.h>
 #include <dingo/static/container_traits.h>
 #include <dingo/static/context.h>
+#include <dingo/static/graph.h>
+#include <dingo/static/registry.h>
 #include <dingo/static/resolution.h>
+#include <dingo/type/annotated.h>
+#include <dingo/type/collection_traits.h>
+#include <dingo/type/dependency.h>
 #include <dingo/type/dependency_traits.h>
+#include <dingo/type/key.h>
+#include <dingo/type/normalized_type.h>
 
 #include <type_traits>
 #include <utility>
@@ -373,7 +389,7 @@ public:
     if constexpr (detail::is_static_lookup_key_v<lookup_key_type>) {
       return resolve<T, lookup_key_type, R>(std::move(key));
     } else {
-      static_assert(detail::container_dependent_false_v<T, lookup_key_type>,
+      static_assert(detail::dependent_false_v<T, lookup_key_type>,
                     "static_container fixed runtime-key request requires "
                     "dingo::key_type<Key, Value>");
     }
@@ -457,7 +473,7 @@ private:
       return static_registry_.template construct_collection<T, LookupKey>(
           scope, *this, context, std::forward<Args>(args)...);
     } else {
-      static_assert(detail::container_dependent_false_v<T, LookupKey>,
+      static_assert(detail::dependent_false_v<T, LookupKey>,
                     "static_container fixed runtime-key collection request "
                     "requires dingo::key_type<Key, Value>");
     }
@@ -582,7 +598,7 @@ public:
       (void)context;
       (void)key;
       if constexpr (StaticError) {
-        static_assert(container_dependent_false_v<Request, LookupKey>,
+        static_assert(dependent_false_v<Request, LookupKey>,
                       "static_container cannot resolve an unbound type");
       } else {
         throw make_type_not_found_exception<typename Request::lookup_type>();

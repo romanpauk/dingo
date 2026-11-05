@@ -334,8 +334,6 @@ def materialize_row(
     plan = plan_for_candidate(candidate, cache)
     if candidate.mode.name == "static" and not plan.static_bindings:
         raise RuntimeError(f"static row {case_name(candidate)} has no bindings")
-    if candidate.mode.name == "mixed" and not plan.mixed_static_bindings:
-        raise RuntimeError(f"mixed row {case_name(candidate)} has no registration plan")
 
     lines = select_case_lines(candidate)
     if lines is None:

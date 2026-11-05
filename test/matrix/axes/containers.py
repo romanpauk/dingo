@@ -57,20 +57,6 @@ CONTAINERS = (
         headers=("matrix/containers/static.h",),
     ),
     container(
-        name="container_static",
-        modes=frozenset({"static"}),
-        container_type="dingo::container<static_bindings>",
-        provides=frozenset(),
-        headers=("matrix/containers/container.h",),
-    ),
-    container(
-        name="container_mixed",
-        modes=frozenset({"mixed"}),
-        container_type="dingo::container<static_bindings>",
-        provides=frozenset({"explicit_dependencies_container"}),
-        headers=("matrix/containers/container.h",),
-    ),
-    container(
         name="runtime_container_indexed",
         modes=frozenset({"runtime"}),
         container_type="dingo::runtime_container<indexed_container_traits>",

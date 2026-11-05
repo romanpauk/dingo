@@ -14,5 +14,4 @@ from schema import RegistrationMode
 REGISTRATION_MODES = (
     RegistrationMode("runtime"),
     RegistrationMode("static"),
-    RegistrationMode("mixed"),
 )

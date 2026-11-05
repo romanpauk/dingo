@@ -200,10 +200,6 @@ def generate_invoke_rows(
                             f"invoke provisioning {provisioning.name} has no "
                             "static bindings"
                         )
-                    if mode.name == "mixed" and not plan.mixed_static_bindings:
-                        raise RuntimeError(
-                            f"invoke provisioning {provisioning.name} has no mixed plan"
-                        )
                     name = "_".join(
                         (
                             mode.name,

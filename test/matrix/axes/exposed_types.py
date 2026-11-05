@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from schema import (
     ExposedType,
-    MixedRegistrationPlacement,
     RegistrationSpec,
 )
 
@@ -22,35 +21,6 @@ EXPOSED_TYPES = (
         supported_stored_kinds=frozenset({"value_type"}),
         provides=frozenset({"concrete_binding"}),
         registrations=(RegistrationSpec(),),
-    ),
-    ExposedType(
-        name="mixed_external_dependency",
-        kind="mixed_external_dependency",
-        supported_stored_kinds=frozenset({"dependent_type"}),
-        provides=frozenset({"mixed_external_dependency"}),
-        registrations=(
-            RegistrationSpec(
-                scope="dingo::scope<dingo::external>",
-                storage="dingo::storage<value_type&>",
-                runtime_setup=("value_type external_value;",),
-                runtime_argument="external_value",
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
-                include_in_static=False,
-            ),
-            RegistrationSpec(),
-        ),
-    ),
-    ExposedType(
-        name="mixed_singular_conflict",
-        kind="value_type",
-        supported_stored_kinds=frozenset({"value_type"}),
-        provides=frozenset({"mixed_singular_conflict"}),
-        registrations=(
-            RegistrationSpec(),
-            RegistrationSpec(
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
-            ),
-        ),
     ),
     ExposedType(
         name="explicit_dependencies",
@@ -65,7 +35,6 @@ EXPOSED_TYPES = (
             RegistrationSpec(
                 scope="dingo::scope<dingo::shared>",
                 storage="dingo::storage<explicit_dependency_second>",
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
             ),
             RegistrationSpec(
                 dependencies=(
@@ -84,7 +53,6 @@ EXPOSED_TYPES = (
             RegistrationSpec(storage="dingo::storage<value_type>"),
             RegistrationSpec(
                 interfaces="dingo::interfaces<interface_type>",
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
             ),
         ),
     ),
@@ -109,7 +77,6 @@ EXPOSED_TYPES = (
             RegistrationSpec(storage="dingo::storage<value_type>"),
             RegistrationSpec(
                 interfaces="dingo::interfaces<copyable_interface_type>",
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
             ),
         ),
     ),
@@ -280,27 +247,6 @@ EXPOSED_TYPES = (
         ),
     ),
     ExposedType(
-        name="local_collection_runtime_host_value",
-        kind="local_collection_value_type",
-        supported_stored_kinds=frozenset({"local_collection_value_type"}),
-        provides=frozenset({"local_bindings"}),
-        registrations=(
-            RegistrationSpec(
-                storage="dingo::storage<std::shared_ptr<element_type<1>>>",
-                interfaces="dingo::interfaces<element_interface>",
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
-            ),
-            RegistrationSpec(
-                dependencies="dingo::dependencies<std::vector<std::shared_ptr<element_interface>>>",
-                local_bindings=(
-                    "dingo::bindings<dingo::bind<dingo::scope<dingo::shared>, "
-                    "dingo::storage<std::shared_ptr<element_type<0>>>, "
-                    "dingo::interfaces<element_interface>>>"
-                ),
-            ),
-        ),
-    ),
-    ExposedType(
         name="factory_function_value",
         kind="factory_function_value_type",
         supported_stored_kinds=frozenset({"factory_function_value_type"}),
@@ -366,16 +312,9 @@ EXPOSED_TYPES = (
             RegistrationSpec(
                 storage="dingo::storage<std::shared_ptr<element_type<1>>>",
                 interfaces="dingo::interfaces<element_interface>",
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
             ),
         ),
         runtime_prefix=(
-            "container.template register_type_collection<"
-            "dingo::scope<dingo::unique>, "
-            "dingo::storage<std::vector<std::shared_ptr<"
-            "element_interface>>>>();",
-        ),
-        mixed_runtime_prefix=(
             "container.template register_type_collection<"
             "dingo::scope<dingo::unique>, "
             "dingo::storage<std::vector<std::shared_ptr<"
@@ -397,7 +336,6 @@ EXPOSED_TYPES = (
                 storage="dingo::storage<std::shared_ptr<element_type<1>>>",
                 interfaces="dingo::interfaces<element_interface>",
                 key="dingo::key_type<key_b>",
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
             ),
         ),
     ),
@@ -416,16 +354,9 @@ EXPOSED_TYPES = (
                 storage="dingo::storage<std::shared_ptr<element_type<1>>>",
                 interfaces="dingo::interfaces<element_interface>",
                 key="dingo::key_type<key_a>",
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
             ),
         ),
         runtime_prefix=(
-            "container.template register_type_collection<"
-            "dingo::scope<dingo::unique>, "
-            "dingo::storage<std::vector<std::shared_ptr<"
-            "element_interface>>>>(dingo::key_type<key_a>{});",
-        ),
-        mixed_runtime_prefix=(
             "container.template register_type_collection<"
             "dingo::scope<dingo::unique>, "
             "dingo::storage<std::vector<std::shared_ptr<"
@@ -442,17 +373,14 @@ EXPOSED_TYPES = (
                 storage="dingo::storage<std::shared_ptr<element_type<0>>>",
                 interfaces="dingo::interfaces<element_interface>",
                 indexed_key="std::size_t{0}",
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
                 include_in_static=False,
             ),
             RegistrationSpec(
                 storage="dingo::storage<std::shared_ptr<element_type<1>>>",
                 interfaces="dingo::interfaces<element_interface>",
                 indexed_key="std::size_t{1}",
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
                 include_in_static=False,
             ),
         ),
-        mixed=False,
     ),
 )

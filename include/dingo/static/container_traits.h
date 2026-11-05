@@ -28,10 +28,6 @@ class static_container;
 
 namespace detail {
 
-template <typename StaticBindings, typename ParentContainer = void,
-          typename RuntimeConfig = void>
-class container_with_static_bindings;
-
 template <typename T> struct is_static_bindings : std::false_type {};
 
 template <typename... Registrations>
@@ -66,24 +62,6 @@ struct static_container_traits<T,
 
 template <typename T>
 using static_container_traits_t = typename static_container_traits<T>::type;
-
-template <typename T> struct is_bindings_wrapper : std::false_type {};
-
-template <typename... Args>
-struct is_bindings_wrapper<::dingo::bindings<Args...>> : std::true_type {};
-
-template <typename T>
-inline constexpr bool is_bindings_wrapper_v = is_bindings_wrapper<T>::value;
-
-template <typename T> struct bindings_wrapper_registry;
-
-template <typename... Args>
-struct bindings_wrapper_registry<::dingo::bindings<Args...>> {
-  using type = typename ::dingo::bindings<Args...>::type;
-};
-
-template <typename T>
-using bindings_wrapper_registry_t = typename bindings_wrapper_registry<T>::type;
 
 } // namespace detail
 } // namespace dingo

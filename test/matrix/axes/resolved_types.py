@@ -44,20 +44,9 @@ RESOLVED_TYPES = (
         requires=frozenset({"unique_storage", "stored_value"}),
     ),
     ResolvedType(
-        name="dependent_type_ref",
-        supported_exposed_types=frozenset({"mixed_external_dependency"}),
-        provides=frozenset({"resolved_mixed_external_dependency"}),
-    ),
-    ResolvedType(
         name="explicit_dependencies_value",
         supported_exposed_types=frozenset({"explicit_dependencies"}),
         provides=frozenset({"resolved_explicit_dependencies"}),
-    ),
-    ResolvedType(
-        name="mixed_singular_conflict_ref",
-        supported_exposed_types=frozenset({"mixed_singular_conflict"}),
-        provides=frozenset({"resolved_mixed_singular_conflict"}),
-        requires=frozenset({"stable_concrete_storage", "direct_value_resolution"}),
     ),
     ResolvedType(
         name="const_value_ref",
@@ -200,13 +189,13 @@ RESOLVED_TYPES = (
         name="element_vector",
         supported_exposed_types=frozenset({"element_collection"}),
         provides=frozenset({"resolved_collection", "constructable_collection"}),
-        supported_modes=frozenset({"static", "mixed"}),
+        supported_modes=frozenset({"static"}),
     ),
     ResolvedType(
         name="element_map_custom_insert",
         supported_exposed_types=frozenset({"element_collection"}),
         provides=frozenset({"constructable_collection"}),
-        supported_modes=frozenset({"static", "mixed"}),
+        supported_modes=frozenset({"static"}),
     ),
     ResolvedType(
         name="element_keyed_shared_ptr_ref",
@@ -242,14 +231,14 @@ RESOLVED_TYPES = (
         name="element_keyed_vector",
         supported_exposed_types=frozenset({"element_keyed_collection"}),
         provides=frozenset({"resolved_keyed_collection"}),
-        supported_modes=frozenset({"static", "mixed"}),
+        supported_modes=frozenset({"static"}),
     ),
     ResolvedType(
         name="keyed_collection_dependency",
         supported_exposed_types=frozenset({"element_keyed_collection"}),
         provides=frozenset({"constructable_dependency"}),
         dependency_forms=frozenset({"selected_value"}),
-        supported_modes=frozenset({"static", "mixed"}),
+        supported_modes=frozenset({"static"}),
     ),
     ResolvedType(
         name="element_indexed_shared_ptr",
@@ -448,9 +437,7 @@ RESOLVED_TYPES = (
     ),
     ResolvedType(
         name="local_collection_value_ref",
-        supported_exposed_types=frozenset(
-            {"local_collection_value", "local_collection_runtime_host_value"}
-        ),
+        supported_exposed_types=frozenset({"local_collection_value"}),
         provides=frozenset({"resolved_concrete"}),
     ),
     ResolvedType(
@@ -482,7 +469,7 @@ RESOLVED_TYPES = (
         name="factory_callable_value_ref",
         supported_exposed_types=frozenset({"factory_callable_value"}),
         provides=frozenset({"resolved_concrete"}),
-        supported_modes=frozenset({"runtime", "mixed"}),
+        supported_modes=frozenset({"runtime"}),
     ),
 )
 
@@ -501,10 +488,6 @@ _RESOLUTION_POLICIES = {
         "keyed_collection_dependency",
         "construct",
     ): "resolution::construct_count_sum<keyed_collection_dependency_type>",
-    (
-        "dependent_type_ref",
-        "mixed_external_dependency",
-    ): "resolution::member_value_ref<dependent_type, 3>",
     ("const_value_ref", "resolve_concrete"): "resolution::const_ref<value_type>",
     ("const_value_ptr", "resolve_concrete"): "resolution::const_ptr<value_type>",
     (

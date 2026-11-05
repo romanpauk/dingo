@@ -208,7 +208,6 @@ inline void exercise_conversion_delivery_regressions() {
   conversion_delivery::exercise_runtime<dingo::runtime_container<>>();
   conversion_delivery::exercise_runtime<dingo::container<>>();
   conversion_delivery::exercise_static<dingo::static_container>();
-  conversion_delivery::exercise_static<dingo::container>();
 }
 
 } // namespace dingo::matrix

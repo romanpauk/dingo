@@ -6,12 +6,12 @@ This page documents the current public container model.
 
 The top-level include set is intentionally small:
 
-- [include/dingo/container.h](../../include/dingo/container.h): combined public
+- [include/dingo/container.h](../../include/dingo/container.h): runtime
   container
 - [include/dingo/runtime_container.h](../../include/dingo/runtime_container.h):
-  runtime-only facade
+  the same runtime container under its explicit name
 - [include/dingo/static_container.h](../../include/dingo/static_container.h):
-  static-only facade
+  static container
 
 Everything else is either runtime/static implementation detail or shared core.
 
@@ -27,68 +27,49 @@ The split keeps public headers small while leaving runtime and static
 implementation details in their own directories. The full header hierarchy is
 described in [Header Layers](overview.md#header-layers).
 
-## Unified Container
+## Two Containers
 
-`container` is the primary public entry point.
-
-It supports two main forms:
+Dingo has two containers, one per registration mode:
 
 ```c++
-dingo::container<> runtime_only;
+dingo::container<> runtime;
+runtime.register_type<dingo::scope<dingo::shared>, dingo::storage<Config>>();
 
 using app_bindings = dingo::bindings<
     dingo::bind<dingo::scope<dingo::shared>, dingo::storage<Config>>,
     dingo::bind<dingo::scope<dingo::unique>, dingo::storage<Service>>
 >;
 
-dingo::container<app_bindings> app_container;
+dingo::static_container<app_bindings> app_container;
 ```
 
-The runtime-only form owns mutable runtime registrations.
+- `container<>`, also spelled `runtime_container<>`, owns mutable runtime
+  registrations added through `register_type<...>()`.
+- `static_container<bindings<...>>` carries its bindings in the container type
+  and has no runtime registration API.
 
-The `bindings<...>` form hosts both:
-
-- compile-time bindings from the `bindings<...>` source
-- runtime registrations added later through `register_type<...>()`
-
-`container<bindings<...>>` is the container form for mixed graphs: static
-bindings are known when the container type is named, and runtime registrations
-can still be added afterward.
-
-## Static And Runtime Facades
-
-The split container facades remain available when the narrower shape is useful:
-
-- `runtime_container` for explicitly runtime-only code
-- `static_container` for explicitly static-only code
-
-Those headers expose only one registration mode. `container` is the public
-container that can represent runtime-only or mixed registration.
+The modes do not mix. A runtime container does not host compile-time bindings,
+and a runtime registration cannot declare local `bindings<...>`; the
+registration container returned by `register_type<...>()` accepts runtime
+registrations only.
 
 ## Binding Semantics
 
-`container<bindings<...>>` can have two binding sources: the static bindings in
-the container type and the runtime registrations added to the object.
+A request for one object must select one binding. Several matching bindings make
+the request ambiguous: the runtime container reports it with
+`type_ambiguous_exception`, the static container rejects it at compile time.
 
-A request for one object must have one source. If only the runtime source
-matches, Dingo uses it. If only the static source matches, Dingo uses it. If
-both sources provide the same singular binding, the request is ambiguous because
-neither source is an override of the other.
+A request for a collection gathers every matching binding.
 
-A request for a collection can use both sources. Runtime and static matches are
-merged into the returned collection.
+Parent containers are a fallback source. `container<> child(&parent)` and
+`static_container<bindings<...>, Parent>` keep the child graph local first: a
+child binding wins for singular requests, and a missing child dependency is
+resolved from the parent graph. A static container's parent is a static
+container.
 
-Parent containers are another fallback source.
-`container<bindings<...>, Parent>` and `static_container<bindings<...>, Parent>`
-keep the child graph local first: a child static or runtime binding wins for
-singular requests, and a missing child dependency can be resolved from the
-parent graph.
-
-Local `bindings<...>` on a registration declare the static part of that
-registration's child container. Runtime bindings added through the returned
-proxy live in the same child. Singular resolution checks that child before the
-root container, while collection resolution merges the child's static and
-runtime matches with root matches.
+Local `bindings<...>` on a static binding declare a child graph for that
+binding's dependencies. Singular resolution checks the local bindings before the
+host bindings, while collection resolution merges local and host matches.
 
 ## Direct Construction
 
@@ -96,33 +77,25 @@ runtime matches with root matches.
 that binding exists for `T`.
 
 Wrapper construction such as `construct<std::shared_ptr<T>>()` also reuses the
-registered/local-binding path when Dingo can resolve the normalized object and
-wrap the result. If no suitable registered path exists, construction falls back
-to the normal constructor-based path.
+registered binding path when Dingo can resolve the normalized object and wrap
+the result. If no suitable registered path exists, construction falls back to
+the normal constructor-based path.
 
 ## Cycle Rules
 
-Purely static cycles are rejected at compile time unless every binding in the
-cycle uses `scope<shared_cyclical>`. A supported static cycle uses the same
-two-phase storage model as runtime `shared_cyclical` registration, so each
-participating slot can be published before its dependencies finish resolving.
-
-`container<bindings<...>>` applies the same rule to statically known static
-cycles: ordinary static cycles are rejected, while all-`shared_cyclical` static
-cycles can resolve through the static binding path.
+Static cycles are rejected at compile time unless every binding in the cycle
+uses `scope<shared_cyclical>`. A supported static cycle uses the same two-phase
+storage model as runtime `shared_cyclical` registration, so each participating
+slot can be published before its dependencies finish resolving.
 
 In static bindings, cycles through declared dependencies (`dependencies<...>`,
 an explicit `constructor<T(Args...)>` or a function factory) are visible to
 compile-time validation and are rejected at compile time. Cycles through
 auto-detected constructors are not: detected constructors do not expose their
 dependencies, so they are detected at runtime and reported with
-`type_recursion_exception`. This applies to `static_container`,
-`container<bindings<...>>` and runtime containers alike. A binding skips the
-runtime check only when its factory provably has no dependencies, such as a
-detected zero-argument constructor.
-
-Mixed runtime/static recursion that only becomes visible during actual runtime
-resolution is rejected at runtime through the normal recursion exception path.
+`type_recursion_exception`. Runtime containers detect every cycle this way. A
+binding skips the runtime check only when its factory provably has no
+dependencies, such as a detected zero-argument constructor.
 
 ## Related Headers
 

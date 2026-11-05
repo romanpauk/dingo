@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from schema import FeatureCaseSpec, MixedRegistrationPlacement, RegistrationSpec
+from schema import FeatureCaseSpec, RegistrationSpec
 
 
 FEATURE_CASES = (
@@ -80,7 +80,6 @@ FEATURE_CASES = (
                     "dingo::callable([](value_type& dependency) { "
                     "return factory_callable_value_type(dependency.marker() + 12); })"
                 ),
-                mixed_placement=MixedRegistrationPlacement.RUNTIME,
                 include_in_static=False,
             ),
         ),

@@ -38,17 +38,14 @@ The public entry points are:
 - [include/dingo/container.h](../../include/dingo/container.h): combined
   container
 - [include/dingo/runtime_container.h](../../include/dingo/runtime_container.h):
-  runtime-only facade
+  the same runtime container under its explicit name
 - [include/dingo/static_container.h](../../include/dingo/static_container.h):
-  static-only facade
+  static container
 
-`container` is the primary public API. It supports:
+`container<>` holds runtime registrations and `static_container<bindings<...>>`
+holds compile-time bindings. A container uses one registration mode.
 
-- `container<>` for runtime-only registrations
-- `container<bindings<...>>` for compile-time bindings with optional runtime
-  registrations
-
-Below that API, the runtime registration path owns:
+Below the runtime container, the runtime registration path owns:
 
 - runtime binding state (`runtime_binding_state`)
 - stable runtime binding entries that own lookup identities
@@ -149,7 +146,7 @@ At a high level, Dingo runs this sequence:
 2. The runtime path creates storage-backed factories for each exposed interface,
    or the static path normalizes `bindings<...>` into a validated static source.
 3. `resolve<T>()` converts `T` into the internal lookup form.
-4. The container selects the matching runtime or static binding source.
+4. The container selects the matching runtime or static binding.
 5. The selected source builds an `instance_request` with the lookup type and
    requested descriptor, then calls the matching factory method for value,
    lvalue reference, rvalue reference, or pointer resolution.
@@ -158,12 +155,8 @@ At a high level, Dingo runs this sequence:
 7. The matched resolution operation converts that materialized source into the
    requested `T`.
 
-For `container<bindings<...>>`:
-
-- singular runtime/static conflicts are ambiguous
-- collection requests merge runtime and static results
-- registration child bindings take precedence for singular requests and merge
-  child static and runtime collections with the root container
+Registration child bindings take precedence for singular requests, and
+collection requests merge the child's matches with the root container.
 
 The pieces above are not independent extension systems. They cooperate in one
 pipeline.

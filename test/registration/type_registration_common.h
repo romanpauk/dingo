@@ -42,26 +42,6 @@ namespace {
   return 0;
 }
 
-struct runtime_binding_local_dependency {
-  explicit runtime_binding_local_dependency(int init_value)
-      : value(init_value) {}
-
-  int value;
-};
-
-[[maybe_unused]] runtime_binding_local_dependency
-make_runtime_binding_local_dependency() {
-  return runtime_binding_local_dependency{7};
-}
-
-struct runtime_binding_local_service {
-  explicit runtime_binding_local_service(
-      runtime_binding_local_dependency &dependency)
-      : value(dependency.value) {}
-
-  int value;
-};
-
 struct counting_runtime_binding_storage {};
 
 struct counting_runtime_binding_container {
@@ -130,40 +110,6 @@ struct runtime_registration_lifetime_factory {
   }
 
   int *destructions_;
-};
-
-struct runtime_unique_local_dependency {
-  explicit runtime_unique_local_dependency(int init_value) : value(init_value) {
-    ++live_count;
-  }
-
-  runtime_unique_local_dependency(const runtime_unique_local_dependency &other)
-      : runtime_unique_local_dependency(other.value) {}
-
-  runtime_unique_local_dependency(runtime_unique_local_dependency &&other)
-      : runtime_unique_local_dependency(other.value) {}
-
-  ~runtime_unique_local_dependency() { --live_count; }
-
-  int value;
-  static int live_count;
-};
-
-int runtime_unique_local_dependency::live_count = 0;
-
-[[maybe_unused]] runtime_unique_local_dependency
-make_runtime_unique_local_dependency() {
-  return runtime_unique_local_dependency{13};
-}
-
-struct runtime_unique_local_service {
-  explicit runtime_unique_local_service(
-      runtime_unique_local_dependency &dependency)
-      : value(dependency.value),
-        dependency_was_live(runtime_unique_local_dependency::live_count != 0) {}
-
-  int value;
-  bool dependency_was_live;
 };
 
 struct runtime_domain_dependency {
@@ -252,61 +198,6 @@ struct runtime_domain_collection_service {
 
   std::vector<runtime_domain_associative_dependency *> associative_dependencies;
   std::vector<runtime_domain_typed_dependency *> typed_dependencies;
-};
-
-struct runtime_composed_static_dependency {
-  runtime_composed_static_dependency() : value(7) {}
-
-  int value;
-};
-
-struct runtime_composed_child_dependency {
-  explicit runtime_composed_child_dependency(int init_value = 0)
-      : value(init_value) {}
-
-  int value;
-};
-
-struct runtime_composed_root_dependency {
-  explicit runtime_composed_root_dependency(int init_value = 0)
-      : value(init_value) {}
-
-  int value;
-};
-
-struct runtime_composed_service {
-  runtime_composed_service(runtime_composed_static_dependency &static_value,
-                           runtime_composed_child_dependency &child_value,
-                           runtime_composed_root_dependency &root_value)
-      : static_result(static_value.value), child_result(child_value.value),
-        root_result(root_value.value) {}
-
-  int static_result;
-  int child_result;
-  int root_result;
-};
-
-struct runtime_composed_collection_dependency {
-  explicit runtime_composed_collection_dependency(int init_value = 0)
-      : value(init_value) {}
-
-  int value;
-};
-
-[[maybe_unused]] runtime_composed_collection_dependency
-make_runtime_composed_static_collection_dependency() {
-  return runtime_composed_collection_dependency{22};
-}
-
-struct runtime_composed_collection_service {
-  explicit runtime_composed_collection_service(
-      std::vector<runtime_composed_collection_dependency *> dependencies) {
-    for (auto *dependency : dependencies) {
-      values.push_back(dependency->value);
-    }
-  }
-
-  std::vector<int> values;
 };
 
 struct runtime_domain_retry_factory {

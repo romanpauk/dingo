@@ -22,18 +22,6 @@
 namespace dingo {
 // TODO: this is bit convoluted, ideally merge resolver with runtime binding
 namespace detail {
-template <typename Container, typename = void>
-struct runtime_resolution_requires_container : std::false_type {};
-
-template <typename Container>
-struct runtime_resolution_requires_container<
-    Container, std::void_t<typename Container::static_bindings_type>>
-    : std::true_type {};
-
-template <typename Container>
-inline constexpr bool runtime_resolution_requires_container_v =
-    runtime_resolution_requires_container<Container>::value;
-
 template <bool Stable>
 class runtime_binding_base : private cache::state<Stable> {
 protected:
@@ -112,16 +100,11 @@ public:
   template <bool TrackRollback = true, typename Fn>
   decltype(auto) with_resolution_container(runtime_context_type &context,
                                            Fn &&fn) {
-    if constexpr (detail::runtime_resolution_requires_container_v<
-                      InstanceContainer>) {
-      return fn(container<TrackRollback>(context));
-    } else {
-      (void)context;
-      if (instance_container_ != nullptr) {
-        return fn(*instance_container_);
-      }
-      return fn(*parent());
+    (void)context;
+    if (instance_container_ != nullptr) {
+      return fn(*instance_container_);
     }
+    return fn(*parent());
   }
 
 private:
@@ -147,17 +130,6 @@ private:
   Storage storage_;
   InstanceContainer *instance_container_ = nullptr;
 };
-
-namespace detail {
-
-template <typename Owner, typename InstanceContainer, typename Storage,
-          typename Bindings,
-          typename RegistrationParent = typename Owner::parent_container_type>
-using runtime_binding_state_t =
-    runtime_binding_state<Owner, InstanceContainer, Storage,
-                          RegistrationParent>;
-
-} // namespace detail
 
 template <typename T> struct runtime_binding_state_traits {
   using state_type = T;

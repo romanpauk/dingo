@@ -35,7 +35,6 @@ from plugins import (
 from schema import (
     GeneratedExecutable,
     LimitationDisposition,
-    MixedRegistrationPlacement,
     RegistrationMode,
     RegistrationSpec,
     SharedCyclicalContainer,
@@ -230,34 +229,24 @@ def _make_case(row: SharedCyclicalRow) -> GeneratedSharedCyclicalCase:
             storage=a_storage,
             dependencies=a_dependencies,
             include_in_runtime=False,
-            include_in_mixed=False,
         ),
         RegistrationSpec(
             storage=b_storage,
             dependencies=b_dependencies,
             include_in_runtime=False,
-            include_in_mixed=False,
         ),
     )
     runtime_registrations = (
         RegistrationSpec(
             storage=a_storage,
             dependencies=a_dependencies,
-            mixed_placement=MixedRegistrationPlacement.RUNTIME,
             include_in_static=False,
         ),
         RegistrationSpec(
             storage=b_storage,
             dependencies=b_dependencies,
-            mixed_placement=MixedRegistrationPlacement.RUNTIME,
             include_in_static=False,
         ),
-    )
-    mixed_anchor = RegistrationSpec(
-        scope="dingo::scope<dingo::shared>",
-        storage="dingo::storage<shared_cyclical_mixed_anchor>",
-        include_in_static=False,
-        include_in_runtime=False,
     )
     plan = build_registration_plan_from_recipe(
         RegistrationRecipe(
@@ -266,7 +255,6 @@ def _make_case(row: SharedCyclicalRow) -> GeneratedSharedCyclicalCase:
             registrations=(
                 *static_registrations,
                 *runtime_registrations,
-                mixed_anchor,
             ),
         )
     )

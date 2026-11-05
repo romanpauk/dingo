@@ -54,25 +54,12 @@ namespace detail {
 
 template <typename Derived> class runtime_registration_api;
 
-template <typename StaticRegistry, typename ParentContainer,
-          typename RuntimeConfig>
-class container_with_static_bindings;
+template <typename ContainerTraits, typename Allocator,
+          typename ParentContainer>
+class runtime_container_impl;
 
 struct runtime_data_owner_t {};
 inline constexpr runtime_data_owner_t runtime_data_owner{};
-
-template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
-          typename ResolveRoot, bool OwnsRuntimeData,
-          bool MergeParentCollections = false>
-struct static_container_runtime_config {
-  using container_traits_type = ContainerTraits;
-  using allocator_type = Allocator;
-  using parent_registry_type = ParentRegistry;
-  using resolve_root_type = ResolveRoot;
-
-  static constexpr bool owns_runtime_data = OwnsRuntimeData;
-  static constexpr bool merge_parent_collections = MergeParentCollections;
-};
 
 template <typename BindingInterface> struct runtime_lookup_binding_view {
   BindingInterface *binding = nullptr;
@@ -1262,7 +1249,7 @@ class DINGO_EMPTY_BASES runtime_registry
   template <typename, typename, typename, typename>
   friend class runtime_binding_state;
   template <typename, typename, typename>
-  friend class detail::container_with_static_bindings;
+  friend class detail::runtime_container_impl;
   template <typename ContainerTraitsT, typename AllocatorT,
             typename ParentRegistryT, typename ResolveRootT,
             bool OwnsRuntimeDataT>
@@ -1279,17 +1266,9 @@ class DINGO_EMPTY_BASES runtime_registry
   using typename store_type::runtime_selection;
   using typename store_type::runtime_transaction_type;
   template <typename Parent>
-  using registration_runtime_config = detail::static_container_runtime_config<
-      ContainerTraits, Allocator, Parent, resolve_root_type, false, true>;
-  template <typename Parent>
-  using runtime_registration_container_type =
+  using registration_container_type =
       runtime_registry<ContainerTraits, Allocator, Parent, resolve_root_type,
                        false>;
-  template <typename Bindings, typename Parent>
-  using registration_container_type = std::conditional_t<
-      std::is_void_v<Bindings>, runtime_registration_container_type<Parent>,
-      detail::container_with_static_bindings<
-          Bindings, Parent, registration_runtime_config<Parent>>>;
 
 public:
   using container_traits_type = ContainerTraits;
@@ -1682,8 +1661,10 @@ private:
         "runtime-key request");
     using binding_model = detail::binding_model<registration>;
     using bindings_type = typename binding_model::bindings_type;
-    using instance_container_type =
-        registration_container_type<bindings_type, Parent>;
+    static_assert(std::is_void_v<bindings_type>,
+                  "runtime registrations cannot declare compile-time "
+                  "bindings<...>; use static_container");
+    using instance_container_type = registration_container_type<Parent>;
     (void)std::addressof(arg);
     using interface_types = typename binding_model::interface_types;
     static constexpr bool storage_tag_is_complete =
@@ -1699,9 +1680,8 @@ private:
       registration_requirements::assert_valid();
 
       using runtime_binding_state_type =
-          detail::runtime_binding_state_t<registry_type,
-                                          instance_container_type, storage_type,
-                                          bindings_type, Parent>;
+          runtime_binding_state<registry_type, instance_container_type,
+                                storage_type, Parent>;
 
       if constexpr (registration_requirements::valid &&
                     type_list_size_v<interface_types> == 1) {

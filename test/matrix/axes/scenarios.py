@@ -292,34 +292,6 @@ PARENT_SCENARIOS = (
     ),
     ScenarioSpec(
         suite="static_parent_container",
-        name="container_child_container_parent",
-        test_name=(
-            "static_shared_value_type_concrete_value_ref_ptr_"
-            "container_child_container_parent_container_static"
-        ),
-        function=(
-            "exercise_static_parent_container_pair<container_parent_shape, "
-            "container_child_shape>"
-        ),
-        supported_containers=frozenset({STANDALONE}),
-        headers=("matrix/scenarios/static_parent.h",),
-    ),
-    ScenarioSpec(
-        suite="static_parent_container",
-        name="container_child_static_parent",
-        test_name=(
-            "static_shared_value_type_concrete_value_ref_ptr_"
-            "container_child_static_parent_container_static"
-        ),
-        function=(
-            "exercise_static_parent_container_pair<static_parent_shape, "
-            "container_child_shape>"
-        ),
-        supported_containers=frozenset({STANDALONE}),
-        headers=("matrix/scenarios/static_parent.h",),
-    ),
-    ScenarioSpec(
-        suite="static_parent_container",
         name="static_child_static_parent",
         test_name=(
             "static_shared_value_type_concrete_value_ref_ptr_"
@@ -334,12 +306,12 @@ PARENT_SCENARIOS = (
     ),
     ScenarioSpec(
         suite="static_parent_container",
-        name="mixed_runtime_static_pairs",
+        name="runtime_child_static_parent",
         test_name=(
             "static_shared_value_type_concrete_value_ref_ptr_"
-            "mixed_runtime_static_pairs_container_static"
+            "runtime_child_static_parent_runtime_container"
         ),
-        function="exercise_mixed_runtime_static_parent_pairs",
+        function="exercise_runtime_child_static_parent",
         supported_containers=frozenset({STANDALONE}),
         headers=("matrix/scenarios/static_parent.h",),
     ),

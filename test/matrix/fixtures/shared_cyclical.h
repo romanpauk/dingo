@@ -80,8 +80,6 @@ template <typename AToBEdge, typename BToAEdge> struct shared_cyclical_b {
   dependency_type *dependency;
 };
 
-struct shared_cyclical_mixed_anchor {};
-
 template <typename Type, bool SharedOwnership, typename Container>
 void check_shared_cyclical_storage(Container &container, Type &instance) {
   ASSERT_EQ(&container.template resolve<Type &>(), &instance);

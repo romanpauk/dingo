@@ -47,8 +47,6 @@ struct dependency_immovable {
   int marker() const { return 3; }
 };
 
-struct dependency_composition_mixed_anchor {};
-
 template <typename Type>
 inline std::size_t dependency_composition_factory_calls = 0;
 

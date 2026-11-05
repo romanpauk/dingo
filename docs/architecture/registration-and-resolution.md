@@ -32,7 +32,7 @@ into the full internal policy set before the factory is created.
 
 ## Compile-Time Registration
 
-`container<bindings<...>>` accepts a compile-time binding source:
+`static_container<bindings<...>>` accepts a compile-time binding source:
 
 ```c++
 using app_bindings = dingo::bindings<
@@ -40,7 +40,7 @@ using app_bindings = dingo::bindings<
     dingo::bind<dingo::scope<dingo::unique>, dingo::storage<Service>>
 >;
 
-dingo::container<app_bindings> container;
+dingo::static_container<app_bindings> container;
 ```
 
 That path is normalized through
@@ -49,11 +49,10 @@ validated by [include/dingo/static/graph.h](../../include/dingo/static/graph.h).
 
 There are two registration modes:
 
-- runtime registration through `register_type<...>()`
-- compile-time registration through `bindings<...>`
+- runtime registration through `register_type<...>()` on `container<>`
+- compile-time registration through `bindings<...>` on `static_container`
 
-`container<bindings<...>>` can host compile-time bindings and runtime
-registrations at the same time.
+A container uses one of them; the modes do not mix.
 
 ## Stored Type Versus Exposed Interface
 
@@ -171,9 +170,9 @@ state.
 
 ## Registration Child Bindings
 
-`register_type<...>()` can carry local `bindings<...>` that configure the static
-part of its registration-created child container. The returned proxy adds
-runtime bindings to that same child.
+`register_type<...>()` returns a proxy to its registration-created child
+container, which accepts further runtime registrations. A static `bind<...>` can
+carry local `bindings<...>` that play the same role for compile-time bindings.
 
 Dependencies are selected with the following rules:
 
@@ -181,9 +180,6 @@ Dependencies are selected with the following rules:
 - local and host both provide the same singular binding: local wins
 - host-only singular match: selected
 - collection request: merge local and host results
-
-Collections combine static and runtime entries from the child with entries from
-the root container.
 
 ## Parent Containers And Auto Construction
 
@@ -211,11 +207,11 @@ Dingo does not try to model the full C++ overload-resolution space, which is why
 ambiguous, policy-sensitive, or readability-critical cases should move to an
 explicit factory.
 
-`container<bindings<...>>` also checks statically known static cycles at compile
-time. Ordinary static cycles are rejected; cycles where every participating
-binding uses `scope<shared_cyclical>` are allowed through the static binding
-path. Mixed runtime/static recursion that only appears during actual
-construction is still rejected at runtime by the recursion guard.
+`static_container` checks statically known cycles at compile time. Ordinary
+static cycles are rejected; cycles where every participating binding uses
+`scope<shared_cyclical>` are allowed through the static binding path. Recursion
+that only appears during actual construction is rejected at runtime by the
+recursion guard.
 
 ## Good Source Companions
 

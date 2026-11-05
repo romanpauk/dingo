@@ -87,11 +87,10 @@ external, annotated, or keyed resolution coverage.
 
 All registration families lower their selected axes into the same generic
 registration recipe. Each registration entry independently declares whether it
-participates in static, runtime, and mixed generation. The shared renderer then
-selects static bindings and runtime setup from the requested container mode.
+participates in static and runtime generation. The shared renderer then
+selects static bindings or runtime setup from the requested container mode.
 Recursive dependency compositions use this path with arbitrary rendered C++
-types; mixed rows add a static anchor through the recipe instead of constructing
-container setup separately.
+types instead of constructing container setup separately.
 
 Every family owns its row model and semantic sharding, but exposes the same
 generation contract. It produces source-shard descriptions, and `family.py`
@@ -141,8 +140,8 @@ global support code.
 - `construct`: construct an unregistered type from registered dependencies.
 - `construct_collection`: construct a collection with default or custom
   insertion.
-- `local_bindings`: resolve dependencies from bindings attached to a
-  registration.
+- `local_bindings`: resolve dependencies from bindings attached to a static
+  `bind<...>` registration.
 - `nested_container`: resolve through child and parent containers.
 - `annotated`: disambiguate registrations with `annotated<T, Tag>`.
 - `variant`: construct or resolve a variant and its held alternative.
@@ -151,12 +150,10 @@ global support code.
   constructor factories.
 - `lifetime_counts`: verify selected storage forms construct, move, copy, and
   destroy the stored value with expected counts.
-- `mixed_external_dependency`: combine compile-time bindings with a runtime
-  external dependency.
 - `custom_allocator`: use a caller-selected allocator for container bookkeeping.
 - `custom_rtti`: use a caller-selected RTTI provider for runtime lookup.
 - `explicit_dependencies`: verify explicit constructor dependency metadata in
-  representative runtime, static, and mixed containers.
+  representative runtime and static containers.
 
 Generic runtime regression scenarios are intentionally limited to
 `runtime_container<>` and `container<>`. Indexed, allocator, and custom-RTTI
@@ -225,8 +222,6 @@ child container families in one behavioral case.
 
 - `runtime`: registrations are added with `register_type<...>()`.
 - `static`: registrations are declared with `bindings<bind<...>>`.
-- `mixed`: `container<bindings<...>>` combines static bindings with runtime
-  registrations.
 
 ### Scope
 
@@ -264,7 +259,6 @@ directed dependency edges.
 ### Exposed Type
 
 - concrete only
-- mixed static graph with a runtime external dependency
 - one interface
 - multiple interfaces
 - copyable interface
@@ -278,7 +272,7 @@ directed dependency edges.
 - runtime-key lookup interface
 - local binding target
 - local binding override target
-- local and host collection target
+- local collection target
 - factory override target
 - cycle-shaped concrete target
 - unique interface target
@@ -316,16 +310,13 @@ directed dependency edges.
 - held variant alternative as value, reference, and pointer
 - nested smart-pointer, variant, and array wrapper requests
 - annotated concrete and interface requests
-- local binding, factory override, mixed external dependency, and cycle-shaped
-  concrete requests
+- local binding, factory override, and cycle-shaped concrete requests
 
 ### Container
 
 - `runtime_container<>`
 - `container<>`
 - `static_container<bindings<...>>`
-- `container<bindings<...>>` using only static bindings
-- `container<bindings<...>>` using static and runtime registrations
 - `runtime_container<indexed_traits<std::size_t>>`
 - `container<indexed_traits<std::size_t>>`
 - `runtime_container<indexed_traits<int>>`
@@ -418,13 +409,12 @@ Focused registration regressions also store const external
 remains copyable, while a const unique handle publishes only stable const
 access and rejects consumption.
 
-The container axis reuses the core runtime, static, generic runtime/static, and
-mixed containers. The scope axis covers shared, unique, and external storage.
+The container axis reuses the core runtime, static, and generic runtime
+containers. The scope axis covers shared, unique, and external storage.
 Shared and external storage use a stable request; unique storage crosses value
 and rvalue requests. Static-only external cases remain in the model as an
 intentional constraint because external storage requires runtime registration.
-Mixed cells use a static anchor and register the composition at runtime, so they
-exercise both halves of the mixed container. The contract rejects missing
+The contract rejects missing
 product cells, so adding a leaf, operator, container, scope, request strategy,
 or request qualification expands resolution and invocation without requiring
 hand-written wrapper cases.
@@ -461,8 +451,6 @@ Its argument-conversion sub-matrix uses the supported combinations of:
 - The container must support the registration mode.
 - Static-only containers cannot use runtime registration.
 - Runtime-only containers cannot use static bindings.
-- Mixed containers require at least one static binding and may add runtime
-  bindings.
 - Runtime-key lookup features require lookup container traits.
 - Runtime-key registration is runtime-only unless static fixed-key bindings are
   added to the library.

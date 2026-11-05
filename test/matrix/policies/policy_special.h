@@ -9,8 +9,6 @@
 
 #include "matrix/policies/policy_core.h"
 
-#include <dingo/base/exceptions.h>
-
 #include <type_traits>
 
 namespace dingo::matrix::resolution {
@@ -31,13 +29,6 @@ template <typename Type> struct local_collection_ref {
     auto constructed = container.template construct<Type>();
     ASSERT_EQ(constructed.count, 2u);
     ASSERT_EQ(constructed.sum, 1);
-  }
-};
-
-template <typename Type> struct ambiguous {
-  template <typename Container> static void check(Container &container) {
-    ASSERT_THROW(container.template resolve<Type &>(),
-                 dingo::type_ambiguous_exception);
   }
 };
 

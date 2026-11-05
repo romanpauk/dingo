@@ -251,7 +251,7 @@ def render_dependency_carrier(carrier: str, base: str) -> str:
     return _CARRIERS_BY_NAME[carrier].type_expression.format(base=base)
 
 
-_ALL_MODES = frozenset({"runtime", "static", "mixed"})
+_ALL_MODES = frozenset({"runtime", "static"})
 _RUNTIME_MODE = frozenset({"runtime"})
 
 _STABLE_CONCRETE_CASES = (
@@ -465,7 +465,7 @@ DEPENDENCY_PROVISIONINGS = (
         "element_shared_ptr",
         "element_keyed_collection",
         (("selected_value", "keyed_collection_dependency", "construct"),),
-        frozenset({"static", "mixed"}),
+        frozenset({"static"}),
     ),
     *(
         _provisioning(

@@ -15,7 +15,6 @@ from schema import (
     ExposedType,
     Feature,
     FeatureCaseSpec,
-    MixedRegistrationPlacement,
     RegistrationMode,
     RegistrationSpec,
     ResolvedType,
@@ -44,8 +43,6 @@ class CaseLines:
 class RegistrationPlan:
     static_bindings: tuple[str, ...]
     runtime_setup: tuple[str, ...]
-    mixed_static_bindings: tuple[str, ...] | None
-    mixed_runtime_setup: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,8 +54,6 @@ class RegistrationRecipe:
     runtime_argument: str | None = None
     factory: str | None = None
     runtime_prefix: tuple[str, ...] = ()
-    mixed_runtime_prefix: tuple[str, ...] = ()
-    mixed: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,7 +195,6 @@ def register_type(
     storage: str,
     *,
     interfaces: str | None = None,
-    local_bindings: str | None = None,
     factory: str | None = None,
     dependencies: str | None = None,
     key: str | None = None,
@@ -210,7 +204,6 @@ def register_type(
         scope,
         storage,
         interfaces=interfaces,
-        local_bindings=local_bindings,
         factory=factory,
         dependencies=dependencies,
         key=key,
@@ -294,7 +287,6 @@ def render_runtime_registration(
         scope_type,
         storage,
         interfaces=spec.interfaces,
-        local_bindings=spec.local_bindings,
         factory=spec.factory or recipe_factory(recipe, spec),
         dependencies=spec.dependencies,
         key=spec.key,
@@ -319,18 +311,6 @@ def build_registration_plan_from_recipe(
     specs = recipe.registrations
     static_specs = tuple(spec for spec in specs if spec.include_in_static)
     runtime_specs = tuple(spec for spec in specs if spec.include_in_runtime)
-    mixed_static_specs = tuple(
-        spec
-        for spec in specs
-        if spec.include_in_mixed
-        if spec.mixed_placement is MixedRegistrationPlacement.STATIC
-    )
-    mixed_runtime_specs = tuple(
-        spec
-        for spec in specs
-        if spec.include_in_mixed
-        if spec.mixed_placement is MixedRegistrationPlacement.RUNTIME
-    )
 
     return RegistrationPlan(
         static_bindings=tuple(
@@ -342,22 +322,6 @@ def build_registration_plan_from_recipe(
             + tuple(
                 render_runtime_registration(recipe, spec)
                 for spec in runtime_specs
-            )
-        ),
-        mixed_static_bindings=(
-            tuple(
-                render_static_binding(recipe, spec)
-                for spec in mixed_static_specs
-            )
-            if recipe.mixed
-            else None
-        ),
-        mixed_runtime_setup=(
-            runtime_setup_prefix(recipe, mixed_runtime_specs)
-            + recipe.mixed_runtime_prefix
-            + tuple(
-                render_runtime_registration(recipe, spec)
-                for spec in mixed_runtime_specs
             )
         ),
     )
@@ -375,8 +339,6 @@ def build_registration_plan(
             runtime_argument=stored_type.runtime_argument,
             factory=stored_type.factory,
             runtime_prefix=exposed_type.runtime_prefix,
-            mixed_runtime_prefix=exposed_type.mixed_runtime_prefix,
-            mixed=exposed_type.mixed,
         )
     )
 
@@ -398,12 +360,5 @@ def render_registration_plan(
         return RenderedRegistrationPlan(
             static_bindings=None,
             setup_lines=plan.runtime_setup,
-        )
-    if mode == "mixed":
-        if not plan.mixed_static_bindings:
-            raise RuntimeError(f"{context} has no mixed registration plan")
-        return RenderedRegistrationPlan(
-            static_bindings=bindings_type(plan.mixed_static_bindings),
-            setup_lines=plan.mixed_runtime_setup,
         )
     raise RuntimeError(f"{context} has unknown registration mode: {mode}")

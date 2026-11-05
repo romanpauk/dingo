@@ -1,6 +1,7 @@
 // RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
 
 #include <dingo/container.h>
+#include <dingo/static_container.h>
 #include <dingo/storage/shared.h>
 
 struct b;
@@ -24,5 +25,4 @@ int main() {
                       dingo::dependencies<a &>>>>();
 }
 
-// CHECK: register_type bindings<...> requires a resolvable compile-time binding
-// graph
+// CHECK: runtime registrations cannot declare compile-time bindings<...>
