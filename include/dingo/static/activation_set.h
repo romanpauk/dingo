@@ -150,44 +150,15 @@ struct binding_request_resolutions
                                   typename BindingModel::storage_type> {};
 
 // The route of a stable default leaf request is the route the storage publishes
-// for the leaf: the object route when the leaf's reference and pointer
-// requests are served together, otherwise the route of the request's category.
-template <typename Interface, typename Shape, bool Shared, bool Reference>
-struct direct_default_leaf_route {
-  using type = type_list<typename storage_resolution<
-      std::conditional_t<Reference, runtime_type &, runtime_type *>, Interface,
-      Shape, borrow, false>::type>;
-};
-
-template <typename Interface, typename Shape, bool Reference>
-struct direct_default_leaf_route<Interface, Shape, true, Reference> {
-private:
-  using conversions = typename Shape::conversions;
-  static constexpr bool serves_value =
-      type_list_contains_v<runtime_type, typename conversions::value_types> &&
-      type_list_size_v<typename conversions::rvalue_reference_types> == 0 &&
-      is_default_value_request<Interface, Shape, runtime_type *>();
-
-public:
-  using type =
-      typename shared_object_resolutions<type_list<runtime_type *>, Interface,
-                                         Shape, serves_value>::type;
-};
-
-template <typename Interface, typename Shape,
-          typename Conversions = typename Shape::conversions>
-constexpr bool is_default_leaf_object_v =
-    type_list_contains_v<runtime_type &,
-                         typename Conversions::lvalue_reference_types> &&
-    type_list_contains_v<runtime_type *, typename Conversions::pointer_types> &&
-    is_default_object_request<Interface, Shape, runtime_type *>();
-
+// for the leaf in the category of the request.
 template <typename Request, typename Interface, typename Storage>
-struct direct_default_leaf_request_resolution
-    : direct_default_leaf_route<
-          Interface, storage_shape_t<Storage>,
-          is_default_leaf_object_v<Interface, storage_shape_t<Storage>>,
-          std::is_lvalue_reference_v<unwrapped_static_request_t<Request>>> {};
+struct direct_default_leaf_request_resolution {
+  using type = type_list<typename storage_resolution<
+      std::conditional_t<
+          std::is_lvalue_reference_v<unwrapped_static_request_t<Request>>,
+          runtime_type &, runtime_type *>,
+      Interface, storage_shape_t<Storage>, borrow, false>::type>;
+};
 
 template <typename Request, typename Interface, typename BindingModel>
 struct binding_request_resolutions<Request, Interface, BindingModel, true>

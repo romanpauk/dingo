@@ -88,13 +88,9 @@ using unwrapped_static_request_t = typename annotated_traits<std::conditional_t<
 
 template <typename T, typename Instance, typename Fn>
 decltype(auto) consume_resolved_binding(Instance &&instance, Fn &&fn) {
-  if constexpr (std::is_lvalue_reference_v<unwrapped_static_request_t<T>> &&
-                std::is_pointer_v<std::remove_reference_t<Instance>>) {
-    // An object route presents an address; the request takes a reference.
-    return consume_resolved_binding<T>(*instance, std::forward<Fn>(fn));
-  } else if constexpr (std::is_lvalue_reference_v<T> || std::is_pointer_v<T> ||
-                       (!std::is_rvalue_reference_v<T> &&
-                        !std::is_constructible_v<T, Instance &&>)) {
+  if constexpr (std::is_lvalue_reference_v<T> || std::is_pointer_v<T> ||
+                (!std::is_rvalue_reference_v<T> &&
+                 !std::is_constructible_v<T, Instance &&>)) {
     return std::forward<Fn>(fn)(instance);
   } else {
     return std::forward<Fn>(fn)(std::forward<Instance>(instance));
@@ -103,25 +99,8 @@ decltype(auto) consume_resolved_binding(Instance &&instance, Fn &&fn) {
 
 template <typename Resolution>
 constexpr bool matches_resolution_request(type_descriptor requested_type) {
-  if (matches_qualification_conversion(
-          describe_type<typename Resolution::target_type>(), requested_type)) {
-    return true;
-  }
-  // An object route serves the reference form and the copy of its object as
-  // well.
-  if constexpr (Resolution::serves_reference) {
-    if (matches_qualification_conversion(
-            describe_type<resolution_reference_target_t<Resolution>>(),
-            requested_type)) {
-      return true;
-    }
-  }
-  if constexpr (Resolution::serves_value) {
-    return matches_qualification_conversion(
-        describe_type<resolution_value_target_t<Resolution>>(), requested_type);
-  } else {
-    return false;
-  }
+  return matches_qualification_conversion(
+      describe_type<typename Resolution::target_type>(), requested_type);
 }
 
 } // namespace detail

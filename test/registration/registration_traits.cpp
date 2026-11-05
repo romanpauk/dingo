@@ -237,12 +237,8 @@ template <typename Target, typename Resolutions>
 inline constexpr bool has_resolution_target_v =
     type_list_contains_v<Target, resolution_targets_t<Resolutions>>;
 
-// The targets that accept the reference form of a request, and the targets that
-// accept the pointer form. An object route serves both with one resolution.
-
 // The targets that accept the value form of a request, as a binding publishes
-// them: the value routes and the object routes that serve the copy of their
-// object.
+// them.
 template <typename Target> struct accepted_target {
   using target_type = Target;
 };
@@ -253,13 +249,10 @@ template <typename... Resolutions>
 struct accepted_value_targets<type_list<Resolutions...>> {
   template <typename Resolution>
   using targets = std::conditional_t<
-      Resolution::serves_value,
-      type_list<accepted_target<detail::resolution_value_target_t<Resolution>>>,
-      std::conditional_t<
-          std::is_reference_v<typename Resolution::target_type> ||
-              std::is_pointer_v<typename Resolution::target_type>,
-          type_list<>,
-          type_list<accepted_target<typename Resolution::target_type>>>>;
+      std::is_reference_v<typename Resolution::target_type> ||
+          std::is_pointer_v<typename Resolution::target_type>,
+      type_list<>,
+      type_list<accepted_target<typename Resolution::target_type>>>;
 
   using type = type_list_cat_t<targets<Resolutions>...>;
 };
@@ -275,11 +268,7 @@ struct reference_resolution_targets<type_list<Resolutions...>> {
   template <typename Resolution>
   using targets = std::conditional_t<
       std::is_lvalue_reference_v<typename Resolution::target_type>,
-      type_list<typename Resolution::target_type>,
-      std::conditional_t<
-          Resolution::serves_reference,
-          type_list<detail::resolution_reference_target_t<Resolution>>,
-          type_list<>>>;
+      type_list<typename Resolution::target_type>, type_list<>>;
 
   using type = type_list_cat_t<targets<Resolutions>...>;
 };
