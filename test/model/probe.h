@@ -266,14 +266,33 @@ void check_probed(const char *prefix) {
 }
 
 // One line of the outcome table: the cell and its outcome.
-inline void record(const char *cell, const char *outcome, const char *error) {
-  if (error) {
-    std::printf("{\"cell\": \"%s\", \"outcome\": \"%s\", \"error\": "
-                "\"%s\"}\n",
-                cell, outcome, error);
-  } else {
-    std::printf("{\"cell\": \"%s\", \"outcome\": \"%s\"}\n", cell, outcome);
+// A text as a JSON string: quoted, its quotes, backslashes and control
+// characters escaped.
+inline std::string json_string(const char *text) {
+  std::string quoted = "\"";
+  for (const char *c = text; *c; ++c) {
+    if (*c == '"' || *c == '\\') {
+      quoted += '\\';
+      quoted += *c;
+    } else if (static_cast<unsigned char>(*c) < 0x20) {
+      char escaped[8];
+      std::snprintf(escaped, sizeof(escaped), "\\u%04x",
+                    static_cast<unsigned>(static_cast<unsigned char>(*c)));
+      quoted += escaped;
+    } else {
+      quoted += *c;
+    }
   }
+  return quoted + '"';
+}
+
+inline void record(const char *cell, const char *outcome, const char *error) {
+  std::string line = "{\"cell\": " + json_string(cell) +
+                     ", \"outcome\": " + json_string(outcome);
+  if (error) {
+    line += ", \"error\": " + json_string(error);
+  }
+  std::printf("%s}\n", line.c_str());
 }
 
 inline void record(const char *cell, const char *outcome) {

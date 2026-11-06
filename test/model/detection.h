@@ -74,9 +74,19 @@ template <typename P> struct reading<single<P>> {
 template <typename P> struct reading<explicit_single<P>> {
   static bool reached(explicit_single<P> &c) { return model::reached(c.got); }
 };
+// An aggregate cannot read its member while it is initialized, so it is read
+// after. A reference, an rvalue one too, or a pointer may then refer to an
+// instance its resolution made for the construction, which is gone; only a
+// member it holds by value is read.
 template <typename P> struct reading<aggregate<P>> {
   static bool reached(aggregate<P> &c) {
-    return model::reached(received<P>(pass_on<P>(c.got)));
+    if constexpr (received<P>::holds &&
+                  !std::is_reference_v<typename received<P>::result_type>) {
+      return model::reached(received<P>(pass_on<P>(c.got)));
+    } else {
+      (void)c;
+      return true;
+    }
   }
 };
 template <typename P> struct reading<pair<P>> {

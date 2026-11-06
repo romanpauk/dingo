@@ -76,7 +76,12 @@ def build_and_run(compiler, flags, directory, name, source):
         return None, result.stderr, None
     run = subprocess.run([str(exe)], capture_output=True, text=True)
     exe.unlink()
-    records = [json.loads(line) for line in run.stdout.splitlines() if line]
+    try:
+        records = [json.loads(line) for line in run.stdout.splitlines()
+                   if line]
+    except json.JSONDecodeError:
+        # A record the program could not print is a crash of its probe.
+        return [], None, f"{CRASH} a malformed record"
     if run.returncode != 0:
         return records, None, f"{CRASH} {run.returncode}"
     return records, None, None
