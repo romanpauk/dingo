@@ -104,6 +104,11 @@ The injectable result depends on both:
 - some exact wrapper forms intentionally resolve only as the wrapper itself,
   rather than as every possible contained alternative
 
+- a value that can be neither copied nor moved is constructed in place and
+  resolved by reference or pointer; an `external` registration keeps a copy of a
+  value it is given, so such a value is given by reference, and
+  `resolve<T &&>()` moves out of the object, so it is not available for it
+
 <!-- { include("../examples/storage/scope_external.cpp", scope="////") -->
 
 Example code included from
@@ -210,11 +215,11 @@ See:
 
 Dingo supports raw C++ arrays, `std::unique_ptr<T[]>`, `std::shared_ptr<T[]>`
 and `std::shared_ptr<T[N]>`, including N-D array shapes. A
-`std::shared_ptr<T[N]>` knows its size, so the default factory makes it, its
-elements made of the arguments and the rest value-initialized; a
-`std::shared_ptr<T[]>` needs a factory that knows the size.
-`std::unique_ptr<T[N]>` is not supported: its default deleter would release the
-array as an object.
+`std::shared_ptr<T[N]>` knows its size, so the default factory makes it, as it
+makes a `T[N]`: its elements are value-initialized, and an array of elements
+that cannot be needs a factory. A `std::shared_ptr<T[]>` needs a factory that
+knows the size. `std::unique_ptr<T[N]>` is not supported: its default deleter
+would release the array as an object.
 
 In practice:
 
@@ -442,6 +447,11 @@ Constructor deduction is intentionally useful, not magical. The main limits are:
 - the runtime and the static container auto-construct alike; a static container
   without a parent rejects at compile time a request it can neither bind nor
   auto-construct
+- `construct<T>()` of a `T` whose construction is not detected is rejected at
+  compile time by a static container, which knows `T` is not bound; a runtime
+  container learns that only at run time, so it resolves `T` when it is bound
+  and throws `type_not_found_exception` when it is not. A registration of such a
+  `T` without a factory is rejected at compile time by both
 - auto-construction requires `T` to be complete
 - borrowed requests such as `resolve<T&>()` and `resolve<T*>()` can use a
   forward-declared `T` as long as the type is already registered

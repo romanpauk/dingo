@@ -156,10 +156,10 @@ def compile_probes(compiler, flags, directory, unit, name, probes):
     return records, stderr, crash, owners_of(source, probes)
 
 
-def probe_alone(compiler, flags, directory, unit, index, probe):
-    """Makes one probe in a program of its own."""
+def probe_alone(compiler, flags, directory, unit, name, probe):
+    """Makes one probe in a program of its own, of the given name."""
     records, stderr, crash, _ = compile_probes(
-        compiler, flags, directory, unit, f"{unit.name}__{index}", [probe])
+        compiler, flags, directory, unit, name, [probe])
     if stderr is not None:
         return [failure(unit, probe, first_error(stderr))]
     if crash is not None:
@@ -185,8 +185,8 @@ def probe_group(compiler, flags, directory, unit, name, probes):
                      for probe, error in failed.items()]
         probes = [probe for probe in probes if probe not in failed]
     for index, probe in enumerate(probes):
-        outcomes += probe_alone(compiler, flags, directory, unit, index,
-                                probe)
+        outcomes += probe_alone(compiler, flags, directory, unit,
+                                f"{name}__{index}", probe)
     return outcomes
 
 
@@ -220,10 +220,12 @@ def probe_shared(compiler, flags, directory, unit, name, probes):
     outcomes += probe_shared(compiler, flags, directory, unit, f"{name}_",
                              [probe for probe in rest
                               if probe not in suspects])
+    # The programs are named after this one: a unit may be probed by several
+    # programs at once, which must not write one file.
     for operation in sorted({probe.operation for probe in suspects}):
         outcomes += probe_group(
             compiler, flags, directory, unit,
-            f"{unit.name}__{operation.name}",
+            f"{name}__{operation.name}",
             [probe for probe in suspects if probe.operation == operation])
     return outcomes
 

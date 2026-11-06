@@ -41,11 +41,24 @@ template <typename R, typename... Args> struct callable_invoke<R(Args...)> {
     }
   }
 
+  // An object constructed in place, as a cyclical scope constructs it, is
+  // initialized with what the callable returns, so the callable returns the
+  // object: a handle it returns owns an object of its own.
   template <typename Type, typename Fn, typename Context, typename Container>
   static auto construct(void *ptr, Fn &&fn, construction_scope scope,
                         Context &ctx, Container &container) {
-    new (ptr) normalized_type_t<Type>(
-        construct(std::forward<Fn>(fn), scope, ctx, container));
+    using result_type =
+        decltype(construct(std::forward<Fn>(fn), scope, ctx, container));
+    if constexpr (!std::is_constructible_v<normalized_type_t<Type>,
+                                           result_type>) {
+      static_assert(
+          std::is_constructible_v<normalized_type_t<Type>, result_type>,
+          "a factory of an object constructed in place, as a cyclical "
+          "scope constructs it, returns the object, not a handle of it");
+    } else {
+      new (ptr) normalized_type_t<Type>(
+          construct(std::forward<Fn>(fn), scope, ctx, container));
+    }
   }
 };
 

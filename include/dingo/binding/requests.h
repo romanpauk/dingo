@@ -45,6 +45,15 @@ inline constexpr bool keyed_by_type_v = [] {
 // lookup_key), count_collection<T>(lookup_key) and with_context(fn), which
 // runs fn with a fresh resolution context, and is the host of
 // request_resolution.
+// resolve<T &&>() returns the T it moves out of the object the request refers
+// to, which a T that can be neither moved nor copied cannot be. The request
+// may be annotated.
+template <typename T, typename R>
+inline constexpr bool movable_rvalue_request_v =
+    !std::is_rvalue_reference_v<::dingo::detail::request_interface_t<T>> ||
+    std::is_reference_v<R> || std::is_pointer_v<R> ||
+    std::is_move_constructible_v<std::remove_cv_t<R>>;
+
 template <typename Container> class container_requests {
   template <typename Collection, typename Fn>
   using collection_insert_invocable =
@@ -64,6 +73,12 @@ public:
       (void)id;
       return resolve<selected_type_t<T>>(
           make_lookup_key(selected_selector_t<T>{}));
+    } else if constexpr (!movable_rvalue_request_v<T, R>) {
+      static_assert(movable_rvalue_request_v<T, R>,
+                    "resolve<T &&>() moves the value out of the object it "
+                    "refers to; a value that can be neither copied nor "
+                    "moved is requested by reference or pointer, or "
+                    "constructed");
     } else {
       return self().template resolve_entry<request_type<T>, R>(
           make_lookup_key(std::forward<IdType>(id)));
@@ -74,7 +89,15 @@ public:
             typename R = request_result_t<T, true>,
             std::enable_if_t<is_lookup_key_v<LookupKey>, int> = 0>
   DINGO_ALWAYS_INLINE R resolve(LookupKey key) {
-    return self().template resolve_entry<request_type<T>, R>(std::move(key));
+    if constexpr (!movable_rvalue_request_v<T, R>) {
+      static_assert(movable_rvalue_request_v<T, R>,
+                    "resolve<T &&>() moves the value out of the object it "
+                    "refers to; a value that can be neither copied nor "
+                    "moved is requested by reference or pointer, or "
+                    "constructed");
+    } else {
+      return self().template resolve_entry<request_type<T>, R>(std::move(key));
+    }
   }
 
   // A dependency of a factory, resolved in the context of the request that
@@ -112,6 +135,12 @@ public:
                   std::is_same_v<Factory, constructor<normalized_type_t<T>>>) {
       (void)factory;
       return resolve<T>();
+    } else if constexpr (!movable_rvalue_request_v<T, R>) {
+      static_assert(movable_rvalue_request_v<T, R>,
+                    "construct<T &&>() moves the value out of the object it "
+                    "refers to; a value that can be neither copied nor "
+                    "moved is requested by reference or pointer, or "
+                    "constructed");
     } else {
       return self().with_context([&](auto &context) -> R {
         return request_resolution::construct<request_type<T>, R>(

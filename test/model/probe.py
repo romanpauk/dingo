@@ -34,6 +34,7 @@ import argparse
 import concurrent.futures
 from dataclasses import replace
 import os
+import re
 from pathlib import Path
 import shlex
 import sys
@@ -122,7 +123,8 @@ def main():
     parser.add_argument("--jobs", type=int, default=os.cpu_count())
     parser.add_argument(
         "--only", default="",
-        help="probe only the registrations whose name contains this text")
+        help="probe only the registrations whose name matches this regular "
+        "expression")
     parser.add_argument(
         "--cover", choices=("all", "pairs", "triples"), default="all",
         help="probe every registration, or the registrations that hold every "
@@ -135,7 +137,8 @@ def main():
     flags = driver.precompile_header(options.compiler, flags, options.work,
                                      "probe.h") + flags
 
-    units = [unit for unit in registrations() if options.only in unit.name]
+    units = [unit for unit in registrations()
+             if re.search(options.only, unit.name)]
     if options.cover != "all":
         covered = covering({"pairs": 2, "triples": 3}[options.cover])
         units = [unit for unit in units if unit.dimensions in covered]

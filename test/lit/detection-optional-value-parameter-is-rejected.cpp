@@ -1,6 +1,6 @@
 // RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
 
-#include <dingo/container.h>
+#include <dingo/static_container.h>
 #include <dingo/storage/unique.h>
 
 #include <optional>
@@ -18,9 +18,13 @@ struct consumer {
 
 template <> struct dingo::is_auto_constructible<consumer> : std::true_type {};
 
+// The static container rejects it as it compiles; the runtime container,
+// which learns only at run time whether the type is bound, throws
+// type_not_found.
 int main() {
-  dingo::container<> container;
-  container.register_type<dingo::scope<dingo::unique>, dingo::storage<A>>();
+  dingo::static_container<dingo::bindings<
+      dingo::bind<dingo::scope<dingo::unique>, dingo::storage<A>>>>
+      container;
   (void)container.construct<consumer>();
 }
 

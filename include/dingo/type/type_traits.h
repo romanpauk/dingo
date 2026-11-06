@@ -12,6 +12,7 @@
 #include <dingo/base/exceptions.h>
 #include <dingo/base/type_list.h>
 
+#include <array>
 #include <memory>
 #include <optional>
 #include <type_traits>
@@ -293,25 +294,65 @@ inline constexpr bool is_alternative_type_interface_compatible_v =
 namespace detail {
 template <typename T, typename... Args> T make_nested(Args &&...args);
 
+// Whether T[N]{args...} is well-formed: its first elements are copy-initialized
+// from the arguments, and the rest value-initialized.
+template <typename T, size_t N, typename, typename... Args>
+struct is_bounded_array_initializable : std::false_type {};
+
+template <typename T, size_t N, typename... Args>
+struct is_bounded_array_initializable<
+    T, N, std::void_t<decltype(std::array<T, N>{{std::declval<Args>()...}})>,
+    Args...> : std::true_type {};
+
+template <typename T, size_t N, typename... Args>
+inline constexpr bool is_bounded_array_initializable_v =
+    is_bounded_array_initializable<T, N, void, Args...>::value;
+
 template <typename T, size_t N, typename... Args>
 T *make_bounded_array(Args &&...args) {
   static_assert(sizeof...(Args) <= N,
                 "too many initializers for bounded array construction");
-  return new T[N]{std::forward<Args>(args)...};
+  if constexpr (!is_bounded_array_initializable_v<T, N, Args &&...>) {
+    static_assert(is_bounded_array_initializable_v<T, N, Args &&...>,
+                  "bounded array elements cannot be initialized: the first "
+                  "are copy-initialized from the arguments and the rest "
+                  "value-initialized; an array of elements that cannot be "
+                  "is made by a factory");
+    return nullptr;
+  } else {
+    return new T[N]{std::forward<Args>(args)...};
+  }
 }
 
 template <typename T, size_t N, typename... Args>
 void construct_bounded_array(void *ptr, Args &&...args) {
   static_assert(sizeof...(Args) <= N,
                 "too many initializers for bounded array construction");
-  new (ptr) T[N]{std::forward<Args>(args)...};
+  if constexpr (!is_bounded_array_initializable_v<T, N, Args &&...>) {
+    static_assert(is_bounded_array_initializable_v<T, N, Args &&...>,
+                  "bounded array elements cannot be initialized: the first "
+                  "are copy-initialized from the arguments and the rest "
+                  "value-initialized; an array of elements that cannot be "
+                  "is made by a factory");
+  } else {
+    new (ptr) T[N]{std::forward<Args>(args)...};
+  }
 }
 
 template <typename T, typename... Args> T *make_dynamic_array(Args &&...args) {
   static_assert(sizeof...(Args) > 0,
                 "dynamic arrays require an explicit size via a custom "
                 "factory or element initializers");
-  return new T[sizeof...(Args)]{std::forward<Args>(args)...};
+  if constexpr (!is_bounded_array_initializable_v<T, sizeof...(Args),
+                                                  Args &&...>) {
+    static_assert(
+        is_bounded_array_initializable_v<T, sizeof...(Args), Args &&...>,
+        "dynamic array elements cannot be initialized: each is "
+        "copy-initialized from its argument");
+    return nullptr;
+  } else {
+    return new T[sizeof...(Args)]{std::forward<Args>(args)...};
+  }
 }
 
 // To with the const and volatile qualifiers of From.

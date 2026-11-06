@@ -22,8 +22,11 @@
 {% set stored = cpp.stored(r.form, r.leaf) %}
 {% set interfaces = declared(r) %}
 dingo::scope<dingo::{{ r.scope.value }}>, dingo::storage<{{ stored }}>
-{%- if r.form.is_dynamic_array and r.scope.value != "external" -%}
-, dingo::factory<dingo::function<&instance<{{ stored }}>::make>>
+{#- A dynamic array has no size, and a factory leaf no default value, that a
+    default factory could make. A reference is only given, and no function
+    returns a bounded array. -#}
+{%- if (r.form.is_dynamic_array or r.leaf.value == "factory") and r.scope.value != "external" and r.form.value not in ("reference", "bounded_array") -%}
+, dingo::factory<dingo::function<&fresh<{{ stored }}>::make>>
 {%- endif -%}
 {%- if interfaces -%}
 , dingo::interfaces<{{ interfaces }}>

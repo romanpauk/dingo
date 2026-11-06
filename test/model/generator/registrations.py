@@ -9,7 +9,7 @@ from .dimensions import (Container, Entry, InterfaceSet, Keeps, Leaf,
 from .model import Probe, grammar, interface
 
 # The leaves a registration stores.
-LEAVES = (Leaf.COPYABLE, Leaf.MOVE_ONLY)
+LEAVES = (Leaf.COPYABLE, Leaf.MOVE_ONLY, Leaf.IMMOVABLE, Leaf.FACTORY)
 
 # The interfaces a registration names, around its leaf L, when the library
 # rejects it and so does not say which it binds; whether each is abstract.
@@ -18,7 +18,8 @@ NAMED = {
     InterfaceSet.INTERFACE: (("leaf_interface", True),),
     InterfaceSet.BOTH: (("L", False), ("leaf_interface", True)),
 }
-LEAF_NAMES = {Leaf.COPYABLE: "leaf", Leaf.MOVE_ONLY: "move_only_leaf"}
+LEAF_NAMES = {Leaf.COPYABLE: "leaf", Leaf.MOVE_ONLY: "move_only_leaf",
+              Leaf.IMMOVABLE: "immovable_leaf", Leaf.FACTORY: "factory_leaf"}
 
 
 @dataclass(frozen=True, order=True)

@@ -320,8 +320,10 @@ template <typename Cell, typename Dependencies> struct binding_activation {
       using source_type =
           std::remove_cv_t<std::remove_reference_t<decltype(storage.resolve(
               scope, context, dependencies))>>;
-      auto &value = context.template construct<source_type>(
-          scope, storage.resolve(scope, context, dependencies));
+      auto &value = context.template construct_from<source_type>(
+          scope, [&]() -> decltype(auto) {
+            return storage.resolve(scope, context, dependencies);
+          });
       auto source = lvalue_source<source_type>(value);
       return std::forward<Fn>(fn)(source);
     } else {

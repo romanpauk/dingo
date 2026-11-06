@@ -26,6 +26,7 @@ The model, the templates and the driver are in generator/.
 import argparse
 import concurrent.futures
 import os
+import re
 from pathlib import Path
 import shlex
 import sys
@@ -62,7 +63,7 @@ def main():
     parser.add_argument("--jobs", type=int, default=os.cpu_count())
     parser.add_argument(
         "--only", default="",
-        help="probe only the units whose name contains this text")
+        help="probe only the units whose name matches this regular expression")
     parser.add_argument(
         "--cover", choices=("all", "pairs", "triples"), default="all",
         help="make the classes over every leaf, selection, kind and provider, "
@@ -77,7 +78,7 @@ def main():
 
     strength = {"all": None, "pairs": 2, "triples": 3}[options.cover]
     selected = [unit for unit in units(strength)
-                if options.only in unit.name]
+                if re.search(options.only, unit.name)]
     # The costliest first: the runtime container's.
     selected.sort(key=lambda unit: unit.container_name != "runtime")
     cells = []

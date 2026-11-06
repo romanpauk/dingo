@@ -145,7 +145,7 @@ covering array of the registrations: every combination of values of two (small)
 or three (medium) of scope, stored form, leaf, interfaces declared and selection
 is probed in both containers, at a thirty-sixth or a sixth of the cost of all of
 them (large). Run directly, `probe.py --cover pairs|triples|all` chooses it, and
-`--only <text>` probes the registrations whose name contains the text.
+`--only <regex>` probes the registrations whose name matches the expression.
 
 ### Generator
 

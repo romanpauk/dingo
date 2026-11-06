@@ -136,10 +136,46 @@ inline constexpr bool constructible_normalized_v =
     std::is_object_v<constructed_type_t<Request>> &&
     !std::is_abstract_v<constructed_type_t<Request>> &&
     std::extent_v<constructed_type_t<Request>> == 0;
+// Whether a handle can be made of Args: the array a handle of one holds is
+// initialized with them, its first elements copy-initialized from them and
+// the rest of a bounded one value-initialized.
+template <typename Handle, typename... Args>
+struct handle_makeable : std::true_type {};
+
+template <typename Array, typename... Args>
+        struct handle_makeable<std::shared_ptr<Array>, Args...>
+    : std::bool_constant < !std::is_array_v<Array> ||
+    detail::is_bounded_array_initializable_v < std::remove_extent_t<Array>,
+    std::extent_v<Array> != 0 ? std::extent_v<Array> : sizeof...(Args),
+    Args... >> {};
+
+template <typename Array, typename Deleter, typename... Args>
+struct handle_makeable<std::unique_ptr<Array, Deleter>, Args...>
+    : handle_makeable<std::shared_ptr<Array>, Args...> {};
+
+template <typename T, size_t> using repeated_argument_t = T;
+
+template <typename Handle, typename Argument, typename Indexes>
+struct handle_makeable_by;
+
+template <typename Handle, typename Argument, size_t... Is>
+struct handle_makeable_by<Handle, Argument, std::index_sequence<Is...>>
+    : handle_makeable<Handle, repeated_argument_t<Argument, Is>...> {};
+
+// A wrapper is made of the normalized value the request resolves, which it
+// copies or moves.
 template <typename Request>
-inline constexpr bool construct_normalized_request_v =
-    can_construct_from_normalized_request_v<Request> &&
-    constructible_normalized_v<Request>;
+inline constexpr bool construct_normalized_request_v = [] {
+  if constexpr (can_construct_from_normalized_request_v<Request> &&
+                constructible_normalized_v<Request>) {
+    using value = constructed_type_t<Request>;
+    return (std::is_move_constructible_v<value> ||
+            std::is_copy_constructible_v<value>) &&
+           handle_makeable<std::decay_t<Request>, value>::value;
+  } else {
+    return false;
+  }
+}();
 // Whether the factory constructs an unbound request. A handle of a dynamic
 // array is not constructed: a default factory has no size to make it with.
 template <typename Request,

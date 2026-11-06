@@ -81,6 +81,34 @@ template <std::size_t Count>
 struct is_constant_count<std::integral_constant<std::size_t, Count>>
     : std::true_type {};
 
+// Whether the default factory makes an unbound request: the class is
+// detected, and an array it makes can be initialized. The argument detection
+// probes with converts as the one that constructs it does. An annotated value
+// is made of the value it annotates, which is copied or moved.
+template <typename Request, typename R,
+          bool Factory =
+              construct_factory_request_v<typename Request::user_type>>
+struct default_factory_makes : std::true_type {};
+
+template <typename Request, typename R>
+struct default_factory_makes<Request, R, true> {
+  using value_type = typename Request::value_type;
+  using annotated_type = typename annotated_traits<value_type>::type;
+  static constexpr bool annotated_is_made =
+      std::is_same_v<annotated_type, value_type> ||
+      std::is_move_constructible_v<annotated_type>;
+  static constexpr bool value = [] {
+    if constexpr (annotated_is_made &&
+                  constructor<value_type>::kind == constructor_kind::concrete) {
+      return handle_makeable_by<
+          std::decay_t<R>, constructor_argument<value_type, constructor_shape>,
+          std::make_index_sequence<constructor<value_type>::arity>>::value;
+    } else {
+      return false;
+    }
+  }();
+};
+
 // The request algorithm of the containers. A container is the host of the
 // algorithm; it provides the binding table and the fallbacks:
 //
@@ -169,7 +197,15 @@ struct request_resolution {
           return construct_bound<Request, R>(host, exact, is_bound(value),
                                              scope, context);
         }
-        return construct_unbound<Request, R>(host, scope, context, factory);
+        // Whether the request is bound is known only now, so a request the
+        // default factory cannot make is not found, rather than rejected
+        // while it compiles.
+        if constexpr (default_factory_makes<Request, R>::value) {
+          return construct_unbound<Request, R>(host, scope, context, factory);
+        } else {
+          throw make_type_not_found_exception<typename Request::lookup_type>(
+              context, key);
+        }
       } else if constexpr (decltype(is_bound(exact))::value ||
                            decltype(is_bound(value))::value) {
         return construct_bound<Request, R>(host, exact, is_bound(value), scope,

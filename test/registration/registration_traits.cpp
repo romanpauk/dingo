@@ -2119,3 +2119,54 @@ TEST(type_registration_test, shared_pointer_of_bounded_array) {
   handle made = fixed.resolve<handle>();
   EXPECT_EQ(made[1].value(), 7);
 }
+
+namespace immovable_unique_test {
+struct immovable {
+  immovable() {}
+  immovable(const immovable &) = delete;
+  immovable &operator=(const immovable &) = delete;
+  int value = 7;
+};
+} // namespace immovable_unique_test
+
+// A unique value a reference refers to is placed in the context of the
+// resolution in place, so a value that can be neither copied nor moved is
+// placed too.
+TEST(type_registration_test, reference_to_immovable_unique_value) {
+  using namespace immovable_unique_test;
+  auto read = [](immovable &value) { return value.value; };
+
+  container<> runtime;
+  runtime.register_type<scope<unique>, storage<immovable>>();
+  EXPECT_EQ(runtime.invoke(read), 7);
+
+  static_container<bindings<bind<scope<unique>, storage<immovable>>>> fixed;
+  EXPECT_EQ(fixed.invoke(read), 7);
+}
+
+namespace undetected_construct_test {
+struct ambiguous {
+  ambiguous(int) {}
+  ambiguous(float) {}
+};
+using alternative = std::variant<ambiguous, int>;
+alternative make() { return alternative(std::in_place_type<int>, 7); }
+} // namespace undetected_construct_test
+
+// The runtime container learns only at run time whether a type is bound: a
+// type its default factory cannot construct is not found when it is not, and
+// resolves when it is, as in the static container.
+TEST(type_registration_test, runtime_construct_of_undetected_type) {
+  using namespace undetected_construct_test;
+
+  container<> runtime;
+  EXPECT_THROW(runtime.construct<ambiguous>(), type_not_found_exception);
+  runtime.register_type<scope<shared>, storage<alternative>,
+                        factory<function<&make>>>();
+  EXPECT_EQ(std::get<int>(runtime.construct<alternative>()), 7);
+
+  static_container<bindings<
+      bind<scope<shared>, storage<alternative>, factory<function<&make>>>>>
+      fixed;
+  EXPECT_EQ(std::get<int>(fixed.construct<alternative>()), 7);
+}

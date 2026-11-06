@@ -51,6 +51,10 @@ class Leaf(Dimension):
     """The type a registration stores, by the operations it supports."""
     COPYABLE = "copyable"
     MOVE_ONLY = "move_only"
+    # Can be neither copied nor moved.
+    IMMOVABLE = "immovable"
+    # Has no default constructor: only its factory makes it.
+    FACTORY = "factory"
     # Stores a copyable leaf, requested as its abstract interface.
     INTERFACE = "interface"
 

@@ -150,6 +150,14 @@ public:
         scope, [&](void *ptr) { new (ptr) T(std::forward<Args>(args)...); });
   }
 
+  // Constructs the T that make returns in place, so that a T that can be
+  // neither copied nor moved is placed too.
+  template <typename T, typename Make>
+  T &construct_from(construction_scope scope, Make &&make) {
+    return Backend::template construct_storage<T>(
+        scope, [&](void *ptr) { new (ptr) T(std::forward<Make>(make)()); });
+  }
+
   template <typename T, typename DetectionMode, typename Container>
   T construct(construction_scope scope, Container &container) {
     using temporary_type = normalized_type_t<T>;

@@ -203,14 +203,37 @@ inline constexpr bool has_explicit_void_interface_v =
 template <typename Storage, typename TypeList, typename Type>
 struct registration_requirements;
 
+} // namespace detail
+
+struct external;
+
+namespace detail {
+// An external scope keeps a copy of a value it is given, so the value has to
+// be copied or moved; a reference or a pointer is kept as itself.
+template <typename Storage, typename Type>
+inline constexpr bool given_value_is_kept_v = [] {
+  if constexpr (!std::is_same_v<typename Storage::tag_type, external> ||
+                std::is_reference_v<Type> || std::is_pointer_v<Type>) {
+    return true;
+  } else {
+    return std::is_move_constructible_v<Type> ||
+           std::is_copy_constructible_v<Type>;
+  }
+}();
+
 template <typename Storage, typename Type, typename... TypeInterfaces>
 struct registration_requirements<Storage, type_list<TypeInterfaces...>, Type> {
   static constexpr bool valid =
+      given_value_is_kept_v<Storage, Type> &&
       (interface_registration_requirements<Storage, TypeInterfaces,
                                            Type>::valid &&
        ...);
 
   static constexpr void assert_valid() {
+    static_assert(given_value_is_kept_v<Storage, Type>,
+                  "an external scope keeps a copy of the value it is given; "
+                  "a value that can be neither copied nor moved is given by "
+                  "reference, storage<T &>, or by pointer");
     (interface_registration_requirements<Storage, TypeInterfaces,
                                          Type>::assert_valid(),
      ...);

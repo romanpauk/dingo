@@ -64,6 +64,46 @@ struct move_only_leaf : leaf_interface {
   int value() const override { return 7; }
 };
 
+// A leaf that can be neither copied nor moved.
+struct immovable_leaf : leaf_interface {
+  immovable_leaf() = default;
+  immovable_leaf(const immovable_leaf &) = delete;
+  immovable_leaf &operator=(const immovable_leaf &) = delete;
+  int value() const override { return 7; }
+};
+
+// What a factory makes a factory leaf of.
+struct made {};
+
+// A leaf without a default constructor: only its factory makes it.
+struct factory_leaf : leaf_interface {
+  explicit factory_leaf(made) {}
+  int value() const override { return 7; }
+};
+
+// The arguments a leaf is constructed with: none, or what its factory makes it
+// of. A stored type around a leaf is constructed from them in place.
+template <typename T> struct leaf_arguments {
+  template <typename Fn> static decltype(auto) apply(Fn &&fn) { return fn(); }
+};
+
+template <> struct leaf_arguments<factory_leaf> {
+  template <typename Fn> static decltype(auto) apply(Fn &&fn) {
+    return fn(made{});
+  }
+};
+
+// The leaf of a stored type, without its arrays, handles and wrappers.
+template <typename T, typename = void> struct leaf_type {
+  using type = std::remove_cv_t<std::remove_all_extents_t<T>>;
+};
+
+// A T made in place of the arguments of its leaf.
+template <typename T> T made_value() {
+  return leaf_arguments<typename leaf_type<T>::type>::apply(
+      [](auto... args) { return T(args...); });
+}
+
 // The second alternative of a stored variant.
 struct other {};
 
@@ -71,55 +111,108 @@ struct other {};
 struct tag {};
 
 // The traits of a container with a lookup by key for each of Interfaces.
+// The keyed lookups of interfaces, one for each lookup domain, which is the
+// normalized interface: an array and its element are one.
+template <typename Domains, typename... Interfaces> struct keyed_lookups;
+
+template <typename... Domains>
+struct keyed_lookups<dingo::type_list<Domains...>> {
+  using type = dingo::lookups<dingo::associative<std::size_t, Domains>...>;
+};
+
+template <typename... Domains, typename Interface, typename... Interfaces>
+struct keyed_lookups<dingo::type_list<Domains...>, Interface, Interfaces...>
+    : std::conditional_t<
+          (std::is_same_v<Domains, dingo::normalized_type_t<Interface>> || ...),
+          keyed_lookups<dingo::type_list<Domains...>, Interfaces...>,
+          keyed_lookups<
+              dingo::type_list<Domains..., dingo::normalized_type_t<Interface>>,
+              Interfaces...>> {};
+
 template <typename Base, typename... Interfaces> struct keyed_traits : Base {
   using lookup_definition_type =
-      dingo::lookups<dingo::associative<std::size_t, Interfaces>...>;
+      typename keyed_lookups<dingo::type_list<>, Interfaces...>::type;
 };
 
 // An instance of a stored type, for the scopes that are given one.
 template <typename Stored> struct instance {
   static Stored make() {
     if constexpr (std::is_pointer_v<Stored>) {
-      static std::remove_pointer_t<Stored> object{};
+      static std::remove_pointer_t<Stored> object =
+          made_value<std::remove_pointer_t<Stored>>();
       return &object;
     } else if constexpr (std::is_array_v<Stored>) {
       static_assert(!std::is_array_v<Stored>, "an array is given by reference");
     } else if constexpr (is_alternative_type_v<Stored>) {
-      return Stored(std::in_place_index<0>);
+      using leaf = std::variant_alternative_t<0, Stored>;
+      return leaf_arguments<leaf>::apply(
+          [](auto... args) { return Stored(std::in_place_index<0>, args...); });
     } else {
-      return Stored{};
+      return made_value<Stored>();
     }
   }
 };
 
 template <typename T> struct instance<std::shared_ptr<T>> {
   static std::shared_ptr<T> make() {
+    using element = std::remove_extent_t<T>;
     if constexpr (std::is_array_v<T>) {
-      return std::shared_ptr<T>(new std::remove_extent_t<T>[2]);
+      return leaf_arguments<element>::apply([](auto... args) {
+        return std::shared_ptr<T>(
+            new element[2]{element(args...), element(args...)});
+      });
     } else {
-      return std::make_shared<T>();
+      return leaf_arguments<T>::apply(
+          [](auto... args) { return std::make_shared<T>(args...); });
     }
   }
 };
 
 template <typename T> struct instance<std::unique_ptr<T>> {
   static std::unique_ptr<T> make() {
+    using element = std::remove_extent_t<T>;
     if constexpr (std::is_array_v<T>) {
-      return std::unique_ptr<T>(new std::remove_extent_t<T>[2]);
+      return leaf_arguments<element>::apply([](auto... args) {
+        return std::unique_ptr<T>(
+            new element[2]{element(args...), element(args...)});
+      });
     } else {
-      return std::make_unique<T>();
+      return leaf_arguments<T>::apply(
+          [](auto... args) { return std::make_unique<T>(args...); });
     }
   }
 };
 
 template <typename T> struct instance<std::optional<T>> {
-  static std::optional<T> make() { return std::optional<T>(std::in_place); }
+  static std::optional<T> make() {
+    return leaf_arguments<T>::apply(
+        [](auto... args) { return std::optional<T>(std::in_place, args...); });
+  }
+};
+
+// A new instance of a stored type, for the factory of a registration whose
+// stored type has no default value: a pointer is to a new object, which the
+// caller owns.
+template <typename Stored> struct fresh : instance<Stored> {};
+
+template <typename T> struct fresh<T *> {
+  static T *make() {
+    return leaf_arguments<T>::apply(
+        [](auto... args) { return new T(args...); });
+  }
 };
 
 // An object an external scope refers to.
 template <typename T> T &external_object() {
-  static T object{};
-  return object;
+  if constexpr (std::is_array_v<T>) {
+    using element = std::remove_extent_t<T>;
+    static_assert(std::extent_v<T> == 2, "a probe array has two rows");
+    static T object = {made_value<element>(), made_value<element>()};
+    return object;
+  } else {
+    static T object = made_value<T>();
+    return object;
+  }
 }
 
 // Whether the library accepts registering Registration. A registration it
