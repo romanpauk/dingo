@@ -100,8 +100,11 @@ T resolve_binding_request(construction_scope scope, Binding &binding,
       cache_key));
 }
 
+// A wrapper made of the normalized value is a new object, so a reference
+// request is not made of it.
 template <typename Request>
 inline constexpr bool can_construct_from_normalized_request_v =
+    !std::is_reference_v<Request> &&
     type_traits<std::decay_t<Request>>::enabled &&
     !std::is_pointer_v<std::decay_t<Request>> &&
     !std::is_same_v<normalized_type_t<Request>, std::decay_t<Request>>;
@@ -122,6 +125,7 @@ template <typename Request,
           typename ResolvedRequest = request_result_t<Request, true>>
 inline constexpr bool construct_factory_request_v =
     constructible_normalized_v<Request> &&
+    !std::is_lvalue_reference_v<ResolvedRequest> &&
     (std::is_pointer_v<ResolvedRequest> ||
      (type_traits<ResolvedRequest>::enabled &&
       !std::is_reference_v<ResolvedRequest>) ||

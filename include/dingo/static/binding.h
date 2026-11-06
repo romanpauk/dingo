@@ -188,24 +188,21 @@ public:
   template <typename InterfaceBinding, typename Request, typename Host,
             typename Context>
   Request resolve(construction_scope scope, Host &host, Context &context) {
-    if constexpr (!std::is_reference_v<Request> &&
-                  !std::is_pointer_v<Request>) {
+    using resolution =
+        typename static_request_resolution<Request, InterfaceBinding,
+                                           Context>::type;
+    if constexpr (std::is_void_v<resolution>) {
+      not_convertible<Request, InterfaceBinding>(context);
+    } else if constexpr (!std::is_reference_v<Request> &&
+                         !std::is_pointer_v<Request>) {
       return consume<InterfaceBinding, Request>(
           scope, host, context, [](auto &&instance) -> Request {
             return Request(std::forward<decltype(instance)>(instance));
           });
     } else {
-      using resolution =
-          typename static_request_resolution<Request, InterfaceBinding,
-                                             Context>::type;
-      if constexpr (std::is_void_v<resolution>) {
-        not_convertible<Request, InterfaceBinding>(context);
-      } else {
-        return convert_resolved_binding<Request>(
-            activation(scope, host)
-                .template resolve_request_address<Request, resolution>(
-                    context));
-      }
+      return convert_resolved_binding<Request>(
+          activation(scope, host)
+              .template resolve_request_address<Request, resolution>(context));
     }
   }
 

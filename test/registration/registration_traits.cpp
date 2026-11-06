@@ -1853,3 +1853,66 @@ TEST(type_registration_test, unique_optional_is_moved_out_of) {
   static_assert(
       std::is_same_v<decltype(runtime.resolve<move_only &&>()), move_only>);
 }
+
+namespace operation_test {
+struct A {
+  int value() const { return 7; }
+};
+struct tag {};
+// Takes its dependency as an annotated rvalue reference.
+struct rvalue_consumer {
+  explicit rvalue_consumer(annotated<A &&, tag> init) {
+    A taken = static_cast<A &&>(init);
+    value = taken.value();
+  }
+  int value = 0;
+};
+} // namespace operation_test
+
+// construct<T &>() refers to an instance as resolve<T &>() does; nothing is
+// constructed for it.
+TEST(type_registration_test, construct_of_reference_resolves_it) {
+  using operation_test::A;
+
+  container<> kept;
+  kept.register_type<scope<shared>, storage<std::optional<A>>>();
+  EXPECT_EQ(&kept.construct<A &>(), &kept.resolve<A &>());
+  EXPECT_EQ(&kept.construct<std::optional<A> &>(),
+            &kept.resolve<std::optional<A> &>());
+
+  container<> fresh;
+  fresh.register_type<scope<unique>, storage<A>>();
+  EXPECT_THROW(fresh.construct<A &>(), type_not_convertible_exception);
+}
+
+// A dependency of an annotated rvalue reference is made of the rvalue.
+TEST(type_registration_test, annotated_rvalue_reference_dependency) {
+  using operation_test::A;
+  using operation_test::rvalue_consumer;
+  using operation_test::tag;
+
+  container<> runtime;
+  runtime.register_type<scope<unique>, storage<A>,
+                        interfaces<annotated<A, tag>>>();
+  runtime.register_type<
+      scope<unique>, storage<rvalue_consumer>,
+      factory<constructor<rvalue_consumer(annotated<A &&, tag>)>>>();
+  EXPECT_EQ(runtime.resolve<rvalue_consumer>().value, 7);
+}
+
+// A request with a key in its type is looked up under that key by the caller
+// of a runtime container, as it is for a dependency.
+TEST(type_registration_test, runtime_request_keyed_by_type) {
+  using operation_test::A;
+  using key = key_type<std::size_t, 1>;
+  struct traits : runtime_container_traits {
+    using lookup_definition_type = lookups<associative<std::size_t, A>>;
+  };
+
+  container<traits> runtime;
+  runtime.register_type<scope<shared>, storage<A>, interfaces<A>>(
+      key_value{std::size_t(1)});
+  A &kept = runtime.resolve<dependency<A &, key>>();
+  EXPECT_EQ(&kept, &runtime.resolve<A &>(std::size_t(1)));
+  EXPECT_EQ((runtime.construct<dependency<A, key>>().value()), 7);
+}

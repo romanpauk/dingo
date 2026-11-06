@@ -331,6 +331,16 @@ private:
 // lookup_key), count_collection<T>(lookup_key) and with_context(fn), which
 // runs fn with a fresh resolution context, and is the host of
 // request_resolution.
+// Whether a request without a runtime key carries a key in its type.
+template <typename T, typename IdType>
+inline constexpr bool keyed_by_type_v = [] {
+  if constexpr (is_none_v<std::decay_t<IdType>> && is_selected_v<T>) {
+    return is_value_selector_v<selected_selector_t<T>>;
+  } else {
+    return false;
+  }
+}();
+
 template <typename Container> class container_interface {
   template <typename Collection, typename Fn>
   using collection_insert_invocable =
@@ -340,12 +350,20 @@ template <typename Container> class container_interface {
   Container &self() { return static_cast<Container &>(*this); }
 
 public:
+  // A request with a key in its type, dependency<T, key_type<Key, Value>>, is
+  // looked up under that key, as a dependency of the request is.
   template <typename T, typename IdType = none_t,
             typename R = request_result_t<T, true>,
             std::enable_if_t<!is_lookup_key_v<std::decay_t<IdType>>, int> = 0>
   DINGO_ALWAYS_INLINE R resolve(IdType &&id = IdType()) {
-    return self().template resolve_entry<request_type<T>, R>(
-        make_lookup_key(std::forward<IdType>(id)));
+    if constexpr (keyed_by_type_v<T, IdType>) {
+      (void)id;
+      return resolve<selected_type_t<T>>(
+          make_lookup_key(selected_selector_t<T>{}));
+    } else {
+      return self().template resolve_entry<request_type<T>, R>(
+          make_lookup_key(std::forward<IdType>(id)));
+    }
   }
 
   template <typename T, typename LookupKey,
@@ -379,13 +397,23 @@ public:
             scope, context, origin, std::move(key));
   }
 
+  // A reference is not constructed: it refers to an instance the container
+  // resolves, as resolve<T>() does. Nor is a request with a key in its type:
+  // the key names a binding.
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
             typename R = request_result_t<T, true>>
   DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {
-    return self().with_context([&](auto &context) -> R {
-      return request_resolution::construct<request_type<T>, R>(
-          self(), ephemeral_scope, context, factory);
-    });
+    if constexpr ((std::is_lvalue_reference_v<R> ||
+                   keyed_by_type_v<T, none_t>) &&
+                  std::is_same_v<Factory, constructor<normalized_type_t<T>>>) {
+      (void)factory;
+      return resolve<T>();
+    } else {
+      return self().with_context([&](auto &context) -> R {
+        return request_resolution::construct<request_type<T>, R>(
+            self(), ephemeral_scope, context, factory);
+      });
+    }
   }
 
   template <typename T> T construct_collection() {

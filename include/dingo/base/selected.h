@@ -69,10 +69,41 @@ private:
   T &value_;
 };
 
+// An rvalue reference: made of the rvalue the request resolves to, and given
+// back as one.
+template <typename T, typename Selector>
+struct selected_base<T &&, Selector, false> {
+  selected_base(const selected_base &) = default;
+  selected_base(selected_base &&) = default;
+  selected_base &operator=(const selected_base &) = default;
+  selected_base &operator=(selected_base &&) = default;
+
+  explicit selected_base(T &&value) : value_(value) {}
+
+  operator T &&() { return std::move(value_); }
+  operator T &() { return value_; }
+
+private:
+  T &value_;
+};
+
 template <typename T, typename Selector>
 struct selected_base<T, Selector, false> : selected_base<T &, Selector, false> {
   explicit selected_base(T &value)
       : selected_base<T &, Selector, false>(value) {}
+
+  // A value that can be neither moved nor copied is not kept, and a reference
+  // to the temporary it is made of would outlive it.
+  template <typename U = T>
+  explicit selected_base(std::add_rvalue_reference_t<U>)
+      : selected_base<T &, Selector, false>(dangling()) {
+    static_assert(!std::is_same_v<U, U>,
+                  "an annotated or keyed value that can be neither moved nor "
+                  "copied cannot be passed by value; request it by reference");
+  }
+
+private:
+  static T &dangling();
 };
 
 template <typename T, typename Selector>

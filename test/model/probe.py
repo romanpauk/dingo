@@ -105,6 +105,13 @@ BINDINGS = {
 
 KEY = "dingo::key_type<std::size_t, 1>"
 
+# How a request is made:
+# - resolve: by the caller of the container
+# - dependency: as the dependency of the constructor of a unique class
+# - invoke: as the parameter of a callable the container invokes
+# - construct: as a new object the container constructs
+OPERATIONS = ("resolve", "dependency", "invoke", "construct")
+
 
 @dataclass(frozen=True)
 class Registration:
@@ -113,11 +120,12 @@ class Registration:
     form: str
     leaf: str
     binding: str
+    operation: str = "resolve"
 
     @property
     def name(self):
-        return "__".join(
-            (self.container, self.scope, self.form, self.leaf, self.binding))
+        return "__".join((self.container, self.scope, self.form, self.leaf,
+                          self.binding, self.operation))
 
     @property
     def leaf_type(self):
@@ -138,6 +146,10 @@ class Registration:
     def arguments(self):
         arguments = (
             f"dingo::scope<dingo::{self.scope}>, dingo::storage<{self.stored}>")
+        if self.form.endswith("array_handle") and self.scope != "external":
+            # A dynamic array has no size the default factory can make.
+            arguments += (f", dingo::factory<dingo::function<"
+                          f"&instance<{self.stored}>::make>>")
         if self.traits["interface"]:
             interface = self.spell(self.traits["interface"])
             arguments += f", dingo::interfaces<{interface}>"
@@ -159,7 +171,7 @@ class Registration:
 
     def cell(self, request):
         return "/".join((self.container, self.scope, self.form, self.leaf,
-                         self.binding, request))
+                         self.binding, self.operation, request))
 
     def container_type(self):
         base = f"dingo::{self.container}_container_traits"
@@ -189,14 +201,42 @@ class Registration:
         return (f"c.template register_type<{self.arguments}>"
                 f"({', '.join(args)});")
 
-    def resolve(self, request):
+    def selected(self, request):
+        """The request as a dependency names it: with its annotation or key."""
         if self.binding == "annotated":
-            request = f"dingo::annotated<{request}, tag>"
+            return f"dingo::annotated<{request}, tag>"
         if self.binding == "keyed":
-            if self.container == "runtime":
-                return f"c.template resolve<{request}>(std::size_t(1))"
-            request = f"dingo::dependency<{request}, {KEY}>"
-        return f"c.template resolve<{request}>()"
+            return f"dingo::dependency<{request}, {KEY}>"
+        return request
+
+    def resolve(self, request):
+        """The expression that makes the request in container c."""
+        selected = self.selected(request)
+        if self.operation == "dependency":
+            return f"c.template resolve<consumer<{selected}>>()"
+        if self.operation == "invoke":
+            return (f"c.invoke([]({selected} arg) {{ return received<"
+                    f"{selected}>(pass_on<{selected}>(arg)); }})")
+        if self.operation == "construct":
+            return f"c.template construct<{selected}>()"
+        if self.binding == "keyed" and self.container == "runtime":
+            return f"c.template resolve<{request}>(std::size_t(1))"
+        return f"c.template resolve<{selected}>()"
+
+    def probed_container(self, request):
+        """The container a request is probed in, within run<Container>."""
+        if self.operation == "dependency":
+            return (f"typename with_consumer<Container, "
+                    f"{self.selected(request)}>::type")
+        return "Container"
+
+    def setup(self, request):
+        """The statements that register what a request needs in c."""
+        statements = self.register()
+        if self.operation == "dependency":
+            statements += (
+                f" register_consumer<{self.selected(request)}>(c);")
+        return statements
 
     def source(self, requests):
         """The unit that probes the requests, and the request each of its
@@ -214,7 +254,12 @@ class Registration:
             "  if constexpr (registrable<dingo::type_registration<"
             f"{self.static_arguments}>, {static}>()) {{",
         ]
-        keeps = "nothing" if self.scope == "unique" else "instance"
+        if self.scope == "unique":
+            keeps = "nothing"
+        elif self.operation == "construct":
+            keeps = "addresses"
+        else:
+            keeps = "instance"
         if self.given():
             # What the scope is given outlives the probes; make it first, so
             # that they do not count it as leaked.
@@ -225,9 +270,9 @@ class Registration:
             owners.update(
                 {len(lines) + offset: request for offset in range(1, 5)})
             lines += [
-                "    probe<Container>(",
+                f"    probe<{self.probed_container(request)}>(",
                 f'        "{self.cell(request)}", keeps::{keeps},',
-                f"        [](auto &c) {{ {self.register()} }},",
+                f"        [](auto &c) {{ {self.setup(request)} }},",
                 f"        [](auto &c) -> decltype(auto) {{ return {resolve}; }});",
             ]
         lines.append("  } else {")
@@ -251,8 +296,9 @@ def registrations():
             for form, _ in STORED:
                 for leaf in LEAVES:
                     for binding in BINDINGS:
-                        yield Registration(container, scope, form, leaf,
-                                           binding)
+                        for operation in OPERATIONS:
+                            yield Registration(container, scope, form, leaf,
+                                               binding, operation)
 
 
 ERROR = re.compile(r"error: (.*)")
@@ -413,7 +459,8 @@ MARKS = {
     "exception": "exc",
 }
 
-DIMENSIONS = ("container", "scope", "form", "leaf", "binding", "request")
+DIMENSIONS = ("container", "scope", "form", "leaf", "binding", "operation",
+              "request")
 
 DEFECTS = ("does_not_compile", "crashed", "violated")
 
@@ -475,25 +522,23 @@ def write_report(path, cells):
     ]
     for dimension in DIMENSIONS[:-1]:
         lines += counts_table(cells, dimension)
-    for container in CONTAINERS:
-        for leaf in LEAVES:
-            for binding, traits in BINDINGS.items():
-                lines += [
-                    f"## {container} container, {leaf} leaf, {binding} "
-                    "binding", "",
-                    "| scope / stored | " +
-                    " | ".join(f"`{r}`" for r, _ in REQUESTS) + " |",
-                    "|---|" + "---|" * len(REQUESTS),
-                ]
-                for scope in SCOPES:
-                    for form, _ in STORED:
-                        unit = Registration(container, scope, form, leaf,
-                                            binding)
-                        row = [table.get(unit.cell(r), "?")
-                               for r, _ in unit.requests()]
-                        lines.append(f"| {scope} / {form} | " +
-                                     " | ".join(row) + " |")
-                lines.append("")
+    for container, leaf, binding, operation in (
+            (c, l, b, o) for c in CONTAINERS for l in LEAVES for b in BINDINGS
+            for o in OPERATIONS):
+        lines += [
+            f"## {container} container, {leaf} leaf, {binding} binding, "
+            f"{operation}", "",
+            "| scope / stored | " +
+            " | ".join(f"`{r}`" for r, _ in REQUESTS) + " |",
+            "|---|" + "---|" * len(REQUESTS),
+        ]
+        for scope in SCOPES:
+            for form, _ in STORED:
+                unit = Registration(container, scope, form, leaf, binding,
+                                    operation)
+                row = [table.get(unit.cell(r), "?") for r, _ in unit.requests()]
+                lines.append(f"| {scope} / {form} | " + " | ".join(row) + " |")
+        lines.append("")
     lines += ["## Container disagreements", ""]
     lines += [
         f"- `{rest}`: " + ", ".join(f"{c} {o}" for c, o in by.items())

@@ -89,13 +89,16 @@ its own time, excluding the instantiations nested in it.
 ## Model Probe
 
 [`test/model/probe.py`](../test/model/probe.py) asks the library what every
-combination of container, scope, stored form, leaf, binding and request does.
-Nothing in it decides what should work: each registration is compiled into a
-program with [`test/model/probe.h`](../test/model/probe.h), which registers it,
-resolves each request twice and records the outcome. A request the library
-rejects at compile time is recorded with the message of its `static_assert`: the
-compiler names the requests that fail by their lines in the program, and the
-others are compiled again without them. The header is precompiled once.
+combination of container, scope, stored form, leaf, binding, operation and
+request does. The operations make the request as the caller of `resolve`, as the
+dependency of a constructor, as the parameter of an invoked callable, and with
+`construct`. Nothing in it decides what should work: each registration is
+compiled into a program with [`test/model/probe.h`](../test/model/probe.h),
+which registers it, resolves each request twice and records the outcome. A
+request the library rejects at compile time is recorded with the message of its
+`static_assert`: the compiler names the requests that fail by their lines in the
+program, and the others are compiled again without them. The header is
+precompiled once.
 
 A resolved request is also checked: its result has to reach the registered leaf,
 a scope that keeps its instance has to return the same one by reference, a
