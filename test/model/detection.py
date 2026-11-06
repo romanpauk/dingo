@@ -33,7 +33,8 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent))
 
 from generator import driver, report  # noqa: E402
-from generator.detection import disagreements, probe_unit, units  # noqa: E402
+from generator.detection import (apply_limitations,  # noqa: E402
+                                 disagreements, probe_unit, units)
 
 DIMENSIONS = ("family", "container", "provider", "leaf", "selection", "kind",
               "operation", "request")
@@ -62,6 +63,10 @@ def main():
     parser.add_argument(
         "--only", default="",
         help="probe only the units whose name contains this text")
+    parser.add_argument(
+        "--cover", choices=("all", "pairs"), default="all",
+        help="make the classes over every leaf, selection, kind and provider, "
+        "or over those that hold every pair of their values")
     options = parser.parse_args()
     options.work.mkdir(parents=True, exist_ok=True)
     flags = (shlex.split(options.flags) +
@@ -69,7 +74,8 @@ def main():
     flags = driver.precompile_header(options.compiler, flags, options.work,
                                      "detection.h") + flags
 
-    selected = [unit for unit in units() if options.only in unit.name]
+    selected = [unit for unit in units(options.cover == "pairs")
+                if options.only in unit.name]
     # The costliest first: the runtime container's.
     selected.sort(key=lambda unit: unit.container_name != "runtime")
     cells = []
@@ -78,7 +84,7 @@ def main():
                 lambda unit: probe_unit(options.compiler, flags, options.work,
                                         unit), selected):
             cells += outcomes
-    cells = report.write(options.output, cells)
+    cells = report.write(options.output, apply_limitations(cells))
     disagreeing = disagreements(cells)
     write_report(options.output.with_suffix(".md"), cells, disagreeing)
     return report.summarize(cells, disagreeing,

@@ -5,9 +5,10 @@ what constructing them does."""
 from dataclasses import dataclass
 from typing import Optional
 
-from . import driver
-from .dimensions import (Construction, Container, Detection, Kind, Leaf,
-                         Making, Scope, Selection, StoredForm)
+from . import cover, driver
+from .dimensions import (Category, Construction, Container, Detection, Kind,
+                         Leaf, Making, Outcome, Scope, Selection, Shape,
+                         StoredForm)
 from .model import Probe, grammar, interface
 
 # The interface a parameter is a shape of, by the leaf it is resolved from.
@@ -120,7 +121,13 @@ class Unit:
         return driver.render("detection.cpp.j2", unit=self, probes=probes)
 
 
-def units():
+def units(cover_pairs=False):
+    """Every unit; with cover_pairs, the units that make classes over the
+    combinations of leaf, selection, kind and provider that hold every pair
+    of their values, in both containers. What detection says is probed for
+    every class."""
+    covered = cover.covering_pairs(list(INTERFACES), Selection, Kind,
+                                   PROVIDERS) if cover_pairs else None
     found = []
     for leaf in INTERFACES:
         for selection in Selection:
@@ -128,7 +135,9 @@ def units():
                 found.append(Unit(leaf, selection, kind))
                 found += [Unit(leaf, selection, kind, container, provider)
                           for container in Container
-                          for provider in PROVIDERS]
+                          for provider in PROVIDERS
+                          if covered is None or
+                          (leaf, selection, kind, provider) in covered]
     return found
 
 
@@ -144,6 +153,89 @@ def probe_unit(compiler, flags, directory, unit):
                                           unit.name, probes)
 
 
+@dataclass(frozen=True)
+class Limitation:
+    """A known limitation of detection: the parameters it holds for, the
+    detections that report a class wrongly, the detected constructions that
+    make the class differently from its explicit constructor, and why. A
+    parameter is a shape in a category, of a request plain or selected."""
+    reason: str
+    shapes: frozenset
+    categories: frozenset
+    selections: frozenset
+    misdetected_by: frozenset
+    made_differently_by: frozenset
+
+    def holds(self, selection, shape, category):
+        return (selection in self.selections and shape in self.shapes and
+                category in self.categories)
+
+
+LIMITATIONS = (
+    Limitation(
+        "a value whose type converts from anything its element can be made "
+        "of, such as std::optional: its converting constructor and the "
+        "detection argument's conversion to the type cannot be ranked, so no "
+        "constructor is detected",
+        frozenset(shape for shape in Shape if shape.converts),
+        frozenset({Category.VALUE, Category.CONST,
+                   Category.RVALUE_REFERENCE}),
+        frozenset({Selection.PLAIN}),
+        frozenset({Detection.SHAPE, Detection.SIGNATURE}),
+        frozenset({Construction.SHAPE, Construction.SIGNATURE})),
+    Limitation(
+        "an rvalue-reference parameter: detection cannot tell it from a value "
+        "one, so the argument is a value and the dependency it requests is "
+        "the value, not an rvalue; signature detection recovers the value",
+        frozenset(Shape),
+        frozenset({Category.RVALUE_REFERENCE}),
+        frozenset({Selection.PLAIN}),
+        frozenset({Detection.SIGNATURE}),
+        frozenset({Construction.SHAPE, Construction.SIGNATURE})),
+)
+
+REQUESTS = {category.value.replace("X", shape.value): (shape, category)
+            for shape in Shape for category in Category}
+
+
+def limitations(cell):
+    """The known limitations a cell is made with: those whose detection
+    reports its class wrongly, for a detection cell, and those whose
+    construction makes it differently, for a construction cell."""
+    parts = cell.split("/")
+    selection = Selection(parts[4])
+    first, rest = parts[6].split("_", 1)
+    shape, category = REQUESTS[parts[7]]
+    found = [known for known in LIMITATIONS
+             if known.holds(selection, shape, category)]
+    if first == "detect":
+        return [known for known in found
+                if Detection(rest) in known.misdetected_by]
+    return [known for known in found
+            if first in {construction.value
+                         for construction in known.made_differently_by}]
+
+
+def apply_limitations(cells):
+    """Records a misdetection a known limitation says as limited, and a
+    detection a known limitation says is misdetected as a stale
+    limitation."""
+    for cell in cells:
+        if not cell["cell"].split("/")[6].startswith("detect_"):
+            continue
+        known = limitations(cell["cell"])
+        if not known:
+            continue
+        reasons = "; ".join(limitation.reason for limitation in known)
+        if cell["outcome"] == Outcome.MISDETECTED:
+            cell["outcome"] = Outcome.LIMITED.value
+            cell["error"] = f"{reasons}; {cell['error']}"
+        elif cell["outcome"] == Outcome.DETECTED:
+            cell["outcome"] = Outcome.STALE_LIMITATION.value
+            cell["error"] = f"no longer limited: {reasons}"
+    return cells
+
+
 def disagreements(cells):
     """The makings with a detected constructor whose outcome is not that of
     the explicit one."""
@@ -153,6 +245,10 @@ def disagreements(cells):
         parts = cell.split("/")
         construction, making = parts[6].split("_", 1)
         if construction not in (Construction.SHAPE, Construction.SIGNATURE):
+            continue
+        # A class a known limitation makes differently is not made as the
+        # explicit constructor makes it.
+        if limitations(cell):
             continue
         reference = Make(Construction(construction), Making(making)).reference
         explicit = "/".join(parts[:6] + [reference.name] + parts[7:])

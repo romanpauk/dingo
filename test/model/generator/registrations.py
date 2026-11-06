@@ -3,7 +3,7 @@ registration binds, made through every entry point, in every position."""
 
 from dataclasses import dataclass
 
-from . import driver
+from . import cover, driver
 from .dimensions import (Binding, Container, Entry, Keeps, Leaf, Position,
                          Scope, StoredForm)
 from .model import Probe, grammar, interface
@@ -122,24 +122,8 @@ def registrations():
 
 def covering_pairs():
     """The registrations, as (scope, form, leaf, binding), that together hold
-    every pair of values of two of these dimensions: a pairwise covering
-    array, chosen greedily and so the same on every run."""
-    combinations = [(scope, form, leaf, binding) for scope in Scope
-                    for form in StoredForm for leaf in LEAVES
-                    for binding in Binding]
-
-    def pairs(combination):
-        return {(i, combination[i], j, combination[j])
-                for i in range(len(combination))
-                for j in range(i + 1, len(combination))}
-
-    uncovered = set().union(*(pairs(c) for c in combinations))
-    chosen = []
-    while uncovered:
-        best = max(combinations, key=lambda c: len(pairs(c) & uncovered))
-        chosen.append(best)
-        uncovered -= pairs(best)
-    return set(chosen)
+    every pair of values of two of these dimensions."""
+    return cover.covering_pairs(Scope, StoredForm, LEAVES, Binding)
 
 
 def probe_registration(compiler, flags, directory, registration, position):

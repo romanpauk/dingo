@@ -41,19 +41,30 @@ function(configure_quality_targets out_check_targets)
   )
   # Detects the constructor of every class generated around a request of the
   # grammar, makes the class, and fails on a defect or on a class that a
-  # detected constructor makes differently from the explicit one. Not part of
-  # check until the defects it finds are fixed.
+  # detected constructor makes differently from the explicit one.
+  # detection-check makes the classes over a pairwise cover of leaf,
+  # selection, kind and provider, and is part of check with GCC and clang;
+  # detection-check-full makes them over all.
   add_custom_target(detection-check
-    COMMENT "Probing constructor detection"
+    COMMENT "Probing constructor detection over a pairwise cover"
     COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/test/model/detection.py
       ${PROJECT_BINARY_DIR}/detection/baseline.json
       --work ${PROJECT_BINARY_DIR}/detection/units
+      --compiler ${CMAKE_CXX_COMPILER} --cover pairs ${model_flags}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    USES_TERMINAL
+  )
+  add_custom_target(detection-check-full
+    COMMENT "Probing constructor detection"
+    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/test/model/detection.py
+      ${PROJECT_BINARY_DIR}/detection-full/baseline.json
+      --work ${PROJECT_BINARY_DIR}/detection-full/units
       --compiler ${CMAKE_CXX_COMPILER} ${model_flags}
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     USES_TERMINAL
   )
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    list(APPEND check_targets model-check)
+    list(APPEND check_targets model-check detection-check)
   endif()
 
   # A report, not a check: it ranks the headers and never fails.

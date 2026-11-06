@@ -52,9 +52,11 @@ Run a quality target with `cmake --build build -t <target>`.
   and fails on a defect; it is part of `check` with GCC and clang, whose
   diagnostics it reads. See [Model Probe](#model-probe).
 - `model-check-full`: the same for every registration; not part of `check`.
-- `detection-check`: probes constructor detection over the request grammar. See
-  [Constructor Detection Probe](#constructor-detection-probe). Not part of
-  `check` until the defects it finds are fixed.
+- `detection-check`: probes constructor detection over the request grammar,
+  making the classes over a pairwise cover of leaf, selection, kind and
+  provider; it is part of `check` with GCC and clang. See
+  [Constructor Detection Probe](#constructor-detection-probe).
+- `detection-check-full`: the same over every combination; not part of `check`.
 
 The development tools are provided by the locked `uv` environment.
 
@@ -179,11 +181,22 @@ makes the class with the constructor an explicit factory names, the one shape
 detection finds and the one signature detection finds. A detected constructor
 has to make what the explicit one makes.
 
+The known limitations of detection are listed, with their reasons, in
+`LIMITATIONS` of
+[`test/model/generator/detection.py`](../test/model/generator/detection.py):
+each says which detections report a class wrongly and which detected
+constructions make it differently from its explicit constructor. A misdetection
+one of them describes is recorded as `limited`, and a construction one of them
+describes is not compared with the explicit constructor; a limitation whose
+misdetection no longer occurs is a defect, `stale_limitation`.
+
 ```bash
 cmake --build build -t detection-check
+cmake --build build -t detection-check-full
 ```
 
-writes `build/detection/baseline.json` and `baseline.md`.
+write `build/detection/baseline.json` and `build/detection-full/baseline.json`,
+each with a `baseline.md`.
 
 ## Generated Matrix Tests
 

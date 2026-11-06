@@ -22,6 +22,8 @@ MARKS = {
     Outcome.EXCEPTION: "exc",
     Outcome.DETECTED: "det",
     Outcome.MISDETECTED: "MIS",
+    Outcome.LIMITED: "lim",
+    Outcome.STALE_LIMITATION: "STALE",
 }
 
 

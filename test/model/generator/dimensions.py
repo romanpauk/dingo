@@ -87,6 +87,12 @@ class Shape(Dimension):
     def is_array(self):
         return self in (Shape.SHARED_ARRAY, Shape.UNIQUE_ARRAY)
 
+    @property
+    def converts(self):
+        """Whether a value of the shape converts from anything its element
+        can be made of, by a converting constructor."""
+        return self is Shape.OPTIONAL
+
 
 class Category(Dimension):
     """How a request takes a shape X."""
@@ -191,9 +197,14 @@ class Outcome(Dimension):
     UNREACHABLE = "unreachable"
     DETECTED = "detected"
     MISDETECTED = "misdetected"
+    # Misdetected as a known limitation says, and a known limitation that
+    # no longer occurs.
+    LIMITED = "limited"
+    STALE_LIMITATION = "stale_limitation"
 
     @property
     def is_defect(self):
         return self in (Outcome.DOES_NOT_COMPILE, Outcome.CRASHED,
                         Outcome.VIOLATED, Outcome.UNPROBED,
-                        Outcome.UNREACHABLE, Outcome.MISDETECTED)
+                        Outcome.UNREACHABLE, Outcome.MISDETECTED,
+                        Outcome.STALE_LIMITATION)
