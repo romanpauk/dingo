@@ -48,8 +48,8 @@ Run a quality target with `cmake --build build -t <target>`.
   report and is not part of `check`. See
   [Complexity Report](#complexity-report).
 - `model-check`: resolves every request of every registration in both containers
-  and fails on a defect; it compiles a few thousand programs, so it is not part
-  of `check`. See [Model Probe](#model-probe).
+  and fails on a defect; it compiles a program per registration, so it is not
+  part of `check`. See [Model Probe](#model-probe).
 
 The development tools are provided by the locked `uv` environment.
 
@@ -93,8 +93,9 @@ combination of container, scope, stored form, leaf, binding and request does.
 Nothing in it decides what should work: each registration is compiled into a
 program with [`test/model/probe.h`](../test/model/probe.h), which registers it,
 resolves each request twice and records the outcome. A request the library
-rejects at compile time is compiled on its own and recorded with the message of
-its `static_assert`.
+rejects at compile time is recorded with the message of its `static_assert`: the
+compiler names the requests that fail by their lines in the program, and the
+others are compiled again without them. The header is precompiled once.
 
 A resolved request is also checked: its result has to reach the registered leaf,
 a scope that keeps its instance has to return the same one by reference, a

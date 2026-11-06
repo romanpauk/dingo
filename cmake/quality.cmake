@@ -16,7 +16,7 @@ function(configure_quality_targets out_check_targets)
 
   # Resolves every request of every registration in both containers, writes
   # the outcome of each to model/baseline.md, and fails on a defect. It
-  # compiles a few thousand small programs, so it is not part of check.
+  # compiles a program per registration, so it is not part of check.
   add_custom_target(model-check
     COMMENT "Probing every registration and request"
     COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/test/model/probe.py
