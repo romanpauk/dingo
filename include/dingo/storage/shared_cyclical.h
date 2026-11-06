@@ -33,15 +33,21 @@ class shared_cyclical_storage;
 
 // Cells of shared_cyclical, which publishes the leaf U and a shared_ptr<U>
 // directly, whatever the registered shape.
-template <storage_form Form, typename U> struct shared_cyclical_requests {
+template <storage_form Form, typename Type, typename U>
+struct shared_cyclical_requests {
   using value_types = type_list<>;
   using lvalue_reference_types = type_list<U &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *>;
 };
 
-template <typename U>
-struct shared_cyclical_requests<storage_form::shared_handle, U> {
+// A bounded array publishes the lists of its form: its rows, and itself.
+template <typename Type, typename U>
+struct shared_cyclical_requests<storage_form::bounded_array, Type, U>
+    : scope_rule_requests<shared_cyclical, Type, U> {};
+
+template <typename Type, typename U>
+struct shared_cyclical_requests<storage_form::shared_handle, Type, U> {
   using value_types = type_list<std::shared_ptr<U>>;
   using lvalue_reference_types = type_list<U &, std::shared_ptr<U> &>;
   using rvalue_reference_types = type_list<>;
@@ -84,7 +90,7 @@ template <> struct scope_traits<shared_cyclical> {
   }
 
   template <storage_form Form, typename Type, typename U>
-  using requests = detail::shared_cyclical_requests<Form, U>;
+  using requests = detail::shared_cyclical_requests<Form, Type, U>;
 
   template <typename Type, typename StoredType, typename Factory,
             typename Conversions>
@@ -103,7 +109,8 @@ struct has_on_rollback<
                  std::declval<void *>()))>> : std::true_type {};
 
 // A shared_cyclical instance publishes its address when it is resolved, before
-// the object is constructed, so a cycle can close over it.
+// the object is constructed, so a cycle can close over it. A bounded array is
+// published by its first element.
 template <typename Type, typename StoredType, typename Factory>
 class storage_instance<shared_cyclical, Type, StoredType, Factory>
     : Factory, public shared_value<Type> {
@@ -111,20 +118,31 @@ public:
   template <typename... Args>
   storage_instance(Args &&...args) : Factory(std::forward<Args>(args)...) {}
 
-  Type *resolve() {
+  auto *resolve() {
     assert(!resolved_);
     resolved_ = true;
     return get();
   }
 
-  Type *get() const { return this->pointer(); }
+  auto *get() const {
+    if constexpr (std::is_array_v<Type>) {
+      return std::addressof((*this->pointer())[0]);
+    } else {
+      return this->pointer();
+    }
+  }
 
   template <typename Context, typename Container>
   void construct(construction_scope scope, Context &context,
                  Container &container) {
     assert(resolved_);
-    Factory::template construct<Type *>(this->storage(), scope, context,
+    if constexpr (std::is_array_v<Type>) {
+      Factory::template construct<Type>(this->storage(), scope, context,
                                         container);
+    } else {
+      Factory::template construct<Type *>(this->storage(), scope, context,
+                                          container);
+    }
     this->constructed();
   }
 

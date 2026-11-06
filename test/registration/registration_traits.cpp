@@ -1775,3 +1775,26 @@ TEST(type_registration_test, cyclical_scope_does_not_store_raw_pointers) {
   static_assert(!detail::has_storage_cell_v<shared_cyclical, A *>);
   static_assert(detail::has_storage_cell_v<shared, A *>);
 }
+
+// A kept optional is copied as its element or as itself.
+TEST(type_registration_test, kept_optional_is_copied_as_itself) {
+  using abstract_interface_test::A;
+
+  container<> runtime;
+  runtime.register_type<scope<shared>, storage<std::optional<A>>>();
+  std::optional<A> copy = runtime.resolve<std::optional<A>>();
+  ASSERT_TRUE(copy.has_value());
+  EXPECT_NE(&*copy, &*runtime.resolve<std::optional<A> &>());
+}
+
+// A cyclical bounded array is published by its first element, as a shared one.
+TEST(type_registration_test, cyclical_bounded_array_publishes_its_rows) {
+  struct A {};
+
+  container<> runtime;
+  runtime.register_type<scope<shared_cyclical>, storage<A[2]>>();
+  A *rows = runtime.resolve<A *>();
+  A(&whole)[2] = runtime.resolve<A(&)[2]>();
+  EXPECT_EQ(rows, &whole[0]);
+  EXPECT_EQ(rows, runtime.resolve<A *>());
+}

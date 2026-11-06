@@ -303,8 +303,9 @@ template <typename Wrapper>
 struct wrapper_storage_form<Wrapper, semantics::optional_value, true> {
   static constexpr storage_form form = storage_form::optional;
 
+  // A kept optional is copied as its element or as itself.
   template <typename U> struct borrowed {
-    using value_types = type_list<U>;
+    using value_types = type_list<U, exact_lookup<Wrapper>>;
     using lvalue_reference_types = type_list<U &, exact_lookup<Wrapper> &>;
     using pointer_types = type_list<U *, exact_lookup<Wrapper> *>;
   };
