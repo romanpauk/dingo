@@ -47,9 +47,11 @@ Run a quality target with `cmake --build build -t <target>`.
 - `complexity-report`: prints where the complexity of the headers is; it is a
   report and is not part of `check`. See
   [Complexity Report](#complexity-report).
-- `model-check`: resolves every request of every registration in both containers
+- `model-check`: resolves every request of the registrations that hold every
+  pair of values of scope, stored form, leaf and binding, in both containers,
   and fails on a defect; it is part of `check` with GCC and clang, whose
   diagnostics it reads. See [Model Probe](#model-probe).
+- `model-check-full`: the same for every registration; not part of `check`.
 
 The development tools are provided by the locked `uv` environment.
 
@@ -126,11 +128,16 @@ both accept.
 
 ```bash
 cmake --build build -t model-check
+cmake --build build -t model-check-full
 ```
 
-writes the outcome of every cell to `build/model/baseline.json` and a summary
-with a table per container, leaf and binding to `build/model/baseline.md`.
-`--only <text>` probes the registrations whose name contains the text.
+write the outcome of every cell they probe to `build/model/baseline.json` and
+`build/model-full/baseline.json`, and a summary with a table per container,
+leaf, binding and operation next to it, as `baseline.md`. `model-check` probes a
+pairwise covering array of the registrations (`--cover pairs`): every pair of
+values of two of scope, stored form, leaf and binding is probed in both
+containers, at an eighth of the cost. `--only <text>` probes the registrations
+whose name contains the text.
 
 ## Generated Matrix Tests
 

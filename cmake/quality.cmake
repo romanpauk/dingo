@@ -14,16 +14,28 @@ function(configure_quality_targets out_check_targets)
   )
   list(APPEND check_targets layers-check)
 
-  # Resolves every request of every registration in both containers, writes
-  # the outcome of each to model/baseline.md, and fails on a defect. It reads
-  # the diagnostics of GCC and clang, and is part of check with them.
+  # Resolves every request of registrations in both containers, writes the
+  # outcome of each to model*/baseline.md, and fails on a defect. It reads the
+  # diagnostics of GCC and clang. model-check probes the registrations that
+  # hold every pair of values of scope, stored form, leaf and binding, and is
+  # part of check with those compilers; model-check-full probes them all.
+  set(model_flags
+    "--flags=-std=c++17 -O0 -I${PROJECT_SOURCE_DIR}/include -I${PROJECT_SOURCE_DIR}/test")
   add_custom_target(model-check
-    COMMENT "Probing every registration and request"
+    COMMENT "Probing every request of a pairwise cover of the registrations"
     COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/test/model/probe.py
       ${PROJECT_BINARY_DIR}/model/baseline.json
       --work ${PROJECT_BINARY_DIR}/model/units
-      --compiler ${CMAKE_CXX_COMPILER}
-      "--flags=-std=c++17 -O0 -I${PROJECT_SOURCE_DIR}/include -I${PROJECT_SOURCE_DIR}/test"
+      --compiler ${CMAKE_CXX_COMPILER} --cover pairs ${model_flags}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    USES_TERMINAL
+  )
+  add_custom_target(model-check-full
+    COMMENT "Probing every request of every registration"
+    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/test/model/probe.py
+      ${PROJECT_BINARY_DIR}/model-full/baseline.json
+      --work ${PROJECT_BINARY_DIR}/model-full/units
+      --compiler ${CMAKE_CXX_COMPILER} ${model_flags}
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     USES_TERMINAL
   )

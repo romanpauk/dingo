@@ -430,6 +430,30 @@ def registrations():
                                            binding)
 
 
+def covering_pairs():
+    """The registrations, as (scope, form, leaf, binding), that together hold
+    every pair of values of two of these dimensions: a pairwise covering
+    array, chosen greedily and so the same on every run."""
+    dimensions = (SCOPES, [form for form, _ in STORED], list(LEAVES),
+                  list(BINDINGS))
+    combinations = [(scope, form, leaf, binding) for scope in dimensions[0]
+                    for form in dimensions[1] for leaf in dimensions[2]
+                    for binding in dimensions[3]]
+
+    def pairs(combination):
+        return {(i, combination[i], j, combination[j])
+                for i in range(len(combination))
+                for j in range(i + 1, len(combination))}
+
+    uncovered = set().union(*(pairs(c) for c in combinations))
+    chosen = []
+    while uncovered:
+        best = max(combinations, key=lambda c: len(pairs(c) & uncovered))
+        chosen.append(best)
+        uncovered -= pairs(best)
+    return set(chosen)
+
+
 ERROR = re.compile(r"error: (.*)")
 ERROR_LIMIT = "too many errors emitted"
 # GCC: "static assertion failed: message"; clang: "static assertion failed
@@ -594,7 +618,7 @@ def probe_shared(compiler, flags, directory, registration, name, probes):
     outcomes += probe_shared(compiler, flags, directory, registration,
                              f"{name}_", [probe for probe in rest
                                           if probe not in suspects])
-    for operation in OPERATIONS:
+    for operation in sorted({probe.operation for probe in suspects}):
         outcomes += probe_group(
             compiler, flags, directory, registration,
             f"{registration.name}__{operation}",
@@ -602,11 +626,15 @@ def probe_shared(compiler, flags, directory, registration, name, probes):
     return outcomes
 
 
-def probe_registration(compiler, flags, directory, registration):
-    """Makes the probes of a registration, the invalid ones aside."""
+def probe_registration(compiler, flags, directory, registration, position):
+    """Makes the probes of a registration in a position, the invalid ones
+    aside, in a program of their own, which bounds the memory of a
+    compile."""
     outcomes = []
     probes = []
     for probe, invalid in registration.probes():
+        if operation_parts(probe.operation)[0] != position:
+            continue
         if invalid:
             outcomes.append({
                 "cell": registration.cell(probe),
@@ -615,14 +643,8 @@ def probe_registration(compiler, flags, directory, registration):
             })
         else:
             probes.append(probe)
-    # A program per position, which bounds the memory of its compile.
-    for position in POSITIONS:
-        outcomes += probe_shared(
-            compiler, flags, directory, registration,
-            f"{registration.name}__{position}",
-            [probe for probe in probes
-             if operation_parts(probe.operation)[0] == position])
-    return outcomes
+    return outcomes + probe_shared(compiler, flags, directory, registration,
+                                   f"{registration.name}__{position}", probes)
 
 
 MARKS = {
@@ -806,21 +828,36 @@ def main():
         "--only", default="",
         help="probe only the registrations whose name contains this text",
     )
+    parser.add_argument(
+        "--cover", choices=("all", "pairs"), default="all",
+        help="probe every registration, or the registrations that hold every "
+        "pair of values of scope, stored form, leaf and binding, in both "
+        "containers",
+    )
     options = parser.parse_args()
     options.work.mkdir(parents=True, exist_ok=True)
     flags = shlex.split(options.flags) + error_limit_flags(options.compiler)
     flags = precompile_header(options.compiler, flags, options.work) + flags
 
     units = [unit for unit in registrations() if options.only in unit.name]
+    if options.cover == "pairs":
+        covered = covering_pairs()
+        units = [unit for unit in units if (unit.scope, unit.form, unit.leaf,
+                                            unit.binding) in covered]
     bound = survey(options.compiler, flags, options.work, units)
     units = [replace(unit, bound=bound.get(unit.survey_key, ()))
              for unit in units]
     cells = []
     with concurrent.futures.ThreadPoolExecutor(options.jobs) as executor:
         for outcomes in executor.map(
-            lambda unit: probe_registration(
-                options.compiler, flags, options.work, unit),
-            units,
+            lambda task: probe_registration(
+                options.compiler, flags, options.work, *task),
+            # The costliest first, so that none of them is left for the end:
+            # the runtime container's, and of those the kept consumers'.
+            sorted(((unit, position) for unit in units
+                    for position in POSITIONS),
+                   key=lambda task: (task[0].container != "runtime",
+                                     POSITIONS[task[1]] is None)),
         ):
             cells += outcomes
     # Every unit of a registration checks what it publishes.
