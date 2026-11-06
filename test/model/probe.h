@@ -205,8 +205,9 @@ const char *violation(keeps scope, const First &first, const Second &second) {
 // Resolves a request twice in one container and checks the results. A raw
 // pointer resolved from a scope that keeps nothing hands the leaf to the
 // caller, so it is not counted as leaked.
-template <typename Container, typename R, typename Setup, typename Resolve>
+template <typename Container, typename Setup, typename Resolve>
 void probe(const char *cell, keeps scope, Setup setup, Resolve resolve) {
+  using R = decltype(resolve(std::declval<Container &>()));
   const long live = leaf_interface::live;
   const char *error = nullptr;
   try {

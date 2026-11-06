@@ -48,8 +48,8 @@ Run a quality target with `cmake --build build -t <target>`.
   report and is not part of `check`. See
   [Complexity Report](#complexity-report).
 - `model-check`: resolves every request of every registration in both containers
-  and fails on a defect; it compiles a program per registration, so it is not
-  part of `check`. See [Model Probe](#model-probe).
+  and fails on a defect; it is part of `check` with GCC and clang, whose
+  diagnostics it reads. See [Model Probe](#model-probe).
 
 The development tools are provided by the locked `uv` environment.
 

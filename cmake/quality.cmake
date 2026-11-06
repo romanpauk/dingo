@@ -15,8 +15,8 @@ function(configure_quality_targets out_check_targets)
   list(APPEND check_targets layers-check)
 
   # Resolves every request of every registration in both containers, writes
-  # the outcome of each to model/baseline.md, and fails on a defect. It
-  # compiles a program per registration, so it is not part of check.
+  # the outcome of each to model/baseline.md, and fails on a defect. It reads
+  # the diagnostics of GCC and clang, and is part of check with them.
   add_custom_target(model-check
     COMMENT "Probing every registration and request"
     COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/test/model/probe.py
@@ -27,6 +27,9 @@ function(configure_quality_targets out_check_targets)
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     USES_TERMINAL
   )
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    list(APPEND check_targets model-check)
+  endif()
 
   # A report, not a check: it ranks the headers and never fails.
   add_custom_target(complexity-report

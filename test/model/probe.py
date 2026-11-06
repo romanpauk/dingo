@@ -225,8 +225,7 @@ class Registration:
             owners.update(
                 {len(lines) + offset: request for offset in range(1, 5)})
             lines += [
-                f"    probe<Container, decltype(std::declval<Container &>()"
-                f".{resolve.removeprefix('c.')})>(",
+                "    probe<Container>(",
                 f'        "{self.cell(request)}", keeps::{keeps},',
                 f"        [](auto &c) {{ {self.register()} }},",
                 f"        [](auto &c) -> decltype(auto) {{ return {resolve}; }});",
@@ -257,7 +256,11 @@ def registrations():
 
 
 ERROR = re.compile(r"error: (.*)")
-ASSERTION = "static assertion failed:"
+ERROR_LIMIT = "too many errors emitted"
+# GCC: "static assertion failed: message"; clang: "static assertion failed
+# due to requirement 'condition': message".
+ASSERTION = re.compile(
+    r"^static assertion failed(?: due to requirement '.*')?:\s*(.*)$")
 CRASH = "exited with"
 
 
@@ -293,36 +296,59 @@ def build_and_run(compiler, flags, directory, name, source):
 
 def failed_requests(stderr, name, owners):
     """The first error of each request a compiler output reports, found by
-    the lines of the unit its instantiation context names. None when an error
-    belongs to no request."""
+    the lines of the unit its instantiation context names: GCC prints the
+    context before an error, clang after it, as notes. None when an error
+    belongs to no request. Clang stops at its error limit; the requests after
+    it are left to the next compile."""
     reference = re.compile(re.escape(f"{name}.cpp") + r":(\d+):")
-    failed = {}
+    context_follows = "note: in instantiation of" in stderr
+    errors = []  # each error with the unit lines of its context
     pending = []
     for line in stderr.splitlines():
-        pending += [int(number) for number in reference.findall(line)]
+        if ERROR_LIMIT in line:
+            # The requests after the limit are left to the next compile.
+            break
         match = ERROR.search(line)
-        if not match:
-            continue
-        owner = next((owners[number] for number in pending
-                      if number in owners), None)
+        if match:
+            if context_follows:
+                errors.append((match.group(1).strip(), []))
+            else:
+                errors.append((match.group(1).strip(), pending))
+                pending = []
+        lines = [int(number) for number in reference.findall(line)]
+        if context_follows and errors:
+            errors[-1][1].extend(lines)
+        elif not match:
+            pending += lines
+    failed = {}
+    owner = None
+    for error, lines in errors:
+        found = next((owners[number] for number in lines if number in owners),
+                     None)
+        # Clang does not repeat the context of an error in the instantiation
+        # of the error before it.
+        if found is None and not context_follows:
+            return None
+        owner = found or owner
         if owner is None:
             return None
-        failed.setdefault(owner, match.group(1).strip())
-        pending = []
+        failed.setdefault(owner, error)
     return failed or None
 
 
 def failure(registration, request, error):
+    assertion = ASSERTION.match(error)
     if error.startswith(CRASH):
         outcome = "crashed"
-    elif error.startswith(ASSERTION):
+    elif assertion:
         outcome = "rejected"
+        error = assertion.group(1)
     else:
         outcome = "does_not_compile"
     return {
         "cell": registration.cell(request),
         "outcome": outcome,
-        "error": error.removeprefix(ASSERTION).strip(),
+        "error": error.strip(),
     }
 
 

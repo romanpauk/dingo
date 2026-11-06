@@ -321,6 +321,10 @@ TEST(type_registration_test, registration_specialization) {
   static_assert(
       !is_interface_storage_rebindable_v<std::unique_ptr<std::shared_ptr<A>>,
                                          I>);
+  // A handle of an array is not rebound, so an array of the interface is
+  // not named: clang rejects it when the interface is abstract.
+  static_assert(!is_interface_storage_rebindable_v<std::shared_ptr<A[]>, I>);
+  static_assert(!is_interface_storage_rebindable_v<std::unique_ptr<A[]>, I>);
 
   static_assert(
       std::is_same_v<nested_stored_type, std::shared_ptr<std::unique_ptr<A>>>);
