@@ -106,26 +106,22 @@ inline constexpr bool can_construct_from_normalized_request_v =
     !std::is_pointer_v<std::decay_t<Request>> &&
     !std::is_same_v<normalized_type_t<Request>, std::decay_t<Request>>;
 
-// Rvalue requests are not "construct me a normalized value" requests. They
-// are asking the routed storage to publish a movable result, so they must
-// reject normalized/wrapper construction instead of silently degrading to `T`.
+// Whether the normalized value of a request is an object that can be built.
+// An rvalue request is not one: it asks the routed storage to publish a
+// movable result, and is rejected rather than degraded to the normalized value.
 template <typename Request>
-inline constexpr bool rvalue_request_requires_explicit_conversion_v =
-    std::is_rvalue_reference_v<Request>;
-
+inline constexpr bool constructible_normalized_v =
+    !std::is_rvalue_reference_v<Request> &&
+    std::is_object_v<normalized_type_t<Request>> &&
+    !std::is_abstract_v<normalized_type_t<Request>>;
 template <typename Request>
 inline constexpr bool construct_normalized_request_v =
     can_construct_from_normalized_request_v<Request> &&
-    !rvalue_request_requires_explicit_conversion_v<Request> &&
-    std::is_object_v<normalized_type_t<Request>> &&
-    !std::is_abstract_v<normalized_type_t<Request>>;
-
+    constructible_normalized_v<Request>;
 template <typename Request,
           typename ResolvedRequest = request_result_t<Request, true>>
 inline constexpr bool construct_factory_request_v =
-    !rvalue_request_requires_explicit_conversion_v<Request> &&
-    std::is_object_v<normalized_type_t<Request>> &&
-    !std::is_abstract_v<normalized_type_t<Request>> &&
+    constructible_normalized_v<Request> &&
     (std::is_pointer_v<ResolvedRequest> ||
      (type_traits<ResolvedRequest>::enabled &&
       !std::is_reference_v<ResolvedRequest>) ||
@@ -134,7 +130,7 @@ inline constexpr bool construct_factory_request_v =
 template <typename Request, typename Context>
 [[noreturn]] void throw_missing_rvalue_conversion(bool has_normalized_request,
                                                   Context &context) {
-  static_assert(rvalue_request_requires_explicit_conversion_v<Request>);
+  static_assert(std::is_rvalue_reference_v<Request>);
   if (has_normalized_request) {
     throw detail::make_type_not_convertible_exception(
         describe_type<Request>(), describe_type<normalized_type_t<Request>>(),

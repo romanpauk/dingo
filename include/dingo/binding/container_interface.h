@@ -227,7 +227,7 @@ private:
   static R construct_bound(Host &host, Selection &exact, bool value_bound,
                            construction_scope scope, Context &context) {
     using user_type = typename Request::user_type;
-    if constexpr (rvalue_request_requires_explicit_conversion_v<user_type>) {
+    if constexpr (std::is_rvalue_reference_v<user_type>) {
       throw_missing_rvalue_conversion<user_type>(value_bound, context);
     } else if constexpr (construct_normalized_request_v<user_type>) {
       return host.template resolve_exact_or_normalized<Request, R>(exact, scope,
@@ -246,8 +246,7 @@ private:
       auto type_guard =
           context.template track_type<typename Request::value_type>();
       return factory.template construct<R>(scope, context, host);
-    } else if constexpr (rvalue_request_requires_explicit_conversion_v<
-                             user_type>) {
+    } else if constexpr (std::is_rvalue_reference_v<user_type>) {
       throw_missing_rvalue_conversion<user_type>(false, context);
     } else {
       return resolve<Request, R>(host, scope, context, host, no_lookup_key());

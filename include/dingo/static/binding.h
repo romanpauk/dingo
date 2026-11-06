@@ -128,7 +128,7 @@ struct local_binding_router {
   decltype(auto) resolve(construction_scope scope, Context &context,
                          LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
-    using R = typename request::result_type;
+    using R = typename request::interface_type;
     constexpr bool collection = collection_traits<R>::is_collection;
     constexpr bool bound_locally = [] {
       if constexpr (collection) {

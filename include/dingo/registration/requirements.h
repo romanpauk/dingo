@@ -179,31 +179,18 @@ struct interface_registration_requirements {
                   "registered types must be complete");
     static_assert(interface_type_is_complete,
                   "registered interfaces must be complete");
-    if constexpr (detail::is_array_like_type_v<Type>) {
-      if constexpr (std::is_array_v<interface_type>) {
-        static_assert(array_shape_matches,
-                      "array registrations require matching "
-                      "array-shape interfaces");
-      } else {
-        static_assert(array_element_matches,
-                      "array registrations require matching "
-                      "element-type interfaces");
-      }
-    }
-
-    if constexpr (registered_type_is_complete) {
-      if constexpr ((!detail::is_array_like_type_v<Type>) ||
-                    (std::is_array_v<interface_type> && array_shape_matches) ||
-                    (!std::is_array_v<interface_type> &&
-                     array_element_matches)) {
-        static_assert(pointer_convertible,
-                      "registered type must be pointer-convertible to "
-                      "the interface");
-        if constexpr (pointer_convertible &&
-                      !std::is_same_v<normalized_type,
-                                      normalized_interface_type>) {
-          static_assert(storage_supported, "storage requirements not met");
-        }
+    // Each array check holds outside its own case.
+    static_assert(array_shape_matches, "array registrations require matching "
+                                       "array-shape interfaces");
+    static_assert(array_element_matches, "array registrations require matching "
+                                         "element-type interfaces");
+    if constexpr (registered_type_is_complete && array_shape_matches &&
+                  array_element_matches) {
+      static_assert(pointer_convertible,
+                    "registered type must be pointer-convertible to "
+                    "the interface");
+      if constexpr (pointer_convertible) {
+        static_assert(storage_supported, "storage requirements not met");
       }
     }
   }
