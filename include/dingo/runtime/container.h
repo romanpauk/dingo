@@ -13,7 +13,7 @@
 #include <dingo/binding/binding_collection.h>
 #include <dingo/binding/binding_resolution.h>
 #include <dingo/binding/binding_selection.h>
-#include <dingo/binding/container_interface.h>
+#include <dingo/binding/requests.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/lookup/container_lookup_definition.h>
@@ -25,7 +25,6 @@
 #include <dingo/runtime/binding.h>
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>
-#include <dingo/runtime/registration_api.h>
 #include <dingo/runtime/registry.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/annotated.h>
@@ -56,9 +55,7 @@ class detail::runtime_container_impl
     : public runtime_registry<ContainerTraits, Allocator, void,
                               detail::runtime_container_impl<
                                   ContainerTraits, Allocator, ParentContainer>>,
-      public detail::runtime_registration_api<detail::runtime_container_impl<
-          ContainerTraits, Allocator, ParentContainer>>,
-      public detail::container_interface<detail::runtime_container_impl<
+      public detail::container_requests<detail::runtime_container_impl<
           ContainerTraits, Allocator, ParentContainer>> {
   template <typename> friend class ::dingo::resolution_context;
 
@@ -145,13 +142,13 @@ private:
 public:
   // The registry base and the registration and resolution interfaces declare
   // some of the same names; these are the ones a container exposes.
-  using detail::container_interface<self_type>::construct;
-  using detail::container_interface<self_type>::resolve;
-  using detail::runtime_registration_api<self_type>::register_type;
-  using detail::runtime_registration_api<self_type>::register_type_collection;
+  using detail::container_requests<self_type>::construct;
+  using detail::container_requests<self_type>::resolve;
   using runtime_base::get_allocator;
-  using detail::container_interface<self_type>::construct_collection;
-  using detail::container_interface<self_type>::count_collection;
+  using runtime_base::register_type;
+  using runtime_base::register_type_collection;
+  using detail::container_requests<self_type>::construct_collection;
+  using detail::container_requests<self_type>::count_collection;
 
   template <typename T, typename Fn, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
@@ -184,7 +181,7 @@ public:
 
 private:
   friend struct detail::request_resolution;
-  friend class detail::container_interface<self_type>;
+  friend class detail::container_requests<self_type>;
 
   parent_container_type *parent() { return parent_; }
 
@@ -236,11 +233,7 @@ public:
   }
 
 private:
-  friend class detail::runtime_registration_api<self_type>;
-
   runtime_registry_type &binding_store() { return *this; }
-
-  self_type &runtime_registration_parent() { return *this; }
 
   parent_container_type *parent_ = nullptr;
 };

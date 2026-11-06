@@ -14,20 +14,23 @@ headers of the layers below its own and of its own directory; directories that
 share a layer do not include each other. The `layers-check` target enforces
 this, and the layer list lives in [tools/layers.py](../../tools/layers.py).
 
-| Layer | Directories | Owns | | ----- | ----------------------- |
-\-----------------------------------------------------------------------------------------------
-| | 0 | `base/` | configuration, `none`, `selected`, exceptions, `type_list`,
-type descriptors | | 1 | `memory/`, `rtti/`, `type/` | allocators and object
-stores, rtti providers, type traits, conversions, keys, annotations | | 2 |
-`resolution/`, `lookup/` | resolution operations and conversion resolutions,
-lookup indexes | | 3 | `factory/` | constructors, callables, constructor
-detection, factory traits | | 4 | `context/` | resolution context base and
-recursion guard | | 5 | `storage/` | storage tags, scope policies, storage
-exposure traits | | 6 | `registration/` | registration options, requirements | |
-7 | `binding/` | binding model, selection and resolution shared by runtime and
-static | | 8 | `runtime/`, `static/` | the runtime and the static container,
-their registries, bindings, contexts and traits, and the static graph | | 9 |
-`dingo/*.h` | `runtime_container` (also named `container`), `static_container` |
+From the bottom:
+
+0. `base/`: configuration, `none`, `selected`, exceptions, `type_list`, type
+   descriptors
+1. `memory/`, `rtti/`, `type/`: allocators and object stores, rtti providers,
+   type traits, conversions, keys, annotations
+2. `resolution/`, `lookup/`: resolution operations and conversion resolutions,
+   lookup indexes
+3. `factory/`: constructors, callables, constructor detection, factory traits
+4. `context/`: resolution context base and recursion guard
+5. `storage/`: storage tags, scope policies, storage exposure traits
+6. `registration/`: registration options, requirements
+7. `binding/`: the binding model, its selection and resolution, the algorithm a
+   container resolves a request with, and the requests both containers answer
+8. `runtime/`, `static/`: the runtime and the static container, their
+   registries, bindings, contexts and traits, and the static graph
+9. `dingo/*.h`: `runtime_container` (also named `container`), `static_container`
 
 ## Main Owners
 

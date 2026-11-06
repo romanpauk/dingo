@@ -7,7 +7,10 @@
 
 #pragma once
 
-#include <dingo/runtime/registration_api.h>
+#include <dingo/base/none.h>
+#include <dingo/binding/binding_collection.h>
+#include <dingo/factory/callable.h>
+#include <dingo/registration/type_registration.h>
 #include <dingo/runtime/registry_store.h>
 
 #include <cassert>
@@ -21,11 +24,8 @@ template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
           typename ResolveRoot>
 class DINGO_EMPTY_BASES runtime_registry
     : public allocator_base<Allocator>,
-      public detail::runtime_registration_api<runtime_registry<
-          ContainerTraits, Allocator, ParentRegistry, ResolveRoot>>,
       protected detail::registry_store<ContainerTraits, Allocator> {
   template <typename> friend class ::dingo::resolution_context;
-  template <typename> friend class detail::runtime_registration_api;
   template <typename, typename, typename, typename>
   friend class runtime_binding_state;
   template <typename, typename, typename>
@@ -101,7 +101,16 @@ public:
 private:
   registry_type &binding_store() { return *this; }
 
-  registry_type &runtime_registration_parent() { return *this; }
+  // What a registration resolves through and constructs its collections with:
+  // the container of the root registry, which derives from it, or the
+  // registration container itself.
+  auto &registration_owner() {
+    if constexpr (OwnsRuntimeData) {
+      return static_cast<resolve_root_type &>(*this);
+    } else {
+      return *this;
+    }
+  }
 
 public:
   runtime_registry(const runtime_registry &) = delete;
@@ -113,6 +122,46 @@ public:
     return allocator_base<allocator_type>::get_allocator();
   }
 
+  // Registers TypeArgs, built by an optional factory argument and found by
+  // the runtime key values that follow it.
+  template <typename... TypeArgs, typename... Args>
+  auto register_type(Args &&...args) {
+    if constexpr (detail::are_runtime_registration_key_args_v<Args...>) {
+      return this->template prepare_binding<TypeArgs...>(
+          &registration_owner(), none_t{}, std::forward<Args>(args)...);
+    } else {
+      return register_with_argument<TypeArgs...>(std::forward<Args>(args)...);
+    }
+  }
+
+  template <typename... TypeArgs, typename Fn>
+  auto register_type_collection(Fn &&fn) {
+    using registration = type_registration<TypeArgs...>;
+    return register_type<TypeArgs...>(
+        callable([this, collection_fn = std::forward<Fn>(fn)]() mutable {
+          return registration_owner()
+              .template construct_collection<
+                  typename registration::storage_type::type>(collection_fn);
+        }));
+  }
+
+  template <typename... TypeArgs> auto register_type_collection() {
+    return register_type_collection<TypeArgs...>(
+        detail::binding_collection_append{});
+  }
+
+private:
+  template <typename... TypeArgs, typename Arg, typename... KeyArgs>
+  auto register_with_argument(Arg &&arg, KeyArgs &&...keys) {
+    static_assert(detail::are_runtime_registration_key_args_v<KeyArgs...>,
+                  "register_type takes a factory argument followed by "
+                  "runtime key values");
+    return this->template prepare_binding<TypeArgs...>(
+        &registration_owner(), std::forward<Arg>(arg),
+        std::forward<KeyArgs>(keys)...);
+  }
+
+public:
 protected:
   runtime_memory<allocator_type> &runtime() {
     return shared_runtime_data().runtime;

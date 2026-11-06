@@ -12,7 +12,7 @@
 #include <dingo/binding/binding_collection.h>
 #include <dingo/binding/binding_resolution.h>
 #include <dingo/binding/binding_selection.h>
-#include <dingo/binding/container_interface.h>
+#include <dingo/binding/requests.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/lookup/container_lookup_definition.h>
@@ -79,7 +79,7 @@ template <typename ParentContainer, typename ContainerTraits,
           typename... Registrations>
 class static_container_impl<static_registry<Registrations...>, ParentContainer,
                             ContainerTraits>
-    : public container_interface<static_container_impl<
+    : public container_requests<static_container_impl<
           static_registry<Registrations...>, ParentContainer, ContainerTraits>>,
       private static_container_dependency_diagnostics_base<
           static_registry<Registrations...>, !std::is_void_v<ParentContainer>> {
@@ -217,7 +217,7 @@ public:
   explicit static_container_impl(Parent *parent)
       : parent_(container_implementation_of(parent)) {}
 
-  using container_interface<static_container_impl>::resolve;
+  using container_requests<static_container_impl>::resolve;
 
   // A request a child container forwards here constructs what this container
   // keeps in the memory of this container, which outlives the child.
@@ -238,8 +238,8 @@ public:
   }
 
 public:
-  using container_interface<static_container_impl>::construct_collection;
-  using container_interface<static_container_impl>::count_collection;
+  using container_requests<static_container_impl>::construct_collection;
+  using container_requests<static_container_impl>::count_collection;
 
   template <typename T, typename Fn, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
@@ -314,7 +314,7 @@ public:
 
 private:
   friend struct detail::request_resolution;
-  friend class container_interface<static_container_impl>;
+  friend class container_requests<static_container_impl>;
 
   template <typename Request, typename R, typename LookupKey>
   DINGO_ALWAYS_INLINE R resolve_entry(LookupKey key) {

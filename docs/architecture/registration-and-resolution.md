@@ -6,8 +6,9 @@ backends, then meet at the shared binding selection and resolution model.
 
 ## Runtime Registration
 
-The public API starts at `container::register_type<...>()` in
-[include/dingo/runtime/registration_api.h](../../include/dingo/runtime/registration_api.h).
+The public API starts at `container::register_type<...>()`, a member of the
+runtime registry in
+[include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h).
 
 `prepare_binding(...)` does three important things:
 
@@ -85,7 +86,7 @@ uses its `lookup_type`, `interface_type`, `result_type`, `value_type`, and
 each path.
 
 Both containers resolve a request with the algorithm in
-[include/dingo/binding/container_interface.h](../../include/dingo/binding/container_interface.h).
+[include/dingo/binding/request_resolution.h](../../include/dingo/binding/request_resolution.h).
 The sequence is:
 
 1. The runtime container checks the request cache of the selected binding.

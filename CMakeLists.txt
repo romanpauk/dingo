@@ -98,7 +98,8 @@ if(DINGO_DEVELOPMENT_MODE)
         binding/binding_resolution.h
         binding/binding_selection.h
         binding/binding_activation.h
-        binding/container_interface.h
+        binding/request_resolution.h
+        binding/requests.h
         type/dependency.h
         factory/factory_traits.h
         type/key.h
@@ -132,7 +133,6 @@ if(DINGO_DEVELOPMENT_MODE)
         runtime_container.h
         runtime/container.h
         runtime/container_traits.h
-        runtime/registration_api.h
         runtime/lookup_index.h
         runtime/memory.h
         runtime/registry.h
@@ -175,6 +175,15 @@ if(DINGO_DEVELOPMENT_MODE)
         base/type_list.h
         type/type_traits.h
         resolution/resolution_operation.h
+        base/complete_type.h
+        base/construction_scope.h
+        base/selected.h
+        binding/binding_collection.h
+        context/recursion_guard.h
+        lookup/container_lookup_definition.h
+        registration/requirements.h
+        resolution/resolution.h
+        type/dependency_traits.h
     )
 
     set(DINGO_INTERFACE_SOURCES "")

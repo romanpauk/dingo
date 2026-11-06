@@ -111,4 +111,5 @@ The key implementation headers behind this model are:
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
 - [include/dingo/binding/binding_selection.h](../../include/dingo/binding/binding_selection.h)
 - [include/dingo/binding/binding_resolution.h](../../include/dingo/binding/binding_resolution.h)
-- [include/dingo/binding/container_interface.h](../../include/dingo/binding/container_interface.h)
+- [include/dingo/binding/request_resolution.h](../../include/dingo/binding/request_resolution.h)
+- [include/dingo/binding/requests.h](../../include/dingo/binding/requests.h)

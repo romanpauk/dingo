@@ -14,7 +14,7 @@
 #include <dingo/binding/binding_collection.h>
 #include <dingo/binding/binding_model.h>
 #include <dingo/binding/binding_selection.h>
-#include <dingo/binding/container_interface.h>
+#include <dingo/binding/request_resolution.h>
 #include <dingo/factory/callable.h>
 #include <dingo/lookup/lookup.h>
 #include <dingo/lookup/operations.h>
@@ -50,8 +50,6 @@
 
 namespace dingo {
 namespace detail {
-
-template <typename Derived> class runtime_registration_api;
 
 template <typename ContainerTraits, typename Allocator,
           typename ParentContainer>
