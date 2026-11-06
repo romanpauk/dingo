@@ -14,6 +14,20 @@ function(configure_quality_targets out_check_targets)
   )
   list(APPEND check_targets layers-check)
 
+  # Resolves every request of every registration in both containers, writes
+  # the outcome of each to model/baseline.md, and fails on a defect. It
+  # compiles a few thousand small programs, so it is not part of check.
+  add_custom_target(model-check
+    COMMENT "Probing every registration and request"
+    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/test/model/probe.py
+      ${PROJECT_BINARY_DIR}/model/baseline.json
+      --work ${PROJECT_BINARY_DIR}/model/units
+      --compiler ${CMAKE_CXX_COMPILER}
+      "--flags=-std=c++17 -O0 -I${PROJECT_SOURCE_DIR}/include -I${PROJECT_SOURCE_DIR}/test"
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    USES_TERMINAL
+  )
+
   # A report, not a check: it ranks the headers and never fails.
   add_custom_target(complexity-report
     COMMENT "Ranking header complexity"

@@ -47,6 +47,9 @@ Run a quality target with `cmake --build build -t <target>`.
 - `complexity-report`: prints where the complexity of the headers is; it is a
   report and is not part of `check`. See
   [Complexity Report](#complexity-report).
+- `model-check`: resolves every request of every registration in both containers
+  and fails on a defect; it compiles a few thousand programs, so it is not part
+  of `check`. See [Model Probe](#model-probe).
 
 The development tools are provided by the locked `uv` environment.
 
@@ -82,6 +85,30 @@ uv run tools/complexity.py --sections modules --build-dir build \
 The rankings are heuristics to compare between revisions. A definition named
 once is a candidate for inlining, not a defect, and an instantiation is charged
 its own time, excluding the instantiations nested in it.
+
+## Model Probe
+
+[`test/model/probe.py`](../test/model/probe.py) asks the library what every
+combination of container, scope, stored form, leaf, binding and request does.
+Nothing in it decides what should work: each registration is compiled into a
+program with [`test/model/probe.h`](../test/model/probe.h), which registers it,
+resolves each request twice and records the outcome. A request the library
+rejects at compile time is compiled on its own and recorded with the message of
+its `static_assert`.
+
+A resolved request is also checked: its result has to reach the registered leaf,
+a scope that keeps its instance has to return the same one by reference, a
+unique scope a new one, and nothing may leak. The probe fails when a request
+does not compile without a `static_assert`, crashes or fails these checks, or
+when the two containers disagree on a registration both accept.
+
+```bash
+cmake --build build -t model-check
+```
+
+writes the outcome of every cell to `build/model/baseline.json` and a summary
+with a table per container, leaf and binding to `build/model/baseline.md`.
+`--only <text>` probes the registrations whose name contains the text.
 
 ## Generated Matrix Tests
 
