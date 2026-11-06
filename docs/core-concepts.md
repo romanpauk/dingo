@@ -75,8 +75,10 @@ representation that Dingo keeps and converts during resolution.
 - `external`: refer to an already existing object
 - `unique`: build a fresh instance per resolution; it is handed over by value,
   or moved into a `std::optional`, `std::unique_ptr` or `std::shared_ptr` of
-  itself or of one of its interfaces, and a reference to it is valid only while
-  the construction that requested it runs
+  itself or of one of its interfaces. A reference to it is valid only while the
+  construction that requested it runs, unless that construction is of an
+  instance a `shared` or `shared_cyclical` scope keeps: the unique instance is
+  then kept with it, for the lifetime of the container
 - `shared`: cache and reuse the same instance
 - `shared_cyclical`: cache instances while permitting cyclic graphs
 

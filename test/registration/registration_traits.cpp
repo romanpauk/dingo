@@ -1916,3 +1916,58 @@ TEST(type_registration_test, runtime_request_keyed_by_type) {
   EXPECT_EQ(&kept, &runtime.resolve<A &>(std::size_t(1)));
   EXPECT_EQ((runtime.construct<dependency<A, key>>().value()), 7);
 }
+
+namespace kept_dependency_test {
+// Counts the parts alive, so that a test sees whether a service refers to one
+// that is gone.
+struct part {
+  part() { ++alive; }
+  part(const part &) { ++alive; }
+  ~part() { --alive; }
+
+  int value = 7;
+  inline static int alive = 0;
+};
+
+struct service {
+  explicit service(part &p) : used(p) {}
+
+  part &used;
+};
+
+template <typename Scope> void check_runtime() {
+  {
+    container<> runtime;
+    runtime.register_type<scope<unique>, storage<part>>();
+    runtime.register_type<scope<Scope>, storage<service>,
+                          factory<constructor<service(part &)>>>();
+    service &kept = runtime.resolve<service &>();
+    EXPECT_EQ(part::alive, 1);
+    EXPECT_EQ(kept.used.value, 7);
+  }
+  EXPECT_EQ(part::alive, 0);
+}
+
+template <typename Scope> void check_static() {
+  {
+    static_container<bindings<bind<scope<unique>, storage<part>>,
+                              bind<scope<Scope>, storage<service>,
+                                   factory<constructor<service(part &)>>>>>
+        fixed;
+    service &kept = fixed.template resolve<service &>();
+    EXPECT_EQ(part::alive, 1);
+    EXPECT_EQ(kept.used.value, 7);
+  }
+  EXPECT_EQ(part::alive, 0);
+}
+} // namespace kept_dependency_test
+
+// A unique instance a kept one refers to is constructed for it, and lives as
+// long as the container.
+TEST(type_registration_test, kept_instance_keeps_unique_dependency) {
+  using namespace kept_dependency_test;
+  check_runtime<shared>();
+  check_runtime<shared_cyclical>();
+  check_static<shared>();
+  check_static<shared_cyclical>();
+}

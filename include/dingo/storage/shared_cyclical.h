@@ -284,9 +284,12 @@ public:
             },
             this);
       }
+      // The instance is kept, so what it is constructed from has to live as
+      // long as the container.
+      (void)scope;
       local_rollback_guard rollback(this);
       instance_.resolve();
-      instance_.construct(scope, context, container);
+      instance_.construct(persistent_scope, context, container);
       rollback.release();
     }
     return instance_.get();

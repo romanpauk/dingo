@@ -91,7 +91,8 @@ its own time, excluding the instantiations nested in it.
 [`test/model/probe.py`](../test/model/probe.py) asks the library what every
 combination of container, scope, stored form, leaf, binding, operation and
 request does. The operations make the request as the caller of `resolve`, as the
-dependency of a constructor, as the parameter of an invoked callable, and with
+dependency of the constructor of a class in the `unique`, `shared` or
+`shared_cyclical` scope, as the parameter of an invoked callable, and with
 `construct`. Nothing in it decides what should work: each registration is
 compiled into a program with [`test/model/probe.h`](../test/model/probe.h),
 which registers it, resolves each request twice and records the outcome. A
@@ -102,9 +103,10 @@ precompiled once.
 
 A resolved request is also checked: its result has to reach the registered leaf,
 a scope that keeps its instance has to return the same one by reference, a
-unique scope a new one, and nothing may leak. The probe fails when a request
-does not compile without a `static_assert`, crashes or fails these checks, or
-when the two containers disagree on a registration both accept.
+unique scope a new one, a kept class may not refer to a leaf that is gone, and
+nothing may leak. The probe fails when a request does not compile without a
+`static_assert`, crashes or fails these checks, or when the two containers
+disagree on a registration both accept.
 
 ```bash
 cmake --build build -t model-check

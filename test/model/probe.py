@@ -107,10 +107,21 @@ KEY = "dingo::key_type<std::size_t, 1>"
 
 # How a request is made:
 # - resolve: by the caller of the container
-# - dependency: as the dependency of the constructor of a unique class
+# - dependency, shared_dependency, cyclical_dependency: as the dependency of
+#   the constructor of a class in the unique, shared or shared_cyclical scope;
+#   a class its scope keeps is resolved by reference, and keeps what it
+#   receives
 # - invoke: as the parameter of a callable the container invokes
 # - construct: as a new object the container constructs
-OPERATIONS = ("resolve", "dependency", "invoke", "construct")
+OPERATIONS = ("resolve", "dependency", "shared_dependency",
+              "cyclical_dependency", "invoke", "construct")
+
+# The scope of the class whose dependency a request is, by operation.
+CONSUMERS = {
+    "dependency": "unique",
+    "shared_dependency": "shared",
+    "cyclical_dependency": "shared_cyclical",
+}
 
 
 @dataclass(frozen=True)
@@ -214,6 +225,8 @@ class Registration:
         selected = self.selected(request)
         if self.operation == "dependency":
             return f"c.template resolve<consumer<{selected}>>()"
+        if self.operation in CONSUMERS:
+            return f"c.template resolve<consumer<{selected}> &>()"
         if self.operation == "invoke":
             return (f"c.invoke([]({selected} arg) {{ return received<"
                     f"{selected}>(pass_on<{selected}>(arg)); }})")
@@ -225,17 +238,19 @@ class Registration:
 
     def probed_container(self, request):
         """The container a request is probed in, within run<Container>."""
-        if self.operation == "dependency":
+        if self.operation in CONSUMERS:
             return (f"typename with_consumer<Container, "
-                    f"{self.selected(request)}>::type")
+                    f"{self.selected(request)}, "
+                    f"dingo::{CONSUMERS[self.operation]}>::type")
         return "Container"
 
     def setup(self, request):
         """The statements that register what a request needs in c."""
         statements = self.register()
-        if self.operation == "dependency":
+        if self.operation in CONSUMERS:
             statements += (
-                f" register_consumer<{self.selected(request)}>(c);")
+                f" register_consumer<{self.selected(request)}, "
+                f"dingo::{CONSUMERS[self.operation]}>(c);")
         return statements
 
     def source(self, requests):

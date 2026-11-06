@@ -158,8 +158,11 @@ public:
   template <typename Context, typename Container>
   decltype(auto) resolve(construction_scope scope, Context &context,
                          Container &container) {
+    // The instance is kept, so what it is constructed from has to live as
+    // long as the container.
+    (void)scope;
     if (instance_.empty())
-      instance_.construct(scope, context, container);
+      instance_.construct(persistent_scope, context, container);
     return instance_.get();
   }
 

@@ -245,6 +245,59 @@ graph_resolvable(const graph_structure<Vertices, Edges> &structure,
 // ---------------------------------------------------------------------------
 
 // The graph of a registry and whether it is resolvable.
+// ---------------------------------------------------------------------------
+// Persistence: what the kept instances are constructed from.
+// ---------------------------------------------------------------------------
+
+// Whether a dependency may refer to an instance constructed for it: a
+// reference or a pointer to a binding that does not keep its instance, or to
+// one that is not known here.
+template <typename Dependency, typename InterfaceBindings>
+constexpr bool graph_may_refer_to_constructed() {
+  if constexpr (!request_may_escape_v<Dependency>) {
+    return false;
+  } else {
+    using found =
+        binding_t<binding_dependency_interface_t<Dependency>,
+                  binding_dependency_key_t<Dependency>, InterfaceBindings>;
+    if constexpr (std::is_void_v<found>) {
+      return true;
+    } else {
+      return !found::binding_model_type::conversions_type::is_stable;
+    }
+  }
+}
+
+template <typename List, typename InterfaceBindings>
+struct graph_refers_to_constructed : std::true_type {};
+
+template <typename... Dependencies, typename InterfaceBindings>
+struct graph_refers_to_constructed<type_list<Dependencies...>,
+                                   InterfaceBindings>
+    : std::bool_constant<(
+          graph_may_refer_to_constructed<Dependencies, InterfaceBindings>() ||
+          ...)> {};
+
+// Whether a binding keeps an instance that may refer to one constructed for
+// it, which then has to live as long as the container. Dependencies that are
+// not known may.
+template <typename Host, typename Binding>
+constexpr bool graph_keeps_constructed_dependency() {
+  using model = typename Binding::binding_model_type;
+  if constexpr (scope_traits<typename model::storage_tag>::consumes) {
+    return false;
+  } else {
+    return graph_refers_to_constructed<
+        typename binding_dependency_list<model>::type,
+        effective_interface_bindings_t<model, Host>>::value;
+  }
+}
+
+template <typename Host, typename... Bindings>
+constexpr bool graph_keeps_constructed_dependencies(type_list<Bindings...>) {
+  return (graph_keeps_constructed_dependency<Host, Bindings>() || ...);
+}
+
 template <typename StaticRegistry> struct graph_model {
   using host_bindings = typename StaticRegistry::interface_bindings;
   using universe = typename graph_universe<host_bindings>::type;
@@ -252,6 +305,10 @@ template <typename StaticRegistry> struct graph_model {
       graph_make_structure<host_bindings>(universe{});
   static constexpr bool resolvable =
       graph_resolvable(structure, type_list_size_v<host_bindings>);
+  // Whether a resolution may construct an instance for the lifetime of the
+  // container.
+  static constexpr bool keeps_constructed_dependencies =
+      graph_keeps_constructed_dependencies<host_bindings>(universe{});
 };
 } // namespace detail
 } // namespace dingo

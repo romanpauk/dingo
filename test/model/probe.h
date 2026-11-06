@@ -22,22 +22,29 @@
 #include <cstdio>
 #include <memory>
 #include <optional>
+#include <set>
 #include <type_traits>
 #include <variant>
 
 namespace dingo::model {
 
-// Counts the leaves alive, so that a probe sees what it leaks.
+// Keeps the leaves alive, so that a probe sees what it leaks and what it
+// refers to after it is gone.
 struct leaf_interface {
-  leaf_interface() { ++live; }
-  leaf_interface(const leaf_interface &) { ++live; }
-  leaf_interface(leaf_interface &&) noexcept { ++live; }
+  leaf_interface() { alive.insert(this); }
+  leaf_interface(const leaf_interface &) { alive.insert(this); }
+  leaf_interface(leaf_interface &&) noexcept { alive.insert(this); }
   leaf_interface &operator=(const leaf_interface &) = default;
   leaf_interface &operator=(leaf_interface &&) = default;
-  virtual ~leaf_interface() { --live; }
+  virtual ~leaf_interface() { alive.erase(this); }
   virtual int value() const = 0;
 
-  inline static long live = 0;
+  static long live() { return static_cast<long>(alive.size()); }
+  static bool is_alive(const leaf_interface *leaf) {
+    return alive.count(leaf) != 0;
+  }
+
+  inline static std::set<const leaf_interface *> alive;
 };
 
 // The object every cell stores, directly or inside its stored type.
@@ -214,23 +221,32 @@ template <typename U, typename Arg> decltype(auto) unwrap(Arg &&arg) {
 
 // What a dependency or a callable received as R: the leaf it reached and its
 // value while it ran, and what it holds by value, which outlives the call. A
-// value it cannot take, such as a const move-only one, is only read.
+// value it cannot take, such as a const move-only one, is only read. An
+// annotated or keyed rvalue reference is unwrapped first: it converts to both
+// an lvalue and an rvalue, so a value cannot be constructed from it directly.
 template <typename R> class received {
 public:
   using result_type = dingo::detail::request_interface_t<R>;
   using held_type = std::remove_cv_t<std::remove_reference_t<result_type>>;
+  using passed_type = decltype(pass_on<R>(std::declval<R &>()));
+  static constexpr bool unwraps =
+      std::is_rvalue_reference_v<result_type> &&
+      !std::is_constructible_v<held_type, passed_type>;
   static constexpr bool holds =
       !std::is_lvalue_reference_v<result_type> &&
       !std::is_pointer_v<result_type> &&
-      std::is_constructible_v<held_type,
-                              decltype(pass_on<R>(std::declval<R &>()))>;
+      std::is_constructible_v<
+          held_type, std::conditional_t<unwraps, result_type, passed_type>>;
   static constexpr bool refers = refers_v<result_type>;
   static constexpr bool hands_over = std::is_pointer_v<result_type>;
 
   template <typename Arg, typename = std::enable_if_t<!std::is_same_v<
                               dingo::detail::remove_cvref_t<Arg>, received>>>
   explicit received(Arg &&arg) {
-    if constexpr (holds) {
+    if constexpr (holds && unwraps) {
+      value_.emplace(unwrap<result_type>(arg));
+      address_ = leaf_of(*value_);
+    } else if constexpr (holds) {
       value_.emplace(std::forward<Arg>(arg));
       address_ = leaf_of(*value_);
     } else if constexpr (std::is_pointer_v<result_type>) {
@@ -250,6 +266,14 @@ public:
     }
   }
   int seen() const { return seen_; }
+  // Whether what it refers to is gone.
+  bool dangles() const {
+    if constexpr (holds) {
+      return false;
+    } else {
+      return address_ && !leaf_interface::is_alive(address_);
+    }
+  }
 
 private:
   std::conditional_t<holds, std::optional<held_type>, std::nullptr_t> value_{};
@@ -263,32 +287,36 @@ template <typename R> struct consumer {
   received<R> got;
 };
 
-// The container a consumer of R is resolved from: a static container binds
-// it too, a runtime one registers it.
-template <typename Container, typename R> struct with_consumer {
+// The container a consumer of R in Scope is resolved from: a static container
+// binds it too, a runtime one registers it.
+template <typename Container, typename R, typename Scope> struct with_consumer {
   using type = Container;
 };
 
-template <typename... Bindings, typename Traits, typename R>
-struct with_consumer<static_container<bindings<Bindings...>, Traits>, R> {
+template <typename... Bindings, typename Traits, typename R, typename Scope>
+struct with_consumer<static_container<bindings<Bindings...>, Traits>, R,
+                     Scope> {
   using type = static_container<
-      bindings<Bindings..., bind<scope<unique>, storage<consumer<R>>,
+      bindings<Bindings..., bind<scope<Scope>, storage<consumer<R>>,
                                  factory<constructor<consumer<R>(R)>>>>,
       Traits>;
 };
 
-template <typename R, typename Container> void register_consumer(Container &c) {
+template <typename R, typename Scope, typename Container>
+void register_consumer(Container &c) {
   if constexpr (is_instance<Container, static_container>::value) {
     (void)c;
   } else {
-    c.template register_type<scope<unique>, storage<consumer<R>>,
+    c.template register_type<scope<Scope>, storage<consumer<R>>,
                              factory<constructor<consumer<R>(R)>>>();
   }
 }
 
 // How a probe reads a result: the leaf it reaches, the value of the leaf,
-// whether it refers to an instance a scope keeps, whether it keeps what it
-// reached, and whether it hands a raw pointer to the caller.
+// whether what it refers to is gone, whether it refers to an instance a scope
+// keeps, whether it keeps what it reached, whether it hands a raw pointer to
+// the caller, and whether it is kept by its scope, so that it has to keep what
+// it refers to.
 template <typename R> struct observation {
   using result_type = std::remove_reference_t<R>;
   static const leaf_interface *leaf(const result_type &result) {
@@ -298,9 +326,11 @@ template <typename R> struct observation {
     const leaf_interface *found = leaf_of(result);
     return found ? found->value() : 0;
   }
+  static bool dangles(const result_type &) { return false; }
   static constexpr bool refers = refers_v<R>;
   static constexpr bool keeps_leaf = true;
   static constexpr bool hands_over = std::is_pointer_v<R>;
+  static constexpr bool kept = false;
 };
 
 template <typename R> struct received_observation {
@@ -308,9 +338,11 @@ template <typename R> struct received_observation {
     return got.leaf();
   }
   static int value(const received<R> &got) { return got.seen(); }
+  static bool dangles(const received<R> &got) { return got.dangles(); }
   static constexpr bool refers = received<R>::refers;
   static constexpr bool keeps_leaf = received<R>::holds;
   static constexpr bool hands_over = received<R>::hands_over;
+  static constexpr bool kept = false;
 };
 
 template <typename R>
@@ -321,9 +353,20 @@ template <typename R> struct observation<consumer<R>> {
     return c.got.leaf();
   }
   static int value(const consumer<R> &c) { return c.got.seen(); }
+  static bool dangles(const consumer<R> &c) { return c.got.dangles(); }
   static constexpr bool refers = received<R>::refers;
   static constexpr bool keeps_leaf = received<R>::holds;
   static constexpr bool hands_over = received<R>::hands_over;
+  static constexpr bool kept = false;
+};
+
+// A consumer its scope keeps is constructed once, so its two requests receive
+// one dependency; what it refers to has to live as long as it does.
+template <typename R>
+struct observation<consumer<R> &> : observation<consumer<R>> {
+  static constexpr bool refers = false;
+  static constexpr bool keeps_leaf = false;
+  static constexpr bool kept = true;
 };
 
 // What is wrong with two results of one request, or null. A leaf that was not
@@ -335,6 +378,10 @@ const char *violation(keeps scope, const First &first, const Second &second) {
   const leaf_interface *b = read::leaf(second);
   if (!a || !b || read::value(first) != 7 || read::value(second) != 7) {
     return "the result does not reach the registered leaf";
+  }
+  if ((scope != keeps::nothing || read::kept) &&
+      (read::dangles(first) || read::dangles(second))) {
+    return "the result refers to a leaf that is gone";
   }
   constexpr bool address =
       std::is_lvalue_reference_v<R> || std::is_pointer_v<R>;
@@ -354,7 +401,7 @@ const char *violation(keeps scope, const First &first, const Second &second) {
 template <typename Container, typename Setup, typename Resolve>
 void probe(const char *cell, keeps scope, Setup setup, Resolve resolve) {
   using R = decltype(resolve(std::declval<Container &>()));
-  const long live = leaf_interface::live;
+  const long live = leaf_interface::live();
   const char *error = nullptr;
   try {
     {
@@ -364,7 +411,7 @@ void probe(const char *cell, keeps scope, Setup setup, Resolve resolve) {
       R second = resolve(c);
       error = violation<R>(scope, first, second);
     }
-    if (!error && leaf_interface::live != live &&
+    if (!error && leaf_interface::live() != live &&
         !(scope == keeps::nothing && observation<R>::hands_over)) {
       error = "the leaves alive differ after the container is destroyed";
     }

@@ -65,6 +65,16 @@ template <typename StaticRegistry, typename ParentContainer = void,
           typename ContainerTraits = ::dingo::static_container_traits>
 class static_container_impl;
 
+// Whether the resolutions of a container carry persistent memory: those of a
+// static container that has some, or whose static parent's resolutions do.
+template <typename Container, typename = void>
+struct uses_persistent_memory : std::false_type {};
+
+template <typename Container>
+struct uses_persistent_memory<
+    Container, std::void_t<decltype(Container::uses_persistent_memory_v)>>
+    : std::bool_constant<Container::uses_persistent_memory_v> {};
+
 template <typename ParentContainer, typename ContainerTraits,
           typename... Registrations>
 class static_container_impl<static_registry<Registrations...>, ParentContainer,
@@ -81,7 +91,18 @@ private:
   using graph_type_ = graph_model<static_bindings_type>;
   using parent_container_type = container_implementation_t<ParentContainer>;
   using storage_type = static_bindings_state<Registrations...>;
-  using context_type = static_context;
+  static constexpr bool has_persistent_memory_v =
+      graph_type_::keeps_constructed_dependencies;
+
+public:
+  static constexpr bool uses_persistent_memory_v =
+      has_persistent_memory_v ||
+      uses_persistent_memory<parent_container_type>::value;
+
+private:
+  using context_type =
+      std::conditional_t<uses_persistent_memory_v, static_persistent_context,
+                         static_context>;
   using index_entries_ = detail::normalize_lookup_definitions_t<
       detail::container_lookup_definition_type_t<ContainerTraits>>;
 
@@ -198,10 +219,20 @@ public:
 
   using container_interface<static_container_impl>::resolve;
 
+  // A request a child container forwards here constructs what this container
+  // keeps in the memory of this container, which outlives the child.
   template <typename Request, typename R, typename Context, typename Origin,
             typename LookupKey>
   R resolve_request(construction_scope scope, Context &context, Origin &origin,
                     LookupKey key) {
+    if constexpr (std::is_same_v<Context, static_persistent_context> &&
+                  has_persistent_memory_v) {
+      if (static_cast<void *>(std::addressof(origin)) != this) {
+        persistent_memory_scope memory(context, persistent_memory());
+        return request_resolution::resolve<Request, R>(*this, scope, context,
+                                                       origin, std::move(key));
+      }
+    }
     return request_resolution::resolve<Request, R>(*this, scope, context,
                                                    origin, std::move(key));
   }
@@ -235,7 +266,7 @@ public:
 
   template <typename Fn>
   DINGO_ALWAYS_INLINE decltype(auto) with_context(Fn &&fn) {
-    context_type context;
+    context_type context(persistent_memory());
     return std::forward<Fn>(fn)(context);
   }
 
@@ -300,7 +331,7 @@ private:
           typename request_type<typename Request::user_type, true>::lookup_type,
           R, LookupKey>(caller_scope, context);
     } else {
-      context_type context;
+      context_type context(persistent_memory());
       return request_resolution::resolve<Request, R>(*this, caller_scope,
                                                      context, *this, key);
     }
@@ -364,6 +395,22 @@ private:
   }
 
 private:
+  struct no_persistent_memory {};
+
+  static_persistent_memory *persistent_memory() {
+    if constexpr (has_persistent_memory_v) {
+      return &persistent_;
+    } else {
+      return nullptr;
+    }
+  }
+
+  // Only a container whose kept instances may refer to what is constructed for
+  // them has the memory. It is declared before the storage, so that what they
+  // refer to is destroyed after them.
+  std::conditional_t<has_persistent_memory_v, static_persistent_memory,
+                     no_persistent_memory>
+      persistent_;
   storage_type storage_;
   parent_container_type *parent_ = nullptr;
 };

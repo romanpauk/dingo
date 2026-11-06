@@ -13,11 +13,44 @@
 #include <dingo/memory/object_store.h>
 
 #include <cstddef>
+#include <memory>
 #include <new>
 #include <type_traits>
 #include <utility>
 
 namespace dingo {
+
+// What a static container constructs for its own lifetime: the dependencies
+// of the instances it keeps that no storage keeps, such as a unique instance a
+// shared one refers to. The memory is allocated on its first use and released
+// with the container. Nothing rolls it back, so what a failed resolution made
+// stays until then.
+class static_persistent_memory {
+public:
+  static_persistent_memory() = default;
+  ~static_persistent_memory() {
+    if (arena_ != nullptr) {
+      store_.destroy(*arena_);
+    }
+  }
+
+  static_persistent_memory(const static_persistent_memory &) = delete;
+  static_persistent_memory &
+  operator=(const static_persistent_memory &) = delete;
+
+  template <typename T, typename ConstructFn>
+  DINGO_NOINLINE T &construct(ConstructFn &&construct_fn) {
+    if (arena_ == nullptr) {
+      arena_ = std::make_unique<arena<>>(DINGO_RUNTIME_ARENA_BLOCK_SIZE);
+    }
+    return store_.template construct_at<T>(
+        *arena_, std::forward<ConstructFn>(construct_fn));
+  }
+
+private:
+  std::unique_ptr<arena<>> arena_;
+  detail::object_store<arena<>> store_;
+};
 
 // The memory of a static resolution: the instances it constructs live until
 // the context ends. Nothing outlives the context, so there is no transaction to
@@ -32,6 +65,8 @@ public:
   static constexpr bool is_transactional = false;
 
   static_context_backend() = default;
+  // A container without persistent memory passes none.
+  explicit static_context_backend(static_persistent_memory *) {}
   ~static_context_backend() {
     if (arena_ != nullptr) {
       release();
@@ -83,6 +118,61 @@ private:
   detail::object_store<arena<>> store_;
 };
 
+// The memory of a resolution of a static container that keeps instances
+// constructed for its kept ones, or whose parent does: the persistent
+// instances live as long as the container whose memory the context has.
+class static_persistent_context_backend : public static_context_backend {
+public:
+  explicit static_persistent_context_backend(
+      static_persistent_memory *persistent)
+      : persistent_(persistent) {}
+
+  // The memory persistent instances are constructed in, which a parent
+  // container replaces with its own while it resolves its bindings. Without
+  // one, they live as long as the context.
+  static_persistent_memory *persistent_memory() const { return persistent_; }
+  void persistent_memory(static_persistent_memory *persistent) {
+    persistent_ = persistent;
+  }
+
+protected:
+  template <typename T, typename ConstructFn>
+  T &construct_storage(construction_scope scope, ConstructFn &&construct_fn) {
+    if (scope.is_persistent() && persistent_ != nullptr) {
+      return persistent_->template construct<T>(
+          std::forward<ConstructFn>(construct_fn));
+    }
+    return static_context_backend::template construct_storage<T>(
+        scope, std::forward<ConstructFn>(construct_fn));
+  }
+
+private:
+  static_persistent_memory *persistent_;
+};
+
 using static_context = resolution_context<static_context_backend>;
+using static_persistent_context =
+    resolution_context<static_persistent_context_backend>;
+
+namespace detail {
+// Places the persistent instances of a static context in memory while it
+// lives, and restores the memory the context had after.
+class persistent_memory_scope {
+public:
+  persistent_memory_scope(static_persistent_context &context,
+                          static_persistent_memory *memory)
+      : context_(context), previous_(context.persistent_memory()) {
+    context.persistent_memory(memory);
+  }
+  ~persistent_memory_scope() { context_.persistent_memory(previous_); }
+
+  persistent_memory_scope(const persistent_memory_scope &) = delete;
+  persistent_memory_scope &operator=(const persistent_memory_scope &) = delete;
+
+private:
+  static_persistent_context &context_;
+  static_persistent_memory *previous_;
+};
+} // namespace detail
 
 } // namespace dingo
