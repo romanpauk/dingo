@@ -1,0 +1,85 @@
+{#- The C++ spellings of the dimensions, shared by the probe templates. -#}
+
+{#- The type a leaf stores, by Leaf. -#}
+{% set LEAF = {
+  "copyable": "leaf",
+  "move_only": "move_only_leaf",
+  "interface": "leaf",
+} %}
+
+{#- The type each StoredForm stores around a leaf L. -#}
+{% set STORED = {
+  "plain": "L",
+  "reference": "L &",
+  "pointer": "L *",
+  "bounded_array": "L[2]",
+  "unique_handle": "std::unique_ptr<L>",
+  "unique_array_handle": "std::unique_ptr<L[]>",
+  "shared_handle": "std::shared_ptr<L>",
+  "shared_array_handle": "std::shared_ptr<L[]>",
+  "optional": "std::optional<L>",
+  "alternative": "std::variant<L, other>",
+} %}
+
+{#- The alias template of probe.h that spells each Shape and Category; none
+    for the interface itself and its value. -#}
+{% set SHAPE = {
+  "I": None,
+  "std::shared_ptr<I>": "sp",
+  "std::unique_ptr<I>": "up",
+  "std::optional<I>": "opt",
+  "std::shared_ptr<I[]>": "sp_array",
+  "std::unique_ptr<I[]>": "up_array",
+} %}
+{% set CATEGORY = {
+  "X": None,
+  "const X": "constant",
+  "X &": "lref",
+  "const X &": "clref",
+  "X &&": "rref",
+  "X *": "ptr",
+  "const X *": "cptr",
+} %}
+
+{% set KEY = "dingo::key_type<std::size_t, 1>" %}
+
+{#- The type a leaf stores in a stored form. -#}
+{% macro stored(form, leaf) -%}
+{{ STORED[form.value] | replace("L", LEAF[leaf.value]) }}
+{%- endmacro %}
+
+{#- A request: a shape of the interface I<index>, in a category. -#}
+{% macro request(r) -%}
+{% set shaped = "I" ~ r.index if SHAPE[r.shape.value] is none
+   else "shape::" ~ SHAPE[r.shape.value] ~ "<I" ~ r.index ~ ">" %}
+{% if CATEGORY[r.category.value] is none %}{{ shaped }}{% else
+%}shape::{{ CATEGORY[r.category.value] }}<{{ shaped }}>{% endif %}
+{%- endmacro %}
+
+{#- A request as it names its binding: with its annotation or its key. -#}
+{% macro selected(selection, request) -%}
+{% if selection.value == "annotated" %}dingo::annotated<{{ request }}, tag>{%
+elif selection.value == "keyed" %}dingo::dependency<{{ request }}, {{ KEY }}>{%
+else %}{{ request }}{% endif %}
+{%- endmacro %}
+
+{#- An interface as a registration declares it for a selection. -#}
+{% macro bound(selection, type) -%}
+{% if selection.value == "annotated" %}dingo::annotated<{{ type }}, tag>{%
+else %}{{ type }}{% endif %}
+{%- endmacro %}
+
+{#- The traits of a container, with a lookup by key for each of the
+    interfaces when the registration is keyed. -#}
+{% macro traits(container, keyed, keys) -%}
+{% if keyed %}keyed_traits<dingo::{{ container.value }}_container_traits, {{
+keys }}>{% else %}dingo::{{ container.value }}_container_traits{% endif %}
+{%- endmacro %}
+
+{#- A container of one registration: a runtime container registers it, a
+    static one binds it. -#}
+{% macro container(container, traits, arguments) -%}
+{% if container.value == "runtime" %}dingo::container<{{ traits }}>{% else
+%}dingo::static_container<dingo::bindings<dingo::bind<{{ arguments }}>>, {{
+traits }}>{% endif %}
+{%- endmacro %}

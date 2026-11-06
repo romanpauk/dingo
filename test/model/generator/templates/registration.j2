@@ -1,0 +1,52 @@
+{#- The C++ of a registration of the main family: its arguments, the
+    instance an external scope is given, and the statement that registers
+    it in a runtime container c. -#}
+{% import "macros.j2" as cpp %}
+
+{#- The interfaces<> each Binding declares, around a leaf L. -#}
+{% set DECLARED = {
+  "concrete": None,
+  "interface": "leaf_interface",
+  "annotated": "dingo::annotated<L, tag>",
+  "keyed": "L",
+} %}
+
+{% macro arguments(r) -%}
+{% set stored = cpp.stored(r.form, r.leaf) %}
+{% set declared = DECLARED[r.binding.value] %}
+dingo::scope<dingo::{{ r.scope.value }}>, dingo::storage<{{ stored }}>
+{%- if r.form.is_dynamic_array and r.scope.value != "external" -%}
+, dingo::factory<dingo::function<&instance<{{ stored }}>::make>>
+{%- endif -%}
+{%- if declared -%}
+, dingo::interfaces<{{ declared | replace("L", cpp.LEAF[r.leaf.value]) }}>
+{%- endif -%}
+{%- endmacro %}
+
+{#- The arguments of a static binding, with its key. -#}
+{% macro static_arguments(r) -%}
+{{ arguments(r) }}{% if r.binding.value == "keyed" %}, {{ cpp.KEY }}{% endif %}
+{%- endmacro %}
+
+{% macro registration(r) -%}
+dingo::type_registration<{{ static_arguments(r) }}>
+{%- endmacro %}
+
+{#- The instance an external scope is given. -#}
+{% macro given(r) -%}
+{% set stored = cpp.stored(r.form, r.leaf) %}
+{% if r.form.is_object %}external_object<{{ stored | replace(" &", "") }}>(){%
+else %}instance<{{ stored }}>::make(){% endif %}
+{%- endmacro %}
+
+{#- The statement that registers r in a runtime container c; none in a
+    static one, which binds it in its type. -#}
+{% macro registered(r) -%}
+{% if r.container.value == "runtime" -%}
+c.template register_type<{{ arguments(r) }}>(
+{%- if r.scope.value == "external" %}{{ given(r) }}{% endif -%}
+{%- if r.scope.value == "external" and r.binding.value == "keyed" %}, {% endif -%}
+{%- if r.binding.value == "keyed" %}dingo::key_value{std::size_t(1)}{% endif -%}
+);
+{%- endif %}
+{%- endmacro %}

@@ -39,6 +39,19 @@ function(configure_quality_targets out_check_targets)
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     USES_TERMINAL
   )
+  # Detects the constructor of every class generated around a request of the
+  # grammar, makes the class, and fails on a defect or on a class that a
+  # detected constructor makes differently from the explicit one. Not part of
+  # check until the defects it finds are fixed.
+  add_custom_target(detection-check
+    COMMENT "Probing constructor detection"
+    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/test/model/detection.py
+      ${PROJECT_BINARY_DIR}/detection/baseline.json
+      --work ${PROJECT_BINARY_DIR}/detection/units
+      --compiler ${CMAKE_CXX_COMPILER} ${model_flags}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    USES_TERMINAL
+  )
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     list(APPEND check_targets model-check)
   endif()

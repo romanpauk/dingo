@@ -52,6 +52,9 @@ Run a quality target with `cmake --build build -t <target>`.
   and fails on a defect; it is part of `check` with GCC and clang, whose
   diagnostics it reads. See [Model Probe](#model-probe).
 - `model-check-full`: the same for every registration; not part of `check`.
+- `detection-check`: probes constructor detection over the request grammar. See
+  [Constructor Detection Probe](#constructor-detection-probe). Not part of
+  `check` until the defects it finds are fixed.
 
 The development tools are provided by the locked `uv` environment.
 
@@ -138,6 +141,49 @@ pairwise covering array of the registrations (`--cover pairs`): every pair of
 values of two of scope, stored form, leaf and binding is probed in both
 containers, at an eighth of the cost. `--only <text>` probes the registrations
 whose name contains the text.
+
+### Generator
+
+The probe and the detection probe below share
+[`test/model/generator/`](../test/model/generator):
+
+- `dimensions.py`: an enum per dimension. The value of a member is its name in a
+  cell.
+- `model.py`: an interface the library names, a request of the grammar as a
+  shape and a category of an interface, with the rules for requests that are not
+  valid C++, and a probe of a request.
+- `registrations.py` and `detection.py`: the units of each family and their
+  cells, without any C++.
+- `templates/`: the Jinja templates that spell the units in C++. `macros.j2`
+  holds the spellings of the dimensions, `registration.j2` those of a
+  registration of the probe.
+- `driver.py`: compiles and runs the programs, and tells compile errors apart by
+  probe. A template marks the lines of each probe with `// probe N`.
+- `survey.py` and `report.py`: the survey of the interfaces a registration
+  binds, and the baseline, its defects and its disagreements.
+
+## Constructor Detection Probe
+
+[`test/model/detection.py`](../test/model/detection.py) probes constructor
+detection. A parameter is every shape of every supported leaf (copyable,
+move-only, and an abstract interface), plain, annotated and keyed, in every
+category. Each is the parameter of a class of each kind: a constructor, an
+explicit constructor, an aggregate member, and the two parameters of a
+constructor ([`test/model/detection.h`](../test/model/detection.h)).
+
+For each class it records what shape and signature detection say, against the
+constructor the generator wrote, and makes the class through `resolve`,
+`construct` and `invoke` of an unregistered class and through a `shared`
+registration of it, in both containers over a few registrations of the leaf. It
+makes the class with the constructor an explicit factory names, the one shape
+detection finds and the one signature detection finds. A detected constructor
+has to make what the explicit one makes.
+
+```bash
+cmake --build build -t detection-check
+```
+
+writes `build/detection/baseline.json` and `baseline.md`.
 
 ## Generated Matrix Tests
 
