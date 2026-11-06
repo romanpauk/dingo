@@ -94,12 +94,14 @@ request does. The operations make the request as the caller of `resolve`, as the
 dependency of the constructor of a class in the `unique`, `shared` or
 `shared_cyclical` scope, as the parameter of an invoked callable, and with
 `construct`. Nothing in it decides what should work: each registration is
-compiled into a program with [`test/model/probe.h`](../test/model/probe.h),
-which registers it, resolves each request twice and records the outcome. A
-request the library rejects at compile time is recorded with the message of its
-`static_assert`: the compiler names the requests that fail by their lines in the
-program, and the others are compiled again without them. The header is
-precompiled once.
+compiled into one program with [`test/model/probe.h`](../test/model/probe.h),
+which makes every request with every operation, resolving it twice, and records
+the outcome. A request the library rejects at compile time is recorded with the
+message of its `static_assert`: the compiler names the requests that fail by
+their lines in the program, and the others are compiled again without them. The
+operations of a request share its instantiation, which the compiler reports
+once, so the other operations of a failed request are compiled in a program per
+operation. The header is precompiled once, and clang's error limit is lifted.
 
 A resolved request is also checked: its result has to reach the registered leaf,
 a scope that keeps its instance has to return the same one by reference, a

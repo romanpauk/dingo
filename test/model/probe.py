@@ -24,11 +24,12 @@ unless one of them does not accept the registration. The probe fails when a
 cell is a defect (does_not_compile, crashed, violated) or the containers
 disagree.
 
-Every registration gets its own translation unit, so a failure is confined to
-its cells. The compiler reports every request that fails to compile at once,
-by its line in the unit, so those are recorded and the others are compiled
-again; a unit whose errors cannot be attributed, or that crashes, is split
-into one unit per request.
+Every registration gets its own translation unit, which makes each request
+with each operation, so a failure is confined to its cells and the operations
+share what they instantiate. The compiler reports every request that fails to
+compile at once, by its line in the unit, so those are recorded and the others
+are compiled again; a unit whose errors cannot be attributed, or that crashes,
+is split into one unit per request.
 """
 
 import argparse
@@ -125,18 +126,24 @@ CONSUMERS = {
 
 
 @dataclass(frozen=True)
+class Probe:
+    """A request made with an operation."""
+    operation: str
+    request: str
+
+
+@dataclass(frozen=True)
 class Registration:
     container: str
     scope: str
     form: str
     leaf: str
     binding: str
-    operation: str = "resolve"
 
     @property
     def name(self):
         return "__".join((self.container, self.scope, self.form, self.leaf,
-                          self.binding, self.operation))
+                          self.binding))
 
     @property
     def leaf_type(self):
@@ -180,9 +187,15 @@ class Registration:
             for spelling, by_value in REQUESTS
         ]
 
-    def cell(self, request):
+    def probes(self):
+        """The probes, each with whether its request is invalid C++."""
+        return [(Probe(operation, request), invalid)
+                for operation in OPERATIONS
+                for request, invalid in self.requests()]
+
+    def cell(self, probe):
         return "/".join((self.container, self.scope, self.form, self.leaf,
-                         self.binding, self.operation, request))
+                         self.binding, probe.operation, probe.request))
 
     def container_type(self):
         base = f"dingo::{self.container}_container_traits"
@@ -220,42 +233,51 @@ class Registration:
             return f"dingo::dependency<{request}, {KEY}>"
         return request
 
-    def resolve(self, request):
+    def resolve(self, probe):
         """The expression that makes the request in container c."""
+        operation, request = probe.operation, probe.request
         selected = self.selected(request)
-        if self.operation == "dependency":
+        if operation == "dependency":
             return f"c.template resolve<consumer<{selected}>>()"
-        if self.operation in CONSUMERS:
+        if operation in CONSUMERS:
             return f"c.template resolve<consumer<{selected}> &>()"
-        if self.operation == "invoke":
+        if operation == "invoke":
             return (f"c.invoke([]({selected} arg) {{ return received<"
                     f"{selected}>(pass_on<{selected}>(arg)); }})")
-        if self.operation == "construct":
+        if operation == "construct":
             return f"c.template construct<{selected}>()"
         if self.binding == "keyed" and self.container == "runtime":
             return f"c.template resolve<{request}>(std::size_t(1))"
         return f"c.template resolve<{selected}>()"
 
-    def probed_container(self, request):
+    def probed_container(self, probe):
         """The container a request is probed in, within run<Container>."""
-        if self.operation in CONSUMERS:
+        if probe.operation in CONSUMERS:
             return (f"typename with_consumer<Container, "
-                    f"{self.selected(request)}, "
-                    f"dingo::{CONSUMERS[self.operation]}>::type")
+                    f"{self.selected(probe.request)}, "
+                    f"dingo::{CONSUMERS[probe.operation]}>::type")
         return "Container"
 
-    def setup(self, request):
+    def setup(self, probe):
         """The statements that register what a request needs in c."""
         statements = self.register()
-        if self.operation in CONSUMERS:
+        if probe.operation in CONSUMERS:
             statements += (
-                f" register_consumer<{self.selected(request)}, "
-                f"dingo::{CONSUMERS[self.operation]}>(c);")
+                f" register_consumer<{self.selected(probe.request)}, "
+                f"dingo::{CONSUMERS[probe.operation]}>(c);")
         return statements
 
-    def source(self, requests):
-        """The unit that probes the requests, and the request each of its
-        lines belongs to, by line number."""
+    def keeps(self, probe):
+        """How the scope keeps what the probe resolves."""
+        if self.scope == "unique":
+            return "nothing"
+        if probe.operation == "construct":
+            return "addresses"
+        return "instance"
+
+    def source(self, probes):
+        """The unit that makes the probes, and the probe each of its lines
+        belongs to, by line number."""
         static = "true" if self.container == "static" else "false"
         lines = [
             "// Generated by test/model/probe.py. Do not edit.",
@@ -269,31 +291,25 @@ class Registration:
             "  if constexpr (registrable<dingo::type_registration<"
             f"{self.static_arguments}>, {static}>()) {{",
         ]
-        if self.scope == "unique":
-            keeps = "nothing"
-        elif self.operation == "construct":
-            keeps = "addresses"
-        else:
-            keeps = "instance"
         if self.given():
             # What the scope is given outlives the probes; make it first, so
             # that they do not count it as leaked.
             lines.append(f"    (void){self.given()};")
         owners = {}
-        for request in requests:
-            resolve = self.resolve(request)
+        for probe in probes:
+            resolve = self.resolve(probe)
             owners.update(
-                {len(lines) + offset: request for offset in range(1, 5)})
+                {len(lines) + offset: probe for offset in range(1, 5)})
             lines += [
-                f"    probe<{self.probed_container(request)}>(",
-                f'        "{self.cell(request)}", keeps::{keeps},',
-                f"        [](auto &c) {{ {self.setup(request)} }},",
+                f"    probe<{self.probed_container(probe)}>(",
+                f'        "{self.cell(probe)}", keeps::{self.keeps(probe)},',
+                f"        [](auto &c) {{ {self.setup(probe)} }},",
                 f"        [](auto &c) -> decltype(auto) {{ return {resolve}; }});",
             ]
         lines.append("  } else {")
         lines += [
-            f'    record("{self.cell(request)}", "not_registrable");'
-            for request in requests
+            f'    record("{self.cell(probe)}", "not_registrable");'
+            for probe in probes
         ]
         lines += [
             "  }",
@@ -311,9 +327,8 @@ def registrations():
             for form, _ in STORED:
                 for leaf in LEAVES:
                     for binding in BINDINGS:
-                        for operation in OPERATIONS:
-                            yield Registration(container, scope, form, leaf,
-                                               binding, operation)
+                        yield Registration(container, scope, form, leaf,
+                                           binding)
 
 
 ERROR = re.compile(r"error: (.*)")
@@ -355,19 +370,19 @@ def build_and_run(compiler, flags, directory, name, source):
     return records, None, None
 
 
-def failed_requests(stderr, name, owners):
-    """The first error of each request a compiler output reports, found by
+def failed_probes(stderr, name, owners):
+    """The first error of each probe a compiler output reports, found by
     the lines of the unit its instantiation context names: GCC prints the
     context before an error, clang after it, as notes. None when an error
-    belongs to no request. Clang stops at its error limit; the requests after
-    it are left to the next compile."""
+    belongs to no probe. Clang stops at its error limit, unless it is lifted;
+    the probes after it are left to the next compile."""
     reference = re.compile(re.escape(f"{name}.cpp") + r":(\d+):")
     context_follows = "note: in instantiation of" in stderr
     errors = []  # each error with the unit lines of its context
     pending = []
     for line in stderr.splitlines():
         if ERROR_LIMIT in line:
-            # The requests after the limit are left to the next compile.
+            # The probes after the limit are left to the next compile.
             break
         match = ERROR.search(line)
         if match:
@@ -397,7 +412,7 @@ def failed_requests(stderr, name, owners):
     return failed or None
 
 
-def failure(registration, request, error):
+def failure(registration, probe, error):
     assertion = ASSERTION.match(error)
     if error.startswith(CRASH):
         outcome = "crashed"
@@ -407,57 +422,97 @@ def failure(registration, request, error):
     else:
         outcome = "does_not_compile"
     return {
-        "cell": registration.cell(request),
+        "cell": registration.cell(probe),
         "outcome": outcome,
         "error": error.strip(),
     }
 
 
-def probe_alone(compiler, flags, directory, registration, index, request):
-    """Probes one request in a unit of its own."""
-    source, _ = registration.source((request,))
+def probe_alone(compiler, flags, directory, registration, index, probe):
+    """Makes one probe in a unit of its own."""
+    source, _ = registration.source((probe,))
     records, stderr, crash = build_and_run(
         compiler, flags, directory, f"{registration.name}__{index}", source)
     if stderr is not None:
-        return [failure(registration, request, first_error(stderr))]
+        return [failure(registration, probe, first_error(stderr))]
     if crash is not None:
-        return [failure(registration, request, crash)]
+        return [failure(registration, probe, crash)]
     return records
 
 
-def probe_registration(compiler, flags, directory, registration):
-    """Probes the requests of a registration in one unit. The requests a
-    compile fails for are recorded with their first error and the rest are
-    compiled again; a unit whose errors cannot be told apart by request, or
-    that crashes, is probed one request at a time."""
+def probe_group(compiler, flags, directory, registration, name, probes):
+    """Makes probes in one unit, until they compile. The probes a compile
+    fails for are recorded with their first error and the rest are compiled
+    again; probes whose errors cannot be told apart, or that crash, are made
+    one at a time."""
     outcomes = []
-    requests = []
-    for request, invalid in registration.requests():
+    while probes:
+        source, owners = registration.source(probes)
+        records, stderr, crash = build_and_run(compiler, flags, directory,
+                                               name, source)
+        if stderr is None and crash is None:
+            return outcomes + records
+        failed = failed_probes(stderr, name, owners) if stderr else None
+        if failed is None:
+            break
+        outcomes += [failure(registration, probe, error)
+                     for probe, error in failed.items()]
+        probes = [probe for probe in probes if probe not in failed]
+    for index, probe in enumerate(probes):
+        outcomes += probe_alone(compiler, flags, directory, registration,
+                                index, probe)
+    return outcomes
+
+
+def probe_shared(compiler, flags, directory, registration, name, probes):
+    """Makes probes in one unit, where the operations share what they
+    instantiate. A request fails to compile in one instantiation, which the
+    compiler reports for the first probe of the request only. So when the
+    unit fails, the probes it reports are recorded, the other probes of their
+    requests are made in one unit per operation, where every request is a
+    probe of its own, and the rest in one unit again."""
+    if not probes:
+        return []
+    source, owners = registration.source(probes)
+    records, stderr, crash = build_and_run(compiler, flags, directory, name,
+                                           source)
+    if stderr is None and crash is None:
+        return records
+    failed = (failed_probes(stderr, name, owners) if stderr else None) or {}
+    outcomes = [failure(registration, probe, error)
+                for probe, error in failed.items()]
+    rest = [probe for probe in probes if probe not in failed]
+    requests = {probe.request for probe in failed}
+    if not failed:
+        # Nothing could be told apart: every probe is a suspect.
+        requests = {probe.request for probe in rest}
+    suspects = [probe for probe in rest if probe.request in requests]
+    outcomes += probe_shared(compiler, flags, directory, registration,
+                             f"{name}_", [probe for probe in rest
+                                          if probe.request not in requests])
+    for operation in OPERATIONS:
+        outcomes += probe_group(
+            compiler, flags, directory, registration,
+            f"{registration.name}__{operation}",
+            [probe for probe in suspects if probe.operation == operation])
+    return outcomes
+
+
+def probe_registration(compiler, flags, directory, registration):
+    """Makes the probes of a registration, the invalid ones aside."""
+    outcomes = []
+    probes = []
+    for probe, invalid in registration.probes():
         if invalid:
             outcomes.append({
-                "cell": registration.cell(request),
+                "cell": registration.cell(probe),
                 "outcome": "invalid",
                 "error": "an abstract type cannot be held by value",
             })
         else:
-            requests.append(request)
-    while requests:
-        source, owners = registration.source(requests)
-        records, stderr, crash = build_and_run(
-            compiler, flags, directory, registration.name, source)
-        if stderr is None and crash is None:
-            return outcomes + records
-        failed = failed_requests(stderr, registration.name,
-                                 owners) if stderr else None
-        if failed is None:
-            break
-        outcomes += [failure(registration, request, error)
-                     for request, error in failed.items()]
-        requests = [request for request in requests if request not in failed]
-    for index, request in enumerate(requests):
-        outcomes += probe_alone(compiler, flags, directory, registration,
-                                index, request)
-    return outcomes
+            probes.append(probe)
+    return outcomes + probe_shared(compiler, flags, directory, registration,
+                                   registration.name, probes)
 
 
 MARKS = {
@@ -549,9 +604,9 @@ def write_report(path, cells):
         ]
         for scope in SCOPES:
             for form, _ in STORED:
-                unit = Registration(container, scope, form, leaf, binding,
-                                    operation)
-                row = [table.get(unit.cell(r), "?") for r, _ in unit.requests()]
+                unit = Registration(container, scope, form, leaf, binding)
+                row = [table.get(unit.cell(Probe(operation, r)), "?")
+                       for r, _ in unit.requests()]
                 lines.append(f"| {scope} / {form} | " + " | ".join(row) + " |")
         lines.append("")
     lines += ["## Container disagreements", ""]
@@ -567,6 +622,14 @@ def write_report(path, cells):
         if len(where) > 4:
             lines.append(f"  - ... {len(where) - 4} more")
     path.write_text("\n".join(lines) + "\n")
+
+
+def error_limit_flags(compiler):
+    """The flags that let the compiler report every error of a unit: clang
+    stops at 20, GCC does not stop."""
+    result = subprocess.run([compiler, "--version"], capture_output=True,
+                            text=True)
+    return ["-ferror-limit=0"] if "clang" in result.stdout else []
 
 
 def precompile_header(compiler, flags, work):
@@ -601,7 +664,7 @@ def main():
     )
     options = parser.parse_args()
     options.work.mkdir(parents=True, exist_ok=True)
-    flags = shlex.split(options.flags)
+    flags = shlex.split(options.flags) + error_limit_flags(options.compiler)
     flags = precompile_header(options.compiler, flags, options.work) + flags
 
     units = [unit for unit in registrations() if options.only in unit.name]
