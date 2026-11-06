@@ -23,12 +23,27 @@ using request_interface_t =
 } // namespace detail
 
 namespace detail {
+// A request without its rvalue reference, also inside an annotation or a
+// selector: a resolved rvalue reference is returned by value.
+template <typename Request> struct remove_rvalue_request {
+  using type = std::conditional_t<std::is_rvalue_reference_v<Request>,
+                                  std::remove_reference_t<Request>, Request>;
+};
+
+template <typename T, typename Tag>
+struct remove_rvalue_request<annotated<T, Tag>> {
+  using type = annotated<typename remove_rvalue_request<T>::type, Tag>;
+};
+
+template <typename T, typename Selector>
+struct remove_rvalue_request<selected<T, Selector>> {
+  using type = selected<typename remove_rvalue_request<T>::type, Selector>;
+};
+
 template <typename Request, bool RemoveRvalueReferences>
-using request_lookup_t = std::conditional_t<
-    RemoveRvalueReferences,
-    std::conditional_t<std::is_rvalue_reference_v<Request>,
-                       std::remove_reference_t<Request>, Request>,
-    Request>;
+using request_lookup_t =
+    std::conditional_t<RemoveRvalueReferences,
+                       typename remove_rvalue_request<Request>::type, Request>;
 } // namespace detail
 
 // Lazy single-member views of request_type. Naming one of these does not

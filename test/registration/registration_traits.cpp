@@ -1753,3 +1753,25 @@ TEST(type_registration_test, unique_pointer_is_handed_to_caller) {
   std::unique_ptr<A> instance(runtime.resolve<A *>());
   EXPECT_EQ(instance->value(), 7);
 }
+
+// A resolved rvalue reference is returned by value, also when it is annotated.
+TEST(type_registration_test, annotated_rvalue_request_returns_value) {
+  struct tag {};
+  struct A {};
+
+  container<> runtime;
+  runtime.register_type<scope<unique>, storage<A>,
+                        interfaces<annotated<A, tag>>>();
+  static_assert(
+      std::is_same_v<decltype(runtime.resolve<annotated<A &&, tag>>()), A>);
+  static_assert(
+      std::is_same_v<decltype(runtime.resolve<annotated<A, tag> &&>()), A>);
+  (void)runtime.resolve<annotated<A &&, tag>>();
+}
+
+TEST(type_registration_test, cyclical_scope_does_not_store_raw_pointers) {
+  struct A {};
+
+  static_assert(!detail::has_storage_cell_v<shared_cyclical, A *>);
+  static_assert(detail::has_storage_cell_v<shared, A *>);
+}

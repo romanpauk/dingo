@@ -57,19 +57,20 @@ template <> struct scope_traits<shared_cyclical> {
   static constexpr materialization_guard guard = materialization_guard::none;
   static constexpr bool retains_unresolved_source = false;
 
-  // Only plain objects, raw pointers and shared_ptr can be stored in a cycle.
-  // The instance is allocated before it is constructed, so a dynamic array,
-  // which has no size to allocate, cannot be.
+  // The instance is allocated before it is constructed, and its address is
+  // published to the cycle in between. Plain objects, bounded arrays and
+  // shared_ptr can be; a dynamic array has no size to allocate, and the object
+  // of a raw pointer is allocated by the factory, after the publication.
   static constexpr storage_exposure exposed(storage_form form) {
     switch (form) {
     case storage_form::plain:
     case storage_form::alternative:
-    case storage_form::pointer:
     case storage_form::bounded_array:
       return storage_exposure::lvalue | storage_exposure::pointer;
     case storage_form::shared_handle:
       return storage_exposure::value | storage_exposure::lvalue |
              storage_exposure::pointer;
+    case storage_form::pointer:
     case storage_form::array:
     case storage_form::shared_array_handle:
     case storage_form::unique_handle:
