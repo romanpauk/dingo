@@ -13,11 +13,7 @@
 
 namespace dingo {
 namespace detail {
-template <typename Target, typename Source, typename Conversion>
-struct type_resolution;
-
-template <typename Operation>
-using operation_cache_types_t = typename Operation::cache_types;
+template <typename Source, typename Conversion> struct type_resolution;
 
 template <typename Source, typename Target,
           bool SourcePointer = std::is_pointer_v<std::remove_cv_t<Source>>,
@@ -72,17 +68,18 @@ inline constexpr bool is_resolution_request_for_v =
 } // namespace detail
 
 namespace detail {
-template <typename Resolutions, typename Storage> struct resolution_cache_types;
+// The conversions the operations of the resolutions retain.
+template <typename Resolutions> struct resolution_cache_types;
 
-template <typename Storage, typename... Resolutions>
-struct resolution_cache_types<type_list<Resolutions...>, Storage> {
-  using type = type_list_unique_t<type_list_cat_t<
-      operation_cache_types_t<typename Resolutions::operation>...>>;
+template <typename... Resolutions>
+struct resolution_cache_types<type_list<Resolutions...>> {
+  using type = type_list_unique_t<
+      type_list_cat_t<typename Resolutions::operation::cache_types...>>;
 };
 
-template <typename Resolutions, typename Storage>
+template <typename Resolutions>
 using resolution_cache_types_t =
-    typename resolution_cache_types<Resolutions, Storage>::type;
+    typename resolution_cache_types<Resolutions>::type;
 
 } // namespace detail
 } // namespace dingo

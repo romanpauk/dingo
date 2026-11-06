@@ -111,24 +111,24 @@ TEST(resolution_operation_test,
   fake_resolution_context context;
 
   using reference_operation =
-      detail::type_resolution<unrelated_alternative &, alternative_type &,
+      detail::type_resolution<alternative_type &,
                               detail::type_conversion_path_t<
                                   unrelated_alternative &, alternative_type &>>;
-  ASSERT_THROW((reference_operation::apply<alternative_storage>(
+  ASSERT_THROW((reference_operation::apply(
                    lvalue_factory, context, detail::make_resolved_source(value),
                    describe_type<unrelated_alternative &>(),
                    describe_type<alternative_type>())),
                type_not_convertible_exception);
 
   using pointer_operation =
-      detail::type_resolution<unrelated_alternative *, alternative_type *,
+      detail::type_resolution<alternative_type *,
                               detail::type_conversion_path_t<
                                   unrelated_alternative *, alternative_type *>>;
   ASSERT_THROW(
-      (pointer_operation::apply<alternative_storage>(
-          pointer_factory, context, detail::make_resolved_source(&value),
-          describe_type<unrelated_alternative *>(),
-          describe_type<alternative_type *>())),
+      (pointer_operation::apply(pointer_factory, context,
+                                detail::make_resolved_source(&value),
+                                describe_type<unrelated_alternative *>(),
+                                describe_type<alternative_type *>())),
       type_not_convertible_exception);
 }
 

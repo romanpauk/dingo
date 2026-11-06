@@ -26,8 +26,8 @@ using conversion_target_t =
 
 template <typename Target, typename Source, typename Access = consume>
 using conversion_resolution = resolution<
-    Target, type_resolution<conversion_target_t<Target>, Source,
-                            type_conversion_path_t<conversion_target_t<Target>,
+    Target,
+    type_resolution<Source, type_conversion_path_t<conversion_target_t<Target>,
                                                    Source, Access>>>;
 
 // A conditional expression still names the conversion probe for unchanged

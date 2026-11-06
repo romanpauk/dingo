@@ -51,8 +51,7 @@ using test_binding_cell = detail::binding_cell<
     std::conditional_t<
         Storage::conversions::is_stable,
         detail::resolution_cache_types_t<
-            typename detail::binding_resolutions<Interface, Storage>::type,
-            detail::storage_shape_t<Storage>>,
+            typename detail::binding_resolutions<Interface, Storage>::type>,
         type_list<>>>;
 
 struct counting_runtime_binding_container {

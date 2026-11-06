@@ -28,8 +28,8 @@ template <typename Interface, typename BindingModel> struct binding {
   using key_type = typename BindingModel::key_type;
 };
 
-template <typename Registration, bool StorageTagIsComplete>
-struct binding_model_impl {
+// What a registration declares.
+template <typename Registration> struct binding_model_base {
   using registration_type = Registration;
   using interface_types = typename Registration::interface_type::type;
   using registered_storage_type = typename Registration::storage_type::type;
@@ -41,28 +41,29 @@ struct binding_model_impl {
   using conversions_type = typename Registration::conversions_type::type;
   using dependencies_type = typename Registration::dependencies_type;
   using bindings_type = typename Registration::bindings_type::type;
+};
 
-  static constexpr bool storage_tag_is_complete = StorageTagIsComplete;
+// A registration whose scope tag is not usable has no storage.
+template <typename Registration, bool StorageTagIsComplete>
+struct binding_model_impl : binding_model_base<Registration> {
+  static constexpr bool storage_tag_is_complete = false;
   static constexpr bool use_interface_as_stored_leaf = false;
-  using stored_leaf_type = leaf_type_t<registered_storage_type>;
-  using stored_type = rebind_leaf_t<registered_storage_type, stored_leaf_type>;
+  using stored_leaf_type = leaf_type_t<
+      typename binding_model_base<Registration>::registered_storage_type>;
+  using stored_type = rebind_leaf_t<
+      typename binding_model_base<Registration>::registered_storage_type,
+      stored_leaf_type>;
   using storage_type = void;
   using requirements = void;
   static constexpr bool valid = false;
 };
 
-template <typename Registration> struct binding_model_impl<Registration, true> {
-  using registration_type = Registration;
-  using interface_types = typename Registration::interface_type::type;
-  using registered_storage_type = typename Registration::storage_type::type;
-  using scope_type = typename Registration::scope_type;
-  using storage_tag = typename scope_type::type;
-  using factory_type = typename Registration::factory_type::type;
-  using registration_key_type = typename Registration::key_type;
-  using key_type = detail::make_lookup_key_t<registration_key_type>;
-  using conversions_type = typename Registration::conversions_type::type;
-  using dependencies_type = typename Registration::dependencies_type;
-  using bindings_type = typename Registration::bindings_type::type;
+template <typename Registration>
+struct binding_model_impl<Registration, true>
+    : binding_model_base<Registration> {
+  using base = binding_model_base<Registration>;
+  using typename base::interface_types;
+  using typename base::registered_storage_type;
 
   static constexpr bool storage_tag_is_complete = true;
   static constexpr bool use_interface_as_stored_leaf =
@@ -73,8 +74,9 @@ template <typename Registration> struct binding_model_impl<Registration, true> {
       typename annotated_traits<type_list_head_t<interface_types>>::type,
       leaf_type_t<registered_storage_type>>;
   using stored_type = rebind_leaf_t<registered_storage_type, stored_leaf_type>;
-  using storage_type = storage<storage_tag, registered_storage_type,
-                               stored_type, factory_type, conversions_type>;
+  using storage_type =
+      storage<typename base::storage_tag, registered_storage_type, stored_type,
+              typename base::factory_type, typename base::conversions_type>;
   using requirements = registration_requirements<storage_type, interface_types,
                                                  typename storage_type::type>;
 

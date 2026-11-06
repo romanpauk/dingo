@@ -17,12 +17,7 @@
 #include <utility>
 
 namespace dingo {
-template <typename... Types> struct conversion_cache;
-
-template <> struct conversion_cache<> {
-  void reset() {}
-};
-
+template <typename Types> struct conversion_cache;
 // A conversion constructed once and kept until the cache is reset or the
 // transaction that constructed it rolls back.
 template <typename T> struct conversion_cache_entry {
@@ -46,8 +41,12 @@ template <typename T> struct conversion_cache_entry {
   T *value_ = nullptr;
 };
 
+// The conversions a binding retains, one entry per type. The cache keeps
+// typed slots and leaves object lifetime to the allocation owner passed to
+// construct().
 template <typename... Types>
-struct conversion_cache : conversion_cache_entry<Types>... {
+struct conversion_cache<type_list<Types...>>
+    : conversion_cache_entry<Types>... {
   template <typename T, typename Context, typename... Args>
   T &construct(Context &context, Args &&...args) {
     return static_cast<conversion_cache_entry<T> &>(*this).construct(
@@ -57,15 +56,6 @@ struct conversion_cache : conversion_cache_entry<Types>... {
   void reset() {
     (static_cast<conversion_cache_entry<Types> &>(*this).reset(), ...);
   }
-};
-
-// Conversion caches retain typed slots but leave object lifetime to the
-// allocation owner passed to construct().
-template <typename... Args>
-struct conversion_cache<type_list<Args...>> : conversion_cache<Args...> {};
-
-template <> struct conversion_cache<type_list<>> {
-  void reset() {}
 };
 
 } // namespace dingo

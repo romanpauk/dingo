@@ -162,7 +162,7 @@ TEST(cache_test, conversion_cache_reuses_value_until_reset) {
 }
 
 TEST(cache_test, tracked_conversion_clears_slot_on_rollback) {
-  conversion_cache<cache_value> cache;
+  conversion_cache<type_list<cache_value>> cache;
   tracked_cache_context context;
 
   auto &first = cache.construct<cache_value>(context, 1);

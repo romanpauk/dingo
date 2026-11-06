@@ -55,10 +55,9 @@ private:
   using storage_type = typename BindingModel::storage_type;
 
   template <typename Interface>
-  using interface_cache_types = resolution_cache_types_t<
-      typename binding_resolutions<typename annotated_traits<Interface>::type,
-                                   storage_type>::type,
-      storage_shape_t<storage_type>>;
+  using interface_cache_types =
+      resolution_cache_types_t<typename binding_resolutions<
+          typename annotated_traits<Interface>::type, storage_type>::type>;
 
 public:
   using type =
@@ -314,7 +313,7 @@ template <typename Cell, typename Dependencies> struct binding_activation {
   template <typename Resolution, typename Context, typename Source>
   decltype(auto) apply(Context &context, Source &&source,
                        type_descriptor requested_type) {
-    return Resolution::operation::template apply<storage_type>(
+    return Resolution::operation::apply(
         *this, context, std::forward<Source>(source), requested_type,
         describe_type<typename storage_type::type>());
   }

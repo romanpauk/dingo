@@ -11,7 +11,6 @@
 #include <dingo/base/exceptions.h>
 #include <dingo/factory/constructor_detection.h>
 #include <dingo/memory/aligned_storage.h>
-#include <dingo/resolution/resolving_frame_fwd.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/key.h>
 
@@ -35,6 +34,29 @@ template <typename T>
 inline constexpr bool is_runtime_context_v =
     is_runtime_context<std::remove_cv_t<std::remove_reference_t<T>>>::value;
 
+class context_path_state;
+
+// A frame of the resolution path: the type being constructed, linked to the
+// frame of the type whose construction requested it.
+class resolving_frame {
+public:
+  resolving_frame(context_path_state &context, type_descriptor type);
+
+  resolving_frame(const resolving_frame &) = delete;
+  resolving_frame &operator=(const resolving_frame &) = delete;
+  resolving_frame(resolving_frame &&) = delete;
+  resolving_frame &operator=(resolving_frame &&) = delete;
+
+  ~resolving_frame();
+
+private:
+  friend class context_path_state;
+
+  context_path_state *context_;
+  resolving_frame *parent_ = nullptr;
+  type_descriptor type_;
+};
+
 class context_path_state {
 public:
   template <typename T> detail::resolving_frame track_type();
@@ -50,18 +72,6 @@ protected:
 
   detail::resolving_frame *active_resolving_frame_ = nullptr;
 };
-
-} // namespace detail
-} // namespace dingo
-
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
-
-#include <dingo/resolution/resolving_frame.h>
-
-namespace dingo {
-namespace detail {
 
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic push
@@ -119,10 +129,6 @@ template <typename T> detail::resolving_frame context_path_state::track_type() {
 }
 
 } // namespace detail
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable : 4702)
-#endif
 
 // The resolution context of both containers. The backend provides the memory
 // of the instances a resolution constructs, construct_storage<T>(scope, fn),

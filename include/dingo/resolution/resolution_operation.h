@@ -44,13 +44,10 @@ Target convert_type(Source &&source) {
   return convert_type<Target>(std::forward<Source>(source), conversion{});
 }
 
-template <typename Target, typename Source, typename Conversion>
-struct type_resolution {
-  using source_type = Source;
+template <typename Source, typename Conversion> struct type_resolution {
   using cache_types = typename Conversion::cache_types;
 
-  template <typename Storage, typename Resolver, typename Context,
-            typename MaterializedSource>
+  template <typename Resolver, typename Context, typename MaterializedSource>
   static decltype(auto)
   apply(Resolver &resolver, Context &context, MaterializedSource &&source,
         type_descriptor requested_type, type_descriptor registered_type) {
