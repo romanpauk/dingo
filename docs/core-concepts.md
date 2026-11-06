@@ -73,7 +73,10 @@ representation that Dingo keeps and converts during resolution.
 ### Scopes
 
 - `external`: refer to an already existing object
-- `unique`: build a fresh instance per resolution
+- `unique`: build a fresh instance per resolution; it is handed over by value,
+  or moved into a `std::optional`, `std::unique_ptr` or `std::shared_ptr` of
+  itself or of one of its interfaces, and a reference to it is valid only while
+  the construction that requested it runs
 - `shared`: cache and reuse the same instance
 - `shared_cyclical`: cache instances while permitting cyclic graphs
 

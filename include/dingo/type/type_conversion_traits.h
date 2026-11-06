@@ -319,6 +319,24 @@ struct target_alternative_type_conversion
   }
 };
 
+// A new owning handle of a consumed value, converted to the element it holds.
+// A value of a class derived from the element is held as itself.
+template <typename Target, typename Source, typename Held, typename Conversion>
+struct boxed_type_conversion : conversion_step<Target, Source, Conversion> {
+  template <typename Resolver, typename Context, typename Actual>
+  static Target apply(Resolver &resolver, Context &context, Actual &&source,
+                      type_descriptor requested, type_descriptor registered) {
+    using handle =
+        typename type_traits<remove_cvref_t<Target>>::template rebind_t<Held>;
+    // The value is taken before it is moved into the handle: GCC then folds a
+    // handle that does not escape, as it does the value.
+    Held value(Conversion::apply(resolver, context,
+                                 std::forward<Actual>(source), requested,
+                                 registered));
+    return Target(type_traits<handle>::make(std::move(value)));
+  }
+};
+
 // Marks a conversion that constructs a new object; it applies as its
 // conversion does.
 template <typename Conversion> struct converted_construction : Conversion {};
@@ -861,6 +879,56 @@ template <typename Target, typename Source, typename Access>
 using source_alternative_fallback =
     typename source_alternative_type_conversion<Target, Source, Access>::type;
 
+// An owning handle of a value that is consumed: a handle of an element, such as
+// std::unique_ptr<T>, made of the source moved into a new object. The element
+// is an object, not another wrapper. It is not a converted_construction: a
+// factory makes a handle in place instead of moving into it what it made. The
+// element is an object, not another wrapper. It is not a
+// converted_construction: a factory makes a handle in place instead of moving
+// into it what it made.
+template <typename Target, typename Source, typename Access,
+          bool Enabled =
+              std::is_same_v<Access, consume> && !std::is_reference_v<Target> &&
+              !std::is_lvalue_reference_v<Source> &&
+              type_traits<remove_cvref_t<Target>>::is_owning_handle &&
+              is_value_borrowable_v<remove_cvref_t<Target>> &&
+              std::is_class_v<remove_cvref_t<Source>> &&
+              !type_traits<remove_cvref_t<Source>>::enabled>
+struct boxed_type_conversion_candidate {
+  using type = unavailable_type_conversion;
+};
+
+template <typename Target, typename Source, typename Access>
+struct boxed_type_conversion_candidate<Target, Source, Access, true> {
+private:
+  using element = std::remove_cv_t<
+      typename type_traits<remove_cvref_t<Target>>::value_type>;
+  using source_type = remove_cvref_t<Source>;
+  using held = std::conditional_t<std::is_base_of_v<element, source_type>,
+                                  source_type, element>;
+
+  template <bool Holdable, typename = void> struct select {
+    using type = unavailable_type_conversion;
+  };
+
+  template <typename Unused> struct select<true, Unused> {
+    using conversion =
+        typename type_conversion_path<held, Source, Access>::type;
+    using type = std::conditional_t<
+        conversion::available,
+        boxed_type_conversion<Target, Source, held, conversion>,
+        unavailable_type_conversion>;
+  };
+
+public:
+  using type =
+      typename select<is_formable_v<held> && !type_traits<held>::enabled>::type;
+};
+
+template <typename Target, typename Source, typename Access>
+using boxed_fallback =
+    typename boxed_type_conversion_candidate<Target, Source, Access>::type;
+
 template <typename Target, typename Source, typename Access>
 using target_wrapper_fallback =
     typename target_wrapper_type_conversion_candidate<Target, Source,
@@ -918,7 +986,7 @@ struct type_conversion_path {
       target_alternative_fallback, source_alternative_fallback,
       target_wrapper_fallback, array_fallback, address_fallback,
       pointer_access_fallback, dereference_fallback, borrowed_fallback,
-      retained_fallback>::type;
+      retained_fallback, boxed_fallback>::type;
   static constexpr bool available = type::available;
 };
 

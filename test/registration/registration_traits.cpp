@@ -1034,9 +1034,11 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   using unique_resolutions = detail::binding_resolutions<
       move_only, typename unique_move_only_model::storage_type>;
   static_assert(
-      std::is_same_v<resolution_targets_t<
-                         typename accepted_values<unique_resolutions>::type>,
-                     type_list<move_only, std::optional<move_only>>>);
+      std::is_same_v<
+          resolution_targets_t<
+              typename accepted_values<unique_resolutions>::type>,
+          type_list<move_only, std::optional<move_only>,
+                    std::unique_ptr<move_only>, std::shared_ptr<move_only>>>);
 
   using compatible_unique_handle_model =
       detail::binding_model<type_registration<
@@ -1797,4 +1799,57 @@ TEST(type_registration_test, cyclical_bounded_array_publishes_its_rows) {
   A(&whole)[2] = runtime.resolve<A(&)[2]>();
   EXPECT_EQ(rows, &whole[0]);
   EXPECT_EQ(rows, runtime.resolve<A *>());
+}
+
+namespace fresh_value_test {
+struct I {
+  virtual ~I() = default;
+  virtual int value() const = 0;
+};
+struct A : I {
+  int value() const override { return 7; }
+};
+struct move_only {
+  move_only() = default;
+  move_only(move_only &&) = default;
+  move_only(const move_only &) = delete;
+};
+// Owns a new instance of its interface.
+struct owner {
+  explicit owner(std::unique_ptr<I> init) : instance(std::move(init)) {}
+  std::unique_ptr<I> instance;
+};
+} // namespace fresh_value_test
+
+// A new value of a unique scope is moved into an owning handle of itself or of
+// its interface.
+TEST(type_registration_test, unique_value_is_moved_into_owning_handle) {
+  using fresh_value_test::A;
+  using fresh_value_test::I;
+  using fresh_value_test::owner;
+
+  container<> runtime;
+  runtime.register_type<scope<unique>, storage<A>, interfaces<A, I>>();
+  runtime.register_type<scope<unique>, storage<owner>>();
+  EXPECT_EQ(runtime.resolve<std::unique_ptr<A>>()->value(), 7);
+  EXPECT_EQ(runtime.resolve<std::shared_ptr<I>>()->value(), 7);
+  EXPECT_EQ(runtime.resolve<owner>().instance->value(), 7);
+
+  static_container<bindings<bind<scope<unique>, storage<A>, interfaces<I>>,
+                            bind<scope<unique>, storage<owner>>>>
+      compile_time;
+  EXPECT_EQ(compile_time.resolve<std::unique_ptr<I>>()->value(), 7);
+  EXPECT_EQ(compile_time.resolve<owner>().instance->value(), 7);
+}
+
+// A new optional of a unique scope gives its element away.
+TEST(type_registration_test, unique_optional_is_moved_out_of) {
+  using fresh_value_test::move_only;
+
+  container<> runtime;
+  runtime.register_type<scope<unique>, storage<std::optional<move_only>>>();
+  move_only value = runtime.resolve<move_only>();
+  (void)value;
+  static_assert(
+      std::is_same_v<decltype(runtime.resolve<move_only &&>()), move_only>);
 }

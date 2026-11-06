@@ -57,16 +57,24 @@ template <> struct scope_traits<unique> {
     return storage_exposure::none;
   }
 
-  // A plain value is additionally consumable as an optional.
+  // A new value is additionally moved into a wrapper of its own: a plain one
+  // or an alternative into an optional or an owning handle, and the element
+  // of an optional out of it.
   template <storage_form Form, typename Type, typename U>
   struct requests : detail::scope_rule_requests<unique, Type, U> {
-    using rvalue_reference_types = std::conditional_t<
-        Form == storage_form::plain,
-        type_list_cat_t<typename detail::scope_rule_requests<
-                            unique, Type, U>::rvalue_reference_types,
-                        type_list<std::optional<U> &&>>,
-        typename detail::scope_rule_requests<unique, Type,
-                                             U>::rvalue_reference_types>;
+  private:
+    using rule = detail::scope_rule_requests<unique, Type, U>;
+    using wrapped =
+        std::conditional_t<Form == storage_form::plain ||
+                               Form == storage_form::alternative,
+                           type_list<std::optional<U> &&, std::unique_ptr<U> &&,
+                                     std::shared_ptr<U> &&>,
+                           std::conditional_t<Form == storage_form::optional,
+                                              type_list<U &&>, type_list<>>>;
+
+  public:
+    using rvalue_reference_types =
+        type_list_cat_t<typename rule::rvalue_reference_types, wrapped>;
   };
 
   template <typename Type, typename StoredType, typename Factory,

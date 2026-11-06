@@ -553,6 +553,10 @@ struct type_traits<std::optional<T>> : semantics::optional_value {
   static const T &borrow(const std::optional<T> &wrapper) {
     return wrapper.value();
   }
+  // A consumed optional gives its element away.
+  static T &&borrow(std::optional<T> &&wrapper) {
+    return std::move(wrapper.value());
+  }
   static bool empty(const std::optional<T> &wrapper) {
     return !wrapper.has_value();
   }
