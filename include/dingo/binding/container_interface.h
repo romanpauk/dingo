@@ -447,12 +447,14 @@ public:
         make_lookup_key(std::forward<IdType>(id)));
   }
 
+  // Returns what the callable returns, a reference included; what the
+  // reference refers to is the callable's to keep alive.
   template <typename Signature = void, typename Callable>
-  auto invoke(Callable &&callable) {
+  decltype(auto) invoke(Callable &&callable) {
     using callable_type = std::remove_cv_t<std::remove_reference_t<Callable>>;
     using dispatch_signature =
         callable_dispatch_signature_t<Signature, callable_type>;
-    return self().with_context([&](auto &context) {
+    return self().with_context([&](auto &context) -> decltype(auto) {
       auto type_guard = context.template track_type<callable_type>();
       return callable_invoke<dispatch_signature>::construct(
           std::forward<Callable>(callable), ephemeral_scope, context, self());

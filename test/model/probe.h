@@ -483,20 +483,6 @@ struct observation<consumer<R> &> : observation<consumer<R>> {
   static constexpr bool kept = true;
 };
 
-// A kept consumer by its address, as a callable returns it.
-template <typename R> struct observation<consumer<R> *> {
-  using by_reference = observation<consumer<R> &>;
-  static const leaf_interface *leaf(consumer<R> *c) {
-    return by_reference::leaf(*c);
-  }
-  static int value(consumer<R> *c) { return by_reference::value(*c); }
-  static bool dangles(consumer<R> *c) { return by_reference::dangles(*c); }
-  static constexpr bool refers = by_reference::refers;
-  static constexpr bool keeps_leaf = by_reference::keeps_leaf;
-  static constexpr bool hands_over = by_reference::hands_over;
-  static constexpr bool kept = true;
-};
-
 // What is wrong with two results of one request, or null. A leaf that was not
 // kept may be gone, so it is not compared.
 template <typename R, typename First, typename Second>

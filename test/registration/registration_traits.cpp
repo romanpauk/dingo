@@ -2035,3 +2035,17 @@ TEST(type_registration_test, construct_of_dynamic_array_handle_holds_value) {
   std::shared_ptr<A[]> fixed_made = fixed.construct<std::shared_ptr<A[]>>();
   EXPECT_EQ(fixed_made[0].value(), 7);
 }
+
+// invoke returns what the callable returns, a reference included.
+TEST(type_registration_test, invoke_returns_what_the_callable_returns) {
+  using operation_test::A;
+
+  container<> runtime;
+  runtime.register_type<scope<shared>, storage<A>>();
+  A &kept = runtime.invoke([](A &a) -> A & { return a; });
+  EXPECT_EQ(&kept, &runtime.resolve<A &>());
+
+  static_container<bindings<bind<scope<shared>, storage<A>>>> fixed;
+  A &fixed_kept = fixed.invoke([](A &a) -> A & { return a; });
+  EXPECT_EQ(&fixed_kept, &fixed.resolve<A &>());
+}

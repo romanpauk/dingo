@@ -327,13 +327,9 @@ class Registration:
         if POSITIONS[position]:
             made += " &"
         if entry == "invoke":
-            # invoke returns a value, so a kept consumer is returned by its
-            # address, which is not copied.
-            if POSITIONS[position]:
-                return (f"c.invoke([]({made} arg) {{ "
-                        f"return std::addressof(arg); }})")
-            return (f"c.invoke([]({made} arg) {{ "
-                    f"return {made}(std::move(arg)); }})")
+            passed = "arg" if POSITIONS[position] else "std::move(arg)"
+            return (f"c.invoke([]({made} arg) -> {made} {{ "
+                    f"return {passed}; }})")
         return f"c.template {entry}<{made}>()"
 
     def probed_container(self, probe):
