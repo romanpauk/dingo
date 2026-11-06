@@ -114,12 +114,28 @@ inline constexpr bool can_construct_from_normalized_request_v =
 // movable result, and is rejected rather than degraded to the normalized value.
 // Nor is a bounded array: a pointer to a new one cannot be made with new, and
 // a handle of one only decays it.
+//
+// The checks read the type the request constructs, which an annotation or a
+// key selection only names.
+template <typename T, bool Selected = detail::is_selected_v<T>>
+struct constructed_type {
+  using type = typename annotated_traits<T>::type;
+};
+
+template <typename T> struct constructed_type<T, true> {
+  using type = typename annotated_traits<detail::selected_type_t<T>>::type;
+};
+
+template <typename Request>
+using constructed_type_t =
+    typename constructed_type<normalized_type_t<Request>>::type;
+
 template <typename Request>
 inline constexpr bool constructible_normalized_v =
     !std::is_rvalue_reference_v<Request> &&
-    std::is_object_v<normalized_type_t<Request>> &&
-    !std::is_abstract_v<normalized_type_t<Request>> &&
-    std::extent_v<normalized_type_t<Request>> == 0;
+    std::is_object_v<constructed_type_t<Request>> &&
+    !std::is_abstract_v<constructed_type_t<Request>> &&
+    std::extent_v<constructed_type_t<Request>> == 0;
 template <typename Request>
 inline constexpr bool construct_normalized_request_v =
     can_construct_from_normalized_request_v<Request> &&

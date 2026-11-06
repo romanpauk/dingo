@@ -2071,3 +2071,34 @@ TEST(type_registration_test, invoke_takes_immovable_parameter) {
   EXPECT_THROW(runtime.invoke([](immovable) { return 0; }),
                type_not_found_exception);
 }
+
+namespace annotated_construct_test {
+struct I {
+  virtual ~I() = default;
+  virtual int value() const = 0;
+};
+struct A : I {
+  int value() const override { return 7; }
+};
+struct tag {};
+} // namespace annotated_construct_test
+
+// construct of an annotated pointer to an abstract interface refers to the
+// instance, as for a plain one; nothing abstract is constructed.
+TEST(type_registration_test, construct_of_annotated_abstract_pointer) {
+  using namespace annotated_construct_test;
+  using request = annotated<I *, tag>;
+
+  container<> runtime;
+  runtime.register_type<scope<shared>, storage<A>,
+                        interfaces<annotated<I, tag>>>();
+  I *constructed = runtime.construct<request>();
+  EXPECT_EQ(constructed, static_cast<I *>(runtime.resolve<request>()));
+  EXPECT_EQ(constructed->value(), 7);
+
+  static_container<
+      bindings<bind<scope<shared>, storage<A>, interfaces<annotated<I, tag>>>>>
+      fixed;
+  I *fixed_constructed = fixed.construct<request>();
+  EXPECT_EQ(fixed_constructed, static_cast<I *>(fixed.resolve<request>()));
+}
