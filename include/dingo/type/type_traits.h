@@ -514,15 +514,32 @@ struct type_traits<
   }
 };
 
-// A shared_ptr of a bounded array is not a handle Dingo makes or reads: its
-// array is neither a dynamic array of elements nor an object.
+// A shared_ptr of a bounded array owns the array, as one of a dynamic array
+// does, and releases it with delete[]. Its size is part of its type, so it is
+// made without a size from the factory: its elements are made of the
+// arguments, and the rest value-initialized.
 template <typename Array>
-struct type_traits<std::shared_ptr<Array>,
-                   std::enable_if_t<std::is_array_v<Array> &&
-                                    (std::extent_v<Array, 0> != 0)>> {
-  static_assert(std::extent_v<Array, 0> == 0,
-                "std::shared_ptr of a bounded array is not supported; use "
-                "std::shared_ptr<T[]>");
+struct type_traits<
+    std::shared_ptr<Array>,
+    std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> != 0)>>
+    : semantics::shared_owner {
+  using value_type = std::remove_extent_t<Array>;
+  template <typename U>
+  using rebind_t = std::shared_ptr<U[std::extent_v<Array, 0>]>;
+
+  static auto *get(const std::shared_ptr<Array> &wrapper) {
+    return wrapper.get();
+  }
+  static bool empty(const std::shared_ptr<Array> &wrapper) {
+    return wrapper.get() == nullptr;
+  }
+
+  template <typename... Args>
+  static std::shared_ptr<Array> make(Args &&...args) {
+    return std::shared_ptr<Array>(
+        detail::make_bounded_array<value_type, std::extent_v<Array, 0>>(
+            std::forward<Args>(args)...));
+  }
 };
 
 template <typename T>

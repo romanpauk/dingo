@@ -17,6 +17,7 @@
   "unique_array_handle": "std::unique_ptr<L[]>",
   "shared_handle": "std::shared_ptr<L>",
   "shared_array_handle": "std::shared_ptr<L[]>",
+  "shared_bounded_array_handle": "std::shared_ptr<L[2]>",
   "optional": "std::optional<L>",
   "alternative": "std::variant<L, other>",
 } %}
@@ -30,6 +31,7 @@
   "std::optional<I>": "opt",
   "std::shared_ptr<I[]>": "sp_array",
   "std::unique_ptr<I[]>": "up_array",
+  "std::shared_ptr<I[2]>": "sp_bounded_array",
 } %}
 {% set CATEGORY = {
   "X": None,

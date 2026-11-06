@@ -2102,3 +2102,20 @@ TEST(type_registration_test, construct_of_annotated_abstract_pointer) {
   I *fixed_constructed = fixed.construct<request>();
   EXPECT_EQ(fixed_constructed, static_cast<I *>(fixed.resolve<request>()));
 }
+
+// A shared_ptr of a bounded array owns the array, publishes its rows, and is
+// made without a size from its factory.
+TEST(type_registration_test, shared_pointer_of_bounded_array) {
+  using operation_test::A;
+  using handle = std::shared_ptr<A[2]>;
+
+  container<> runtime;
+  runtime.register_type<scope<shared>, storage<handle>>();
+  handle &kept = runtime.resolve<handle &>();
+  EXPECT_EQ(runtime.resolve<A *>(), &kept[0]);
+  EXPECT_EQ(kept[1].value(), 7);
+
+  static_container<bindings<bind<scope<unique>, storage<handle>>>> fixed;
+  handle made = fixed.resolve<handle>();
+  EXPECT_EQ(made[1].value(), 7);
+}

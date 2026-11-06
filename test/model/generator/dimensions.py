@@ -31,6 +31,7 @@ class StoredForm(Dimension):
     UNIQUE_ARRAY_HANDLE = "unique_array_handle"
     SHARED_HANDLE = "shared_handle"
     SHARED_ARRAY_HANDLE = "shared_array_handle"
+    SHARED_BOUNDED_ARRAY_HANDLE = "shared_bounded_array_handle"
     OPTIONAL = "optional"
     ALTERNATIVE = "alternative"
 
@@ -78,10 +79,12 @@ class Shape(Dimension):
     OPTIONAL = "std::optional<I>"
     SHARED_ARRAY = "std::shared_ptr<I[]>"
     UNIQUE_ARRAY = "std::unique_ptr<I[]>"
+    SHARED_BOUNDED_ARRAY = "std::shared_ptr<I[2]>"
 
     @property
     def is_array(self):
-        return self in (Shape.SHARED_ARRAY, Shape.UNIQUE_ARRAY)
+        return self in (Shape.SHARED_ARRAY, Shape.UNIQUE_ARRAY,
+                        Shape.SHARED_BOUNDED_ARRAY)
 
     @property
     def converts(self):

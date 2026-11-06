@@ -208,8 +208,13 @@ See:
 
 ## Arrays
 
-Dingo supports raw C++ arrays, `std::unique_ptr<T[]>`, and
-`std::shared_ptr<T[]>`, including N-D array shapes.
+Dingo supports raw C++ arrays, `std::unique_ptr<T[]>`, `std::shared_ptr<T[]>`
+and `std::shared_ptr<T[N]>`, including N-D array shapes. A
+`std::shared_ptr<T[N]>` knows its size, so the default factory makes it, its
+elements made of the arguments and the rest value-initialized; a
+`std::shared_ptr<T[]>` needs a factory that knows the size.
+`std::unique_ptr<T[N]>` is not supported: its default deleter would release the
+array as an object.
 
 In practice:
 

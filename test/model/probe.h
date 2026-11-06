@@ -186,6 +186,7 @@ template <typename X> using up = std::unique_ptr<X>;
 template <typename X> using opt = std::optional<X>;
 template <typename X> using sp_array = std::shared_ptr<X[]>;
 template <typename X> using up_array = std::unique_ptr<X[]>;
+template <typename X> using sp_bounded_array = std::shared_ptr<X[2]>;
 } // namespace shape
 
 // The name of a type as the compiler spells it.
