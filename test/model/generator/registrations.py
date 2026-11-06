@@ -4,21 +4,19 @@ registration binds, made through every entry point, in every position."""
 from dataclasses import dataclass
 
 from . import cover, driver
-from .dimensions import (Binding, Container, Entry, Keeps, Leaf, Position,
-                         Scope, StoredForm)
+from .dimensions import (Container, Entry, InterfaceSet, Keeps, Leaf,
+                         Position, Scope, Selection, StoredForm)
 from .model import Probe, grammar, interface
 
 # The leaves a registration stores.
 LEAVES = (Leaf.COPYABLE, Leaf.MOVE_ONLY)
 
-# The interface a binding names, by the leaf it stores, when the library
-# rejects the registration and so does not say which it binds, and whether
-# that interface is abstract.
+# The interfaces a registration names, around its leaf L, when the library
+# rejects it and so does not say which it binds; whether each is abstract.
 NAMED = {
-    Binding.CONCRETE: (None, False),
-    Binding.INTERFACE: ("leaf_interface", True),
-    Binding.ANNOTATED: (None, False),
-    Binding.KEYED: (None, False),
+    InterfaceSet.DEFAULT: (("L", False),),
+    InterfaceSet.INTERFACE: (("leaf_interface", True),),
+    InterfaceSet.BOTH: (("L", False), ("leaf_interface", True)),
 }
 LEAF_NAMES = {Leaf.COPYABLE: "leaf", Leaf.MOVE_ONLY: "move_only_leaf"}
 
@@ -47,31 +45,41 @@ class Registration:
     scope: Scope
     form: StoredForm
     leaf: Leaf
-    binding: Binding
+    interfaces_declared: InterfaceSet
+    selection: Selection
     # The interfaces the registration binds, as the library says.
     bound: tuple = ()
 
     @property
+    def binding(self):
+        """The interfaces declared and how a request selects them, as a cell
+        names them."""
+        return f"{self.interfaces_declared.value}/{self.selection.value}"
+
+    @property
     def name(self):
         return "__".join((self.container, self.scope, self.form, self.leaf,
-                          self.binding))
+                          self.interfaces_declared, self.selection))
 
     @property
     def survey_key(self):
-        return "__".join((self.scope, self.form, self.leaf, self.binding))
+        return "__".join((self.scope, self.form, self.leaf,
+                          self.interfaces_declared, self.selection))
 
     @property
     def dimensions(self):
-        return (self.scope, self.form, self.leaf, self.binding)
+        return (self.scope, self.form, self.leaf, self.interfaces_declared,
+                self.selection)
 
     def interfaces(self):
         """The interfaces the registration binds; when the library rejects
         it, the one it names."""
         if self.bound:
             return self.bound
-        named, abstract = NAMED[self.binding]
-        return (interface(f"dingo::model::{named or LEAF_NAMES[self.leaf]}",
-                          abstract),)
+        return tuple(
+            interface(f"dingo::model::{named.replace('L', LEAF_NAMES[self.leaf])}",
+                      abstract)
+            for named, abstract in NAMED[self.interfaces_declared])
 
     def probes(self, position=None):
         """The probes, in a position or in all of them, each with why its
@@ -115,15 +123,18 @@ class Registration:
 
 
 def registrations():
-    return [Registration(container, scope, form, leaf, binding)
+    return [Registration(container, scope, form, leaf, interfaces, selection)
             for container in Container for scope in Scope
-            for form in StoredForm for leaf in LEAVES for binding in Binding]
+            for form in StoredForm for leaf in LEAVES
+            for interfaces in InterfaceSet for selection in Selection]
 
 
-def covering_pairs():
-    """The registrations, as (scope, form, leaf, binding), that together hold
-    every pair of values of two of these dimensions."""
-    return cover.covering_pairs(Scope, StoredForm, LEAVES, Binding)
+def covering(strength):
+    """The registrations, as (scope, form, leaf, interfaces, selection), that
+    together hold every combination of values of `strength` of these
+    dimensions."""
+    return cover.covering(strength, Scope, StoredForm, LEAVES, InterfaceSet,
+                          Selection)
 
 
 def probe_registration(compiler, flags, directory, registration, position):

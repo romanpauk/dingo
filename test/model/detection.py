@@ -64,9 +64,10 @@ def main():
         "--only", default="",
         help="probe only the units whose name contains this text")
     parser.add_argument(
-        "--cover", choices=("all", "pairs"), default="all",
+        "--cover", choices=("all", "pairs", "triples"), default="all",
         help="make the classes over every leaf, selection, kind and provider, "
-        "or over those that hold every pair of their values")
+        "or over those that hold every combination of values of two or three "
+        "of them")
     options = parser.parse_args()
     options.work.mkdir(parents=True, exist_ok=True)
     flags = (shlex.split(options.flags) +
@@ -74,7 +75,8 @@ def main():
     flags = driver.precompile_header(options.compiler, flags, options.work,
                                      "detection.h") + flags
 
-    selected = [unit for unit in units(options.cover == "pairs")
+    strength = {"all": None, "pairs": 2, "triples": 3}[options.cover]
+    selected = [unit for unit in units(strength)
                 if options.only in unit.name]
     # The costliest first: the runtime container's.
     selected.sort(key=lambda unit: unit.container_name != "runtime")

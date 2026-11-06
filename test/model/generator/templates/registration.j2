@@ -3,29 +3,36 @@
     it in a runtime container c. -#}
 {% import "macros.j2" as cpp %}
 
-{#- The interfaces<> each Binding declares, around a leaf L. -#}
+{#- The interfaces each InterfaceSet declares, around a leaf L: none for the
+    default ones, which a selection by annotation cannot annotate, so it
+    declares the leaf. -#}
 {% set DECLARED = {
-  "concrete": None,
-  "interface": "leaf_interface",
-  "annotated": "dingo::annotated<L, tag>",
-  "keyed": "L",
+  "default": [],
+  "interface": ["leaf_interface"],
+  "both": ["L", "leaf_interface"],
 } %}
+
+{#- The interfaces<> of r, each annotated when r is selected by one. -#}
+{% macro declared(r) -%}
+{% set names = DECLARED[r.interfaces_declared.value] or (["L"] if r.selection.value == "annotated" else []) %}
+{% for name in names %}{{ cpp.bound(r.selection, name | replace("L", cpp.LEAF[r.leaf.value])) }}{{ ", " if not loop.last }}{% endfor %}
+{%- endmacro %}
 
 {% macro arguments(r) -%}
 {% set stored = cpp.stored(r.form, r.leaf) %}
-{% set declared = DECLARED[r.binding.value] %}
+{% set interfaces = declared(r) %}
 dingo::scope<dingo::{{ r.scope.value }}>, dingo::storage<{{ stored }}>
 {%- if r.form.is_dynamic_array and r.scope.value != "external" -%}
 , dingo::factory<dingo::function<&instance<{{ stored }}>::make>>
 {%- endif -%}
-{%- if declared -%}
-, dingo::interfaces<{{ declared | replace("L", cpp.LEAF[r.leaf.value]) }}>
+{%- if interfaces -%}
+, dingo::interfaces<{{ interfaces }}>
 {%- endif -%}
 {%- endmacro %}
 
 {#- The arguments of a static binding, with its key. -#}
 {% macro static_arguments(r) -%}
-{{ arguments(r) }}{% if r.binding.value == "keyed" %}, {{ cpp.KEY }}{% endif %}
+{{ arguments(r) }}{% if r.selection.value == "keyed" %}, {{ cpp.KEY }}{% endif %}
 {%- endmacro %}
 
 {% macro registration(r) -%}
@@ -45,8 +52,8 @@ else %}instance<{{ stored }}>::make(){% endif %}
 {% if r.container.value == "runtime" -%}
 c.template register_type<{{ arguments(r) }}>(
 {%- if r.scope.value == "external" %}{{ given(r) }}{% endif -%}
-{%- if r.scope.value == "external" and r.binding.value == "keyed" %}, {% endif -%}
-{%- if r.binding.value == "keyed" %}dingo::key_value{std::size_t(1)}{% endif -%}
+{%- if r.scope.value == "external" and r.selection.value == "keyed" %}, {% endif -%}
+{%- if r.selection.value == "keyed" %}dingo::key_value{std::size_t(1)}{% endif -%}
 );
 {%- endif %}
 {%- endmacro %}

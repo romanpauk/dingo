@@ -14,57 +14,35 @@ function(configure_quality_targets out_check_targets)
   )
   list(APPEND check_targets layers-check)
 
-  # Resolves every request of registrations in both containers, writes the
-  # outcome of each to model*/baseline.md, and fails on a defect. It reads the
-  # diagnostics of GCC and clang. model-check probes the registrations that
-  # hold every pair of values of scope, stored form, leaf and binding, and is
-  # part of check with those compilers; model-check-full probes them all.
+  # The model probes: probe.py resolves every request of registrations in both
+  # containers, detection.py detects and makes the classes generated around
+  # them. Each writes the outcome of every cell to model-<size>/, with a
+  # summary as .md, and fails on a defect. They read the diagnostics of GCC
+  # and clang. A size probes a cover of the dimensions: small every pair of
+  # their values, medium every three, large every combination, which takes
+  # about half an hour. model-check-small is part of check with those
+  # compilers.
   set(model_flags
     "--flags=-std=c++17 -O0 -I${PROJECT_SOURCE_DIR}/include -I${PROJECT_SOURCE_DIR}/test")
-  add_custom_target(model-check
-    COMMENT "Probing every request of a pairwise cover of the registrations"
-    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/test/model/probe.py
-      ${PROJECT_BINARY_DIR}/model/baseline.json
-      --work ${PROJECT_BINARY_DIR}/model/units
-      --compiler ${CMAKE_CXX_COMPILER} --cover pairs ${model_flags}
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-    USES_TERMINAL
-  )
-  add_custom_target(model-check-full
-    COMMENT "Probing every request of every registration"
-    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/test/model/probe.py
-      ${PROJECT_BINARY_DIR}/model-full/baseline.json
-      --work ${PROJECT_BINARY_DIR}/model-full/units
-      --compiler ${CMAKE_CXX_COMPILER} ${model_flags}
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-    USES_TERMINAL
-  )
-  # Detects the constructor of every class generated around a request of the
-  # grammar, makes the class, and fails on a defect or on a class that a
-  # detected constructor makes differently from the explicit one.
-  # detection-check makes the classes over a pairwise cover of leaf,
-  # selection, kind and provider, and is part of check with GCC and clang;
-  # detection-check-full makes them over all.
-  add_custom_target(detection-check
-    COMMENT "Probing constructor detection over a pairwise cover"
-    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/test/model/detection.py
-      ${PROJECT_BINARY_DIR}/detection/baseline.json
-      --work ${PROJECT_BINARY_DIR}/detection/units
-      --compiler ${CMAKE_CXX_COMPILER} --cover pairs ${model_flags}
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-    USES_TERMINAL
-  )
-  add_custom_target(detection-check-full
-    COMMENT "Probing constructor detection"
-    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/test/model/detection.py
-      ${PROJECT_BINARY_DIR}/detection-full/baseline.json
-      --work ${PROJECT_BINARY_DIR}/detection-full/units
-      --compiler ${CMAKE_CXX_COMPILER} ${model_flags}
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-    USES_TERMINAL
-  )
+  foreach(size_cover IN ITEMS small:pairs medium:triples large:all)
+    string(REPLACE ":" ";" size_cover "${size_cover}")
+    list(GET size_cover 0 size)
+    list(GET size_cover 1 cover)
+    set(model_dir ${PROJECT_BINARY_DIR}/model-${size})
+    add_custom_target(model-check-${size}
+      COMMENT "Probing the ${size} cover of the model"
+      COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/test/model/probe.py
+        ${model_dir}/probe.json --work ${model_dir}/probe
+        --compiler ${CMAKE_CXX_COMPILER} --cover ${cover} ${model_flags}
+      COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/test/model/detection.py
+        ${model_dir}/detection.json --work ${model_dir}/detection
+        --compiler ${CMAKE_CXX_COMPILER} --cover ${cover} ${model_flags}
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+      USES_TERMINAL
+    )
+  endforeach()
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    list(APPEND check_targets model-check detection-check)
+    list(APPEND check_targets model-check-small)
   endif()
 
   # A report, not a check: it ranks the headers and never fails.

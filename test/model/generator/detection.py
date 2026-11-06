@@ -121,13 +121,13 @@ class Unit:
         return driver.render("detection.cpp.j2", unit=self, probes=probes)
 
 
-def units(cover_pairs=False):
-    """Every unit; with cover_pairs, the units that make classes over the
-    combinations of leaf, selection, kind and provider that hold every pair
-    of their values, in both containers. What detection says is probed for
-    every class."""
-    covered = cover.covering_pairs(list(INTERFACES), Selection, Kind,
-                                   PROVIDERS) if cover_pairs else None
+def units(strength=None):
+    """Every unit; with a strength, the units that make classes over the
+    combinations of leaf, selection, kind and provider that hold every
+    combination of values of `strength` of them, in both containers. What
+    detection says is probed for every class."""
+    covered = cover.covering(strength, list(INTERFACES), Selection, Kind,
+                             PROVIDERS) if strength else None
     found = []
     for leaf in INTERFACES:
         for selection in Selection:

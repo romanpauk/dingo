@@ -47,16 +47,13 @@ Run a quality target with `cmake --build build -t <target>`.
 - `complexity-report`: prints where the complexity of the headers is; it is a
   report and is not part of `check`. See
   [Complexity Report](#complexity-report).
-- `model-check`: resolves every request of the registrations that hold every
-  pair of values of scope, stored form, leaf and binding, in both containers,
-  and fails on a defect; it is part of `check` with GCC and clang, whose
-  diagnostics it reads. See [Model Probe](#model-probe).
-- `model-check-full`: the same for every registration; not part of `check`.
-- `detection-check`: probes constructor detection over the request grammar,
-  making the classes over a pairwise cover of leaf, selection, kind and
-  provider; it is part of `check` with GCC and clang. See
-  [Constructor Detection Probe](#constructor-detection-probe).
-- `detection-check-full`: the same over every combination; not part of `check`.
+- `model-check-small`, `model-check-medium`, `model-check-large`: run both model
+  probes, the [Model Probe](#model-probe) and the
+  [Constructor Detection Probe](#constructor-detection-probe), on a cover of
+  their dimensions: small every pair of their values, in about three minutes;
+  medium every three, in about three times that; large every combination, in
+  about half an hour. They fail on a defect and read the diagnostics of GCC and
+  clang; `model-check-small` is part of `check` with them.
 
 The development tools are provided by the locked `uv` environment.
 
@@ -96,8 +93,13 @@ its own time, excluding the instantiations nested in it.
 ## Model Probe
 
 [`test/model/probe.py`](../test/model/probe.py) asks the library what every
-combination of container, scope, stored form, leaf, binding, operation and
-request does. Nothing in it decides what should work.
+combination of container, scope, stored form, leaf, interfaces declared,
+selection, operation and request does. Nothing in it decides what should work.
+
+A registration declares no interfaces, so that the library binds those it
+derives from the stored type; its abstract interface `leaf_interface`; or both
+its leaf and that interface. Its requests select it plainly, by an annotation,
+or by a key.
 
 A survey program first asks the library which interfaces each registration
 binds. The requests are every shape of every bound interface `I`: `I`,
@@ -132,17 +134,18 @@ unreachable or unprobed, or when the two containers disagree on a registration
 both accept.
 
 ```bash
-cmake --build build -t model-check
-cmake --build build -t model-check-full
+cmake --build build -t model-check-small
 ```
 
-write the outcome of every cell they probe to `build/model/baseline.json` and
-`build/model-full/baseline.json`, and a summary with a table per container,
-leaf, binding and operation next to it, as `baseline.md`. `model-check` probes a
-pairwise covering array of the registrations (`--cover pairs`): every pair of
-values of two of scope, stored form, leaf and binding is probed in both
-containers, at an eighth of the cost. `--only <text>` probes the registrations
-whose name contains the text.
+writes the outcome of every cell to `build/model-small/probe.json`, and a
+summary with a table per container, leaf, interfaces, selection and operation
+next to it, as `probe.md`; `model-check-medium` and `model-check-large` write
+theirs to `build/model-medium/` and `build/model-large/`. A size probes a
+covering array of the registrations: every combination of values of two (small)
+or three (medium) of scope, stored form, leaf, interfaces declared and selection
+is probed in both containers, at a thirty-sixth or a sixth of the cost of all of
+them (large). Run directly, `probe.py --cover pairs|triples|all` chooses it, and
+`--only <text>` probes the registrations whose name contains the text.
 
 ### Generator
 
@@ -190,13 +193,9 @@ one of them describes is recorded as `limited`, and a construction one of them
 describes is not compared with the explicit constructor; a limitation whose
 misdetection no longer occurs is a defect, `stale_limitation`.
 
-```bash
-cmake --build build -t detection-check
-cmake --build build -t detection-check-full
-```
-
-write `build/detection/baseline.json` and `build/detection-full/baseline.json`,
-each with a `baseline.md`.
+The model check targets run it on the same cover sizes, over leaf, selection,
+kind and provider, and write `detection.json` and `detection.md` next to the
+probe's.
 
 ## Generated Matrix Tests
 

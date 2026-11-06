@@ -54,17 +54,13 @@ class Leaf(Dimension):
     INTERFACE = "interface"
 
 
-class Binding(Dimension):
-    """How a registration binds its interfaces."""
-    CONCRETE = "concrete"
+class InterfaceSet(Dimension):
+    """The interfaces a registration declares: none, so that the library
+    binds the ones it derives from the stored type; its abstract interface;
+    or both its leaf and its abstract interface."""
+    DEFAULT = "default"
     INTERFACE = "interface"
-    ANNOTATED = "annotated"
-    KEYED = "keyed"
-
-    @property
-    def selection(self):
-        return {Binding.ANNOTATED: Selection.ANNOTATED,
-                Binding.KEYED: Selection.KEYED}.get(self, Selection.PLAIN)
+    BOTH = "both"
 
 
 class Selection(Dimension):

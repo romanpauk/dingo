@@ -1,6 +1,6 @@
 {% import "macros.j2" as cpp %}
 {% import "registration.j2" as reg %}
-{% set selection = r.binding.selection %}
+{% set selection = r.selection %}
 {% macro dependency(probe) -%}
 {{ cpp.selected(selection, cpp.request(probe.request)) }}
 {%- endmacro %}
@@ -14,7 +14,7 @@
 c.invoke([]({{ selected }} arg) { return received<{{ selected }}>(pass_on<{{ selected }}>(arg)); })
 {%- elif entry == "construct" -%}
 c.template construct<{{ selected }}>()
-{%- elif r.binding.value == "keyed" and r.container.value == "runtime" -%}
+{%- elif r.selection.value == "keyed" and r.container.value == "runtime" -%}
 c.template resolve<{{ cpp.request(probe.request) }}>(std::size_t(1))
 {%- else -%}
 c.template resolve<{{ selected }}>()
@@ -81,4 +81,4 @@ template <typename Container> void run() {
   }
 }
 
-int main() { run<{{ cpp.container(r.container, cpp.traits(r.container, r.binding.value == "keyed", keys), reg.static_arguments(r)) }}>(); }
+int main() { run<{{ cpp.container(r.container, cpp.traits(r.container, r.selection.value == "keyed", keys), reg.static_arguments(r)) }}>(); }
