@@ -90,7 +90,15 @@ its own time, excluding the instantiations nested in it.
 
 [`test/model/probe.py`](../test/model/probe.py) asks the library what every
 combination of container, scope, stored form, leaf, binding, operation and
-request does. The operations make the request as the caller of `resolve`, as the
+request does. A survey program first asks the library which interfaces each
+registration binds; the requests are every shape of every bound interface `I`:
+`I`, `std::shared_ptr<I>`, `std::unique_ptr<I>`, `std::optional<I>`,
+`std::shared_ptr<I[]>` and `std::unique_ptr<I[]>`, each by value, `const`, as
+`&`, `const &`, `&&`, `*` and `const *`. A request that is not valid C++, such
+as an abstract type held by value, is recorded as invalid with the reason. Each
+program also checks every request the registration publishes: one that selects
+another binding is unreachable, and one that no probe makes is unprobed; both
+are defects. The operations make the request as the caller of `resolve`, as the
 dependency of the constructor of a class in the `unique`, `shared` or
 `shared_cyclical` scope, as the parameter of an invoked callable, and with
 `construct`. Nothing in it decides what should work: each registration is

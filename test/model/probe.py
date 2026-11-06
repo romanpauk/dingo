@@ -34,7 +34,7 @@ is split into one unit per request.
 
 import argparse
 import concurrent.futures
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 import os
 from pathlib import Path
@@ -66,35 +66,70 @@ STORED = (
     ("alternative", "std::variant<L, other>"),
 )
 
-# The requests of a binding requested as T, and whether a request holds T by
-# value, which an abstract T cannot be. A resolved rvalue reference is
-# returned by value.
-REQUESTS = (
-    ("T", True),
-    ("const T", True),
-    ("T &", False),
-    ("const T &", False),
-    ("T &&", True),
-    ("T *", False),
-    ("const T *", False),
-    ("std::shared_ptr<T>", False),
-    ("std::shared_ptr<T> &", False),
-    ("const std::shared_ptr<T> &", False),
-    ("std::shared_ptr<T> *", False),
-    ("std::unique_ptr<T>", False),
-    ("std::unique_ptr<T> &", False),
-    ("std::unique_ptr<T> &&", False),
-    ("std::optional<T>", True),
-    ("std::optional<T> &", True),
-    ("std::optional<T> *", True),
-    ("std::variant<T, other>", True),
-    ("std::variant<T, other> &", True),
+# The shapes a bound interface I is requested in: I itself or a handle of it,
+# each in every form. Each is spelled for the report and, through the alias
+# templates of probe.h, for C++.
+BASES = (
+    ("I", "{}"),
+    ("std::shared_ptr<I>", "shape::sp<{}>"),
+    ("std::unique_ptr<I>", "shape::up<{}>"),
+    ("std::optional<I>", "shape::opt<{}>"),
+    ("std::shared_ptr<I[]>", "shape::sp_array<{}>"),
+    ("std::unique_ptr<I[]>", "shape::up_array<{}>"),
 )
 
-# How a binding is registered and requested:
+# The forms of a shape X, and whether a request in the form holds X by value;
+# a resolved rvalue reference is returned by value.
+FORMS = (
+    ("X", "{}", True),
+    ("const X", "shape::constant<{}>", True),
+    ("X &", "shape::lref<{}>", False),
+    ("const X &", "shape::clref<{}>", False),
+    ("X &&", "shape::rref<{}>", True),
+    ("X *", "shape::ptr<{}>", False),
+    ("const X *", "shape::cptr<{}>", False),
+)
+
+
+@dataclass(frozen=True)
+class Interface:
+    """An interface a registration binds: its name in the report, its C++
+    spelling, and whether it is abstract or an array."""
+    name: str
+    spelled: str
+    abstract: bool = False
+    array: bool = False
+
+
+def interface(spelled, abstract=False, array=False):
+    name = spelled.replace("dingo::model::", "").replace(" [", "[")
+    return Interface(name, spelled, abstract, array)
+
+
+def invalid_request(bound, base, by_value):
+    """Why a request of a shape of an interface is not valid C++, or None."""
+    if bound.abstract:
+        if base == "I" and by_value:
+            return "an abstract type cannot be held by value"
+        if base == "std::optional<I>":
+            return "an optional cannot hold an abstract type"
+        if base.endswith("[]>"):
+            return "an array cannot hold an abstract type"
+    if bound.array:
+        if base == "I" and by_value:
+            return "an array cannot be returned by value"
+        if base == "std::optional<I>":
+            return "an optional cannot hold an array"
+        if base == "std::unique_ptr<I>":
+            return "a unique_ptr deletes an array as an object"
+    return None
+
+
+# How a binding is registered:
 # - interface: the interfaces<> of the registration, or None
-# - target: the type T of the requests
-# - abstract: whether T is abstract
+# - target: the interface it binds when the library rejects it, and so does
+#   not say
+# - abstract: whether the target is abstract
 BINDINGS = {
     "concrete": dict(interface=None, target="L", abstract=False),
     "interface": dict(interface="leaf_interface", target="leaf_interface",
@@ -127,9 +162,12 @@ CONSUMERS = {
 
 @dataclass(frozen=True)
 class Probe:
-    """A request made with an operation."""
+    """A request of a bound interface, made with an operation: the interface
+    and the request as the report names them, and the request in C++."""
     operation: str
+    interface: str
     request: str
+    spelled: str
 
 
 @dataclass(frozen=True)
@@ -139,6 +177,8 @@ class Registration:
     form: str
     leaf: str
     binding: str
+    # The interfaces the registration binds, as the library says.
+    bound: tuple = ()
 
     @property
     def name(self):
@@ -179,27 +219,49 @@ class Registration:
             return f"{self.arguments}, {KEY}"
         return self.arguments
 
+    @property
+    def survey_key(self):
+        return "__".join((self.scope, self.form, self.leaf, self.binding))
+
+    def interfaces(self):
+        """The interfaces the registration binds; when the library rejects
+        it, the one it names."""
+        if self.bound:
+            return self.bound
+        return (interface(self.spell(self.traits["target"]),
+                          self.traits["abstract"]),)
+
     def requests(self):
-        """The requests, each with whether it is invalid C++."""
-        target = self.spell(self.traits["target"])
-        return [
-            (spelling.replace("T", target), self.traits["abstract"] and by_value)
-            for spelling, by_value in REQUESTS
-        ]
+        """The requests of every bound interface: (the index of the
+        interface, the request as the report names it, the request in C++,
+        and why it is not valid C++, or None)."""
+        found = []
+        for index, bound in enumerate(self.interfaces()):
+            for base, base_spelled in BASES:
+                for form, form_spelled, by_value in FORMS:
+                    found.append(
+                        (index, form.replace("X", base),
+                         form_spelled.format(base_spelled.format(f"I{index}")),
+                         invalid_request(bound, base, by_value)))
+        return found
 
     def probes(self):
-        """The probes, each with whether its request is invalid C++."""
-        return [(Probe(operation, request), invalid)
+        """The probes, each with why its request is not valid C++, or None."""
+        interfaces = self.interfaces()
+        return [(Probe(operation, interfaces[index].name, request, spelled),
+                 invalid)
                 for operation in OPERATIONS
-                for request, invalid in self.requests()]
+                for index, request, spelled, invalid in self.requests()]
 
     def cell(self, probe):
         return "/".join((self.container, self.scope, self.form, self.leaf,
-                         self.binding, probe.operation, probe.request))
+                         self.binding, probe.operation, probe.interface,
+                         probe.request))
 
     def container_type(self):
         base = f"dingo::{self.container}_container_traits"
-        traits = (f"keyed_traits<{self.leaf_type}, {base}>"
+        keys = ", ".join(f"I{index}" for index in range(len(self.interfaces())))
+        traits = (f"keyed_traits<{base}, {keys}>"
                   if self.binding == "keyed" else base)
         if self.container == "runtime":
             return f"dingo::container<{traits}>"
@@ -235,7 +297,7 @@ class Registration:
 
     def resolve(self, probe):
         """The expression that makes the request in container c."""
-        operation, request = probe.operation, probe.request
+        operation, request = probe.operation, probe.spelled
         selected = self.selected(request)
         if operation == "dependency":
             return f"c.template resolve<consumer<{selected}>>()"
@@ -254,7 +316,7 @@ class Registration:
         """The container a request is probed in, within run<Container>."""
         if probe.operation in CONSUMERS:
             return (f"typename with_consumer<Container, "
-                    f"{self.selected(probe.request)}, "
+                    f"{self.selected(probe.spelled)}, "
                     f"dingo::{CONSUMERS[probe.operation]}>::type")
         return "Container"
 
@@ -263,7 +325,7 @@ class Registration:
         statements = self.register()
         if probe.operation in CONSUMERS:
             statements += (
-                f" register_consumer<{self.selected(probe.request)}, "
+                f" register_consumer<{self.selected(probe.spelled)}, "
                 f"dingo::{CONSUMERS[probe.operation]}>(c);")
         return statements
 
@@ -279,18 +341,34 @@ class Registration:
         """The unit that makes the probes, and the probe each of its lines
         belongs to, by line number."""
         static = "true" if self.container == "static" else "false"
+        registration = f"dingo::type_registration<{self.static_arguments}>"
         lines = [
             "// Generated by test/model/probe.py. Do not edit.",
             '#include "model/probe.h"',
             "",
             "using namespace dingo::model;",
             "",
+            "// The interfaces the registration binds.",
+        ]
+        lines += [f"using I{index} = {bound.spelled};"
+                  for index, bound in enumerate(self.interfaces())]
+        lines += [
+            "",
             "// The container is a template parameter, so that the calls on it",
             "// are dependent and the branch not taken is discarded.",
             "template <typename Container> void run() {",
-            "  if constexpr (registrable<dingo::type_registration<"
-            f"{self.static_arguments}>, {static}>()) {{",
+            f"  if constexpr (registrable<{registration}, {static}>()) {{",
         ]
+        # Every request a bound interface serves has to be probed.
+        for index, bound in enumerate(self.bound):
+            requests = ", ".join(spelled for at, _, spelled, invalid in
+                                 self.requests()
+                                 if at == index and invalid is None)
+            prefix = "/".join((self.container, self.scope, self.form,
+                               self.leaf, self.binding, "published",
+                               bound.name, ""))
+            lines.append(f'    check_probed<{registration}, I{index}, '
+                         f'{requests}>("{prefix}");')
         if self.given():
             # What the scope is given outlives the probes; make it first, so
             # that they do not count it as leaked.
@@ -466,11 +544,12 @@ def probe_group(compiler, flags, directory, registration, name, probes):
 
 def probe_shared(compiler, flags, directory, registration, name, probes):
     """Makes probes in one unit, where the operations share what they
-    instantiate. A request fails to compile in one instantiation, which the
-    compiler reports for the first probe of the request only. So when the
-    unit fails, the probes it reports are recorded, the other probes of their
-    requests are made in one unit per operation, where every request is a
-    probe of its own, and the rest in one unit again."""
+    instantiate. A failure in an instantiation that several probes share is
+    reported for the first of them only. So when the unit fails, the probes it
+    reports are recorded, the operations they belong to and the other probes
+    of their requests are made in a unit per operation, where their probes
+    are told apart one compile after another, and the rest in one unit
+    again."""
     if not probes:
         return []
     source, owners = registration.source(probes)
@@ -482,14 +561,18 @@ def probe_shared(compiler, flags, directory, registration, name, probes):
     outcomes = [failure(registration, probe, error)
                 for probe, error in failed.items()]
     rest = [probe for probe in probes if probe not in failed]
-    requests = {probe.request for probe in failed}
-    if not failed:
+    if failed:
+        operations = {probe.operation for probe in failed}
+        requests = {(probe.interface, probe.request) for probe in failed}
+        suspects = [probe for probe in rest
+                    if probe.operation in operations or
+                    (probe.interface, probe.request) in requests]
+    else:
         # Nothing could be told apart: every probe is a suspect.
-        requests = {probe.request for probe in rest}
-    suspects = [probe for probe in rest if probe.request in requests]
+        suspects = rest
     outcomes += probe_shared(compiler, flags, directory, registration,
                              f"{name}_", [probe for probe in rest
-                                          if probe.request not in requests])
+                                          if probe not in suspects])
     for operation in OPERATIONS:
         outcomes += probe_group(
             compiler, flags, directory, registration,
@@ -507,7 +590,7 @@ def probe_registration(compiler, flags, directory, registration):
             outcomes.append({
                 "cell": registration.cell(probe),
                 "outcome": "invalid",
-                "error": "an abstract type cannot be held by value",
+                "error": invalid,
             })
         else:
             probes.append(probe)
@@ -526,13 +609,18 @@ MARKS = {
     "does_not_compile": "DNC",
     "crashed": "CRASH",
     "violated": "BAD",
+    "unprobed": "UNPROBED",
+    "unreachable": "UNREACHABLE",
     "exception": "exc",
 }
 
 DIMENSIONS = ("container", "scope", "form", "leaf", "binding", "operation",
-              "request")
+              "interface", "request")
 
-DEFECTS = ("does_not_compile", "crashed", "violated")
+# unprobed: a request a binding publishes and selects that no probe makes;
+# unreachable: a request a binding publishes that selects another binding.
+DEFECTS = ("does_not_compile", "crashed", "violated", "unprobed",
+           "unreachable")
 
 
 def disagreements(cells):
@@ -592,22 +680,28 @@ def write_report(path, cells):
     ]
     for dimension in DIMENSIONS[:-1]:
         lines += counts_table(cells, dimension)
+    patterns = [form.replace("X", base) for base, _ in BASES
+                for form, _, _ in FORMS]
+    rows = {}
+    for cell in cells:
+        (container, scope, form, leaf, binding, operation, bound,
+         request) = cell["cell"].split("/")
+        rows.setdefault((container, leaf, binding, operation), {}).setdefault(
+            (scope, form, bound), {})[request] = table[cell["cell"]]
     for container, leaf, binding, operation in (
             (c, l, b, o) for c in CONTAINERS for l in LEAVES for b in BINDINGS
             for o in OPERATIONS):
         lines += [
             f"## {container} container, {leaf} leaf, {binding} binding, "
             f"{operation}", "",
-            "| scope / stored | " +
-            " | ".join(f"`{r}`" for r, _ in REQUESTS) + " |",
-            "|---|" + "---|" * len(REQUESTS),
+            "| scope / stored / interface | " +
+            " | ".join(f"`{r}`" for r in patterns) + " |",
+            "|---|" + "---|" * len(patterns),
         ]
-        for scope in SCOPES:
-            for form, _ in STORED:
-                unit = Registration(container, scope, form, leaf, binding)
-                row = [table.get(unit.cell(Probe(operation, r)), "?")
-                       for r, _ in unit.requests()]
-                lines.append(f"| {scope} / {form} | " + " | ".join(row) + " |")
+        found = rows.get((container, leaf, binding, operation), {})
+        for (scope, form, bound), row in found.items():
+            lines.append(f"| {scope} / {form} / `{bound}` | " +
+                         " | ".join(row.get(r, "?") for r in patterns) + " |")
         lines.append("")
     lines += ["## Container disagreements", ""]
     lines += [
@@ -630,6 +724,29 @@ def error_limit_flags(compiler):
     result = subprocess.run([compiler, "--version"], capture_output=True,
                             text=True)
     return ["-ferror-limit=0"] if "clang" in result.stdout else []
+
+
+def survey(compiler, flags, work, units):
+    """The interfaces each registration binds, by its survey key, as the
+    library says; a registration it rejects binds none."""
+    keys = {}
+    for unit in units:
+        keys.setdefault(unit.survey_key, unit)
+    lines = ['#include "model/probe.h"', "", "using namespace dingo::model;",
+             "", "int main() {"]
+    lines += [f'  survey<dingo::type_registration<{unit.static_arguments}>>'
+              f'("{key}");' for key, unit in keys.items()]
+    lines += ["}", ""]
+    records, stderr, crash = build_and_run(compiler, flags, work, "survey",
+                                           "\n".join(lines))
+    if stderr is not None or crash is not None:
+        sys.exit(f"the survey failed: {stderr or crash}")
+    bound = {}
+    for record in records:
+        bound.setdefault(record["registration"], []).append(
+            interface(record["interface"], record["abstract"],
+                      record["array"]))
+    return {key: tuple(found) for key, found in bound.items()}
 
 
 def precompile_header(compiler, flags, work):
@@ -668,6 +785,9 @@ def main():
     flags = precompile_header(options.compiler, flags, options.work) + flags
 
     units = [unit for unit in registrations() if options.only in unit.name]
+    bound = survey(options.compiler, flags, options.work, units)
+    units = [replace(unit, bound=bound.get(unit.survey_key, ()))
+             for unit in units]
     cells = []
     with concurrent.futures.ThreadPoolExecutor(options.jobs) as executor:
         for outcomes in executor.map(
@@ -676,6 +796,8 @@ def main():
             units,
         ):
             cells += outcomes
+    # Every unit of a registration checks what it publishes.
+    cells = list({cell["cell"]: cell for cell in cells}.values())
     cells.sort(key=lambda cell: cell["cell"])
     options.output.write_text(json.dumps(cells, indent=1) + "\n")
     write_report(options.output.with_suffix(".md"), cells)

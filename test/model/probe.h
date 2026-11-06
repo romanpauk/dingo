@@ -23,6 +23,8 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <string>
+#include <string_view>
 #include <type_traits>
 #include <variant>
 
@@ -68,10 +70,10 @@ struct other {};
 // The tag of an annotated binding.
 struct tag {};
 
-// The traits of a container with a lookup by key for T.
-template <typename T, typename Base> struct keyed_traits : Base {
+// The traits of a container with a lookup by key for each of Interfaces.
+template <typename Base, typename... Interfaces> struct keyed_traits : Base {
   using lookup_definition_type =
-      dingo::lookups<dingo::associative<std::size_t, T>>;
+      dingo::lookups<dingo::associative<std::size_t, Interfaces>...>;
 };
 
 // An instance of a stored type, for the scopes that are given one.
@@ -148,6 +150,10 @@ struct is_instance<Template<Args...>, Template> : std::true_type {};
 template <typename T> const leaf_interface *leaf_of(const T &result) {
   if constexpr (std::is_base_of_v<leaf_interface, T>) {
     return &result;
+  } else if constexpr (std::is_same_v<T, other>) {
+    return nullptr;
+  } else if constexpr (std::is_array_v<T>) {
+    return leaf_of(result[0]);
   } else if constexpr (std::is_pointer_v<T>) {
     return result ? leaf_of(*result) : nullptr;
   } else if constexpr (is_instance<T, std::shared_ptr>::value ||
@@ -164,9 +170,103 @@ template <typename T> const leaf_interface *leaf_of(const T &result) {
   }
 }
 
+// The shapes the probe requests a bound interface X in: a value, a reference
+// or a pointer of X or of a handle of it. Alias templates spell them, so that
+// an array interface is spelled as C++ spells it.
+namespace shape {
+template <typename X> using value = X;
+template <typename X> using constant = const X;
+template <typename X> using lref = X &;
+template <typename X> using clref = const X &;
+template <typename X> using rref = X &&;
+template <typename X> using ptr = X *;
+template <typename X> using cptr = const X *;
+template <typename X> using sp = std::shared_ptr<X>;
+template <typename X> using up = std::unique_ptr<X>;
+template <typename X> using opt = std::optional<X>;
+template <typename X> using sp_array = std::shared_ptr<X[]>;
+template <typename X> using up_array = std::unique_ptr<X[]>;
+} // namespace shape
+
+// The name of a type as the compiler spells it.
+template <typename T> std::string_view type_name() {
+  std::string_view text = __PRETTY_FUNCTION__;
+  const auto begin = text.find("T = ") + 4;
+  auto end = text.find(';', begin);
+  if (end == std::string_view::npos) {
+    end = text.size() - 1;
+  }
+  return text.substr(begin, end - begin);
+}
+
+template <typename Interface> void survey_interface(const char *registration) {
+  using type = typename annotated_traits<Interface>::type;
+  const auto name = type_name<type>();
+  std::printf("{\"registration\": \"%s\", \"interface\": \"%.*s\", "
+              "\"abstract\": %s, \"array\": %s}\n",
+              registration, static_cast<int>(name.size()), name.data(),
+              std::is_abstract_v<type> ? "true" : "false",
+              std::is_array_v<type> ? "true" : "false");
+}
+
+template <typename... Interfaces>
+void survey_interfaces(const char *registration, type_list<Interfaces...> *) {
+  (survey_interface<Interfaces>(registration), ...);
+}
+
+// Prints the interfaces a registration binds, one line each, when the library
+// accepts it.
+template <typename Registration> void survey(const char *registration) {
+  using model = detail::binding_model<Registration>;
+  if constexpr (model::storage_tag_is_complete && model::stored &&
+                model::valid) {
+    survey_interfaces(registration,
+                      static_cast<typename model::interface_types *>(nullptr));
+  }
+}
+
+inline void record(const char *cell, const char *outcome, const char *error);
+
+// A request selects the binding of its normalized type, or of its exact type.
+template <typename Request, typename Interface>
+inline constexpr bool selects_v =
+    std::is_same_v<typename request_type<Request>::value_type, Interface> ||
+    std::is_same_v<typename request_type<Request>::exact_type, Interface>;
+
+template <typename Interface, typename Target, typename... Requests>
+void check_probed(const std::string &prefix) {
+  const auto name = type_name<Target>();
+  if (!selects_v<Target, Interface>) {
+    record((prefix + std::string(name)).c_str(), "unreachable", nullptr);
+  } else if (!(detail::matches_qualification_conversion(
+                   describe_type<Target>(), describe_type<Requests>()) ||
+               ...)) {
+    record((prefix + std::string(name)).c_str(), "unprobed", nullptr);
+  }
+}
+
+template <typename Interface, typename... Requests, typename... Resolutions>
+void check_probed(const std::string &prefix, type_list<Resolutions...>) {
+  (check_probed<Interface, typename Resolutions::target_type, Requests...>(
+       prefix),
+   ...);
+}
+
+// Checks each request the registration publishes for Interface: a request
+// that does not select Interface is unreachable, and one that none of
+// Requests asks for is unprobed. Every request a binding can serve has to be
+// probed, and a binding should publish only those.
+template <typename Registration, typename Interface, typename... Requests>
+void check_probed(const char *prefix) {
+  using model = detail::binding_model<Registration>;
+  using storage = typename model::storage_type;
+  using type = typename annotated_traits<Interface>::type;
+  check_probed<type, Requests...>(
+      prefix, typename detail::binding_resolutions<type, storage>::type{});
+}
+
 // One line of the outcome table: the cell and its outcome.
-inline void record(const char *cell, const char *outcome,
-                   const char *error = nullptr) {
+inline void record(const char *cell, const char *outcome, const char *error) {
   if (error) {
     std::printf("{\"cell\": \"%s\", \"outcome\": \"%s\", \"error\": "
                 "\"%s\"}\n",
@@ -174,6 +274,10 @@ inline void record(const char *cell, const char *outcome,
   } else {
     std::printf("{\"cell\": \"%s\", \"outcome\": \"%s\"}\n", cell, outcome);
   }
+}
+
+inline void record(const char *cell, const char *outcome) {
+  record(cell, outcome, nullptr);
 }
 
 // How the scope of a cell keeps what it resolves.
