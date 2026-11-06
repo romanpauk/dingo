@@ -419,6 +419,14 @@ Constructor deduction is intentionally useful, not magical. The main limits are:
   always the overload to commit to in public code
 - constructor templates and other generic catch-all constructor shapes are
   rejected from auto-detection; those types must use `factory<constructor<...>>`
+- a parameter that takes by value a type that converts from anything its element
+  can be made of, such as `std::optional`, `std::any` or a wrapper with such a
+  converting constructor, is not detected: that constructor and the detection
+  argument's conversion to the type cannot be ranked. Take it by reference, or
+  name the constructor. `std::variant` is detected: its converting constructor
+  needs a single alternative to convert to
+- signature detection cannot tell an rvalue-reference parameter `T&&` from a
+  value one; it recovers and requests `T`
 - ambiguous or unsupported cases should be resolved explicitly with
   `factory<constructor<...>>`, `factory<function<...>>`, `callable(...)`, or
   `callable<Signature>(...)`

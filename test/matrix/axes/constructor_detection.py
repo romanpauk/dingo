@@ -13,7 +13,7 @@ from axes.dependency_compositions import (
     render_dependency_composition,
 )
 from axes.dependency_forms import (
-    NON_GNU_WRAPPER_SHAPE_LIMITATION,
+    WRAPPER_SHAPE_LIMITATION,
     DEPENDENCY_FORMS,
     DEPENDENCY_SHAPES,
     WRAPPER_SIGNATURE_RECOVERY_LIMITATION,
@@ -237,7 +237,7 @@ CONSTRUCTOR_SHAPES = (
         dependency_forms=frozenset({"value", "optional", "variant"}),
         constructor_detection_limitations=(
             WRAPPER_SIGNATURE_RECOVERY_LIMITATION,
-            NON_GNU_WRAPPER_SHAPE_LIMITATION,
+            WRAPPER_SHAPE_LIMITATION,
         ),
     ),
     ConstructorShape(
@@ -251,7 +251,7 @@ CONSTRUCTOR_SHAPES = (
         detector_only=True,
         constructor_detection_limitations=(
             WRAPPER_SIGNATURE_RECOVERY_LIMITATION,
-            NON_GNU_WRAPPER_SHAPE_LIMITATION,
+            WRAPPER_SHAPE_LIMITATION,
         ),
     ),
     *WRAPPED_DEPENDENCY_CONSTRUCTOR_SHAPES,

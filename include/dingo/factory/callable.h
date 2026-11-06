@@ -22,14 +22,23 @@ namespace detail {
 template <typename Signature> struct callable_invoke;
 
 template <typename R, typename... Args> struct callable_invoke<R(Args...)> {
+  // A callable is called directly, so that a value its parameter takes
+  // initializes it in place: a type that can be neither copied nor moved can
+  // be passed by value. std::invoke would take it as a reference and have to
+  // move it. A member pointer is invoked.
   template <typename Fn, typename Context, typename Container>
   static decltype(auto) construct(Fn &&fn, construction_scope scope,
                                   Context &ctx, Container &container) {
     (void)scope;
-    return std::invoke(
-        std::forward<Fn>(fn),
-        ctx.template resolve<Args>(detail::dependency_scope<Args>(scope),
-                                   container)...);
+    if constexpr (std::is_member_pointer_v<std::decay_t<Fn>>) {
+      return std::invoke(
+          std::forward<Fn>(fn),
+          ctx.template resolve<Args>(detail::dependency_scope<Args>(scope),
+                                     container)...);
+    } else {
+      return std::forward<Fn>(fn)(ctx.template resolve<Args>(
+          detail::dependency_scope<Args>(scope), container)...);
+    }
   }
 
   template <typename Type, typename Fn, typename Context, typename Container>

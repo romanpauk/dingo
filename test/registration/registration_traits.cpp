@@ -2049,3 +2049,25 @@ TEST(type_registration_test, invoke_returns_what_the_callable_returns) {
   A &fixed_kept = fixed.invoke([](A &a) -> A & { return a; });
   EXPECT_EQ(&fixed_kept, &fixed.resolve<A &>());
 }
+
+namespace detected_wrapper_test {
+struct A {
+  A() {}
+  int value = 7;
+};
+// An aggregate that can be neither copied nor moved.
+struct immovable {
+  const std::unique_ptr<A> held;
+};
+} // namespace detected_wrapper_test
+
+// invoke calls a callable directly, so a parameter of a type that can be
+// neither copied nor moved compiles; such a value is not auto-constructed.
+TEST(type_registration_test, invoke_takes_immovable_parameter) {
+  using namespace detected_wrapper_test;
+
+  container<> runtime;
+  runtime.register_type<scope<unique>, storage<A>>();
+  EXPECT_THROW(runtime.invoke([](immovable) { return 0; }),
+               type_not_found_exception);
+}

@@ -32,15 +32,16 @@ WRAPPER_SIGNATURE_RECOVERY_LIMITATION = ConstructorDetectionLimitation(
     disposition=LimitationDisposition.KNOWN_GAP,
 )
 
-NON_GNU_WRAPPER_SHAPE_LIMITATION = ConstructorDetectionLimitation(
+WRAPPER_SHAPE_LIMITATION = ConstructorDetectionLimitation(
     backend=None,
     mode="shape",
     reason=(
-        "Clang and MSVC cannot reliably instantiate the constructor-shape "
-        "probe when an outer wrapper exposes competing converting constructors"
+        "constructor-shape detection cannot initialize a wrapper by value whose "
+        "converting constructor takes anything its element can be made of: "
+        "that constructor and the argument's conversion to the wrapper cannot "
+        "be ranked"
     ),
-    disposition=LimitationDisposition.COMPILER_LIMITATION,
-    guard="defined(__clang__) || defined(_MSC_VER)",
+    disposition=LimitationDisposition.KNOWN_GAP,
 )
 
 
@@ -94,7 +95,7 @@ DEPENDENCY_SHAPES = (
             DependencyShapeConstructorDetectionLimitation(
                 carriers=frozenset({"value"}),
                 decorations=frozenset({"plain"}),
-                limitation=NON_GNU_WRAPPER_SHAPE_LIMITATION,
+                limitation=WRAPPER_SHAPE_LIMITATION,
             ),
         ),
     ),

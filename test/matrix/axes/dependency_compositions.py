@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from itertools import combinations
 
-from axes.dependency_forms import NON_GNU_WRAPPER_SHAPE_LIMITATION
+from axes.dependency_forms import WRAPPER_SHAPE_LIMITATION
 from schema import (
     ConstructorDetectionLimitation,
     DependencyComposition,
@@ -310,7 +310,7 @@ def _composition_limitations(
         for limitation in limitations
     )
     if non_gnu_ambiguous_wrapper and not has_unconditional_shape_limitation:
-        limitations += (NON_GNU_WRAPPER_SHAPE_LIMITATION,)
+        limitations += (WRAPPER_SHAPE_LIMITATION,)
     return limitations
 
 

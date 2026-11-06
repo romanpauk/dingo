@@ -378,8 +378,7 @@ def test_constructor_detection_limitations_are_explicit() -> None:
         for row in rows
         if row.limitation is not None
     ) == {
-        LimitationDisposition.KNOWN_GAP: 1578,
-        LimitationDisposition.COMPILER_LIMITATION: 306,
+        LimitationDisposition.KNOWN_GAP: 1884,
     }
     shape_limited_compositions = {
         composition.name
@@ -421,9 +420,7 @@ def test_dependency_shapes_own_constructor_detection_limitations() -> None:
     assert optional_shape_limitation.decorations == frozenset({"plain"})
     assert optional_shape_limitation.limitation.backend is None
     assert optional_shape_limitation.limitation.mode == "shape"
-    assert optional_shape_limitation.limitation.guard == (
-        "defined(__clang__) || defined(_MSC_VER)"
-    )
+    assert optional_shape_limitation.limitation.guard is None
 
     constructor_limitations = {
         next(iter(shape.dependency_forms)): shape.constructor_detection_limitations
@@ -495,11 +492,7 @@ def test_dependency_compositions_are_bounded_and_rendered_structurally() -> None
         in {"pointer", "const_pointer"}
     }
     assert len(optional_pointer_compositions) == 8
-    unconditional_shape_limitations = optional_pointer_compositions | {
-        "optional_array_copy_only",
-        "optional_variant_regular_copy_only",
-    }
-    non_gnu_ambiguous_compositions = {
+    wrapper_ambiguous_compositions = {
         composition.name
         for composition in DEPENDENCY_COMPOSITIONS
         if composition.operator is not None
@@ -515,20 +508,14 @@ def test_dependency_compositions_are_bounded_and_rendered_structurally() -> None
             )
         )
     }
-    assert len(non_gnu_ambiguous_compositions) == 160
-    assert set(limited) == non_gnu_ambiguous_compositions
+    assert len(wrapper_ambiguous_compositions) == 160
+    assert set(limited) == wrapper_ambiguous_compositions
     for name, limitations in limited.items():
         assert len(limitations) == 1
         limitation = limitations[0]
         assert limitation.mode == "shape"
-        if name in unconditional_shape_limitations:
-            assert limitation.backend is None
-            assert limitation.guard is None
-        else:
-            assert limitation.backend is None
-            assert limitation.guard == (
-                "defined(__clang__) || defined(_MSC_VER)"
-            )
+        assert limitation.backend is None
+        assert limitation.guard is None
     assert {
         name: rendered[name]
         for name in {
@@ -1152,7 +1139,7 @@ def test_matrix_report_includes_every_limitation_family(
     )
 
     assert "# Matrix Coverage" in report
-    assert "| Constructor detection | 1578 | 0 | 306 |" in report
+    assert "| Constructor detection | 1884 | 0 | 0 |" in report
     assert "| Constructor argument conversion | 0 | 0 | 2 |" in report
     assert "| Shared cyclical | 0 | 453 | 0 |" in report
     assert "| Omitted compiler cases | 0 | 0 | 2 |" in report
@@ -2708,18 +2695,6 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
         source.read_text(encoding="utf-8").count("\nTEST(")
         for source in dependency_runners
     ) == expected_compiled_rows
-    for backend in ("portable", "msvc"):
-        shape_source = (
-            out_dir / f"constructor_detection_{backend}_shape.cpp"
-        ).read_text(encoding="utf-8")
-        shape_runner = (
-            out_dir
-            / f"matrix_runner_constructor_detection_{backend}_shape.cpp"
-        ).read_text(encoding="utf-8")
-        assert "#if !(defined(__clang__) || defined(_MSC_VER))" in (
-            shape_source
-        )
-        assert "#if defined(__clang__) || defined(_MSC_VER)" in shape_runner
     assert cmake_file.is_file()
     cmake_content = cmake_file.read_text(encoding="utf-8")
     isolated_source_count = 0

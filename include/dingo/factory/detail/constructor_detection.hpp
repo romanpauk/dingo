@@ -34,16 +34,11 @@ struct constructor_argument;
 template <class DisabledType, typename DetectionMode>
 struct opaque_constructor_argument;
 
+// The conversions of the argument detection probes a constructor with are
+// those of the argument that constructs it (constructor_argument_impl), so
+// that what is detected is what can be constructed.
 template <class DisabledType>
 struct constructor_argument<DisabledType, constructor_shape> {
-  // Non-scalar wrappers may use constrained converting constructors that
-  // require an xvalue source while checking nested dependency conversions.
-  template <typename T,
-            typename = typename std::enable_if_t<
-                !std::is_same_v<DisabledType, std::decay_t<T>> &&
-                !std::is_scalar_v<T> && is_complete<std::decay_t<T>>::value>>
-  operator T &&() const;
-
   // Lvalue-reference probes stay available for incomplete types. They model
   // borrowed dependencies that can be satisfied by lookup without trying to
   // construct the forward-declared type.
@@ -342,15 +337,54 @@ struct constructor_detection_dispatch<T, DetectionMode, Arity,
   template <typename Type, typename Context, typename Container>
   static Type construct(construction_scope, Context &, Container &) {
     static_assert(always_false_v<Type>,
-                  "class T construction not detected or ambiguous");
+                  "class T construction not detected or ambiguous; a parameter "
+                  "whose type converts from anything its element can be made "
+                  "of, such as std::optional or std::any by value, cannot be "
+                  "detected: name the constructor with "
+                  "factory<constructor<...>>, or take it by reference");
   }
 
   template <typename Type, typename Context, typename Container>
   static void construct(void *, construction_scope, Context &, Container &) {
     static_assert(always_false_v<Type>,
-                  "class T construction not detected or ambiguous");
+                  "class T construction not detected or ambiguous; a parameter "
+                  "whose type converts from anything its element can be made "
+                  "of, such as std::optional or std::any by value, cannot be "
+                  "detected: name the constructor with "
+                  "factory<constructor<...>>, or take it by reference");
   }
 };
+
+// Whether an aggregate initialized from Args has one more member: an empty
+// braced initializer value-initializes a member without a conversion, so it is
+// never ambiguous.
+template <typename T, typename, typename... Args>
+struct aggregate_has_more_members : std::false_type {};
+
+template <typename T, typename... Args>
+struct aggregate_has_more_members<
+    T, std::void_t<decltype(T{std::declval<Args>()..., {}})>, Args...>
+    : std::true_type {};
+
+template <typename T, typename Indexes> struct aggregate_has_member_after;
+
+template <typename T, size_t... Is>
+struct aggregate_has_member_after<T, std::index_sequence<Is...>>
+    : aggregate_has_more_members<
+          T, void,
+          repeated_type<constructor_argument<T, constructor_shape>, Is>...> {};
+
+// An aggregate detected with fewer arguments than it has members, below the
+// largest arity searched, was detected at an arity whose next member a
+// dependency cannot initialize, such as a value that converts from anything
+// its element can be made of; constructing it would leave that member
+// default-initialized.
+template <typename T, size_t Arity, bool Aggregate = std::is_aggregate_v<T>>
+struct is_partial_aggregate : std::false_type {};
+
+template <typename T, size_t Arity>
+struct is_partial_aggregate<T, Arity, true>
+    : aggregate_has_member_after<T, std::make_index_sequence<Arity>> {};
 
 template <template <typename, typename, template <class, class> class,
                     template <typename...> typename,
@@ -363,7 +397,17 @@ struct constructor_detection_policy {
   // Search from high to low so the first match is the winning constructor
   // arity without materializing the full `[0, N]` probe set up front.
   static constexpr size_t detected_arity = ArityDetection::value;
-  static constexpr bool detected = detected_arity != invalid_arity;
+  // An aggregate detected at the largest arity searched is initialized as far
+  // as constructor_detection_traits allows.
+  static constexpr bool detected = [] {
+    if constexpr (detected_arity == invalid_arity) {
+      return false;
+    } else if constexpr (detected_arity == N) {
+      return true;
+    } else {
+      return !is_partial_aggregate<T, detected_arity>::value;
+    }
+  }();
   static constexpr bool requires_explicit_factory = [] {
     if constexpr (!detected || detected_arity == 0) {
       return false;
