@@ -14,6 +14,7 @@
 #include <dingo/resolution/conversion_resolution.h>
 #include <dingo/resolution/materialized_source.h>
 #include <dingo/resolution/resolution.h>
+#include <dingo/type/dependency_traits.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/type/type_conversion_traits.h>
 #include <dingo/type/type_traits.h>
@@ -198,11 +199,32 @@ using storage_resolution_source_t =
                        typename storage_source_traits<Storage>::borrowed_type,
                        typename storage_source_traits<Storage>::consumed_type>;
 
+// Whether a request of Target selects the binding of Interface: a request is
+// looked up by its normalized type, or by its exact type.
+template <typename Target, typename Interface>
+inline constexpr bool selects_interface_v =
+    std::is_same_v<typename request_type<Target>::value_type, Interface> ||
+    std::is_same_v<typename request_type<Target>::exact_type, Interface>;
+
+// The resolution of a request the storage publishes, when a request of its
+// target selects the binding; a binding of another interface serves the
+// others.
+template <typename Target, typename Interface, typename Source, typename Access,
+          bool Selects = selects_interface_v<Target, Interface>>
+struct selected_resolution {
+  using type = type_list<>;
+};
+
+template <typename Target, typename Interface, typename Source, typename Access>
+struct selected_resolution<Target, Interface, Source, Access, true>
+    : available_resolution<Target, Source, Access> {};
+
 template <typename Request, typename Interface, typename Storage,
           typename Access, bool PublishValue>
-using storage_resolution_t = available_resolution_t<
+using storage_resolution_t = typename selected_resolution<
     storage_resolution_target_t<Request, Interface, Storage, PublishValue>,
-    storage_resolution_source_t<Storage, Access>, Access>;
+    std::remove_cv_t<Interface>, storage_resolution_source_t<Storage, Access>,
+    Access>::type;
 
 template <typename Requests, typename Interface, typename Storage,
           typename Access, bool PublishValue>

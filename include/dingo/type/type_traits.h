@@ -514,6 +514,17 @@ struct type_traits<
   }
 };
 
+// A shared_ptr of a bounded array is not a handle Dingo makes or reads: its
+// array is neither a dynamic array of elements nor an object.
+template <typename Array>
+struct type_traits<std::shared_ptr<Array>,
+                   std::enable_if_t<std::is_array_v<Array> &&
+                                    (std::extent_v<Array, 0> != 0)>> {
+  static_assert(std::extent_v<Array, 0> == 0,
+                "std::shared_ptr of a bounded array is not supported; use "
+                "std::shared_ptr<T[]>");
+};
+
 template <typename T>
 struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>>
     : semantics::shared_owner {

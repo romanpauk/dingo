@@ -112,20 +112,26 @@ inline constexpr bool can_construct_from_normalized_request_v =
 // Whether the normalized value of a request is an object that can be built.
 // An rvalue request is not one: it asks the routed storage to publish a
 // movable result, and is rejected rather than degraded to the normalized value.
+// Nor is a bounded array: a pointer to a new one cannot be made with new, and
+// a handle of one only decays it.
 template <typename Request>
 inline constexpr bool constructible_normalized_v =
     !std::is_rvalue_reference_v<Request> &&
     std::is_object_v<normalized_type_t<Request>> &&
-    !std::is_abstract_v<normalized_type_t<Request>>;
+    !std::is_abstract_v<normalized_type_t<Request>> &&
+    std::extent_v<normalized_type_t<Request>> == 0;
 template <typename Request>
 inline constexpr bool construct_normalized_request_v =
     can_construct_from_normalized_request_v<Request> &&
     constructible_normalized_v<Request>;
+// Whether the factory constructs an unbound request. A handle of a dynamic
+// array is not constructed: a default factory has no size to make it with.
 template <typename Request,
           typename ResolvedRequest = request_result_t<Request, true>>
 inline constexpr bool construct_factory_request_v =
     constructible_normalized_v<Request> &&
     !std::is_lvalue_reference_v<ResolvedRequest> &&
+    !detail::is_array_like_type_v<std::decay_t<ResolvedRequest>> &&
     (std::is_pointer_v<ResolvedRequest> ||
      (type_traits<ResolvedRequest>::enabled &&
       !std::is_reference_v<ResolvedRequest>) ||

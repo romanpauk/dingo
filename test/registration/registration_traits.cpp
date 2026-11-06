@@ -919,8 +919,10 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
           scope<external>, storage<optional_pointer>, interfaces<I, J>>>;
   using optional_interface_resolutions = detail::binding_resolutions<
       I, typename optional_interface_pointer_model::storage_type>;
+  // The optional of the leaf selects the leaf, which is not bound; the
+  // interface publishes its own optional only.
   static_assert(
-      has_resolution_target_v<
+      !has_resolution_target_v<
           std::optional<A>,
           typename accepted_values<optional_interface_resolutions>::type>);
   static_assert(
@@ -931,7 +933,7 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
       std::is_same_v<
           pointer_resolution_targets_t<
               typename optional_interface_resolutions::object_resolutions>,
-          type_list<std::optional<A> *>>);
+          type_list<>>);
   using optional_interface_binding =
       detail::binding<I, optional_interface_pointer_model>;
   static_assert(
@@ -1149,7 +1151,7 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   using const_array_pointer_model = detail::binding_model<
       type_registration<scope<external>, storage<const_array_pointer>>>;
   using const_array_pointer_resolutions = detail::binding_resolutions<
-      A, typename const_array_pointer_model::storage_type>;
+      std::array<A, 2>, typename const_array_pointer_model::storage_type>;
   static_assert(std::is_same_v<resolution_targets_t<typename accepted_values<
                                    const_array_pointer_resolutions>::type>,
                                type_list<std::array<A, 2>>>);
@@ -1570,16 +1572,27 @@ TEST(type_registration_test,
      multidimensional_array_storage_preserves_exact_and_row_shapes) {
   using model = detail::binding_model<
       type_registration<scope<shared>, storage<int[2][3]>>>;
-  using resolutions =
-      detail::binding_resolutions<int, typename model::storage_type>;
+  // Each shape is published by the interface it selects: the whole array by
+  // itself, its rows by the row type.
+  using whole_resolutions =
+      detail::binding_resolutions<int[2][3], typename model::storage_type>;
+  using row_resolutions =
+      detail::binding_resolutions<int[3], typename model::storage_type>;
   static_assert(
-      std::is_same_v<typename accepted_values<resolutions>::type, type_list<>>);
-  static_assert(std::is_same_v<reference_resolution_targets_t<
-                                   typename resolutions::object_resolutions>,
-                               type_list<int (&)[2][3]>>);
-  static_assert(std::is_same_v<pointer_resolution_targets_t<
-                                   typename resolutions::object_resolutions>,
-                               type_list<int (*)[3], int (*)[2][3]>>);
+      std::is_same_v<typename accepted_values<whole_resolutions>::type,
+                     type_list<>>);
+  static_assert(
+      std::is_same_v<reference_resolution_targets_t<
+                         typename whole_resolutions::object_resolutions>,
+                     type_list<int (&)[2][3]>>);
+  static_assert(
+      std::is_same_v<pointer_resolution_targets_t<
+                         typename whole_resolutions::object_resolutions>,
+                     type_list<int (*)[2][3]>>);
+  static_assert(
+      std::is_same_v<pointer_resolution_targets_t<
+                         typename row_resolutions::object_resolutions>,
+                     type_list<int (*)[3]>>);
 
   container<> container;
   container.register_type<scope<shared>, storage<int[2][3]>>();
@@ -1970,4 +1983,55 @@ TEST(type_registration_test, kept_instance_keeps_unique_dependency) {
   check_runtime<shared_cyclical>();
   check_static<shared>();
   check_static<shared_cyclical>();
+}
+
+namespace published_test {
+template <typename Target, typename... Resolutions>
+constexpr bool publishes(type_list<Resolutions...>) {
+  return (std::is_same_v<typename Resolutions::target_type, Target> || ...);
+}
+} // namespace published_test
+
+// A binding publishes only the requests that select it: a bounded array binds
+// its rows and itself, and each of them serves its own requests.
+TEST(type_registration_test, binding_publishes_only_requests_it_selects) {
+  using published_test::publishes;
+  struct A {};
+  using model =
+      detail::binding_model<type_registration<scope<shared>, storage<A[2]>>>;
+  using storage_type = typename model::storage_type;
+  using rows = typename detail::binding_resolutions<A, storage_type>::type;
+  using whole = typename detail::binding_resolutions<A[2], storage_type>::type;
+
+  static_assert(publishes<A *>(rows{}));
+  static_assert(!publishes<A(*)[2]>(rows{}));
+  static_assert(!publishes<A(&)[2]>(rows{}));
+  static_assert(publishes<A(*)[2]>(whole{}));
+  static_assert(!publishes<A *>(whole{}));
+}
+
+// A pointer to a bounded array is not constructed: new cannot make one, so
+// construct resolves it.
+TEST(type_registration_test, construct_of_pointer_to_bounded_array_resolves) {
+  struct A {};
+
+  container<> runtime;
+  runtime.register_type<scope<shared>, storage<A[2]>>();
+  A(*constructed)[2] = runtime.construct<A(*)[2]>();
+  EXPECT_EQ(constructed, &runtime.resolve<A(&)[2]>());
+}
+
+// A handle of a dynamic array is made of the bound value by both containers;
+// a default factory has no size to construct one with.
+TEST(type_registration_test, construct_of_dynamic_array_handle_holds_value) {
+  using operation_test::A;
+
+  container<> runtime;
+  runtime.register_type<scope<unique>, storage<A>>();
+  std::shared_ptr<A[]> made = runtime.construct<std::shared_ptr<A[]>>();
+  EXPECT_EQ(made[0].value(), 7);
+
+  static_container<bindings<bind<scope<unique>, storage<A>>>> fixed;
+  std::shared_ptr<A[]> fixed_made = fixed.construct<std::shared_ptr<A[]>>();
+  EXPECT_EQ(fixed_made[0].value(), 7);
 }
