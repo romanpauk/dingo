@@ -385,11 +385,21 @@ private:
   int seen_ = 0;
 };
 
-// A class that takes R as the dependency of its constructor.
+// A class that takes R as the dependency of its constructor. A container
+// constructs it unregistered, as a user's class it may auto-construct, or
+// registered in a scope that keeps it.
 template <typename R> struct consumer {
+  using dingo_constructor_type = constructor<consumer(R)>;
   explicit consumer(R arg) : got(pass_on<R>(arg)) {}
   received<R> got;
 };
+} // namespace dingo::model
+
+template <typename R>
+struct dingo::is_auto_constructible<dingo::model::consumer<R>>
+    : std::true_type {};
+
+namespace dingo::model {
 
 // The container a consumer of R in Scope is resolved from: a static container
 // binds it too, a runtime one registers it.
@@ -470,6 +480,20 @@ template <typename R>
 struct observation<consumer<R> &> : observation<consumer<R>> {
   static constexpr bool refers = false;
   static constexpr bool keeps_leaf = false;
+  static constexpr bool kept = true;
+};
+
+// A kept consumer by its address, as a callable returns it.
+template <typename R> struct observation<consumer<R> *> {
+  using by_reference = observation<consumer<R> &>;
+  static const leaf_interface *leaf(consumer<R> *c) {
+    return by_reference::leaf(*c);
+  }
+  static int value(consumer<R> *c) { return by_reference::value(*c); }
+  static bool dangles(consumer<R> *c) { return by_reference::dangles(*c); }
+  static constexpr bool refers = by_reference::refers;
+  static constexpr bool keeps_leaf = by_reference::keeps_leaf;
+  static constexpr bool hands_over = by_reference::hands_over;
   static constexpr bool kept = true;
 };
 

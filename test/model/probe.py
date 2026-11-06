@@ -141,23 +141,37 @@ BINDINGS = {
 
 KEY = "dingo::key_type<std::size_t, 1>"
 
-# How a request is made:
-# - resolve: by the caller of the container
-# - dependency, shared_dependency, cyclical_dependency: as the dependency of
-#   the constructor of a class in the unique, shared or shared_cyclical scope;
-#   a class its scope keeps is resolved by reference, and keeps what it
-#   receives
-# - invoke: as the parameter of a callable the container invokes
-# - construct: as a new object the container constructs
-OPERATIONS = ("resolve", "dependency", "shared_dependency",
-              "cyclical_dependency", "invoke", "construct")
+# The entry points of a container a request is made through: resolve<>,
+# invoke() of a callable that takes it, and construct<>.
+ENTRIES = ("resolve", "invoke", "construct")
 
-# The scope of the class whose dependency a request is, by operation.
-CONSUMERS = {
-    "dependency": "unique",
-    "shared_dependency": "shared",
-    "cyclical_dependency": "shared_cyclical",
+# Where the request stands, and the scope of the class whose constructor
+# takes it:
+# - direct: the request itself
+# - consumer: the dependency of an unregistered class, which the container
+#   constructs
+# - shared, cyclical: the dependency of a class registered in the shared or
+#   shared_cyclical scope, which keeps it and what it receives; the class is
+#   requested by reference
+POSITIONS = {
+    "direct": None,
+    "consumer": None,
+    "shared": "shared",
+    "cyclical": "shared_cyclical",
 }
+
+# An operation is a position and an entry point, such as shared_invoke; a
+# direct one is named by its entry point.
+OPERATIONS = tuple(entry if position == "direct" else f"{position}_{entry}"
+                   for position in POSITIONS for entry in ENTRIES)
+
+
+def operation_parts(operation):
+    """The position and the entry point of an operation."""
+    if operation in ENTRIES:
+        return "direct", operation
+    position, entry = operation.split("_", 1)
+    return position, entry
 
 
 @dataclass(frozen=True)
@@ -297,36 +311,47 @@ class Registration:
 
     def resolve(self, probe):
         """The expression that makes the request in container c."""
-        operation, request = probe.operation, probe.spelled
+        position, entry = operation_parts(probe.operation)
+        request = probe.spelled
         selected = self.selected(request)
-        if operation == "dependency":
-            return f"c.template resolve<consumer<{selected}>>()"
-        if operation in CONSUMERS:
-            return f"c.template resolve<consumer<{selected}> &>()"
-        if operation == "invoke":
-            return (f"c.invoke([]({selected} arg) {{ return received<"
-                    f"{selected}>(pass_on<{selected}>(arg)); }})")
-        if operation == "construct":
-            return f"c.template construct<{selected}>()"
-        if self.binding == "keyed" and self.container == "runtime":
-            return f"c.template resolve<{request}>(std::size_t(1))"
-        return f"c.template resolve<{selected}>()"
+        if position == "direct":
+            if entry == "invoke":
+                return (f"c.invoke([]({selected} arg) {{ return received<"
+                        f"{selected}>(pass_on<{selected}>(arg)); }})")
+            if entry == "construct":
+                return f"c.template construct<{selected}>()"
+            if self.binding == "keyed" and self.container == "runtime":
+                return f"c.template resolve<{request}>(std::size_t(1))"
+            return f"c.template resolve<{selected}>()"
+        made = f"consumer<{selected}>"
+        if POSITIONS[position]:
+            made += " &"
+        if entry == "invoke":
+            # invoke returns a value, so a kept consumer is returned by its
+            # address, which is not copied.
+            if POSITIONS[position]:
+                return (f"c.invoke([]({made} arg) {{ "
+                        f"return std::addressof(arg); }})")
+            return (f"c.invoke([]({made} arg) {{ "
+                    f"return {made}(std::move(arg)); }})")
+        return f"c.template {entry}<{made}>()"
 
     def probed_container(self, probe):
         """The container a request is probed in, within run<Container>."""
-        if probe.operation in CONSUMERS:
+        scope = POSITIONS[operation_parts(probe.operation)[0]]
+        if scope:
             return (f"typename with_consumer<Container, "
-                    f"{self.selected(probe.spelled)}, "
-                    f"dingo::{CONSUMERS[probe.operation]}>::type")
+                    f"{self.selected(probe.spelled)}, dingo::{scope}>::type")
         return "Container"
 
     def setup(self, probe):
         """The statements that register what a request needs in c."""
         statements = self.register()
-        if probe.operation in CONSUMERS:
+        scope = POSITIONS[operation_parts(probe.operation)[0]]
+        if scope:
             statements += (
                 f" register_consumer<{self.selected(probe.spelled)}, "
-                f"dingo::{CONSUMERS[probe.operation]}>(c);")
+                f"dingo::{scope}>(c);")
         return statements
 
     def keeps(self, probe):
@@ -594,8 +619,14 @@ def probe_registration(compiler, flags, directory, registration):
             })
         else:
             probes.append(probe)
-    return outcomes + probe_shared(compiler, flags, directory, registration,
-                                   registration.name, probes)
+    # A program per position, which bounds the memory of its compile.
+    for position in POSITIONS:
+        outcomes += probe_shared(
+            compiler, flags, directory, registration,
+            f"{registration.name}__{position}",
+            [probe for probe in probes
+             if operation_parts(probe.operation)[0] == position])
+    return outcomes
 
 
 MARKS = {

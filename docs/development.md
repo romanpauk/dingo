@@ -90,33 +90,39 @@ its own time, excluding the instantiations nested in it.
 
 [`test/model/probe.py`](../test/model/probe.py) asks the library what every
 combination of container, scope, stored form, leaf, binding, operation and
-request does. A survey program first asks the library which interfaces each
-registration binds; the requests are every shape of every bound interface `I`:
-`I`, `std::shared_ptr<I>`, `std::unique_ptr<I>`, `std::optional<I>`,
+request does. Nothing in it decides what should work.
+
+A survey program first asks the library which interfaces each registration
+binds. The requests are every shape of every bound interface `I`: `I`,
+`std::shared_ptr<I>`, `std::unique_ptr<I>`, `std::optional<I>`,
 `std::shared_ptr<I[]>` and `std::unique_ptr<I[]>`, each by value, `const`, as
 `&`, `const &`, `&&`, `*` and `const *`. A request that is not valid C++, such
-as an abstract type held by value, is recorded as invalid with the reason. Each
-program also checks every request the registration publishes: one that selects
-another binding is unreachable, and one that no probe makes is unprobed; both
-are defects. The operations make the request as the caller of `resolve`, as the
-dependency of the constructor of a class in the `unique`, `shared` or
-`shared_cyclical` scope, as the parameter of an invoked callable, and with
-`construct`. Nothing in it decides what should work: each registration is
-compiled into one program with [`test/model/probe.h`](../test/model/probe.h),
-which makes every request with every operation, resolving it twice, and records
-the outcome. A request the library rejects at compile time is recorded with the
-message of its `static_assert`: the compiler names the requests that fail by
-their lines in the program, and the others are compiled again without them. The
-operations of a request share its instantiation, which the compiler reports
-once, so the other operations of a failed request are compiled in a program per
-operation. The header is precompiled once, and clang's error limit is lifted.
+as an abstract type held by value, is recorded as invalid with the reason.
+
+Each request is made through every entry point, `resolve`, `invoke` and
+`construct`, in four positions: itself; as the dependency of the constructor of
+an unregistered class, which the container constructs; and as the dependency of
+a class registered in the `shared` or `shared_cyclical` scope, which keeps it
+and what it receives.
+
+Each registration is compiled into a program per position with
+[`test/model/probe.h`](../test/model/probe.h), which makes each request,
+resolving it twice, and records the outcome. A request the library rejects at
+compile time is recorded with the message of its `static_assert`: the compiler
+names the requests that fail by their lines in the program, and the others are
+compiled again without them. Probes share instantiations, which the compiler
+reports once, so the operations of a failed request are then compiled in a
+program each. The header is precompiled once, and clang's error limit is lifted.
 
 A resolved request is also checked: its result has to reach the registered leaf,
 a scope that keeps its instance has to return the same one by reference, a
 unique scope a new one, a kept class may not refer to a leaf that is gone, and
-nothing may leak. The probe fails when a request does not compile without a
-`static_assert`, crashes or fails these checks, or when the two containers
-disagree on a registration both accept.
+nothing may leak. Each program also checks every request its registration
+publishes: one that selects another binding is unreachable, and one that no
+probe makes is unprobed. The probe fails when a request does not compile without
+a `static_assert`, crashes or fails these checks, when a published request is
+unreachable or unprobed, or when the two containers disagree on a registration
+both accept.
 
 ```bash
 cmake --build build -t model-check
