@@ -1644,3 +1644,112 @@ TEST(type_registration_test, normalized_type_trait) {
   static_assert(!request_may_escape_v<detail::selected<A, selected_key>>);
   static_assert(!request_may_escape_v<detail::selected<A &&, selected_key>>);
 }
+
+namespace abstract_interface_test {
+struct I {
+  virtual ~I() = default;
+  virtual int value() const = 0;
+};
+struct A : I {
+  int value() const override { return 7; }
+};
+// Reads a unique instance while it is alive, during its own construction.
+struct reader {
+  explicit reader(I &instance) : value(instance.value()) {}
+  int value;
+};
+} // namespace abstract_interface_test
+
+TEST(type_registration_test, value_of_abstract_type_is_not_formable) {
+  using abstract_interface_test::A;
+  using abstract_interface_test::I;
+
+  static_assert(!detail::is_formable_v<I>);
+  static_assert(!detail::is_formable_v<const I>);
+  static_assert(!detail::is_formable_v<std::optional<I>>);
+  static_assert(!detail::is_formable_v<std::variant<A, I>>);
+  static_assert(detail::is_formable_v<I &>);
+  static_assert(detail::is_formable_v<I *>);
+  static_assert(detail::is_formable_v<std::shared_ptr<I>>);
+  static_assert(detail::is_formable_v<std::optional<A>>);
+}
+
+TEST(type_registration_test, scope_stores_reference_only_when_given_it) {
+  struct A {};
+
+  static_assert(detail::has_storage_cell_v<external, A &>);
+  static_assert(!detail::has_storage_cell_v<unique, A &>);
+  static_assert(!detail::has_storage_cell_v<shared, A &>);
+  static_assert(!detail::has_storage_cell_v<shared_cyclical, A &>);
+  static_assert(!detail::binding_model<
+                type_registration<scope<shared>, storage<A &>>>::valid);
+  static_assert(detail::binding_model<
+                type_registration<scope<external>, storage<A &>>>::valid);
+}
+
+TEST(type_registration_test, cyclical_scope_does_not_store_dynamic_arrays) {
+  struct A {};
+
+  static_assert(!detail::has_storage_cell_v<shared_cyclical, A[]>);
+  static_assert(
+      !detail::has_storage_cell_v<shared_cyclical, std::shared_ptr<A[]>>);
+  static_assert(detail::has_storage_cell_v<shared_cyclical, A[2]>);
+  static_assert(
+      detail::has_storage_cell_v<shared_cyclical, std::shared_ptr<A>>);
+}
+
+// The routes of an abstract interface over a value include no value wrapper
+// of the interface, which cannot exist.
+TEST(type_registration_test, abstract_interface_binds_over_value_storage) {
+  using abstract_interface_test::A;
+  using abstract_interface_test::I;
+
+  using abstract_interface_test::reader;
+
+  container<> unique_container;
+  unique_container.register_type<scope<unique>, storage<A>, interfaces<I>>();
+  unique_container.register_type<scope<unique>, storage<reader>>();
+  EXPECT_EQ(unique_container.resolve<reader>().value, 7);
+
+  container<> optional_container;
+  optional_container
+      .register_type<scope<shared>, storage<std::optional<A>>, interfaces<I>>();
+  EXPECT_EQ(optional_container.resolve<I &>().value(), 7);
+  EXPECT_EQ(optional_container.resolve<I *>()->value(), 7);
+
+  static_container<
+      bindings<bind<scope<shared>, storage<std::optional<A>>, interfaces<I>>>>
+      static_optional;
+  EXPECT_EQ(static_optional.resolve<I &>().value(), 7);
+}
+
+// A unique instance lives in the resolution context: a dependency can refer
+// to it, the caller of the container cannot.
+TEST(type_registration_test,
+     unique_instance_is_referred_to_only_as_dependency) {
+  using abstract_interface_test::A;
+  using abstract_interface_test::I;
+  using abstract_interface_test::reader;
+
+  container<> runtime;
+  runtime.register_type<scope<unique>, storage<A>, interfaces<I>>();
+  runtime.register_type<scope<unique>, storage<reader>>();
+  EXPECT_EQ(runtime.resolve<reader>().value, 7);
+  EXPECT_THROW(runtime.resolve<I &>(), type_not_convertible_exception);
+  EXPECT_THROW(runtime.resolve<I *>(), type_not_convertible_exception);
+
+  static_container<bindings<bind<scope<unique>, storage<A>, interfaces<I>>,
+                            bind<scope<unique>, storage<reader>>>>
+      compile_time;
+  EXPECT_EQ(compile_time.resolve<reader>().value, 7);
+}
+
+// A unique pointer is handed to the caller, not referred to in the context.
+TEST(type_registration_test, unique_pointer_is_handed_to_caller) {
+  using abstract_interface_test::A;
+
+  container<> runtime;
+  runtime.register_type<scope<unique>, storage<A *>>();
+  std::unique_ptr<A> instance(runtime.resolve<A *>());
+  EXPECT_EQ(instance->value(), 7);
+}

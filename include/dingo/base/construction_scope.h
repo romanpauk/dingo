@@ -9,8 +9,13 @@
 
 namespace dingo {
 
+// How long what a construction makes is used: during the construction that
+// requested it (ephemeral), by the caller of the container after the
+// resolution has ended (caller), or for the lifetime of the container
+// (persistent).
 enum class construction_lifetime {
   ephemeral,
+  caller,
   persistent,
 };
 
@@ -27,12 +32,17 @@ public:
     return lifetime_ == construction_lifetime::persistent;
   }
 
+  constexpr bool is_caller() const noexcept {
+    return lifetime_ == construction_lifetime::caller;
+  }
+
 private:
   construction_lifetime lifetime_;
 };
 
 inline constexpr construction_scope ephemeral_scope{
     construction_lifetime::ephemeral};
+inline constexpr construction_scope caller_scope{construction_lifetime::caller};
 inline constexpr construction_scope persistent_scope{
     construction_lifetime::persistent};
 

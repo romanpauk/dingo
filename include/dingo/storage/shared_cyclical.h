@@ -47,10 +47,6 @@ struct shared_cyclical_requests<storage_form::shared_handle, U> {
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *, std::shared_ptr<U> *>;
 };
-
-template <typename U>
-struct shared_cyclical_requests<storage_form::shared_array_handle, U>
-    : shared_cyclical_requests<storage_form::shared_handle, U> {};
 } // namespace detail
 
 template <> struct scope_traits<shared_cyclical> {
@@ -62,21 +58,24 @@ template <> struct scope_traits<shared_cyclical> {
   static constexpr bool retains_unresolved_source = false;
 
   // Only plain objects, raw pointers and shared_ptr can be stored in a cycle.
+  // The instance is allocated before it is constructed, so a dynamic array,
+  // which has no size to allocate, cannot be.
   static constexpr storage_exposure exposed(storage_form form) {
     switch (form) {
     case storage_form::plain:
     case storage_form::alternative:
     case storage_form::pointer:
-    case storage_form::array:
     case storage_form::bounded_array:
       return storage_exposure::lvalue | storage_exposure::pointer;
     case storage_form::shared_handle:
-    case storage_form::shared_array_handle:
       return storage_exposure::value | storage_exposure::lvalue |
              storage_exposure::pointer;
+    case storage_form::array:
+    case storage_form::shared_array_handle:
     case storage_form::unique_handle:
     case storage_form::unique_array_handle:
     case storage_form::optional:
+    case storage_form::reference:
     case storage_form::unknown:
       break;
     }

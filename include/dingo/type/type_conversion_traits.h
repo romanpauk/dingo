@@ -932,9 +932,15 @@ template <typename Target, typename Source, typename Access = consume>
 using type_conversion_path_t =
     typename type_conversion_path<Target, Source, Access>::type;
 
+// A target that cannot exist is not probed: probing would instantiate it.
 template <typename Target, typename Source, typename Access = consume>
-inline constexpr bool is_type_conversion_available_v =
-    type_conversion_path<Target, Source, Access>::available;
+inline constexpr bool is_type_conversion_available_v = [] {
+  if constexpr (is_formable_v<Target>) {
+    return type_conversion_path<Target, Source, Access>::available;
+  } else {
+    return false;
+  }
+}();
 
 } // namespace detail
 } // namespace dingo

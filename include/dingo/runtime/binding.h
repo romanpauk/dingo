@@ -159,6 +159,23 @@ private:
     return describe_type<detail::registered_type_t<Storage>>();
   }
 
+  // The source of an unstable storage lives in the context, which ends before
+  // the caller of the container uses an address into it.
+  template <typename Source>
+  static void check_caller_address(construction_scope scope,
+                                   const resolved_address &resolved,
+                                   const void *source,
+                                   const request_type &request,
+                                   runtime_context_type &context) {
+    if constexpr (Storage::conversions::is_stable) {
+      (void)scope, (void)resolved, (void)source, (void)request, (void)context;
+    } else if (scope.is_caller() &&
+               detail::refers_into<Source>(resolved.address, source)) {
+      throw detail::make_type_not_convertible_exception(
+          request.requested_type, registered_type(), context);
+    }
+  }
+
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4702)
@@ -191,10 +208,14 @@ private:
             activation_type activation{state.cell(), container, scope};
             return activation.template with_source<void>(
                 context, [&](auto &&source) -> resolved_address {
-                  return detail::resolve_indexed_address(
+                  const void *source_address = std::addressof(source);
+                  auto resolved = detail::resolve_indexed_address(
                       activation, context,
                       std::forward<decltype(source)>(source), resolution_index,
                       request_resolutions{}, request.requested_type);
+                  check_caller_address<decltype(source)>(
+                      scope, resolved, source_address, request, context);
+                  return resolved;
                 });
           });
       // Request caching is intentionally stricter than conversion caching and

@@ -38,9 +38,12 @@ template <> struct scope_traits<shared> {
       materialization_guard::while_unresolved;
   static constexpr bool retains_unresolved_source = true;
 
-  static constexpr storage_exposure exposed(storage_form) {
-    return storage_exposure::value | storage_exposure::lvalue |
-           storage_exposure::pointer;
+  // The instance is constructed, so it is not a reference.
+  static constexpr storage_exposure exposed(storage_form form) {
+    return form == storage_form::reference
+               ? storage_exposure::none
+               : storage_exposure::value | storage_exposure::lvalue |
+                     storage_exposure::pointer;
   }
 
   template <typename Type, typename StoredType, typename Factory,

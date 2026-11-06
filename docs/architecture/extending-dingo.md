@@ -85,7 +85,9 @@ specialized the same way. The specialization declares:
   whether references stay valid, whether a request consumes the instance, the
   recursion guard, and whether unresolved storage keeps source state
 - `exposed(storage_form)`: which request categories (value, lvalue reference,
-  rvalue reference, pointer) the scope publishes for each form of stored type
+  rvalue reference, pointer) the scope publishes for each form of stored type;
+  `storage_form::reference` is a stored reference, which only a scope given its
+  instance can hold
 - `storage<Type, StoredType, Factory, Conversions>`: the class that keeps the
   instance; it provides `resolve`, and `is_resolved` and `reset` when it keeps
   the instance between requests

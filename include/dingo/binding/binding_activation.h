@@ -18,6 +18,7 @@
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/annotated.h>
 
+#include <functional>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -223,6 +224,17 @@ inline constexpr bool materializes_value_source_v = [] {
   return !std::is_reference_v<source_result> && !std::is_pointer_v<source_type>;
 }();
 
+// Whether address lies within the object of type T at object.
+template <typename T>
+bool refers_into(const void *address, const void *object) {
+  using byte_pointer = const unsigned char *;
+  const std::less<byte_pointer> less;
+  const auto begin = static_cast<byte_pointer>(object);
+  const auto at = static_cast<byte_pointer>(address);
+  return !less(at, begin) &&
+         less(at, begin + sizeof(std::remove_reference_t<T>));
+}
+
 template <typename Target, typename Context, typename T>
 void *result_address(construction_scope scope, Context &context, T &&instance) {
   using instance_type = std::remove_reference_t<T>;
@@ -257,6 +269,13 @@ template <typename Cell, typename Dependencies> struct binding_activation {
   using owner_type = std::remove_reference_t<Dependencies>;
   using materialization_traits =
       scope_materialization<typename storage_type::tag_type>;
+
+  // Whether an address request is served from a value the storage yields,
+  // which is placed in the context and lives only as long as the context.
+  template <typename Request, typename Context>
+  static constexpr bool places_value_in_context =
+      (std::is_lvalue_reference_v<Request> || std::is_pointer_v<Request>) &&
+      materializes_value_source_v<storage_type, Context, owner_type>;
 
   Cell &cell;
   Dependencies dependencies;
@@ -296,6 +315,8 @@ template <typename Cell, typename Dependencies> struct binding_activation {
                           std::is_pointer_v<Request>) &&
                          materializes_value_source_v<storage_type, Context,
                                                      owner_type>) {
+      // places_value_in_context, spelled out: a dependency chain resolves
+      // through here, and every template level it adds is paid per link.
       using source_type =
           std::remove_cv_t<std::remove_reference_t<decltype(storage.resolve(
               scope, context, dependencies))>>;

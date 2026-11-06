@@ -168,6 +168,32 @@ inline constexpr bool is_optional_type_v =
                           semantics::optional_value>::value;
 
 namespace detail {
+// Whether a value of T can exist: an abstract class cannot, nor can a value
+// that holds an abstract element in place. References and pointers can. It is
+// decided without instantiating T.
+template <typename... Types>
+constexpr bool is_formable_list(type_list<Types...>);
+
+template <typename T> constexpr bool is_formable() {
+  using type = std::remove_cv_t<T>;
+  if constexpr (has_semantics<type, semantics::optional_value>::value) {
+    return is_formable<typename type_traits<type>::value_type>();
+  } else if constexpr (is_alternative_type_v<type>) {
+    return is_formable_list(typename type_traits<type>::alternatives{});
+  } else if constexpr (std::is_class_v<type>) {
+    return !std::is_abstract_v<type>;
+  } else {
+    return true;
+  }
+}
+
+template <typename... Types>
+constexpr bool is_formable_list(type_list<Types...>) {
+  return (is_formable<Types>() && ...);
+}
+
+template <typename T> inline constexpr bool is_formable_v = is_formable<T>();
+
 template <typename List, typename Selected> struct type_list_count;
 
 template <typename Selected, typename... Alternatives>

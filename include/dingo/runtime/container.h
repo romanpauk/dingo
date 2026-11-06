@@ -132,12 +132,12 @@ private:
       }
       return with_context([&](runtime_context_type &context) -> R {
         return detail::request_resolution::resolve<Request, R>(
-            *this, selected, ephemeral_scope, context, *this, key);
+            *this, selected, caller_scope, context, *this, key);
       });
     } else {
       return with_context([&](runtime_context_type &context) -> R {
         return detail::request_resolution::resolve<Request, R>(
-            *this, ephemeral_scope, context, *this, std::move(key));
+            *this, caller_scope, context, *this, std::move(key));
       });
     }
   }

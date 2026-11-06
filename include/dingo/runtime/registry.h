@@ -341,13 +341,14 @@ private:
     using instance_container_type = registration_container_type<Parent>;
     (void)std::addressof(arg);
     using interface_types = typename binding_model::interface_types;
-    static constexpr bool storage_tag_is_complete =
-        binding_model::storage_tag_is_complete;
-    static_assert(storage_tag_is_complete,
+    static_assert(binding_model::storage_tag_is_complete,
                   "registered storage tag must be complete and specialize "
                   "dingo::scope_traits; include the corresponding "
                   "dingo/storage header");
-    if constexpr (!storage_tag_is_complete) {
+    static_assert(!binding_model::storage_tag_is_complete ||
+                      binding_model::stored,
+                  "the scope does not store this type");
+    if constexpr (!binding_model::stored) {
       return store_type::template invalid_registration_return<
           instance_container_type>();
     } else {
@@ -361,7 +362,7 @@ private:
           runtime_binding_state<registry_type, instance_container_type,
                                 detail::binding_cell_t<binding_model>, Parent>;
 
-      if constexpr (!registration_requirements::valid) {
+      if constexpr (!binding_model::valid) {
         return store_type::template invalid_registration_return<
             instance_container_type>();
       } else {

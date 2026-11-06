@@ -20,12 +20,19 @@
 
 namespace dingo {
 namespace detail {
+// Only a pointer-like handle is rebound, so Target is probed only for one: a
+// value wrapper of an abstract interface cannot exist.
 template <typename Source, typename Target>
-inline constexpr bool is_handle_rebindable_v =
-    type_traits<Source>::enabled && type_traits<Source>::is_pointer_like &&
-    (std::is_constructible_v<Target, Source> ||
-     !is_default_type_conversion<
-         type_conversion_traits<Target, Source>>::value);
+inline constexpr bool is_handle_rebindable_v = [] {
+  if constexpr (type_traits<Source>::enabled &&
+                type_traits<Source>::is_pointer_like) {
+    return std::is_constructible_v<Target, Source> ||
+           !is_default_type_conversion<
+               type_conversion_traits<Target, Source>>::value;
+  } else {
+    return false;
+  }
+}();
 } // namespace detail
 
 template <typename Storage, typename Interface>

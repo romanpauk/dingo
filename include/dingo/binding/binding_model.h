@@ -13,6 +13,7 @@
 #include <dingo/registration/requirements.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/storage/interface_storage_traits.h>
+#include <dingo/storage/scope_traits.h>
 #include <dingo/storage/storage.h>
 #include <dingo/type/rebind_type.h>
 
@@ -43,10 +44,12 @@ template <typename Registration> struct binding_model_base {
   using bindings_type = typename Registration::bindings_type::type;
 };
 
-// A registration whose scope tag is not usable has no storage.
-template <typename Registration, bool StorageTagIsComplete>
+// A registration whose scope tag is not usable, or whose scope does not store
+// the registered type, has no storage.
+template <typename Registration, bool StorageTagIsComplete, bool Stored>
 struct binding_model_impl : binding_model_base<Registration> {
-  static constexpr bool storage_tag_is_complete = false;
+  static constexpr bool storage_tag_is_complete = StorageTagIsComplete;
+  static constexpr bool stored = false;
   static constexpr bool use_interface_as_stored_leaf = false;
   using stored_leaf_type = leaf_type_t<
       typename binding_model_base<Registration>::registered_storage_type>;
@@ -59,13 +62,14 @@ struct binding_model_impl : binding_model_base<Registration> {
 };
 
 template <typename Registration>
-struct binding_model_impl<Registration, true>
+struct binding_model_impl<Registration, true, true>
     : binding_model_base<Registration> {
   using base = binding_model_base<Registration>;
   using typename base::interface_types;
   using typename base::registered_storage_type;
 
   static constexpr bool storage_tag_is_complete = true;
+  static constexpr bool stored = true;
   static constexpr bool use_interface_as_stored_leaf =
       use_interface_as_stored_leaf_v<registered_storage_type, interface_types>;
 
@@ -89,10 +93,22 @@ inline constexpr bool scope_tag_is_usable_v =
     (!requires_complete_type_v<Tag> || is_complete_v<Tag>) &&
     scope_traits<Tag>::enabled;
 
+// Whether the scope of a registration stores its type.
+template <typename Registration> constexpr bool binding_is_stored() {
+  using tag = typename Registration::scope_type::type;
+  if constexpr (scope_tag_is_usable_v<tag>) {
+    return has_storage_cell_v<tag, typename binding_model_base<
+                                       Registration>::registered_storage_type>;
+  } else {
+    return false;
+  }
+}
+
 template <typename Registration>
 using binding_model = binding_model_impl<
     Registration,
-    scope_tag_is_usable_v<typename Registration::scope_type::type>>;
+    scope_tag_is_usable_v<typename Registration::scope_type::type>,
+    binding_is_stored<Registration>()>;
 
 template <typename BindingModel, typename InterfaceList>
 struct binding_expansion_impl;

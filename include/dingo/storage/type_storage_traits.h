@@ -200,13 +200,9 @@ using storage_resolution_source_t =
 
 template <typename Request, typename Interface, typename Storage,
           typename Access, bool PublishValue>
-struct storage_resolution {
-  using target_type =
-      storage_resolution_target_t<Request, Interface, Storage, PublishValue>;
-  using conversion_source_type = storage_resolution_source_t<Storage, Access>;
-  using type =
-      conversion_resolution<target_type, conversion_source_type, Access>;
-};
+using storage_resolution_t = available_resolution_t<
+    storage_resolution_target_t<Request, Interface, Storage, PublishValue>,
+    storage_resolution_source_t<Storage, Access>, Access>;
 
 template <typename Requests, typename Interface, typename Storage,
           typename Access, bool PublishValue>
@@ -223,16 +219,8 @@ template <typename Interface, typename Storage, typename Access,
           bool PublishValue, typename Request>
 struct storage_resolutions<type_list<Request>, Interface, Storage, Access,
                            PublishValue> {
-private:
-  using candidate =
-      storage_resolution<Request, Interface, Storage, Access, PublishValue>;
-
-public:
-  using type = std::conditional_t<
-      is_type_conversion_available_v<
-          conversion_target_t<typename candidate::type::target_type>,
-          typename candidate::conversion_source_type, Access>,
-      type_list<typename candidate::type>, type_list<>>;
+  using type =
+      storage_resolution_t<Request, Interface, Storage, Access, PublishValue>;
 };
 
 template <typename Interface, typename Storage, typename Access,
@@ -240,22 +228,11 @@ template <typename Interface, typename Storage, typename Access,
           typename... Requests>
 struct storage_resolutions<type_list<First, Second, Requests...>, Interface,
                            Storage, Access, PublishValue> {
-private:
-  template <typename Request>
-  using candidate =
-      storage_resolution<Request, Interface, Storage, Access, PublishValue>;
-
-  template <typename Request>
-  using selected = std::conditional_t<
-      is_type_conversion_available_v<
-          conversion_target_t<typename candidate<Request>::type::target_type>,
-          typename candidate<Request>::conversion_source_type, Access>,
-      type_list<typename candidate<Request>::type>, type_list<>>;
-
-public:
-  using type =
-      type_list_unique_t<type_list_cat_t<selected<First>, selected<Second>,
-                                         selected<Requests>...>>;
+  using type = type_list_unique_t<type_list_cat_t<
+      storage_resolution_t<First, Interface, Storage, Access, PublishValue>,
+      storage_resolution_t<Second, Interface, Storage, Access, PublishValue>,
+      storage_resolution_t<Requests, Interface, Storage, Access,
+                           PublishValue>...>>;
 };
 
 template <typename Requests, typename Interface, typename Storage,
@@ -265,19 +242,14 @@ using storage_resolutions_t =
                                  PublishValue>::type;
 
 // Avoid probing conversions for empty storage categories.
-template <bool Enabled, typename Target, typename ConversionTarget,
-          typename Source, typename Access>
+template <bool Enabled, typename Target, typename Source, typename Access>
 struct interface_resolution_if {
   using type = type_list<>;
 };
 
-template <typename Target, typename ConversionTarget, typename Source,
-          typename Access>
-struct interface_resolution_if<true, Target, ConversionTarget, Source, Access> {
-  using type = std::conditional_t<
-      is_type_conversion_available_v<ConversionTarget, Source, Access>,
-      type_list<conversion_resolution<Target, Source, Access>>, type_list<>>;
-};
+template <typename Target, typename Source, typename Access>
+struct interface_resolution_if<true, Target, Source, Access>
+    : available_resolution<Target, Source, Access> {};
 
 template <bool Enabled, typename Source, typename Interface, typename Access>
 struct wrapper_resolution_if {
@@ -316,7 +288,6 @@ struct object_category<request_category::lvalue_reference, Interface, Storage> {
   using requests = typename Storage::conversions::lvalue_reference_types;
   using access = borrow;
   using target = typename interface_target<Interface, Storage>::borrowed_type &;
-  using conversion_target = target;
   using source = typename storage_source_traits<Storage>::borrowed_type;
 };
 
@@ -325,7 +296,6 @@ struct object_category<request_category::pointer, Interface, Storage> {
   using requests = typename Storage::conversions::pointer_types;
   using access = borrow;
   using target = typename interface_target<Interface, Storage>::borrowed_type *;
-  using conversion_target = target;
   using source = typename storage_source_traits<Storage>::borrowed_type;
 };
 
@@ -334,7 +304,6 @@ struct object_category<request_category::rvalue_reference, Interface, Storage> {
   using requests = typename Storage::conversions::rvalue_reference_types;
   using access = consume;
   using target = typename interface_target<Interface, Storage>::type &&;
-  using conversion_target = typename interface_target<Interface, Storage>::type;
   using source = typename storage_source_traits<Storage>::consumed_type;
 };
 
@@ -351,8 +320,8 @@ public:
       typename interface_resolution_if<
           interface_target<Interface, Storage>::resolvable &&
               type_list_size_v<requests> != 0,
-          typename category::target, typename category::conversion_target,
-          typename category::source, typename category::access>::type,
+          typename category::target, typename category::source,
+          typename category::access>::type,
       storage_resolutions_t<requests, Interface, Storage,
                             typename category::access>>;
 };
@@ -370,14 +339,13 @@ private:
   static constexpr bool consumes =
       type_list_size_v<typename conversions::rvalue_reference_types> != 0;
 
-  using interface_values = type_list_cat_t<
-      typename interface_resolution_if<
-          target::resolvable && borrows, typename target::type,
-          typename target::type, typename source::borrowed_type, borrow>::type,
-      typename interface_resolution_if<
-          target::resolvable && consumes, typename target::type,
-          typename target::type, typename source::consumed_type,
-          consume>::type>;
+  using interface_values =
+      type_list_cat_t<typename interface_resolution_if<
+                          target::resolvable && borrows, typename target::type,
+                          typename source::borrowed_type, borrow>::type,
+                      typename interface_resolution_if<
+                          target::resolvable && consumes, typename target::type,
+                          typename source::consumed_type, consume>::type>;
   using wrapper_values = type_list_cat_t<
       typename wrapper_resolution_if<borrows, typename source::borrowed_type,
                                      Interface, borrow>::type,

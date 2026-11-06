@@ -93,6 +93,33 @@ private:
   static constexpr std::size_t collection_count_v =
       static_collection_binding_count<static_bindings_type, Collection, Key>();
 
+  // Whether a request of the caller is served from a value placed in the
+  // context, which ends before the caller uses it. Only an address request of
+  // a scope that does not keep its instance asks for the type its storage
+  // yields: that instantiates the factory, and so the dependency chain.
+  template <typename Request, typename Result, typename LookupKey>
+  static constexpr bool escapes_context_v = [] {
+    using selection = selection_t<typename Request::lookup_type, LookupKey>;
+    if constexpr (collection_traits<Result>::is_collection ||
+                  (!std::is_lvalue_reference_v<Result> &&
+                   !std::is_pointer_v<Result>) ||
+                  selection::status != binding_status::found) {
+      return false;
+    } else {
+      using model = typename selection::binding_type::binding_model_type;
+      if constexpr (model::conversions_type::is_stable) {
+        return false;
+      } else {
+        using activation = binding_activation<
+            binding_cell_t<model>,
+            typename static_dependencies<static_container_impl,
+                                         typename model::bindings_type>::type>;
+        return activation::template places_value_in_context<Result,
+                                                            context_type>;
+      }
+    }
+  }();
+
   // Keep the public static boundary out of static_context when the request is a
   // direct stored reference/pointer read. Those paths are part of the tiny
   // static codegen contract; any temporary, collection, conversion, or parent
@@ -111,7 +138,8 @@ private:
              binding_supports_request_v<interface_type, binding> &&
              stored_request_identity_v<interface_type,
                                        typename model::storage_type> &&
-             factory_without_dependencies_v<typename model::factory_type>;
+             factory_without_dependencies_v<typename model::factory_type> &&
+             !escapes_context_v<Request, Result, LookupKey>;
     }
   }();
 
@@ -262,14 +290,18 @@ private:
     static_assert(detail::is_static_lookup_key_v<LookupKey>,
                   "static_container fixed runtime-key request requires "
                   "dingo::key_type<Key, Value>");
+    static_assert(!escapes_context_v<Request, R, LookupKey>,
+                  "static_container cannot return a reference or a pointer to "
+                  "an instance the resolution constructs and does not keep; "
+                  "request it by value, or as a dependency");
     if constexpr (uses_static_minimal_context_v<Request, R, LookupKey>) {
       no_dependency_context context;
       return resolve_bound<
           typename request_type<typename Request::user_type, true>::lookup_type,
-          R, LookupKey>(ephemeral_scope, context);
+          R, LookupKey>(caller_scope, context);
     } else {
       context_type context;
-      return request_resolution::resolve<Request, R>(*this, ephemeral_scope,
+      return request_resolution::resolve<Request, R>(*this, caller_scope,
                                                      context, *this, key);
     }
   }

@@ -42,9 +42,11 @@
 
 namespace dingo {
 
-// The registered shapes storage exposure distinguishes.
+// The registered shapes storage exposure distinguishes. A reference is a form
+// of its own: only a scope that is given its instance can hold one.
 enum class storage_form {
   unknown,
+  reference,
   plain,
   alternative,
   pointer,
@@ -99,7 +101,9 @@ enum class materialization_guard {
 //   retains_unresolved_source  an unresolved storage may retain source state
 //                              across a resolution
 //   exposed(form)              request lists published for a form; none
-//                              disables the form
+//                              disables the form. For a stored reference,
+//                              exposed(reference) enables it and the form it
+//                              refers to selects the lists
 //   storage<Type, StoredType, Factory, Conversions>
 //                              the storage of a registered type: resolve(),
 //                              and is_resolved() and reset() for a scope that
@@ -324,15 +328,20 @@ template <bool Active, typename Lists> struct consumed_storage_lists {
 
 template <typename Lists> struct consumed_storage_lists<true, Lists> : Lists {};
 
-// A form is stored in a scope if the scope publishes any list for it.
+// A form is stored in a scope if the scope publishes any list for it. A
+// reference is stored if the scope exposes references, with the lists of the
+// form it refers to.
 template <typename StorageTag, typename Type>
 inline constexpr bool has_storage_cell_v = [] {
-  if constexpr (scope_traits<StorageTag>::enabled) {
-    return storage_form_traits<Type>::form != storage_form::unknown &&
-           scope_traits<StorageTag>::exposed(storage_form_traits<Type>::form) !=
-               storage_exposure::none;
-  } else {
+  constexpr storage_form form = storage_form_traits<remove_cvref_t<Type>>::form;
+  if constexpr (!scope_traits<StorageTag>::enabled ||
+                form == storage_form::unknown) {
     return false;
+  } else {
+    using policy = scope_traits<StorageTag>;
+    return policy::exposed(form) != storage_exposure::none &&
+           (!std::is_reference_v<Type> ||
+            policy::exposed(storage_form::reference) != storage_exposure::none);
   }
 }();
 
@@ -387,8 +396,9 @@ template <typename StorageTag, typename Stored, typename U>
 struct stored_type_requests
     : std::conditional_t<
           has_storage_cell_v<StorageTag, Stored>,
-          scope_requests<StorageTag, storage_form_traits<Stored>::form, Stored,
-                         U>,
+          scope_requests<StorageTag,
+                         storage_form_traits<remove_cvref_t<Stored>>::form,
+                         remove_cvref_t<Stored>, U>,
           no_scope_requests> {
   static_assert(has_storage_cell_v<StorageTag, Stored>,
                 "the scope does not store this type");
@@ -398,8 +408,7 @@ struct stored_type_requests
 // The requests a registration publishes when it declares no conversions: the
 // request lists its scope publishes for the form of the stored type.
 template <typename StorageTag, typename Type, typename U>
-struct conversions : stored_type_requests<StorageTag, remove_cvref_t<Type>, U> {
-};
+struct conversions : stored_type_requests<StorageTag, Type, U> {};
 } // namespace detail
 
 namespace detail {
