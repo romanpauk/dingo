@@ -9,8 +9,8 @@
 
 #include <dingo/base/type_list.h>
 #include <dingo/lookup/lookup.h>
+#include <dingo/lookup/lookup_key.h>
 #include <dingo/static/registry.h>
-#include <dingo/type/key.h>
 
 #include <cstddef>
 #include <type_traits>

@@ -18,6 +18,7 @@
 #include <dingo/factory/auto_constructible.h>
 #include <dingo/factory/callable.h>
 #include <dingo/lookup/lookup.h>
+#include <dingo/lookup/lookup_key.h>
 #include <dingo/lookup/operations.h>
 #include <dingo/memory/allocator.h>
 #include <dingo/registration/requirements.h>
@@ -30,7 +31,6 @@
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/collection_traits.h>
-#include <dingo/type/key.h>
 #include <dingo/type/request.h>
 #include <dingo/type/shape.h>
 

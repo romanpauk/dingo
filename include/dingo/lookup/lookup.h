@@ -12,9 +12,9 @@
 #include <dingo/lookup/array.h>
 #include <dingo/lookup/base.h>
 #include <dingo/lookup/collection.h>
+#include <dingo/lookup/lookup_key.h>
 #include <dingo/lookup/ordered.h>
 #include <dingo/lookup/unordered.h>
-#include <dingo/type/key.h>
 #include <dingo/type/shape.h>
 
 #include <tuple>

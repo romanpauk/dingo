@@ -10,6 +10,7 @@
 #include <dingo/base/config.h>
 
 #include <dingo/base/type_list.h>
+#include <dingo/lookup/lookup_key.h>
 #include <dingo/registration/requirements.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/storage/interface_storage_traits.h>

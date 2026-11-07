@@ -8,8 +8,8 @@
 #pragma once
 
 #include <dingo/base/type_list.h>
+#include <dingo/lookup/lookup_key.h>
 #include <dingo/type/collection_traits.h>
-#include <dingo/type/key.h>
 #include <dingo/type/shape.h>
 
 #include <cstddef>

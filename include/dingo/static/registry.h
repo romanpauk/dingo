@@ -12,6 +12,7 @@
 #include <dingo/binding/binding_selection.h>
 #include <dingo/factory/factory_traits.h>
 #include <dingo/lookup/lookup.h>
+#include <dingo/lookup/lookup_key.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/collection_traits.h>

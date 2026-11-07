@@ -102,6 +102,7 @@ if(DINGO_DEVELOPMENT_MODE)
         binding/requests.h
         factory/factory_traits.h
         type/key.h
+        lookup/lookup_key.h
         base/none.h
         static/binding.h
         static/container.h

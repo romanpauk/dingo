@@ -10,9 +10,9 @@
 #include <dingo/base/construction_scope.h>
 #include <dingo/base/exceptions.h>
 #include <dingo/factory/constructor_detection.h>
+#include <dingo/lookup/lookup_key.h>
 #include <dingo/memory/aligned_storage.h>
 #include <dingo/type/annotated.h>
-#include <dingo/type/key.h>
 
 #include <array>
 #include <cassert>

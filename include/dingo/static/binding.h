@@ -15,11 +15,11 @@
 #include <dingo/binding/binding_resolution.h>
 #include <dingo/context/resolution_context.h>
 #include <dingo/factory/factory_traits.h>
+#include <dingo/lookup/lookup_key.h>
 #include <dingo/resolution/cache.h>
 #include <dingo/static/graph.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/collection_traits.h>
-#include <dingo/type/key.h>
 
 #include <cassert>
 #include <cstddef>

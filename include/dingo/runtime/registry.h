@@ -10,6 +10,7 @@
 #include <dingo/base/none.h>
 #include <dingo/binding/binding_collection.h>
 #include <dingo/factory/callable.h>
+#include <dingo/lookup/lookup_key.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/runtime/registry_store.h>
 
