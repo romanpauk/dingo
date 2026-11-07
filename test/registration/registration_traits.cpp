@@ -2170,3 +2170,38 @@ TEST(type_registration_test, runtime_construct_of_undetected_type) {
       fixed;
   EXPECT_EQ(std::get<int>(fixed.construct<alternative>()), 7);
 }
+
+namespace keyed_array_test {
+struct A {
+  A() {}
+  int value = 7;
+};
+struct element_lookup : runtime_container_traits {
+  using lookup_definition_type = lookups<associative<std::size_t, A>>;
+};
+struct array_lookups : runtime_container_traits {
+  using lookup_definition_type =
+      lookups<associative<std::size_t, A[2]>, associative<std::size_t, A>>;
+};
+} // namespace keyed_array_test
+
+// A lookup is defined for the interface it names: an array and its element
+// are two interfaces of a registration of an array, each with its own lookup.
+// A keyed request selects the lookup of its interface, or else that of its
+// normalized one.
+TEST(type_registration_test, keyed_registration_of_array) {
+  using namespace keyed_array_test;
+
+  container<array_lookups> both;
+  both.register_type<scope<shared>, storage<A[2]>>(key_value{std::size_t(1)});
+  EXPECT_EQ(both.resolve<A(&)[2]>(key_value{std::size_t(1)})[1].value, 7);
+  EXPECT_EQ(both.resolve<A *>(key_value{std::size_t(1)})->value, 7);
+  EXPECT_THROW(both.resolve<A(&)[2]>(), type_not_found_exception);
+
+  container<element_lookup> element;
+  element.register_type<scope<shared>, storage<A[2]>>(
+      key_value{std::size_t(1)});
+  EXPECT_EQ(element.resolve<A *>(key_value{std::size_t(1)})->value, 7);
+  EXPECT_THROW(element.resolve<A(&)[2]>(key_value{std::size_t(1)}),
+               type_not_convertible_exception);
+}

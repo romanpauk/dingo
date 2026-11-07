@@ -63,10 +63,10 @@ protected:
   using typename store_type::runtime_bindings_state;
   using typename store_type::runtime_data_type;
   using typename store_type::runtime_scope_state;
-  template <typename TypeInterface>
+  template <typename TypeInterface, typename Interfaces>
   using runtime_lookup_entries_for_interface_t =
       typename store_type::template runtime_lookup_entries_for_interface_t<
-          TypeInterface>;
+          TypeInterface, Interfaces>;
   template <typename Interface, typename Key>
   using lookup_index_route =
       typename store_type::template lookup_index_route<Interface, Key>;
@@ -427,9 +427,10 @@ private:
             std::conditional_t<single, runtime_binding_state_type,
                                runtime_binding_state_type *>>;
         static constexpr bool shared_owner =
-            !single || (sizeof...(KeyValueArgs) > 0 &&
-                        type_list_size_v<runtime_lookup_entries_for_interface_t<
-                                type_list_head_t<interface_types>>> > 1);
+            !single ||
+            (sizeof...(KeyValueArgs) > 0 &&
+             type_list_size_v<runtime_lookup_entries_for_interface_t<
+                     type_list_head_t<interface_types>, interface_types>> > 1);
         return commit_binding<shared_owner, interface_types, storage_type,
                               owner_type, runtime_binding_state_type>(
             parent, registration_key{}, std::forward<Arg>(arg),
@@ -465,7 +466,8 @@ private:
     auto commit = [&](auto &value_factory) {
       for_each(Interfaces{}, [&](auto element) {
         using interface_type = typename decltype(element)::type;
-        this->template commit_registration<interface_type, TypeStorage>(
+        this->template commit_registration<interface_type, TypeStorage,
+                                           Interfaces>(
             state, value_factory, transaction, lookup_key, key_values...);
       });
     };

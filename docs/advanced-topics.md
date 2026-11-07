@@ -17,6 +17,15 @@ Use lookups when:
 Lookup definitions are scoped to the interface they serve. Every keyed
 registration or runtime request requires a matching lookup definition.
 
+A lookup is defined for the interface it names, as a binding is bound to it. A
+request selects the lookup of its interface, or else that of its normalized
+interface: `resolve<IProcessor *>(key)` and
+`resolve<std::shared_ptr<IProcessor>>(key)` use the lookup of `IProcessor`. A
+registration of an array binds the array and its element, two interfaces, so
+`associative<K, T[N]>` keys requests of the array, such as
+`resolve<T (&)[N]>(key)`; without it, the registration is keyed only under the
+lookup of `T`.
+
 Unkeyed runtime registrations without an explicit lookup are treated as
 `none_t`/`one`: a second registration for the same interface is rejected,
 regardless of storage type. Declare `collection<I>` when an interface is meant

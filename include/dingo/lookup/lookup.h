@@ -65,8 +65,9 @@ template <typename... Types> struct lookup_interface_arg<interfaces<Types...>> {
   using type = type_list<Types...>;
 };
 
-template <typename T>
-using normalized_lookup_interface_t = normalized_type_t<T>;
+// A lookup is defined for the interface it names, as a binding is bound to
+// it: an array and its element are two interfaces.
+template <typename T> using normalized_lookup_interface_t = std::remove_cv_t<T>;
 
 template <typename Interfaces, typename KeyDomain, typename Cardinality,
           typename Backend>
@@ -167,17 +168,26 @@ public:
       typename matching_lookup_entry<Interface, Key, type_list<Tail...>>::type>;
 };
 
+// The lookup of an interface: the one defined for the interface itself, or
+// else the one of its normalized interface, as a request selects the bindings
+// of its exact interface or else those of its normalized one.
 template <typename Interface, typename Key, typename Entries>
 struct selected_lookup_entry {
 private:
-  using normalized_interface = normalized_lookup_interface_t<Interface>;
+  using exact_interface = std::remove_cv_t<std::remove_reference_t<Interface>>;
   using normalized_key = std::decay_t<Key>;
   static_assert(is_lookup_key_v<normalized_key>,
                 "internal lookup selection requires dingo::detail::lookup_key");
+  using exact_entry =
+      typename matching_lookup_entry<exact_interface, normalized_key,
+                                     Entries>::type;
 
 public:
-  using type = typename matching_lookup_entry<normalized_interface,
-                                              normalized_key, Entries>::type;
+  using type = std::conditional_t<
+      std::is_void_v<exact_entry>,
+      typename matching_lookup_entry<normalized_type_t<Interface>,
+                                     normalized_key, Entries>::type,
+      exact_entry>;
 };
 
 template <typename Interface, typename Key, typename Entries>

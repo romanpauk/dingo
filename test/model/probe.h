@@ -111,8 +111,8 @@ struct other {};
 struct tag {};
 
 // The traits of a container with a lookup by key for each of Interfaces.
-// The keyed lookups of interfaces, one for each lookup domain, which is the
-// normalized interface: an array and its element are one.
+// The keyed lookups of interfaces, one for each interface: an array and its
+// element are two.
 template <typename Domains, typename... Interfaces> struct keyed_lookups;
 
 template <typename... Domains>
@@ -123,10 +123,10 @@ struct keyed_lookups<dingo::type_list<Domains...>> {
 template <typename... Domains, typename Interface, typename... Interfaces>
 struct keyed_lookups<dingo::type_list<Domains...>, Interface, Interfaces...>
     : std::conditional_t<
-          (std::is_same_v<Domains, dingo::normalized_type_t<Interface>> || ...),
+          (std::is_same_v<Domains, std::remove_cv_t<Interface>> || ...),
           keyed_lookups<dingo::type_list<Domains...>, Interfaces...>,
           keyed_lookups<
-              dingo::type_list<Domains..., dingo::normalized_type_t<Interface>>,
+              dingo::type_list<Domains..., std::remove_cv_t<Interface>>,
               Interfaces...>> {};
 
 template <typename Base, typename... Interfaces> struct keyed_traits : Base {

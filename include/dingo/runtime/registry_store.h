@@ -176,8 +176,7 @@ struct has_key_value_lookup_definition<
     Container, Request, LookupKey,
     std::void_t<typename Container::lookup_definition_type>>
     : std::bool_constant<!std::is_void_v<selected_lookup_entry_t<
-          normalized_type_t<Request>,
-          typename std::decay_t<LookupKey>::definition_type,
+          Request, typename std::decay_t<LookupKey>::definition_type,
           normalize_lookup_definitions_t<
               typename Container::lookup_definition_type>>>> {};
 
@@ -406,25 +405,46 @@ protected:
     using key_type = Key;
   };
 
-  // The key-value lookup entries of an interface.
-  template <typename TypeInterface, typename Entries>
+  // The key-value lookup entries of an interface of a registration: those
+  // defined for the interface itself, or else those of its normalized
+  // interface, unless the registration binds that one too. An array and its
+  // element are two interfaces, each with its own lookup.
+  template <typename TypeInterface, typename Interfaces, typename Entries>
   struct runtime_lookup_entries_for_interface;
 
-  template <typename TypeInterface, typename... Entries>
-  struct runtime_lookup_entries_for_interface<TypeInterface,
-                                              type_list<Entries...>> {
-    using type = type_list_cat_t<std::conditional_t<
+  template <typename TypeInterface, typename... Interfaces, typename... Entries>
+  struct runtime_lookup_entries_for_interface<
+      TypeInterface, type_list<Interfaces...>, type_list<Entries...>> {
+  private:
+    template <typename Interface>
+    using entries_of = type_list_cat_t<std::conditional_t<
         runtime_lookup_entry_traits<Entries>::is_key_value &&
-            std::is_same_v<
-                normalized_type_t<TypeInterface>,
-                typename runtime_lookup_entry_traits<Entries>::interface_type>,
+            std::is_same_v<Interface, typename runtime_lookup_entry_traits<
+                                          Entries>::interface_type>,
         type_list<Entries>, type_list<>>...>;
+    using exact_interface = std::remove_cv_t<TypeInterface>;
+    using normalized_interface = normalized_type_t<TypeInterface>;
+    using exact = entries_of<exact_interface>;
+    static constexpr bool binds_normalized =
+        !std::is_same_v<exact_interface, normalized_interface> &&
+        (std::is_same_v<std::remove_cv_t<Interfaces>, normalized_interface> ||
+         ...);
+
+  public:
+    using type =
+        std::conditional_t<type_list_size_v<exact> != 0 || binds_normalized,
+                           exact, entries_of<normalized_interface>>;
+    // Whether the lookups of the interface are those of its normalized
+    // interface, which the registration commits under that one.
+    static constexpr bool defers_to_normalized =
+        type_list_size_v<exact> == 0 && binds_normalized &&
+        type_list_size_v<entries_of<normalized_interface>> != 0;
   };
 
-  template <typename TypeInterface>
+  template <typename TypeInterface, typename Interfaces>
   using runtime_lookup_entries_for_interface_t =
       typename runtime_lookup_entries_for_interface<
-          TypeInterface, normalized_lookup_entries>::type;
+          TypeInterface, Interfaces, normalized_lookup_entries>::type;
 
   template <typename Arg>
   using runtime_registration_arg_traits = std::decay_t<Arg>;
@@ -478,12 +498,12 @@ protected:
 
   template <typename... Interfaces, typename Arg>
   struct runtime_registration_key_match_count<type_list<Interfaces...>, Arg>
-      : std::integral_constant<
-            std::size_t,
-            (std::size_t{0} + ... +
-             runtime_lookup_entry_key_count<
-                 runtime_lookup_entries_for_interface_t<Interfaces>,
-                 Arg>::value)> {};
+      : std::integral_constant<std::size_t,
+                               (std::size_t{0} + ... +
+                                runtime_lookup_entry_key_count<
+                                    runtime_lookup_entries_for_interface_t<
+                                        Interfaces, type_list<Interfaces...>>,
+                                    Arg>::value)> {};
 
   template <typename InterfaceList, typename... KeyValueArgs>
   static constexpr void validate_supplied_runtime_registration_keys() {
@@ -520,8 +540,7 @@ protected:
   private:
     using key_definition = typename std::decay_t<Key>::definition_type;
     using explicit_entry =
-        detail::selected_lookup_entry_t<normalized_type_t<Interface>,
-                                        key_definition,
+        detail::selected_lookup_entry_t<Interface, key_definition,
                                         normalized_lookup_entries>;
     static constexpr bool is_static_key =
         detail::is_static_lookup_key_definition_v<key_definition>;
@@ -609,13 +628,23 @@ protected:
                                    LookupKey &key) {
     static_assert(detail::is_lookup_key_v<LookupKey>);
     if constexpr (!detail::is_static_lookup_key_definition_v<LookupKey>) {
+      // The lookup of the exact interface, when it has one of its own, and
+      // else that of the normalized one, as a static container selects.
       using lookup_route = lookup_index_route<Value, LookupKey>;
-      if constexpr (!lookup_route::has_explicit_lookup &&
-                    !std::is_same_v<Value, Exact>) {
-        using exact_route = lookup_index_route<Exact, LookupKey>;
-        if constexpr (exact_route::has_explicit_lookup) {
-          return select_binding_at_interface<AllowMiss, LookupKey, Exact>(state,
-                                                                          key);
+      using exact_route = lookup_index_route<Exact, LookupKey>;
+      if constexpr (!std::is_same_v<Value, Exact> &&
+                    exact_route::has_explicit_lookup &&
+                    !std::is_same_v<typename exact_route::entry,
+                                    typename lookup_route::entry>) {
+        auto selection =
+            select_binding_at_interface<AllowMiss, LookupKey, Exact>(state,
+                                                                     key);
+        if constexpr (lookup_route::has_explicit_lookup) {
+          if (!detail::selects_normalized_interface(selection.status)) {
+            return selection;
+          }
+        } else {
+          return selection;
         }
       }
       return select_binding_at_interface<AllowMiss, LookupKey, Value>(state,
@@ -877,8 +906,8 @@ protected:
   // Commits a binding to the lookups of its interface: to each key-value
   // lookup with its supplied key value, or else to the routed lookup of its
   // static key.
-  template <typename TypeInterface, typename TypeStorage, typename LookupKey,
-            typename ValueFactory, typename... KeyValueArgs>
+  template <typename TypeInterface, typename TypeStorage, typename Interfaces,
+            typename LookupKey, typename ValueFactory, typename... KeyValueArgs>
   void commit_registration(runtime_bindings_state &state,
                            ValueFactory &value_factory,
                            runtime_transaction_type &transaction,
@@ -887,9 +916,20 @@ protected:
         TypeStorage, typename annotated_traits<TypeInterface>::type,
         typename TypeStorage::type>::assert_valid();
     using lookup_entries =
-        runtime_lookup_entries_for_interface_t<TypeInterface>;
+        runtime_lookup_entries_for_interface_t<TypeInterface, Interfaces>;
     if constexpr (sizeof...(KeyValueArgs) > 0 &&
-                  type_list_size_v<lookup_entries> > 0) {
+                  runtime_lookup_entries_for_interface<
+                      TypeInterface, Interfaces,
+                      normalized_lookup_entries>::defers_to_normalized) {
+      // A keyed request of the interface selects the lookup of its normalized
+      // interface, which the registration commits under that one.
+      (void)state;
+      (void)value_factory;
+      (void)transaction;
+      (void)lookup_key;
+      ((void)key_values, ...);
+    } else if constexpr (sizeof...(KeyValueArgs) > 0 &&
+                         type_list_size_v<lookup_entries> > 0) {
       validate_required_runtime_registration_keys<lookup_entries,
                                                   KeyValueArgs...>();
       auto key_value_tuple = std::forward_as_tuple(key_values...);
