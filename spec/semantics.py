@@ -262,10 +262,9 @@ def makes_storage(form, context):
     outer = LAYERS[layers[0]] if layers else None
     if outer and outer.bounded and not context.leaf.default_constructible:
         return False
-    if (context.scope.publishes_early and context.leaf.made_by_factory and
-            outer and outer.shares_element):
-        return False
-    return not blocked(context, "store", layers)
+    return not (context.scope.publishes_early and
+                context.leaf.made_by_factory and outer and
+                outer.shares_element)
 
 
 def source(scope, form, interfaces=InterfaceSet.DEFAULT):
@@ -417,8 +416,8 @@ def transitions(thing, context):
 @dataclass(frozen=True)
 class Gap:
     """Where a limitation keeps the library from what the semantics allow:
-    at a kind of step from one thing to another, at a reference or a pointer
-    to a thing, or at the storage of a stack."""
+    at a kind of step from one thing to another, or at a reference or a
+    pointer to a thing."""
     limitation: "Limitation"
     at: str
     applies: object
@@ -438,9 +437,6 @@ class Limitation(Enum):
     # A new handle or optional of the element moved out of an optional made
     # for the request, as one of the alternative of an alternative type is.
     WRAP_OF_MADE_OPTIONAL_ELEMENT = "wrap_of_made_optional_element"
-    # An optional of a leaf that can be neither copied nor moved, which a
-    # scope that keeps it could construct in place, as it does the leaf.
-    KEPT_OPTIONAL_OF_IMMOVABLE = "kept_optional_of_immovable"
     # A handle of a bounded array taking over a pointer to an array a scope
     # makes; a handle of an array of unknown bound takes over a pointer to
     # its first element.
@@ -469,9 +465,6 @@ GAPS = (
         thing.lifetimes[1] is Lifetime.REQUEST),
     Gap(Limitation.WRAP_OF_MADE_OPTIONAL_ELEMENT, "wrap",
         lambda context, thing, following: thing.contained == "optional"),
-    Gap(Limitation.KEPT_OPTIONAL_OF_IMMOVABLE, "store",
-        lambda context, layers: not context.scope.makes and
-        layers[:1] == ("optional",) and not context.leaf.movable),
     Gap(Limitation.BOUNDED_HANDLE_OF_MADE_ARRAY, "adopt",
         lambda context, thing, following: len(thing.layers) > 1 and
         LAYERS[thing.layers[1]].bounded),
@@ -756,13 +749,12 @@ def failure(container, scope, form, leaf, bound, shape, category, position,
             interfaces=InterfaceSet.DEFAULT):
     """How the library fails a request it does not resolve. What the types
     of a request say it cannot be, either container rejects as it compiles:
-    a storage that cannot be made, or that the library does not make yet, and
-    a value that can be neither moved nor copied where one is passed. The static container knows the rest as it
+    a storage that cannot be made, and a value that can be neither moved nor
+    copied where one is passed. The static container knows the rest as it
     compiles too, except which alternative an alternative type holds; the
     runtime container finds all of it out as it resolves."""
     layers, element = SHAPES[shape] + bound.layers, bound.element
-    context = Context(LEAVES[leaf], SCOPES[scope], element == "interface",
-                      LIMITATIONS)
+    context = Context(LEAVES[leaf], SCOPES[scope], element == "interface")
     if not makes_storage(form, context):
         return Answer.REJECTED
     # The other alternative of an alternative type is a type of its own, which

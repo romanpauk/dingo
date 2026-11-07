@@ -76,7 +76,12 @@ public:
   template <typename Context, typename Container, typename Scope>
   void construct(Scope scope, Context &context, Container &container) {
     assert(this->empty());
-    if constexpr (converts) {
+    if constexpr (converts && std::is_same_v<Type, StoredType>) {
+      // What the factory makes is constructed in place, as the leaf of an
+      // optional that can be neither copied nor moved has to be.
+      new (this->storage()) StoredType(
+          Factory::template construct<Type>(scope, context, container));
+    } else if constexpr (converts) {
       new (this->storage())
           StoredType(detail::convert_type<StoredType, consume>(
               Factory::template construct<Type>(scope, context, container)));

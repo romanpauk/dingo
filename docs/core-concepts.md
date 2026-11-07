@@ -108,10 +108,11 @@ The injectable result depends on both:
 - some exact wrapper forms intentionally resolve only as the wrapper itself,
   rather than as every possible contained alternative
 
-- a value that can be neither copied nor moved is constructed in place and
-  resolved by reference or pointer; an `external` registration keeps a copy of a
-  value it is given, so such a value is given by reference, and
-  `resolve<T &&>()` moves out of the object, so it is not available for it
+- a value that can be neither copied nor moved is constructed in place, as is a
+  `std::optional` of it a `shared` scope keeps, and resolved by reference or
+  pointer; an `external` registration keeps a copy of a value it is given, so
+  such a value is given by reference, and `resolve<T &&>()` moves out of the
+  object, so it is not available for it
 
 <!-- { include("../examples/storage/scope_external.cpp", scope="////") -->
 

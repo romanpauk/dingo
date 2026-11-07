@@ -2153,6 +2153,22 @@ TEST(type_registration_test, reference_to_immovable_unique_value) {
   EXPECT_EQ(fixed.invoke(read), 7);
 }
 
+// A shared optional is constructed in place, as its leaf, which can be
+// neither copied nor moved, has to be.
+TEST(type_registration_test, shared_optional_of_immovable_value) {
+  using namespace immovable_unique_test;
+  using stored = std::optional<immovable>;
+
+  container<> runtime;
+  runtime.register_type<scope<shared>, storage<stored>>();
+  EXPECT_EQ(runtime.resolve<immovable &>().value, 7);
+  EXPECT_EQ(&runtime.resolve<stored &>().value(),
+            &runtime.resolve<immovable &>());
+
+  static_container<bindings<bind<scope<shared>, storage<stored>>>> fixed;
+  EXPECT_EQ(fixed.resolve<immovable &>().value, 7);
+}
+
 namespace undetected_construct_test {
 struct ambiguous {
   ambiguous(int) {}

@@ -205,7 +205,7 @@ TYPED_TEST(lifetime_count_test, shared_scope_neither_copies_nor_leaks) {
   check_counts<Kind, dingo::shared, std::shared_ptr<counted>,
                std::shared_ptr<counted>>({0, 0, 0, 0});
   check_counts<Kind, dingo::shared, std::optional<counted>,
-               std::optional<counted> &>({0, 0, 1, 3});
+               std::optional<counted> &>({0, 0, 0, 0});
 }
 
 TYPED_TEST(lifetime_count_test, unique_scope_moves_without_copying) {
