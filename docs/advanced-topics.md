@@ -369,7 +369,7 @@ assert(&repo.replica == &replica);
 
 See:
 
-- [test/matrix/README.md](../test/matrix/README.md)
+- [spec/semantics.py](../spec/semantics.py)
 - [include/dingo/type/annotated.h](../include/dingo/type/annotated.h)
 
 ## Runtime And Compile-Time Registration
@@ -499,7 +499,7 @@ assert(nested_container.resolve<B>().value == 1);
 
 See:
 
-- [test/matrix/README.md](../test/matrix/README.md)
+- [test/container/parent/](../test/container/parent)
 
 ## Replacing Registrations
 

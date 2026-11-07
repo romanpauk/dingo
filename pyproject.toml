@@ -13,7 +13,6 @@ dev = [
     "lit>=18.1.8",
     "lizard>=1.17",
     "mdformat",
-    "pytest>=8.0",
 ]
 
 [tool.uv]

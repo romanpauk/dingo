@@ -236,19 +236,14 @@ The model check targets run it on the same cover sizes, over leaf, selection,
 kind and provider, and write `detection.json` and `detection.md` next to the
 probe's.
 
-## Generated Matrix Tests
+## Unit Tests
 
-`dingo_matrix_test` is generated from the axis model in
-[`test/matrix/README.md`](../test/matrix/README.md). The model combines
-features, registration modes, scopes, stored types, exposed types, resolved
-types, and container shapes, then filters invalid combinations before emitting
-GoogleTest sources.
-
-The hand-written C++ portion is organized by role: `common/` provides matrix
-plumbing, `containers/` and `fixtures/` define axis inputs, `policies/` contains
-generic row behavior, and `scenarios/` contains complete behavioral and
-regression cases. Axis definitions declare the headers needed by each generated
-shard so unrelated scenarios are not compiled together.
+`dingo_unit_test` tests what the [Specification](#specification) does not speak
+of, a test for each behaviour, in the directory of what it tests: collections
+and lookups in `test/lookup`, parent containers in `test/container/parent`, the
+kinds of factory and constructor detection in `test/factory`, wrappers,
+callables and identity across requests in `test/resolution`, and the runtime
+container's regressions in `test/runtime`.
 
 ## Code Size Tests
 
