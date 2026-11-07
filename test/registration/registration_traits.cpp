@@ -2220,3 +2220,28 @@ TEST(type_registration_test, keyed_registration_of_array) {
   EXPECT_THROW(element.resolve<A(&)[2]>(key_value{std::size_t(1)}),
                type_not_convertible_exception);
 }
+
+namespace construct_rvalue_test {
+struct A {
+  A() {}
+  int value = 7;
+};
+} // namespace construct_rvalue_test
+
+// construct<T &&>() resolves the request, as resolve<T &&>() does: it moves
+// out of an instance made for it, and is refused one the container keeps.
+TEST(type_registration_test, construct_of_rvalue_reference_resolves_it) {
+  using construct_rvalue_test::A;
+
+  container<> made;
+  made.register_type<scope<unique>, storage<A>>();
+  EXPECT_EQ(made.construct<A &&>().value, 7);
+  EXPECT_EQ(made.construct<std::unique_ptr<A> &&>()->value, 7);
+
+  container<> kept;
+  kept.register_type<scope<shared>, storage<A>>();
+  EXPECT_THROW(kept.construct<A &&>(), type_not_convertible_exception);
+
+  static_container<bindings<bind<scope<unique>, storage<A>>>> fixed;
+  EXPECT_EQ(fixed.construct<A &&>().value, 7);
+}

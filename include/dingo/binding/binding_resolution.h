@@ -189,18 +189,6 @@ inline constexpr bool construct_factory_request_v =
       !std::is_reference_v<ResolvedRequest>) ||
      std::is_constructible_v<ResolvedRequest, normalized_type_t<Request>>);
 
-template <typename Request, typename Context>
-[[noreturn]] void throw_missing_rvalue_conversion(bool has_normalized_request,
-                                                  Context &context) {
-  static_assert(std::is_rvalue_reference_v<Request>);
-  if (has_normalized_request) {
-    throw detail::make_type_not_convertible_exception(
-        describe_type<Request>(), describe_type<normalized_type_t<Request>>(),
-        context);
-  }
-  throw detail::make_type_not_found_exception<Request>(context);
-}
-
 } // namespace dingo
 
 #ifdef _MSC_VER

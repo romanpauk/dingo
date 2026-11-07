@@ -194,8 +194,7 @@ struct request_resolution {
       auto value = host.template select_request<request_type<value_type>>(key);
       if constexpr (is_runtime_binding_selection<decltype(exact)>::value) {
         if (is_bound(exact) || is_bound(value)) {
-          return construct_bound<Request, R>(host, exact, is_bound(value),
-                                             scope, context);
+          return construct_bound<Request, R>(host, exact, scope, context);
         }
         // Whether the request is bound is known only now, so a request the
         // default factory cannot make is not found, rather than rejected
@@ -208,8 +207,7 @@ struct request_resolution {
         }
       } else if constexpr (decltype(is_bound(exact))::value ||
                            decltype(is_bound(value))::value) {
-        return construct_bound<Request, R>(host, exact, is_bound(value), scope,
-                                           context);
+        return construct_bound<Request, R>(host, exact, scope, context);
       } else {
         return construct_unbound<Request, R>(host, scope, context, factory);
       }
@@ -259,12 +257,10 @@ struct request_resolution {
 private:
   template <typename Request, typename R, typename Host, typename Selection,
             typename Context>
-  static R construct_bound(Host &host, Selection &exact, bool value_bound,
+  static R construct_bound(Host &host, Selection &exact,
                            construction_scope scope, Context &context) {
     using user_type = typename Request::user_type;
-    if constexpr (std::is_rvalue_reference_v<user_type>) {
-      throw_missing_rvalue_conversion<user_type>(value_bound, context);
-    } else if constexpr (construct_normalized_request_v<user_type>) {
+    if constexpr (construct_normalized_request_v<user_type>) {
       return host.template resolve_exact_or_normalized<Request, R>(exact, scope,
                                                                    context);
     } else {
@@ -281,8 +277,6 @@ private:
       auto type_guard =
           context.template track_type<typename Request::value_type>();
       return factory.template construct<R>(scope, context, host);
-    } else if constexpr (std::is_rvalue_reference_v<user_type>) {
-      throw_missing_rvalue_conversion<user_type>(false, context);
     } else {
       return resolve<Request, R>(host, scope, context, host, no_lookup_key());
     }

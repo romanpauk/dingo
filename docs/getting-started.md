@@ -177,7 +177,9 @@ References:
 Not every type needs to be registered.
 
 - `construct<T>()` creates an unmanaged object and injects its dependencies from
-  the container.
+  the container. A reference, `construct<T &>()` or `construct<T &&>()`, and a
+  request a key or an annotation selects, name an instance or a binding rather
+  than a value to make: they resolve as `resolve<T>()` does.
 - `invoke(fn)` calls an unambiguous callable and resolves its arguments from the
   container.
 - `invoke<Signature>(fn)` selects a specific overload when deduction is

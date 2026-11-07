@@ -125,22 +125,24 @@ public:
   }
 
   // A reference is not constructed: it refers to an instance the container
-  // resolves, as resolve<T>() does. Nor is a request with a key in its type:
-  // the key names a binding.
+  // resolves, as resolve<T>() does; an rvalue reference moves out of one.
+  // Nor is a request with a key in its type: the key names a binding. A
+  // factory makes a value, which an rvalue reference request does not take.
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
             typename R = request_result_t<T, true>>
   DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {
-    if constexpr ((std::is_lvalue_reference_v<R> ||
+    constexpr bool rvalue =
+        std::is_rvalue_reference_v<::dingo::detail::request_interface_t<T>>;
+    constexpr bool default_factory =
+        std::is_same_v<Factory, constructor<normalized_type_t<T>>>;
+    if constexpr ((std::is_lvalue_reference_v<R> || rvalue ||
                    keyed_by_type_v<T, none_t>) &&
-                  std::is_same_v<Factory, constructor<normalized_type_t<T>>>) {
+                  default_factory) {
       (void)factory;
       return resolve<T>();
-    } else if constexpr (!movable_rvalue_request_v<T, R>) {
-      static_assert(movable_rvalue_request_v<T, R>,
-                    "construct<T &&>() moves the value out of the object it "
-                    "refers to; a value that can be neither copied nor "
-                    "moved is requested by reference or pointer, or "
-                    "constructed");
+    } else if constexpr (rvalue) {
+      static_assert(!rvalue, "construct<T &&>(factory) cannot take what the "
+                             "factory makes; construct<T>(factory) does");
     } else {
       return self().with_context([&](auto &context) -> R {
         // What construct makes is returned to the caller, as are the
