@@ -106,9 +106,9 @@ public:
   template <typename T, bool RemoveRvalueReferences, typename Context,
             typename LookupKey,
             typename R = request_result_t<T, RemoveRvalueReferences>,
-            std::enable_if_t<is_lookup_key_v<LookupKey>, int> = 0>
-  DINGO_ALWAYS_INLINE R resolve(construction_scope scope, Context &context,
-                                LookupKey key) {
+            std::enable_if_t<is_lookup_key_v<LookupKey>, int> = 0,
+            typename Scope>
+  DINGO_ALWAYS_INLINE R resolve(Scope scope, Context &context, LookupKey key) {
     return resolve<T, RemoveRvalueReferences>(scope, context, self(),
                                               std::move(key));
   }
@@ -116,9 +116,10 @@ public:
   template <typename T, bool RemoveRvalueReferences, typename Context,
             typename Origin, typename LookupKey,
             typename R = request_result_t<T, RemoveRvalueReferences>,
-            std::enable_if_t<is_lookup_key_v<LookupKey>, int> = 0>
-  DINGO_ALWAYS_INLINE R resolve(construction_scope scope, Context &context,
-                                Origin &origin, LookupKey key) {
+            std::enable_if_t<is_lookup_key_v<LookupKey>, int> = 0,
+            typename Scope>
+  DINGO_ALWAYS_INLINE R resolve(Scope scope, Context &context, Origin &origin,
+                                LookupKey key) {
     return self()
         .template resolve_request<request_type<T, RemoveRvalueReferences>, R>(
             scope, context, origin, std::move(key));

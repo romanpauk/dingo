@@ -135,9 +135,9 @@ struct request_resolution {
   // Otherwise the collection is constructed from the bindings of its element,
   // and a host without any is answered by the parent or the origin.
   template <typename Request, typename R, typename Host, typename Context,
-            typename Origin, typename LookupKey>
-  static R resolve(Host &host, construction_scope scope, Context &context,
-                   Origin &origin, LookupKey key) {
+            typename Origin, typename LookupKey, typename Scope>
+  static R resolve(Host &host, Scope scope, Context &context, Origin &origin,
+                   LookupKey key) {
     constexpr bool collection = collection_traits<R>::is_collection;
     if constexpr (collection && !is_no_lookup_key_v<LookupKey>) {
       return construct_collection<Request, R>(host, scope, context, origin,
@@ -153,8 +153,8 @@ struct request_resolution {
   // constructs the collection when the host constructs collections.
   template <typename Request, typename R, bool Collection = false,
             typename Host, typename Selection, typename Context,
-            typename Origin, typename LookupKey>
-  static R resolve(Host &host, Selection selection, construction_scope scope,
+            typename Origin, typename LookupKey, typename Scope>
+  static R resolve(Host &host, Selection selection, Scope scope,
                    Context &context, Origin &origin, LookupKey &key) {
     if constexpr (is_runtime_binding_selection<Selection>::value) {
       if (selection.status == binding_status::ambiguous) {
@@ -182,8 +182,8 @@ struct request_resolution {
   // type is constructed by the factory. The paths are separate functions: the
   // one a static selection does not take is never instantiated.
   template <typename Request, typename R, typename Host, typename Context,
-            typename Factory>
-  DINGO_ALWAYS_INLINE static R construct(Host &host, construction_scope scope,
+            typename Factory, typename Scope>
+  DINGO_ALWAYS_INLINE static R construct(Host &host, Scope scope,
                                          Context &context, Factory &factory) {
     using value_type = typename Request::value_type;
     if constexpr (!std::is_same_v<Factory, constructor<value_type>>) {
@@ -215,9 +215,9 @@ struct request_resolution {
   }
 
   // The normalized value of a request, made into the requested wrapper.
-  template <typename Request, typename R, typename Host, typename Context>
-  static R resolve_normalized(Host &host, construction_scope scope,
-                              Context &context) {
+  template <typename Request, typename R, typename Host, typename Context,
+            typename Scope>
+  static R resolve_normalized(Host &host, Scope scope, Context &context) {
     using normalized = request_type<typename Request::value_type>;
     auto &&instance = resolve<normalized, typename normalized::lookup_type>(
         host, scope, context, host, no_lookup_key());
@@ -230,9 +230,9 @@ struct request_resolution {
   // through the root container of the chain, when the request may construct
   // it.
   template <typename Request, bool MayAutoConstruct, typename R, typename Host,
-            typename Root, typename Context, typename LookupKey>
-  static R unresolved(Host &host, Root &root, construction_scope scope,
-                      Context &context, const LookupKey &key) {
+            typename Root, typename Context, typename LookupKey, typename Scope>
+  static R unresolved(Host &host, Root &root, Scope scope, Context &context,
+                      const LookupKey &key) {
     using value_type = typename Request::value_type;
     if constexpr (collection_traits<R>::is_collection) {
       if constexpr (default_collection_append_v<R>) {
@@ -256,9 +256,9 @@ struct request_resolution {
 
 private:
   template <typename Request, typename R, typename Host, typename Selection,
-            typename Context>
-  static R construct_bound(Host &host, Selection &exact,
-                           construction_scope scope, Context &context) {
+            typename Context, typename Scope>
+  static R construct_bound(Host &host, Selection &exact, Scope scope,
+                           Context &context) {
     using user_type = typename Request::user_type;
     if constexpr (construct_normalized_request_v<user_type>) {
       return host.template resolve_exact_or_normalized<Request, R>(exact, scope,
@@ -269,9 +269,9 @@ private:
   }
 
   template <typename Request, typename R, typename Host, typename Context,
-            typename Factory>
-  static R construct_unbound(Host &host, construction_scope scope,
-                             Context &context, Factory &factory) {
+            typename Factory, typename Scope>
+  static R construct_unbound(Host &host, Scope scope, Context &context,
+                             Factory &factory) {
     using user_type = typename Request::user_type;
     if constexpr (construct_factory_request_v<user_type>) {
       auto type_guard =
@@ -283,9 +283,10 @@ private:
   }
 
   template <typename Request, typename R, bool Collection, typename Host,
-            typename Context, typename Origin, typename LookupKey>
-  static R resolve_unbound(Host &host, construction_scope scope,
-                           Context &context, Origin &origin, LookupKey &key) {
+            typename Context, typename Origin, typename LookupKey,
+            typename Scope>
+  static R resolve_unbound(Host &host, Scope scope, Context &context,
+                           Origin &origin, LookupKey &key) {
     if constexpr (Collection) {
       return construct_collection<Request, R>(host, scope, context, origin,
                                               key);
@@ -298,10 +299,9 @@ private:
   }
 
   template <typename Request, typename R, typename Host, typename Context,
-            typename Origin, typename LookupKey>
-  static R construct_collection(Host &host, construction_scope scope,
-                                Context &context, Origin &origin,
-                                LookupKey &key) {
+            typename Origin, typename LookupKey, typename Scope>
+  static R construct_collection(Host &host, Scope scope, Context &context,
+                                Origin &origin, LookupKey &key) {
     auto count = host.template count_collection<R>(key);
     if constexpr (is_constant_count<decltype(count)>::value) {
       if constexpr (decltype(count)::value == 0) {
@@ -324,10 +324,9 @@ private:
   }
 
   template <typename Request, typename R, typename Host, typename Context,
-            typename Origin, typename LookupKey>
-  static R construct_bound_collection(Host &host, construction_scope scope,
-                                      Context &context, Origin &origin,
-                                      LookupKey &key) {
+            typename Origin, typename LookupKey, typename Scope>
+  static R construct_bound_collection(Host &host, Scope scope, Context &context,
+                                      Origin &origin, LookupKey &key) {
     if constexpr (default_collection_append_v<R>) {
       return host.template construct_request_collection<R>(scope, context, key);
     } else {
@@ -340,9 +339,9 @@ private:
   // answers the misses of the whole chain.
   template <typename Request, typename R, bool MayAutoConstruct,
             typename Lookup, typename Host, typename Context, typename Origin,
-            typename LookupKey>
-  static R resolve_missing(Host &host, construction_scope scope,
-                           Context &context, Origin &origin, LookupKey &key) {
+            typename LookupKey, typename Scope>
+  static R resolve_missing(Host &host, Scope scope, Context &context,
+                           Origin &origin, LookupKey &key) {
     if constexpr (Host::template parent_serves<Lookup, LookupKey>()) {
       if (auto *parent = host.parent()) {
         return parent->template resolve<typename Request::user_type,

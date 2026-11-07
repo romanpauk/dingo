@@ -80,8 +80,9 @@ representation that Dingo keeps and converts during resolution.
   runs, and to an instance a `shared` or `shared_cyclical` scope keeps, which
   keeps the unique instance with it for the lifetime of the container. A class
   returned to the caller, by `resolve`, `construct` or as a dependency of one,
-  is refused a reference to it (`type_not_convertible_exception`): it takes the
-  value instead
+  is refused a reference to it: a static container rejects it at compile time, a
+  runtime container throws `type_not_convertible_exception`. Such a class takes
+  the value instead
 - `shared`: cache and reuse the same instance
 - `shared_cyclical`: cache instances while permitting cyclic graphs
 

@@ -144,22 +144,23 @@ public:
   resolution_context(const resolution_context &) = delete;
   resolution_context &operator=(const resolution_context &) = delete;
 
-  template <typename T, typename... Args>
-  T &construct(construction_scope scope, Args &&...args) {
+  template <typename T, typename Scope, typename... Args>
+  T &construct(Scope scope, Args &&...args) {
     return Backend::template construct_storage<T>(
         scope, [&](void *ptr) { new (ptr) T(std::forward<Args>(args)...); });
   }
 
   // Constructs the T that make returns in place, so that a T that can be
   // neither copied nor moved is placed too.
-  template <typename T, typename Make>
-  T &construct_from(construction_scope scope, Make &&make) {
+  template <typename T, typename Scope, typename Make>
+  T &construct_from(Scope scope, Make &&make) {
     return Backend::template construct_storage<T>(
         scope, [&](void *ptr) { new (ptr) T(std::forward<Make>(make)()); });
   }
 
-  template <typename T, typename DetectionMode, typename Container>
-  T construct(construction_scope scope, Container &container) {
+  template <typename T, typename DetectionMode, typename Scope,
+            typename Container>
+  T construct(Scope scope, Container &container) {
     using temporary_type = normalized_type_t<T>;
     auto &instance = Backend::template construct_storage<temporary_type>(
         scope, [&](void *ptr) {
@@ -178,8 +179,8 @@ public:
     }
   }
 
-  template <typename T, typename Container>
-  T resolve(construction_scope scope, Container &container) {
+  template <typename T, typename Scope, typename Container>
+  T resolve(Scope scope, Container &container) {
     if constexpr (detail::is_selected_v<T>) {
       using request_type = detail::selected_type_t<T>;
       using selector_type = detail::selected_selector_t<T>;

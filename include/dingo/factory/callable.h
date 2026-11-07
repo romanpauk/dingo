@@ -26,9 +26,9 @@ template <typename R, typename... Args> struct callable_invoke<R(Args...)> {
   // initializes it in place: a type that can be neither copied nor moved can
   // be passed by value. std::invoke would take it as a reference and have to
   // move it. A member pointer is invoked.
-  template <typename Fn, typename Context, typename Container>
-  static decltype(auto) construct(Fn &&fn, construction_scope scope,
-                                  Context &ctx, Container &container) {
+  template <typename Fn, typename Context, typename Container, typename Scope>
+  static decltype(auto) construct(Fn &&fn, Scope scope, Context &ctx,
+                                  Container &container) {
     (void)scope;
     if constexpr (std::is_member_pointer_v<std::decay_t<Fn>>) {
       return std::invoke(
@@ -44,9 +44,10 @@ template <typename R, typename... Args> struct callable_invoke<R(Args...)> {
   // An object constructed in place, as a cyclical scope constructs it, is
   // initialized with what the callable returns, so the callable returns the
   // object: a handle it returns owns an object of its own.
-  template <typename Type, typename Fn, typename Context, typename Container>
-  static auto construct(void *ptr, Fn &&fn, construction_scope scope,
-                        Context &ctx, Container &container) {
+  template <typename Type, typename Fn, typename Context, typename Container,
+            typename Scope>
+  static auto construct(void *ptr, Fn &&fn, Scope scope, Context &ctx,
+                        Container &container) {
     using result_type =
         decltype(construct(std::forward<Fn>(fn), scope, ctx, container));
     if constexpr (!std::is_constructible_v<normalized_type_t<Type>,
@@ -229,14 +230,13 @@ using callable_dispatch_signature_t =
 template <typename Signature, typename T> struct callable_factory {
   explicit callable_factory(T fn) : fn_(std::move(fn)) {}
 
-  template <typename Type, typename Context, typename Container>
-  auto construct(construction_scope scope, Context &ctx, Container &container) {
+  template <typename Type, typename Context, typename Container, typename Scope>
+  auto construct(Scope scope, Context &ctx, Container &container) {
     return callable_invoke<Signature>::construct(fn_, scope, ctx, container);
   }
 
-  template <typename Type, typename Context, typename Container>
-  auto construct(void *ptr, construction_scope scope, Context &ctx,
-                 Container &container) {
+  template <typename Type, typename Context, typename Container, typename Scope>
+  auto construct(void *ptr, Scope scope, Context &ctx, Container &container) {
     callable_invoke<Signature>::template construct<Type>(ptr, fn_, scope, ctx,
                                                          container);
   }

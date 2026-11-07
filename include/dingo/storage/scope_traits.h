@@ -438,9 +438,10 @@ private:
       std::declval<Container &>()))>;
 
   // Constructs the value the storage produces in place.
-  template <typename Context, typename Storage, typename Container>
-  static auto source_builder(construction_scope scope, Context &context,
-                             Storage &storage, Container &container) {
+  template <typename Context, typename Storage, typename Container,
+            typename Scope>
+  static auto source_builder(Scope scope, Context &context, Storage &storage,
+                             Container &container) {
     return [&, scope](void *ptr) {
       new (ptr) source_t<Storage, Context, Container>(
           storage.resolve(scope, context, container));
@@ -479,8 +480,9 @@ public:
     }
   }
 
-  template <typename Context, typename Storage, typename Container>
-  static auto materialize_source(construction_scope scope, Context &context,
+  template <typename Context, typename Storage, typename Container,
+            typename Scope>
+  static auto materialize_source(Scope scope, Context &context,
                                  Storage &storage, Container &container) {
     if constexpr (policy::consumes) {
       return make_rvalue_source<source_t<Storage, Context, Container>>(
@@ -491,9 +493,10 @@ public:
   }
 
   // The source of a consuming scope, placed in the context.
-  template <typename Context, typename Storage, typename Container>
-  static auto &materialize_source_in_context(construction_scope scope,
-                                             Context &context, Storage &storage,
+  template <typename Context, typename Storage, typename Container,
+            typename Scope>
+  static auto &materialize_source_in_context(Scope scope, Context &context,
+                                             Storage &storage,
                                              Container &container) {
     static_assert(policy::consumes);
     return context.template construct<

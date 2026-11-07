@@ -132,9 +132,8 @@ public:
     }
   }
 
-  template <typename Context, typename Container>
-  void construct(construction_scope scope, Context &context,
-                 Container &container) {
+  template <typename Context, typename Container, typename Scope>
+  void construct(Scope scope, Context &context, Container &container) {
     assert(resolved_);
     if constexpr (std::is_array_v<Type>) {
       Factory::template construct<Type>(this->storage(), scope, context,
@@ -194,9 +193,8 @@ public:
 
   std::shared_ptr<StoredType> &get() { return instance_; }
 
-  template <typename Context, typename Container>
-  auto construct(construction_scope scope, Context &context,
-                 Container &container) {
+  template <typename Context, typename Container, typename Scope>
+  auto construct(Scope scope, Context &context, Container &container) {
     assert(instance_);
     Factory::template construct<Type *>(instance_.get(), scope, context,
                                         container);
@@ -264,9 +262,8 @@ public:
                    .get());
   using tag_type = shared_cyclical;
 
-  template <typename Context, typename Container>
-  decltype(auto) resolve(construction_scope scope, Context &context,
-                         Container &container) {
+  template <typename Context, typename Container, typename Scope>
+  decltype(auto) resolve(Scope scope, Context &context, Container &container) {
     if (instance_.empty()) {
       // shared_cyclical publishes its owning handle before the pointee
       // is fully constructed so the graph can close over a stable

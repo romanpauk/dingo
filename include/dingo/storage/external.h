@@ -109,8 +109,8 @@ public:
   template <typename T>
   external_storage(T &&instance) : instance_(std::forward<T>(instance)) {}
 
-  template <typename Context, typename Container>
-  decltype(auto) resolve(construction_scope, Context &, Container &) {
+  template <typename Context, typename Container, typename Scope>
+  decltype(auto) resolve(Scope, Context &, Container &) {
     return instance_.get();
   }
   constexpr bool is_resolved() const { return true; }

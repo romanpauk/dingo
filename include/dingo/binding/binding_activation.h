@@ -170,9 +170,8 @@ public:
 
   // A cached conversion outlives the request; it is forgotten again when the
   // transaction that constructed it rolls back.
-  template <typename T, typename Context, typename... Args>
-  T &construct_conversion(construction_scope scope, Context &context,
-                          Args &&...args) {
+  template <typename T, typename Context, typename Scope, typename... Args>
+  T &construct_conversion(Scope scope, Context &context, Args &&...args) {
     if constexpr (has_conversion_cache) {
       return conversions().template construct<T>(context,
                                                  std::forward<Args>(args)...);
@@ -235,8 +234,8 @@ bool refers_into(const void *address, const void *object) {
          less(at, begin + sizeof(std::remove_reference_t<T>));
 }
 
-template <typename Target, typename Context, typename T>
-void *result_address(construction_scope scope, Context &context, T &&instance) {
+template <typename Target, typename Context, typename T, typename Scope>
+void *result_address(Scope scope, Context &context, T &&instance) {
   using instance_type = std::remove_reference_t<T>;
 
   if constexpr (std::is_pointer_v<instance_type>) {
@@ -264,7 +263,9 @@ void *result_address(construction_scope scope, Context &context, T &&instance) {
 // bindings of a static registration first. In a runtime transaction the
 // activation tracks what it leaves in the cell, so that a failed transaction
 // rolls it back.
-template <typename Cell, typename Dependencies> struct binding_activation {
+template <typename Cell, typename Dependencies,
+          typename Scope = construction_scope>
+struct binding_activation {
   using storage_type = typename Cell::storage_type;
   using owner_type = std::remove_reference_t<Dependencies>;
   using materialization_traits =
@@ -279,10 +280,11 @@ template <typename Cell, typename Dependencies> struct binding_activation {
 
   Cell &cell;
   Dependencies dependencies;
-  construction_scope scope;
+  Scope scope;
 
-  template <typename T, typename Context, typename Source>
-  decltype(auto) construct_conversion(construction_scope construction,
+  template <typename T, typename Context, typename Source,
+            typename Construction>
+  decltype(auto) construct_conversion(Construction construction,
                                       Context &context, Source &&source) {
     return cell.template construct_conversion<T>(construction, context,
                                                  std::forward<Source>(source));
@@ -321,8 +323,15 @@ template <typename Cell, typename Dependencies> struct binding_activation {
           std::remove_cv_t<std::remove_reference_t<decltype(storage.resolve(
               scope, context, dependencies))>>;
       // The context ends before the caller uses what the resolution
-      // returns, so an address into it would dangle.
-      if (scope.is_caller()) {
+      // returns, so an address into it would dangle: a scope known to be the
+      // caller's is refused as the code compiles.
+      if constexpr (is_fixed_caller_scope_v<Scope>) {
+        static_assert(!is_fixed_caller_scope_v<Scope>,
+                      "a reference or a pointer to an instance the "
+                      "resolution makes would dangle in what is returned to "
+                      "the caller; take it by value, or let a shared scope "
+                      "keep what refers to it");
+      } else if (scope.is_caller()) {
         throw make_type_not_convertible_exception(
             describe_type<Request>(), describe_type<source_type>(), context);
       }
@@ -436,8 +445,8 @@ private:
 
   // A runtime context places a source it retains in the transaction, as it
   // does every source of a persistent request.
-  template <typename Context, typename Fn>
-  decltype(auto) with_runtime_source(construction_scope construction,
+  template <typename Context, typename Fn, typename Construction>
+  decltype(auto) with_runtime_source(Construction construction,
                                      Context &context, Fn &&fn) {
     auto &storage = cell.storage();
     if constexpr (materialization_traits::consumes) {

@@ -16,15 +16,14 @@ namespace dingo {
 template <auto fn> struct function {
   using signature = detail::callable_signature_t<decltype(fn)>;
 
-  template <typename Type, typename Context, typename Container>
-  static auto construct(construction_scope scope, Context &ctx,
-                        Container &container) {
+  template <typename Type, typename Context, typename Container, typename Scope>
+  static auto construct(Scope scope, Context &ctx, Container &container) {
     return detail::callable_invoke<signature>::construct(fn, scope, ctx,
                                                          container);
   }
 
-  template <typename Type, typename Context, typename Container>
-  static auto construct(void *ptr, construction_scope scope, Context &ctx,
+  template <typename Type, typename Context, typename Container, typename Scope>
+  static auto construct(void *ptr, Scope scope, Context &ctx,
                         Container &container) {
     detail::callable_invoke<signature>::template construct<Type>(
         ptr, fn, scope, ctx, container);

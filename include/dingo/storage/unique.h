@@ -100,9 +100,8 @@ public:
                                            std::remove_extent_t<Type> *, Type>;
   using tag_type = unique;
 
-  template <typename Context, typename Container>
-  decltype(auto) resolve(construction_scope scope, Context &context,
-                         Container &container) {
+  template <typename Context, typename Container, typename Scope>
+  decltype(auto) resolve(Scope scope, Context &context, Container &container) {
     return Factory::template construct<Type>(scope, context, container);
   }
 };

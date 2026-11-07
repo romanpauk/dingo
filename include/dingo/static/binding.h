@@ -124,9 +124,9 @@ struct local_binding_router {
 
   template <typename T, bool RemoveRvalueReferences, typename Context,
             typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  decltype(auto) resolve(construction_scope scope, Context &context,
-                         LookupKey key) {
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0,
+            typename Scope>
+  decltype(auto) resolve(Scope scope, Context &context, LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
     using R = typename request::interface_type;
     constexpr bool collection = collection_traits<R>::is_collection;
@@ -186,8 +186,8 @@ public:
   // Selects the resolution of a request at compile time and applies it
   // through a binding activation.
   template <typename InterfaceBinding, typename Request, typename Host,
-            typename Context>
-  Request resolve(construction_scope scope, Host &host, Context &context) {
+            typename Context, typename Scope>
+  Request resolve(Scope scope, Host &host, Context &context) {
     using resolution =
         typename static_request_resolution<Request, InterfaceBinding,
                                            Context>::type;
@@ -207,9 +207,8 @@ public:
   }
 
   template <typename InterfaceBinding, typename Request, typename Host,
-            typename Context, typename Fn>
-  decltype(auto) consume(construction_scope scope, Host &host, Context &context,
-                         Fn &&fn) {
+            typename Context, typename Fn, typename Scope>
+  decltype(auto) consume(Scope scope, Host &host, Context &context, Fn &&fn) {
     using resolution =
         typename static_request_resolution<Request, InterfaceBinding,
                                            Context>::type;
@@ -223,15 +222,15 @@ public:
   }
 
 private:
-  template <typename Host>
-  auto activation(construction_scope scope, Host &host) {
+  template <typename Host, typename Scope>
+  auto activation(Scope scope, Host &host) {
     using dependencies =
         typename static_dependencies<Host, typename model::bindings_type>::type;
     if constexpr (std::is_reference_v<dependencies>) {
-      return binding_activation<binding_cell_t<model>, dependencies>{
+      return binding_activation<binding_cell_t<model>, dependencies, Scope>{
           cell_, host, scope};
     } else {
-      return binding_activation<binding_cell_t<model>, dependencies>{
+      return binding_activation<binding_cell_t<model>, dependencies, Scope>{
           cell_, {this->scope, host}, scope};
     }
   }
@@ -253,25 +252,24 @@ template <typename... Registrations>
 class static_bindings_state : private static_binding<Registrations>... {
 public:
   template <typename InterfaceBinding, typename Request, typename Host,
-            typename Context>
-  Request resolve(construction_scope scope, Host &host, Context &context) {
+            typename Context, typename Scope>
+  Request resolve(Scope scope, Host &host, Context &context) {
     return binding<InterfaceBinding>()
         .template resolve<InterfaceBinding, Request>(scope, host, context);
   }
 
   template <typename InterfaceBinding, typename Request, typename Host,
-            typename Context, typename Fn>
-  decltype(auto) consume(construction_scope scope, Host &host, Context &context,
-                         Fn &&fn) {
+            typename Context, typename Fn, typename Scope>
+  decltype(auto) consume(Scope scope, Host &host, Context &context, Fn &&fn) {
     return binding<InterfaceBinding>()
         .template consume<InterfaceBinding, Request>(scope, host, context,
                                                      std::forward<Fn>(fn));
   }
 
   template <typename T, typename LookupKey, typename Bindings, typename Host,
-            typename Context, typename Fn>
-  std::size_t append_collection(construction_scope scope, T &results,
-                                Host &host, Context &context, Fn &&fn) {
+            typename Context, typename Fn, typename Scope>
+  std::size_t append_collection(Scope scope, T &results, Host &host,
+                                Context &context, Fn &&fn) {
     static_assert(is_lookup_key_v<LookupKey>);
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
@@ -297,9 +295,8 @@ public:
   }
 
   template <typename T, typename LookupKey, typename Bindings, typename Host,
-            typename Context, typename Fn>
-  T construct_collection(construction_scope scope, Host &host, Context &context,
-                         Fn &&fn) {
+            typename Context, typename Fn, typename Scope>
+  T construct_collection(Scope scope, Host &host, Context &context, Fn &&fn) {
     constexpr std::size_t count =
         static_collection_binding_count<Bindings, T, LookupKey>();
     static_assert(
@@ -314,9 +311,8 @@ public:
   }
 
   template <typename T, typename LookupKey, typename Bindings, typename Host,
-            typename Context>
-  T construct_collection(construction_scope scope, Host &host,
-                         Context &context) {
+            typename Context, typename Scope>
+  T construct_collection(Scope scope, Host &host, Context &context) {
     using collection_type = collection_traits<T>;
     constexpr std::size_t count =
         static_collection_binding_count<Bindings, T, LookupKey>();

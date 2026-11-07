@@ -165,8 +165,8 @@ private:
   }();
 
   template <typename Lookup, typename Result, typename LookupKey,
-            typename Context>
-  decltype(auto) resolve_bound(construction_scope scope, Context &context) {
+            typename Context, typename Scope>
+  decltype(auto) resolve_bound(Scope scope, Context &context) {
     using binding = typename selection_t<Lookup, LookupKey>::binding_type;
     return storage_.template resolve<binding, Result>(scope, *this, context);
   }
@@ -222,8 +222,8 @@ public:
   // A request a child container forwards here constructs what this container
   // keeps in the memory of this container, which outlives the child.
   template <typename Request, typename R, typename Context, typename Origin,
-            typename LookupKey>
-  R resolve_request(construction_scope scope, Context &context, Origin &origin,
+            typename LookupKey, typename Scope>
+  R resolve_request(Scope scope, Context &context, Origin &origin,
                     LookupKey key) {
     if constexpr (std::is_same_v<Context, static_persistent_context> &&
                   has_persistent_memory_v) {
@@ -283,8 +283,9 @@ public:
   template <typename Request, bool MayAutoConstruct, typename LookupKey,
             typename R = typename Request::lookup_type,
             bool StaticError = !has_parent_v, typename Context,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R unresolved(construction_scope scope, Context &context, LookupKey key) {
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0,
+            typename Scope>
+  R unresolved(Scope scope, Context &context, LookupKey key) {
     if constexpr (collection_traits<R>::is_collection) {
       (void)scope;
       (void)context;
@@ -339,9 +340,9 @@ private:
 
   // The request itself if its binding publishes it, otherwise its normalized
   // value.
-  template <typename Request, typename R, typename Selection, typename Context>
-  R resolve_exact_or_normalized(Selection, construction_scope scope,
-                                Context &context) {
+  template <typename Request, typename R, typename Selection, typename Context,
+            typename Scope>
+  R resolve_exact_or_normalized(Selection, Scope scope, Context &context) {
     constexpr bool exact = [] {
       if constexpr (Selection::status == binding_status::found) {
         return binding_supports_request_v<typename Request::user_type,
@@ -364,9 +365,9 @@ private:
     return selection_t<typename Request::lookup_type, LookupKey>{};
   }
 
-  template <typename Request, typename R, typename Selection, typename Context>
-  decltype(auto) resolve_selected(Selection &, construction_scope scope,
-                                  Context &context) {
+  template <typename Request, typename R, typename Selection, typename Context,
+            typename Scope>
+  decltype(auto) resolve_selected(Selection &, Scope scope, Context &context) {
     return storage_.template resolve<typename Selection::binding_type,
                                      typename Request::interface_type>(
         scope, *this, context);
@@ -386,9 +387,8 @@ private:
 
   parent_container_type *parent() { return parent_; }
 
-  template <typename R, typename Context, typename LookupKey>
-  R construct_request_collection(construction_scope scope, Context &context,
-                                 LookupKey) {
+  template <typename R, typename Context, typename LookupKey, typename Scope>
+  R construct_request_collection(Scope scope, Context &context, LookupKey) {
     return storage_
         .template construct_collection<R, LookupKey, static_bindings_type>(
             scope, *this, context);

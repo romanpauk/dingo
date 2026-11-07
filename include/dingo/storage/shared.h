@@ -73,9 +73,8 @@ public:
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-  template <typename Context, typename Container>
-  void construct(construction_scope scope, Context &context,
-                 Container &container) {
+  template <typename Context, typename Container, typename Scope>
+  void construct(Scope scope, Context &context, Container &container) {
     assert(this->empty());
     if constexpr (converts) {
       new (this->storage())
@@ -113,9 +112,8 @@ public:
 
   ~storage_instance() { reset(); }
 
-  template <typename Context, typename Container>
-  auto construct(construction_scope scope, Context &context,
-                 Container &container) {
+  template <typename Context, typename Container, typename Scope>
+  auto construct(Scope scope, Context &context, Container &container) {
     assert(empty());
     instance_ = Factory::template construct<Type *>(scope, context, container);
   }
@@ -155,9 +153,8 @@ public:
                    .get());
   using tag_type = shared;
 
-  template <typename Context, typename Container>
-  decltype(auto) resolve(construction_scope scope, Context &context,
-                         Container &container) {
+  template <typename Context, typename Container, typename Scope>
+  decltype(auto) resolve(Scope scope, Context &context, Container &container) {
     // The instance is kept, so what it is constructed from has to live as
     // long as the container.
     (void)scope;

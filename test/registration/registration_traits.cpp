@@ -1766,12 +1766,6 @@ TEST(type_registration_test,
   returned.register_type<scope<unique>, storage<reader>>();
   EXPECT_THROW(returned.resolve<reader>(), type_not_convertible_exception);
   EXPECT_THROW(returned.construct<reader>(), type_not_convertible_exception);
-
-  static_container<bindings<bind<scope<unique>, storage<A>, interfaces<I>>,
-                            bind<scope<unique>, storage<reader>>>>
-      returned_static;
-  EXPECT_THROW(returned_static.resolve<reader>(),
-               type_not_convertible_exception);
 }
 
 // A unique pointer is handed to the caller, not referred to in the context.

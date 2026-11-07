@@ -84,9 +84,14 @@ namespace detail {
 // keeps the class, or as long as the caller uses it, when the class is
 // returned to the caller. Anything else is used while the class is
 // constructed.
-template <typename Request>
-constexpr construction_scope dependency_scope(construction_scope scope) {
-  return request_may_escape_v<Request> ? scope : ephemeral_scope;
+template <typename Request, typename Scope>
+constexpr auto dependency_scope(Scope scope) {
+  if constexpr (request_may_escape_v<Request>) {
+    return scope;
+  } else {
+    (void)scope;
+    return ephemeral_scope;
+  }
 }
 } // namespace detail
 
