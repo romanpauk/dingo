@@ -78,14 +78,15 @@ representation that Dingo keeps and converts during resolution.
   itself or of one of its interfaces. One stored in a `std::optional` or a
   `std::unique_ptr` is moved out of it, also into another of these, and one
   stored in a `std::shared_ptr` is copied out of it. A reference or a pointer to
-  it, or to the handle, optional or alternative type it is stored as and its
-  element, is given only where it cannot dangle: to a callable `invoke` calls,
-  while the call runs, and to an instance a `shared` or `shared_cyclical` scope
-  keeps, which keeps the unique instance with it for the lifetime of the
-  container. A class returned to the caller, by `resolve`, `construct` or as a
-  dependency of one, is refused a reference to it: a static container rejects it
-  at compile time, a runtime container throws `type_not_convertible_exception`.
-  Such a class takes the value instead
+  it, to the handle, optional or alternative type it is stored as and its
+  element, or to a value the request makes of it, such as a `std::shared_ptr` of
+  one of its interfaces, is given only where it cannot dangle: to a callable
+  `invoke` calls, while the call runs, and to an instance a `shared` or
+  `shared_cyclical` scope keeps, which keeps the unique instance with it for the
+  lifetime of the container. A class returned to the caller, by `resolve`,
+  `construct` or as a dependency of one, is refused a reference to it: a static
+  container rejects it at compile time, a runtime container throws
+  `type_not_convertible_exception`. Such a class takes the value instead
 - `shared`: cache and reuse the same instance
 - `shared_cyclical`: cache instances while permitting cyclic graphs
 

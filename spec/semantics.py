@@ -440,8 +440,8 @@ class Gap:
 class Limitation(Enum):
     """A known gap of the library: a step it does not take, or a request it
     does not satisfy, although the semantics allow it."""
-    # A reference to a handle or an optional a step makes for the request,
-    # rather than the one the storage makes.
+    # A reference to an array made for the request, which is handed over as
+    # a pointer, never kept as an object.
     REFERENCE_TO_MADE_LAYER = "reference_to_made_layer"
     # The element of a holder a step makes for the request, and a pointer
     # handed over out of a holder made for it.
@@ -453,11 +453,9 @@ def _made(thing):
 
 
 GAPS = (
-    # A made array is handed over as a pointer, never kept as an object.
     Gap(Limitation.REFERENCE_TO_MADE_LAYER, "refer",
         lambda context, category, thing: bool(thing.layers) and
-        _made(thing) and (thing.added or
-                          LAYERS[thing.layers[0]].decays_to is not None)),
+        _made(thing) and LAYERS[thing.layers[0]].decays_to is not None),
     Gap(Limitation.ELEMENT_OF_MADE_HOLDER, "refer",
         lambda context, category, thing: thing.in_added),
     Gap(Limitation.ELEMENT_OF_MADE_HOLDER, "element",

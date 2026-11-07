@@ -188,6 +188,15 @@ private:
            requested.pointee != nullptr;
   }
 
+  // The value an address request refers to.
+  static constexpr type_descriptor referred_value(type_descriptor requested) {
+    type_descriptor value =
+        requested.pointee != nullptr ? *requested.pointee : requested;
+    value.reference = type_reference_kind::none;
+    value.cv = type_cv_flags::none;
+    return value;
+  }
+
   // A storage that makes a value for the request places it in the context,
   // which ends before the caller of the container uses an address into it,
   // or into what it owns, as the static container knows as it compiles. A
@@ -222,9 +231,23 @@ private:
       throw detail::make_type_not_convertible_exception(
           request.requested_type, registered_type(), context);
     } else {
-      const auto resolution_index = detail::resolution_request_index(
-          request_resolutions{}, request.requested_type);
-      if (resolution_index == type_list_size_v<request_resolutions>) {
+      type_descriptor resolved_type = request.requested_type;
+      auto resolution_index = detail::resolution_request_index(
+          request_resolutions{}, resolved_type);
+      // A reference or a pointer the storage publishes no address for
+      // refers to the value it makes, placed in the context.
+      bool placed = false;
+      if constexpr (detail::places_made_values_v<Storage>) {
+        if (resolution_index == type_list_size_v<request_resolutions> &&
+            refers(resolved_type)) {
+          resolved_type = referred_value(resolved_type);
+          resolution_index = detail::resolution_request_index(
+              request_resolutions{}, resolved_type);
+          placed = true;
+        }
+      }
+      if (resolution_index == type_list_size_v<request_resolutions> ||
+          (placed && scope.is_caller())) {
         throw detail::make_type_not_convertible_exception(
             request.requested_type, registered_type(), context);
       }
@@ -241,7 +264,11 @@ private:
                   auto resolved = detail::resolve_indexed_address(
                       activation, context,
                       std::forward<decltype(source)>(source), resolution_index,
-                      request_resolutions{}, request.requested_type);
+                      request_resolutions{}, resolved_type);
+                  if (placed) {
+                    resolved.access = resolved_address::access_kind::borrow;
+                    return resolved;
+                  }
                   check_caller_address<detail::materializes_value_source_v<
                       Storage, runtime_context_type,
                       std::remove_reference_t<decltype(container)>>>(

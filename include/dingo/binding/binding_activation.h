@@ -223,6 +223,22 @@ inline constexpr bool materializes_value_source_v = [] {
   return !std::is_reference_v<source_result> && !std::is_pointer_v<source_type>;
 }();
 
+// The value a reference or a pointer request refers to.
+template <typename Request>
+using referred_value_t =
+    std::remove_cv_t<std::remove_pointer_t<std::remove_reference_t<Request>>>;
+
+// Whether a storage makes a value for each request that a reference may
+// refer to: one moved out of what it makes, or a wrapper it is moved into,
+// rather than a copy of an element a handle shares.
+template <typename Storage>
+inline constexpr bool places_made_values_v =
+    scope_materialization<typename Storage::tag_type>::consumes &&
+    storage_form_traits<typename Storage::type>::form !=
+        storage_form::shared_handle &&
+    storage_form_traits<typename Storage::type>::form !=
+        storage_form::shared_array_handle;
+
 template <typename Target, typename Context, typename T, typename Scope>
 void *result_address(Scope scope, Context &context, T &&instance) {
   using instance_type = std::remove_reference_t<T>;

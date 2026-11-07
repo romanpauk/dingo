@@ -165,12 +165,31 @@ struct static_dependencies<Host, static_registry<LocalRegistrations...>> {
                            static_registry<LocalRegistrations...>, Host>;
 };
 
+// A reference or a pointer request of a value the storage makes for the
+// request, which it publishes no address of: the value is placed in the
+// context. A copy is not the instance a reference refers to, so the storage
+// moves its instance into the value, as one that does not share it does.
+template <typename Request, typename InterfaceBinding>
+inline constexpr bool places_request_value_v = [] {
+  using storage = typename InterfaceBinding::binding_model_type::storage_type;
+  if constexpr ((std::is_lvalue_reference_v<Request> ||
+                 std::is_pointer_v<Request>) &&
+                places_made_values_v<storage>) {
+    return !binding_supports_request_v<Request, InterfaceBinding> &&
+           binding_supports_request_v<referred_value_t<Request>,
+                                      InterfaceBinding>;
+  } else {
+    return false;
+  }
+}();
+
 // The resolution of a request selected at compile time.
 template <typename Request, typename InterfaceBinding, typename Context>
 struct static_request_resolution
     : binding_supports_request<Request, InterfaceBinding> {
   static_assert(is_runtime_context_v<Context> ||
-                    binding_supports_request_v<Request, InterfaceBinding>,
+                    binding_supports_request_v<Request, InterfaceBinding> ||
+                    places_request_value_v<Request, InterfaceBinding>,
                 "static resolution cannot satisfy a request the storage "
                 "does not publish");
 };
@@ -191,7 +210,9 @@ public:
     using resolution =
         typename static_request_resolution<Request, InterfaceBinding,
                                            Context>::type;
-    if constexpr (std::is_void_v<resolution>) {
+    if constexpr (places_request_value_v<Request, InterfaceBinding>) {
+      return place_value<InterfaceBinding, Request>(scope, host, context);
+    } else if constexpr (std::is_void_v<resolution>) {
       not_convertible<Request, InterfaceBinding>(context);
     } else if constexpr (!std::is_reference_v<Request> &&
                          !std::is_pointer_v<Request>) {
@@ -222,6 +243,32 @@ public:
   }
 
 private:
+  // Places the value a reference or a pointer request refers to in the
+  // context, which ends before the caller uses what a resolution returns.
+  template <typename InterfaceBinding, typename Request, typename Host,
+            typename Context, typename Scope>
+  Request place_value(Scope scope, Host &host, Context &context) {
+    using value_type = referred_value_t<Request>;
+    if constexpr (is_fixed_caller_scope_v<Scope>) {
+      static_assert(!is_fixed_caller_scope_v<Scope>,
+                    "a reference or a pointer to an instance the "
+                    "resolution makes would dangle in what is returned to "
+                    "the caller; take it by value, or let a shared scope "
+                    "keep what refers to it");
+    } else if (scope.is_caller()) {
+      not_convertible<Request, InterfaceBinding>(context);
+    }
+    auto &value =
+        context.template construct_from<value_type>(scope, [&]() -> value_type {
+          return resolve<InterfaceBinding, value_type>(scope, host, context);
+        });
+    if constexpr (std::is_pointer_v<Request>) {
+      return &value;
+    } else {
+      return value;
+    }
+  }
+
   template <typename Host, typename Scope>
   auto activation(Scope scope, Host &host) {
     using dependencies =
