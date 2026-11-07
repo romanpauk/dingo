@@ -31,13 +31,26 @@
 namespace dingo::model {
 
 // Keeps the leaves alive, so that a probe sees what it leaks and what it
-// refers to after it is gone.
+// refers to after it is gone. A leaf moved from loses its value, so that a
+// probe sees a kept leaf moved out of.
 struct leaf_interface {
   leaf_interface() { alive.insert(this); }
-  leaf_interface(const leaf_interface &) { alive.insert(this); }
-  leaf_interface(leaf_interface &&) noexcept { alive.insert(this); }
-  leaf_interface &operator=(const leaf_interface &) = default;
-  leaf_interface &operator=(leaf_interface &&) = default;
+  leaf_interface(const leaf_interface &other) : state(other.state) {
+    alive.insert(this);
+  }
+  leaf_interface(leaf_interface &&other) noexcept : state(other.state) {
+    other.state = 0;
+    alive.insert(this);
+  }
+  leaf_interface &operator=(const leaf_interface &other) {
+    state = other.state;
+    return *this;
+  }
+  leaf_interface &operator=(leaf_interface &&other) noexcept {
+    state = other.state;
+    other.state = 0;
+    return *this;
+  }
   virtual ~leaf_interface() { alive.erase(this); }
   virtual int value() const = 0;
 
@@ -47,11 +60,14 @@ struct leaf_interface {
   }
 
   inline static std::set<const leaf_interface *> alive;
+
+protected:
+  int state = 7;
 };
 
 // The object every cell stores, directly or inside its stored type.
 struct leaf : leaf_interface {
-  int value() const override { return 7; }
+  int value() const override { return state; }
 };
 
 // A leaf that can be moved and not copied.
@@ -61,7 +77,7 @@ struct move_only_leaf : leaf_interface {
   move_only_leaf &operator=(move_only_leaf &&) = default;
   move_only_leaf(const move_only_leaf &) = delete;
   move_only_leaf &operator=(const move_only_leaf &) = delete;
-  int value() const override { return 7; }
+  int value() const override { return state; }
 };
 
 // A leaf that can be neither copied nor moved.
@@ -69,7 +85,7 @@ struct immovable_leaf : leaf_interface {
   immovable_leaf() = default;
   immovable_leaf(const immovable_leaf &) = delete;
   immovable_leaf &operator=(const immovable_leaf &) = delete;
-  int value() const override { return 7; }
+  int value() const override { return state; }
 };
 
 // What a factory makes a factory leaf of.
@@ -78,7 +94,7 @@ struct made {};
 // A leaf without a default constructor: only its factory makes it.
 struct factory_leaf : leaf_interface {
   explicit factory_leaf(made) {}
-  int value() const override { return 7; }
+  int value() const override { return state; }
 };
 
 // The arguments a leaf is constructed with: none, or what its factory makes it
@@ -246,6 +262,14 @@ template <typename T> const leaf_interface *leaf_of(const T &result) {
   } else if constexpr (std::is_same_v<T, other>) {
     return nullptr;
   } else if constexpr (std::is_array_v<T>) {
+    // The first element stands for the array when every element is a leaf
+    // of the value registered.
+    for (const auto &element : result) {
+      const leaf_interface *found = leaf_of(element);
+      if (!found || found->value() != 7) {
+        return nullptr;
+      }
+    }
     return leaf_of(result[0]);
   } else if constexpr (std::is_pointer_v<T>) {
     return result ? leaf_of(*result) : nullptr;

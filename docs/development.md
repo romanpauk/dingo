@@ -174,10 +174,12 @@ writes the outcome of every cell to `build/model-small/probe.json`, and a
 summary with a table per container, leaf, interfaces, selection and operation
 next to it, as `probe.md`; `model-check-medium` and `model-check-large` write
 theirs to `build/model-medium/` and `build/model-large/`. A size probes a
-covering array of the registrations: every combination of values of two (small)
-or three (medium) of scope, stored form, leaf, interfaces declared and selection
-is probed in both containers, at a thirty-sixth or a sixth of the cost of all of
-them (large). Run directly, `probe.py --cover pairs|triples|all` chooses it, and
+covering array of the registrations the specification says the library accepts:
+every combination of values of two (small) or three (medium) of scope, stored
+form, leaf, interfaces declared and selection that such a registration holds is
+probed in both containers, with 46 or 151 of the 1584 registrations (large). A
+registration the library does not accept resolves nothing, so it covers nothing.
+Run directly, `probe.py --cover pairs|triples|all` chooses it, and
 `--only <regex>` probes the registrations whose name matches the expression.
 
 ### Generator

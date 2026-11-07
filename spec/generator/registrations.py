@@ -161,9 +161,12 @@ def registrations():
 def covering(strength):
     """The registrations, as (scope, form, leaf, interfaces, selection), that
     together hold every combination of values of `strength` of these
-    dimensions."""
-    return cover.covering(strength, Scope, StoredForm, LEAVES, InterfaceSet,
-                          Selection)
+    dimensions that a registration the library accepts holds. A registration
+    it does not accept resolves nothing, so it covers nothing."""
+    return cover.covering(
+        strength, Scope, StoredForm, LEAVES, InterfaceSet, Selection,
+        valid=lambda registration: semantics.registrable(
+            Container.RUNTIME, *registration[:4]))
 
 
 def probe_registration(compiler, flags, directory, registration, position):

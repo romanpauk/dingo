@@ -4,11 +4,12 @@ hold every combination of values of any `strength` of them."""
 from itertools import combinations, product
 
 
-def covering(strength, *dimensions):
-    """The combinations of a value of each dimension that hold every
-    combination of values of `strength` dimensions, chosen greedily and so
-    the same on every run."""
-    candidates = list(product(*dimensions))
+def covering(strength, *dimensions, valid=lambda combination: True):
+    """The valid combinations of a value of each dimension that hold every
+    combination of values of `strength` dimensions some valid one holds,
+    chosen greedily and so the same on every run."""
+    candidates = [combination for combination in product(*dimensions)
+                  if valid(combination)]
 
     def held(candidate):
         return {tuple((i, candidate[i]) for i in indexes)
