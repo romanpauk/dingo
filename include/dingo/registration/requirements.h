@@ -94,7 +94,7 @@ struct alternative_type_provides_interface<
 
 template <typename Storage, typename TypeInterface, typename Type>
 struct interface_registration_requirements {
-  using interface_type = typename annotated_traits<TypeInterface>::type;
+  using interface_type = unannotated_t<TypeInterface>;
   using normalized_type = normalized_type_t<Type>;
   using normalized_interface_type = normalized_type_t<interface_type>;
   using interface_value_type =

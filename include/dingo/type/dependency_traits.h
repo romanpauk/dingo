@@ -17,9 +17,7 @@ namespace dingo {
 
 namespace detail {
 // The interface a request names, without its selector or annotation.
-template <typename Request>
-using request_interface_t =
-    typename annotated_traits<selected_type_t<Request>>::type;
+template <typename Request> using request_interface_t = unannotated_t<Request>;
 } // namespace detail
 
 namespace detail {

@@ -338,9 +338,8 @@ protected:
 public:
   template <typename TypeInterface, typename TypeStorage, typename BindingState>
   using runtime_registration_binding_t =
-      runtime_binding<container_type,
-                      typename annotated_traits<TypeInterface>::type,
-                      TypeStorage, BindingState>;
+      runtime_binding<container_type, unannotated_t<TypeInterface>, TypeStorage,
+                      BindingState>;
 
   template <typename InterfaceList, typename TypeStorage, typename BindingState>
   struct runtime_binding_value_owner;

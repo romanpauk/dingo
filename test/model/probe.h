@@ -325,8 +325,7 @@ inline constexpr bool is_one_of_v = (std::is_same_v<T, Types> || ...);
 template <typename... Expected, typename... Bound>
 constexpr bool binds_exactly(type_list<Bound...> *) {
   return sizeof...(Bound) == sizeof...(Expected) &&
-         (is_one_of_v<typename annotated_traits<Bound>::type, Expected...> &&
-          ...);
+         (is_one_of_v<unannotated_t<Bound>, Expected...> && ...);
 }
 
 // Prints whether a registration the library accepts binds exactly the
@@ -379,7 +378,7 @@ template <typename Registration, typename Interface, typename... Requests>
 void check_probed(const char *prefix) {
   using model = detail::binding_model<Registration>;
   using storage = typename model::storage_type;
-  using type = typename annotated_traits<Interface>::type;
+  using type = unannotated_t<Interface>;
   check_probed<type, Requests...>(
       prefix, typename detail::binding_resolutions<type, storage>::type{});
 }

@@ -34,27 +34,30 @@ struct annotated<T &, Tag> : detail::selected<T &, detail::type_selector<Tag>> {
       : detail::selected<T &, detail::type_selector<Tag>>(value) {}
 };
 
-template <typename T> struct annotated_traits {
+// A request or an interface without its annotation and its key selection,
+// also behind a reference or a pointer.
+template <typename T> struct unannotated {
   using type = T;
 };
 
-template <typename T, typename Tag> struct annotated_traits<annotated<T, Tag>> {
-  using type = T;
+template <typename T> struct unannotated<T &> {
+  using type = typename unannotated<T>::type &;
+};
+
+template <typename T> struct unannotated<T &&> {
+  using type = typename unannotated<T>::type &&;
+};
+
+template <typename T> struct unannotated<T *> {
+  using type = typename unannotated<T>::type *;
 };
 
 template <typename T, typename Tag>
-struct annotated_traits<annotated<T, Tag> &> {
-  using type = T &;
-};
+struct unannotated<annotated<T, Tag>> : unannotated<T> {};
 
-template <typename T, typename Tag>
-struct annotated_traits<annotated<T, Tag> &&> {
-  using type = T &&;
-};
+template <typename T, typename Selector>
+struct unannotated<detail::selected<T, Selector>> : unannotated<T> {};
 
-template <typename T, typename Tag>
-struct annotated_traits<annotated<T, Tag> *> {
-  using type = T *;
-};
+template <typename T> using unannotated_t = typename unannotated<T>::type;
 
 } // namespace dingo

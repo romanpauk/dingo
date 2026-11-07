@@ -347,7 +347,7 @@ protected:
 
     // The binding of an interface.
     template <typename Interface> runtime_binding_interface_type *view() {
-      using interface_type = typename annotated_traits<Interface>::type;
+      using interface_type = unannotated_t<Interface>;
       static_assert(
           (std::is_same_v<typename Bindings::interface_type, interface_type> ||
            ...),
@@ -896,9 +896,8 @@ protected:
     Binding *binding;
 
     template <typename TypeInterface> runtime_lookup_value make() {
-      static_assert(
-          std::is_same_v<typename Binding::interface_type,
-                         typename annotated_traits<TypeInterface>::type>);
+      static_assert(std::is_same_v<typename Binding::interface_type,
+                                   unannotated_t<TypeInterface>>);
       return runtime_lookup_value(binding);
     }
   };
@@ -913,7 +912,7 @@ protected:
                            runtime_transaction_type &transaction,
                            LookupKey lookup_key, KeyValueArgs &&...key_values) {
     detail::interface_registration_requirements<
-        TypeStorage, typename annotated_traits<TypeInterface>::type,
+        TypeStorage, unannotated_t<TypeInterface>,
         typename TypeStorage::type>::assert_valid();
     using lookup_entries =
         runtime_lookup_entries_for_interface_t<TypeInterface, Interfaces>;

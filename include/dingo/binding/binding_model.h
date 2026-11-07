@@ -73,10 +73,10 @@ struct binding_model_impl<Registration, true, true>
   static constexpr bool use_interface_as_stored_leaf =
       use_interface_as_stored_leaf_v<registered_storage_type, interface_types>;
 
-  using stored_leaf_type = std::conditional_t<
-      use_interface_as_stored_leaf,
-      typename annotated_traits<type_list_head_t<interface_types>>::type,
-      leaf_type_t<registered_storage_type>>;
+  using stored_leaf_type =
+      std::conditional_t<use_interface_as_stored_leaf,
+                         unannotated_t<type_list_head_t<interface_types>>,
+                         leaf_type_t<registered_storage_type>>;
   using stored_type = rebind_leaf_t<registered_storage_type, stored_leaf_type>;
   using storage_type =
       storage<typename base::storage_tag, registered_storage_type, stored_type,

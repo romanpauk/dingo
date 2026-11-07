@@ -68,7 +68,7 @@ struct matching_binding_resolution<Request, type_list<>> {
 template <typename Request, typename Head, typename... Tail>
 struct matching_binding_resolution<Request, type_list<Head, Tail...>> {
 private:
-  using unwrapped_request = unwrapped_static_request_t<Request>;
+  using unwrapped_request = unannotated_t<Request>;
 
 public:
   using type = std::conditional_t<
@@ -88,10 +88,9 @@ inline constexpr request_category static_request_category_v =
 
 template <typename Request, typename Interface, typename Storage>
 struct request_binding_resolutions {
-  using type =
-      category_resolutions_t<static_request_category_v<std::remove_cv_t<
-                                 unwrapped_static_request_t<Request>>>,
-                             Interface, storage_shape_t<Storage>>;
+  using type = category_resolutions_t<
+      static_request_category_v<std::remove_cv_t<unannotated_t<Request>>>,
+      Interface, storage_shape_t<Storage>>;
 };
 
 template <typename Request, typename InterfaceBinding>
@@ -99,7 +98,7 @@ struct binding_supports_request {
 private:
   using binding_model_type = typename InterfaceBinding::binding_model_type;
   using interface_type = typename InterfaceBinding::interface_type;
-  using raw_interface_type = typename annotated_traits<interface_type>::type;
+  using raw_interface_type = unannotated_t<interface_type>;
   using storage_type = typename binding_model_type::storage_type;
   using resolutions =
       typename request_binding_resolutions<Request, raw_interface_type,

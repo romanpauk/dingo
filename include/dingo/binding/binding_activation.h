@@ -58,7 +58,7 @@ private:
   template <typename Interface>
   using interface_cache_types =
       resolution_cache_types_t<typename binding_resolutions<
-          typename annotated_traits<Interface>::type, storage_type>::type>;
+          unannotated_t<Interface>, storage_type>::type>;
 
 public:
   using type =
@@ -108,12 +108,11 @@ struct binding_cache_types<BindingModel, type_list<Interfaces...>>
     : binding_cache_types_impl<
           BindingModel,
           (binding_has_cacheless_conversion_shape_v<BindingModel> &&
-           (stored_request_identity_v<
-                typename annotated_traits<Interfaces>::type,
-                typename BindingModel::storage_type> &&
+           (stored_request_identity_v<unannotated_t<Interfaces>,
+                                      typename BindingModel::storage_type> &&
             ...)) ||
-              (binding_has_cacheless_default_leaf_v<
-                   typename annotated_traits<Interfaces>::type, BindingModel> &&
+              (binding_has_cacheless_default_leaf_v<unannotated_t<Interfaces>,
+                                                    BindingModel> &&
                ...),
           Interfaces...> {};
 

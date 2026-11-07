@@ -65,12 +65,6 @@ template <typename T> T convert_resolved_binding(void *ptr) {
       {ptr, resolved_address::access_kind::borrow});
 }
 
-// The request a static request resolves: the annotation of an annotated or
-// selected request does not take part in the resolution.
-template <typename Request>
-using unwrapped_static_request_t = typename annotated_traits<std::conditional_t<
-    is_selected_v<Request>, selected_type_t<Request>, Request>>::type;
-
 template <typename T, typename Instance, typename Fn>
 decltype(auto) consume_resolved_binding(Instance &&instance, Fn &&fn) {
   if constexpr (std::is_lvalue_reference_v<T> || std::is_pointer_v<T> ||
@@ -117,18 +111,8 @@ inline constexpr bool can_construct_from_normalized_request_v =
 //
 // The checks read the type the request constructs, which an annotation or a
 // key selection only names.
-template <typename T, bool Selected = detail::is_selected_v<T>>
-struct constructed_type {
-  using type = typename annotated_traits<T>::type;
-};
-
-template <typename T> struct constructed_type<T, true> {
-  using type = typename annotated_traits<detail::selected_type_t<T>>::type;
-};
-
 template <typename Request>
-using constructed_type_t =
-    typename constructed_type<normalized_type_t<Request>>::type;
+using constructed_type_t = unannotated_t<normalized_type_t<Request>>;
 
 template <typename Request>
 inline constexpr bool constructible_normalized_v =

@@ -93,7 +93,7 @@ struct default_factory_makes : std::true_type {};
 template <typename Request, typename R>
 struct default_factory_makes<Request, R, true> {
   using value_type = typename Request::value_type;
-  using annotated_type = typename annotated_traits<value_type>::type;
+  using annotated_type = unannotated_t<value_type>;
   static constexpr bool annotated_is_made =
       std::is_same_v<annotated_type, value_type> ||
       std::is_move_constructible_v<annotated_type>;

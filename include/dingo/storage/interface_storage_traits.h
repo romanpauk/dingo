@@ -37,8 +37,7 @@ inline constexpr bool is_interface_storage_rebindable_v = [] {
                 type_traits<Storage>::is_pointer_like &&
                 is_value_borrowable_v<Storage>) {
     return detail::is_handle_rebindable_v<
-        Storage,
-        rebind_leaf_t<Storage, typename annotated_traits<Interface>::type>>;
+        Storage, rebind_leaf_t<Storage, unannotated_t<Interface>>>;
   } else {
     return false;
   }
@@ -54,7 +53,7 @@ struct use_interface_as_stored_leaf<Storage, type_list<Interfaces...>>
 
 template <typename Storage, typename Interface>
 inline constexpr bool can_store_interface_as_leaf_v = [] {
-  using interface_type = typename annotated_traits<Interface>::type;
+  using interface_type = unannotated_t<Interface>;
   if constexpr (!requires_complete_type_v<interface_type> ||
                 !is_complete_v<interface_type> ||
                 !std::is_class_v<interface_type>) {
