@@ -154,7 +154,7 @@ public:
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   T construct_collection(Fn &&fn, LookupKey key) {
     return with_context([&](runtime_context_type &context) -> T {
-      return construct_collection<T>(ephemeral_scope, context,
+      return construct_collection<T>(caller_scope, context,
                                      std::forward<Fn>(fn), std::move(key));
     });
   }

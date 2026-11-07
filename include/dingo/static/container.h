@@ -250,11 +250,11 @@ public:
                                      binding_collection_append>) {
           return storage_.template construct_collection<T, LookupKey,
                                                         static_bindings_type>(
-              ephemeral_scope, *this, context);
+              caller_scope, *this, context);
         } else {
           return storage_.template construct_collection<T, LookupKey,
                                                         static_bindings_type>(
-              ephemeral_scope, *this, context, std::forward<Fn>(fn));
+              caller_scope, *this, context, std::forward<Fn>(fn));
         }
       });
     } else {

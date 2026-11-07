@@ -1668,7 +1668,7 @@ struct I {
 struct A : I {
   int value() const override { return 7; }
 };
-// Reads a unique instance while it is alive, during its own construction.
+// Reads the instance it is constructed with.
 struct reader {
   explicit reader(I &instance) : value(instance.value()) {}
   int value;
@@ -1723,8 +1723,8 @@ TEST(type_registration_test, abstract_interface_binds_over_value_storage) {
 
   container<> unique_container;
   unique_container.register_type<scope<unique>, storage<A>, interfaces<I>>();
-  unique_container.register_type<scope<unique>, storage<reader>>();
-  EXPECT_EQ(unique_container.resolve<reader>().value, 7);
+  unique_container.register_type<scope<shared>, storage<reader>>();
+  EXPECT_EQ(unique_container.resolve<reader &>().value, 7);
 
   container<> optional_container;
   optional_container
@@ -1741,22 +1741,37 @@ TEST(type_registration_test, abstract_interface_binds_over_value_storage) {
 // A unique instance lives in the resolution context: a dependency can refer
 // to it, the caller of the container cannot.
 TEST(type_registration_test,
-     unique_instance_is_referred_to_only_as_dependency) {
+     unique_instance_is_referred_to_only_by_what_a_scope_keeps) {
   using abstract_interface_test::A;
   using abstract_interface_test::I;
   using abstract_interface_test::reader;
 
+  // A class a shared scope keeps keeps the unique instance it refers to.
   container<> runtime;
   runtime.register_type<scope<unique>, storage<A>, interfaces<I>>();
-  runtime.register_type<scope<unique>, storage<reader>>();
-  EXPECT_EQ(runtime.resolve<reader>().value, 7);
+  runtime.register_type<scope<shared>, storage<reader>>();
+  EXPECT_EQ(runtime.resolve<reader &>().value, 7);
   EXPECT_THROW(runtime.resolve<I &>(), type_not_convertible_exception);
   EXPECT_THROW(runtime.resolve<I *>(), type_not_convertible_exception);
 
   static_container<bindings<bind<scope<unique>, storage<A>, interfaces<I>>,
-                            bind<scope<unique>, storage<reader>>>>
+                            bind<scope<shared>, storage<reader>>>>
       compile_time;
-  EXPECT_EQ(compile_time.resolve<reader>().value, 7);
+  EXPECT_EQ(compile_time.resolve<reader &>().value, 7);
+
+  // A class returned to the caller would refer to an instance that is gone
+  // when the resolution ends.
+  container<> returned;
+  returned.register_type<scope<unique>, storage<A>, interfaces<I>>();
+  returned.register_type<scope<unique>, storage<reader>>();
+  EXPECT_THROW(returned.resolve<reader>(), type_not_convertible_exception);
+  EXPECT_THROW(returned.construct<reader>(), type_not_convertible_exception);
+
+  static_container<bindings<bind<scope<unique>, storage<A>, interfaces<I>>,
+                            bind<scope<unique>, storage<reader>>>>
+      returned_static;
+  EXPECT_THROW(returned_static.resolve<reader>(),
+               type_not_convertible_exception);
 }
 
 // A unique pointer is handed to the caller, not referred to in the context.

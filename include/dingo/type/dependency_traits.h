@@ -79,11 +79,14 @@ template <typename Request>
 inline constexpr bool request_may_escape_v = request_may_escape<Request>::value;
 
 namespace detail {
+// The scope a dependency is resolved in. A reference or a pointer a class
+// keeps lives as long as the class: as long as the container, when a scope
+// keeps the class, or as long as the caller uses it, when the class is
+// returned to the caller. Anything else is used while the class is
+// constructed.
 template <typename Request>
 constexpr construction_scope dependency_scope(construction_scope scope) {
-  return scope.is_persistent() && request_may_escape_v<Request>
-             ? persistent_scope
-             : ephemeral_scope;
+  return request_may_escape_v<Request> ? scope : ephemeral_scope;
 }
 } // namespace detail
 

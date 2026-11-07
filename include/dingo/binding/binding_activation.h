@@ -320,6 +320,12 @@ template <typename Cell, typename Dependencies> struct binding_activation {
       using source_type =
           std::remove_cv_t<std::remove_reference_t<decltype(storage.resolve(
               scope, context, dependencies))>>;
+      // The context ends before the caller uses what the resolution
+      // returns, so an address into it would dangle.
+      if (scope.is_caller()) {
+        throw make_type_not_convertible_exception(
+            describe_type<Request>(), describe_type<source_type>(), context);
+      }
       auto &value = context.template construct_from<source_type>(
           scope, [&]() -> decltype(auto) {
             return storage.resolve(scope, context, dependencies);

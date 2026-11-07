@@ -143,8 +143,10 @@ public:
                     "constructed");
     } else {
       return self().with_context([&](auto &context) -> R {
+        // What construct makes is returned to the caller, as are the
+        // references it holds.
         return request_resolution::construct<request_type<T>, R>(
-            self(), ephemeral_scope, context, factory);
+            self(), caller_scope, context, factory);
       });
     }
   }

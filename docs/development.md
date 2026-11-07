@@ -182,7 +182,11 @@ constructor the generator wrote, and makes the class through `resolve`,
 registration of it, in both containers over a few registrations of the leaf. It
 makes the class with the constructor an explicit factory names, the one shape
 detection finds and the one signature detection finds. A detected constructor
-has to make what the explicit one makes.
+has to make what the explicit one makes: through a registration as a
+registration does, and through `resolve` or `construct` as `construct` does. A
+class `invoke` makes has no explicit counterpart, as it may refer to what the
+request makes, which a class returned to the caller may not; it is checked only
+for defects.
 
 The known limitations of detection are listed, with their reasons, in
 `LIMITATIONS` of

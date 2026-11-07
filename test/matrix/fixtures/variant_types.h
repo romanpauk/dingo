@@ -14,7 +14,7 @@
 namespace dingo::matrix {
 
 struct variant_a {
-  explicit variant_a(value_type &dependency) : value(dependency.marker()) {}
+  explicit variant_a(value_type dependency) : value(dependency.marker()) {}
 
   int value;
 };

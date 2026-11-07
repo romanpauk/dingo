@@ -60,8 +60,13 @@ class Make:
     @property
     def reference(self):
         """The making with the explicit constructor a detected one has to
-        agree with: a registration with a registration, any other with
-        construct."""
+        agree with: a registration with a registration, a class returned to
+        the caller with construct. A parameter of a call has none: it is
+        returned by value as construct returns it, but may refer to what the
+        request makes, as a class a shared scope keeps may; a detected one is
+        checked only for defects."""
+        if self.making is Making.INVOKE:
+            return None
         making = (Making.REGISTERED if self.making is Making.REGISTERED
                   else Making.CONSTRUCT)
         return Make(Construction.EXPLICIT, making)
@@ -251,6 +256,8 @@ def disagreements(cells):
         if limitations(cell):
             continue
         reference = Make(Construction(construction), Making(making)).reference
+        if reference is None:
+            continue
         explicit = "/".join(parts[:6] + [reference.name] + parts[7:])
         if explicit in outcomes and outcomes[explicit] != outcome:
             found.append(f"{cell}: {outcome}, explicit "
