@@ -154,13 +154,19 @@ set_tests_properties(dingo_matrix_generator_test PROPERTIES
 add_executable(dingo_unit_test
     container/construct_dependency.cpp
     container/container_move.cpp
+    container/container_parameters.cpp
+    container/cycles.cpp
     container/dependency_chain.cpp
     container/incomplete_resolve.cpp
     container/incomplete_resolve_fixture.cpp
     container/parent_container_resolution.cpp
     container/recursion.cpp
     factory/constructor_detection.cpp
+    factory/constructor_detection_cases.cpp
+    factory/constructor_detection_fixture.h
+    factory/factory_kinds.cpp
     lookup/associative_backends.cpp
+    lookup/collections.cpp
     lookup/index_injection.cpp
     lookup/index_registration.cpp
     lookup/index_runtime.cpp
@@ -179,6 +185,9 @@ add_executable(dingo_unit_test
     registration/static_parent_container.cpp
     registration/type_registration.cpp
     resolution/cache.cpp
+    resolution/invoke_callables.cpp
+    resolution/request_identity.cpp
+    resolution/wrappers.cpp
     runtime/memory.cpp
     runtime/transaction.cpp
     resolution/resolution_operation.cpp
