@@ -223,17 +223,6 @@ inline constexpr bool materializes_value_source_v = [] {
   return !std::is_reference_v<source_result> && !std::is_pointer_v<source_type>;
 }();
 
-// Whether address lies within the object of type T at object.
-template <typename T>
-bool refers_into(const void *address, const void *object) {
-  using byte_pointer = const unsigned char *;
-  const std::less<byte_pointer> less;
-  const auto begin = static_cast<byte_pointer>(object);
-  const auto at = static_cast<byte_pointer>(address);
-  return !less(at, begin) &&
-         less(at, begin + sizeof(std::remove_reference_t<T>));
-}
-
 template <typename Target, typename Context, typename T, typename Scope>
 void *result_address(Scope scope, Context &context, T &&instance) {
   using instance_type = std::remove_reference_t<T>;

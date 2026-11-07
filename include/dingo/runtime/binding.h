@@ -181,18 +181,19 @@ private:
     return describe_type<detail::registered_type_t<Storage>>();
   }
 
-  // The source of an unstable storage lives in the context, which ends before
-  // the caller of the container uses an address into it.
-  template <typename Source>
+  // A storage that makes a value for the request places it in the context,
+  // which ends before the caller of the container uses an address into it,
+  // or into what it owns, as the static container knows as it compiles. A
+  // pointer the storage makes hands over what it points to.
+  template <bool PlacesValue>
   static void check_caller_address(construction_scope scope,
                                    const resolved_address &resolved,
-                                   const void *source,
                                    const request_type &request,
                                    runtime_context_type &context) {
-    if constexpr (Storage::conversions::is_stable) {
-      (void)scope, (void)resolved, (void)source, (void)request, (void)context;
+    if constexpr (!PlacesValue) {
+      (void)scope, (void)resolved, (void)request, (void)context;
     } else if (scope.is_caller() &&
-               detail::refers_into<Source>(resolved.address, source)) {
+               resolved.access == resolved_address::access_kind::borrow) {
       throw detail::make_type_not_convertible_exception(
           request.requested_type, registered_type(), context);
     }
@@ -230,13 +231,14 @@ private:
             activation_type activation{state.cell(), container, scope};
             return activation.template with_source<void>(
                 context, [&](auto &&source) -> resolved_address {
-                  const void *source_address = std::addressof(source);
                   auto resolved = detail::resolve_indexed_address(
                       activation, context,
                       std::forward<decltype(source)>(source), resolution_index,
                       request_resolutions{}, request.requested_type);
-                  check_caller_address<decltype(source)>(
-                      scope, resolved, source_address, request, context);
+                  check_caller_address<detail::materializes_value_source_v<
+                      Storage, runtime_context_type,
+                      std::remove_reference_t<decltype(container)>>>(
+                      scope, resolved, request, context);
                   return resolved;
                 });
           });

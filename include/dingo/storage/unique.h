@@ -50,7 +50,8 @@ template <> struct scope_traits<unique> {
     case storage_form::shared_handle:
     case storage_form::shared_array_handle:
     case storage_form::optional:
-      return storage_exposure::rvalue;
+      return storage_exposure::lvalue | storage_exposure::rvalue |
+             storage_exposure::pointer;
     case storage_form::reference:
     case storage_form::unknown:
       break;
