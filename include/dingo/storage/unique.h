@@ -38,7 +38,8 @@ template <> struct scope_traits<unique> {
   static constexpr storage_exposure exposed(storage_form form) {
     switch (form) {
     case storage_form::plain:
-      return storage_exposure::lvalue | storage_exposure::rvalue;
+      return storage_exposure::lvalue | storage_exposure::rvalue |
+             storage_exposure::pointer;
     case storage_form::pointer:
     case storage_form::array:
     case storage_form::bounded_array:

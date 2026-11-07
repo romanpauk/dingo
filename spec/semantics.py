@@ -426,9 +426,6 @@ class Gap:
 class Limitation(Enum):
     """A known gap of the library: a step it does not take, or a request it
     does not satisfy, although the semantics allow it."""
-    # A pointer to an instance made for the request, which a reference to it
-    # is given.
-    POINTER_TO_REQUEST_INSTANCE = "pointer_to_request_instance"
     # A reference to a handle or an optional made for the request.
     REFERENCE_TO_MADE_LAYER = "reference_to_made_layer"
     # The element of a holder made for the request: of a pointer or a handle
@@ -444,12 +441,6 @@ def _made(thing):
 
 
 GAPS = (
-    Gap(Limitation.POINTER_TO_REQUEST_INSTANCE, "refer",
-        lambda context, category, thing: category in POINTERS and
-        _made(thing)),
-    Gap(Limitation.POINTER_TO_REQUEST_INSTANCE, "point",
-        lambda context, category, thing:
-        thing.lifetimes[1] is Lifetime.REQUEST),
     Gap(Limitation.REFERENCE_TO_MADE_LAYER, "refer",
         lambda context, category, thing: bool(thing.layers) and
         _made(thing)),
@@ -533,8 +524,7 @@ def satisfies(things, category, lifetime, layers, context):
                     return False
                 if thing.origin is Origin.MADE:
                     return True
-                return (thing.lifetimes[1].value >= lifetime.value and
-                        not blocked(context, "point", category, thing))
+                return thing.lifetimes[1].value >= lifetime.value
             return any(points(thing) for thing in things)
         return False
     if category is Category.RVALUE_REFERENCE:
