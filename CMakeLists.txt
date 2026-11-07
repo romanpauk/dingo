@@ -167,8 +167,7 @@ if(DINGO_DEVELOPMENT_MODE)
         storage/scope_traits.h
         storage/type_storage_traits.h
         storage/unique.h
-        type/normalized_type.h
-        type/rebind_type.h
+        type/shape.h
         type/type_conversion_traits.h
         base/type_descriptor.h
         base/type_list.h

@@ -31,8 +31,8 @@
 #include <dingo/type/auto_constructible.h>
 #include <dingo/type/collection_traits.h>
 #include <dingo/type/key.h>
-#include <dingo/type/normalized_type.h>
 #include <dingo/type/request.h>
+#include <dingo/type/shape.h>
 
 #include <algorithm>
 #include <cassert>

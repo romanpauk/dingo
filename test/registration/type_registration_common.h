@@ -24,7 +24,7 @@
 #include <dingo/storage/shared.h>
 #include <dingo/storage/shared_cyclical.h>
 #include <dingo/storage/unique.h>
-#include <dingo/type/rebind_type.h>
+#include <dingo/type/shape.h>
 
 #include <gtest/gtest.h>
 

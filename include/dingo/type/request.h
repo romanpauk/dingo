@@ -11,8 +11,7 @@
 #include <dingo/base/selected.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/key.h>
-#include <dingo/type/normalized_type.h>
-#include <dingo/type/rebind_type.h>
+#include <dingo/type/shape.h>
 
 #include <type_traits>
 

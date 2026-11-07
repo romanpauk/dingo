@@ -12,7 +12,7 @@
 #include <dingo/base/complete_type.h>
 #include <dingo/base/type_list.h>
 #include <dingo/type/annotated.h>
-#include <dingo/type/rebind_type.h>
+#include <dingo/type/shape.h>
 #include <dingo/type/type_conversion_traits.h>
 #include <dingo/type/type_traits.h>
 

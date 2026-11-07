@@ -10,7 +10,7 @@
 #include <dingo/base/type_list.h>
 #include <dingo/type/collection_traits.h>
 #include <dingo/type/key.h>
-#include <dingo/type/normalized_type.h>
+#include <dingo/type/shape.h>
 
 #include <cstddef>
 #include <type_traits>

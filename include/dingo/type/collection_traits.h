@@ -9,7 +9,7 @@
 
 #include <dingo/base/config.h>
 
-#include <dingo/type/normalized_type.h>
+#include <dingo/type/shape.h>
 
 #include <list>
 #include <map>

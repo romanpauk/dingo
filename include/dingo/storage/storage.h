@@ -11,7 +11,7 @@
 #include <dingo/factory/constructor.h>
 #include <dingo/memory/aligned_storage.h>
 #include <dingo/memory/object_lifetime.h>
-#include <dingo/type/normalized_type.h>
+#include <dingo/type/shape.h>
 
 #include <new>
 #include <type_traits>

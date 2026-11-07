@@ -15,7 +15,7 @@
 #include <dingo/lookup/ordered.h>
 #include <dingo/lookup/unordered.h>
 #include <dingo/type/key.h>
-#include <dingo/type/normalized_type.h>
+#include <dingo/type/shape.h>
 
 #include <tuple>
 #include <type_traits>

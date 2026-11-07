@@ -15,7 +15,7 @@
 #include <dingo/resolution/materialized_source.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>
-#include <dingo/type/rebind_type.h>
+#include <dingo/type/shape.h>
 #include <dingo/type/type_traits.h>
 
 #include <cstddef>

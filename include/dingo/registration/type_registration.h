@@ -14,7 +14,7 @@
 #include <dingo/factory/factory_traits.h>
 #include <dingo/storage/storage.h>
 #include <dingo/type/key.h>
-#include <dingo/type/rebind_type.h>
+#include <dingo/type/shape.h>
 
 #include <type_traits>
 #include <utility>

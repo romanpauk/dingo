@@ -27,8 +27,8 @@
 #include <dingo/factory/constructor_typedef.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/key.h>
-#include <dingo/type/normalized_type.h>
 #include <dingo/type/request.h>
+#include <dingo/type/shape.h>
 
 #include <type_traits>
 #include <utility>

@@ -15,7 +15,7 @@
 #include <dingo/storage/scope_traits.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>
-#include <dingo/type/normalized_type.h>
+#include <dingo/type/shape.h>
 
 #include <atomic>
 #include <memory>

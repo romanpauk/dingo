@@ -14,8 +14,8 @@
 #include <dingo/resolution/conversion_resolution.h>
 #include <dingo/resolution/materialized_source.h>
 #include <dingo/resolution/resolution.h>
-#include <dingo/type/rebind_type.h>
 #include <dingo/type/request.h>
+#include <dingo/type/shape.h>
 #include <dingo/type/type_conversion_traits.h>
 #include <dingo/type/type_traits.h>
 

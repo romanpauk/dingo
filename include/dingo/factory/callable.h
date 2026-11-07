@@ -9,8 +9,8 @@
 
 #include <dingo/base/config.h>
 #include <dingo/base/construction_scope.h>
-#include <dingo/type/normalized_type.h>
 #include <dingo/type/request.h>
+#include <dingo/type/shape.h>
 
 #include <functional>
 #include <type_traits>
