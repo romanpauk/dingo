@@ -237,7 +237,7 @@ The main constraints are:
 
 - `resolve<T[N]>()` is not supported because arrays are not returned by value
 - unique array storage can hand out owning handles such as
-  `std::unique_ptr<T[]>`
+  `std::unique_ptr<T[]>`, and a `std::shared_ptr<T[N]>` of a bounded array
 - shared array storage can hand out stable borrowed views and shared handles
 
 <!-- { include("../examples/storage/array.cpp", scope="////") -->

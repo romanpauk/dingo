@@ -196,9 +196,11 @@ template <typename T, size_t N> struct storage_form_traits<T[N]> {
     using pointer_types = type_list<row_type *, exact_lookup<exact_type> *>;
   };
 
+  // A shared_ptr of the bounded array takes it over too.
   template <typename U> struct consumed {
-    using rvalue_reference_types =
-        typename array_row_handle_promotions<T, U>::type;
+    using rvalue_reference_types = type_list_cat_t<
+        typename array_row_handle_promotions<T, U>::type,
+        type_list<wrapper_rebind_leaf_t<std::shared_ptr<T[N]>, U> &&>>;
   };
 };
 

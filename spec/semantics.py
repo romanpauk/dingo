@@ -437,10 +437,6 @@ class Limitation(Enum):
     # A new handle or optional of the element moved out of an optional made
     # for the request, as one of the alternative of an alternative type is.
     WRAP_OF_MADE_OPTIONAL_ELEMENT = "wrap_of_made_optional_element"
-    # A handle of a bounded array taking over a pointer to an array a scope
-    # makes; a handle of an array of unknown bound takes over a pointer to
-    # its first element.
-    BOUNDED_HANDLE_OF_MADE_ARRAY = "bounded_handle_of_made_array"
 
 
 def _made(thing):
@@ -465,9 +461,6 @@ GAPS = (
         thing.lifetimes[1] is Lifetime.REQUEST),
     Gap(Limitation.WRAP_OF_MADE_OPTIONAL_ELEMENT, "wrap",
         lambda context, thing, following: thing.contained == "optional"),
-    Gap(Limitation.BOUNDED_HANDLE_OF_MADE_ARRAY, "adopt",
-        lambda context, thing, following: len(thing.layers) > 1 and
-        LAYERS[thing.layers[1]].bounded),
 )
 
 
