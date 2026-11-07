@@ -20,8 +20,8 @@
 
 #include <dingo/base/config.h>
 
-#include <dingo/base/complete_type.h>
 #include <dingo/base/construction_scope.h>
+#include <dingo/base/meta.h>
 #include <dingo/base/type_list.h>
 #include <dingo/factory/constructor_traits.h>
 #include <dingo/factory/constructor_typedef.h>

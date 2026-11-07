@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/base/complete_type.h>
+#include <dingo/base/meta.h>
 
 #include <type_traits>
 

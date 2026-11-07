@@ -10,6 +10,7 @@
 #include <dingo/base/config.h>
 
 #include <dingo/base/exceptions.h>
+#include <dingo/base/meta.h>
 #include <dingo/base/type_list.h>
 
 #include <array>
@@ -26,19 +27,6 @@ struct external;
 
 template <class T> struct exact_lookup;
 template <class T> struct collection_traits;
-
-namespace detail {
-template <typename T, typename, auto... Values>
-struct is_brace_constructible_impl : std::false_type {};
-
-template <typename T, auto... Values>
-struct is_brace_constructible_impl<T, std::void_t<decltype(T{Values...})>,
-                                   Values...> : std::true_type {};
-
-template <typename T, auto... Values>
-inline constexpr bool is_brace_constructible_v =
-    is_brace_constructible_impl<T, void, Values...>::value;
-} // namespace detail
 
 // The wrapper semantics a type_traits specialization names. The library knows
 // a wrapper only by its semantics and by the operations of its type_traits; the
@@ -195,14 +183,6 @@ constexpr bool is_formable_list(type_list<Types...>) {
 
 template <typename T> inline constexpr bool is_formable_v = is_formable<T>();
 
-template <typename List, typename Selected> struct type_list_count;
-
-template <typename Selected, typename... Alternatives>
-struct type_list_count<type_list<Alternatives...>, Selected>
-    : std::integral_constant<
-          size_t,
-          (0u + ... + (std::is_same_v<Selected, Alternatives> ? 1u : 0u))> {};
-
 template <typename Type, typename = void>
 struct alternative_type_alternatives {};
 
@@ -354,20 +334,6 @@ template <typename T, typename... Args> T *make_dynamic_array(Args &&...args) {
     return new T[sizeof...(Args)]{std::forward<Args>(args)...};
   }
 }
-
-// To with the const and volatile qualifiers of From.
-template <typename From, typename To> struct copy_cv {
-private:
-  using const_type =
-      std::conditional_t<std::is_const_v<From>, std::add_const_t<To>, To>;
-
-public:
-  using type = std::conditional_t<std::is_volatile_v<From>,
-                                  std::add_volatile_t<const_type>, const_type>;
-};
-
-template <typename From, typename To>
-using copy_cv_t = typename copy_cv<From, To>::type;
 
 template <typename Type, typename U, typename = void>
 struct wrapper_rebind_leaf {

@@ -15,6 +15,7 @@
 #include <dingo/binding/binding_model.h>
 #include <dingo/binding/binding_selection.h>
 #include <dingo/binding/request_resolution.h>
+#include <dingo/factory/auto_constructible.h>
 #include <dingo/factory/callable.h>
 #include <dingo/lookup/lookup.h>
 #include <dingo/lookup/operations.h>
@@ -28,7 +29,6 @@
 #include <dingo/runtime/transaction.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/annotated.h>
-#include <dingo/type/auto_constructible.h>
 #include <dingo/type/collection_traits.h>
 #include <dingo/type/key.h>
 #include <dingo/type/request.h>

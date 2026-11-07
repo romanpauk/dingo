@@ -9,7 +9,6 @@
 
 #include <dingo/base/type_list.h>
 #include <dingo/resolution/resolution.h>
-#include <dingo/type/access.h>
 #include <dingo/type/type_conversion_traits.h>
 #include <dingo/type/type_traits.h>
 

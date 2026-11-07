@@ -9,7 +9,7 @@
 
 #include <dingo/base/config.h>
 
-#include <dingo/base/complete_type.h>
+#include <dingo/base/meta.h>
 #include <dingo/base/type_list.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/storage/storage.h>

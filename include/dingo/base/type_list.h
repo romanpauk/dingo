@@ -123,4 +123,16 @@ void for_each(type_list<Types...>, Function &&fn) {
   (fn(type_list_iterator<Types>{}), ...);
 }
 
+namespace detail {
+// How many times Selected is in List.
+template <typename List, typename Selected> struct type_list_count;
+
+template <typename Selected, typename... Alternatives>
+struct type_list_count<type_list<Alternatives...>, Selected>
+    : std::integral_constant<
+          size_t,
+          (0u + ... + (std::is_same_v<Selected, Alternatives> ? 1u : 0u))> {};
+
+} // namespace detail
+
 } // namespace dingo

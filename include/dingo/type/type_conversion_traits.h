@@ -12,7 +12,6 @@
 #include <dingo/base/exceptions.h>
 #include <dingo/base/type_descriptor.h>
 #include <dingo/base/type_list.h>
-#include <dingo/type/access.h>
 #include <dingo/type/shape.h>
 #include <dingo/type/type_traits.h>
 
@@ -20,6 +19,10 @@
 #include <utility>
 
 namespace dingo {
+// How a conversion reaches its source: it borrows it, or it consumes it.
+struct borrow {};
+struct consume {};
+
 template <typename TargetType, typename SourceType, typename = void>
 struct type_conversion_traits {
   static constexpr bool is_default = true;

@@ -7,13 +7,14 @@
 
 #pragma once
 
-#include <dingo/base/complete_type.h>
 #include <dingo/base/exceptions.h>
+#include <dingo/base/meta.h>
 #include <dingo/base/none.h>
 #include <dingo/binding/binding_collection.h>
 #include <dingo/binding/binding_resolution.h>
 #include <dingo/binding/binding_selection.h>
 #include <dingo/binding/requests.h>
+#include <dingo/factory/auto_constructible.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/lookup/container_lookup_definition.h>
@@ -28,7 +29,6 @@
 #include <dingo/runtime/registry.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/annotated.h>
-#include <dingo/type/auto_constructible.h>
 #include <dingo/type/collection_traits.h>
 #include <dingo/type/key.h>
 #include <dingo/type/request.h>

@@ -7,9 +7,9 @@
 
 #pragma once
 
+#include <dingo/factory/auto_constructible.h>
 #include <dingo/factory/constructor_detection.h>
 #include <dingo/registration/constructor.h>
-#include <dingo/type/auto_constructible.h>
 
 #include <type_traits>
 

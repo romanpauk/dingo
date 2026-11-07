@@ -93,7 +93,7 @@ if(DINGO_DEVELOPMENT_MODE)
         static/graph.h
         static/registry.h
         container.h
-        type/auto_constructible.h
+        factory/auto_constructible.h
         binding/binding_model.h
         binding/binding_resolution.h
         binding/binding_selection.h
@@ -124,7 +124,6 @@ if(DINGO_DEVELOPMENT_MODE)
         memory/arena_allocator.h
         memory/object_store.h
         memory/object_lifetime.h
-        type/access.h
         type/annotated.h
         type/collection_traits.h
         registration/constructor.h
@@ -173,7 +172,7 @@ if(DINGO_DEVELOPMENT_MODE)
         base/type_list.h
         type/type_traits.h
         resolution/resolution_operation.h
-        base/complete_type.h
+        base/meta.h
         base/construction_scope.h
         base/selected.h
         binding/binding_collection.h
