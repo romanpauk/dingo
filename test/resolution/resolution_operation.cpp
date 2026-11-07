@@ -156,21 +156,20 @@ TEST(resolution_operation_test, rvalue_source_destroys_materialized_value) {
 
 TEST(resolution_operation_test,
      nested_conversions_publish_retained_cache_types) {
-  using retained = detail::retained_type_conversion<
-      std::shared_ptr<int> &, int &,
-      detail::traits_type_conversion<std::shared_ptr<int>, int &>>;
-  using borrowed =
-      detail::borrowed_type_conversion<std::shared_ptr<int> &, int &, retained>;
+  using retained =
+      detail::outward<detail::retained_step, std::shared_ptr<int> &,
+                      detail::converted_t<std::shared_ptr<int>, int &>>;
+  using borrowed = detail::inward<detail::borrowed_step, retained>;
   using alternative = detail::alternative_type_conversion<
       std::shared_ptr<int> &, alternative_type &,
       type_list<
           detail::alternative_type_conversion_branch<alternative_a, borrowed>>>;
   using wrapped =
-      detail::wrapper_type_conversion<std::optional<std::shared_ptr<int>>,
-                                      int &, retained, false>;
-  using selected = detail::target_alternative_type_conversion<
-      std::variant<std::shared_ptr<int>, int>, int &, std::shared_ptr<int>,
-      retained>;
+      detail::outward<detail::optional_step,
+                      std::optional<std::shared_ptr<int>>, retained>;
+  using selected =
+      detail::outward<detail::alternative_step<std::shared_ptr<int>>,
+                      std::variant<std::shared_ptr<int>, int>, retained>;
   using construction = detail::converted_construction<selected>;
 
   static_assert(std::is_same_v<typename borrowed::cache_types,

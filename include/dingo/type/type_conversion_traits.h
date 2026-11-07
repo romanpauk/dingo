@@ -111,42 +111,162 @@ struct custom_conversion_access<
   using type = typename Traits::template required_access<Source>;
 };
 
-// A conversion is one step of a route from a source to a target: what it
-// requires of its source, borrow or consume, and how it is applied. A step that
-// continues with a nested conversion applies it to the object it reaches.
-// cache_types are the conversions a step retains in its binding.
+// A route converts a source into a target in steps. A step ends the route at
+// the object it has, reaches inward to an object that object holds, or makes a
+// new object outward around what the rest of the route makes; the steps below
+// are tried in order, and the first that applies is taken.
+//
+// A conversion is a route: whether it is available, what it requires of its
+// source, borrow or consume, the conversions it retains in its binding, and
+// how it applies to a source.
 struct unavailable_type_conversion {
   static constexpr bool available = false;
   using required_access = unavailable_access;
   using cache_types = type_list<>;
 };
 
-template <typename Target, typename Source, typename RequiredAccess>
-struct conversion_leaf {
+// A route that ends at the source: Step makes the target of it.
+template <typename Step, typename Target, typename RequiredAccess>
+struct ending {
   static constexpr bool available = true;
-
   using required_access = RequiredAccess;
   using cache_types = type_list<>;
-};
-
-template <typename Target, typename Source, typename Conversion>
-struct conversion_step {
-  static constexpr bool available = Conversion::available;
-
-  using required_access = typename Conversion::required_access;
-  using cache_types = typename Conversion::cache_types;
-};
-
-// The conversion type_conversion_traits declares, called with Argument.
-template <typename Target, typename Source, typename RequiredAccess = borrow,
-          typename Argument = Source>
-struct traits_type_conversion
-    : conversion_leaf<Target, Source, RequiredAccess> {
-  using argument_type = Argument;
 
   template <typename Resolver, typename Context, typename Actual>
-  static Target apply(Resolver &, Context &, Actual &&source, type_descriptor,
-                      type_descriptor) {
+  static decltype(auto) apply(Resolver &, Context &, Actual &&source,
+                              type_descriptor, type_descriptor) {
+    return Step::template end<Target>(std::forward<Actual>(source));
+  }
+};
+
+// A route that continues from what the rest of it, Next, reaches.
+template <typename Next> struct continued {
+  static constexpr bool available = Next::available;
+  using required_access = typename Next::required_access;
+  using cache_types = typename Next::cache_types;
+};
+
+// A route that continues from the object Step reaches in the source.
+template <typename Step, typename Next> struct inward : continued<Next> {
+  template <typename Resolver, typename Context, typename Actual>
+  static decltype(auto) apply(Resolver &resolver, Context &context,
+                              Actual &&source, type_descriptor requested,
+                              type_descriptor registered) {
+    return Next::apply(resolver, context,
+                       Step::reach(std::forward<Actual>(source)), requested,
+                       registered);
+  }
+};
+
+// A route whose Step makes the target around what the rest of it, Next, makes
+// of the source, which it is given to make when it needs it, so that what Next
+// returns by value constructs what Step makes in place. A step that keeps what
+// it makes in the binding names it in its retained types.
+template <typename Step, typename Target, typename Next>
+struct outward : continued<Next> {
+  using cache_types = type_list_unique_t<
+      type_list_cat_t<typename Step::template retained_types<Target>,
+                      typename Next::cache_types>>;
+
+  template <typename Resolver, typename Context, typename Actual>
+  static Target apply(Resolver &resolver, Context &context, Actual &&source,
+                      type_descriptor requested, type_descriptor registered) {
+    return Step::template make<Target>(
+        resolver, context, [&]() -> decltype(auto) {
+          return Next::apply(resolver, context, std::forward<Actual>(source),
+                             requested, registered);
+        });
+  }
+};
+
+// Marks a route that constructs a new object; it applies as its route does.
+template <typename Conversion> struct converted_construction : Conversion {};
+
+// A route that goes on with Step when the rest of it, Next, is available.
+template <typename Step, typename Next>
+using continued_t =
+    std::conditional_t<Next::available, Step, unavailable_type_conversion>;
+
+// The route from Source to Target that Access allows. A pair with a custom
+// type_conversion_traits takes only its conversion; any other pair takes the
+// first step below that applies.
+template <typename Target, typename Source, typename Access = consume,
+          bool Default = is_default_type_conversion<
+              type_conversion_traits<Target, remove_cvref_t<Source>>>::value>
+struct type_conversion_path;
+
+template <typename Target, typename Source, typename Access>
+using route_t = typename type_conversion_path<Target, Source, Access>::type;
+
+template <typename Alternative, typename Source>
+using qualified_alternative_t =
+    copy_cv_t<std::remove_reference_t<Source>, Alternative>;
+
+// An alternative of an alternative type, with the value category of the
+// alternative type.
+template <typename Alternative, typename Source>
+using alternative_source_t =
+    std::conditional_t<std::is_lvalue_reference_v<Source>,
+                       qualified_alternative_t<Alternative, Source> &,
+                       qualified_alternative_t<Alternative, Source> &&>;
+
+template <typename Type>
+inline constexpr bool is_value_wrapper_type_v = is_optional_type_v<Type>;
+
+// A target made by a step rather than converted: an alternative type or an
+// optional value.
+template <typename Target>
+inline constexpr bool is_structural_conversion_target_v = [] {
+  using target_type = remove_cvref_t<Target>;
+  return !std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
+         (is_alternative_type_v<target_type> ||
+          is_value_wrapper_type_v<target_type>);
+}();
+
+template <typename Type, typename = void>
+struct borrows_value_wrapper : std::false_type {};
+
+template <typename Type>
+struct borrows_value_wrapper<
+    Type, std::void_t<decltype(type_traits<remove_cvref_t<Type>>::borrow(
+              std::declval<Type>()))>>
+    : std::bool_constant<is_value_borrowable_v<remove_cvref_t<Type>> &&
+                         is_value_wrapper_type_v<
+                             decltype(type_traits<remove_cvref_t<Type>>::borrow(
+                                 std::declval<Type>()))>> {};
+
+template <typename Type>
+inline constexpr bool borrows_value_wrapper_v =
+    borrows_value_wrapper<Type>::value;
+
+template <typename Conversion, typename Access>
+using conversion_for_access_t = std::conditional_t<
+    Conversion::available &&
+        access_satisfies<Access, typename Conversion::required_access>::value,
+    Conversion, unavailable_type_conversion>;
+
+// --- Steps that end the route at the source.
+
+// The source itself.
+struct identity_step {
+  template <typename Target, typename Actual>
+  static decltype(auto) end(Actual &&source) {
+    return std::forward<Actual>(source);
+  }
+};
+
+// A reference to the source, or to a base of it.
+struct reference_step {
+  template <typename Target, typename Actual>
+  static Target &end(Actual &&source) {
+    return static_cast<Target &>(source);
+  }
+};
+
+// What type_conversion_traits converts the source to, given as Argument.
+template <typename Source, typename Argument> struct converted_step {
+  template <typename Target, typename Actual>
+  static Target end(Actual &&source) {
     using traits = type_conversion_traits<Target, remove_cvref_t<Actual>>;
     if constexpr (std::is_same_v<Argument, Source>) {
       return static_cast<Target>(traits::convert(std::forward<Actual>(source)));
@@ -157,192 +277,271 @@ struct traits_type_conversion
   }
 };
 
-// The source itself.
-template <typename Target, typename Source>
-struct identity_type_conversion
-    : conversion_leaf<Target, Source,
-                      std::conditional_t<std::is_rvalue_reference_v<Source>,
-                                         consume, borrow>> {
-  template <typename Resolver, typename Context, typename Actual>
-  static decltype(auto) apply(Resolver &, Context &, Actual &&source,
-                              type_descriptor, type_descriptor) {
-    return std::forward<Actual>(source);
+template <typename Target, typename Source, typename RequiredAccess = borrow,
+          typename Argument = Source>
+using converted_t =
+    ending<converted_step<Source, Argument>, Target, RequiredAccess>;
+
+enum class basic_conversion_kind { none, identity, reference, converted };
+
+// The default conversions that keep the source object: a reference to it or to
+// its base, a copy of it or of its base, or the object moved from an rvalue.
+// Every other conversion, taking the address included, is found by the steps
+// after it.
+//
+// The predicate is a function template rather than a lambda in a member
+// initializer: MSVC's pre-C++20 lambda processor fails on those lambdas for
+// some instantiations.
+template <typename Target, typename Source, typename Access>
+constexpr basic_conversion_kind basic_conversion_selected() {
+  using kind = basic_conversion_kind;
+  using source_type = remove_cvref_t<Source>;
+  using source_pointer = std::add_pointer_t<std::remove_reference_t<Source>>;
+  constexpr bool borrows = std::is_lvalue_reference_v<Source> &&
+                           access_satisfies<Access, borrow>::value;
+  constexpr bool defaults = !std::is_pointer_v<Target>;
+  // A value target of a non-volatile source.
+  constexpr bool by_value =
+      defaults && !std::is_reference_v<Target> &&
+      !std::is_volatile_v<std::remove_reference_t<Source>>;
+  if constexpr (defaults && std::is_lvalue_reference_v<Target>) {
+    return borrows && std::is_convertible_v<
+                          source_pointer,
+                          std::add_pointer_t<std::remove_reference_t<Target>>>
+               ? kind::converted
+               : kind::none;
+  } else if constexpr (by_value && borrows &&
+                       std::is_same_v<std::remove_cv_t<Target>, source_type>) {
+    return is_copy_constructible_v<Target> ? kind::identity : kind::none;
+  } else if constexpr (by_value && borrows &&
+                       std::is_convertible_v<source_pointer,
+                                             std::add_pointer_t<Target>>) {
+    return is_copy_constructible_v<Target> ? kind::reference : kind::none;
+  } else if constexpr (by_value && std::is_rvalue_reference_v<Source> &&
+                       std::is_same_v<std::remove_cv_t<Target>, source_type> &&
+                       access_satisfies<Access, consume>::value) {
+    return std::is_constructible_v<Target, Source> ? kind::identity
+                                                   : kind::none;
+  } else {
+    return kind::none;
   }
+}
+
+// The source kept: itself, a reference to it or to its base, or a copy or a
+// move of it, tried before the general search.
+struct basic_route {
+  template <typename Target, typename Source, typename Access,
+            basic_conversion_kind Kind =
+                basic_conversion_selected<Target, Source, Access>()>
+  struct route {
+    using type = unavailable_type_conversion;
+  };
+
+  template <typename Target, typename Source, typename Access>
+  struct route<Target, Source, Access, basic_conversion_kind::identity> {
+    using type = ending<identity_step, Target,
+                        std::conditional_t<std::is_rvalue_reference_v<Source>,
+                                           consume, borrow>>;
+  };
+
+  template <typename Target, typename Source, typename Access>
+  struct route<Target, Source, Access, basic_conversion_kind::reference> {
+    using type = ending<reference_step, Target, borrow>;
+  };
+
+  template <typename Target, typename Source, typename Access>
+  struct route<Target, Source, Access, basic_conversion_kind::converted> {
+    using type = converted_t<Target, Source, borrow, Source>;
+  };
 };
 
-// A reference to the source, or to a base of it.
-template <typename Target, typename Source>
-struct reference_type_conversion : conversion_leaf<Target, Source, borrow> {
-  template <typename Resolver, typename Context, typename Actual>
-  static Target &apply(Resolver &, Context &, Actual &&source, type_descriptor,
-                       type_descriptor) {
-    return static_cast<Target &>(source);
+// Whether the default conversion borrows its source: it consumes an rvalue
+// source, and any source of a target that takes ownership; it borrows any
+// other source, an lvalue only when the target can be built from it as a const
+// lvalue.
+template <typename Target, typename Source, typename Traits,
+          bool TakesOwnership>
+constexpr bool direct_conversion_borrows() {
+  if constexpr (std::is_rvalue_reference_v<Source> || TakesOwnership) {
+    return false;
+  } else if constexpr (std::is_lvalue_reference_v<Source>) {
+    return has_compatible_conversion<
+        Target, Traits,
+        std::add_lvalue_reference_t<
+            std::add_const_t<std::remove_reference_t<Source>>>>::value;
+  } else {
+    return true;
   }
+}
+
+// What the default type_conversion_traits converts the source to. Wrappers and
+// alternatives are made by the steps after it instead.
+struct direct_route {
+  template <typename Target, typename Source, typename Access,
+            bool Structural = is_structural_conversion_target_v<Target>>
+  struct route {
+  private:
+    using source_type = remove_cvref_t<Source>;
+    using traits = type_conversion_traits<Target, source_type>;
+    using const_source = std::add_lvalue_reference_t<
+        std::add_const_t<std::remove_reference_t<Source>>>;
+    static constexpr bool takes_ownership =
+        type_traits<remove_cvref_t<Target>>::is_owning_handle &&
+        !type_traits<source_type>::is_owning_handle;
+    static constexpr bool borrows =
+        direct_conversion_borrows<Target, Source, traits, takes_ownership>();
+    using argument =
+        std::conditional_t<borrows && std::is_lvalue_reference_v<Source>,
+                           const_source, Source>;
+
+  public:
+    using type = std::conditional_t<
+        has_compatible_conversion<Target, traits, argument>::value,
+        converted_t<Target, Source,
+                    std::conditional_t<borrows, borrow, consume>, argument>,
+        unavailable_type_conversion>;
+  };
+
+  template <typename Target, typename Source, typename Access>
+  struct route<Target, Source, Access, true> {
+    using type = unavailable_type_conversion;
+  };
 };
 
-// The address of the source.
-template <typename Target, typename Source>
-struct address_type_conversion : conversion_leaf<Target, Source, borrow> {
-  template <typename Resolver, typename Context, typename Actual>
-  static Target apply(Resolver &, Context &, Actual &&source, type_descriptor,
-                      type_descriptor) {
+// The address of an lvalue source, for a pointer target it converts to.
+struct address_step {
+  template <typename Target, typename Actual>
+  static Target end(Actual &&source) {
     return static_cast<Target>(std::addressof(source));
   }
+
+  template <typename Target, typename Source, typename Access> struct route {
+    using type = std::conditional_t<
+        std::is_pointer_v<Target> && std::is_lvalue_reference_v<Source> &&
+            std::is_convertible_v<
+                std::add_pointer_t<std::remove_reference_t<Source>>, Target>,
+        ending<address_step, Target, borrow>, unavailable_type_conversion>;
+  };
 };
 
-// The array a pointer to its first element points to, as a reference.
-template <typename Target, typename Source>
-struct array_reference_type_conversion
-    : conversion_leaf<Target, Source, borrow> {
-  template <typename Resolver, typename Context, typename Actual>
-  static Target apply(Resolver &, Context &, Actual &&source, type_descriptor,
-                      type_descriptor) {
-    return *reinterpret_cast<
-        std::add_pointer_t<std::remove_reference_t<Target>>>(source);
+// The array a pointer to its first element points to, as a reference or as a
+// pointer.
+struct array_step {
+  template <typename Target, typename Actual>
+  static Target end(Actual &&source) {
+    if constexpr (std::is_pointer_v<Target>) {
+      return reinterpret_cast<Target>(source);
+    } else {
+      return *reinterpret_cast<
+          std::add_pointer_t<std::remove_reference_t<Target>>>(source);
+    }
   }
+
+  template <typename Target, typename Source, typename Access> struct route {
+  private:
+    using target_array = std::conditional_t<std::is_pointer_v<Target>,
+                                            std::remove_pointer_t<Target>,
+                                            std::remove_reference_t<Target>>;
+    using projected_element = std::remove_extent_t<target_array>;
+    using source_type = std::remove_reference_t<Source>;
+    using source_element = std::remove_pointer_t<source_type>;
+    static constexpr bool projects =
+        (std::is_lvalue_reference_v<Target> || std::is_pointer_v<Target>) &&
+        std::is_array_v<target_array> && std::is_pointer_v<source_type> &&
+        std::is_same_v<std::remove_cv_t<source_element>,
+                       std::remove_cv_t<projected_element>> &&
+        std::is_convertible_v<std::add_pointer_t<source_element>,
+                              std::add_pointer_t<projected_element>>;
+
+  public:
+    using type =
+        std::conditional_t<projects, ending<array_step, Target, borrow>,
+                           unavailable_type_conversion>;
+  };
 };
 
-// The array a pointer to its first element points to, as a pointer.
-template <typename Target, typename Source>
-struct array_pointer_type_conversion : conversion_leaf<Target, Source, borrow> {
-  template <typename Resolver, typename Context, typename Actual>
-  static Target apply(Resolver &, Context &, Actual &&source, type_descriptor,
-                      type_descriptor) {
-    return reinterpret_cast<Target>(source);
-  }
-};
-
-// The address of the element of a wrapper.
-template <typename Target, typename Source>
-struct pointer_access_type_conversion
-    : conversion_leaf<Target, Source, borrow> {
-  template <typename Resolver, typename Context, typename Actual>
-  static Target apply(Resolver &, Context &, Actual &&source, type_descriptor,
-                      type_descriptor) {
+// The address of the element of a wrapper, for a pointer target.
+struct element_address_step {
+  template <typename Target, typename Actual>
+  static Target end(Actual &&source) {
     return static_cast<Target>(
         type_traits<remove_cvref_t<Actual>>::get(source));
   }
+
+  template <typename Target, typename Source, typename Access, typename = void>
+  struct route {
+    using type = unavailable_type_conversion;
+  };
+
+  template <typename Target, typename Source, typename Access>
+  struct route<Target, Source, Access,
+               std::void_t<decltype(type_traits<remove_cvref_t<Source>>::get(
+                   std::declval<Source>()))>> {
+  private:
+    using element = decltype(type_traits<remove_cvref_t<Source>>::get(
+        std::declval<Source>()));
+
+  public:
+    using type =
+        std::conditional_t<std::is_pointer_v<Target> &&
+                               std::is_lvalue_reference_v<Source> &&
+                               std::is_convertible_v<element, Target>,
+                           ending<element_address_step, Target, borrow>,
+                           unavailable_type_conversion>;
+  };
 };
 
+// --- Steps that reach inward, to an object the source holds.
+
 // The pointee of a pointer.
-template <typename Target, typename Source, typename Conversion>
-struct dereference_type_conversion
-    : conversion_step<Target, Source, Conversion> {
-  template <typename Resolver, typename Context, typename Actual>
-  static decltype(auto) apply(Resolver &resolver, Context &context,
-                              Actual &&source, type_descriptor requested,
-                              type_descriptor registered) {
-    return Conversion::apply(resolver, context, *std::forward<Actual>(source),
-                             requested, registered);
+struct pointee_step {
+  template <typename Actual> static decltype(auto) reach(Actual &&source) {
+    return *std::forward<Actual>(source);
   }
+
+  template <typename Target, typename Source, typename Access, typename = void>
+  struct route {
+    using type = unavailable_type_conversion;
+  };
+
+  template <typename Target, typename Source, typename Access>
+  struct route<
+      Target, Source, Access,
+      std::enable_if_t<std::is_pointer_v<std::remove_reference_t<Source>> &&
+                       !std::is_void_v<std::remove_pointer_t<
+                           std::remove_reference_t<Source>>> &&
+                       !std::is_pointer_v<Target>>> {
+    using next = route_t<Target, decltype(*std::declval<Source>()), Access>;
+    using type = continued_t<inward<pointee_step, next>, next>;
+  };
 };
 
 // The element of a wrapper, borrowed.
-template <typename Target, typename Source, typename Conversion>
-struct borrowed_type_conversion : conversion_step<Target, Source, Conversion> {
-  template <typename Resolver, typename Context, typename Actual>
-  static decltype(auto) apply(Resolver &resolver, Context &context,
-                              Actual &&source, type_descriptor requested,
-                              type_descriptor registered) {
-    return Conversion::apply(resolver, context,
-                             type_traits<remove_cvref_t<Actual>>::borrow(
-                                 std::forward<Actual>(source)),
-                             requested, registered);
+struct borrowed_step {
+  template <typename Actual> static decltype(auto) reach(Actual &&source) {
+    return type_traits<remove_cvref_t<Actual>>::borrow(
+        std::forward<Actual>(source));
   }
+
+  template <typename Target, typename Source, typename Access, typename = void>
+  struct route {
+    using type = unavailable_type_conversion;
+  };
+
+  template <typename Target, typename Source, typename Access>
+  struct route<
+      Target, Source, Access,
+      std::enable_if_t<
+          is_value_borrowable_v<remove_cvref_t<Source>>,
+          std::void_t<decltype(type_traits<remove_cvref_t<Source>>::borrow(
+              std::declval<Source>()))>>> {
+    using next = route_t<Target,
+                         decltype(type_traits<remove_cvref_t<Source>>::borrow(
+                             std::declval<Source>())),
+                         Access>;
+    using type = continued_t<inward<borrowed_step, next>, next>;
+  };
 };
-
-// An object the binding keeps, converted from the source, that a reference or
-// a pointer request refers to.
-template <typename Target, typename Source, typename Conversion>
-struct retained_type_conversion : conversion_step<Target, Source, Conversion> {
-  using retained_type =
-      std::remove_cv_t<std::conditional_t<std::is_pointer_v<Target>,
-                                          std::remove_pointer_t<Target>,
-                                          std::remove_reference_t<Target>>>;
-  using cache_types =
-      type_list_unique_t<type_list_cat_t<type_list<retained_type>,
-                                         typename Conversion::cache_types>>;
-
-  template <typename Resolver, typename Context, typename Actual>
-  static Target apply(Resolver &resolver, Context &context, Actual &&source,
-                      type_descriptor requested, type_descriptor registered) {
-    auto &retained = resolver.template retain_conversion<retained_type>(
-        context,
-        Conversion::apply(resolver, context, std::forward<Actual>(source),
-                          requested, registered));
-    if constexpr (std::is_pointer_v<Target>) {
-      return std::addressof(retained);
-    } else {
-      return retained;
-    }
-  }
-};
-
-// An optional value made of the converted source, or of the converted element
-// of a source optional value.
-template <typename Target, typename Source, typename Conversion,
-          bool UnwrapSource>
-struct wrapper_type_conversion : conversion_step<Target, Source, Conversion> {
-  template <typename Resolver, typename Context, typename Actual>
-  static Target apply(Resolver &resolver, Context &context, Actual &&source,
-                      type_descriptor requested, type_descriptor registered) {
-    using target = type_traits<remove_cvref_t<Target>>;
-    if constexpr (UnwrapSource) {
-      using source_traits = type_traits<remove_cvref_t<Actual>>;
-      if (source_traits::empty(source)) {
-        return target::make_empty();
-      }
-      auto *value = source_traits::get(source);
-      if constexpr (std::is_lvalue_reference_v<Actual>) {
-        return target::wrap(Conversion::apply(resolver, context, *value,
-                                              requested, registered));
-      } else {
-        return target::wrap(Conversion::apply(
-            resolver, context, std::move(*value), requested, registered));
-      }
-    } else {
-      return target::wrap(Conversion::apply(resolver, context,
-                                            std::forward<Actual>(source),
-                                            requested, registered));
-    }
-  }
-};
-
-// An alternative type holding the converted source as Selected.
-template <typename Target, typename Source, typename Selected,
-          typename Conversion>
-struct target_alternative_type_conversion
-    : conversion_step<Target, Source, Conversion> {
-  template <typename Resolver, typename Context, typename Actual>
-  static Target apply(Resolver &resolver, Context &context, Actual &&source,
-                      type_descriptor requested, type_descriptor registered) {
-    return type_traits<remove_cvref_t<Target>>::template wrap<Selected>(
-        Conversion::apply(resolver, context, std::forward<Actual>(source),
-                          requested, registered));
-  }
-};
-
-// A new owning handle of a consumed value, converted to the element it holds.
-// A value of a class derived from the element is held as itself.
-template <typename Target, typename Source, typename Held, typename Conversion>
-struct boxed_type_conversion : conversion_step<Target, Source, Conversion> {
-  template <typename Resolver, typename Context, typename Actual>
-  static Target apply(Resolver &resolver, Context &context, Actual &&source,
-                      type_descriptor requested, type_descriptor registered) {
-    using handle =
-        typename type_traits<remove_cvref_t<Target>>::template rebind_t<Held>;
-    // The value is taken before it is moved into the handle: GCC then folds a
-    // handle that does not escape, as it does the value.
-    Held value(Conversion::apply(resolver, context,
-                                 std::forward<Actual>(source), requested,
-                                 registered));
-    return Target(type_traits<handle>::make(std::move(value)));
-  }
-};
-
-// Marks a conversion that constructs a new object; it applies as its
-// conversion does.
-template <typename Conversion> struct converted_construction : Conversion {};
 
 template <typename Alternative, typename Conversion>
 struct alternative_type_conversion_branch {
@@ -353,7 +552,8 @@ struct alternative_type_conversion_branch {
 template <typename Target, typename Source, typename Branches>
 struct alternative_type_conversion;
 
-// The converted alternative a source alternative type holds, tried in order.
+// The alternative a source alternative type holds, reached as it is held, so
+// each alternative is a branch of its own, tried in order.
 template <typename Target, typename Source, typename... Branches>
 struct alternative_type_conversion<Target, Source, type_list<Branches...>> {
   static constexpr bool available = (Branches::conversion::available || ...);
@@ -404,100 +604,137 @@ private:
   }
 };
 
-// The route from Source to Target that Access allows. A pair with a custom
-// type_conversion_traits takes only its conversion; any other pair takes the
-// first of the default conversions and structural candidates that is
-// available.
-template <typename Target, typename Source, typename Access = consume,
-          bool Default = is_default_type_conversion<
-              type_conversion_traits<Target, remove_cvref_t<Source>>>::value>
-struct type_conversion_path;
+// The alternative a source alternative type holds: any of them for a
+// reference or pointer target, otherwise the target itself when it is an
+// alternative exactly once.
+struct held_alternative_step {
+  template <typename Target, typename Source, typename Access,
+            typename Alternatives>
+  struct branches;
 
-template <typename Alternative, typename Source>
-using qualified_alternative_t =
-    copy_cv_t<std::remove_reference_t<Source>, Alternative>;
+  template <typename Target, typename Source, typename Access,
+            typename... Alternatives>
+  struct branches<Target, Source, Access, type_list<Alternatives...>> {
+    using type = alternative_type_conversion<
+        Target, Source,
+        type_list<alternative_type_conversion_branch<
+            Alternatives,
+            route_t<Target, alternative_source_t<Alternatives, Source>,
+                    Access>>...>>;
+  };
 
-template <typename Alternative, typename Source>
-using alternative_source_t =
-    std::conditional_t<std::is_lvalue_reference_v<Source>,
-                       qualified_alternative_t<Alternative, Source> &,
-                       qualified_alternative_t<Alternative, Source> &&>;
+  template <typename Target, typename Source, typename Access,
+            bool IsAlternative =
+                is_alternative_type_v<remove_cvref_t<Source>> &&
+                !std::is_volatile_v<std::remove_reference_t<Source>>>
+  struct route {
+    using type = unavailable_type_conversion;
+  };
 
-template <typename Type>
-inline constexpr bool is_value_wrapper_type_v = is_optional_type_v<Type>;
+  template <typename Target, typename Source, typename Access>
+  struct route<Target, Source, Access, true> {
+  private:
+    using source_type = remove_cvref_t<Source>;
+    using target_type = remove_cvref_t<Target>;
+    using alternatives = std::conditional_t<
+        std::is_reference_v<Target> || std::is_pointer_v<Target>,
+        alternative_type_alternatives_t<source_type>,
+        std::conditional_t<
+            alternative_type_count<source_type, target_type>::value == 1,
+            type_list<target_type>, type_list<>>>;
 
-template <typename Target>
-inline constexpr bool is_structural_conversion_target_v = [] {
-  using target_type = remove_cvref_t<Target>;
-  return !std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
-         (is_alternative_type_v<target_type> ||
-          is_value_wrapper_type_v<target_type>);
-}();
+  public:
+    using type = typename branches<Target, Source, Access, alternatives>::type;
+  };
+};
 
-template <typename Type, typename = void>
-struct borrows_value_wrapper : std::false_type {};
+// --- Steps that make a new object outward, around what the rest of the
+// route makes.
 
-template <typename Type>
-struct borrows_value_wrapper<
-    Type, std::void_t<decltype(type_traits<remove_cvref_t<Type>>::borrow(
-              std::declval<Type>()))>>
-    : std::bool_constant<is_value_borrowable_v<remove_cvref_t<Type>> &&
-                         is_value_wrapper_type_v<
-                             decltype(type_traits<remove_cvref_t<Type>>::borrow(
-                                 std::declval<Type>()))>> {};
+// What an outward step keeps in the binding: nothing, unless it says so.
+struct outward_step {
+  template <typename Target> using retained_types = type_list<>;
+};
 
-template <typename Type>
-inline constexpr bool borrows_value_wrapper_v =
-    borrows_value_wrapper<Type>::value;
+// An alternative type holding the converted source as the alternative
+// overload resolution selects.
+template <typename Selected> struct alternative_step : outward_step {
+  template <typename Target, typename Resolver, typename Context, typename Next>
+  static Target make(Resolver &, Context &, Next &&next) {
+    return type_traits<remove_cvref_t<Target>>::template wrap<Selected>(next());
+  }
+};
 
-template <typename Target, typename Source, typename Conversion,
-          bool UnwrapSource>
-struct compose_wrapper_type_conversion {
+struct alternative_route {
+  template <typename Target, typename Source, typename Access,
+            bool Enabled = is_structural_conversion_target_v<Target> &&
+                           is_alternative_type_v<Target>,
+            typename = void>
+  struct route {
+    using type = unavailable_type_conversion;
+  };
+
+  template <typename Target, typename Source, typename Access>
+  struct route<Target, Source, Access, true,
+               std::void_t<typename type_traits<
+                   std::remove_cv_t<Target>>::template selected_type<Source>>> {
+  private:
+    using selected = typename type_traits<
+        std::remove_cv_t<Target>>::template selected_type<Source>;
+    using next = route_t<selected, Source, Access>;
+
+  public:
+    using type =
+        continued_t<converted_construction<
+                        outward<alternative_step<selected>, Target, next>>,
+                    next>;
+  };
+};
+
+// An optional value made of the converted source.
+struct optional_step : outward_step {
+  template <typename Target, typename Resolver, typename Context, typename Next>
+  static Target make(Resolver &, Context &, Next &&next) {
+    return type_traits<remove_cvref_t<Target>>::wrap(next());
+  }
+};
+
+// An optional value made of the converted element of a source optional value,
+// empty when the source is.
+template <typename Target, typename Next>
+struct optional_element_conversion : continued<Next> {
+  template <typename Resolver, typename Context, typename Actual>
+  static Target apply(Resolver &resolver, Context &context, Actual &&source,
+                      type_descriptor requested, type_descriptor registered) {
+    using target = type_traits<remove_cvref_t<Target>>;
+    using source_traits = type_traits<remove_cvref_t<Actual>>;
+    if (source_traits::empty(source)) {
+      return target::make_empty();
+    }
+    auto *value = source_traits::get(source);
+    if constexpr (std::is_lvalue_reference_v<Actual>) {
+      return target::wrap(
+          Next::apply(resolver, context, *value, requested, registered));
+    } else {
+      return target::wrap(Next::apply(resolver, context, std::move(*value),
+                                      requested, registered));
+    }
+  }
+};
+
+// The optional value a route makes, marked as constructed when the rest of the
+// route constructs.
+template <typename Target, typename Next, bool OfElement>
+struct optional_conversion {
   using type =
-      wrapper_type_conversion<Target, Source, Conversion, UnwrapSource>;
+      std::conditional_t<OfElement, optional_element_conversion<Target, Next>,
+                         outward<optional_step, Target, Next>>;
 };
 
-template <typename Target, typename Source, typename Conversion,
-          bool UnwrapSource>
-struct compose_wrapper_type_conversion<
-    Target, Source, converted_construction<Conversion>, UnwrapSource> {
+template <typename Target, typename Next, bool OfElement>
+struct optional_conversion<Target, converted_construction<Next>, OfElement> {
   using type = converted_construction<
-      wrapper_type_conversion<Target, Source, Conversion, UnwrapSource>>;
-};
-
-template <typename Target, typename Source, typename Conversion,
-          bool UnwrapSource>
-using compose_wrapper_type_conversion_t =
-    typename compose_wrapper_type_conversion<Target, Source, Conversion,
-                                             UnwrapSource>::type;
-
-// An alternative type built from the source as the alternative overload
-// resolution selects.
-template <typename Target, typename Source, typename Access,
-          bool Enabled = is_structural_conversion_target_v<Target> &&
-                         is_alternative_type_v<Target>,
-          typename = void>
-struct target_alternative_type_conversion_candidate {
-  using type = unavailable_type_conversion;
-};
-
-template <typename Target, typename Source, typename Access>
-struct target_alternative_type_conversion_candidate<
-    Target, Source, Access, true,
-    std::void_t<typename type_traits<
-        std::remove_cv_t<Target>>::template selected_type<Source>>> {
-private:
-  using selected = typename type_traits<
-      std::remove_cv_t<Target>>::template selected_type<Source>;
-  using conversion =
-      typename type_conversion_path<selected, Source, Access>::type;
-
-public:
-  using type = std::conditional_t<
-      conversion::available,
-      converted_construction<target_alternative_type_conversion<
-          Target, Source, selected, conversion>>,
-      unavailable_type_conversion>;
+      typename optional_conversion<Target, Next, OfElement>::type>;
 };
 
 // The element of an optional source, with the value category of the source.
@@ -513,338 +750,158 @@ template <typename Source> struct wrapper_element_source<Source, true> {
                            Source>;
 };
 
-// An optional value made of the converted source, or of the converted element
-// of an optional source.
-template <typename Target, typename Source, typename Access,
-          bool Enabled = is_structural_conversion_target_v<Target> &&
-                         is_value_wrapper_type_v<Target>>
-struct target_wrapper_type_conversion_candidate {
-  using type = unavailable_type_conversion;
+struct optional_route {
+  template <typename Target, typename Source, typename Access,
+            bool Enabled = is_structural_conversion_target_v<Target> &&
+                           is_value_wrapper_type_v<Target>>
+  struct route {
+    using type = unavailable_type_conversion;
+  };
+
+  template <typename Target, typename Source, typename Access>
+  struct route<Target, Source, Access, true> {
+  private:
+    static constexpr bool of_element = is_value_wrapper_type_v<Source>;
+    using next =
+        route_t<typename type_traits<std::remove_cv_t<Target>>::value_type,
+                typename wrapper_element_source<Source>::type, Access>;
+
+  public:
+    using type = std::conditional_t<
+        (of_element || !borrows_value_wrapper_v<Source>) && next::available,
+        typename optional_conversion<Target, next, of_element>::type,
+        unavailable_type_conversion>;
+  };
 };
 
-template <typename Target, typename Source, typename Access>
-struct target_wrapper_type_conversion_candidate<Target, Source, Access, true> {
-private:
-  static constexpr bool unwrap = is_value_wrapper_type_v<Source>;
-  using conversion = typename type_conversion_path<
-      typename type_traits<std::remove_cv_t<Target>>::value_type,
-      typename wrapper_element_source<Source>::type, Access>::type;
+// A wrapper the binding keeps, converted from the source, that a reference or
+// a pointer target refers to.
+struct retained_step {
+  template <typename Target>
+  using retained_types = type_list<std::remove_cv_t<std::conditional_t<
+      std::is_pointer_v<Target>, std::remove_pointer_t<Target>,
+      std::remove_reference_t<Target>>>>;
 
-public:
-  using type = std::conditional_t<
-      (unwrap || !borrows_value_wrapper_v<Source>) && conversion::available,
-      compose_wrapper_type_conversion_t<Target, Source, conversion, unwrap>,
-      unavailable_type_conversion>;
-};
-
-// The converted alternative a source alternative type holds: any of them for
-// a reference or pointer target, otherwise the target itself when it is an
-// alternative exactly once.
-template <typename Target, typename Source, typename Access,
-          typename Alternatives>
-struct alternative_type_conversion_branches;
-
-template <typename Target, typename Source, typename Access,
-          typename... Alternatives>
-struct alternative_type_conversion_branches<Target, Source, Access,
-                                            type_list<Alternatives...>> {
-  using type = alternative_type_conversion<
-      Target, Source,
-      type_list<alternative_type_conversion_branch<
-          Alternatives, typename type_conversion_path<
-                            Target, alternative_source_t<Alternatives, Source>,
-                            Access>::type>...>>;
-};
-
-template <typename Target, typename Source, typename Access,
-          bool IsAlternative =
-              is_alternative_type_v<remove_cvref_t<Source>> &&
-              !std::is_volatile_v<std::remove_reference_t<Source>>>
-struct source_alternative_type_conversion {
-  using type = unavailable_type_conversion;
-};
-
-template <typename Target, typename Source, typename Access>
-struct source_alternative_type_conversion<Target, Source, Access, true> {
-private:
-  using source_type = remove_cvref_t<Source>;
-  using target_type = remove_cvref_t<Target>;
-  using alternatives = std::conditional_t<
-      std::is_reference_v<Target> || std::is_pointer_v<Target>,
-      alternative_type_alternatives_t<source_type>,
-      std::conditional_t<
-          alternative_type_count<source_type, target_type>::value == 1,
-          type_list<target_type>, type_list<>>>;
-
-public:
-  using type =
-      typename alternative_type_conversion_branches<Target, Source, Access,
-                                                    alternatives>::type;
-};
-
-template <typename Target, typename Source, typename Access, typename = void>
-struct borrowed_type_conversion_candidate {
-  using type = unavailable_type_conversion;
-};
-
-template <typename Target, typename Source, typename Access, typename = void>
-struct dereference_type_conversion_candidate {
-  using type = unavailable_type_conversion;
-};
-
-template <typename Target, typename Source>
-struct array_type_conversion_candidate {
-private:
-  using target_type = std::remove_reference_t<Target>;
-  using source_type = std::remove_reference_t<Source>;
-  using target_array =
-      std::conditional_t<std::is_pointer_v<Target>,
-                         std::remove_pointer_t<Target>, target_type>;
-  using projected_element = std::remove_extent_t<target_array>;
-  using source_element = std::remove_pointer_t<source_type>;
-  static constexpr bool same_projection =
-      std::is_same_v<std::remove_cv_t<source_element>,
-                     std::remove_cv_t<projected_element>>;
-  static constexpr bool compatible_projection =
-      std::is_pointer_v<source_type> && same_projection &&
-      std::is_convertible_v<std::add_pointer_t<source_element>,
-                            std::add_pointer_t<projected_element>>;
-  static constexpr bool reference = std::is_lvalue_reference_v<Target> &&
-                                    std::is_array_v<target_type> &&
-                                    compatible_projection;
-  static constexpr bool pointer =
-      std::is_pointer_v<Target> &&
-      std::is_array_v<std::remove_pointer_t<Target>> && compatible_projection;
-
-public:
-  using type = std::conditional_t<
-      reference, array_reference_type_conversion<Target, Source>,
-      std::conditional_t<pointer, array_pointer_type_conversion<Target, Source>,
-                         unavailable_type_conversion>>;
-};
-
-template <typename Target, typename Source, typename = void>
-struct pointer_access_type_conversion_candidate {
-  using type = unavailable_type_conversion;
-};
-
-template <typename Target, typename Source, typename Access, typename = void>
-struct retained_type_conversion_candidate {
-  using type = unavailable_type_conversion;
-};
-
-template <typename Target>
-using retained_conversion_type_t = std::remove_cv_t<
-    std::conditional_t<std::is_pointer_v<Target>, std::remove_pointer_t<Target>,
-                       std::remove_reference_t<Target>>>;
-
-template <typename Target, typename Source>
-struct pointer_access_type_conversion_candidate<
-    Target, Source,
-    std::void_t<decltype(type_traits<remove_cvref_t<Source>>::get(
-        std::declval<Source>()))>> {
-private:
-  using source_type = remove_cvref_t<Source>;
-  using result_type =
-      decltype(type_traits<source_type>::get(std::declval<Source>()));
-
-public:
-  using type =
-      std::conditional_t<std::is_pointer_v<Target> &&
-                             std::is_lvalue_reference_v<Source> &&
-                             std::is_convertible_v<result_type, Target>,
-                         pointer_access_type_conversion<Target, Source>,
-                         unavailable_type_conversion>;
-};
-
-template <typename Target, typename Source, typename Access>
-struct borrowed_type_conversion_candidate<
-    Target, Source, Access,
-    std::enable_if_t<
-        is_value_borrowable_v<remove_cvref_t<Source>>,
-        std::void_t<decltype(type_traits<remove_cvref_t<Source>>::borrow(
-            std::declval<Source>()))>>> {
-private:
-  using source_type = remove_cvref_t<Source>;
-  using borrowed_source =
-      decltype(type_traits<source_type>::borrow(std::declval<Source>()));
-  using next =
-      typename type_conversion_path<Target, borrowed_source, Access>::type;
-
-public:
-  using type =
-      std::conditional_t<next::available,
-                         borrowed_type_conversion<Target, Source, next>,
-                         unavailable_type_conversion>;
-};
-
-template <typename Target, typename Source, typename Access>
-struct dereference_type_conversion_candidate<
-    Target, Source, Access,
-    std::enable_if_t<std::is_pointer_v<std::remove_reference_t<Source>> &&
-                     !std::is_void_v<std::remove_pointer_t<
-                         std::remove_reference_t<Source>>> &&
-                     !std::is_pointer_v<Target>>> {
-private:
-  using pointee_source = decltype(*std::declval<Source>());
-  using conversion =
-      typename type_conversion_path<Target, pointee_source, Access>::type;
-
-public:
-  using type = std::conditional_t<
-      conversion::available,
-      dereference_type_conversion<Target, Source, conversion>,
-      unavailable_type_conversion>;
-};
-
-template <typename Target, typename Source, typename Access>
-struct retained_type_conversion_candidate<
-    Target, Source, Access,
-    std::enable_if_t<(std::is_lvalue_reference_v<Target> ||
-                      std::is_pointer_v<Target>) &&
-                     type_traits<retained_conversion_type_t<Target>>::enabled &&
-                     !std::is_array_v<retained_conversion_type_t<Target>>>> {
-private:
-  using retained_type = retained_conversion_type_t<Target>;
-  using conversion =
-      typename type_conversion_path<retained_type, Source, Access>::type;
-
-public:
-  using type =
-      std::conditional_t<conversion::available,
-                         retained_type_conversion<Target, Source, conversion>,
-                         unavailable_type_conversion>;
-};
-
-template <typename Conversion, typename Access>
-using conversion_for_access_t = std::conditional_t<
-    Conversion::available &&
-        access_satisfies<Access, typename Conversion::required_access>::value,
-    Conversion, unavailable_type_conversion>;
-
-enum class basic_conversion_kind { none, identity, reference, converted };
-
-// The default conversions that keep the source object: a reference to it or to
-// its base, a copy of it or of its base, or the object moved from an rvalue.
-// Every other conversion, taking the address included, is found by the direct
-// path and the fallbacks.
-//
-// The predicate is a function template rather than a lambda in a member
-// initializer: MSVC's pre-C++20 lambda processor fails on those lambdas for
-// some instantiations.
-template <typename Target, typename Source, typename Access,
-          bool UsesDefaultConversion>
-constexpr basic_conversion_kind basic_conversion_selected() {
-  using kind = basic_conversion_kind;
-  using source_type = remove_cvref_t<Source>;
-  using source_pointer = std::add_pointer_t<std::remove_reference_t<Source>>;
-  constexpr bool borrows = std::is_lvalue_reference_v<Source> &&
-                           access_satisfies<Access, borrow>::value;
-  constexpr bool defaults = UsesDefaultConversion && !std::is_pointer_v<Target>;
-  // A value target of a non-volatile source.
-  constexpr bool by_value =
-      defaults && !std::is_reference_v<Target> &&
-      !std::is_volatile_v<std::remove_reference_t<Source>>;
-  if constexpr (defaults && std::is_lvalue_reference_v<Target>) {
-    return borrows && std::is_convertible_v<
-                          source_pointer,
-                          std::add_pointer_t<std::remove_reference_t<Target>>>
-               ? kind::converted
-               : kind::none;
-  } else if constexpr (by_value && borrows &&
-                       std::is_same_v<std::remove_cv_t<Target>, source_type>) {
-    return is_copy_constructible_v<Target> ? kind::identity : kind::none;
-  } else if constexpr (by_value && borrows &&
-                       std::is_convertible_v<source_pointer,
-                                             std::add_pointer_t<Target>>) {
-    return is_copy_constructible_v<Target> ? kind::reference : kind::none;
-  } else if constexpr (by_value && std::is_rvalue_reference_v<Source> &&
-                       std::is_same_v<std::remove_cv_t<Target>, source_type> &&
-                       access_satisfies<Access, consume>::value) {
-    return std::is_constructible_v<Target, Source> ? kind::identity
-                                                   : kind::none;
-  } else {
-    return kind::none;
+  template <typename Target, typename Resolver, typename Context, typename Next>
+  static Target make(Resolver &resolver, Context &context, Next &&next) {
+    using retained_type = type_list_head_t<retained_types<Target>>;
+    auto &retained =
+        resolver.template retain_conversion<retained_type>(context, next());
+    if constexpr (std::is_pointer_v<Target>) {
+      return std::addressof(retained);
+    } else {
+      return retained;
+    }
   }
-}
 
-// The default conversion that keeps the source object, tried before the
-// general search.
-template <typename Target, typename Source, typename Access>
-using basic_fallback = std::conditional_t<
-    basic_conversion_selected<Target, Source, Access, true>() ==
-        basic_conversion_kind::identity,
-    identity_type_conversion<Target, Source>,
-    std::conditional_t<
-        basic_conversion_selected<Target, Source, Access, true>() ==
-            basic_conversion_kind::reference,
-        reference_type_conversion<Target, Source>,
-        std::conditional_t<
-            basic_conversion_selected<Target, Source, Access, true>() ==
-                basic_conversion_kind::converted,
-            traits_type_conversion<Target, Source, borrow, Source>,
-            unavailable_type_conversion>>>;
+  template <typename Target, typename Source, typename Access, typename = void>
+  struct route {
+    using type = unavailable_type_conversion;
+  };
 
-// Whether the default conversion borrows its source: it consumes an rvalue
-// source, and any source of a target that takes ownership; it borrows any
-// other source, an lvalue only when the target can be built from it as a const
-// lvalue.
-template <typename Target, typename Source, typename Traits,
-          bool TakesOwnership>
-constexpr bool direct_conversion_borrows() {
-  if constexpr (std::is_rvalue_reference_v<Source> || TakesOwnership) {
-    return false;
-  } else if constexpr (std::is_lvalue_reference_v<Source>) {
-    return has_compatible_conversion<
-        Target, Traits,
-        std::add_lvalue_reference_t<
-            std::add_const_t<std::remove_reference_t<Source>>>>::value;
-  } else {
-    return true;
-  }
-}
-
-// The conversion the default type_conversion_traits performs. Wrappers and
-// alternatives are built by the structural candidates instead.
-template <typename Target, typename Source, typename Access,
-          bool Structural = is_structural_conversion_target_v<Target>>
-struct direct_type_conversion {
-private:
-  using source_type = remove_cvref_t<Source>;
-  using traits = type_conversion_traits<Target, source_type>;
-  using const_source = std::add_lvalue_reference_t<
-      std::add_const_t<std::remove_reference_t<Source>>>;
-  static constexpr bool takes_ownership =
-      type_traits<remove_cvref_t<Target>>::is_owning_handle &&
-      !type_traits<source_type>::is_owning_handle;
-  static constexpr bool borrows =
-      direct_conversion_borrows<Target, Source, traits, takes_ownership>();
-  using argument =
-      std::conditional_t<borrows && std::is_lvalue_reference_v<Source>,
-                         const_source, Source>;
-
-public:
-  using type = std::conditional_t<
-      has_compatible_conversion<Target, traits, argument>::value,
-      traits_type_conversion<Target, Source,
-                             std::conditional_t<borrows, borrow, consume>,
-                             argument>,
-      unavailable_type_conversion>;
+  template <typename Target, typename Source, typename Access>
+  struct route<
+      Target, Source, Access,
+      std::enable_if_t<
+          (std::is_lvalue_reference_v<Target> || std::is_pointer_v<Target>) &&
+          type_traits<type_list_head_t<retained_types<Target>>>::enabled &&
+          !std::is_array_v<type_list_head_t<retained_types<Target>>>>> {
+    using next =
+        route_t<type_list_head_t<retained_types<Target>>, Source, Access>;
+    using type = continued_t<outward<retained_step, Target, next>, next>;
+  };
 };
 
-template <typename Target, typename Source, typename Access>
-struct direct_type_conversion<Target, Source, Access, true> {
+// A new owning handle of a consumed value, converted to the element it holds.
+// A value of a class derived from the element is held as itself. It is not a
+// converted_construction: a factory makes a handle in place instead of moving
+// into it what it made.
+template <typename Held> struct handle_step : outward_step {
+  template <typename Target, typename Resolver, typename Context, typename Next>
+  static Target make(Resolver &, Context &, Next &&next) {
+    using handle =
+        typename type_traits<remove_cvref_t<Target>>::template rebind_t<Held>;
+    // The value is taken before it is moved into the handle: GCC then folds a
+    // handle that does not escape, as it does the value.
+    Held held(next());
+    return Target(type_traits<handle>::make(std::move(held)));
+  }
+};
+
+struct handle_route {
+  template <typename Target, typename Source, typename Access,
+            bool Enabled =
+                std::is_same_v<Access, consume> &&
+                !std::is_reference_v<Target> &&
+                !std::is_lvalue_reference_v<Source> &&
+                type_traits<remove_cvref_t<Target>>::is_owning_handle &&
+                is_value_borrowable_v<remove_cvref_t<Target>> &&
+                std::is_class_v<remove_cvref_t<Source>> &&
+                !type_traits<remove_cvref_t<Source>>::enabled>
+  struct route {
+    using type = unavailable_type_conversion;
+  };
+
+  template <typename Target, typename Source, typename Access>
+  struct route<Target, Source, Access, true> {
+  private:
+    using element = std::remove_cv_t<
+        typename type_traits<remove_cvref_t<Target>>::value_type>;
+    using source_type = remove_cvref_t<Source>;
+    using held = std::conditional_t<std::is_base_of_v<element, source_type>,
+                                    source_type, element>;
+
+    template <bool Holdable, typename = void> struct select {
+      using type = unavailable_type_conversion;
+    };
+
+    template <typename Unused> struct select<true, Unused> {
+      using next = route_t<held, Source, Access>;
+      using type = continued_t<outward<handle_step<held>, Target, next>, next>;
+    };
+
+  public:
+    using type = typename select<is_formable_v<held> &&
+                                 !type_traits<held>::enabled>::type;
+  };
+};
+
+// The first step, in order, that applies with the access. A later step is
+// named only once every earlier one has failed, so its route is not
+// instantiated before.
+template <typename Target, typename Source, typename Access, typename... Steps>
+struct first_route {
   using type = unavailable_type_conversion;
 };
 
-template <typename Target, typename Source, typename Access>
-using direct_fallback =
-    typename direct_type_conversion<Target, Source, Access>::type;
+template <typename Target, typename Source, typename Access, typename Step,
+          typename... Steps>
+struct first_route<Target, Source, Access, Step, Steps...> {
+private:
+  using candidate = conversion_for_access_t<
+      typename Step::template route<Target, Source, Access>::type, Access>;
+
+public:
+  using type = typename std::conditional_t<
+      candidate::available, std::enable_if<true, candidate>,
+      first_route<Target, Source, Access, Steps...>>::type;
+};
+
+template <typename Target, typename Source, typename Access, bool Default>
+struct type_conversion_path {
+  using type =
+      typename first_route<Target, Source, Access, basic_route, direct_route,
+                           alternative_route, held_alternative_step,
+                           optional_route, array_step, address_step,
+                           element_address_step, pointee_step, borrowed_step,
+                           retained_step, handle_route>::type;
+  static constexpr bool available = type::available;
+};
 
 // The conversion a custom type_conversion_traits declares, with the access it
 // requires.
 template <typename Target, typename Source, typename Access>
-struct custom_type_conversion {
+struct type_conversion_path<Target, Source, Access, false> {
 private:
   using traits = type_conversion_traits<Target, remove_cvref_t<Source>>;
   using required_access =
@@ -858,144 +915,10 @@ private:
 
 public:
   using type = conversion_for_access_t<
-      std::conditional_t<
-          converts,
-          traits_type_conversion<Target, Source, required_access, Source>,
-          unavailable_type_conversion>,
+      std::conditional_t<converts,
+                         converted_t<Target, Source, required_access, Source>,
+                         unavailable_type_conversion>,
       Access>;
-};
-
-// The address of an lvalue source, for a pointer target it converts to.
-template <typename Target, typename Source, typename Access>
-using address_fallback = std::conditional_t<
-    std::is_pointer_v<Target> && std::is_lvalue_reference_v<Source> &&
-        std::is_convertible_v<
-            std::add_pointer_t<std::remove_reference_t<Source>>, Target>,
-    address_type_conversion<Target, Source>, unavailable_type_conversion>;
-
-template <typename Target, typename Source, typename Access>
-using target_alternative_fallback =
-    typename target_alternative_type_conversion_candidate<Target, Source,
-                                                          Access>::type;
-
-template <typename Target, typename Source, typename Access>
-using source_alternative_fallback =
-    typename source_alternative_type_conversion<Target, Source, Access>::type;
-
-// An owning handle of a value that is consumed: a handle of an element, such as
-// std::unique_ptr<T>, made of the source moved into a new object. The element
-// is an object, not another wrapper. It is not a converted_construction: a
-// factory makes a handle in place instead of moving into it what it made. The
-// element is an object, not another wrapper. It is not a
-// converted_construction: a factory makes a handle in place instead of moving
-// into it what it made.
-template <typename Target, typename Source, typename Access,
-          bool Enabled =
-              std::is_same_v<Access, consume> && !std::is_reference_v<Target> &&
-              !std::is_lvalue_reference_v<Source> &&
-              type_traits<remove_cvref_t<Target>>::is_owning_handle &&
-              is_value_borrowable_v<remove_cvref_t<Target>> &&
-              std::is_class_v<remove_cvref_t<Source>> &&
-              !type_traits<remove_cvref_t<Source>>::enabled>
-struct boxed_type_conversion_candidate {
-  using type = unavailable_type_conversion;
-};
-
-template <typename Target, typename Source, typename Access>
-struct boxed_type_conversion_candidate<Target, Source, Access, true> {
-private:
-  using element = std::remove_cv_t<
-      typename type_traits<remove_cvref_t<Target>>::value_type>;
-  using source_type = remove_cvref_t<Source>;
-  using held = std::conditional_t<std::is_base_of_v<element, source_type>,
-                                  source_type, element>;
-
-  template <bool Holdable, typename = void> struct select {
-    using type = unavailable_type_conversion;
-  };
-
-  template <typename Unused> struct select<true, Unused> {
-    using conversion =
-        typename type_conversion_path<held, Source, Access>::type;
-    using type = std::conditional_t<
-        conversion::available,
-        boxed_type_conversion<Target, Source, held, conversion>,
-        unavailable_type_conversion>;
-  };
-
-public:
-  using type =
-      typename select<is_formable_v<held> && !type_traits<held>::enabled>::type;
-};
-
-template <typename Target, typename Source, typename Access>
-using boxed_fallback =
-    typename boxed_type_conversion_candidate<Target, Source, Access>::type;
-
-template <typename Target, typename Source, typename Access>
-using target_wrapper_fallback =
-    typename target_wrapper_type_conversion_candidate<Target, Source,
-                                                      Access>::type;
-
-template <typename Target, typename Source, typename Access>
-using array_fallback =
-    typename array_type_conversion_candidate<Target, Source>::type;
-
-template <typename Target, typename Source, typename Access>
-using pointer_access_fallback =
-    typename pointer_access_type_conversion_candidate<Target, Source>::type;
-
-template <typename Target, typename Source, typename Access>
-using dereference_fallback =
-    typename dereference_type_conversion_candidate<Target, Source,
-                                                   Access>::type;
-
-template <typename Target, typename Source, typename Access>
-using borrowed_fallback =
-    typename borrowed_type_conversion_candidate<Target, Source, Access>::type;
-
-template <typename Target, typename Source, typename Access>
-using retained_fallback =
-    typename retained_type_conversion_candidate<Target, Source, Access>::type;
-
-// The first fallback, in order, that is available with the access. A later
-// fallback is named only once every earlier one has failed, so its path is
-// not instantiated before.
-template <typename Target, typename Source, typename Access,
-          template <typename, typename, typename> typename... Fallbacks>
-struct select_conversion_fallback {
-  using type = unavailable_type_conversion;
-};
-
-template <typename Target, typename Source, typename Access,
-          template <typename, typename, typename> typename Fallback,
-          template <typename, typename, typename> typename... Fallbacks>
-struct select_conversion_fallback<Target, Source, Access, Fallback,
-                                  Fallbacks...> {
-private:
-  using candidate =
-      conversion_for_access_t<Fallback<Target, Source, Access>, Access>;
-
-public:
-  using type = typename std::conditional_t<
-      candidate::available, std::enable_if<true, candidate>,
-      select_conversion_fallback<Target, Source, Access, Fallbacks...>>::type;
-};
-
-template <typename Target, typename Source, typename Access, bool Default>
-struct type_conversion_path {
-  using type = typename select_conversion_fallback<
-      Target, Source, Access, basic_fallback, direct_fallback,
-      target_alternative_fallback, source_alternative_fallback,
-      target_wrapper_fallback, array_fallback, address_fallback,
-      pointer_access_fallback, dereference_fallback, borrowed_fallback,
-      retained_fallback, boxed_fallback>::type;
-  static constexpr bool available = type::available;
-};
-
-template <typename Target, typename Source, typename Access>
-struct type_conversion_path<Target, Source, Access, false> {
-  using type = typename custom_type_conversion<Target, Source, Access>::type;
   static constexpr bool available = type::available;
 };
 
@@ -1012,6 +935,5 @@ inline constexpr bool is_type_conversion_available_v = [] {
     return false;
   }
 }();
-
 } // namespace detail
 } // namespace dingo

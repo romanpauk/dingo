@@ -64,15 +64,28 @@ an interface that is already a wrapper is published as that exact shape rather
 than being nested inside the stored wrapper again. Storage stability remains a
 separate property controlling reference and pointer lifetime.
 
-Publication decomposes a conversion into identity forwarding, compatible
-reference access, custom trait conversion, address-taking, array projection,
-pointer dereferencing, wrapper pointer access, wrapper borrowing, alternative
-selection, or retention of a converted wrapper. Pointer-backed storage keeps the
-pointer as its source; wrapper composition inspects the pointee shape, and the
-conversion route records the dereference explicitly. The chosen decomposition is
-stored in the operation and executed directly; execution does not classify the
-target and source a second time. Custom `type_conversion_traits` take precedence
-over the default compatible-reference shortcut.
+Publication finds a route from the source to the target, in steps, the same
+steps the [specification](../development.md#specification) derives a request by.
+A step ends the route at the object it has, reaches inward to an object that
+object holds, or makes a new object outward around what the rest of the route
+makes:
+
+- ending: the source itself, a reference to it or to its base, its address, the
+  array a pointer to its first element points to, the address of the element of
+  a wrapper, or what `type_conversion_traits` converts it to
+- inward: the pointee of a pointer, the element a wrapper lends, or the
+  alternative an alternative type holds, each alternative a branch of its own
+- outward: an optional value, an alternative type, or a new owning handle made
+  of what the rest of the route makes, and a converted wrapper the binding
+  retains for a reference or a pointer to refer to
+
+Each step is one class, which says where it applies and what it does; the steps
+are tried in a fixed order, and the first that applies is taken. Pointer-backed
+storage keeps the pointer as its source, and the route records the dereference
+explicitly. The chosen route is stored in the operation and executed directly;
+execution does not classify the target and source a second time. Custom
+`type_conversion_traits` take precedence over the default compatible-reference
+shortcut.
 
 Keeping the operation in the resolution makes route selection and execution one
 decision. New wrapper, alternative, and array operations can be introduced by
@@ -84,9 +97,9 @@ performs a second conversion. Operations also publish any cache,
 source-retention, and static temporary-storage requirements created by their
 execution. The runtime and static backends derive those resources from the same
 resolution list instead of maintaining a parallel list of conversion types on
-the storage. A new operation must provide `cache_types`,
-`temporary_types<Storage>`, and `requires_source_retention` along with its
-`apply` function, even when those requirements are empty.
+the storage. A new step provides where it applies, as its `route`, and what it
+does: `end`, `reach` or `make`; the route it makes provides `available`,
+`required_access`, `cache_types` and `apply`.
 
 Factory construction and storage rebinding use this operation model as well.
 When a factory selects an alternative to construct, Dingo plans the conversion
@@ -100,7 +113,7 @@ the conversion tree for variants or wrappers.
 
 The conversion's `available` value and required source access come from that
 same recursive decomposition. Leaf operations require either `borrow` or
-`consume`; dereference, wrapper borrowing, and retention inherit the inner
+`consume`; a step that reaches inward or makes outward inherits the inner
 operation's requirement, while an alternative keeps the requirements of its
 viable branches. Conversion selection applies one rule: consumed storage
 satisfies both requirements, while borrowed storage satisfies only `borrow`.
