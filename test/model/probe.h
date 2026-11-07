@@ -293,29 +293,30 @@ template <typename T> std::string_view type_name() {
   return text.substr(begin, end - begin);
 }
 
-template <typename Interface> void survey_interface(const char *registration) {
-  using type = typename annotated_traits<Interface>::type;
-  const auto name = type_name<type>();
-  std::printf("{\"registration\": \"%s\", \"interface\": \"%.*s\", "
-              "\"abstract\": %s, \"array\": %s}\n",
-              registration, static_cast<int>(name.size()), name.data(),
-              std::is_abstract_v<type> ? "true" : "false",
-              std::is_array_v<type> ? "true" : "false");
+template <typename T, typename... Types>
+inline constexpr bool is_one_of_v = (std::is_same_v<T, Types> || ...);
+
+// Whether the interfaces a registration binds, annotated or not, are the
+// expected ones, in any order.
+template <typename... Expected, typename... Bound>
+constexpr bool binds_exactly(type_list<Bound...> *) {
+  return sizeof...(Bound) == sizeof...(Expected) &&
+         (is_one_of_v<typename annotated_traits<Bound>::type, Expected...> &&
+          ...);
 }
 
-template <typename... Interfaces>
-void survey_interfaces(const char *registration, type_list<Interfaces...> *) {
-  (survey_interface<Interfaces>(registration), ...);
-}
-
-// Prints the interfaces a registration binds, one line each, when the library
-// accepts it.
-template <typename Registration> void survey(const char *registration) {
+// Prints whether a registration the library accepts binds exactly the
+// interfaces the specification expects.
+template <typename Registration, typename... Expected>
+void survey(const char *registration) {
   using model = detail::binding_model<Registration>;
   if constexpr (model::storage_tag_is_complete && model::stored &&
                 model::valid) {
-    survey_interfaces(registration,
-                      static_cast<typename model::interface_types *>(nullptr));
+    std::printf("{\"registration\": \"%s\", \"binds\": %s}\n", registration,
+                binds_exactly<Expected...>(
+                    static_cast<typename model::interface_types *>(nullptr))
+                    ? "true"
+                    : "false");
   }
 }
 

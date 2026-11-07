@@ -16,6 +16,9 @@ import jinja2
 
 from .dimensions import Outcome
 
+# The headers of the probes, which their programs include as model/<header>.
+HEADERS = Path(__file__).parents[2] / "test" / "model"
+
 TEMPLATES = jinja2.Environment(
     loader=jinja2.FileSystemLoader(Path(__file__).with_name("templates")),
     undefined=jinja2.StrictUndefined,
@@ -243,10 +246,9 @@ def precompile_header(compiler, flags, work, header):
     first, and returns the include path that finds it first; no path when the
     compiler cannot. The headers are copied, so that the one a program
     includes is the one precompiled."""
-    source = Path(__file__).parent.parent
     directory = work / "pch"
     (directory / "model").mkdir(parents=True, exist_ok=True)
-    for path in source.glob("*.h"):
+    for path in HEADERS.glob("*.h"):
         (directory / "model" / path.name).write_text(path.read_text())
     copy = directory / "model" / header
     result = subprocess.run(

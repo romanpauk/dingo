@@ -1,25 +1,27 @@
 """The model both families of probes share: the interfaces the library names,
 the requests of the grammar over them, and a probe of a request."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from .dimensions import Category, Shape
+from spec.vocabulary import Category, Shape
 
 
 @dataclass(frozen=True, order=True)
 class Interface:
     """A type requests are made of: its name in a cell, the type as the
-    compiler spells it, and whether it is abstract or an array."""
+    compiler spells it, whether it is abstract or an array, and the interface
+    of the specification it is, when it is one a registration binds."""
     name: str
     spelled: str
     abstract: bool = False
     array: bool = False
+    bound: object = field(default=None, compare=False)
 
 
 def interface(spelled, abstract=False, array=False):
-    """An interface named by the compiler's spelling of it."""
-    name = spelled.replace("dingo::model::", "").replace(" [", "[")
-    return Interface(name, spelled, abstract, array)
+    """An interface of the probe's types, named without their namespace."""
+    return Interface(spelled.replace("dingo::model::", ""), spelled, abstract,
+                     array)
 
 
 @dataclass(frozen=True, order=True)

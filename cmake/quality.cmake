@@ -31,10 +31,10 @@ function(configure_quality_targets out_check_targets)
     set(model_dir ${PROJECT_BINARY_DIR}/model-${size})
     add_custom_target(model-check-${size}
       COMMENT "Probing the ${size} cover of the model"
-      COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/test/model/probe.py
+      COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/spec/probe.py
         ${model_dir}/probe.json --work ${model_dir}/probe
         --compiler ${CMAKE_CXX_COMPILER} --cover ${cover} ${model_flags}
-      COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/test/model/detection.py
+      COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/spec/detection.py
         ${model_dir}/detection.json --work ${model_dir}/detection
         --compiler ${CMAKE_CXX_COMPILER} --cover ${cover} ${model_flags}
       WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}

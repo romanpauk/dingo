@@ -5,10 +5,12 @@ what constructing them does."""
 from dataclasses import dataclass
 from typing import Optional
 
+from spec.vocabulary import (Category, Container, Leaf, Scope, Selection,
+                             Shape, StoredForm)
+
 from . import cover, driver
-from .dimensions import (Category, Construction, Container, Detection, Kind,
-                         Leaf, Making, Outcome, Scope, Selection, Shape,
-                         StoredForm)
+
+from .dimensions import Construction, Detection, Kind, Making, Outcome
 from .model import Probe, grammar, interface
 
 # The interface a parameter is a shape of, by the leaf it is resolved from.
@@ -199,36 +201,36 @@ LIMITATIONS = (
         frozenset({Construction.SHAPE, Construction.SIGNATURE})),
 )
 
-REQUESTS = {category.value.replace("X", shape.value): (shape, category)
-            for shape in Shape for category in Category}
-
-
-def limitations(cell):
-    """The known limitations a cell is made with: those whose detection
-    reports its class wrongly, for a detection cell, and those whose
-    construction makes it differently, for a construction cell."""
-    parts = cell.split("/")
-    selection = Selection(parts[4])
-    first, rest = parts[6].split("_", 1)
-    shape, category = REQUESTS[parts[7]]
+def limitations(unit, probe):
+    """The known limitations a probe is made with: those whose detection
+    reports its class wrongly, for a detection, and those whose construction
+    makes it differently, for a making."""
+    request, operation = probe.request, probe.operation
     found = [known for known in LIMITATIONS
-             if known.holds(selection, shape, category)]
-    if first == "detect":
+             if known.holds(unit.selection, request.shape, request.category)]
+    if isinstance(operation, Detect):
         return [known for known in found
-                if Detection(rest) in known.misdetected_by]
+                if operation.detection in known.misdetected_by]
     return [known for known in found
-            if first in {construction.value
-                         for construction in known.made_differently_by}]
+            if operation.construction in known.made_differently_by]
 
 
-def apply_limitations(cells):
+def probes_of(units):
+    """Each valid probe of the units, by its cell."""
+    return {unit.cell(probe): (unit, probe) for unit in units
+            for probe, invalid in unit.probes() if not invalid}
+
+
+def apply_limitations(cells, units):
     """Records a misdetection a known limitation says as limited, and a
     detection a known limitation says is misdetected as a stale
     limitation."""
+    probes = probes_of(units)
     for cell in cells:
-        if not cell["cell"].split("/")[6].startswith("detect_"):
+        unit, probe = probes.get(cell["cell"], (None, None))
+        if probe is None or not isinstance(probe.operation, Detect):
             continue
-        known = limitations(cell["cell"])
+        known = limitations(unit, probe)
         if not known:
             continue
         reasons = "; ".join(limitation.reason for limitation in known)
@@ -241,25 +243,22 @@ def apply_limitations(cells):
     return cells
 
 
-def disagreements(cells):
+def disagreements(cells, units):
     """The makings with a detected constructor whose outcome is not that of
     the explicit one."""
     outcomes = {cell["cell"]: cell["outcome"] for cell in cells}
     found = []
-    for cell, outcome in outcomes.items():
-        parts = cell.split("/")
-        construction, making = parts[6].split("_", 1)
-        if construction not in (Construction.SHAPE, Construction.SIGNATURE):
-            continue
+    for cell, (unit, probe) in probes_of(units).items():
+        operation = probe.operation
         # A class a known limitation makes differently is not made as the
         # explicit constructor makes it.
-        if limitations(cell):
+        if (not isinstance(operation, Make) or
+                operation.construction is Construction.EXPLICIT or
+                operation.reference is None or limitations(unit, probe) or
+                cell not in outcomes):
             continue
-        reference = Make(Construction(construction), Making(making)).reference
-        if reference is None:
-            continue
-        explicit = "/".join(parts[:6] + [reference.name] + parts[7:])
-        if explicit in outcomes and outcomes[explicit] != outcome:
-            found.append(f"{cell}: {outcome}, explicit "
+        explicit = unit.cell(Probe(operation.reference, probe.request))
+        if explicit in outcomes and outcomes[explicit] != outcomes[cell]:
+            found.append(f"{cell}: {outcomes[cell]}, explicit "
                          f"{outcomes[explicit]}")
     return found
