@@ -44,10 +44,12 @@ template <> struct scope_traits<unique> {
     case storage_form::array:
     case storage_form::bounded_array:
       return storage_exposure::rvalue | storage_exposure::pointer;
+    case storage_form::shared_handle:
+      return storage_exposure::value | storage_exposure::lvalue |
+             storage_exposure::rvalue | storage_exposure::pointer;
     case storage_form::alternative:
     case storage_form::unique_handle:
     case storage_form::unique_array_handle:
-    case storage_form::shared_handle:
     case storage_form::shared_array_handle:
     case storage_form::optional:
       return storage_exposure::lvalue | storage_exposure::rvalue |
@@ -60,19 +62,23 @@ template <> struct scope_traits<unique> {
   }
 
   // A new value is additionally moved into a wrapper of its own: a plain one
-  // or an alternative into an optional or an owning handle, and the element
-  // of an optional out of it.
+  // or an alternative into an optional or an owning handle. The element of an
+  // optional or a unique_ptr is moved out of it, and into a wrapper of its
+  // own; that of a shared_ptr is copied.
   template <storage_form Form, typename Type, typename U>
   struct requests : detail::scope_rule_requests<unique, Type, U> {
   private:
     using rule = detail::scope_rule_requests<unique, Type, U>;
-    using wrapped =
-        std::conditional_t<Form == storage_form::plain ||
-                               Form == storage_form::alternative,
-                           type_list<std::optional<U> &&, std::unique_ptr<U> &&,
-                                     std::shared_ptr<U> &&>,
-                           std::conditional_t<Form == storage_form::optional,
-                                              type_list<U &&>, type_list<>>>;
+    using handles = type_list<std::unique_ptr<U> &&, std::shared_ptr<U> &&>;
+    using wrapped = std::conditional_t<
+        Form == storage_form::plain || Form == storage_form::alternative,
+        type_list_cat_t<type_list<std::optional<U> &&>, handles>,
+        std::conditional_t<
+            Form == storage_form::optional,
+            type_list_cat_t<type_list<U &&>, handles>,
+            std::conditional_t<Form == storage_form::unique_handle,
+                               type_list<U &&, std::optional<U> &&>,
+                               type_list<>>>>;
 
   public:
     using rvalue_reference_types =

@@ -443,13 +443,9 @@ class Limitation(Enum):
     # A reference to a handle or an optional a step makes for the request,
     # rather than the one the storage makes.
     REFERENCE_TO_MADE_LAYER = "reference_to_made_layer"
-    # The element of a holder made for the request: a reference into one a
-    # step makes, a value of the element of a pointer or a handle, and a
-    # pointer handed over out of one.
+    # The element of a holder a step makes for the request, and a pointer
+    # handed over out of a holder made for it.
     ELEMENT_OF_MADE_HOLDER = "element_of_made_holder"
-    # A new handle or optional of the element moved out of an optional made
-    # for the request, as one of the alternative of an alternative type is.
-    WRAP_OF_MADE_OPTIONAL_ELEMENT = "wrap_of_made_optional_element"
 
 
 def _made(thing):
@@ -470,11 +466,6 @@ GAPS = (
         thing.lifetimes[1] is Lifetime.REQUEST),
     Gap(Limitation.ELEMENT_OF_MADE_HOLDER, "point",
         lambda context, category, thing: thing.contained is not None),
-    Gap(Limitation.ELEMENT_OF_MADE_HOLDER, "value",
-        lambda context, category, thing: thing.contained is not None and
-        LAYERS[thing.contained].shares_element),
-    Gap(Limitation.WRAP_OF_MADE_OPTIONAL_ELEMENT, "wrap",
-        lambda context, thing, following: thing.contained == "optional"),
 )
 
 
@@ -578,8 +569,6 @@ def satisfies(things, category, lifetime, layers, context):
                 return thing.lifetimes[1].value >= lifetime.value
             return any(points(thing) for thing in things)
         return False
-    of_shape = [thing for thing in of_shape
-                if not blocked(context, "value", category, thing)]
     if category is Category.RVALUE_REFERENCE:
         # The object the request moves from: one it made.
         return any(thing.origin is Origin.MADE and can_move(thing, context)

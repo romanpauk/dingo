@@ -516,6 +516,14 @@ struct type_traits<std::unique_ptr<T, Deleter>,
   static T &borrow(const std::unique_ptr<T, Deleter> &wrapper) {
     return *wrapper;
   }
+  // A consumed handle gives its element away, as it owns it alone; one with
+  // a deleter of its own keeps it, as its deleter may expect to find it.
+  template <
+      typename D = Deleter,
+      typename = std::enable_if_t<std::is_same_v<D, std::default_delete<T>>>>
+  static T &&borrow(std::unique_ptr<T, Deleter> &&wrapper) {
+    return std::move(*wrapper);
+  }
   static bool empty(const std::unique_ptr<T, Deleter> &wrapper) {
     return wrapper.get() == nullptr;
   }

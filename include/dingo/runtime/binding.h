@@ -181,6 +181,13 @@ private:
     return describe_type<detail::registered_type_t<Storage>>();
   }
 
+  // Whether a request is of an address: an lvalue reference or a pointer. A
+  // value is copied out of what it is resolved from before that ends.
+  static constexpr bool refers(type_descriptor requested) {
+    return requested.reference == type_reference_kind::lvalue ||
+           requested.pointee != nullptr;
+  }
+
   // A storage that makes a value for the request places it in the context,
   // which ends before the caller of the container uses an address into it,
   // or into what it owns, as the static container knows as it compiles. A
@@ -192,7 +199,7 @@ private:
                                    runtime_context_type &context) {
     if constexpr (!PlacesValue) {
       (void)scope, (void)resolved, (void)request, (void)context;
-    } else if (scope.is_caller() &&
+    } else if (scope.is_caller() && refers(request.requested_type) &&
                resolved.access == resolved_address::access_kind::borrow) {
       throw detail::make_type_not_convertible_exception(
           request.requested_type, registered_type(), context);
