@@ -105,5 +105,5 @@ The rebinding utilities are what allow those three layers to compose.
 
 - [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h)
 - [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
-- [include/dingo/type/dependency_traits.h](../../include/dingo/type/dependency_traits.h)
+- [include/dingo/type/request.h](../../include/dingo/type/request.h)
 - [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)

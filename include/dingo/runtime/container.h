@@ -30,10 +30,9 @@
 #include <dingo/type/annotated.h>
 #include <dingo/type/auto_constructible.h>
 #include <dingo/type/collection_traits.h>
-#include <dingo/type/dependency.h>
-#include <dingo/type/dependency_traits.h>
 #include <dingo/type/key.h>
 #include <dingo/type/normalized_type.h>
+#include <dingo/type/request.h>
 
 #include <cstddef>
 #include <type_traits>

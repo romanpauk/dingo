@@ -100,7 +100,6 @@ if(DINGO_DEVELOPMENT_MODE)
         binding/binding_activation.h
         binding/request_resolution.h
         binding/requests.h
-        type/dependency.h
         factory/factory_traits.h
         type/key.h
         base/none.h
@@ -183,7 +182,7 @@ if(DINGO_DEVELOPMENT_MODE)
         lookup/container_lookup_definition.h
         registration/requirements.h
         resolution/resolution.h
-        type/dependency_traits.h
+        type/request.h
     )
 
     set(DINGO_INTERFACE_SOURCES "")

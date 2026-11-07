@@ -16,8 +16,8 @@
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/collection_traits.h>
-#include <dingo/type/dependency_traits.h>
 #include <dingo/type/normalized_type.h>
+#include <dingo/type/request.h>
 #include <dingo/type/type_traits.h>
 
 #include <cassert>
@@ -109,17 +109,12 @@ inline constexpr bool can_construct_from_normalized_request_v =
 // Nor is a bounded array: a pointer to a new one cannot be made with new, and
 // a handle of one only decays it.
 //
-// The checks read the type the request constructs, which an annotation or a
-// key selection only names.
-template <typename Request>
-using constructed_type_t = unannotated_t<normalized_type_t<Request>>;
-
 template <typename Request>
 inline constexpr bool constructible_normalized_v =
     !std::is_rvalue_reference_v<Request> &&
-    std::is_object_v<constructed_type_t<Request>> &&
-    !std::is_abstract_v<constructed_type_t<Request>> &&
-    std::extent_v<constructed_type_t<Request>> == 0;
+    std::is_object_v<request_constructed_t<Request>> &&
+    !std::is_abstract_v<request_constructed_t<Request>> &&
+    std::extent_v<request_constructed_t<Request>> == 0;
 // Whether a handle can be made of Args: the array a handle of one holds is
 // initialized with them, its first elements copy-initialized from them and
 // the rest of a bounded one value-initialized.
@@ -152,7 +147,7 @@ template <typename Request>
 inline constexpr bool construct_normalized_request_v = [] {
   if constexpr (can_construct_from_normalized_request_v<Request> &&
                 constructible_normalized_v<Request>) {
-    using value = constructed_type_t<Request>;
+    using value = request_constructed_t<Request>;
     return (std::is_move_constructible_v<value> ||
             std::is_copy_constructible_v<value>) &&
            handle_makeable<std::decay_t<Request>, value>::value;

@@ -222,11 +222,6 @@ inline constexpr bool materializes_value_source_v = [] {
   return !std::is_reference_v<source_result> && !std::is_pointer_v<source_type>;
 }();
 
-// The value a reference or a pointer request refers to.
-template <typename Request>
-using referred_value_t =
-    std::remove_cv_t<std::remove_pointer_t<std::remove_reference_t<Request>>>;
-
 // Whether a storage makes a value for each request that a reference may
 // refer to: one moved out of what it makes, or a wrapper it is moved into,
 // rather than a copy of an element a handle shares.

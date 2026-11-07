@@ -26,9 +26,9 @@
 #include <dingo/factory/constructor_traits.h>
 #include <dingo/factory/constructor_typedef.h>
 #include <dingo/type/annotated.h>
-#include <dingo/type/dependency_traits.h>
 #include <dingo/type/key.h>
 #include <dingo/type/normalized_type.h>
+#include <dingo/type/request.h>
 
 #include <type_traits>
 #include <utility>

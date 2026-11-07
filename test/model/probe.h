@@ -467,7 +467,7 @@ template <typename U, typename Arg> decltype(auto) unwrap(Arg &&arg) {
 // an lvalue and an rvalue, so a value cannot be constructed from it directly.
 template <typename R> class received {
 public:
-  using result_type = dingo::detail::request_interface_t<R>;
+  using result_type = dingo::unannotated_t<R>;
   using held_type = std::remove_cv_t<std::remove_reference_t<result_type>>;
   using passed_type = decltype(pass_on<R>(std::declval<R &>()));
   static constexpr bool unwraps =

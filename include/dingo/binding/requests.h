@@ -15,9 +15,9 @@
 #include <dingo/factory/callable.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/type/collection_traits.h>
-#include <dingo/type/dependency_traits.h>
 #include <dingo/type/key.h>
 #include <dingo/type/normalized_type.h>
+#include <dingo/type/request.h>
 
 #include <type_traits>
 #include <utility>
@@ -50,7 +50,7 @@ inline constexpr bool keyed_by_type_v = [] {
 // may be annotated.
 template <typename T, typename R>
 inline constexpr bool movable_rvalue_request_v =
-    !std::is_rvalue_reference_v<::dingo::detail::request_interface_t<T>> ||
+    !std::is_rvalue_reference_v<::dingo::unannotated_t<T>> ||
     std::is_reference_v<R> || std::is_pointer_v<R> ||
     std::is_move_constructible_v<std::remove_cv_t<R>>;
 
@@ -133,7 +133,7 @@ public:
             typename R = request_result_t<T, true>>
   DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {
     constexpr bool rvalue =
-        std::is_rvalue_reference_v<::dingo::detail::request_interface_t<T>>;
+        std::is_rvalue_reference_v<::dingo::unannotated_t<T>>;
     constexpr bool default_factory =
         std::is_same_v<Factory, constructor<normalized_type_t<T>>>;
     if constexpr ((std::is_lvalue_reference_v<R> || rvalue ||

@@ -15,8 +15,8 @@
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/collection_traits.h>
-#include <dingo/type/dependency.h>
 #include <dingo/type/normalized_type.h>
+#include <dingo/type/request.h>
 
 #include <type_traits>
 #include <utility>

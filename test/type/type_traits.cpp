@@ -7,8 +7,7 @@
 
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/collection_traits.h>
-#include <dingo/type/dependency.h>
-#include <dingo/type/dependency_traits.h>
+#include <dingo/type/request.h>
 #include <dingo/type/type_traits.h>
 
 #include <gtest/gtest.h>

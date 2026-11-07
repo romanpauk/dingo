@@ -11,7 +11,7 @@
 #include <dingo/base/construction_scope.h>
 #include <dingo/base/type_descriptor.h>
 #include <dingo/resolution/cache.h>
-#include <dingo/type/rebind_type.h>
+#include <dingo/type/request.h>
 
 #include <cassert>
 
@@ -22,36 +22,6 @@ template <typename RTTI> struct instance_request {
   type_index lookup_type;
   type_descriptor requested_type;
 };
-
-template <typename T> struct request_lookup_type {
-  using type = rebind_leaf_t<T, runtime_type>;
-};
-
-template <typename T>
-struct request_lookup_type<const T> : request_lookup_type<T> {};
-
-template <typename T>
-struct request_lookup_type<volatile T> : request_lookup_type<T> {};
-
-template <typename T>
-struct request_lookup_type<const volatile T> : request_lookup_type<T> {};
-
-template <typename T> struct request_lookup_type<T *> {
-  using type = std::add_pointer_t<typename request_lookup_type<T>::type>;
-};
-
-template <typename T> struct request_lookup_type<T &> {
-  using type =
-      std::add_lvalue_reference_t<typename request_lookup_type<T>::type>;
-};
-
-template <typename T> struct request_lookup_type<T &&> {
-  using type =
-      std::add_rvalue_reference_t<typename request_lookup_type<T>::type>;
-};
-
-template <typename T>
-using request_lookup_type_t = typename request_lookup_type<T>::type;
 
 struct resolved_address {
   void *address;
