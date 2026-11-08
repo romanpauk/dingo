@@ -301,8 +301,10 @@ private:
                                            const void *cache_key) {
     auto &binding = static_cast<runtime_binding &>(erased);
     if constexpr (type_list_size_v<request_resolutions> == 0) {
-      (void)scope;
       (void)cache_key;
+      if (request.compose != nullptr) {
+        return request.compose(&erased, scope, &context);
+      }
       throw detail::make_type_not_convertible_exception(
           request.requested_type, registered_type(), context);
     } else {
@@ -329,6 +331,10 @@ private:
       }
       if (resolution_index == type_list_size_v<request_resolutions> ||
           (placed && scope.is_caller())) {
+        if (request.compose != nullptr &&
+            resolution_index == type_list_size_v<request_resolutions>) {
+          return request.compose(&erased, scope, &context);
+        }
         throw detail::make_type_not_convertible_exception(
             request.requested_type, registered_type(), context);
       }

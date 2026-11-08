@@ -93,9 +93,22 @@ representation that Dingo keeps and converts during resolution.
 ### Storage Forms
 
 The stored type can be a value, raw pointer, `std::unique_ptr`,
-`std::shared_ptr`, `std::optional`, raw arrays, or another supported form. Dingo
-respects the usual semantics of that form when creating or passing instances
-around.
+`std::shared_ptr`, `std::optional`, raw arrays, or another supported form, and
+the wrappers compose: a `std::shared_ptr<std::optional<T>>` or a
+`std::optional<std::unique_ptr<T>>` is stored and resolved through as well.
+Dingo respects the usual semantics of that form when creating or passing
+instances around.
+
+A request composes wrappers too. A wrapper the binding does not publish is made
+of the value it holds, which is resolved first, so a `unique` registration of a
+`T` gives a `std::optional<std::shared_ptr<T>>` or a
+`std::shared_ptr<std::unique_ptr<T>>`, moving the new `T` in. Wrapping keeps
+unique and shared semantics: a new wrapper holds what the request owns, never a
+copy of what a scope keeps. A `shared` registration of a `std::shared_ptr<T>`
+gives a `std::optional<std::shared_ptr<T>>` holding a copy of that handle, which
+shares the one `T`; a `shared` registration of a plain `T` gives no
+`std::shared_ptr<T>` or `std::optional<T>`, as it would have to copy the `T`.
+Register the `std::shared_ptr<T>` instead.
 
 The injectable result depends on both:
 

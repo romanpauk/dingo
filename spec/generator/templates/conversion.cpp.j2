@@ -15,13 +15,12 @@ struct unit_{{ loop.index0 }} {
 
   static void run() {
     if constexpr (registrable<registration, false>()) {
-      using storage =
-          typename dingo::detail::binding_model<registration>::storage_type;
+      using model = dingo::detail::binding_model<registration>;
 {% for index, interface, requests in u.checks() %}
       check_probed<registration, I{{ index }}{% for request in requests %}, {{ cpp.request(request) }}{% endfor %}>("{{ u.published_prefix(interface) }}");
 {% endfor %}
 {% for request in u.requests() %}
-      publication<storage, I{{ request.index }}, {{ cpp.request(request) }}>("{{ u.prefix(request) }}", "{{ request.name }}");
+      publication<model, I{{ request.index }}, {{ cpp.request(request) }}>("{{ u.prefix(request) }}", "{{ request.name }}");
 {% endfor %}
     } else {
       record("{{ u.prefix(none) }}", "not_registrable", nullptr);

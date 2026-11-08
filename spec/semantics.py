@@ -19,8 +19,9 @@ from enum import Enum
 import functools
 import itertools
 
-from .vocabulary import (Answer, Category, Container, Entry, InterfaceSet,
-                         Leaf, Position, Scope, Selection, Shape, StoredForm)
+from .vocabulary import (SHAPE_DEPTH, WRAPPERS, Answer, Category, Container, Entry,
+                         InterfaceSet, Leaf, Position, Scope, Selection,
+                         Shape, StoredForm)
 
 
 class Owner(Enum):
@@ -162,25 +163,17 @@ FORMS = {
     StoredForm.UNIQUE_ARRAY_HANDLE: ("unique_ptr", "array"),
     StoredForm.SHARED_ARRAY_HANDLE: ("shared_ptr", "array"),
     StoredForm.SHARED_BOUNDED_ARRAY_HANDLE: ("shared_ptr", "array2"),
-    StoredForm.SHARED_OPTIONAL: ("shared_ptr", "optional"),
-    StoredForm.UNIQUE_OPTIONAL: ("unique_ptr", "optional"),
-    StoredForm.OPTIONAL_SHARED_HANDLE: ("optional", "shared_ptr"),
-    StoredForm.OPTIONAL_UNIQUE_HANDLE: ("optional", "unique_ptr"),
+    **{form: tuple(WRAPPERS[name][0] for name in form.wrappers)
+       for form in StoredForm if form.wrappers},
 }
 
 # The stack a request shape asks for around its interface.
 SHAPES = {
-    Shape.OBJECT: (),
-    Shape.SHARED_PTR: ("shared_ptr",),
-    Shape.UNIQUE_PTR: ("unique_ptr",),
-    Shape.OPTIONAL: ("optional",),
     Shape.SHARED_ARRAY: ("shared_ptr", "array"),
     Shape.UNIQUE_ARRAY: ("unique_ptr", "array"),
     Shape.SHARED_BOUNDED_ARRAY: ("shared_ptr", "array2"),
-    Shape.SHARED_OPTIONAL: ("shared_ptr", "optional"),
-    Shape.UNIQUE_OPTIONAL: ("unique_ptr", "optional"),
-    Shape.OPTIONAL_SHARED_PTR: ("optional", "shared_ptr"),
-    Shape.OPTIONAL_UNIQUE_PTR: ("optional", "unique_ptr"),
+    **{shape: tuple(WRAPPERS[name][0] for name in shape.wrappers)
+       for shape in Shape if not shape.is_array},
 }
 
 @dataclass(frozen=True, order=True)
@@ -339,9 +332,10 @@ def can_move(thing, context):
                      context.leaf.movable)
 
 
-# The deepest stack a derivation makes: a request and a stored type have at
-# most this many layers around their element.
-DEPTH = 3
+# The deepest stack a derivation makes: a request has at most SHAPE_DEPTH
+# wrappers around its interface, which may be a layer of its own, such as an
+# alternative type.
+DEPTH = SHAPE_DEPTH + 1
 
 
 def transitions(thing, context):
@@ -397,18 +391,21 @@ def transitions(thing, context):
     # request owns when it cannot be copied.
     if thing.element == "leaf" and context.abstract:
         outer = LAYERS[layers[0]] if layers else None
-        if outer is None or (outer.shares_element and outer.copyable):
+        if outer is None or (len(layers) == 1 and outer.shares_element and
+                             outer.copyable):
             yield "upcast", replace(thing, element="interface")
-        elif outer.shares_element and thing.origin.owned:
+        elif len(layers) == 1 and outer.shares_element and thing.origin.owned:
             yield "upcast", replace(
                 thing, element="interface",
                 lifetimes=(Lifetime.REQUEST,) + thing.lifetimes[1:])
-        else:
-            # A copy of the layers above a handle that shares the leaf holds
-            # a handle of the interface: a new object, which shares the leaf.
+        elif len(layers) > 1:
+            # A copy of the layers above the handle that holds the leaf, the
+            # first of them to share it, holds a handle of the interface: a
+            # new object, which shares the leaf. A handle of a handle of the
+            # leaf is not one of a handle of the interface.
             depth = copied_layers(layers)
-            if 1 < depth <= len(layers) and all(
-                    LAYERS[name].copyable for name in layers[:depth]):
+            if depth == len(layers) and all(
+                    LAYERS[name].copyable for name in layers):
                 yield "upcast", replace(
                     thing, element="interface", origin=Origin.COPIED,
                     instance=False,
@@ -422,15 +419,20 @@ def transitions(thing, context):
             thing, lifetimes=(Lifetime.REQUEST,) * depth +
             thing.lifetimes[depth:], origin=Origin.COPIED,
             instance=thing.instance and depth <= len(layers))
-    # A new layer holding a value the request made, moved into it.
-    if (thing.origin is Origin.MADE and can_move(thing, context) and
-            len(layers) < DEPTH):
+    # A new layer holding what the request owns, moved into it: a value it
+    # made, or a copy that shares what it was copied of, such as a copy of a
+    # shared handle. What a scope keeps, or a copy of a value that shares
+    # nothing, is not wrapped: a new layer does not hold a copy of an
+    # instance, nor share one that no handle owns.
+    shares = thing.origin is Origin.COPIED and thing.instance
+    if ((thing.origin is Origin.MADE or shares) and
+            can_move(thing, context) and len(layers) < DEPTH):
         for made in LAYERS.values():
             if made.made_from_value and not (made.holds_element_only and
                                              layers):
                 yield "wrap", replace(
                     thing, layers=(made.name,) + layers,
-                    lifetimes=(Lifetime.REQUEST,) * (len(thing.lifetimes) + 1))
+                    lifetimes=(Lifetime.REQUEST,) + thing.lifetimes)
 
 
 # The known gaps of the library, as filters over what the rules allow.
@@ -476,9 +478,9 @@ GAPS = (
 
 def _holds_made_pointee(thing):
     """Whether a thing is what a pointer made for the request points to, or
-    holds it by value."""
+    holds it by value: its innermost layer is not a handle of it."""
     return thing.made_pointee and not (
-        thing.layers and LAYERS[thing.layers[0]].shares_element)
+        thing.layers and LAYERS[thing.layers[-1]].shares_element)
 
 
 def blocked(context, at, *event):

@@ -70,8 +70,10 @@ def write_report(path, cells, mismatches):
     ]
     for dimension in DIMENSIONS[:-1]:
         lines += report.counts_table(cells, DIMENSIONS, dimension)
-    patterns = [category.value.replace("X", shape.value) for shape in Shape
-                for category in Category]
+    present = {cell["cell"].rsplit("/", 1)[1] for cell in cells}
+    patterns = [pattern for pattern in (
+        category.value.replace("X", shape.value) for shape in Shape
+        for category in Category) if pattern in present]
     rows = {}
     for cell in cells:
         (container, scope, form, leaf, interfaces, selection, operation,

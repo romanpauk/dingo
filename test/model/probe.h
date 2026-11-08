@@ -217,7 +217,11 @@ template <typename T> struct instance<std::unique_ptr<T>> {
 
 template <typename T> struct instance<std::optional<T>> {
   static std::optional<T> make() {
-    if constexpr (dingo::type_traits<T>::enabled) {
+    if constexpr (is_optional_v<T>) {
+      return leaf_arguments<typename T::value_type>::apply([](auto... args) {
+        return std::optional<T>(std::in_place, std::in_place, args...);
+      });
+    } else if constexpr (dingo::type_traits<T>::enabled) {
       return std::optional<T>(instance<T>::make());
     } else {
       return leaf_arguments<T>::apply([](auto... args) {
@@ -325,10 +329,6 @@ template <typename X> using opt = std::optional<X>;
 template <typename X> using sp_array = std::shared_ptr<X[]>;
 template <typename X> using up_array = std::unique_ptr<X[]>;
 template <typename X> using sp_bounded_array = std::shared_ptr<X[2]>;
-template <typename X> using sp_opt = std::shared_ptr<std::optional<X>>;
-template <typename X> using up_opt = std::unique_ptr<std::optional<X>>;
-template <typename X> using opt_sp = std::optional<std::shared_ptr<X>>;
-template <typename X> using opt_up = std::optional<std::unique_ptr<X>>;
 } // namespace shape
 
 // The name of a type as the compiler spells it.

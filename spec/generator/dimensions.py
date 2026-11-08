@@ -78,6 +78,7 @@ class Outcome(Dimension):
     # none, and a different answer of the two containers; a request the
     # binding of another interface answers.
     PUBLISHED = "published"
+    COMPOSED = "composed"
     UNCONVERTIBLE = "unconvertible"
     UNPUBLISHED = "unpublished"
     DIVERGED = "diverged"

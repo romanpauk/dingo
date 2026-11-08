@@ -13,6 +13,7 @@
 #include <dingo/binding/binding_collection.h>
 #include <dingo/binding/binding_model.h>
 #include <dingo/binding/binding_resolution.h>
+#include <dingo/binding/request_composition.h>
 #include <dingo/context/resolution_context.h>
 #include <dingo/factory/factory_traits.h>
 #include <dingo/lookup/lookup_key.h>
@@ -201,14 +202,42 @@ inline constexpr bool adopts_request_pointer_v = [] {
   }
 }();
 
+template <typename Request, typename InterfaceBinding> struct composes_request;
+
+// Whether a binding resolves a request: one it publishes, a reference to a
+// value it places in the context or a pointer it adopts, or a wrapper it
+// composes.
+template <typename Request, typename InterfaceBinding>
+inline constexpr bool resolves_request_v =
+    binding_supports_request_v<Request, InterfaceBinding> ||
+    places_request_value_v<Request, InterfaceBinding> ||
+    adopts_request_pointer_v<Request, InterfaceBinding> ||
+    composes_request<Request, InterfaceBinding>::value;
+
+// Whether a binding composes a request of a wrapper it does not publish:
+// it resolves the value the wrapper holds, and makes the wrapper of it.
+template <typename Request, typename InterfaceBinding>
+constexpr bool composes_request_of() {
+  if constexpr (!composes_v<Request> ||
+                binding_supports_request_v<Request, InterfaceBinding> ||
+                places_request_value_v<Request, InterfaceBinding> ||
+                adopts_request_pointer_v<Request, InterfaceBinding>) {
+    return false;
+  } else {
+    return resolves_request_v<composed_inner_t<Request>, InterfaceBinding>;
+  }
+}
+
+template <typename Request, typename InterfaceBinding>
+struct composes_request
+    : std::bool_constant<composes_request_of<Request, InterfaceBinding>()> {};
+
 // The resolution of a request selected at compile time.
 template <typename Request, typename InterfaceBinding, typename Context>
 struct static_request_resolution
     : binding_supports_request<Request, InterfaceBinding> {
   static_assert(is_runtime_context_v<Context> ||
-                    binding_supports_request_v<Request, InterfaceBinding> ||
-                    places_request_value_v<Request, InterfaceBinding> ||
-                    adopts_request_pointer_v<Request, InterfaceBinding>,
+                    resolves_request_v<Request, InterfaceBinding>,
                 "static resolution cannot satisfy a request the storage "
                 "does not publish");
 };
@@ -233,6 +262,8 @@ public:
       return place_value<InterfaceBinding, Request>(scope, host, context);
     } else if constexpr (adopts_request_pointer_v<Request, InterfaceBinding>) {
       return adopt_pointer<InterfaceBinding, Request>(scope, host, context);
+    } else if constexpr (composes_request<Request, InterfaceBinding>::value) {
+      return compose_request<InterfaceBinding, Request>(scope, host, context);
     } else if constexpr (std::is_void_v<resolution>) {
       not_convertible<Request, InterfaceBinding>(context);
     } else if constexpr (!std::is_reference_v<Request> &&
@@ -293,6 +324,36 @@ private:
         resolve<InterfaceBinding, pointer_type>(scope, host, context);
     place_adopted_pointer(scope, context, pointer);
     return *pointer;
+  }
+
+  // Makes a wrapper of the value it holds, which it resolves. A reference or
+  // a pointer to the wrapper refers to one placed in the context.
+  template <typename InterfaceBinding, typename Request, typename Host,
+            typename Context, typename Scope>
+  Request compose_request(Scope scope, Host &host, Context &context) {
+    using wrapper = composed_type_t<Request>;
+    using inner = composed_inner_t<Request>;
+    if constexpr (!std::is_reference_v<Request> &&
+                  !std::is_pointer_v<Request>) {
+      return compose<wrapper>(
+          resolve<InterfaceBinding, inner>(scope, host, context));
+    } else {
+      if constexpr (!std::is_rvalue_reference_v<Request>) {
+        refuse_caller<InterfaceBinding, Request>(scope, context);
+      }
+      auto &value =
+          context.template construct_from<wrapper>(scope, [&]() -> wrapper {
+            return compose<wrapper>(
+                resolve<InterfaceBinding, inner>(scope, host, context));
+          });
+      if constexpr (std::is_pointer_v<Request>) {
+        return &value;
+      } else if constexpr (std::is_rvalue_reference_v<Request>) {
+        return std::move(value);
+      } else {
+        return value;
+      }
+    }
   }
 
   // What is placed in the context ends before the caller uses what a

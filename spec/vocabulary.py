@@ -3,6 +3,7 @@ of, an enum each. The value of a member is its name where the specification
 is written out, such as in a cell of a probe."""
 
 from enum import Enum
+import itertools
 
 
 class Dimension(str, Enum):
@@ -22,6 +23,29 @@ class Scope(Dimension):
     SHARED_CYCLICAL = "shared_cyclical"
 
 
+# The wrappers a stored form and a request shape compose, by the name of a
+# layer of each in a form: the layer of the semantics it is, its spelling
+# around what it holds, and the alias of test/model/probe.h that spells it.
+WRAPPERS = {
+    "shared": ("shared_ptr", "std::shared_ptr<{}>", "sp"),
+    "unique": ("unique_ptr", "std::unique_ptr<{}>", "up"),
+    "optional": ("optional", "std::optional<{}>", "opt"),
+}
+
+
+def _spelled(names, inner):
+    for name in reversed(names):
+        inner = WRAPPERS[name][1].format(inner)
+    return inner
+
+
+def _composed_forms():
+    """The stored forms of two wrappers, such as shared_optional for a
+    std::shared_ptr<std::optional<L>>."""
+    return {f"{outer}_{inner}".upper(): f"{outer}_{inner}"
+            for outer, inner in itertools.product(WRAPPERS, repeat=2)}
+
+
 class StoredForm(Dimension):
     """The type a registration stores, around its leaf."""
     PLAIN = "plain"
@@ -35,11 +59,16 @@ class StoredForm(Dimension):
     SHARED_BOUNDED_ARRAY_HANDLE = "shared_bounded_array_handle"
     OPTIONAL = "optional"
     ALTERNATIVE = "alternative"
-    # Two layers: a handle of an optional, and an optional of a handle.
-    SHARED_OPTIONAL = "shared_optional"
-    UNIQUE_OPTIONAL = "unique_optional"
-    OPTIONAL_SHARED_HANDLE = "optional_shared_handle"
-    OPTIONAL_UNIQUE_HANDLE = "optional_unique_handle"
+    # Two wrappers, outermost first.
+    locals().update(_composed_forms())
+
+    @property
+    def wrappers(self):
+        """The wrappers of a composed form, outermost first; none of
+        another."""
+        names = tuple(self.value.split("_"))
+        return names if len(names) == 2 and all(
+            name in WRAPPERS for name in names) else ()
 
     @property
     def is_dynamic_array(self):
@@ -81,6 +110,17 @@ class Selection(Dimension):
     KEYED = "keyed"
 
 
+# How many wrappers a request shape composes at most.
+SHAPE_DEPTH = 3
+
+
+def _composed_shapes():
+    """The shapes of two or more wrappers around the interface."""
+    return {"_".join(names).upper(): _spelled(names, "I")
+            for depth in range(2, SHAPE_DEPTH + 1)
+            for names in itertools.product(WRAPPERS, repeat=depth)}
+
+
 class Shape(Dimension):
     """What a request asks of a bound interface I."""
     OBJECT = "I"
@@ -90,22 +130,28 @@ class Shape(Dimension):
     SHARED_ARRAY = "std::shared_ptr<I[]>"
     UNIQUE_ARRAY = "std::unique_ptr<I[]>"
     SHARED_BOUNDED_ARRAY = "std::shared_ptr<I[2]>"
-    # The shapes of the two-layer stored forms, which only a registration of
-    # the form requests.
-    SHARED_OPTIONAL = "std::shared_ptr<std::optional<I>>"
-    UNIQUE_OPTIONAL = "std::unique_ptr<std::optional<I>>"
-    OPTIONAL_SHARED_PTR = "std::optional<std::shared_ptr<I>>"
-    OPTIONAL_UNIQUE_PTR = "std::optional<std::unique_ptr<I>>"
+    # Two wrappers or more, outermost first.
+    locals().update(_composed_shapes())
 
     @property
-    def is_nested(self):
-        return any(self in shapes for shapes in NESTED_SHAPES.values())
+    def wrappers(self):
+        """The wrappers the shape composes, outermost first; none of an
+        array or of the interface itself."""
+        return () if self.is_array else _wrappers_of(self)
+
+    @property
+    def depth(self):
+        return len(self.wrappers)
 
     @property
     def holds_optional(self):
         """Whether an optional holds the interface itself."""
-        return self in (Shape.OPTIONAL, Shape.SHARED_OPTIONAL,
-                        Shape.UNIQUE_OPTIONAL)
+        return self.wrappers[-1:] == ("optional",)
+
+    @property
+    def holds_unique(self):
+        """Whether a unique_ptr holds the interface itself."""
+        return self.wrappers[-1:] == ("unique",)
 
     @property
     def is_array(self):
@@ -119,13 +165,29 @@ class Shape(Dimension):
         return self is Shape.OPTIONAL
 
 
-# The shapes a two-layer stored form is requested as: its own, and that of
-# the shared handle a unique handle of it converts to.
+def _wrappers_of(shape):
+    names = []
+    rest = shape.value
+    while rest != "I":
+        name = next(name for name, (_, spelled, _) in WRAPPERS.items()
+                    if rest.startswith(spelled.split("{}")[0]))
+        names.append(name)
+        rest = rest[len(WRAPPERS[name][1].split("{}")[0]):-1]
+    return tuple(names)
+
+
+def shape_of(wrappers):
+    """The shape that composes the wrappers, outermost first."""
+    return Shape(_spelled(wrappers, "I"))
+
+
+# The shapes a stored form of two wrappers is requested as: its own, and that
+# of the shared handle a unique handle of it converts to.
 NESTED_SHAPES = {
-    StoredForm.SHARED_OPTIONAL: (Shape.SHARED_OPTIONAL,),
-    StoredForm.UNIQUE_OPTIONAL: (Shape.UNIQUE_OPTIONAL, Shape.SHARED_OPTIONAL),
-    StoredForm.OPTIONAL_SHARED_HANDLE: (Shape.OPTIONAL_SHARED_PTR,),
-    StoredForm.OPTIONAL_UNIQUE_HANDLE: (Shape.OPTIONAL_UNIQUE_PTR,),
+    form: (shape_of(form.wrappers),) + (
+        (shape_of(("shared",) + form.wrappers[1:]),)
+        if form.wrappers[0] == "unique" else ())
+    for form in StoredForm if form.wrappers
 }
 
 

@@ -10,7 +10,7 @@ from spec.vocabulary import (NESTED_SHAPES, Answer, Container, Entry,
 
 from . import cover, driver
 from .dimensions import Keeps, Outcome
-from .model import SHAPES, Interface, Probe, grammar
+from .model import COMPOSED_SHAPES, SHAPES, Interface, Probe, grammar
 
 # The leaves a registration stores.
 LEAVES = (Leaf.COPYABLE, Leaf.MOVE_ONLY, Leaf.IMMOVABLE, Leaf.FACTORY)
@@ -102,10 +102,26 @@ class Registration:
                 if position is None or operation.position is position
                 for request in requests]
 
+    @property
+    def composes(self):
+        """Whether the registration is requested as every shape of two
+        wrappers too: one of a leaf that can be moved, stored plainly or in
+        one wrapper, declared and selected plainly."""
+        return (self.form in (StoredForm.PLAIN, StoredForm.SHARED_HANDLE,
+                              StoredForm.UNIQUE_HANDLE, StoredForm.OPTIONAL)
+                and self.leaf in (Leaf.COPYABLE, Leaf.MOVE_ONLY) and
+                self.interfaces_declared is InterfaceSet.DEFAULT and
+                self.selection is Selection.PLAIN)
+
     def grammar(self, interfaces):
-        """The requests of the grammar over interfaces, with the shape of
-        the stored form when it has two layers."""
-        return grammar(interfaces, SHAPES + NESTED_SHAPES.get(self.form, ()))
+        """The requests of the grammar over interfaces: with the shapes of
+        the stored form when it has two wrappers, and every shape of two
+        wrappers when the registration composes."""
+        shapes = SHAPES + NESTED_SHAPES.get(self.form, ())
+        if self.composes:
+            shapes += tuple(shape for shape in COMPOSED_SHAPES
+                            if shape not in shapes)
+        return grammar(interfaces, shapes)
 
     def cell(self, probe):
         return "/".join((self.container, self.scope, self.form, self.leaf,

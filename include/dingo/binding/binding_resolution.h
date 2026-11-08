@@ -10,6 +10,7 @@
 #include <dingo/base/exceptions.h>
 #include <dingo/base/type_descriptor.h>
 #include <dingo/binding/binding_selection.h>
+#include <dingo/binding/request_composition.h>
 #include <dingo/binding/runtime_binding_interface.h>
 #include <dingo/context/resolution_context.h>
 #include <dingo/resolution/resolution_operation.h>
@@ -87,11 +88,57 @@ constexpr bool matches_resolution_request(type_descriptor requested_type) {
 
 template <typename T, typename RTTI, typename Binding, typename Context>
 T resolve_binding_request(construction_scope scope, Binding &binding,
-                          Context &context, const void *cache_key = nullptr) {
+                          Context &context, const void *cache_key = nullptr);
+
+namespace detail {
+// Makes a wrapper the binding does not publish of the value it holds, which
+// it resolves through the binding, and places it in the context. A
+// reference or a pointer to it is refused to the caller, which uses what is
+// returned to it after the context ends.
+template <typename T, typename RTTI, typename Binding, typename Context>
+resolved_address compose_binding_request(void *erased, construction_scope scope,
+                                         void *erased_context) {
+  using wrapper = composed_type_t<T>;
+  using inner = composed_inner_t<T>;
+  auto &binding = *static_cast<Binding *>(erased);
+  auto &context = *static_cast<Context *>(erased_context);
+  constexpr bool refers = std::is_lvalue_reference_v<T> || std::is_pointer_v<T>;
+  if constexpr (refers) {
+    if (scope.is_caller()) {
+      throw_type_not_convertible(described_type_v<T>, described_type_v<inner>,
+                                 context);
+    }
+  }
+  auto &value =
+      context.template construct_from<wrapper>(scope, [&]() -> wrapper {
+        return compose<wrapper>(
+            resolve_binding_request<inner, RTTI>(scope, binding, context));
+      });
+  return {std::addressof(value), refers
+                                     ? resolved_address::access_kind::borrow
+                                     : resolved_address::access_kind::consume};
+}
+
+template <typename T, typename RTTI, typename Binding, typename Context>
+constexpr typename instance_request<RTTI>::compose_function composer() {
+  if constexpr (composes_v<T>) {
+    return &compose_binding_request<T, RTTI, Binding, Context>;
+  } else {
+    return nullptr;
+  }
+}
+} // namespace detail
+
+// Resolves a request through a binding. A wrapper the binding does not
+// publish is composed of the value it holds.
+template <typename T, typename RTTI, typename Binding, typename Context>
+T resolve_binding_request(construction_scope scope, Binding &binding,
+                          Context &context, const void *cache_key) {
   return detail::convert_resolved_binding<T>(binding.resolve_request(
       scope, context,
       {RTTI::template get_type_index<request_lookup_type_t<T>>(),
-       detail::described_type_v<T>},
+       detail::described_type_v<T>,
+       detail::composer<T, RTTI, Binding, Context>()},
       cache_key));
 }
 

@@ -18,6 +18,7 @@ import threading
 import jinja2
 
 from .dimensions import Outcome
+from .model import spell_shape, spell_stored
 
 # The headers of the probes, which their programs include as model/<header>.
 HEADERS = Path(__file__).parents[2] / "test" / "model"
@@ -29,6 +30,7 @@ TEMPLATES = jinja2.Environment(
     lstrip_blocks=True,
     keep_trailing_newline=True,
 )
+TEMPLATES.globals.update(spell_shape=spell_shape, spell_stored=spell_stored)
 
 PROBE_MARKER = re.compile(r"^\s*// probe (\d+)$")
 END_MARKER = "// probes end"

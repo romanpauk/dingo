@@ -343,15 +343,15 @@ private:
     }
   }
 
-  // The request itself if its binding publishes it, otherwise its normalized
-  // value.
+  // The request itself if its binding resolves it, by publishing or
+  // composing it, otherwise its normalized value.
   template <typename Request, typename R, typename Selection, typename Context,
             typename Scope>
   R resolve_exact_or_normalized(Selection, Scope scope, Context &context) {
     constexpr bool exact = [] {
       if constexpr (Selection::status == binding_status::found) {
-        return binding_supports_request_v<typename Request::user_type,
-                                          typename Selection::binding_type>;
+        return resolves_request_v<typename Request::user_type,
+                                  typename Selection::binding_type>;
       } else {
         return false;
       }

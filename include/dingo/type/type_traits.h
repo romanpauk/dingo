@@ -689,7 +689,13 @@ struct type_traits<std::optional<T>> : semantics::optional_value {
   static std::optional<T> make_empty() { return std::nullopt; }
 
   template <typename... Args> static std::optional<T> make(Args &&...args) {
-    if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
+    // An optional of an optional is made in place too, as its element may
+    // be moved neither in it nor out of it.
+    if constexpr (is_optional_type_v<T> &&
+                  std::is_constructible_v<T, std::in_place_t, Args...>)
+      return std::optional<T>{std::in_place, std::in_place,
+                              std::forward<Args>(args)...};
+    else if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
       return std::optional<T>{
           std::in_place, detail::make_nested<T>(std::forward<Args>(args)...)};
     else if constexpr (std::is_constructible_v<T, Args...>)

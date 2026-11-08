@@ -49,11 +49,11 @@ Run a quality target with `cmake --build build -t <target>`.
   [Complexity Report](#complexity-report).
 - `conversion-check`: checks what the conversion layer of every registration
   publishes against the [Specification](specification.md#conversion-check), in
-  seconds; it is part of `check` with GCC and clang.
+  about a minute; it is part of `check` with GCC and clang.
 - `model-check-small`, `model-check-medium`, `model-check-large`: run both model
   probes of the [Specification](specification.md), on a cover of their
-  dimensions: small every pair of their values, in about six minutes; medium
-  every three, in about twenty; large every combination, which takes longer
+  dimensions: small every pair of their values, in about eight minutes; medium
+  every three, in about twenty-five; large every combination, which takes longer
   still. They fail on a defect and read the diagnostics of GCC and clang;
   `model-check-small` is part of `check` with them. See
   [Model Checks](#model-checks).

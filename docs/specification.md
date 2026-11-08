@@ -23,6 +23,15 @@ does not resolve the static container rejects as it compiles, except a request
 for the alternative an alternative type does not hold; the runtime container
 throws `type_not_convertible`, except for what the types of a request rule out.
 
+Stored forms and request shapes are compositions of `std::shared_ptr`,
+`std::unique_ptr` and `std::optional`. A new layer holds what the request owns,
+moved into it: a value made for the request, or a copy that shares what it was
+copied of, such as a copy of a shared handle, which refers to the same object.
+What a scope keeps that shares nothing gets no new layer, as a copy of it is not
+the instance: a `shared` scope that keeps a `T` gives no `std::shared_ptr<T>`
+and no `std::optional<T>` of it, while one that keeps a `std::shared_ptr<T>`
+gives a `std::optional<std::shared_ptr<T>>`, which shares the `T`.
+
 ## Limitations
 
 What the library does not do, although the semantics allow it, is a named
@@ -61,11 +70,13 @@ program first checks that the library binds exactly those types. The requests
 are every shape of every bound interface `I`: `I`, `std::shared_ptr<I>`,
 `std::unique_ptr<I>`, `std::optional<I>`, `std::shared_ptr<I[]>` and
 `std::unique_ptr<I[]>`, each by value, `const`, as `&`, `const &`, `&&`, `*` and
-`const *`. A registration of a stored form of two layers, such as
+`const *`. A registration of a stored form of two wrappers, such as
 `std::shared_ptr<std::optional<L>>`, requests its own shape too, and a unique
-handle of one the shape of the shared handle it converts to. A request that is
-not valid C++, such as an abstract type held by value, is recorded as invalid
-with the reason.
+handle of one the shape of the shared handle it converts to; a registration of a
+leaf that can be moved, stored plainly or in one wrapper and selected plainly,
+requests every shape of two wrappers, such as
+`std::optional<std::shared_ptr<I>>`. A request that is not valid C++, such as an
+abstract type held by value, is recorded as invalid with the reason.
 
 Each request is made through every entry point, `resolve`, `invoke` and
 `construct`, in four positions: itself; as the dependency of the constructor of
@@ -99,20 +110,21 @@ registration binds other interfaces than the specification says.
 A cover probes a covering array of the registrations the specification says the
 library accepts: every combination of values of two (small) or three (medium) of
 scope, stored form, leaf, interfaces declared and selection that such a
-registration holds is probed in both containers, with 62 or 200 of the 2160
+registration holds is probed in both containers, with 82 or 260 of the 2880
 registrations (large). A registration the library does not accept resolves
 nothing, so it covers nothing.
 
 ## Conversion Check
 
 [`spec/conversion.py`](../spec/conversion.py) asks the conversion layer of every
-registration the library accepts what it publishes for every request of the
-grammar, as the code compiles: whether the request lists of the static container
-select a resolution of the request, whether the descriptors the runtime
-container dispatches on select the same one, and whether its conversion is
-available ([`test/model/conversion.h`](../test/model/conversion.h)). No
-container is made and nothing resolves, so every registration is checked, many
-in a program, in seconds.
+registration the library accepts what it publishes for every request of every
+shape of up to three wrappers, as the code compiles: whether the request lists
+of the static container select a resolution of the request, whether the
+descriptors the runtime container dispatches on select the same one, and whether
+its conversion is available, and whether it composes a wrapper it does not
+publish ([`test/model/conversion.h`](../test/model/conversion.h)). No container
+is made and nothing resolves, so every registration is checked, many in a
+program, in about a minute.
 
 A published request has to be one the specification, with the limitations of the
 library, resolves in some position, and a request it resolves for the caller has

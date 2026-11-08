@@ -3,7 +3,49 @@ the requests of the grammar over them, and a probe of a request."""
 
 from dataclasses import dataclass, field
 
-from spec.vocabulary import Category, Shape
+from spec.vocabulary import WRAPPERS, Category, Shape, StoredForm
+
+# The type each stored form stores around a leaf L that is not a composition
+# of wrappers.
+STORED = {
+    StoredForm.PLAIN: "L",
+    StoredForm.REFERENCE: "L &",
+    StoredForm.POINTER: "L *",
+    StoredForm.BOUNDED_ARRAY: "L[2]",
+    StoredForm.UNIQUE_HANDLE: "std::unique_ptr<L>",
+    StoredForm.UNIQUE_ARRAY_HANDLE: "std::unique_ptr<L[]>",
+    StoredForm.SHARED_HANDLE: "std::shared_ptr<L>",
+    StoredForm.SHARED_ARRAY_HANDLE: "std::shared_ptr<L[]>",
+    StoredForm.SHARED_BOUNDED_ARRAY_HANDLE: "std::shared_ptr<L[2]>",
+    StoredForm.OPTIONAL: "std::optional<L>",
+    StoredForm.ALTERNATIVE: "std::variant<L, other>",
+}
+
+# The alias templates of test/model/probe.h that spell an array shape.
+ARRAY_ALIASES = {
+    Shape.SHARED_ARRAY: "sp_array",
+    Shape.UNIQUE_ARRAY: "up_array",
+    Shape.SHARED_BOUNDED_ARRAY: "sp_bounded_array",
+}
+
+
+def spell_stored(form):
+    """The type a stored form stores around a leaf L."""
+    if form in STORED:
+        return STORED[form]
+    spelled = "L"
+    for name in reversed(form.wrappers):
+        spelled = WRAPPERS[name][1].format(spelled)
+    return spelled
+
+
+def spell_shape(shape, inner):
+    """A shape around the type inner, in the aliases of probe.h."""
+    if shape in ARRAY_ALIASES:
+        return f"shape::{ARRAY_ALIASES[shape]}<{inner}>"
+    for name in reversed(shape.wrappers):
+        inner = f"shape::{WRAPPERS[name][2]}<{inner}>"
+    return inner
 
 
 @dataclass(frozen=True, order=True)
@@ -50,15 +92,19 @@ class Request:
         if self.interface.array:
             if self.shape is Shape.OBJECT and by_value:
                 return "an array cannot be returned by value"
-            if self.shape is Shape.OPTIONAL:
+            if self.shape.holds_optional:
                 return "an optional cannot hold an array"
-            if self.shape is Shape.UNIQUE_PTR:
+            if self.shape.holds_unique:
                 return "a unique_ptr deletes an array as an object"
         return None
 
 
-# The shapes every unit requests.
-SHAPES = tuple(shape for shape in Shape if not shape.is_nested)
+# The shapes every unit requests: the interface, a wrapper of it, and an
+# array of it.
+SHAPES = tuple(shape for shape in Shape if shape.depth <= 1)
+
+# The shapes of two wrappers, which some units request too.
+COMPOSED_SHAPES = tuple(shape for shape in Shape if shape.depth == 2)
 
 
 def grammar(interfaces, shapes=SHAPES):

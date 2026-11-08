@@ -16,19 +16,26 @@
 #include <cassert>
 
 namespace dingo {
-template <typename RTTI> struct instance_request {
-  using type_index = typename RTTI::type_index;
-
-  type_index lookup_type;
-  type_descriptor requested_type;
-};
-
 struct resolved_address {
   void *address;
   enum class access_kind {
     borrow,
     consume,
   } access;
+};
+
+template <typename RTTI> struct instance_request {
+  using type_index = typename RTTI::type_index;
+  // Composes a wrapper the binding does not publish of the value it holds,
+  // which it resolves through the binding, into the context.
+  using compose_function = resolved_address (*)(void *binding,
+                                                construction_scope scope,
+                                                void *context);
+
+  type_index lookup_type;
+  type_descriptor requested_type;
+  // Called only when the binding does not publish the request.
+  compose_function compose = nullptr;
 };
 
 template <typename RTTI, typename Context> class runtime_binding_interface {

@@ -8,10 +8,11 @@ from dataclasses import dataclass
 
 from spec import semantics
 from spec.vocabulary import (Container, Entry, InterfaceSet, Leaf, Position,
-                             Scope, Selection, StoredForm)
+                             Scope, Selection, Shape, StoredForm)
 
 from . import driver
 from .dimensions import Outcome
+from .model import grammar
 from .registrations import LEAVES, Registration
 
 
@@ -23,6 +24,10 @@ class Unit(Registration):
     def base(self):
         return "/".join((self.scope, self.form, self.leaf,
                          self.interfaces_declared))
+
+    def grammar(self, interfaces):
+        """Every shape of the vocabulary, to its depth."""
+        return grammar(interfaces, tuple(Shape))
 
     def requests(self):
         return [request for request in self.grammar(self.interfaces())
@@ -121,10 +126,10 @@ def apply_semantics(cells, units):
             continue
         anywhere, for_caller = expected
         outcome = Outcome(cell["outcome"])
-        if outcome is Outcome.PUBLISHED and not anywhere:
+        if outcome in (Outcome.PUBLISHED, Outcome.COMPOSED) and not anywhere:
             cell.update(outcome=Outcome.UNEXPECTED.value,
-                        error="published, which the specification resolves "
-                        "nowhere")
+                        error=f"{outcome.value}, which the specification "
+                        "resolves nowhere")
         elif (outcome in (Outcome.UNPUBLISHED, Outcome.UNCONVERTIBLE) and
               for_caller):
             cell.update(outcome=Outcome.UNEXPECTED.value,

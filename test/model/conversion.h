@@ -54,13 +54,15 @@ template <typename Head, typename... Tail>
 struct resolution_at_available<0, type_list<Head, Tail...>>
     : conversion_available<typename Head::operation> {};
 
-// Records a request of Interface the binding of a storage answers: published
-// when its resolution is selected and its conversion available, unconvertible
-// when the conversion is not, unpublished when no resolution is selected, and
-// diverged when the two containers select differently. A request the lookup
-// sends to the binding of another interface is answered there.
-template <typename Storage, typename Interface, typename Request>
+// Records a request of Interface the binding of a registration answers:
+// published when its resolution is selected and its conversion available,
+// unconvertible when the conversion is not, composed when it is a wrapper the
+// binding makes of a value it resolves, unpublished when it is none of
+// these, and diverged when the two containers select differently. A request
+// the lookup sends to the binding of another interface is answered there.
+template <typename Model, typename Interface, typename Request>
 void publication(const std::string &prefix, const char *name) {
+  using Storage = typename Model::storage_type;
   using type = unannotated_t<Interface>;
   using resolutions = typename detail::binding_resolutions<type, Storage>::type;
   using selected = typename detail::matching_binding_resolution<
@@ -79,7 +81,12 @@ void publication(const std::string &prefix, const char *name) {
                   : "the runtime container selects a resolution, the static "
                     "container none");
   } else if constexpr (!listed) {
-    record(cell.c_str(), "unpublished", nullptr);
+    if constexpr (detail::composes_request<
+                      Request, detail::binding<type, Model>>::value) {
+      record(cell.c_str(), "composed", nullptr);
+    } else {
+      record(cell.c_str(), "unpublished", nullptr);
+    }
   } else if constexpr (!conversion_available<
                            typename selected::operation>::value ||
                        !resolution_at_available<index, resolutions>::value) {

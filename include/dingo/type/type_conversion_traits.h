@@ -693,14 +693,29 @@ constexpr auto held_alternative_path() {
   }
 }
 
+// Whether an optional value holds exactly the source, rather than what the
+// source borrows.
+template <typename Target, typename Source>
+inline constexpr bool wraps_exactly_v = [] {
+  if constexpr (is_value_wrapper_type_v<remove_cvref_t<Target>>) {
+    return std::is_same_v<std::remove_cv_t<typename type_traits<
+                              remove_cvref_t<Target>>::value_type>,
+                          remove_cvref_t<Source>>;
+  } else {
+    return false;
+  }
+}();
+
 // An optional value made of the source, or of the element of a source
-// optional value.
+// optional value. A source that borrows an optional value is held as itself
+// only by an optional of exactly it.
 template <typename Target, typename Source, typename Access>
 constexpr auto wrap_optional_path() {
   constexpr bool of_element = is_value_wrapper_type_v<Source>;
   if constexpr (is_structural_conversion_target_v<Target> &&
                 is_value_wrapper_type_v<Target> &&
-                (of_element || !borrows_value_wrapper_v<Source>)) {
+                (of_element || !borrows_value_wrapper_v<Source> ||
+                 wraps_exactly_v<Target, Source>)) {
     using inner =
         path_t<typename type_traits<std::remove_cv_t<Target>>::value_type,
                typename wrapper_element_source<Source>::type, Access>;
@@ -833,7 +848,34 @@ using held_t =
 
 // A new owning handle of a consumed value: of an object, of a wrapper, or an
 // array of it, the rest of a bounded one value-initialized. A pointer is not
-// held: a handle takes it over instead.
+// held: a handle takes it over instead. A wrapper is held as itself only by a
+// handle of it; another handle is made of what the wrapper holds.
+template <typename Target, typename Source>
+inline constexpr bool boxes_source_v = [] {
+  using source_type = remove_cvref_t<Source>;
+  if constexpr (!type_traits<source_type>::enabled) {
+    return true;
+  } else if constexpr (!type_traits<remove_cvref_t<Target>>::enabled) {
+    return false;
+  } else {
+    return std::is_same_v<std::remove_cv_t<typename type_traits<
+                              remove_cvref_t<Target>>::value_type>,
+                          source_type>;
+  }
+}();
+
+// Whether a handle of the kind of Target can be made of a held value: asked
+// only of one that can exist, as asking it of another instantiates it.
+template <typename Target, typename Held> constexpr bool box_makeable() {
+  if constexpr (is_formable_v<Held>) {
+    return handle_makeable<
+        typename type_traits<remove_cvref_t<Target>>::template rebind_t<Held>,
+        Held>::value;
+  } else {
+    return false;
+  }
+}
+
 template <typename Target, typename Source, typename Access>
 constexpr auto box_path() {
   using source_type = remove_cvref_t<Source>;
@@ -845,10 +887,9 @@ constexpr auto box_path() {
                 std::is_object_v<source_type> &&
                 !std::is_pointer_v<source_type> &&
                 !std::is_array_v<source_type> &&
-                !type_traits<source_type>::enabled) {
+                boxes_source_v<Target, Source>) {
     using held = held_t<Target, Source>;
-    using handle = typename type_traits<target_type>::template rebind_t<held>;
-    if constexpr (is_formable_v<held> && handle_makeable<handle, held>::value) {
+    if constexpr (box_makeable<Target, held>()) {
       using inner = path_t<held, Source, Access>;
       return available_t<conversion_wrap<box<held>, Target, inner>, inner>{};
     } else {
