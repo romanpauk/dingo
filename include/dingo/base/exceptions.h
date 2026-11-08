@@ -97,35 +97,29 @@ void append_active_type_text(std::string &message, const Context &context) {
   }
 }
 
-template <typename Request>
-type_not_found_exception make_type_not_found_exception() {
-  std::string message = "type not found: ";
-  append_type_name(message, describe_type<Request>());
-  return type_not_found_exception(std::move(message));
-}
+// The messages name types by their descriptors, so that a message is made by
+// one function for every type it names, rather than by one per type.
 
-template <typename Request, typename Context>
-type_not_found_exception make_type_not_found_exception(const Context &context) {
-  std::string message = "type not found: ";
-  append_type_name(message, describe_type<Request>());
-  append_type_path_text(message, context);
-  return type_not_found_exception(std::move(message));
-}
-
+// The index type of a lookup key, or null for a key without one.
 template <typename Selector>
-void append_lookup_key_text(std::string &message,
-                            const lookup_key<Selector> &) {
-  if constexpr (!std::is_same_v<Selector, key_type<none_t>>) {
-    append_text(message, " (index type: ", describe_type<Selector>(), ")");
+constexpr const type_descriptor *
+lookup_key_index_type(const lookup_key<Selector> &) {
+  if constexpr (std::is_same_v<Selector, key_type<none_t>>) {
+    return nullptr;
+  } else {
+    return &described_type_v<Selector>;
   }
 }
 
-template <typename Request, typename Context, typename LookupKey>
-type_not_found_exception make_type_not_found_exception(const Context &context,
-                                                       const LookupKey &key) {
+template <typename Context>
+type_not_found_exception
+make_type_not_found_exception(type_descriptor request, const Context &context,
+                              const type_descriptor *index_type) {
   std::string message = "type not found: ";
-  append_type_name(message, describe_type<Request>());
-  append_lookup_key_text(message, key);
+  append_type_name(message, request);
+  if (index_type != nullptr) {
+    append_text(message, " (index type: ", *index_type, ")");
+  }
   append_type_path_text(message, context);
   return type_not_found_exception(std::move(message));
 }
@@ -138,10 +132,11 @@ type_not_found_exception make_collection_type_not_found_exception() {
   return type_not_found_exception(std::move(message));
 }
 
-template <typename Request, typename Context>
-type_ambiguous_exception make_type_ambiguous_exception(const Context &context) {
+template <typename Context>
+type_ambiguous_exception make_type_ambiguous_exception(type_descriptor request,
+                                                       const Context &context) {
   std::string message = "type resolution is ambiguous: ";
-  append_type_name(message, describe_type<Request>());
+  append_type_name(message, request);
   append_active_type_text(message, context);
   return type_ambiguous_exception(std::move(message));
 }
@@ -177,53 +172,44 @@ type_recursion_exception make_type_recursion_exception(const Context &context) {
   return type_recursion_exception(std::move(message));
 }
 
-template <typename Selector>
-void append_lookup_already_registered_key_text(std::string &message,
-                                               const lookup_key<Selector> &) {
-  if constexpr (std::is_same_v<Selector, key_type<none_t>>) {
-    append_text(message, ", key type ", describe_type<none_t>());
+// The key type a registration is looked up by: the type of the key it is
+// registered with, or the selector of its lookup key.
+template <typename BackendKey, typename Selector>
+constexpr type_descriptor registration_key_type(const lookup_key<Selector> &) {
+  if constexpr (!std::is_same_v<std::decay_t<BackendKey>, none_t>) {
+    return describe_type<std::decay_t<BackendKey>>();
+  } else if constexpr (std::is_same_v<Selector, key_type<none_t>>) {
+    return describe_type<none_t>();
   } else {
-    append_text(message, ", key type ", describe_type<Selector>());
+    return describe_type<Selector>();
   }
 }
 
-template <typename Interface, typename Storage, typename LookupKey,
-          typename BackendKey>
-std::string make_lookup_registration_message(const char *prefix,
-                                             const LookupKey &key,
-                                             const BackendKey &) {
+inline std::string make_lookup_registration_message(const char *prefix,
+                                                    type_descriptor interface,
+                                                    type_descriptor storage,
+                                                    type_descriptor key_type) {
   std::string message = prefix;
-  append_text(message, describe_type<Interface>(), ", storage ",
-              describe_type<Storage>());
-  if constexpr (std::is_same_v<std::decay_t<BackendKey>, none_t>) {
-    append_lookup_already_registered_key_text(message, key);
-  } else {
-    append_text(message, ", key type ",
-                describe_type<std::decay_t<BackendKey>>());
-  }
+  append_text(message, interface, ", storage ", storage, ", key type ",
+              key_type);
   return message;
 }
 
-template <typename Interface, typename Storage, typename LookupKey,
-          typename BackendKey>
-lookup_already_registered_exception
-make_lookup_already_registered_exception(const LookupKey &key,
-                                         const BackendKey &backend_key) {
-  return lookup_already_registered_exception(
-      make_lookup_registration_message<Interface, Storage>(
-          "lookup already registered: interface ", key, backend_key));
+inline lookup_already_registered_exception
+make_lookup_already_registered_exception(type_descriptor interface,
+                                         type_descriptor storage,
+                                         type_descriptor key_type) {
+  return lookup_already_registered_exception(make_lookup_registration_message(
+      "lookup already registered: interface ", interface, storage, key_type));
 }
 
-template <typename Interface, typename Storage, typename LookupKey,
-          typename BackendKey>
-container_sealed_exception
-make_container_sealed_exception(const LookupKey &key,
-                                const BackendKey &backend_key) {
-  return container_sealed_exception(
-      make_lookup_registration_message<Interface, Storage>(
-          "container sealed by resolve, lookup can not be replaced: "
-          "interface ",
-          key, backend_key));
+inline container_sealed_exception
+make_container_sealed_exception(type_descriptor interface,
+                                type_descriptor storage,
+                                type_descriptor key_type) {
+  return container_sealed_exception(make_lookup_registration_message(
+      "container sealed by resolve, lookup can not be replaced: interface ",
+      interface, storage, key_type));
 }
 
 } // namespace detail

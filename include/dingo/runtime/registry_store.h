@@ -734,19 +734,18 @@ protected:
     return std::get<index>(keys).value();
   }
 
-  template <typename TypeInterface, typename TypeStorage, typename LookupKey,
-            typename KeyArg>
+  // A registration the lookup rejects, named by its descriptors.
   static void check_lookup_commit(lookup_commit result,
-                                  const LookupKey &lookup_key,
-                                  const KeyArg &key_arg) {
+                                  type_descriptor interface,
+                                  type_descriptor storage,
+                                  type_descriptor key_type) {
     if (result == lookup_commit::rejected) {
-      throw detail::make_lookup_already_registered_exception<
-          TypeInterface, typename TypeStorage::type>(lookup_key, key_arg);
+      throw detail::make_lookup_already_registered_exception(interface, storage,
+                                                             key_type);
     }
     if (result == lookup_commit::sealed) {
-      throw detail::make_container_sealed_exception<TypeInterface,
-                                                    typename TypeStorage::type>(
-          lookup_key, key_arg);
+      throw detail::make_container_sealed_exception(interface, storage,
+                                                    key_type);
     }
   }
 
@@ -766,10 +765,12 @@ protected:
         record_lookup_rollback<LookupEntry>(transaction, state, handle,
                                             key_arg);
       } else {
-        check_lookup_commit<TypeInterface, TypeStorage>(
-            replace_lookup<LookupEntry>(transaction, state, handle, key_arg,
-                                        std::move(value)),
-            lookup_key, key_arg);
+        check_lookup_commit(replace_lookup<LookupEntry>(transaction, state,
+                                                        handle, key_arg,
+                                                        std::move(value)),
+                            describe_type<TypeInterface>(),
+                            describe_type<typename TypeStorage::type>(),
+                            detail::registration_key_type<KeyArg>(lookup_key));
       }
     } else {
       auto handle =

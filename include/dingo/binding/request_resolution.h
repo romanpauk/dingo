@@ -202,8 +202,9 @@ struct request_resolution {
         if constexpr (default_factory_makes<Request, R>::value) {
           return construct_unbound<Request, R>(host, scope, context, factory);
         } else {
-          throw make_type_not_found_exception<typename Request::lookup_type>(
-              context, key);
+          throw make_type_not_found_exception(
+              describe_type<typename Request::lookup_type>(), context,
+              lookup_key_index_type(key));
         }
       } else if constexpr (decltype(is_bound(exact))::value ||
                            decltype(is_bound(value))::value) {
@@ -251,8 +252,9 @@ struct request_resolution {
                                           constructor_shape>(scope, root);
       }
     }
-    throw make_type_not_found_exception<typename Request::lookup_type>(context,
-                                                                       key);
+    throw make_type_not_found_exception(
+        describe_type<typename Request::lookup_type>(), context,
+        lookup_key_index_type(key));
   }
 
 private:

@@ -275,10 +275,19 @@ inline void append_described_type_name(std::string &name,
 
 } // namespace detail
 
-template <typename T> constexpr type_descriptor describe_type() {
-  auto descriptor = detail::make_type_descriptor<std::remove_reference_t<T>>();
-  descriptor.reference = detail::make_type_reference_kind<T>();
+namespace detail {
+// The descriptor of a type, made once at compile time: a function computing
+// it would be emitted for every type a message names.
+template <typename T>
+inline constexpr type_descriptor described_type_v = [] {
+  auto descriptor = make_type_descriptor<std::remove_reference_t<T>>();
+  descriptor.reference = make_type_reference_kind<T>();
   return descriptor;
+}();
+} // namespace detail
+
+template <typename T> constexpr type_descriptor describe_type() {
+  return detail::described_type_v<T>;
 }
 
 inline void append_type_name(std::string &name, type_descriptor descriptor) {
