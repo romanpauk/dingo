@@ -65,9 +65,9 @@ than being nested inside the stored wrapper again. Storage stability remains a
 separate property controlling reference and pointer lifetime.
 
 Publication finds the conversion from the source to the target as a path of
-operations, the operations the [specification](../development.md#specification)
-derives a request by. An operation is applied to the source, unwraps it before
-an inner conversion, or wraps what an inner conversion returns:
+operations, the operations the [specification](../specification.md) derives a
+request by. An operation is applied to the source, unwraps it before an inner
+conversion, or wraps what an inner conversion returns:
 
 - `conversion_leaf`: the source itself, a reference to it or to its base, its
   address, the pointer an array decays to, a pointer to the array an owning

@@ -150,6 +150,8 @@ When working from a checkout, the top-level CMake project also supports
   extension traits, and conversion rules.
 - [Examples](docs/examples.md): a guided index of runnable examples in
   [`examples/`](examples).
+- [Specification](docs/specification.md): what the library should do, its known
+  limitations, and the probes that compare the library with it.
 - [Development](docs/development.md): local development builds, repo tooling,
   Markdown verification, and CI container notes.
 - [Motivation and History](docs/history.md): background on how the library
@@ -170,7 +172,7 @@ When working from a checkout, the top-level CMake project also supports
 - Custom RTTI and allocator hooks
 - A specification of resolution that every scope, stored type, request and
   container is probed against, and focused tests of the rest. See the
-  [specification](docs/development.md#specification).
+  [specification](docs/specification.md).
 
 ## Related Projects
 
