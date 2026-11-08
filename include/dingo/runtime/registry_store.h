@@ -287,14 +287,13 @@ protected:
     void *address = nullptr;
   };
 
-  template <typename Request>
-  cache_result lookup_cache(runtime_selection selection) const {
-    if constexpr (detail::cache::supports_v<Request>) {
-      if (selection.status == detail::binding_status::found) {
-        auto *entry = selection.binding->cache_slot();
-        if (entry != nullptr && entry->key == detail::cache::key<Request>()) {
-          return {true, entry->address};
-        }
+  // The address a selected binding caches for the request of a cache key.
+  static cache_result lookup_cache(runtime_selection selection,
+                                   const void *key) {
+    if (selection.status == detail::binding_status::found) {
+      auto *entry = selection.binding->cache_slot();
+      if (entry != nullptr && entry->key == key) {
+        return {true, entry->address};
       }
     }
     return {};

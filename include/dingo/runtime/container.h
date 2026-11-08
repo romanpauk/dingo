@@ -122,7 +122,8 @@ private:
     using interface_type = typename Request::interface_type;
     if constexpr (is_cacheable<Request, R>()) {
       auto selected = this->template select_request<Request>(key);
-      auto result = this->template lookup_cache<interface_type>(selected);
+      auto result =
+          this->lookup_cache(selected, detail::cache::key<interface_type>());
       if (result.hit) {
         return this->template resolve_cached<interface_type, R>(result);
       }
