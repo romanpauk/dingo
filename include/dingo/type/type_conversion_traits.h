@@ -785,13 +785,21 @@ constexpr auto element_ptr_path() {
   }
 }
 
+// The element of a handle that shares it is borrowed, of a consumed handle
+// too: another handle may hold it.
+template <typename Source, typename Access>
+using element_access_t =
+    std::conditional_t<std::is_base_of_v<semantics::shared_owner,
+                                         type_traits<remove_cvref_t<Source>>>,
+                       borrow, Access>;
+
 template <typename Target, typename Source, typename Access>
 constexpr auto borrow_element_path() {
   if constexpr (has_borrow_element_v<Source>) {
     using inner = path_t<Target,
                          decltype(type_traits<remove_cvref_t<Source>>::borrow(
                              std::declval<Source>())),
-                         Access>;
+                         element_access_t<Source, Access>>;
     return available_t<conversion_unwrap<borrow_element, inner>, inner>{};
   } else {
     return unavailable_type_conversion{};

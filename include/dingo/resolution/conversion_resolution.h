@@ -29,12 +29,28 @@ using conversion_resolution = resolution<
     type_resolution<Source, type_conversion_path_t<conversion_target_t<Target>,
                                                    Source, Access>>>;
 
+// Whether a conversion of Source to Target is available. An rvalue reference
+// moves from what the request owns: its conversion consumes the source, rather
+// than borrowing from it, such as the element a shared handle shares.
+template <typename Target, typename Source, typename Access>
+inline constexpr bool resolution_available_v = [] {
+  using target = conversion_target_t<Target>;
+  if constexpr (!is_type_conversion_available_v<target, Source, Access>) {
+    return false;
+  } else if constexpr (std::is_rvalue_reference_v<Target>) {
+    return !access_satisfies<
+        borrow, typename type_conversion_path_t<
+                    target, Source, Access>::required_access>::value;
+  } else {
+    return true;
+  }
+}();
+
 // The resolution of Target from Source, as a list of one when a conversion
 // is available and of none otherwise. The resolution is named only when it is
 // available: naming it probes the conversion, which instantiates the target.
 template <typename Target, typename Source, typename Access,
-          bool = is_type_conversion_available_v<conversion_target_t<Target>,
-                                                Source, Access>>
+          bool = resolution_available_v<Target, Source, Access>>
 struct available_resolution {
   using type = type_list<>;
 };
