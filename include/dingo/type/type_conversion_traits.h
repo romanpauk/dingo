@@ -314,13 +314,6 @@ struct element_ptr {
   }
 };
 
-// The pointee of a pointer.
-struct deref {
-  template <typename Actual> static decltype(auto) apply(Actual &&source) {
-    return *std::forward<Actual>(source);
-  }
-};
-
 // The element of a wrapper, borrowed.
 struct borrow_element {
   template <typename Actual> static decltype(auto) apply(Actual &&source) {
@@ -522,7 +515,7 @@ template <typename Held> struct box : wrap_base {
 
 // --- The paths of the operations.
 
-enum class basic_conversion_kind { none, identity, reference, converted };
+enum class basic_conversion_kind { none, identity, reference };
 
 // The default conversions that keep the source object: a reference to it or to
 // its base, a copy of it or of its base, or the object moved from an rvalue.
@@ -544,7 +537,7 @@ constexpr basic_conversion_kind basic_conversion_selected() {
     return borrows && std::is_convertible_v<
                           source_pointer,
                           std::add_pointer_t<std::remove_reference_t<Target>>>
-               ? kind::converted
+               ? kind::reference
                : kind::none;
   } else if constexpr (by_value && borrows &&
                        std::is_same_v<std::remove_cv_t<Target>, source_type>) {
@@ -640,8 +633,6 @@ constexpr auto basic_path() {
                            borrow>>{};
   } else if constexpr (kind == basic_conversion_kind::reference) {
     return conversion_leaf<base_ref, Target, borrow>{};
-  } else if constexpr (kind == basic_conversion_kind::converted) {
-    return convert_t<Target, Source, borrow, Source>{};
   } else {
     return unavailable_type_conversion{};
   }
@@ -777,19 +768,6 @@ constexpr auto element_ptr_path() {
 }
 
 template <typename Target, typename Source, typename Access>
-constexpr auto deref_path() {
-  if constexpr (std::is_pointer_v<std::remove_reference_t<Source>> &&
-                !std::is_void_v<
-                    std::remove_pointer_t<std::remove_reference_t<Source>>> &&
-                !std::is_pointer_v<Target>) {
-    using inner = path_t<Target, decltype(*std::declval<Source>()), Access>;
-    return available_t<conversion_unwrap<deref, inner>, inner>{};
-  } else {
-    return unavailable_type_conversion{};
-  }
-}
-
-template <typename Target, typename Source, typename Access>
 constexpr auto borrow_element_path() {
   if constexpr (has_borrow_element_v<Source>) {
     using inner = path_t<Target,
@@ -859,7 +837,6 @@ enum class op : std::size_t {
   array_view,
   address,
   element_ptr,
-  deref,
   borrow_element,
   retain,
   box,
@@ -884,8 +861,6 @@ constexpr auto path() {
     return address_path<Target, Source, Access>();
   } else if constexpr (Op == op::element_ptr) {
     return element_ptr_path<Target, Source, Access>();
-  } else if constexpr (Op == op::deref) {
-    return deref_path<Target, Source, Access>();
   } else if constexpr (Op == op::borrow_element) {
     return borrow_element_path<Target, Source, Access>();
   } else if constexpr (Op == op::retain) {

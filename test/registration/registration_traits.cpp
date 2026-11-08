@@ -899,7 +899,7 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
       std::is_same_v<
           detail::type_conversion_path_t<std::optional<I>, optional_pointer>,
           detail::conversion_unwrap<
-              detail::deref,
+              detail::borrow_element,
               detail::optional_element_conversion<
                   std::optional<I>,
                   detail::conversion_leaf<detail::base_ref, I, borrow>>>>);

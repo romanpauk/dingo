@@ -72,9 +72,9 @@ an inner conversion, or wraps what an inner conversion returns:
 - `conversion_leaf`: the source itself, a reference to it or to its base, its
   address, the array a pointer to its first element points to, the address of
   the element of a wrapper, or what `type_conversion_traits` converts it to
-- `conversion_unwrap`: the pointee of a pointer, the element a wrapper lends, or
-  the alternative an alternative type holds, each alternative a branch of its
-  own
+- `conversion_unwrap`: the element a pointer or a wrapper lends, its
+  `type_traits::borrow`; the alternative an alternative type holds is unwrapped
+  by `alternative_type_conversion`, each alternative a branch of its own
 - `conversion_wrap`: an optional value, an alternative type, or a new owning
   handle, and a converted wrapper the binding retains for a reference or a
   pointer to refer to
@@ -84,10 +84,10 @@ in, and a constexpr function that returns its path, or an unavailable conversion
 where the operation does not apply. `select` tries the paths in the order of
 `op` and takes the first available one; the paths of later operations are not
 instantiated once one is. Pointer-backed storage keeps the pointer as its
-source, and the path records the dereference explicitly. The chosen conversion
-is stored in the operation and executed directly; execution does not classify
-the target and source a second time. Custom `type_conversion_traits` take
-precedence over the default compatible-reference shortcut.
+source, and the path borrows its pointee explicitly. The chosen conversion is
+stored in the operation and executed directly; execution does not classify the
+target and source a second time. Custom `type_conversion_traits` take precedence
+over the default compatible-reference shortcut.
 
 Keeping the operation in the resolution makes route selection and execution one
 decision. New wrapper, alternative, and array operations can be introduced by
