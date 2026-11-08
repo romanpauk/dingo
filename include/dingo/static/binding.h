@@ -182,13 +182,33 @@ inline constexpr bool places_request_value_v = [] {
   }
 }();
 
+// A reference request of a storage that hands over a pointer it makes for the
+// request: the request is resolved as the pointer, which an owner placed in
+// the context adopts.
+template <typename Request, typename InterfaceBinding>
+inline constexpr bool adopts_request_pointer_v = [] {
+  using storage = typename InterfaceBinding::binding_model_type::storage_type;
+  if constexpr (std::is_lvalue_reference_v<Request> &&
+                adopts_made_pointer_v<storage,
+                                      std::remove_reference_t<Request>>) {
+    return !binding_supports_request_v<Request, InterfaceBinding> &&
+           !places_request_value_v<Request, InterfaceBinding> &&
+           binding_supports_request_v<
+               std::add_pointer_t<std::remove_reference_t<Request>>,
+               InterfaceBinding>;
+  } else {
+    return false;
+  }
+}();
+
 // The resolution of a request selected at compile time.
 template <typename Request, typename InterfaceBinding, typename Context>
 struct static_request_resolution
     : binding_supports_request<Request, InterfaceBinding> {
   static_assert(is_runtime_context_v<Context> ||
                     binding_supports_request_v<Request, InterfaceBinding> ||
-                    places_request_value_v<Request, InterfaceBinding>,
+                    places_request_value_v<Request, InterfaceBinding> ||
+                    adopts_request_pointer_v<Request, InterfaceBinding>,
                 "static resolution cannot satisfy a request the storage "
                 "does not publish");
 };
@@ -211,6 +231,8 @@ public:
                                            Context>::type;
     if constexpr (places_request_value_v<Request, InterfaceBinding>) {
       return place_value<InterfaceBinding, Request>(scope, host, context);
+    } else if constexpr (adopts_request_pointer_v<Request, InterfaceBinding>) {
+      return adopt_pointer<InterfaceBinding, Request>(scope, host, context);
     } else if constexpr (std::is_void_v<resolution>) {
       not_convertible<Request, InterfaceBinding>(context);
     } else if constexpr (!std::is_reference_v<Request> &&
@@ -248,15 +270,7 @@ private:
             typename Context, typename Scope>
   Request place_value(Scope scope, Host &host, Context &context) {
     using value_type = referred_value_t<Request>;
-    if constexpr (is_fixed_caller_scope_v<Scope>) {
-      static_assert(!is_fixed_caller_scope_v<Scope>,
-                    "a reference or a pointer to an instance the "
-                    "resolution makes would dangle in what is returned to "
-                    "the caller; take it by value, or let a shared scope "
-                    "keep what refers to it");
-    } else if (scope.is_caller()) {
-      not_convertible<Request, InterfaceBinding>(context);
-    }
+    refuse_caller<InterfaceBinding, Request>(scope, context);
     auto &value =
         context.template construct_from<value_type>(scope, [&]() -> value_type {
           return resolve<InterfaceBinding, value_type>(scope, host, context);
@@ -265,6 +279,35 @@ private:
       return &value;
     } else {
       return value;
+    }
+  }
+
+  // Resolves a reference request as the pointer the storage hands over, and
+  // places an owner of the pointer in the context.
+  template <typename InterfaceBinding, typename Request, typename Host,
+            typename Context, typename Scope>
+  Request adopt_pointer(Scope scope, Host &host, Context &context) {
+    using pointer_type = std::add_pointer_t<std::remove_reference_t<Request>>;
+    refuse_caller<InterfaceBinding, Request>(scope, context);
+    pointer_type pointer =
+        resolve<InterfaceBinding, pointer_type>(scope, host, context);
+    place_adopted_pointer(scope, context, pointer);
+    return *pointer;
+  }
+
+  // What is placed in the context ends before the caller uses what a
+  // resolution returns: a request of the caller is refused.
+  template <typename InterfaceBinding, typename Request, typename Context,
+            typename Scope>
+  static void refuse_caller(Scope scope, Context &context) {
+    if constexpr (is_fixed_caller_scope_v<Scope>) {
+      static_assert(!is_fixed_caller_scope_v<Scope>,
+                    "a reference or a pointer to an instance the "
+                    "resolution makes would dangle in what is returned to "
+                    "the caller; take it by value, or let a shared scope "
+                    "keep what refers to it");
+    } else if (scope.is_caller()) {
+      not_convertible<Request, InterfaceBinding>(context);
     }
   }
 

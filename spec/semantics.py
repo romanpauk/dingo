@@ -212,11 +212,6 @@ class Origin(Enum):
         return self is not Origin.BORROWED
 
 
-# How a step made a layer: a new holder of its own, or a handle taking over
-# the element of the one the storage holds.
-MADE, TAKEN = "made", "taken"
-
-
 @dataclass(frozen=True)
 class Thing:
     """An object a derivation reaches.
@@ -229,11 +224,6 @@ class Thing:
       it, rather than a copy of it
     contained: the holder made for the request it is the element of, or
       was copied from the element of, or None
-    added: how a step made the outermost layer, rather than the storage:
-      MADE for a new holder of its own, TAKEN for a handle that takes over
-      the storage's element, None for the storage's layer
-    in_added: whether the holder it is the element of is one a step made
-      of its own
     """
     layers: tuple
     element: str
@@ -241,8 +231,6 @@ class Thing:
     origin: Origin
     instance: bool
     contained: str = None
-    added: str = None
-    in_added: bool = False
 
     @property
     def lifetime(self):
@@ -288,12 +276,10 @@ def source(scope, form, interfaces=InterfaceSet.DEFAULT):
     lifetime = Lifetime.REQUEST if traits.makes else Lifetime.STABLE
     rebound = (interfaces is InterfaceSet.INTERFACE and len(layers) == 1 and
                LAYERS[layers[0]].rebinds)
-    # A handle that cannot be copied is rebound by a new one taking it over.
     return Thing(layers, "interface" if rebound else "leaf",
                  (lifetime,) * (len(layers) + 1),
                  Origin.MADE if traits.makes else Origin.BORROWED,
-                 instance=True,
-                 added=TAKEN if rebound and takes_over(layers) else None)
+                 instance=True)
 
 
 # What can be done with a thing.
@@ -440,29 +426,12 @@ class Gap:
 class Limitation(Enum):
     """A known gap of the library: a step it does not take, or a request it
     does not satisfy, although the semantics allow it."""
-    # A reference to an array made for the request, which is handed over as
-    # a pointer, never kept as an object.
-    REFERENCE_TO_MADE_LAYER = "reference_to_made_layer"
-    # The element of a holder a step makes for the request, and a pointer
-    # handed over out of a holder made for it.
-    ELEMENT_OF_MADE_HOLDER = "element_of_made_holder"
-
-
-def _made(thing):
-    return thing.lifetime is Lifetime.REQUEST
+    # A pointer handed over out of a holder made for the request.
+    POINTER_OUT_OF_MADE_HOLDER = "pointer_out_of_made_holder"
 
 
 GAPS = (
-    Gap(Limitation.REFERENCE_TO_MADE_LAYER, "refer",
-        lambda context, category, thing: bool(thing.layers) and
-        _made(thing) and LAYERS[thing.layers[0]].decays_to is not None),
-    Gap(Limitation.ELEMENT_OF_MADE_HOLDER, "refer",
-        lambda context, category, thing: thing.in_added),
-    Gap(Limitation.ELEMENT_OF_MADE_HOLDER, "element",
-        lambda context, thing, following: thing.added == MADE and
-        LAYERS[thing.layers[0]].shares_element and
-        thing.lifetimes[1] is Lifetime.REQUEST),
-    Gap(Limitation.ELEMENT_OF_MADE_HOLDER, "point",
+    Gap(Limitation.POINTER_OUT_OF_MADE_HOLDER, "point",
         lambda context, category, thing: thing.contained is not None),
 )
 
@@ -473,36 +442,11 @@ def blocked(context, at, *event):
                gap.applies(context, *event) for gap in GAPS)
 
 
-# The steps that make a new outermost layer, rather than reach one the thing
-# holds. An upcast makes one when it takes over a handle it cannot copy.
-MAKES_LAYER = ("decay", "hand_over", "adopt", "convert", "copy", "wrap")
-
-
-def takes_over(layers):
-    return bool(layers) and not LAYERS[layers[0]].copyable
-
-
-def marked(kind, thing, following):
-    """The thing a step reaches, marked with whether a step made its
-    outermost layer and the holder it is the element of."""
-    if kind in MAKES_LAYER:
-        return replace(following, added=MADE)
-    if kind == "upcast" and takes_over(thing.layers):
-        # A handle a step made is still one when another takes it over.
-        return replace(following, added=thing.added or TAKEN)
-    if kind == "element":
-        return replace(following, added=thing.added, in_added=thing.in_added or
-                       (thing.added == MADE and
-                        following.contained is not None))
-    return following
-
-
 def steps(thing, context):
     """The steps from a thing the library takes: those the semantics allow
     that no limitation blocks."""
     found = []
     for kind, following in transitions(thing, context):
-        following = marked(kind, thing, following)
         if not blocked(context, kind, thing, following):
             found.append((kind, following))
     return found

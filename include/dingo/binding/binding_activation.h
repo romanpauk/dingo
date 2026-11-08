@@ -233,6 +233,43 @@ inline constexpr bool places_made_values_v =
     storage_form_traits<typename Storage::type>::form !=
         storage_form::shared_array_handle;
 
+// Whether a storage hands over a pointer it makes for each request: to the
+// object, or to the first element of an array.
+template <typename Storage>
+inline constexpr bool hands_over_made_pointers_v =
+    scope_materialization<typename Storage::tag_type>::consumes &&
+    (storage_form_traits<typename Storage::type>::form ==
+         storage_form::pointer ||
+     storage_form_traits<typename Storage::type>::form ==
+         storage_form::bounded_array);
+
+// Whether a pointer to Pointee the storage hands over is adopted for a
+// reference to what it points to: one to an object, or one to the array it
+// makes, not to the first element of the array.
+template <typename Storage, typename Pointee>
+inline constexpr bool adopts_made_pointer_v =
+    hands_over_made_pointers_v<Storage> &&
+    (storage_form_traits<typename Storage::type>::form ==
+         storage_form::pointer ||
+     std::is_array_v<Pointee>);
+
+// The owner of a pointer handed over to a request, which a reference to what
+// it points to is resolved through: the owner is placed in the context.
+template <typename T> std::unique_ptr<T> adopt_pointer(T *pointer) {
+  return std::unique_ptr<T>(pointer);
+}
+
+template <typename T, std::size_t N>
+std::unique_ptr<T[]> adopt_pointer(T (*array)[N]) {
+  return std::unique_ptr<T[]>(*array);
+}
+
+template <typename Pointer, typename Context, typename Scope>
+void place_adopted_pointer(Scope scope, Context &context, Pointer pointer) {
+  auto owner = adopt_pointer(pointer);
+  context.template construct<decltype(owner)>(scope, std::move(owner));
+}
+
 template <typename Target, typename Context, typename T, typename Scope>
 void *result_address(Scope scope, Context &context, T &&instance) {
   using instance_type = std::remove_reference_t<T>;

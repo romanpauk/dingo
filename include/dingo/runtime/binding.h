@@ -99,6 +99,55 @@ std::size_t resolution_request_index(type_list<Resolutions...>,
   return result;
 }
 
+// Whether a resolution of a pointer resolves a reference request as the
+// pointer, which an owner placed in the context adopts.
+template <typename Storage, typename Resolution>
+constexpr bool matches_adopted_request(type_descriptor requested_type) {
+  using target = typename Resolution::target_type;
+  if constexpr (std::is_pointer_v<target> &&
+                adopts_made_pointer_v<Storage, std::remove_pointer_t<target>>) {
+    return matches_qualification_conversion(
+        detail::described_type_v<std::remove_pointer_t<target> &>,
+        requested_type);
+  } else {
+    return false;
+  }
+}
+
+template <typename Storage, typename... Resolutions>
+std::size_t adopted_request_index(type_list<Resolutions...>,
+                                  type_descriptor requested_type) {
+  std::size_t index = 0;
+  std::size_t result = sizeof...(Resolutions);
+  (void)(((matches_adopted_request<Storage, Resolutions>(requested_type)
+               ? (result = index, true)
+               : (++index, false)) ||
+          ...));
+  return result;
+}
+
+template <typename Target, typename Context>
+void place_adopted(construction_scope scope, Context &context, void *address) {
+  if constexpr (std::is_pointer_v<Target>) {
+    place_adopted_pointer(scope, context, static_cast<Target>(address));
+  } else {
+    (void)scope, (void)context, (void)address;
+  }
+}
+
+// Places an owner of the pointer the resolution at a run-time index resolved.
+template <typename Context, typename... Resolutions>
+void place_adopted_address(construction_scope scope, Context &context,
+                           std::size_t resolution_index,
+                           type_list<Resolutions...>, void *address) {
+  std::size_t index = 0;
+  (void)((resolution_index == index++ &&
+          (place_adopted<typename Resolutions::target_type>(scope, context,
+                                                            address),
+           true)) ||
+         ...);
+}
+
 // Applies a resolution to a source. A source the transaction keeps is an
 // lvalue, so that a reference or a pointer can refer to it; a value is moved
 // out of it as out of any other source. Only the resolutions that refer are
@@ -215,6 +264,32 @@ private:
     }
   }
 
+  // Whether a reference the storage publishes no address for, nor a value it
+  // refers to, refers to what the pointer the storage hands over points to:
+  // it is resolved as the pointer, adopted by an owner placed in the
+  // context.
+  static bool route_adopted(type_descriptor requested,
+                            type_descriptor &resolved_type,
+                            std::size_t &resolution_index) {
+    if (resolution_index != type_list_size_v<request_resolutions> ||
+        requested.reference != type_reference_kind::lvalue) {
+      return false;
+    }
+    resolved_type = requested;
+    resolution_index = detail::adopted_request_index<Storage>(
+        request_resolutions{}, requested);
+    return true;
+  }
+
+  static void place_adopted(bool adopted, construction_scope scope,
+                            runtime_context_type &context,
+                            std::size_t resolution_index, void *address) {
+    if (adopted) {
+      detail::place_adopted_address(scope, context, resolution_index,
+                                    request_resolutions{}, address);
+    }
+  }
+
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4702)
@@ -235,8 +310,10 @@ private:
       auto resolution_index = detail::resolution_request_index(
           request_resolutions{}, resolved_type);
       // A reference or a pointer the storage publishes no address for
-      // refers to the value it makes, placed in the context.
+      // refers to the value it makes, placed in the context, or to what the
+      // pointer it hands over points to.
       bool placed = false;
+      bool adopted = false;
       if constexpr (detail::places_made_values_v<Storage>) {
         if (resolution_index == type_list_size_v<request_resolutions> &&
             refers(resolved_type)) {
@@ -244,6 +321,10 @@ private:
           resolution_index = detail::resolution_request_index(
               request_resolutions{}, resolved_type);
           placed = true;
+          if constexpr (detail::hands_over_made_pointers_v<Storage>) {
+            adopted = route_adopted(request.requested_type, resolved_type,
+                                    resolution_index);
+          }
         }
       }
       if (resolution_index == type_list_size_v<request_resolutions> ||
@@ -265,6 +346,10 @@ private:
                       activation, context,
                       std::forward<decltype(source)>(source), resolution_index,
                       request_resolutions{}, resolved_type);
+                  if constexpr (detail::hands_over_made_pointers_v<Storage>) {
+                    place_adopted(adopted, scope, context, resolution_index,
+                                  resolved.address);
+                  }
                   if (placed) {
                     resolved.access = resolved_address::access_kind::borrow;
                     return resolved;
