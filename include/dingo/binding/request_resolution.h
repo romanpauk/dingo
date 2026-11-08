@@ -221,7 +221,8 @@ struct request_resolution {
     using normalized = request_type<typename Request::value_type>;
     auto &&instance = resolve<normalized, typename normalized::lookup_type>(
         host, scope, context, host, no_lookup_key());
-    return type_traits<std::decay_t<typename Request::user_type>>::make(
+    return detail::convert_type<std::decay_t<typename Request::user_type>,
+                                consume>(
         std::forward<decltype(instance)>(instance));
   }
 

@@ -335,6 +335,32 @@ template <typename T, typename... Args> T *make_dynamic_array(Args &&...args) {
   }
 }
 
+// Whether a handle can be made of Args: the array a handle of one holds is
+// initialized with them, its first elements copy-initialized from them and
+// the rest of a bounded one value-initialized.
+template <typename Handle, typename... Args>
+struct handle_makeable : std::true_type {};
+
+template <typename Array, typename... Args>
+        struct handle_makeable<std::shared_ptr<Array>, Args...>
+    : std::bool_constant < !std::is_array_v<Array> ||
+    is_bounded_array_initializable_v < std::remove_extent_t<Array>,
+    std::extent_v<Array> != 0 ? std::extent_v<Array> : sizeof...(Args),
+    Args... >> {};
+
+template <typename Array, typename Deleter, typename... Args>
+struct handle_makeable<std::unique_ptr<Array, Deleter>, Args...>
+    : handle_makeable<std::shared_ptr<Array>, Args...> {};
+
+template <typename T, size_t> using repeated_argument_t = T;
+
+template <typename Handle, typename Argument, typename Indexes>
+struct handle_makeable_by;
+
+template <typename Handle, typename Argument, size_t... Is>
+struct handle_makeable_by<Handle, Argument, std::index_sequence<Is...>>
+    : handle_makeable<Handle, repeated_argument_t<Argument, Is>...> {};
+
 template <typename Type, typename U, typename = void>
 struct wrapper_rebind_leaf {
   using type = copy_cv_t<Type, U>;
@@ -621,8 +647,15 @@ struct type_traits<std::optional<T>> : semantics::optional_value {
 };
 
 namespace detail {
+// A nested wrapper made of the arguments of its element, or moved when it is
+// given as itself.
 template <typename T, typename... Args> T make_nested(Args &&...args) {
-  return type_traits<T>::make(std::forward<Args>(args)...);
+  if constexpr (sizeof...(Args) == 1 &&
+                (std::is_same_v<remove_cvref_t<Args>, T> && ...)) {
+    return T(std::forward<Args>(args)...);
+  } else {
+    return type_traits<T>::make(std::forward<Args>(args)...);
+  }
 }
 } // namespace detail
 

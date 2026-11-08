@@ -813,28 +813,34 @@ constexpr auto retain_path() {
 }
 
 // The element of an owning handle Target, made of a Source: Source itself
-// when it derives from the element.
-template <typename Target, typename Source>
-using held_t = std::conditional_t<
-    std::is_base_of_v<std::remove_cv_t<typename type_traits<
-                          remove_cvref_t<Target>>::value_type>,
-                      remove_cvref_t<Source>>,
-    remove_cvref_t<Source>,
-    std::remove_cv_t<typename type_traits<remove_cvref_t<Target>>::value_type>>;
+// when it derives from the element of a handle of an object. An array holds
+// its element exactly.
+template <typename Target, typename Source,
+          typename Element = std::remove_cv_t<
+              typename type_traits<remove_cvref_t<Target>>::value_type>>
+using held_t =
+    std::conditional_t<!is_array_like_type_v<remove_cvref_t<Target>> &&
+                           std::is_base_of_v<Element, remove_cvref_t<Source>>,
+                       remove_cvref_t<Source>, Element>;
 
-// A new owning handle of a consumed value.
+// A new owning handle of a consumed value: of an object, of a wrapper, or an
+// array of it, the rest of a bounded one value-initialized. A pointer is not
+// held: a handle takes it over instead.
 template <typename Target, typename Source, typename Access>
 constexpr auto box_path() {
   using source_type = remove_cvref_t<Source>;
+  using target_type = remove_cvref_t<Target>;
   if constexpr (std::is_same_v<Access, consume> &&
                 !std::is_reference_v<Target> &&
                 !std::is_lvalue_reference_v<Source> &&
-                type_traits<remove_cvref_t<Target>>::is_owning_handle &&
-                is_value_borrowable_v<remove_cvref_t<Target>> &&
-                std::is_class_v<source_type> &&
+                type_traits<target_type>::is_owning_handle &&
+                std::is_object_v<source_type> &&
+                !std::is_pointer_v<source_type> &&
+                !std::is_array_v<source_type> &&
                 !type_traits<source_type>::enabled) {
     using held = held_t<Target, Source>;
-    if constexpr (is_formable_v<held> && !type_traits<held>::enabled) {
+    using handle = typename type_traits<target_type>::template rebind_t<held>;
+    if constexpr (is_formable_v<held> && handle_makeable<handle, held>::value) {
       using inner = path_t<held, Source, Access>;
       return available_t<conversion_wrap<box<held>, Target, inner>, inner>{};
     } else {

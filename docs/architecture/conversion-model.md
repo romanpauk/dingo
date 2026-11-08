@@ -78,8 +78,8 @@ an inner conversion, or wraps what an inner conversion returns:
   `type_traits::borrow`; the alternative an alternative type holds is unwrapped
   by `alternative_type_conversion`, each alternative a branch of its own
 - `conversion_wrap`: an optional value, an alternative type, or a new owning
-  handle, and a converted wrapper the binding retains for a reference or a
-  pointer to refer to
+  handle of an object, of a wrapper or an array of it, and a converted wrapper
+  the binding retains for a reference or a pointer to refer to
 
 An operation is a class with a static `apply`, called by the shape it is used
 in, and a constexpr function that returns its path, or an unavailable conversion
@@ -105,7 +105,9 @@ the storage. A new operation provides `apply`, a function returning its path,
 and a place in `op`; the conversion its path makes provides `available`,
 `required_access`, `cache_types` and `apply`.
 
-Factory construction and storage rebinding use this operation model as well. A
+Factory construction and storage rebinding use this operation model as well, and
+so does `construct<T>()` of a wrapper of a bound type that its binding does not
+publish: the wrapper is the conversion from the value the binding resolves. A
 storage hands out an array as it hands out any other object, and the conversion
 decays it. When a factory selects an alternative to construct, Dingo plans the
 conversion from that selected value to the requested wrapper shape and executes
