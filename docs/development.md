@@ -49,9 +49,9 @@ Run a quality target with `cmake --build build -t <target>`.
   [Complexity Report](#complexity-report).
 - `model-check-small`, `model-check-medium`, `model-check-large`: run both model
   probes of the [Specification](specification.md), on a cover of their
-  dimensions: small every pair of their values, in about three minutes; medium
-  every three, in about three times that; large every combination, in about half
-  an hour. They fail on a defect and read the diagnostics of GCC and clang;
+  dimensions: small every pair of their values, in about six minutes; medium
+  every three, in about twenty; large every combination, which takes longer
+  still. They fail on a defect and read the diagnostics of GCC and clang;
   `model-check-small` is part of `check` with them. See
   [Model Checks](#model-checks).
 

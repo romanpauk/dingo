@@ -162,6 +162,10 @@ FORMS = {
     StoredForm.UNIQUE_ARRAY_HANDLE: ("unique_ptr", "array"),
     StoredForm.SHARED_ARRAY_HANDLE: ("shared_ptr", "array"),
     StoredForm.SHARED_BOUNDED_ARRAY_HANDLE: ("shared_ptr", "array2"),
+    StoredForm.SHARED_OPTIONAL: ("shared_ptr", "optional"),
+    StoredForm.UNIQUE_OPTIONAL: ("unique_ptr", "optional"),
+    StoredForm.OPTIONAL_SHARED_HANDLE: ("optional", "shared_ptr"),
+    StoredForm.OPTIONAL_UNIQUE_HANDLE: ("optional", "unique_ptr"),
 }
 
 # The stack a request shape asks for around its interface.
@@ -173,6 +177,10 @@ SHAPES = {
     Shape.SHARED_ARRAY: ("shared_ptr", "array"),
     Shape.UNIQUE_ARRAY: ("unique_ptr", "array"),
     Shape.SHARED_BOUNDED_ARRAY: ("shared_ptr", "array2"),
+    Shape.SHARED_OPTIONAL: ("shared_ptr", "optional"),
+    Shape.UNIQUE_OPTIONAL: ("unique_ptr", "optional"),
+    Shape.OPTIONAL_SHARED_PTR: ("optional", "shared_ptr"),
+    Shape.OPTIONAL_UNIQUE_PTR: ("optional", "unique_ptr"),
 }
 
 @dataclass(frozen=True, order=True)
@@ -395,6 +403,17 @@ def transitions(thing, context):
             yield "upcast", replace(
                 thing, element="interface",
                 lifetimes=(Lifetime.REQUEST,) + thing.lifetimes[1:])
+        else:
+            # A copy of the layers above a handle that shares the leaf holds
+            # a handle of the interface: a new object, which shares the leaf.
+            depth = copied_layers(layers)
+            if 1 < depth <= len(layers) and all(
+                    LAYERS[name].copyable for name in layers[:depth]):
+                yield "upcast", replace(
+                    thing, element="interface", origin=Origin.COPIED,
+                    instance=False,
+                    lifetimes=(Lifetime.REQUEST,) * depth +
+                    thing.lifetimes[depth:])
     # A copy: a new object the request owns. What a layer that shares its
     # element holds is not copied: the copy still holds the instance.
     if can_copy(thing, context):

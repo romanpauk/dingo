@@ -35,6 +35,11 @@ class StoredForm(Dimension):
     SHARED_BOUNDED_ARRAY_HANDLE = "shared_bounded_array_handle"
     OPTIONAL = "optional"
     ALTERNATIVE = "alternative"
+    # Two layers: a handle of an optional, and an optional of a handle.
+    SHARED_OPTIONAL = "shared_optional"
+    UNIQUE_OPTIONAL = "unique_optional"
+    OPTIONAL_SHARED_HANDLE = "optional_shared_handle"
+    OPTIONAL_UNIQUE_HANDLE = "optional_unique_handle"
 
     @property
     def is_dynamic_array(self):
@@ -85,6 +90,22 @@ class Shape(Dimension):
     SHARED_ARRAY = "std::shared_ptr<I[]>"
     UNIQUE_ARRAY = "std::unique_ptr<I[]>"
     SHARED_BOUNDED_ARRAY = "std::shared_ptr<I[2]>"
+    # The shapes of the two-layer stored forms, which only a registration of
+    # the form requests.
+    SHARED_OPTIONAL = "std::shared_ptr<std::optional<I>>"
+    UNIQUE_OPTIONAL = "std::unique_ptr<std::optional<I>>"
+    OPTIONAL_SHARED_PTR = "std::optional<std::shared_ptr<I>>"
+    OPTIONAL_UNIQUE_PTR = "std::optional<std::unique_ptr<I>>"
+
+    @property
+    def is_nested(self):
+        return any(self in shapes for shapes in NESTED_SHAPES.values())
+
+    @property
+    def holds_optional(self):
+        """Whether an optional holds the interface itself."""
+        return self in (Shape.OPTIONAL, Shape.SHARED_OPTIONAL,
+                        Shape.UNIQUE_OPTIONAL)
 
     @property
     def is_array(self):
@@ -96,6 +117,16 @@ class Shape(Dimension):
         """Whether a value of the shape converts from anything its element
         can be made of, by a converting constructor."""
         return self is Shape.OPTIONAL
+
+
+# The shapes a two-layer stored form is requested as: its own, and that of
+# the shared handle a unique handle of it converts to.
+NESTED_SHAPES = {
+    StoredForm.SHARED_OPTIONAL: (Shape.SHARED_OPTIONAL,),
+    StoredForm.UNIQUE_OPTIONAL: (Shape.UNIQUE_OPTIONAL, Shape.SHARED_OPTIONAL),
+    StoredForm.OPTIONAL_SHARED_HANDLE: (Shape.OPTIONAL_SHARED_PTR,),
+    StoredForm.OPTIONAL_UNIQUE_HANDLE: (Shape.OPTIONAL_UNIQUE_PTR,),
+}
 
 
 class Category(Dimension):

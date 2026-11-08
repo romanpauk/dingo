@@ -20,7 +20,7 @@ function(configure_quality_targets out_check_targets)
   # summary as .md, and fails on a defect.
   # They read the diagnostics of GCC and clang. A size probes a cover of the
   # dimensions: small every pair of their values, medium every three, large
-  # every combination, which takes about half an hour. model-check-small is
+  # every combination, which takes longest. model-check-small is
   # part of check with those compilers.
   #
   # A check that passed is not made again until what it reads changes: the

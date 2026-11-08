@@ -43,7 +43,7 @@ class Request:
         if self.interface.abstract:
             if self.shape is Shape.OBJECT and by_value:
                 return "an abstract type cannot be held by value"
-            if self.shape is Shape.OPTIONAL:
+            if self.shape.holds_optional:
                 return "an optional cannot hold an abstract type"
             if self.shape.is_array:
                 return "an array cannot hold an abstract type"
@@ -57,11 +57,15 @@ class Request:
         return None
 
 
-def grammar(interfaces):
+# The shapes every unit requests.
+SHAPES = tuple(shape for shape in Shape if not shape.is_nested)
+
+
+def grammar(interfaces, shapes=SHAPES):
     """Every shape of every interface, in every category."""
     return [Request(index, bound, shape, category)
             for index, bound in enumerate(interfaces)
-            for shape in Shape for category in Category]
+            for shape in shapes for category in Category]
 
 
 @dataclass(frozen=True, order=True)

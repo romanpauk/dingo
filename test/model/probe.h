@@ -150,6 +150,10 @@ template <typename Base, typename... Interfaces> struct keyed_traits : Base {
       typename keyed_lookups<dingo::type_list<>, Interfaces...>::type;
 };
 
+template <typename T> inline constexpr bool is_optional_v = false;
+template <typename T>
+inline constexpr bool is_optional_v<std::optional<T>> = true;
+
 // An instance of a stored type, for the scopes that are given one.
 template <typename Stored> struct instance {
   static Stored make() {
@@ -172,7 +176,13 @@ template <typename Stored> struct instance {
 template <typename T> struct instance<std::shared_ptr<T>> {
   static std::shared_ptr<T> make() {
     using element = std::remove_extent_t<T>;
-    if constexpr (std::is_array_v<T>) {
+    if constexpr (is_optional_v<T>) {
+      return leaf_arguments<typename T::value_type>::apply([](auto... args) {
+        return std::make_shared<T>(std::in_place, args...);
+      });
+    } else if constexpr (dingo::type_traits<T>::enabled) {
+      return std::make_shared<T>(instance<T>::make());
+    } else if constexpr (std::is_array_v<T>) {
       return leaf_arguments<element>::apply([](auto... args) {
         return std::shared_ptr<T>(
             new element[2]{element(args...), element(args...)});
@@ -187,7 +197,13 @@ template <typename T> struct instance<std::shared_ptr<T>> {
 template <typename T> struct instance<std::unique_ptr<T>> {
   static std::unique_ptr<T> make() {
     using element = std::remove_extent_t<T>;
-    if constexpr (std::is_array_v<T>) {
+    if constexpr (is_optional_v<T>) {
+      return leaf_arguments<typename T::value_type>::apply([](auto... args) {
+        return std::make_unique<T>(std::in_place, args...);
+      });
+    } else if constexpr (dingo::type_traits<T>::enabled) {
+      return std::make_unique<T>(instance<T>::make());
+    } else if constexpr (std::is_array_v<T>) {
       return leaf_arguments<element>::apply([](auto... args) {
         return std::unique_ptr<T>(
             new element[2]{element(args...), element(args...)});
@@ -201,8 +217,13 @@ template <typename T> struct instance<std::unique_ptr<T>> {
 
 template <typename T> struct instance<std::optional<T>> {
   static std::optional<T> make() {
-    return leaf_arguments<T>::apply(
-        [](auto... args) { return std::optional<T>(std::in_place, args...); });
+    if constexpr (dingo::type_traits<T>::enabled) {
+      return std::optional<T>(instance<T>::make());
+    } else {
+      return leaf_arguments<T>::apply([](auto... args) {
+        return std::optional<T>(std::in_place, args...);
+      });
+    }
   }
 };
 
@@ -304,6 +325,10 @@ template <typename X> using opt = std::optional<X>;
 template <typename X> using sp_array = std::shared_ptr<X[]>;
 template <typename X> using up_array = std::unique_ptr<X[]>;
 template <typename X> using sp_bounded_array = std::shared_ptr<X[2]>;
+template <typename X> using sp_opt = std::shared_ptr<std::optional<X>>;
+template <typename X> using up_opt = std::unique_ptr<std::optional<X>>;
+template <typename X> using opt_sp = std::optional<std::shared_ptr<X>>;
+template <typename X> using opt_up = std::optional<std::unique_ptr<X>>;
 } // namespace shape
 
 // The name of a type as the compiler spells it.

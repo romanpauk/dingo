@@ -61,8 +61,11 @@ program first checks that the library binds exactly those types. The requests
 are every shape of every bound interface `I`: `I`, `std::shared_ptr<I>`,
 `std::unique_ptr<I>`, `std::optional<I>`, `std::shared_ptr<I[]>` and
 `std::unique_ptr<I[]>`, each by value, `const`, as `&`, `const &`, `&&`, `*` and
-`const *`. A request that is not valid C++, such as an abstract type held by
-value, is recorded as invalid with the reason.
+`const *`. A registration of a stored form of two layers, such as
+`std::shared_ptr<std::optional<L>>`, requests its own shape too, and a unique
+handle of one the shape of the shared handle it converts to. A request that is
+not valid C++, such as an abstract type held by value, is recorded as invalid
+with the reason.
 
 Each request is made through every entry point, `resolve`, `invoke` and
 `construct`, in four positions: itself; as the dependency of the constructor of
@@ -96,7 +99,7 @@ registration binds other interfaces than the specification says.
 A cover probes a covering array of the registrations the specification says the
 library accepts: every combination of values of two (small) or three (medium) of
 scope, stored form, leaf, interfaces declared and selection that such a
-registration holds is probed in both containers, with 46 or 151 of the 1584
+registration holds is probed in both containers, with 62 or 200 of the 2160
 registrations (large). A registration the library does not accept resolves
 nothing, so it covers nothing.
 

@@ -22,6 +22,10 @@
   "shared_bounded_array_handle": "std::shared_ptr<L[2]>",
   "optional": "std::optional<L>",
   "alternative": "std::variant<L, other>",
+  "shared_optional": "std::shared_ptr<std::optional<L>>",
+  "unique_optional": "std::unique_ptr<std::optional<L>>",
+  "optional_shared_handle": "std::optional<std::shared_ptr<L>>",
+  "optional_unique_handle": "std::optional<std::unique_ptr<L>>",
 } %}
 
 {#- The alias template of probe.h that spells each Shape and Category; none
@@ -34,6 +38,10 @@
   "std::shared_ptr<I[]>": "sp_array",
   "std::unique_ptr<I[]>": "up_array",
   "std::shared_ptr<I[2]>": "sp_bounded_array",
+  "std::shared_ptr<std::optional<I>>": "sp_opt",
+  "std::unique_ptr<std::optional<I>>": "up_opt",
+  "std::optional<std::shared_ptr<I>>": "opt_sp",
+  "std::optional<std::unique_ptr<I>>": "opt_up",
 } %}
 {% set CATEGORY = {
   "X": None,

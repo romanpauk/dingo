@@ -4,12 +4,13 @@ registration binds, made through every entry point, in every position."""
 from dataclasses import dataclass
 
 from spec import semantics
-from spec.vocabulary import (Answer, Container, Entry, InterfaceSet, Leaf,
-                             Position, Scope, Selection, StoredForm)
+from spec.vocabulary import (NESTED_SHAPES, Answer, Container, Entry,
+                             InterfaceSet, Leaf, Position, Scope, Selection,
+                             StoredForm)
 
 from . import cover, driver
 from .dimensions import Keeps, Outcome
-from .model import Interface, Probe, grammar
+from .model import SHAPES, Interface, Probe, grammar
 
 # The leaves a registration stores.
 LEAVES = (Leaf.COPYABLE, Leaf.MOVE_ONLY, Leaf.IMMOVABLE, Leaf.FACTORY)
@@ -95,11 +96,16 @@ class Registration:
     def probes(self, position=None):
         """The probes, in a position or in all of them, each with why its
         request is not valid C++, or None."""
-        requests = grammar(self.interfaces())
+        requests = self.grammar(self.interfaces())
         return [(Probe(operation, request), request.invalid)
                 for operation in OPERATIONS
                 if position is None or operation.position is position
                 for request in requests]
+
+    def grammar(self, interfaces):
+        """The requests of the grammar over interfaces, with the shape of
+        the stored form when it has two layers."""
+        return grammar(interfaces, SHAPES + NESTED_SHAPES.get(self.form, ()))
 
     def cell(self, probe):
         return "/".join((self.container, self.scope, self.form, self.leaf,
@@ -117,7 +123,7 @@ class Registration:
         the grammar: every request it publishes for the interface has to be
         one of them."""
         bound = self.interfaces()
-        requests = grammar(bound)
+        requests = self.grammar(bound)
         return [(index, interface, [request for request in requests
                                     if request.index == index and
                                     request.invalid is None])
