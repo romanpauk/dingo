@@ -47,6 +47,9 @@ Run a quality target with `cmake --build build -t <target>`.
 - `complexity-report`: prints where the complexity of the headers is; it is a
   report and is not part of `check`. See
   [Complexity Report](#complexity-report).
+- `conversion-check`: checks what the conversion layer of every registration
+  publishes against the [Specification](specification.md#conversion-check), in
+  seconds; it is part of `check` with GCC and clang.
 - `model-check-small`, `model-check-medium`, `model-check-large`: run both model
   probes of the [Specification](specification.md), on a cover of their
   dimensions: small every pair of their values, in about six minutes; medium

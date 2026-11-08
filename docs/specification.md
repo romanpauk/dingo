@@ -103,6 +103,27 @@ registration holds is probed in both containers, with 62 or 200 of the 2160
 registrations (large). A registration the library does not accept resolves
 nothing, so it covers nothing.
 
+## Conversion Check
+
+[`spec/conversion.py`](../spec/conversion.py) asks the conversion layer of every
+registration the library accepts what it publishes for every request of the
+grammar, as the code compiles: whether the request lists of the static container
+select a resolution of the request, whether the descriptors the runtime
+container dispatches on select the same one, and whether its conversion is
+available ([`test/model/conversion.h`](../test/model/conversion.h)). No
+container is made and nothing resolves, so every registration is checked, many
+in a program, in seconds.
+
+A published request has to be one the specification, with the limitations of the
+library, resolves in some position, and a request it resolves for the caller has
+to be published: what the library resolves into the context of a call, a value
+placed there or a pointer it adopts, it does not publish. The check fails when
+the two containers select differently, a registration does not compile, a
+published request is unprobed or unreachable, or a cell is not what the
+specification expects. Of a storage that cannot be made, and of the other
+alternative of an alternative type, which a probe's never holds, it compares
+nothing. What resolving a request does is the [Model Probe](#model-probe)'s.
+
 ## Constructor Detection Probe
 
 [`spec/detection.py`](../spec/detection.py) probes constructor detection. A

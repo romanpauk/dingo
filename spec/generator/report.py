@@ -25,6 +25,11 @@ MARKS = {
     Outcome.LIMITED: "lim",
     Outcome.STALE_LIMITATION: "STALE",
     Outcome.UNEXPECTED: "UNEXP",
+    Outcome.PUBLISHED: "pub",
+    Outcome.UNCONVERTIBLE: "unconv",
+    Outcome.UNPUBLISHED: "unpub",
+    Outcome.DIVERGED: "DIVERGED",
+    Outcome.SELECTS_ANOTHER: "other",
 }
 
 

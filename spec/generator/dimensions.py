@@ -73,10 +73,20 @@ class Outcome(Dimension):
     STALE_LIMITATION = "stale_limitation"
     # Not the outcome the semantics expect.
     UNEXPECTED = "unexpected"
+    # What the conversion layer of a binding answers a request: a resolution
+    # with an available conversion, one whose conversion is not available,
+    # none, and a different answer of the two containers; a request the
+    # binding of another interface answers.
+    PUBLISHED = "published"
+    UNCONVERTIBLE = "unconvertible"
+    UNPUBLISHED = "unpublished"
+    DIVERGED = "diverged"
+    SELECTS_ANOTHER = "selects_another"
 
     @property
     def is_defect(self):
         return self in (Outcome.DOES_NOT_COMPILE, Outcome.CRASHED,
                         Outcome.VIOLATED, Outcome.UNPROBED,
                         Outcome.UNREACHABLE, Outcome.MISDETECTED,
-                        Outcome.STALE_LIMITATION, Outcome.UNEXPECTED)
+                        Outcome.STALE_LIMITATION, Outcome.UNEXPECTED,
+                        Outcome.DIVERGED)

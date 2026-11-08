@@ -62,8 +62,31 @@ function(configure_quality_targets out_check_targets)
     )
     add_custom_target(model-check-${size} DEPENDS ${model_dir}/checked)
   endforeach()
+
+  # The conversion check: conversion.py asks the conversion layer of every
+  # registration what it publishes for every request, as the code compiles,
+  # and compares it with the specification. It resolves nothing, so it
+  # checks every registration in seconds; the model probes check what
+  # resolutions do.
+  set(conversion_dir ${PROJECT_BINARY_DIR}/conversion)
+  set(conversion_configuration ${conversion_dir}/configuration.txt)
+  file(CONFIGURE OUTPUT ${conversion_configuration} CONTENT
+    "${CMAKE_CXX_COMPILER} ${CMAKE_CXX_COMPILER_VERSION}\n${model_flags}\n")
+  add_custom_command(
+    OUTPUT ${conversion_dir}/checked
+    COMMENT "Checking the conversion layer of every registration"
+    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/spec/conversion.py
+      ${conversion_dir}/conversion.json --work ${conversion_dir}/work
+      --compiler ${CMAKE_CXX_COMPILER} "--flags=${model_flags}"
+    COMMAND ${CMAKE_COMMAND} -E touch ${conversion_dir}/checked
+    DEPENDS ${model_inputs} ${conversion_configuration}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    USES_TERMINAL
+    VERBATIM
+  )
+  add_custom_target(conversion-check DEPENDS ${conversion_dir}/checked)
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    list(APPEND check_targets model-check-small)
+    list(APPEND check_targets conversion-check model-check-small)
   endif()
 
   # A report, not a check: it ranks the headers and never fails.
