@@ -224,6 +224,8 @@ class Thing:
       it, rather than a copy of it
     contained: the holder made for the request it is the element of, or
       was copied from the element of, or None
+    made_pointee: whether its element is what a pointer made for the
+      request points to
     """
     layers: tuple
     element: str
@@ -231,6 +233,7 @@ class Thing:
     origin: Origin
     instance: bool
     contained: str = None
+    made_pointee: bool = False
 
     @property
     def lifetime(self):
@@ -279,7 +282,8 @@ def source(scope, form, interfaces=InterfaceSet.DEFAULT):
     return Thing(layers, "interface" if rebound else "leaf",
                  (lifetime,) * (len(layers) + 1),
                  Origin.MADE if traits.makes else Origin.BORROWED,
-                 instance=True)
+                 instance=True,
+                 made_pointee=traits.makes and layers[:1] == (POINTER,))
 
 
 # What can be done with a thing.
@@ -426,6 +430,11 @@ class Gap:
 class Limitation(Enum):
     """A known gap of the library: a step it does not take, or a request it
     does not satisfy, although the semantics allow it."""
+    # A value of what a pointer made for the request points to, copied or
+    # moved out of it, alone or into a holder of it by value. The library
+    # takes such a pointer over into a handle, or for a reference to what it
+    # points to, which a call or a kept class takes.
+    VALUE_OF_MADE_POINTEE = "value_of_made_pointee"
     # A pointer handed over out of a holder made for the request, such as
     # the T * of a std::unique_ptr<T[]> a unique scope makes. The library
     # keeps this one: handing it over would release the holder the
@@ -436,9 +445,21 @@ class Limitation(Enum):
 
 
 GAPS = (
+    Gap(Limitation.VALUE_OF_MADE_POINTEE, "value",
+        lambda context, category, thing: _holds_made_pointee(thing)),
+    Gap(Limitation.VALUE_OF_MADE_POINTEE, "refer",
+        lambda context, category, thing: bool(thing.layers) and
+        _holds_made_pointee(thing)),
     Gap(Limitation.POINTER_OUT_OF_MADE_HOLDER, "point",
         lambda context, category, thing: thing.contained is not None),
 )
+
+
+def _holds_made_pointee(thing):
+    """Whether a thing is what a pointer made for the request points to, or
+    holds it by value."""
+    return thing.made_pointee and not (
+        thing.layers and LAYERS[thing.layers[0]].shares_element)
 
 
 def blocked(context, at, *event):
@@ -516,6 +537,8 @@ def satisfies(things, category, lifetime, layers, context):
                 return thing.lifetimes[1].value >= lifetime.value
             return any(points(thing) for thing in things)
         return False
+    of_shape = [thing for thing in of_shape
+                if not blocked(context, "value", category, thing)]
     if category is Category.RVALUE_REFERENCE:
         # The object the request moves from: one it made.
         return any(thing.origin is Origin.MADE and can_move(thing, context)

@@ -31,14 +31,19 @@ from them. A cell a limitation keeps from resolving is limited, and one that
 resolves although a limitation says it does not is a stale limitation, which the
 [Model Probe](#model-probe) fails on.
 
-The library has one, which it keeps on purpose:
+The library has two:
 
-- `POINTER_OUT_OF_MADE_HOLDER`: a raw pointer handed to the caller out of a
-  holder the registration makes, such as the `T *` of a `std::unique_ptr<T[]>`
-  a unique scope makes. Handing it over would release the holder the
-  registration declares and give the caller an owning raw pointer instead. The
-  caller requests the holder; a pointer a callable `invoke` calls or a kept
-  class takes points into a holder kept for as long as it is used.
+- `VALUE_OF_MADE_POINTEE`: a value of what a pointer a unique scope makes points
+  to, such as a `T` or a `std::optional<T>` of a unique `T *`: the library takes
+  the pointer over into a `std::unique_ptr<T>` or a `std::shared_ptr<T>`, or for
+  a reference to `T` that a callable `invoke` calls or a kept class takes, but
+  copies and moves nothing out of it.
+- `POINTER_OUT_OF_MADE_HOLDER`, which it keeps on purpose: a raw pointer handed
+  to the caller out of a holder the registration makes, such as the `T *` of a
+  `std::unique_ptr<T[]>` a unique scope makes. Handing it over would release the
+  holder the registration declares and give the caller an owning raw pointer
+  instead. The caller requests the holder; a pointer a callable `invoke` calls
+  or a kept class takes points into a holder kept for as long as it is used.
 
 ## Model Probe
 
@@ -129,8 +134,7 @@ The probe covers leaf, selection, kind and provider on the same cover sizes.
 
 ## Generator
 
-The probe and the detection probe share
-[`spec/generator/`](../spec/generator):
+The probe and the detection probe share [`spec/generator/`](../spec/generator):
 
 - `dimensions.py`: an enum per dimension only the probes have, beside the
   vocabulary of the specification. The value of a member is its name in a cell.
