@@ -52,8 +52,7 @@ template <typename Source, typename Conversion> struct type_resolution {
   apply(Resolver &resolver, Context &context, MaterializedSource &&source,
         type_descriptor requested_type, type_descriptor registered_type) {
     if constexpr (!Conversion::available) {
-      throw make_type_not_convertible_exception(requested_type,
-                                                registered_type);
+      throw_type_not_convertible(requested_type, registered_type);
     } else if constexpr (std::is_lvalue_reference_v<Source>) {
       return Conversion::apply(resolver, context, *source, requested_type,
                                registered_type);

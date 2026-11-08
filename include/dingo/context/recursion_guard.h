@@ -63,7 +63,7 @@ template <typename T> struct recursion_guard {
     for (const recursion_guard *guard = prev_; guard != nullptr;
          guard = guard->prev_) {
       if (guard->binding_ == binding_) {
-        throw detail::make_type_recursion_exception<T>(context);
+        detail::throw_type_recursion(describe_type<T>(), context);
       }
     }
     // The destructor unlinks the guard, which GCC does not see when it warns

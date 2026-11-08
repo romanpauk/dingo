@@ -381,7 +381,7 @@ private:
                                    std::forward<Actual>(source), requested,
                                    registered);
     } else {
-      throw make_type_not_convertible_exception(requested, registered);
+      throw_type_not_convertible(requested, registered);
     }
   }
 };

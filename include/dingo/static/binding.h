@@ -283,7 +283,7 @@ private:
 
   template <typename Request, typename InterfaceBinding, typename Context>
   [[noreturn]] static void not_convertible(Context &context) {
-    throw make_type_not_convertible_exception(
+    throw_type_not_convertible(
         describe_type<Request>(),
         describe_type<typename InterfaceBinding::storage_type::type>(),
         context);

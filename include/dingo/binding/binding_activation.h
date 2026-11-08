@@ -331,8 +331,8 @@ struct binding_activation {
                       "the caller; take it by value, or let a shared scope "
                       "keep what refers to it");
       } else if (scope.is_caller()) {
-        throw make_type_not_convertible_exception(
-            describe_type<Request>(), describe_type<source_type>(), context);
+        throw_type_not_convertible(describe_type<Request>(),
+                                   describe_type<source_type>(), context);
       }
       auto &value = context.template construct_from<source_type>(
           scope, [&]() -> decltype(auto) {
