@@ -112,9 +112,12 @@ does not resolve the static container rejects as it compiles, except a request
 for the alternative an alternative type does not hold; the runtime container
 throws `type_not_convertible`, except for what the types of a request rule out.
 
-What the library does not do yet, although the semantics allow it, is a named
+What the library does not do, although the semantics allow it, is a named
 limitation: a filter over the steps and references of the semantics, kept apart
-from them. The [Model Probe](#model-probe) compares the library with the
+from them. One is kept on purpose: `POINTER_OUT_OF_MADE_HOLDER`, a raw pointer
+handed to the caller out of a holder the registration makes, such as the `T *`
+of a unique `std::unique_ptr<T[]>`, which would release the holder the user
+declared. The [Model Probe](#model-probe) compares the library with the
 specification.
 
 ## Model Probe

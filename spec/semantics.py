@@ -426,7 +426,12 @@ class Gap:
 class Limitation(Enum):
     """A known gap of the library: a step it does not take, or a request it
     does not satisfy, although the semantics allow it."""
-    # A pointer handed over out of a holder made for the request.
+    # A pointer handed over out of a holder made for the request, such as
+    # the T * of a std::unique_ptr<T[]> a unique scope makes. The library
+    # keeps this one: handing it over would release the holder the
+    # registration declared, and give the caller an owning raw pointer
+    # instead. The caller requests the holder; a pointer a call or a kept
+    # class takes points into a holder kept in the context.
     POINTER_OUT_OF_MADE_HOLDER = "pointer_out_of_made_holder"
 
 

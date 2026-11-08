@@ -242,6 +242,11 @@ The main constraints are:
 - `resolve<T[N]>()` is not supported because arrays are not returned by value
 - unique array storage can hand out owning handles such as
   `std::unique_ptr<T[]>`, and a `std::shared_ptr<T[N]>` of a bounded array
+- a unique `std::unique_ptr<T[]>` is not resolved for the caller as a `T *`:
+  that would release the owner the registration declares and hand over an owning
+  raw pointer. Resolve the `std::unique_ptr<T[]>` instead; a `T *` that a
+  callable `invoke` calls or a class a `shared` scope keeps takes points into an
+  owner kept for as long as it is used
 - shared array storage can hand out stable borrowed views and shared handles
 
 <!-- { include("../examples/storage/array.cpp", scope="////") -->
