@@ -27,6 +27,7 @@ MARKS = {
     Outcome.UNEXPECTED: "UNEXP",
     Outcome.PUBLISHED: "pub",
     Outcome.COMPOSED: "comp",
+    Outcome.ADOPTED: "adopt",
     Outcome.UNCONVERTIBLE: "unconv",
     Outcome.UNPUBLISHED: "unpub",
     Outcome.DIVERGED: "DIVERGED",

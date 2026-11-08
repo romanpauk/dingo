@@ -42,19 +42,13 @@ from them. A cell a limitation keeps from resolving is limited, and one that
 resolves although a limitation says it does not is a stale limitation, which the
 [Model Probe](#model-probe) fails on.
 
-The library has two:
-
-- `VALUE_OF_MADE_POINTEE`: a value of what a pointer a unique scope makes points
-  to, such as a `T` or a `std::optional<T>` of a unique `T *`: the library takes
-  the pointer over into a `std::unique_ptr<T>` or a `std::shared_ptr<T>`, or for
-  a reference to `T` that a callable `invoke` calls or a kept class takes, but
-  copies and moves nothing out of it.
-- `POINTER_OUT_OF_MADE_HOLDER`, which it keeps on purpose: a raw pointer handed
-  to the caller out of a holder the registration makes, such as the `T *` of a
-  `std::unique_ptr<T[]>` a unique scope makes. Handing it over would release the
-  holder the registration declares and give the caller an owning raw pointer
-  instead. The caller requests the holder; a pointer a callable `invoke` calls
-  or a kept class takes points into a holder kept for as long as it is used.
+The library has one, which it keeps on purpose: `POINTER_OUT_OF_MADE_HOLDER`, a
+raw pointer handed to the caller out of a holder the registration makes, such as
+the `T *` of a `std::unique_ptr<T[]>` a unique scope makes. Handing it over
+would release the holder the registration declares and give the caller an owning
+raw pointer instead. The caller requests the holder; a pointer a callable
+`invoke` calls or a kept class takes points into a holder kept for as long as it
+is used.
 
 ## Model Probe
 
@@ -124,19 +118,21 @@ shape of up to three wrappers, as the code compiles: whether the request lists
 of the static container select a resolution of the request, whether the
 descriptors the runtime container dispatches on select the same one, and whether
 its conversion is available, and whether it composes a wrapper it does not
-publish ([`test/model/conversion.h`](../test/model/conversion.h)). No container
-is made and nothing resolves, so every registration is checked, many in a
-program, in about a minute.
+publish or takes a value over from a pointer it makes
+([`test/model/conversion.h`](../test/model/conversion.h)). No container is made
+and nothing resolves, so every registration is checked, many in a program, in
+about a minute.
 
 A published request has to be one the specification, with the limitations of the
 library, resolves in some position, and a request it resolves for the caller has
-to be published: what the library resolves into the context of a call, a value
-placed there or a pointer it adopts, it does not publish. The check fails when
-the two containers select differently, a registration does not compile, a
-published request is unprobed or unreachable, or a cell is not what the
-specification expects. Of a storage that cannot be made, and of the other
-alternative of an alternative type, which a probe's never holds, it compares
-nothing. What resolving a request does is the [Model Probe](#model-probe)'s.
+to be published, composed or taken over from a pointer: what the library
+resolves into the context of a call, a value placed there or a reference into a
+pointer it adopts, it does not publish. The check fails when the two containers
+select differently, a registration does not compile, a published request is
+unprobed or unreachable, or a cell is not what the specification expects. Of a
+storage that cannot be made, and of the other alternative of an alternative
+type, which a probe's never holds, it compares nothing. What resolving a request
+does is the [Model Probe](#model-probe)'s.
 
 ## Constructor Detection Probe
 

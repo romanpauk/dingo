@@ -84,6 +84,9 @@ void publication(const std::string &prefix, const char *name) {
     if constexpr (detail::composes_request<
                       Request, detail::binding<type, Model>>::value) {
       record(cell.c_str(), "composed", nullptr);
+    } else if constexpr (detail::adopts_request_pointer_v<
+                             Request, detail::binding<type, Model>>) {
+      record(cell.c_str(), "adopted", nullptr);
     } else {
       record(cell.c_str(), "unpublished", nullptr);
     }

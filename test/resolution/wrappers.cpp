@@ -491,3 +491,54 @@ TEST(wrappers_runtime_test, external_custom_wrappers_resolve_as_stored) {
           optional);
   EXPECT_EQ(&expect_custom_optional(optional_referenced), &optional);
 }
+
+namespace {
+// Counts the live objects of a leaf a unique scope makes as a raw pointer.
+struct counted_pointee {
+  counted_pointee() { ++live; }
+  counted_pointee(const counted_pointee &) { ++live; }
+  counted_pointee(counted_pointee &&) noexcept { ++live; }
+  ~counted_pointee() { --live; }
+  static int live;
+};
+int counted_pointee::live = 0;
+
+counted_pointee *make_counted_pointee() { return new counted_pointee; }
+
+// A value of what a pointer the scope makes points to is moved out of it,
+// and the pointer is deleted: no object outlives what was resolved.
+template <typename Container> void expect_values_of_made_pointee() {
+  {
+    Container container;
+    if constexpr (std::is_same_v<Container, runtime_container<>>) {
+      container
+          .template register_type<scope<unique>, storage<counted_pointee *>,
+                                  factory<function<make_counted_pointee>>>();
+    }
+    {
+      auto value = container.template resolve<counted_pointee>();
+      auto moved = container.template resolve<counted_pointee &&>();
+      auto optional =
+          container.template resolve<std::optional<counted_pointee>>();
+      auto shared = container.template resolve<
+          std::shared_ptr<std::optional<counted_pointee>>>();
+      EXPECT_TRUE(optional.has_value());
+      EXPECT_TRUE(shared->has_value());
+      EXPECT_EQ(counted_pointee::live, 4);
+      (void)value, (void)moved;
+    }
+    EXPECT_EQ(counted_pointee::live, 0);
+  }
+  EXPECT_EQ(counted_pointee::live, 0);
+}
+} // namespace
+
+TEST(wrappers_test, runtime_values_of_made_pointee_are_moved_out_of_it) {
+  expect_values_of_made_pointee<runtime_container<>>();
+}
+
+TEST(wrappers_test, static_values_of_made_pointee_are_moved_out_of_it) {
+  expect_values_of_made_pointee<static_container<
+      bindings<bind<scope<unique>, storage<counted_pointee *>,
+                    factory<function<make_counted_pointee>>>>>>();
+}

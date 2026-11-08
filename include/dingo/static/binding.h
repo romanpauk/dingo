@@ -189,6 +189,7 @@ inline constexpr bool places_request_value_v = [] {
 template <typename Request, typename InterfaceBinding>
 inline constexpr bool adopts_request_pointer_v = [] {
   using storage = typename InterfaceBinding::binding_model_type::storage_type;
+  using value_type = remove_cvref_t<Request>;
   if constexpr (std::is_lvalue_reference_v<Request> &&
                 adopts_made_pointer_v<storage,
                                       std::remove_reference_t<Request>>) {
@@ -197,6 +198,15 @@ inline constexpr bool adopts_request_pointer_v = [] {
            binding_supports_request_v<
                std::add_pointer_t<std::remove_reference_t<Request>>,
                InterfaceBinding>;
+  } else if constexpr (!std::is_lvalue_reference_v<Request> &&
+                       !std::is_pointer_v<Request> &&
+                       std::is_object_v<value_type> &&
+                       !std::is_array_v<value_type> &&
+                       takes_made_pointee_v<storage> &&
+                       std::is_constructible_v<value_type, value_type &&>) {
+    // A value of what the pointer points to is moved out of it.
+    return !binding_supports_request_v<Request, InterfaceBinding> &&
+           binding_supports_request_v<value_type *, InterfaceBinding>;
   } else {
     return false;
   }
@@ -313,17 +323,31 @@ private:
     }
   }
 
-  // Resolves a reference request as the pointer the storage hands over, and
-  // places an owner of the pointer in the context.
+  // Resolves a request of what the pointer the storage hands over points to
+  // as the pointer, and adopts it. A reference refers to what it points to,
+  // through an owner placed in the context; a value is moved out of it.
   template <typename InterfaceBinding, typename Request, typename Host,
             typename Context, typename Scope>
   Request adopt_pointer(Scope scope, Host &host, Context &context) {
     using pointer_type = std::add_pointer_t<std::remove_reference_t<Request>>;
-    refuse_caller<InterfaceBinding, Request>(scope, context);
-    pointer_type pointer =
-        resolve<InterfaceBinding, pointer_type>(scope, host, context);
-    place_adopted_pointer(scope, context, pointer);
-    return *pointer;
+    if constexpr (std::is_lvalue_reference_v<Request>) {
+      refuse_caller<InterfaceBinding, Request>(scope, context);
+      pointer_type pointer =
+          resolve<InterfaceBinding, pointer_type>(scope, host, context);
+      place_adopted_pointer(scope, context, pointer);
+      return *pointer;
+    } else {
+      using value_type = remove_cvref_t<Request>;
+      value_type *pointer =
+          resolve<InterfaceBinding, value_type *>(scope, host, context);
+      if constexpr (std::is_rvalue_reference_v<Request>) {
+        place_adopted_pointer(scope, context, pointer);
+        return std::move(*pointer);
+      } else {
+        auto owner = detail::adopt_pointer(pointer);
+        return Request(std::move(*owner));
+      }
+    }
   }
 
   // Makes a wrapper of the value it holds, which it resolves. A reference or

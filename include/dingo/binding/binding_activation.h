@@ -182,6 +182,13 @@ inline constexpr bool adopts_made_pointer_v =
          storage_form::pointer ||
      std::is_array_v<Pointee>);
 
+// Whether a value of what a pointer the storage hands over points to is
+// moved out of it: one to an object, not to an array.
+template <typename Storage>
+inline constexpr bool takes_made_pointee_v =
+    hands_over_made_pointers_v<Storage> &&
+    storage_form_traits<typename Storage::type>::form == storage_form::pointer;
+
 // The owner of a pointer handed over to a request, which a reference to what
 // it points to is resolved through: the owner is placed in the context.
 template <typename T> std::unique_ptr<T> adopt_pointer(T *pointer) {
