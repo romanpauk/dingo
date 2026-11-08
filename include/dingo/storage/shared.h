@@ -59,7 +59,7 @@ using shared_value_t =
     std::conditional_t<type_traits<Type>::enabled, StoredType, Type>;
 
 // A shared instance of the registered type, or of the stored type a wrapper
-// converts to. A bounded array is published by its first element.
+// converts to.
 template <typename Type, typename StoredType, typename Factory>
 class storage_instance<shared, Type, StoredType, Factory>
     : Factory, public shared_value<shared_value_t<Type, StoredType>> {
@@ -101,8 +101,6 @@ public:
   decltype(auto) get() const {
     if constexpr (converts) {
       return *this->pointer();
-    } else if constexpr (std::is_array_v<Type>) {
-      return std::addressof((*this->pointer())[0]);
     } else {
       return this->pointer();
     }

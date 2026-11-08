@@ -70,8 +70,10 @@ derives a request by. An operation is applied to the source, unwraps it before
 an inner conversion, or wraps what an inner conversion returns:
 
 - `conversion_leaf`: the source itself, a reference to it or to its base, its
-  address, the array a pointer to its first element points to, the address of
-  the element of a wrapper, or what `type_conversion_traits` converts it to
+  address, the pointer an array decays to, a pointer to the array an owning
+  pointer to its first element points to, as a unique scope hands over an array
+  it makes, the address of the element of a wrapper, or what
+  `type_conversion_traits` converts it to
 - `conversion_unwrap`: the element a pointer or a wrapper lends, its
   `type_traits::borrow`; the alternative an alternative type holds is unwrapped
   by `alternative_type_conversion`, each alternative a branch of its own
@@ -103,15 +105,16 @@ the storage. A new operation provides `apply`, a function returning its path,
 and a place in `op`; the conversion its path makes provides `available`,
 `required_access`, `cache_types` and `apply`.
 
-Factory construction and storage rebinding use this operation model as well.
-When a factory selects an alternative to construct, Dingo plans the conversion
-from that selected value to the requested wrapper shape and executes the
-resulting wrapper/alternative operations. Storage rebinding similarly selects a
-conversion operation rather than calling `type_conversion_traits` directly.
-There is no separate recursive construction trait for wrapper composition.
-Conversion planning marks a route that starts by constructing the selected
-factory type. Factory dispatch consumes that route directly; it does not inspect
-the conversion tree for variants or wrappers.
+Factory construction and storage rebinding use this operation model as well. A
+storage hands out an array as it hands out any other object, and the conversion
+decays it. When a factory selects an alternative to construct, Dingo plans the
+conversion from that selected value to the requested wrapper shape and executes
+the resulting wrapper/alternative operations. Storage rebinding similarly
+selects a conversion operation rather than calling `type_conversion_traits`
+directly. There is no separate recursive construction trait for wrapper
+composition. Conversion planning marks a route that starts by constructing the
+selected factory type. Factory dispatch consumes that route directly; it does
+not inspect the conversion tree for variants or wrappers.
 
 The conversion's `available` value and required source access come from that
 same recursive decomposition. Leaf operations require either `borrow` or

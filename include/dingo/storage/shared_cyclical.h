@@ -124,13 +124,7 @@ public:
     return get();
   }
 
-  auto *get() const {
-    if constexpr (std::is_array_v<Type>) {
-      return std::addressof((*this->pointer())[0]);
-    } else {
-      return this->pointer();
-    }
-  }
+  auto *get() const { return this->pointer(); }
 
   template <typename Context, typename Container, typename Scope>
   void construct(Scope scope, Context &context, Container &container) {

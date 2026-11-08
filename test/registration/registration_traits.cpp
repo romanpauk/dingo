@@ -500,6 +500,21 @@ TEST(type_registration_test, conversion_availability_uses_source_access) {
       !std::is_same_v<
           detail::type_conversion_path_t<void *, address_variant &, borrow>,
           detail::conversion_leaf<detail::address, void *, borrow>>);
+  // An lvalue array decays to a pointer to its first element.
+  static_assert(
+      std::is_same_v<
+          detail::type_conversion_path_t<int (*)[3], int (&)[2][3], borrow>,
+          detail::conversion_leaf<detail::decay, int (*)[3], borrow>>);
+  static_assert(
+      !detail::is_type_conversion_available_v<int (*)[4], int (&)[2][3]>);
+  static_assert(
+      !detail::is_type_conversion_available_v<int (*)[3],
+                                              volatile int (&)[2][3]>);
+  static_assert(
+      detail::is_type_conversion_available_v<const volatile int (*)[3],
+                                             int (&)[2][3]>);
+  // A pointer to the first element of an array is a pointer to the array, of
+  // the same element.
   static_assert(
       detail::is_type_conversion_available_v<int (*)[2][3], int (*)[3]>);
   static_assert(

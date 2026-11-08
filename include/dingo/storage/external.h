@@ -75,12 +75,9 @@ public:
   template <typename T>
   storage_instance(T &&instance) : instance_(hold(std::forward<T>(instance))) {}
 
-  // An array is published by its first element, a pointer by value and
-  // anything else by reference.
+  // A pointer is published by value and anything else by reference.
   decltype(auto) get() {
-    if constexpr (std::is_array_v<Type>) {
-      return &instance_[0];
-    } else if constexpr (std::is_pointer_v<Type>) {
+    if constexpr (std::is_pointer_v<Type>) {
       return instance_;
     } else {
       return (instance_);

@@ -291,17 +291,20 @@ struct address {
   }
 };
 
-// The array a pointer to its first element points to, as a reference or as a
-// pointer.
+// The first element of an array, as the pointer the array decays to.
+struct decay {
+  template <typename Target, typename Actual>
+  static Target apply(Actual &&source) {
+    return static_cast<Target>(source);
+  }
+};
+
+// The array an owning pointer to its first element points to, as a pointer:
+// a scope hands an array it makes over as a pointer to its first element.
 struct array_view {
   template <typename Target, typename Actual>
   static Target apply(Actual &&source) {
-    if constexpr (std::is_pointer_v<Target>) {
-      return reinterpret_cast<Target>(source);
-    } else {
-      return *reinterpret_cast<
-          std::add_pointer_t<std::remove_reference_t<Target>>>(source);
-    }
+    return reinterpret_cast<Target>(source);
   }
 };
 
@@ -601,22 +604,6 @@ inline constexpr bool has_selected_alternative_v<
     std::void_t<typename type_traits<
         std::remove_cv_t<Target>>::template selected_type<Source>>> = true;
 
-// Whether an array a pointer to its first element points to is the target.
-template <typename Target, typename Source> constexpr bool projects_array() {
-  using target_array = std::conditional_t<std::is_pointer_v<Target>,
-                                          std::remove_pointer_t<Target>,
-                                          std::remove_reference_t<Target>>;
-  using projected_element = std::remove_extent_t<target_array>;
-  using source_type = std::remove_reference_t<Source>;
-  using source_element = std::remove_pointer_t<source_type>;
-  return (std::is_lvalue_reference_v<Target> || std::is_pointer_v<Target>) &&
-         std::is_array_v<target_array> && std::is_pointer_v<source_type> &&
-         std::is_same_v<std::remove_cv_t<source_element>,
-                        std::remove_cv_t<projected_element>> &&
-         std::is_convertible_v<std::add_pointer_t<source_element>,
-                               std::add_pointer_t<projected_element>>;
-}
-
 // The path of each operation: the conversion it makes of the source with the
 // conversion of what it unwraps or wraps, or unavailable when the operation
 // does not apply. A path whose inner conversion is unavailable is unavailable.
@@ -724,10 +711,41 @@ constexpr auto wrap_optional_path() {
   }
 }
 
+// The pointer an lvalue array decays to, for a pointer target it converts to.
+template <typename Target, typename Source, typename Access>
+constexpr auto decay_path() {
+  using array = std::remove_reference_t<Source>;
+  if constexpr (std::is_pointer_v<Target> &&
+                std::is_lvalue_reference_v<Source> && std::is_array_v<array> &&
+                std::is_convertible_v<
+                    std::add_pointer_t<std::remove_extent_t<array>>, Target>) {
+    return conversion_leaf<decay, Target, borrow>{};
+  } else {
+    return unavailable_type_conversion{};
+  }
+}
+
+// A pointer to the array a pointer to its first element points to.
+template <typename Array, typename Element> constexpr bool views_array() {
+  if constexpr (std::is_array_v<Array>) {
+    using row = std::remove_extent_t<Array>;
+    return std::is_same_v<std::remove_cv_t<Element>, std::remove_cv_t<row>> &&
+           std::is_convertible_v<Element *, row *>;
+  } else {
+    return false;
+  }
+}
+
 template <typename Target, typename Source, typename Access>
 constexpr auto array_view_path() {
-  if constexpr (projects_array<Target, Source>()) {
-    return conversion_leaf<array_view, Target, borrow>{};
+  using source = std::remove_reference_t<Source>;
+  if constexpr (std::is_pointer_v<Target> && std::is_pointer_v<source>) {
+    if constexpr (views_array<std::remove_pointer_t<Target>,
+                              std::remove_pointer_t<source>>()) {
+      return conversion_leaf<array_view, Target, borrow>{};
+    } else {
+      return unavailable_type_conversion{};
+    }
   } else {
     return unavailable_type_conversion{};
   }
@@ -834,6 +852,7 @@ enum class op : std::size_t {
   wrap_alternative,
   held_alternative,
   wrap_optional,
+  decay,
   array_view,
   address,
   element_ptr,
@@ -855,6 +874,8 @@ constexpr auto path() {
     return held_alternative_path<Target, Source, Access>();
   } else if constexpr (Op == op::wrap_optional) {
     return wrap_optional_path<Target, Source, Access>();
+  } else if constexpr (Op == op::decay) {
+    return decay_path<Target, Source, Access>();
   } else if constexpr (Op == op::array_view) {
     return array_view_path<Target, Source, Access>();
   } else if constexpr (Op == op::address) {
