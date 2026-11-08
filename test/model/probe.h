@@ -646,24 +646,19 @@ const char *violation(keeps scope, const First &first, const Second &second) {
   }
   return nullptr;
 }
-// Resolves a request twice in one container and checks the results. A raw
-// pointer resolved from a scope that keeps nothing hands the leaf to the
-// caller, so it is not counted as leaked.
-template <typename Container, typename Setup, typename Resolve>
-void probe(const char *cell, keeps scope, Setup setup, Resolve resolve) {
-  using R = decltype(resolve(std::declval<Container &>()));
+// Runs the resolutions of a probe and records its outcome: what is wrong
+// with them, or the exception they threw. A raw pointer resolved from a scope
+// that keeps nothing hands the leaf to the caller, so it is not counted as
+// leaked. It is not a template: only what resolves depends on the request.
+inline void run_probe(const char *cell, keeps scope, bool hands_over,
+                      const char *(*resolutions)(const void *, keeps),
+                      const void *state) {
   const long live = leaf_interface::live();
   const char *error = nullptr;
   try {
-    {
-      Container c;
-      setup(c);
-      R first = resolve(c);
-      R second = resolve(c);
-      error = violation<R>(scope, first, second);
-    }
+    error = resolutions(state, scope);
     if (!error && leaf_interface::live() != live &&
-        !(scope == keeps::nothing && observation<R>::hands_over)) {
+        !(scope == keeps::nothing && hands_over)) {
       error = "the leaves alive differ after the container is destroyed";
     }
   } catch (const type_not_found_exception &) {
@@ -676,6 +671,28 @@ void probe(const char *cell, keeps scope, Setup setup, Resolve resolve) {
     return record(cell, "exception", e.what());
   }
   record(cell, error ? "violated" : "resolved", error);
+}
+
+// Resolves a request twice in one container, which is destroyed before the
+// leaves alive are counted, and checks the results.
+template <typename Container, typename Setup, typename Resolve>
+void probe(const char *cell, keeps scope, Setup setup, Resolve resolve) {
+  using R = decltype(resolve(std::declval<Container &>()));
+  struct calls {
+    Setup setup;
+    Resolve resolve;
+  } state{setup, resolve};
+  run_probe(
+      cell, scope, observation<R>::hands_over,
+      [](const void *state, keeps scope) -> const char * {
+        const calls &made = *static_cast<const calls *>(state);
+        Container c;
+        made.setup(c);
+        R first = made.resolve(c);
+        R second = made.resolve(c);
+        return violation<R>(scope, first, second);
+      },
+      &state);
 }
 
 } // namespace dingo::model
