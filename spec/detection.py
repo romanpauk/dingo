@@ -83,6 +83,7 @@ def main():
     # The costliest first: the runtime container's.
     selected.sort(key=lambda unit: unit.container_name != "runtime")
     cells = []
+    driver.set_jobs(options.jobs)
     with concurrent.futures.ThreadPoolExecutor(options.jobs) as executor:
         for outcomes in executor.map(
                 lambda unit: probe_unit(options.compiler, flags, options.work,

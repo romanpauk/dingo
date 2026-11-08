@@ -138,6 +138,7 @@ def main():
                    key=lambda task: (task[0].container is not Container.RUNTIME,
                                      task[1].kept_by is None))
     cells = []
+    driver.set_jobs(options.jobs)
     with concurrent.futures.ThreadPoolExecutor(options.jobs) as executor:
         for outcomes in executor.map(
                 lambda task: probe_registration(options.compiler, flags,

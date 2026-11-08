@@ -7,10 +7,13 @@ after the last, so that a compile error is told apart by probe: the
 compiler names the lines of the program an error was instantiated from.
 """
 
+import concurrent.futures
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
+import threading
 
 import jinja2
 
@@ -37,6 +40,27 @@ ERROR_LIMIT = "too many errors emitted"
 ASSERTION = re.compile(
     r"^static assertion failed(?: due to requirement '.*')?:\s*(.*)$")
 CRASH = "exited with"
+
+
+# The compilers running at once, across every program a probe makes: the
+# programs a failed one is split into are compiled concurrently, and this
+# bounds them all.
+COMPILES = threading.BoundedSemaphore(os.cpu_count())
+
+
+def set_jobs(jobs):
+    """Sets how many compilers run at once."""
+    global COMPILES
+    COMPILES = threading.BoundedSemaphore(jobs)
+
+
+def concurrently(calls):
+    """The results of calls, made concurrently, in their order. They wait for
+    a compiler of their own, so a call waiting on others holds none."""
+    if len(calls) <= 1:
+        return [call() for call in calls]
+    with concurrent.futures.ThreadPoolExecutor(len(calls)) as executor:
+        return list(executor.map(lambda call: call(), calls))
 
 
 def render(template, **context):
@@ -73,8 +97,9 @@ def build_and_run(compiler, flags, directory, name, source):
     cpp = directory / f"{name}.cpp"
     exe = directory / name
     cpp.write_text(source)
-    result = subprocess.run([compiler, *flags, str(cpp), "-o", str(exe)],
-                            capture_output=True, text=True)
+    with COMPILES:
+        result = subprocess.run([compiler, *flags, str(cpp), "-o", str(exe)],
+                                capture_output=True, text=True)
     if result.returncode != 0:
         return None, result.stderr, None
     run = subprocess.run([str(exe)], capture_output=True, text=True)
@@ -173,8 +198,9 @@ def probe_alone(compiler, flags, directory, unit, name, probe):
 def probe_group(compiler, flags, directory, unit, name, probes):
     """Makes probes in one program, until they compile. The probes a compile
     fails for are recorded with their first error and the rest are compiled
-    again; probes whose errors cannot be told apart, or that crash, are made
-    one at a time."""
+    again. Probes whose errors cannot be told apart, or that crash, are made
+    one at a time, concurrently, and so are the rest when a compile tells
+    apart few of them: a failure they share is reported for one at a time."""
     outcomes = []
     while probes:
         records, stderr, crash, owners = compile_probes(
@@ -186,10 +212,15 @@ def probe_group(compiler, flags, directory, unit, name, probes):
             break
         outcomes += [failure(unit, probe, error)
                      for probe, error in failed.items()]
+        told_apart = len(failed) * 4 >= len(probes)
         probes = [probe for probe in probes if probe not in failed]
-    for index, probe in enumerate(probes):
-        outcomes += probe_alone(compiler, flags, directory, unit,
-                                f"{name}__{index}", probe)
+        if not told_apart:
+            break
+    for alone in concurrently([
+            lambda index=index, probe=probe: probe_alone(
+                compiler, flags, directory, unit, f"{name}__{index}", probe)
+            for index, probe in enumerate(probes)]):
+        outcomes += alone
     return outcomes
 
 
@@ -220,16 +251,18 @@ def probe_shared(compiler, flags, directory, unit, name, probes):
     else:
         # Nothing could be told apart: every probe is a suspect.
         suspects = rest
-    outcomes += probe_shared(compiler, flags, directory, unit, f"{name}_",
-                             [probe for probe in rest
-                              if probe not in suspects])
     # The programs are named after this one: a unit may be probed by several
-    # programs at once, which must not write one file.
-    for operation in sorted({probe.operation for probe in suspects}):
-        outcomes += probe_group(
-            compiler, flags, directory, unit,
-            f"{name}__{operation.name}",
-            [probe for probe in suspects if probe.operation == operation])
+    # programs at once, which must not write one file. They are independent,
+    # and compiled concurrently.
+    calls = [lambda: probe_shared(compiler, flags, directory, unit,
+                                  f"{name}_", [probe for probe in rest
+                                               if probe not in suspects])]
+    calls += [lambda operation=operation: probe_group(
+        compiler, flags, directory, unit, f"{name}__{operation.name}",
+        [probe for probe in suspects if probe.operation == operation])
+        for operation in sorted({probe.operation for probe in suspects})]
+    for found in concurrently(calls):
+        outcomes += found
     return outcomes
 
 
