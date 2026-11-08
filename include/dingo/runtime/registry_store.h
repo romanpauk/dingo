@@ -764,12 +764,12 @@ protected:
         record_lookup_rollback<LookupEntry>(transaction, state, handle,
                                             key_arg);
       } else {
-        check_lookup_commit(replace_lookup<LookupEntry>(transaction, state,
-                                                        handle, key_arg,
-                                                        std::move(value)),
-                            describe_type<TypeInterface>(),
-                            describe_type<typename TypeStorage::type>(),
-                            detail::registration_key_type<KeyArg>(lookup_key));
+        check_lookup_commit(
+            replace_lookup<LookupEntry>(transaction, state, handle, key_arg,
+                                        std::move(value)),
+            detail::described_type_v<TypeInterface>,
+            detail::described_type_v<typename TypeStorage::type>,
+            detail::registration_key_type<KeyArg>(lookup_key));
       }
     } else {
       auto handle =

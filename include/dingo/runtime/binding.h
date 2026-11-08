@@ -178,7 +178,7 @@ private:
   state_type &state() { return state_traits::ref(state_); }
 
   static constexpr type_descriptor registered_type() {
-    return describe_type<detail::registered_type_t<Storage>>();
+    return detail::described_type_v<detail::registered_type_t<Storage>>;
   }
 
   // Whether a request is of an address: an lvalue reference or a pointer. A

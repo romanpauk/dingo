@@ -216,7 +216,7 @@ class shared_cyclical_storage {
   template <typename T> struct typed_conversion_entry : conversion_entry {
     template <typename Source>
     explicit typed_conversion_entry(Source &&source)
-        : conversion_entry(describe_type<T>()),
+        : conversion_entry(detail::described_type_v<T>),
           value(std::forward<Source>(source)) {}
 
     T value;
@@ -289,7 +289,7 @@ public:
   template <typename T, typename Context, typename Source>
   T &resolve_conversion(Context &, Source &&source) {
     for (auto &entry : conversions_) {
-      if (entry->descriptor == describe_type<T>()) {
+      if (entry->descriptor == detail::described_type_v<T>) {
         return static_cast<typed_conversion_entry<T> &>(*entry).value;
       }
     }

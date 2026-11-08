@@ -33,8 +33,8 @@ Target convert_type(Source &&source, Conversion) {
 
   empty_conversion_context state;
   return Conversion::apply(state, state, std::forward<Source>(source),
-                           describe_type<Target>(),
-                           describe_type<source_type>());
+                           detail::described_type_v<Target>,
+                           detail::described_type_v<source_type>);
 }
 
 template <typename Target, typename Access = consume, typename Source>

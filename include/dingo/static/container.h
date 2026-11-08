@@ -382,8 +382,8 @@ private:
   [[noreturn]] void ambiguous(Context &context) {
     static_assert(dependent_false_v<Request, Context>,
                   "static_container cannot resolve an ambiguously bound type");
-    throw_type_ambiguous(describe_type<typename Request::lookup_type>(),
-                         context);
+    throw_type_ambiguous(
+        detail::described_type_v<typename Request::lookup_type>, context);
   }
 
   template <typename Lookup, typename LookupKey>

@@ -509,8 +509,8 @@ private:
 
   template <typename Request>
   [[noreturn]] void ambiguous(runtime_context_type &context) {
-    detail::throw_type_ambiguous(describe_type<typename Request::lookup_type>(),
-                                 context);
+    detail::throw_type_ambiguous(
+        detail::described_type_v<typename Request::lookup_type>, context);
   }
 
   // A registration container answers its misses through its parent; the

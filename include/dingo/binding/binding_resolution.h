@@ -55,7 +55,8 @@ template <typename T> T convert_resolved_binding(resolved_address result) {
   } else if constexpr (is_copy_constructible_v<value_type>) {
     return *static_cast<value_type *>(result.address);
   } else {
-    throw_type_not_convertible(describe_type<T>(), describe_type<value_type>());
+    throw_type_not_convertible(detail::described_type_v<T>,
+                               detail::described_type_v<value_type>);
   }
 }
 
@@ -78,7 +79,8 @@ decltype(auto) consume_resolved_binding(Instance &&instance, Fn &&fn) {
 template <typename Resolution>
 constexpr bool matches_resolution_request(type_descriptor requested_type) {
   return matches_qualification_conversion(
-      describe_type<typename Resolution::target_type>(), requested_type);
+      detail::described_type_v<typename Resolution::target_type>,
+      requested_type);
 }
 
 } // namespace detail
@@ -89,7 +91,7 @@ T resolve_binding_request(construction_scope scope, Binding &binding,
   return detail::convert_resolved_binding<T>(binding.resolve_request(
       scope, context,
       {RTTI::template get_type_index<request_lookup_type_t<T>>(),
-       describe_type<T>()},
+       detail::described_type_v<T>},
       cache_key));
 }
 

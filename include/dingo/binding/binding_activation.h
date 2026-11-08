@@ -331,8 +331,9 @@ struct binding_activation {
                       "the caller; take it by value, or let a shared scope "
                       "keep what refers to it");
       } else if (scope.is_caller()) {
-        throw_type_not_convertible(describe_type<Request>(),
-                                   describe_type<source_type>(), context);
+        throw_type_not_convertible(detail::described_type_v<Request>,
+                                   detail::described_type_v<source_type>,
+                                   context);
       }
       auto &value = context.template construct_from<source_type>(
           scope, [&]() -> decltype(auto) {
@@ -352,7 +353,7 @@ struct binding_activation {
                        type_descriptor requested_type) {
     return Resolution::operation::apply(
         *this, context, std::forward<Source>(source), requested_type,
-        describe_type<typename storage_type::type>());
+        detail::described_type_v<typename storage_type::type>);
   }
 
   // The address of the instance of a resolution, applied to a source.
@@ -380,7 +381,7 @@ struct binding_activation {
     return with_source<Request>(context, [&](auto &&source) {
       return resolve_address<Resolution>(context,
                                          std::forward<decltype(source)>(source),
-                                         describe_type<Request>());
+                                         detail::described_type_v<Request>);
     });
   }
 
@@ -391,7 +392,7 @@ struct binding_activation {
     return with_source<Request>(context, [&](auto &&source) -> decltype(auto) {
       auto &&instance =
           apply<Resolution>(context, std::forward<decltype(source)>(source),
-                            describe_type<Request>());
+                            detail::described_type_v<Request>);
       return consume_resolved_binding<Request>(
           std::forward<decltype(instance)>(instance), std::forward<Fn>(fn));
     });

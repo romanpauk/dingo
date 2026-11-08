@@ -127,8 +127,8 @@ make_type_not_found_exception(type_descriptor request, const Context &context,
 template <typename Collection, typename ResolveType>
 type_not_found_exception make_collection_type_not_found_exception() {
   std::string message = "type not found for collection ";
-  append_text(message, describe_type<Collection>(),
-              " (element type: ", describe_type<ResolveType>(), ")");
+  append_text(message, detail::described_type_v<Collection>,
+              " (element type: ", detail::described_type_v<ResolveType>, ")");
   return type_not_found_exception(std::move(message));
 }
 
@@ -216,11 +216,11 @@ template <typename Context>
 template <typename BackendKey, typename Selector>
 constexpr type_descriptor registration_key_type(const lookup_key<Selector> &) {
   if constexpr (!std::is_same_v<std::decay_t<BackendKey>, none_t>) {
-    return describe_type<std::decay_t<BackendKey>>();
+    return detail::described_type_v<std::decay_t<BackendKey>>;
   } else if constexpr (std::is_same_v<Selector, key_type<none_t>>) {
-    return describe_type<none_t>();
+    return detail::described_type_v<none_t>;
   } else {
-    return describe_type<Selector>();
+    return detail::described_type_v<Selector>;
   }
 }
 
