@@ -69,8 +69,8 @@ are every shape of every bound interface `I`: `I`, `std::shared_ptr<I>`,
 `const *`. A registration of a stored form of two wrappers, such as
 `std::shared_ptr<std::optional<L>>`, requests its own shape too, and a unique
 handle of one the shape of the shared handle it converts to; a registration of a
-leaf that can be moved, stored plainly or in one wrapper and selected plainly,
-requests every shape of two wrappers, such as
+leaf that can be moved, stored plainly or in one wrapper, however it is declared
+and selected, requests every shape of two wrappers, such as
 `std::optional<std::shared_ptr<I>>`. A request that is not valid C++, such as an
 abstract type held by value, is recorded as invalid with the reason.
 

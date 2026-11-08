@@ -106,12 +106,10 @@ class Registration:
     def composes(self):
         """Whether the registration is requested as every shape of two
         wrappers too: one of a leaf that can be moved, stored plainly or in
-        one wrapper, declared and selected plainly."""
+        one wrapper, however it is declared and selected."""
         return (self.form in (StoredForm.PLAIN, StoredForm.SHARED_HANDLE,
                               StoredForm.UNIQUE_HANDLE, StoredForm.OPTIONAL)
-                and self.leaf in (Leaf.COPYABLE, Leaf.MOVE_ONLY) and
-                self.interfaces_declared is InterfaceSet.DEFAULT and
-                self.selection is Selection.PLAIN)
+                and self.leaf in (Leaf.COPYABLE, Leaf.MOVE_ONLY))
 
     def grammar(self, interfaces):
         """The requests of the grammar over interfaces: with the shapes of
