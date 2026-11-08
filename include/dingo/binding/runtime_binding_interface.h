@@ -16,6 +16,10 @@
 #include <cassert>
 
 namespace dingo {
+namespace detail {
+class retention;
+} // namespace detail
+
 struct resolved_address {
   void *address;
   enum class access_kind {
@@ -29,8 +33,10 @@ template <typename RTTI> struct instance_request {
   // Composes a wrapper the binding does not publish of the value it holds,
   // which it resolves through the binding, into the context.
   using compose_function = resolved_address (*)(void *binding,
+                                                detail::retention *kept,
                                                 construction_scope scope,
-                                                void *context);
+                                                void *context,
+                                                const void *cache_key);
 
   type_index lookup_type;
   type_descriptor requested_type;

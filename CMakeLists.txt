@@ -100,7 +100,6 @@ if(DINGO_DEVELOPMENT_MODE)
         binding/binding_activation.h
         binding/request_composition.h
         binding/request_resolution.h
-        binding/retention.h
         binding/requests.h
         factory/factory_traits.h
         type/key.h
@@ -165,6 +164,7 @@ if(DINGO_DEVELOPMENT_MODE)
         storage/shared_cyclical.h
         storage/shared.h
         storage/storage.h
+        storage/retention.h
         storage/scope_traits.h
         storage/type_storage_traits.h
         storage/unique.h

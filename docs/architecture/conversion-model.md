@@ -195,10 +195,14 @@ again.
 A binding of a scope that keeps its instance keeps what it converts the instance
 to for a reference or a pointer, such as a `std::shared_ptr<I>` of a kept
 `std::shared_ptr<T>`, in the retention of its cell,
-[include/dingo/binding/retention.h](../../include/dingo/binding/retention.h):
+[include/dingo/storage/retention.h](../../include/dingo/storage/retention.h):
 one object per type, under the key of the type, made the first time it is asked
 for, so that every reference to it refers to the same object for as long as the
-binding lives. A runtime container makes the objects in its persistent memory
-and forgets them when the transaction that made them rolls back; a static
-container, which may have no persistent memory, owns them in the retention. A
-binding of a scope that makes an instance for each request keeps nothing.
+binding lives. A wrapper a request composes of a copy that shares the instance,
+such as the `std::optional<std::shared_ptr<T>>` of a kept `std::shared_ptr<T>`,
+is kept there too, and a runtime binding publishes its address in the request
+cache as it does that of a retained conversion. A runtime container makes the
+objects in its persistent memory and forgets them when the transaction that made
+them rolls back; a static container, which may have no persistent memory, owns
+them in the retention. A binding of a scope that makes an instance for each
+request keeps nothing.

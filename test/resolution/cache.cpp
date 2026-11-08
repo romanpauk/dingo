@@ -5,15 +5,18 @@
 // SPDX-License-Identifier: MIT
 //
 
-#include <dingo/binding/retention.h>
 #include <dingo/container.h>
 #include <dingo/resolution/cache.h>
+#include <dingo/static_container.h>
+#include <dingo/storage/retention.h>
 #include <dingo/storage/shared.h>
+#include <dingo/storage/unique.h>
 
 #include <gtest/gtest.h>
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
@@ -52,6 +55,53 @@ struct runtime_conversion_rollback_consumer {
   static std::shared_ptr<runtime_conversion_rollback_interface> *first_handle;
   static std::shared_ptr<runtime_conversion_rollback_interface> *second_handle;
 };
+
+// Takes a wrapper a request composes of a shared handle, and fails while it
+// should.
+struct composed_rollback_consumer {
+  explicit composed_rollback_consumer(
+      std::optional<std::shared_ptr<runtime_conversion_rollback_interface>>
+          &handle) {
+    seen = std::addressof(handle);
+    if (should_throw) {
+      throw std::runtime_error("resolution failed");
+    }
+  }
+
+  static bool should_throw;
+  static std::optional<std::shared_ptr<runtime_conversion_rollback_interface>>
+      *seen;
+};
+
+bool composed_rollback_consumer::should_throw = true;
+std::optional<std::shared_ptr<runtime_conversion_rollback_interface>>
+    *composed_rollback_consumer::seen = nullptr;
+
+// A wrapper of a copy of the handle a shared scope keeps is kept with it: a
+// reference refers to one object, for as long as the container lives, which
+// shares the instance.
+template <typename Container> void expect_kept_composition(Container &c) {
+  using leaf_handle =
+      std::shared_ptr<runtime_conversion_rollback_implementation>;
+  using leaf_wrapper = std::optional<leaf_handle>;
+  using interface_wrapper =
+      std::optional<std::shared_ptr<runtime_conversion_rollback_interface>>;
+  auto &first = c.template resolve<leaf_wrapper &>();
+  auto &again = c.template resolve<const leaf_wrapper &>();
+  auto *pointer = c.template resolve<leaf_wrapper *>();
+  auto &interface = c.template resolve<interface_wrapper &>();
+  auto &kept = c.template resolve<leaf_handle &>();
+  EXPECT_EQ(std::addressof(again), std::addressof(first));
+  EXPECT_EQ(pointer, std::addressof(first));
+  EXPECT_EQ(first->get(), kept.get());
+  EXPECT_EQ(std::addressof(c.template resolve<interface_wrapper &>()),
+            std::addressof(interface));
+  EXPECT_EQ(static_cast<runtime_conversion_rollback_implementation *>(
+                interface->get()),
+            kept.get());
+  auto value = c.template resolve<leaf_wrapper>();
+  EXPECT_EQ(value->get(), kept.get());
+}
 
 bool runtime_conversion_rollback_consumer::should_throw = true;
 std::shared_ptr<runtime_conversion_rollback_interface>
@@ -234,6 +284,68 @@ TEST(cache_test,
           .resolve<std::shared_ptr<runtime_conversion_rollback_interface> &>();
   EXPECT_EQ(std::addressof(after_failure), std::addressof(committed));
   EXPECT_EQ(after_failure.get(), committed.get());
+}
+
+TEST(cache_test, runtime_binding_keeps_composed_wrapper) {
+  dingo::container<> container;
+  container.register_type<
+      scope<shared>,
+      storage<std::shared_ptr<runtime_conversion_rollback_implementation>>,
+      interfaces<runtime_conversion_rollback_interface,
+                 runtime_conversion_rollback_implementation>>();
+  expect_kept_composition(container);
+}
+
+TEST(cache_test, static_binding_keeps_composed_wrapper) {
+  static_container<bindings<
+      bind<scope<shared>,
+           storage<std::shared_ptr<runtime_conversion_rollback_implementation>>,
+           interfaces<runtime_conversion_rollback_interface,
+                      runtime_conversion_rollback_implementation>>>>
+      container;
+  expect_kept_composition(container);
+}
+
+// A wrapper a unique scope makes is the request's: a reference to it is
+// refused to the caller.
+TEST(cache_test, unique_binding_keeps_no_composed_wrapper) {
+  dingo::container<> container;
+  container.register_type<
+      scope<unique>,
+      storage<std::shared_ptr<runtime_conversion_rollback_implementation>>>();
+  EXPECT_THROW(
+      (container.resolve<std::optional<
+           std::shared_ptr<runtime_conversion_rollback_implementation>> &>()),
+      type_not_convertible_exception);
+}
+
+TEST(cache_test, runtime_composed_wrapper_rolls_back_after_failed_resolution) {
+  composed_rollback_consumer::should_throw = true;
+  composed_rollback_consumer::seen = nullptr;
+
+  dingo::container<> container;
+  container.register_type<
+      scope<shared>,
+      storage<std::shared_ptr<runtime_conversion_rollback_implementation>>,
+      interfaces<runtime_conversion_rollback_interface,
+                 runtime_conversion_rollback_implementation>>();
+  container.register_type<scope<shared>, storage<composed_rollback_consumer>>();
+
+  EXPECT_THROW((container.resolve<composed_rollback_consumer &>()),
+               std::runtime_error);
+  ASSERT_NE(composed_rollback_consumer::seen, nullptr);
+  auto &implementation = container.resolve<
+      std::shared_ptr<runtime_conversion_rollback_implementation> &>();
+  // What the failed resolution kept is gone, the handle it copied with it.
+  EXPECT_EQ(implementation.use_count(), 1);
+
+  composed_rollback_consumer::should_throw = false;
+  (void)container.resolve<composed_rollback_consumer &>();
+  auto &kept = container.resolve<std::optional<
+      std::shared_ptr<runtime_conversion_rollback_interface>> &>();
+  EXPECT_EQ(std::addressof(kept), composed_rollback_consumer::seen);
+  // The storage and the kept wrapper share the instance.
+  EXPECT_EQ(implementation.use_count(), 2);
 }
 
 TEST(cache_test, rollback_clears_cache_replaced_by_another_request_shape) {

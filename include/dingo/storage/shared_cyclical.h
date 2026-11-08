@@ -12,6 +12,7 @@
 #include <dingo/base/type_descriptor.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/memory/aligned_storage.h>
+#include <dingo/storage/retention.h>
 #include <dingo/storage/scope_traits.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>
@@ -206,24 +207,10 @@ private:
 template <typename Type, typename StoredType, typename Factory,
           typename Conversions>
 class shared_cyclical_storage {
-  struct conversion_entry {
-    explicit conversion_entry(type_descriptor key) : descriptor(key) {}
-    virtual ~conversion_entry() = default;
-
-    type_descriptor descriptor;
-  };
-
-  template <typename T> struct typed_conversion_entry : conversion_entry {
-    template <typename Source>
-    explicit typed_conversion_entry(Source &&source)
-        : conversion_entry(detail::described_type_v<T>),
-          value(std::forward<Source>(source)) {}
-
-    T value;
-  };
-
   storage_instance<shared_cyclical, Type, StoredType, Factory> instance_;
-  std::vector<std::unique_ptr<conversion_entry>> conversions_;
+  // What the bindings of the instance convert it to, which the graph may
+  // refer to; kept until the instance is reset.
+  retention conversions_;
 
   class local_rollback_guard {
   public:
@@ -286,24 +273,13 @@ public:
     return instance_.get();
   }
 
-  template <typename T, typename Context, typename Source>
-  T &resolve_conversion(Context &, Source &&source) {
-    for (auto &entry : conversions_) {
-      if (entry->descriptor == detail::described_type_v<T>) {
-        return static_cast<typed_conversion_entry<T> &>(*entry).value;
-      }
-    }
-
-    conversions_.push_back(std::make_unique<typed_conversion_entry<T>>(
-        std::forward<Source>(source)));
-    return static_cast<typed_conversion_entry<T> &>(*conversions_.back()).value;
-  }
+  retention &retained() noexcept { return conversions_; }
 
   bool is_resolved() const { return !instance_.empty(); }
 
   void reset() noexcept {
     // Graph objects can keep references to rebound shared_ptr interface
-    // handles stored in `conversions_`. Destroy the object graph first so
+    // handles kept in `conversions_`. Destroy the object graph first so
     // those references stay valid for any destructor work.
     instance_.reset();
     conversions_.clear();

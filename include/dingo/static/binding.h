@@ -327,7 +327,9 @@ private:
   }
 
   // Makes a wrapper of the value it holds, which it resolves. A reference or
-  // a pointer to the wrapper refers to one placed in the context.
+  // a pointer to the wrapper refers to one the binding keeps, when the
+  // wrapper shares the instance it keeps, or else to one placed in the
+  // context.
   template <typename InterfaceBinding, typename Request, typename Host,
             typename Context, typename Scope>
   Request compose_request(Scope scope, Host &host, Context &context) {
@@ -338,14 +340,25 @@ private:
       return compose<wrapper>(
           resolve<InterfaceBinding, inner>(scope, host, context));
     } else {
-      if constexpr (!std::is_rvalue_reference_v<Request>) {
+      auto make = [&]() -> wrapper {
+        return compose<wrapper>(
+            resolve<InterfaceBinding, inner>(scope, host, context));
+      };
+      // A wrapper of what shares the instance the binding keeps is kept with
+      // it; any other lives in the context.
+      constexpr bool retains = retains_composed_v<Request> &&
+                               binding_cell_t<model>::keeps_conversions;
+      if constexpr (!retains && !std::is_rvalue_reference_v<Request>) {
         refuse_caller<InterfaceBinding, Request>(scope, context);
       }
-      auto &value =
-          context.template construct_from<wrapper>(scope, [&]() -> wrapper {
-            return compose<wrapper>(
-                resolve<InterfaceBinding, inner>(scope, host, context));
-          });
+      auto &value = [&]() -> wrapper & {
+        if constexpr (retains) {
+          return cell_.retained().template keep<wrapper>(cache::key<wrapper>(),
+                                                         context, make);
+        } else {
+          return context.template construct_from<wrapper>(scope, make);
+        }
+      }();
       if constexpr (std::is_pointer_v<Request>) {
         return &value;
       } else if constexpr (std::is_rvalue_reference_v<Request>) {

@@ -30,7 +30,9 @@ copied of, such as a copy of a shared handle, which refers to the same object.
 What a scope keeps that shares nothing gets no new layer, as a copy of it is not
 the instance: a `shared` scope that keeps a `T` gives no `std::shared_ptr<T>`
 and no `std::optional<T>` of it, while one that keeps a `std::shared_ptr<T>`
-gives a `std::optional<std::shared_ptr<T>>`, which shares the `T`.
+gives a `std::optional<std::shared_ptr<T>>`, which shares the `T`. A layer
+holding a copy that shares what the scope or the caller keeps is kept with it,
+so the caller may refer to it.
 
 ## Limitations
 

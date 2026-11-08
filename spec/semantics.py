@@ -423,16 +423,23 @@ def transitions(thing, context):
     # made, or a copy that shares what it was copied of, such as a copy of a
     # shared handle. What a scope keeps, or a copy of a value that shares
     # nothing, is not wrapped: a new layer does not hold a copy of an
-    # instance, nor share one that no handle owns.
+    # instance, nor share one that no handle owns. A layer holding a copy
+    # that shares what the scope or the caller keeps is kept with it, as the
+    # copy in it is: the binding retains it.
     shares = thing.origin is Origin.COPIED and thing.instance
     if ((thing.origin is Origin.MADE or shares) and
             can_move(thing, context) and len(layers) < DEPTH):
+        depth = copied_layers(layers)
+        if shares and thing.lifetimes[depth] is Lifetime.STABLE:
+            lifetimes = ((Lifetime.STABLE,) * (1 + depth) +
+                         thing.lifetimes[depth:])
+        else:
+            lifetimes = (Lifetime.REQUEST,) + thing.lifetimes
         for made in LAYERS.values():
             if made.made_from_value and not (made.holds_element_only and
                                              layers):
                 yield "wrap", replace(
-                    thing, layers=(made.name,) + layers,
-                    lifetimes=(Lifetime.REQUEST,) + thing.lifetimes)
+                    thing, layers=(made.name,) + layers, lifetimes=lifetimes)
 
 
 # The known gaps of the library, as filters over what the rules allow.

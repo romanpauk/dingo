@@ -58,6 +58,23 @@ using composed_inner_t =
                             !std::is_copy_constructible_v<Value>),
                        Value, Value &&>;
 
+// Whether a reference or a pointer to a composed wrapper refers to one the
+// binding keeps: the wrapper holds a copy that shares what the binding keeps,
+// so it lives as long as the binding keeps its instance. Any other composed
+// wrapper is made for the request.
+template <typename Request> constexpr bool retains_composed() {
+  if constexpr (std::is_lvalue_reference_v<Request> ||
+                std::is_pointer_v<Request>) {
+    return copy_shares_v<
+        typename type_traits<composed_type_t<Request>>::value_type>;
+  } else {
+    return false;
+  }
+}
+
+template <typename Request>
+inline constexpr bool retains_composed_v = retains_composed<Request>();
+
 // Whether a request is of a wrapper that can be made of the value it holds:
 // a value that can exist, moved into a wrapper that can; a const value is
 // not moved. The conversion is probed only then, as probing it instantiates

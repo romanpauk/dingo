@@ -10,10 +10,10 @@
 #include <dingo/base/type_list.h>
 #include <dingo/binding/binding_model.h>
 #include <dingo/binding/binding_resolution.h>
-#include <dingo/binding/retention.h>
 #include <dingo/context/resolution_context.h>
 #include <dingo/resolution/cache.h>
 #include <dingo/resolution/resolution_operation.h>
+#include <dingo/storage/retention.h>
 #include <dingo/storage/scope_traits.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/annotated.h>
@@ -63,20 +63,34 @@ struct no_retention {
   void clear() noexcept {}
 };
 
+// Whether a storage keeps what is converted of its instance itself, as a
+// cyclical one does, for the graph it constructs may refer to it.
+template <typename Storage, typename = void>
+struct storage_retains : std::false_type {};
+
+template <typename Storage>
+struct storage_retains<
+    Storage, std::void_t<decltype(std::declval<Storage &>().retained())>>
+    : std::true_type {};
+
+// What a cell keeps of the instance of a storage that keeps it, unless the
+// storage keeps it itself.
+template <typename Storage>
+using cell_retention_t =
+    std::conditional_t<cache::is_stable_storage_v<Storage> &&
+                           !storage_retains<Storage>::value,
+                       retention, no_retention>;
+
 // The state of one registration, shared by the containers: the storage of its
 // instance, and what is kept of the instance for its interfaces. Only a
 // storage that keeps its instance keeps more of it.
 template <typename Storage>
-class binding_cell
-    : private std::conditional_t<cache::is_stable_storage_v<Storage>, retention,
-                                 no_retention> {
-  using retention_type = std::conditional_t<cache::is_stable_storage_v<Storage>,
-                                            retention, no_retention>;
-
+class binding_cell : private cell_retention_t<Storage> {
 public:
   using storage_type = Storage;
 
-  static constexpr bool keeps_conversions = cache::is_stable_storage_v<Storage>;
+  static constexpr bool keeps_conversions =
+      cache::is_stable_storage_v<Storage> || storage_retains<Storage>::value;
 
   binding_cell() = default;
 
@@ -103,16 +117,21 @@ public:
 
   // What is kept of the instance, of the types the binding converts it to
   // and composes of it.
-  retention_type &retained() noexcept { return *this; }
+  auto &retained() noexcept {
+    if constexpr (storage_retains<Storage>::value) {
+      return storage_.retained();
+    } else {
+      return static_cast<cell_retention_t<Storage> &>(*this);
+    }
+  }
 
-  void reset_conversions() noexcept { retained().clear(); }
-
-  // Returns the cell to its unresolved state.
+  // Returns the cell to its unresolved state. The instance goes first, as
+  // what it refers to of what is kept has to outlive it.
   void reset() noexcept {
-    reset_conversions();
     if constexpr (storage_can_reset<storage_type>::value) {
       storage_.reset();
     }
+    static_cast<cell_retention_t<Storage> &>(*this).clear();
   }
 
 private:
@@ -121,18 +140,6 @@ private:
 
 template <typename BindingModel>
 using binding_cell_t = binding_cell<typename BindingModel::storage_type>;
-
-template <typename Storage, typename T, typename Context, typename Source,
-          typename = void>
-struct has_storage_resolve_conversion : std::false_type {};
-
-template <typename Storage, typename T, typename Context, typename Source>
-struct has_storage_resolve_conversion<
-    Storage, T, Context, Source,
-    std::void_t<
-        decltype(std::declval<Storage &>().template resolve_conversion<T>(
-            std::declval<Context &>(), std::declval<Source>()))>>
-    : std::true_type {};
 
 // Whether the storage yields its instance by value rather than by reference.
 template <typename Storage, typename Context, typename Owner>
@@ -250,14 +257,8 @@ struct binding_activation {
 
   template <typename T, typename Context, typename Source>
   decltype(auto) retain_conversion(Context &context, Source &&source) {
-    if constexpr (has_storage_resolve_conversion<storage_type, T, Context,
-                                                 Source &&>::value) {
-      return cell.storage().template resolve_conversion<T>(
-          context, std::forward<Source>(source));
-    } else {
-      return construct_conversion<T>(scope, context,
-                                     std::forward<Source>(source));
-    }
+    return construct_conversion<T>(scope, context,
+                                   std::forward<Source>(source));
   }
 
   // Materializes the storage and passes its source to fn.

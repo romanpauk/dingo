@@ -14,6 +14,7 @@
 #include <dingo/binding/runtime_binding_interface.h>
 #include <dingo/context/resolution_context.h>
 #include <dingo/resolution/resolution_operation.h>
+#include <dingo/storage/retention.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/collection_traits.h>
@@ -96,13 +97,32 @@ namespace detail {
 // reference or a pointer to it is refused to the caller, which uses what is
 // returned to it after the context ends.
 template <typename T, typename RTTI, typename Binding, typename Context>
-resolved_address compose_binding_request(void *erased, construction_scope scope,
-                                         void *erased_context) {
+resolved_address
+compose_binding_request(void *erased, retention *kept, construction_scope scope,
+                        void *erased_context, const void *cache_key) {
   using wrapper = composed_type_t<T>;
   using inner = composed_inner_t<T>;
   auto &binding = *static_cast<Binding *>(erased);
   auto &context = *static_cast<Context *>(erased_context);
   constexpr bool refers = std::is_lvalue_reference_v<T> || std::is_pointer_v<T>;
+  // A wrapper of what shares the instance a binding keeps is kept with it,
+  // and published as the request's address.
+  if constexpr (retains_composed_v<T>) {
+    if (kept != nullptr) {
+      auto &value = kept->template keep<wrapper>(
+          cache::key<wrapper>(), context, [&]() -> wrapper {
+            return compose<wrapper>(
+                resolve_binding_request<inner, RTTI>(scope, binding, context));
+          });
+      if (cache_key != nullptr) {
+        binding.publish_cache(context, cache_key, std::addressof(value));
+      }
+      return {std::addressof(value), resolved_address::access_kind::borrow};
+    }
+  } else {
+    (void)kept;
+    (void)cache_key;
+  }
   if constexpr (refers) {
     if (scope.is_caller()) {
       throw_type_not_convertible(described_type_v<T>, described_type_v<inner>,

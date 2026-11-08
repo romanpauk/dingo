@@ -106,9 +106,13 @@ of the value it holds, which is resolved first, so a `unique` registration of a
 unique and shared semantics: a new wrapper holds what the request owns, never a
 copy of what a scope keeps. A `shared` registration of a `std::shared_ptr<T>`
 gives a `std::optional<std::shared_ptr<T>>` holding a copy of that handle, which
-shares the one `T`; a `shared` registration of a plain `T` gives no
-`std::shared_ptr<T>` or `std::optional<T>`, as it would have to copy the `T`.
-Register the `std::shared_ptr<T>` instead.
+shares the one `T`. The binding keeps that wrapper with its instance, so a
+`std::optional<std::shared_ptr<T>> &` refers to one wrapper for as long as the
+container lives, as a `std::shared_ptr<I> &` of an interface does; a wrapper
+made of what a `unique` scope makes is made for the request, and only taken by
+value. A `shared` registration of a plain `T` gives no `std::shared_ptr<T>` or
+`std::optional<T>`, as it would have to copy the `T`. Register the
+`std::shared_ptr<T>` instead.
 
 The injectable result depends on both:
 

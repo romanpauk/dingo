@@ -290,6 +290,28 @@ private:
     }
   }
 
+  // The key a composed reference is published in the request cache under;
+  // none when the binding has no cache.
+  static const void *cached(const void *cache_key) noexcept {
+    if constexpr (Storage::conversions::is_stable) {
+      return cache_key;
+    } else {
+      (void)cache_key;
+      return nullptr;
+    }
+  }
+
+  // What the binding keeps of its instance, which a reference composed of it
+  // may refer to; none when it keeps no instance.
+  static detail::retention *retained(runtime_binding &binding) noexcept {
+    if constexpr (state_type::cell_type::keeps_conversions) {
+      return std::addressof(binding.state().cell().retained());
+    } else {
+      (void)binding;
+      return nullptr;
+    }
+  }
+
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4702)
@@ -301,9 +323,9 @@ private:
                                            const void *cache_key) {
     auto &binding = static_cast<runtime_binding &>(erased);
     if constexpr (type_list_size_v<request_resolutions> == 0) {
-      (void)cache_key;
       if (request.compose != nullptr) {
-        return request.compose(&erased, scope, &context);
+        return request.compose(&erased, retained(binding), scope, &context,
+                               cached(cache_key));
       }
       throw detail::make_type_not_convertible_exception(
           request.requested_type, registered_type(), context);
@@ -333,7 +355,8 @@ private:
           (placed && scope.is_caller())) {
         if (request.compose != nullptr &&
             resolution_index == type_list_size_v<request_resolutions>) {
-          return request.compose(&erased, scope, &context);
+          return request.compose(&erased, retained(binding), scope, &context,
+                                 cached(cache_key));
         }
         throw detail::make_type_not_convertible_exception(
             request.requested_type, registered_type(), context);
