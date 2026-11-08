@@ -98,7 +98,9 @@ if(DINGO_DEVELOPMENT_MODE)
         binding/binding_resolution.h
         binding/binding_selection.h
         binding/binding_activation.h
+        binding/request_composition.h
         binding/request_resolution.h
+        binding/retention.h
         binding/requests.h
         factory/factory_traits.h
         type/key.h
@@ -148,7 +150,6 @@ if(DINGO_DEVELOPMENT_MODE)
         lookup/tags.h
         lookup/unordered.h
         resolution/cache.h
-        resolution/conversion_cache.h
         resolution/conversion_resolution.h
         binding/runtime_binding_interface.h
         runtime/binding.h

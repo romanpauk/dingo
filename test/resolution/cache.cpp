@@ -5,9 +5,9 @@
 // SPDX-License-Identifier: MIT
 //
 
+#include <dingo/binding/retention.h>
 #include <dingo/container.h>
 #include <dingo/resolution/cache.h>
-#include <dingo/resolution/conversion_cache.h>
 #include <dingo/storage/shared.h>
 
 #include <gtest/gtest.h>
@@ -142,49 +142,30 @@ TEST(cache_test, stable_storage_trait_requires_explicit_stability) {
   static_assert(!detail::cache::is_stable_storage_v<unmarked_storage>);
 }
 
-TEST(cache_test, conversion_cache_reuses_value_until_reset) {
-  conversion_cache<type_list<cache_value>> cache;
-  tracked_cache_context owner;
+// What a static container's binding keeps it owns: one object per key, kept
+// until it is cleared, and destroyed then.
+TEST(cache_test, retention_keeps_one_object_per_key_until_cleared) {
+  detail::retention kept;
+  tracked_cache_context context;
+  int key_a = 0;
+  int key_b = 0;
 
-  auto &first = cache.construct<cache_value>(owner, 1);
-  auto &again = cache.construct<cache_value>(owner, 2);
+  auto &first =
+      kept.keep<cache_value>(&key_a, context, [] { return cache_value(1); });
+  auto &again =
+      kept.keep<cache_value>(&key_a, context, [] { return cache_value(2); });
+  auto &other =
+      kept.keep<cache_value>(&key_b, context, [] { return cache_value(3); });
 
   EXPECT_EQ(std::addressof(again), std::addressof(first));
   EXPECT_EQ(again.value, 1);
-  ASSERT_EQ(owner.values.size(), 1u);
+  EXPECT_NE(std::addressof(other), std::addressof(first));
+  EXPECT_EQ(other.value, 3);
 
-  cache.reset();
-  auto &after_reset = cache.construct<cache_value>(owner, 3);
-
-  EXPECT_NE(std::addressof(after_reset), std::addressof(first));
-  EXPECT_EQ(after_reset.value, 3);
-  EXPECT_EQ(owner.values.size(), 2u);
-}
-
-TEST(cache_test, tracked_conversion_clears_slot_on_rollback) {
-  conversion_cache<type_list<cache_value>> cache;
-  tracked_cache_context context;
-
-  auto &first = cache.construct<cache_value>(context, 1);
-  auto &again = cache.construct<cache_value>(context, 2);
-  EXPECT_EQ(std::addressof(again), std::addressof(first));
-  ASSERT_EQ(context.values.size(), 1u);
-
-  context.rollback();
-  auto &after_rollback = cache.construct<cache_value>(context, 3);
-
-  EXPECT_NE(std::addressof(after_rollback), std::addressof(first));
-  EXPECT_EQ(after_rollback.value, 3);
-  EXPECT_EQ(context.values.size(), 2u);
-}
-
-TEST(cache_test, empty_conversion_cache_has_no_state) {
-  static_assert(std::is_empty_v<conversion_cache<type_list<>>>);
-  static_assert(
-      std::is_trivially_destructible_v<conversion_cache<type_list<>>>);
-
-  conversion_cache<type_list<>> cache;
-  cache.reset();
+  kept.clear();
+  auto &after_clear =
+      kept.keep<cache_value>(&key_a, context, [] { return cache_value(4); });
+  EXPECT_EQ(after_clear.value, 4);
 }
 
 TEST(cache_test,

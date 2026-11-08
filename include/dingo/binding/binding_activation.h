@@ -10,9 +10,9 @@
 #include <dingo/base/type_list.h>
 #include <dingo/binding/binding_model.h>
 #include <dingo/binding/binding_resolution.h>
+#include <dingo/binding/retention.h>
 #include <dingo/context/resolution_context.h>
 #include <dingo/resolution/cache.h>
-#include <dingo/resolution/conversion_cache.h>
 #include <dingo/resolution/resolution_operation.h>
 #include <dingo/storage/scope_traits.h>
 #include <dingo/storage/type_storage_traits.h>
@@ -47,94 +47,6 @@ inline constexpr bool stored_request_identity_v = [] {
          std::is_same_v<Request, const stored_type *>;
 }();
 
-template <typename BindingModel, bool StoredInterfaces, typename... Interfaces>
-struct binding_cache_types_impl;
-
-template <typename BindingModel, typename... Interfaces>
-struct binding_cache_types_impl<BindingModel, false, Interfaces...> {
-private:
-  using storage_type = typename BindingModel::storage_type;
-
-  template <typename Interface>
-  using interface_cache_types =
-      resolution_cache_types_t<typename binding_resolutions<
-          unannotated_t<Interface>, storage_type>::type>;
-
-public:
-  using type =
-      type_list_unique_t<type_list_cat_t<interface_cache_types<Interfaces>...>>;
-};
-
-template <typename BindingModel, typename... Interfaces>
-struct binding_cache_types_impl<BindingModel, true, Interfaces...> {
-  using type = type_list<>;
-};
-
-template <typename BindingModel, typename Interfaces>
-struct binding_cache_types;
-
-template <typename BindingModel>
-inline constexpr bool binding_has_cacheless_conversion_shape_v = [] {
-  using conversions = typename BindingModel::conversions_type;
-  return conversions::is_stable &&
-         std::is_same_v<typename conversions::value_types,
-                        type_list<runtime_type>> &&
-         std::is_same_v<typename conversions::lvalue_reference_types,
-                        type_list<runtime_type &>> &&
-         std::is_same_v<typename conversions::rvalue_reference_types,
-                        type_list<>> &&
-         std::is_same_v<typename conversions::pointer_types,
-                        type_list<runtime_type *>>;
-}();
-
-template <typename BindingModel>
-inline constexpr bool binding_uses_default_conversions_v = std::is_same_v<
-    typename BindingModel::conversions_type,
-    detail::conversions<typename BindingModel::storage_tag,
-                        typename BindingModel::registered_storage_type,
-                        runtime_type>>;
-
-template <typename Request, typename BindingModel>
-inline constexpr bool binding_has_cacheless_default_leaf_v =
-    binding_uses_default_conversions_v<BindingModel> &&
-    BindingModel::conversions_type::is_stable &&
-    std::is_same_v<std::remove_cv_t<Request>,
-                   std::remove_cv_t<typename BindingModel::stored_leaf_type>>;
-
-template <typename BindingModel, typename... Interfaces>
-struct binding_cache_types<BindingModel, type_list<Interfaces...>>
-    // Exact stored requests and stable default leaf requests cannot retain an
-    // adapted value, so enumerating every resolution route cannot add a slot.
-    : binding_cache_types_impl<
-          BindingModel,
-          (binding_has_cacheless_conversion_shape_v<BindingModel> &&
-           (stored_request_identity_v<unannotated_t<Interfaces>,
-                                      typename BindingModel::storage_type> &&
-            ...)) ||
-              (binding_has_cacheless_default_leaf_v<unannotated_t<Interfaces>,
-                                                    BindingModel> &&
-               ...),
-          Interfaces...> {};
-
-template <typename BindingModel>
-using binding_cache_types_t =
-    typename binding_cache_types<BindingModel,
-                                 typename BindingModel::interface_types>::type;
-
-// Only stable storage caches conversions; the routes of other storage are not
-// enumerated.
-template <typename BindingModel,
-          bool Stable =
-              cache::is_stable_storage_v<typename BindingModel::storage_type>>
-struct binding_cell_cache_types
-    : binding_cache_types<BindingModel,
-                          typename BindingModel::interface_types> {};
-
-template <typename BindingModel>
-struct binding_cell_cache_types<BindingModel, false> {
-  using type = type_list<>;
-};
-
 template <typename Storage, typename = void>
 struct storage_can_reset : std::false_type {};
 
@@ -145,17 +57,26 @@ struct storage_can_reset<
                 decltype(std::declval<const Storage &>().is_resolved())>>
     : std::true_type {};
 
+// What a storage that makes an instance for each request keeps of it:
+// nothing.
+struct no_retention {
+  void clear() noexcept {}
+};
+
 // The state of one registration, shared by the containers: the storage of its
-// instance and the conversions of the instance it retains for its interfaces.
-template <typename Storage, typename CacheTypes = type_list<>>
-class binding_cell : private conversion_cache<CacheTypes> {
-  using conversion_cache_type = conversion_cache<CacheTypes>;
+// instance, and what is kept of the instance for its interfaces. Only a
+// storage that keeps its instance keeps more of it.
+template <typename Storage>
+class binding_cell
+    : private std::conditional_t<cache::is_stable_storage_v<Storage>, retention,
+                                 no_retention> {
+  using retention_type = std::conditional_t<cache::is_stable_storage_v<Storage>,
+                                            retention, no_retention>;
 
 public:
   using storage_type = Storage;
 
-  static constexpr bool has_conversion_cache =
-      type_list_size_v<CacheTypes> != 0;
+  static constexpr bool keeps_conversions = cache::is_stable_storage_v<Storage>;
 
   binding_cell() = default;
 
@@ -167,19 +88,24 @@ public:
 
   storage_type &storage() { return storage_; }
 
-  // A cached conversion outlives the request; it is forgotten again when the
-  // transaction that constructed it rolls back.
+  // A conversion of what the storage keeps is kept with it, once per type;
+  // that of what it makes lives in the context of the request.
   template <typename T, typename Context, typename Scope, typename... Args>
   T &construct_conversion(Scope scope, Context &context, Args &&...args) {
-    if constexpr (has_conversion_cache) {
-      return conversions().template construct<T>(context,
-                                                 std::forward<Args>(args)...);
+    if constexpr (keeps_conversions) {
+      return retained().template keep<T>(cache::key<T>(), context, [&]() -> T {
+        return T(std::forward<Args>(args)...);
+      });
     } else {
       return context.template construct<T>(scope, std::forward<Args>(args)...);
     }
   }
 
-  void reset_conversions() noexcept { conversions().reset(); }
+  // What is kept of the instance, of the types the binding converts it to
+  // and composes of it.
+  retention_type &retained() noexcept { return *this; }
+
+  void reset_conversions() noexcept { retained().clear(); }
 
   // Returns the cell to its unresolved state.
   void reset() noexcept {
@@ -190,15 +116,11 @@ public:
   }
 
 private:
-  conversion_cache_type &conversions() { return *this; }
-
   storage_type storage_;
 };
 
 template <typename BindingModel>
-using binding_cell_t =
-    binding_cell<typename BindingModel::storage_type,
-                 typename binding_cell_cache_types<BindingModel>::type>;
+using binding_cell_t = binding_cell<typename BindingModel::storage_type>;
 
 template <typename Storage, typename T, typename Context, typename Source,
           typename = void>

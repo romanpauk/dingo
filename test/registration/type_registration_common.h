@@ -13,7 +13,6 @@
 #include <dingo/factory/factory_traits.h>
 #include <dingo/registration/constructor.h>
 #include <dingo/registration/type_registration.h>
-#include <dingo/resolution/conversion_cache.h>
 #include <dingo/rtti/rtti.h>
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/runtime/binding.h>
@@ -46,13 +45,7 @@ struct counting_runtime_binding_storage {};
 
 // The cell of a runtime binding of one interface over a storage.
 template <typename Interface, typename Storage>
-using test_binding_cell = detail::binding_cell<
-    Storage,
-    std::conditional_t<
-        Storage::conversions::is_stable,
-        detail::resolution_cache_types_t<
-            typename detail::binding_resolutions<Interface, Storage>::type>,
-        type_list<>>>;
+using test_binding_cell = detail::binding_cell<Storage>;
 
 struct counting_runtime_binding_container {
   using allocator_type = std::allocator<char>;

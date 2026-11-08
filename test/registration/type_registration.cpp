@@ -329,9 +329,6 @@ TEST(type_registration_test, registration_specialization) {
   static_assert(
       std::is_same_v<nested_stored_type, std::shared_ptr<std::unique_ptr<A>>>);
 
-  static_assert(std::is_empty_v<conversion_cache<type_list<>>>);
-  static_assert(
-      std::is_trivially_destructible_v<conversion_cache<type_list<>>>);
   static_assert(sizeof(shared_binding) <= sizeof(shared_ptr_binding));
   static_assert(sizeof(external_binding) <= sizeof(external_shared_binding));
 }

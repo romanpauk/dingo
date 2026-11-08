@@ -96,14 +96,11 @@ decision. New wrapper, alternative, and array operations can be introduced by
 the traits that publish those routes without adding matching branches to the
 binding dispatcher. Dispatchers only materialize the source and execute the
 operation carried by the matched resolution. A retained conversion receives an
-already-converted value; the resolver only stores or caches it and never
-performs a second conversion. Operations also publish any cache,
-source-retention, and static temporary-storage requirements created by their
-execution. The runtime and static backends derive those resources from the same
-resolution list instead of maintaining a parallel list of conversion types on
-the storage. A new operation provides `apply`, a function returning its path,
-and a place in `op`; the conversion its path makes provides `available`,
-`required_access`, `cache_types` and `apply`.
+already-converted value; the resolver only keeps it and never performs a second
+conversion, in the retention of the binding, which holds any type, so no list of
+retained types is derived for it. A new operation provides `apply`, a function
+returning its path, and a place in `op`; the conversion its path makes provides
+`available`, `required_access`, `cache_types` and `apply`.
 
 Factory construction and storage rebinding use this operation model as well, and
 so does `construct<T>()` of a wrapper of a bound type that its binding does not
@@ -193,17 +190,15 @@ New conversion behavior should be modeled as a route operation first. This keeps
 availability, ownership, and execution from becoming independent rule sets
 again.
 
-## Conversion Cache
+## Retention
 
-Shared and external resolution can preserve conversion objects through
-[include/dingo/binding/binding_activation.h](../../include/dingo/binding/binding_activation.h)
-and
-[include/dingo/resolution/conversion_cache.h](../../include/dingo/resolution/conversion_cache.h).
-
-That cache matters when a conversion object must outlive a single expression,
-for example when a resolved shared object hands out references into a converted
-wrapper form.
-
-The current implementation is intentionally narrow: the conversions object is
-closer to an expanded variant of cached conversion instances than to a general
-conversion graph.
+A binding of a scope that keeps its instance keeps what it converts the instance
+to for a reference or a pointer, such as a `std::shared_ptr<I>` of a kept
+`std::shared_ptr<T>`, in the retention of its cell,
+[include/dingo/binding/retention.h](../../include/dingo/binding/retention.h):
+one object per type, under the key of the type, made the first time it is asked
+for, so that every reference to it refers to the same object for as long as the
+binding lives. A runtime container makes the objects in its persistent memory
+and forgets them when the transaction that made them rolls back; a static
+container, which may have no persistent memory, owns them in the retention. A
+binding of a scope that makes an instance for each request keeps nothing.

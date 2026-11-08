@@ -96,9 +96,9 @@ are normalized internally through the static registry path under
 
 Both containers keep the state of a registration in a binding cell,
 [include/dingo/binding/binding_activation.h](../../include/dingo/binding/binding_activation.h):
-the storage object and the conversion cache its interfaces share. A static
-container holds one cell per registration inline. A runtime binding holds its
-cell in `runtime_binding_state` from
+the storage object and what its interfaces keep of the instance, its retention.
+A static container holds one cell per registration inline. A runtime binding
+holds its cell in `runtime_binding_state` from
 [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h),
 together with the child container used to resolve constructor dependencies.
 

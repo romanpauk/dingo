@@ -6,7 +6,6 @@
 //
 
 #include <dingo/container.h>
-#include <dingo/resolution/conversion_cache.h>
 #include <dingo/runtime/memory.h>
 #include <dingo/runtime/transaction.h>
 #include <dingo/storage/external.h>
@@ -107,10 +106,6 @@ using size_multi_interface_model =
     detail::binding_model<size_multi_interface_registration>;
 using size_multi_interface_storage =
     typename size_multi_interface_model::storage_type;
-using size_multi_interface_cache_types =
-    detail::binding_cache_types_t<size_multi_interface_model>;
-using size_multi_interface_conversion_cache =
-    conversion_cache<size_multi_interface_cache_types>;
 using size_multi_interface_state =
     runtime_binding_state<size_registry_type, size_instance_container,
                           detail::binding_cell_t<size_multi_interface_model>>;
@@ -201,27 +196,26 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
     expect_size_at_most<size_storage>("shared registration storage", 16);
     // Stable runtime state keeps its request cache inline; retained source
     // data lives in the runtime transaction journal instead of a binding-owned
-    // lifetime frame.
-    expect_size_at_most<size_binding_state>("runtime binding state", 48);
+    // lifetime frame. A state that keeps its instance keeps what is converted
+    // and composed of it too, behind one pointer.
+    expect_size_at_most<size_binding_state>("runtime binding state", 56);
     expect_size_at_most<size_unique_state>("unique runtime binding state", 24);
     EXPECT_EQ(sizeof(size_scoped_parent_unique_state),
               sizeof(size_unique_state));
     expect_size_at_most<size_external_state>("external runtime binding state",
-                                             40);
+                                             48);
     expect_size_at_most<size_shared_ptr_state>(
-        "shared_ptr runtime binding state", 56);
+        "shared_ptr runtime binding state", 64);
     expect_size_at_most<size_shared_cyclical_state>(
-        "shared_cyclical runtime binding state", 56);
-    // The state holds the conversion cache its interfaces share.
+        "shared_cyclical runtime binding state", 64);
+    // The state holds what its interfaces keep of the instance.
     expect_size_at_most<size_multi_interface_state>(
         "multi-interface runtime binding state", 72);
-    expect_size_at_most<size_multi_interface_conversion_cache>(
-        "pointer-backed conversion cache", 16);
     // Runtime bindings keep a direct cache-slot pointer beside the vptr so
     // cache access does not require another virtual dispatch.
-    expect_size_at_most<size_binding>("runtime binding", 64);
+    expect_size_at_most<size_binding>("runtime binding", 72);
     expect_size_at_most<size_single_owner>("single-interface binding owner",
-                                           64);
+                                           72);
     expect_size_at_most<size_multi_interface_pointer_state_owner>(
         "multi-interface pointer-state binding owner", 80);
 
@@ -243,9 +237,6 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
   }
 
   static_assert(!std::is_polymorphic_v<size_storage>);
-  static_assert(sizeof(size_multi_interface_conversion_cache) <=
-                sizeof(void *) *
-                    type_list_size_v<size_multi_interface_cache_types>);
   static_assert(sizeof(size_base_lookup_key) == sizeof(size_type_index) * 2);
   static_assert(std::is_empty_v<size_probe_registry::runtime_binding_value>);
   static_assert(std::is_same_v<size_single_owner, size_binding>);
