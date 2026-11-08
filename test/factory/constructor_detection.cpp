@@ -296,9 +296,9 @@ TEST(constructor_detection_test,
 
 TEST(constructor_detection_test, selected_conversion_route_is_executed) {
   using target = std::variant<int, long>;
-  using conversion =
-      detail::outward<detail::alternative_step<long>, target,
-                      detail::type_conversion_path_t<long, int &&, consume>>;
+  using conversion = detail::conversion_wrap<
+      detail::wrap_alternative<long>, target,
+      detail::type_conversion_path_t<long, int &&, consume>>;
   using dispatch =
       detail::construction_dispatch<target, int,
                                     detail::converted_construction<conversion>>;

@@ -13,7 +13,7 @@ The full conversion behavior is spread across a few layers:
 - `type_conversion_traits` validates and performs custom type conversions
 - `resolution` records the operation for an allowed source-to-result route
 - `instance_request` carries the lookup type and requested descriptor
-- each conversion step of `type_conversion_traits.h` applies itself
+- each conversion of `type_conversion_traits.h` applies itself
 
 The important source files are:
 
@@ -64,28 +64,30 @@ an interface that is already a wrapper is published as that exact shape rather
 than being nested inside the stored wrapper again. Storage stability remains a
 separate property controlling reference and pointer lifetime.
 
-Publication finds a route from the source to the target, in steps, the same
-steps the [specification](../development.md#specification) derives a request by.
-A step ends the route at the object it has, reaches inward to an object that
-object holds, or makes a new object outward around what the rest of the route
-makes:
+Publication finds the conversion from the source to the target as a path of
+operations, the operations the [specification](../development.md#specification)
+derives a request by. An operation is applied to the source, unwraps it before
+an inner conversion, or wraps what an inner conversion returns:
 
-- ending: the source itself, a reference to it or to its base, its address, the
-  array a pointer to its first element points to, the address of the element of
-  a wrapper, or what `type_conversion_traits` converts it to
-- inward: the pointee of a pointer, the element a wrapper lends, or the
-  alternative an alternative type holds, each alternative a branch of its own
-- outward: an optional value, an alternative type, or a new owning handle made
-  of what the rest of the route makes, and a converted wrapper the binding
-  retains for a reference or a pointer to refer to
+- `conversion_leaf`: the source itself, a reference to it or to its base, its
+  address, the array a pointer to its first element points to, the address of
+  the element of a wrapper, or what `type_conversion_traits` converts it to
+- `conversion_unwrap`: the pointee of a pointer, the element a wrapper lends, or
+  the alternative an alternative type holds, each alternative a branch of its
+  own
+- `conversion_wrap`: an optional value, an alternative type, or a new owning
+  handle, and a converted wrapper the binding retains for a reference or a
+  pointer to refer to
 
-Each step is one class, which says where it applies and what it does; the steps
-are tried in a fixed order, and the first that applies is taken. Pointer-backed
-storage keeps the pointer as its source, and the route records the dereference
-explicitly. The chosen route is stored in the operation and executed directly;
-execution does not classify the target and source a second time. Custom
-`type_conversion_traits` take precedence over the default compatible-reference
-shortcut.
+An operation is a class with a static `apply`, called by the shape it is used
+in, and a constexpr function that returns its path, or an unavailable conversion
+where the operation does not apply. `select` tries the paths in the order of
+`op` and takes the first available one; the paths of later operations are not
+instantiated once one is. Pointer-backed storage keeps the pointer as its
+source, and the path records the dereference explicitly. The chosen conversion
+is stored in the operation and executed directly; execution does not classify
+the target and source a second time. Custom `type_conversion_traits` take
+precedence over the default compatible-reference shortcut.
 
 Keeping the operation in the resolution makes route selection and execution one
 decision. New wrapper, alternative, and array operations can be introduced by
@@ -97,8 +99,8 @@ performs a second conversion. Operations also publish any cache,
 source-retention, and static temporary-storage requirements created by their
 execution. The runtime and static backends derive those resources from the same
 resolution list instead of maintaining a parallel list of conversion types on
-the storage. A new step provides where it applies, as its `route`, and what it
-does: `end`, `reach` or `make`; the route it makes provides `available`,
+the storage. A new operation provides `apply`, a function returning its path,
+and a place in `op`; the conversion its path makes provides `available`,
 `required_access`, `cache_types` and `apply`.
 
 Factory construction and storage rebinding use this operation model as well.
@@ -113,10 +115,10 @@ the conversion tree for variants or wrappers.
 
 The conversion's `available` value and required source access come from that
 same recursive decomposition. Leaf operations require either `borrow` or
-`consume`; a step that reaches inward or makes outward inherits the inner
-operation's requirement, while an alternative keeps the requirements of its
-viable branches. Conversion selection applies one rule: consumed storage
-satisfies both requirements, while borrowed storage satisfies only `borrow`.
+`consume`; an unwrapping or a wrapping conversion inherits the inner operation's
+requirement, while an alternative keeps the requirements of its viable branches.
+Conversion selection applies one rule: consumed storage satisfies both
+requirements, while borrowed storage satisfies only `borrow`.
 
 Specialize `type_conversion_traits` when a custom conversion cannot be inferred
 from the default rules. A conversion is available exactly when `convert(Source)`
@@ -167,12 +169,12 @@ return only an address because they are borrowed by definition.
 executes the operation selected during publication. `type_resolution` carries
 the target, source, and conversion types. It extracts the source with the
 published value category and applies the selected conversion. Every conversion
-step in
+in
 [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
-is one struct: what it requires of its source, `borrow` or `consume`, the
-conversions it retains, and how it is applied; a step that continues with a
-nested conversion applies it to the object it reaches. Identity conversion
-forwards an exact source, while a custom trait conversion creates a new value.
+says what it requires of its source, `borrow` or `consume`, the conversions it
+retains, and how it is applied; an unwrapping or a wrapping conversion applies
+its inner conversion to what it unwraps or wraps. Identity conversion forwards
+an exact source, while a custom trait conversion creates a new value.
 
 Broadly, the rules cover:
 

@@ -335,7 +335,7 @@ TEST(type_registration_test, conversion_availability_uses_source_access) {
       conversion_compatibility_test::owning_source &, borrow>;
   static_assert(std::is_same_v<
                 borrowed_owner_conversion,
-                detail::converted_t<
+                detail::convert_t<
                     conversion_compatibility_test::copying_from_owner,
                     conversion_compatibility_test::owning_source &, borrow,
                     const conversion_compatibility_test::owning_source &>>);
@@ -425,7 +425,7 @@ TEST(type_registration_test, conversion_availability_uses_source_access) {
       detail::is_type_conversion_available_v<owning_variant, int *, borrow>);
   static_assert(!std::is_same_v<
                 detail::type_conversion_path_t<owning_variant, int *, borrow>,
-                detail::converted_t<owning_variant, int *>>);
+                detail::convert_t<owning_variant, int *>>);
   using nested_owning_variant = std::optional<owning_variant>;
   static_assert(std::is_constructible_v<nested_owning_variant, int *>);
   static_assert(detail::is_type_conversion_available_v<nested_owning_variant,
@@ -454,11 +454,11 @@ TEST(type_registration_test, conversion_availability_uses_source_access) {
   static_assert(
       detail::is_type_conversion_available_v<const mixed_variant &,
                                              mixed_variant &, borrow>);
-  using mixed_variant_conversion = detail::outward<
-      detail::alternative_step<conversion_compatibility_test::observer_pointer>,
+  using mixed_variant_conversion = detail::conversion_wrap<
+      detail::wrap_alternative<conversion_compatibility_test::observer_pointer>,
       mixed_variant,
-      detail::converted_t<conversion_compatibility_test::observer_pointer,
-                          int *, borrow, int *>>;
+      detail::convert_t<conversion_compatibility_test::observer_pointer, int *,
+                        borrow, int *>>;
   static_assert(std::is_same_v<
                 detail::type_conversion_path_t<mixed_variant, int *, borrow>,
                 detail::converted_construction<mixed_variant_conversion>>);
@@ -469,9 +469,9 @@ TEST(type_registration_test, conversion_availability_uses_source_access) {
   static_assert(
       std::is_same_v<
           detail::type_conversion_path_t<nested_mixed_variant, int *, borrow>,
-          detail::converted_construction<
-              detail::outward<detail::optional_step, nested_mixed_variant,
-                              mixed_variant_conversion>>>);
+          detail::converted_construction<detail::conversion_wrap<
+              detail::wrap_optional, nested_mixed_variant,
+              mixed_variant_conversion>>>);
   // Taking the address of a compatible lvalue is selected directly, also when
   // the source is itself an alternative type. A pointer that merely converts
   // to the target keeps its direct conversion, and a variant lvalue still
@@ -479,27 +479,27 @@ TEST(type_registration_test, conversion_availability_uses_source_access) {
   using address_variant = std::variant<int, long>;
   static_assert(
       std::is_same_v<detail::type_conversion_path_t<int *, int &, borrow>,
-                     detail::ending<detail::address_step, int *, borrow>>);
+                     detail::conversion_leaf<detail::address, int *, borrow>>);
   static_assert(
       std::is_same_v<detail::type_conversion_path_t<const address_variant *,
                                                     address_variant &, borrow>,
-                     detail::ending<detail::address_step,
-                                    const address_variant *, borrow>>);
+                     detail::conversion_leaf<detail::address,
+                                             const address_variant *, borrow>>);
   static_assert(
       std::is_same_v<
           detail::type_conversion_path_t<address_variant *, address_variant &,
                                          consume>,
-          detail::ending<detail::address_step, address_variant *, borrow>>);
-  static_assert(
-      !std::is_same_v<detail::type_conversion_path_t<void *, int *&, borrow>,
-                      detail::ending<detail::address_step, void *, borrow>>);
+          detail::conversion_leaf<detail::address, address_variant *, borrow>>);
+  static_assert(!std::is_same_v<
+                detail::type_conversion_path_t<void *, int *&, borrow>,
+                detail::conversion_leaf<detail::address, void *, borrow>>);
   static_assert(
       detail::is_type_conversion_available_v<void *, address_variant &,
                                              borrow>);
   static_assert(
       !std::is_same_v<
           detail::type_conversion_path_t<void *, address_variant &, borrow>,
-          detail::ending<detail::address_step, void *, borrow>>);
+          detail::conversion_leaf<detail::address, void *, borrow>>);
   static_assert(
       detail::is_type_conversion_available_v<int (*)[2][3], int (*)[3]>);
   static_assert(
@@ -653,7 +653,7 @@ TEST(type_registration_test,
   using namespace resolution_test;
   static_assert(
       std::is_same_v<detail::type_conversion_path_t<copy_target, copy_source &>,
-                     detail::converted_t<copy_target, copy_source &>>);
+                     detail::convert_t<copy_target, copy_source &>>);
 
   using registration =
       type_registration<scope<external>, storage<copy_source *>,
@@ -898,11 +898,11 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   static_assert(
       std::is_same_v<
           detail::type_conversion_path_t<std::optional<I>, optional_pointer>,
-          detail::inward<
-              detail::pointee_step,
+          detail::conversion_unwrap<
+              detail::deref,
               detail::optional_element_conversion<
                   std::optional<I>,
-                  detail::ending<detail::reference_step, I, borrow>>>>);
+                  detail::conversion_leaf<detail::base_ref, I, borrow>>>>);
   using optional_pointer_model = detail::binding_model<
       type_registration<scope<external>, storage<optional_pointer>>>;
   using optional_pointer_resolutions = detail::binding_resolutions<
