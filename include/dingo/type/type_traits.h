@@ -433,6 +433,49 @@ public:
                       typename next::copyable_value_types>;
 };
 
+// An optional is walked through to its element too.
+template <typename Handle>
+struct wrapper_storage_types<
+    Handle,
+    std::enable_if_t<has_semantics<Handle, semantics::optional_value>::value>> {
+private:
+  using next = wrapper_storage_types<typename type_traits<Handle>::value_type>;
+  using copyable_handle_types =
+      std::conditional_t<std::is_copy_constructible_v<Handle>,
+                         type_list<Handle>, type_list<>>;
+
+public:
+  using lvalue_reference_types =
+      type_list_cat_t<type_list<Handle &>,
+                      typename next::lvalue_reference_types>;
+  using pointer_types =
+      type_list_cat_t<type_list<Handle *>, typename next::pointer_types>;
+  using copyable_value_types =
+      type_list_cat_t<copyable_handle_types,
+                      typename next::copyable_value_types>;
+};
+
+// Whether every layer of a wrapper can exist: a handle can hold an abstract
+// element, a value that holds its element in place cannot. It is decided
+// without instantiating the wrapper.
+template <typename Type> constexpr bool is_wrapper_formable() {
+  if constexpr (type_traits<Type>::enabled && !std::is_pointer_v<Type>) {
+    using element = typename type_traits<Type>::value_type;
+    constexpr bool element_formable =
+        !type_traits<element>::enabled || is_wrapper_formable<element>();
+    if constexpr (type_traits<Type>::is_pointer_like) {
+      return element_formable;
+    } else {
+      return is_formable_v<Type> && element_formable;
+    }
+  } else {
+    return true;
+  }
+}
+
+template <typename Type>
+inline constexpr bool is_wrapper_formable_v = is_wrapper_formable<Type>();
+
 // An array, or an owning handle whose element cannot be borrowed as an object,
 // which owns an array; its exact interface is the array.
 template <typename Type, typename = void> struct array_like {
@@ -522,7 +565,12 @@ struct type_traits<std::unique_ptr<T, Deleter>,
 
   template <typename... Args>
   static std::unique_ptr<T, Deleter> make(Args &&...args) {
-    if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
+    // An optional is made in place, as a shared_ptr makes one.
+    if constexpr (is_optional_type_v<T> &&
+                  std::is_constructible_v<T, std::in_place_t, Args...>)
+      return std::unique_ptr<T, Deleter>(
+          new T(std::in_place, std::forward<Args>(args)...));
+    else if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
       return std::unique_ptr<T, Deleter>(
           new T(detail::make_nested<T>(std::forward<Args>(args)...)));
     // Work around direct-initialization in smart-pointer-backed factories.
@@ -596,7 +644,12 @@ struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>>
   }
 
   template <typename... Args> static std::shared_ptr<T> make(Args &&...args) {
-    if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
+    // An optional is made in place of the arguments of its element, which
+    // may be moved neither in it nor out of it.
+    if constexpr (is_optional_type_v<T> &&
+                  std::is_constructible_v<T, std::in_place_t, Args...>)
+      return std::make_shared<T>(std::in_place, std::forward<Args>(args)...);
+    else if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
       return std::make_shared<T>(
           detail::make_nested<T>(std::forward<Args>(args)...));
     // Work around direct-initialization in std::make_shared().

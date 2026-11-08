@@ -26,6 +26,28 @@ namespace detail {
 template <typename Type, typename StoredType, typename Factory,
           typename Conversions>
 class unique_storage;
+
+// Whether a wrapper holds another wrapper.
+template <typename Type, typename = void>
+inline constexpr bool holds_wrapper_v = false;
+
+template <typename Type>
+inline constexpr bool
+    holds_wrapper_v<Type, std::void_t<typename type_traits<Type>::value_type>> =
+        type_traits<Type>::enabled && !std::is_pointer_v<Type> &&
+        type_traits<typename type_traits<Type>::value_type>::enabled;
+
+// Whether a wrapper holds one that owns its element alone, which gives the
+// element away when it is consumed.
+template <typename Type, typename = void>
+inline constexpr bool holds_sole_owner_v = false;
+
+template <typename Type>
+inline constexpr bool holds_sole_owner_v<
+    Type, std::void_t<typename type_traits<Type>::value_type>> =
+    holds_wrapper_v<Type> &&
+    std::is_base_of_v<semantics::sole_owner,
+                      type_traits<typename type_traits<Type>::value_type>>;
 } // namespace detail
 
 template <> struct scope_traits<unique> {
@@ -64,21 +86,30 @@ template <> struct scope_traits<unique> {
   // A new value is additionally moved into a wrapper of its own: a plain one
   // or an alternative into an optional or an owning handle. The element of an
   // optional or a unique_ptr is moved out of it, and into a wrapper of its
-  // own; that of a shared_ptr is copied.
+  // own; that of a shared_ptr is copied. The leaf of one that holds another
+  // wrapper is moved out of both, into any wrapper of its own, unless a
+  // shared_ptr shares it.
   template <storage_form Form, typename Type, typename U>
   struct requests : detail::scope_rule_requests<unique, Type, U> {
   private:
     using rule = detail::scope_rule_requests<unique, Type, U>;
     using handles = type_list<std::unique_ptr<U> &&, std::shared_ptr<U> &&>;
+    static constexpr bool nested = detail::holds_wrapper_v<Type>;
     using wrapped = std::conditional_t<
         Form == storage_form::plain || Form == storage_form::alternative,
         type_list_cat_t<type_list<std::optional<U> &&>, handles>,
         std::conditional_t<
             Form == storage_form::optional,
-            type_list_cat_t<type_list<U &&>, handles>,
-            std::conditional_t<Form == storage_form::unique_handle,
-                               type_list<U &&, std::optional<U> &&>,
-                               type_list<>>>>;
+            type_list_cat_t<type_list<U &&>, handles,
+                            std::conditional_t<detail::holds_sole_owner_v<Type>,
+                                               type_list<std::optional<U> &&>,
+                                               type_list<>>>,
+            std::conditional_t<
+                Form == storage_form::unique_handle,
+                type_list_cat_t<
+                    type_list<U &&, std::optional<U> &&>,
+                    std::conditional_t<nested, handles, type_list<>>>,
+                type_list<>>>>;
 
   public:
     using rvalue_reference_types =

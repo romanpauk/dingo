@@ -239,11 +239,26 @@ template <typename Wrapper, typename U>
 using shared_handle_t = typename type_traits<Wrapper>::template share_t<
     wrapper_element_t<Wrapper, U>>;
 
+// What reaches the element of a wrapper rebound to an interface it cannot
+// hold, such as an optional of an abstract one: a reference and a pointer.
+template <typename U> struct element_storage_types {
+  using lvalue_reference_types = type_list<U &>;
+  using pointer_types = type_list<U *>;
+  using copyable_value_types = type_list<>;
+};
+
+// Whether a wrapper of the leaf U can exist, every layer of it.
+template <typename Wrapper, typename U>
+inline constexpr bool rebinds_to_v =
+    is_wrapper_formable_v<wrapper_rebind_leaf_t<Wrapper, U>>;
+
 template <typename Wrapper, bool Array> struct owner_storage_form_base {
   template <typename U> struct borrowed {
   private:
     using handle = wrapper_rebind_leaf_t<Wrapper, U>;
-    using types = wrapper_storage_types<handle>;
+    using types = std::conditional_t<rebinds_to_v<Wrapper, U>,
+                                     wrapper_storage_types<handle>,
+                                     element_storage_types<U>>;
 
   public:
     using lvalue_reference_types =
@@ -264,17 +279,25 @@ struct wrapper_storage_form<Wrapper, semantics::sole_owner, Borrowable> {
                                            ? storage_form::unique_handle
                                            : storage_form::unique_array_handle;
 
+  // A kept sole owner is copied as its leaf, and as what it holds that can be
+  // copied, such as an optional of its leaf.
   template <typename U>
   struct borrowed
       : owner_storage_form_base<Wrapper, !Borrowable>::template borrowed<U> {
-    using value_types =
-        std::conditional_t<Borrowable, type_list<U>, type_list<>>;
+    using value_types = std::conditional_t<
+        Borrowable,
+        type_list_unique_t<type_list_cat_t<
+            type_list<U>, typename owner_storage_form_base<Wrapper, false>::
+                              template borrowed<U>::copyable_value_types>>,
+        type_list<>>;
   };
 
   template <typename U> struct consumed {
     using rvalue_reference_types =
-        type_list<wrapper_rebind_leaf_t<Wrapper, U> &&,
-                  shared_handle_t<Wrapper, U> &&>;
+        std::conditional_t<rebinds_to_v<Wrapper, U>,
+                           type_list<wrapper_rebind_leaf_t<Wrapper, U> &&,
+                                     shared_handle_t<Wrapper, U> &&>,
+                           type_list<>>;
   };
 };
 
@@ -297,7 +320,9 @@ struct wrapper_storage_form<Wrapper, semantics::shared_owner, Borrowable> {
 
   template <typename U> struct consumed {
     using rvalue_reference_types =
-        type_list<wrapper_rebind_leaf_t<Wrapper, U> &&>;
+        std::conditional_t<rebinds_to_v<Wrapper, U>,
+                           type_list<wrapper_rebind_leaf_t<Wrapper, U> &&>,
+                           type_list<>>;
   };
 };
 
@@ -305,11 +330,22 @@ template <typename Wrapper>
 struct wrapper_storage_form<Wrapper, semantics::optional_value, true> {
   static constexpr storage_form form = storage_form::optional;
 
-  // A kept optional is copied as its element or as itself.
+  // A kept optional is copied as its element or as itself, and what its
+  // element is a wrapper of is reached through it.
   template <typename U> struct borrowed {
-    using value_types = type_list<U, exact_lookup<Wrapper>>;
-    using lvalue_reference_types = type_list<U &, exact_lookup<Wrapper> &>;
-    using pointer_types = type_list<U *, exact_lookup<Wrapper> *>;
+  private:
+    using element = wrapper_storage_types<wrapper_element_t<Wrapper, U>>;
+
+  public:
+    using value_types = type_list_unique_t<
+        type_list_cat_t<type_list<U>, typename element::copyable_value_types,
+                        type_list<exact_lookup<Wrapper>>>>;
+    using lvalue_reference_types = type_list_unique_t<
+        type_list_cat_t<typename element::lvalue_reference_types,
+                        type_list<exact_lookup<Wrapper> &>>>;
+    using pointer_types =
+        type_list_unique_t<type_list_cat_t<typename element::pointer_types,
+                                           type_list<exact_lookup<Wrapper> *>>>;
   };
 
   template <typename U> struct consumed {
