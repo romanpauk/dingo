@@ -150,9 +150,12 @@ template <typename Request, typename Scope>
 constexpr auto dependency_scope(Scope scope) {
   if constexpr (request_may_escape_v<Request>) {
     return scope;
-  } else {
+  } else if constexpr (is_fixed_construction_scope<Scope>::value) {
     (void)scope;
     return ephemeral_scope;
+  } else {
+    (void)scope;
+    return construction_scope(construction_lifetime::ephemeral);
   }
 }
 } // namespace detail

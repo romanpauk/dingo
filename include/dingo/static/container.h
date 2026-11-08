@@ -269,6 +269,12 @@ public:
     return std::forward<Fn>(fn)(context);
   }
 
+  // The scope a request enters with, known as the code compiles: what
+  // depends on it is decided at compile time.
+  template <typename Scope> static constexpr Scope entry_scope(Scope scope) {
+    return scope;
+  }
+
   template <typename T, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   auto count_collection(LookupKey) {

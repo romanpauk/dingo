@@ -128,12 +128,12 @@ private:
       }
       return with_context([&](runtime_context_type &context) -> R {
         return detail::request_resolution::resolve<Request, R>(
-            *this, selected, caller_scope, context, *this, key);
+            *this, selected, entry_scope(caller_scope), context, *this, key);
       });
     } else {
       return with_context([&](runtime_context_type &context) -> R {
         return detail::request_resolution::resolve<Request, R>(
-            *this, caller_scope, context, *this, std::move(key));
+            *this, entry_scope(caller_scope), context, *this, std::move(key));
       });
     }
   }
@@ -153,13 +153,23 @@ public:
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   T construct_collection(Fn &&fn, LookupKey key) {
     return with_context([&](runtime_context_type &context) -> T {
-      return construct_collection<T>(caller_scope, context,
+      return construct_collection<T>(entry_scope(caller_scope), context,
                                      std::forward<Fn>(fn), std::move(key));
     });
   }
 
   template <typename Fn> decltype(auto) with_context(Fn &&fn) {
     return execute_transaction(this->runtime(), std::forward<Fn>(fn));
+  }
+
+  // The scope a request enters with, known only at run time: the resolution
+  // of the bindings a runtime container selects at run time is instantiated
+  // once for every scope, not once for every scope known as the code
+  // compiles.
+  template <construction_lifetime Lifetime>
+  static constexpr construction_scope
+  entry_scope(fixed_construction_scope<Lifetime>) {
+    return construction_scope(Lifetime);
   }
 
   template <typename Request, typename IdType>

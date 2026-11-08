@@ -149,7 +149,7 @@ public:
         // What construct makes is returned to the caller, as are the
         // references it holds.
         return request_resolution::construct<request_type<T>, R>(
-            self(), caller_scope, context, factory);
+            self(), self().entry_scope(caller_scope), context, factory);
       });
     }
   }
@@ -195,7 +195,8 @@ public:
     return self().with_context([&](auto &context) -> decltype(auto) {
       auto type_guard = context.template track_type<callable_type>();
       return callable_invoke<dispatch_signature>::construct(
-          std::forward<Callable>(callable), ephemeral_scope, context, self());
+          std::forward<Callable>(callable), self().entry_scope(ephemeral_scope),
+          context, self());
     });
   }
 };
