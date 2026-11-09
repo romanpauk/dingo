@@ -485,17 +485,53 @@ def steps(thing, context):
     return found
 
 
+# What a derivation does to the leaf. A copy of a stack, or a move of it into a
+# new layer, makes its leaf anew when no layer of it shares its element. A
+# copy is made where the request holds it, and a value made for the request
+# is moved there once, however many layers it is moved into: the fewest a
+# resolution needs is a copy when it copies the leaf, else a move when it
+# moves it.
+
+
+def makes_leaf_anew(layers):
+    return copied_layers(layers) > len(layers)
+
+
+def effect_of(kind, thing):
+    """What a step from a thing does to its leaf: "copy", "move" or None."""
+    if kind in ("copy", "wrap") and makes_leaf_anew(thing.layers):
+        return "copy" if kind == "copy" else "move"
+    return None
+
+
+def affected(cost, effect):
+    """The copies and the moves of the leaf, as (copies, moves), after an
+    effect: a copy is made where it is moved to."""
+    copies, moves = cost
+    if effect == "copy":
+        return 1, moves
+    if effect == "move" and not copies:
+        return copies, 1
+    return cost
+
+
 @functools.lru_cache(maxsize=None)
 def reachable(start, context):
-    seen = {start}
-    frontier = [start]
+    """The things derived from a start, each with the costs of the
+    derivations that reach it, as (copies, moves) of the leaf."""
+    seen = {(start, (0, 0))}
+    frontier = list(seen)
     while frontier:
-        thing = frontier.pop()
-        for _, following in steps(thing, context):
-            if following not in seen:
-                seen.add(following)
-                frontier.append(following)
-    return frozenset(seen)
+        thing, cost = frontier.pop()
+        for kind, following in steps(thing, context):
+            state = (following, affected(cost, effect_of(kind, thing)))
+            if state not in seen:
+                seen.add(state)
+                frontier.append(state)
+    found = {}
+    for thing, cost in seen:
+        found.setdefault(thing, set()).add(cost)
+    return {thing: frozenset(costs) for thing, costs in found.items()}
 
 
 # What a request asks of the things.
@@ -520,15 +556,18 @@ REFERENCES = (Category.LVALUE_REFERENCE, Category.CONST_LVALUE_REFERENCE,
 POINTERS = (Category.POINTER, Category.CONST_POINTER)
 
 
-def satisfies(things, category, lifetime, layers, context):
-    """Whether one of the things of a request's element satisfies it."""
+def satisfactions(things, category, lifetime, layers, context):
+    """The things of a request's element that satisfy it, each with what
+    satisfying it does to the leaf, as effect_of says."""
     of_shape = [thing for thing in things if thing.layers == layers]
     if category in REFERENCES:
         # A reference or a pointer refers to the instance, or to a layer of
         # it, that lives long enough.
-        if any(thing.instance and thing.lifetime.value >= lifetime.value
-               for thing in of_shape):
-            return True
+        referred = [(thing, None) for thing in of_shape
+                    if thing.instance and
+                    thing.lifetime.value >= lifetime.value]
+        if referred:
+            return referred
         if category in POINTERS:
             # A pointer value: one the request owns, or one whose pointee
             # lives long enough.
@@ -541,15 +580,21 @@ def satisfies(things, category, lifetime, layers, context):
                         not blocked(context, "point", category, thing)):
                     return True
                 return thing.lifetimes[1].value >= lifetime.value
-            return any(points(thing) for thing in things)
-        return False
+            return [(thing, None) for thing in things if points(thing)]
+        return []
     if category is Category.RVALUE_REFERENCE:
         # The object the request moves from: one it made.
-        return any(thing.origin is Origin.MADE and can_move(thing, context)
-                   for thing in of_shape)
+        return [(thing, None) for thing in of_shape
+                if thing.origin is Origin.MADE and can_move(thing, context)]
     # A value: an owned object moved, or any object copied.
-    return any((thing.origin.owned and can_move(thing, context)) or
-               can_copy(thing, context) for thing in of_shape)
+    found = []
+    for thing in of_shape:
+        anew = makes_leaf_anew(thing.layers)
+        if thing.origin.owned and can_move(thing, context):
+            found.append((thing, "move" if anew else None))
+        if can_copy(thing, context):
+            found.append((thing, "copy" if anew else None))
+    return found
 
 
 def copyable_shape(layers, context):
@@ -585,38 +630,50 @@ def entry_of(entry, position, selection, category):
     return entry
 
 
-def resolves(scope, form, leaf, bound, shape, category, position, entry,
-             limits=frozenset(), selection=Selection.PLAIN,
-             interfaces=InterfaceSet.DEFAULT):
-    """Whether a request of a shape of the bound interface resolves, under
-    the limitations given."""
+def fewest(scope, form, leaf, bound, shape, category, position, entry,
+           limits=frozenset(), selection=Selection.PLAIN,
+           interfaces=InterfaceSet.DEFAULT):
+    """The fewest copies and moves of the leaf a request of a shape of the
+    bound interface resolves with, as (copies, moves), under the
+    limitations given; None when it does not resolve."""
     layers, element = SHAPES[shape] + bound.layers, bound.element
     context = Context(LEAVES[leaf], SCOPES[scope], element == "interface",
                       limits)
     if not makes_storage(form, context):
-        return False
-    things = [thing for thing in reachable(source(scope, form, interfaces),
-                                           context)
-              if thing.element == element]
+        return None
+    reached = reachable(source(scope, form, interfaces), context)
+    things = [thing for thing in reached if thing.element == element]
     direct = position is Position.DIRECT
     entry = entry_of(entry, position, selection, category)
     if selector_rejects(layers, category, position, entry, selection,
                         context):
-        return False
-    if satisfies(things, category, required_lifetime(position, entry), layers,
-                 context):
-        return True
+        return None
+    costs = [affected(cost, effect)
+             for thing, effect in satisfactions(
+                 things, category, required_lifetime(position, entry),
+                 layers, context)
+             for cost in reached[thing]]
+    if costs:
+        return min(costs)
     # construct<T>() of a value it cannot resolve makes T of the leaf the
     # container resolves by value: a new handle, optional or array of it,
-    # the rest of a bounded array value-initialized.
+    # the rest of a bounded array value-initialized. The value is moved into
+    # it, unless it is a copy made there.
     bounded = any(LAYERS[name].bounded for name in SHAPES[shape])
     if (direct and entry is Entry.CONSTRUCT and element == "leaf" and
             shape is not Shape.OBJECT and
             (context.leaf.default_constructible or not bounded)):
-        return resolves(scope, form, leaf, LEAF, Shape.OBJECT,
-                        Category.VALUE, Position.DIRECT, Entry.RESOLVE,
-                        limits, selection, interfaces)
-    return False
+        value = fewest(scope, form, leaf, LEAF, Shape.OBJECT, Category.VALUE,
+                       Position.DIRECT, Entry.RESOLVE, limits, selection,
+                       interfaces)
+        return None if value is None else affected(value, "move")
+    return None
+
+
+def resolves(*args, **options):
+    """Whether a request of a shape of the bound interface resolves, under
+    the limitations given."""
+    return fewest(*args, **options) is not None
 
 
 LIMITATIONS = frozenset(Limitation)

@@ -92,9 +92,16 @@ program each. The header is precompiled once, and clang's error limit is lifted.
 A resolved request is also checked: its result has to reach the registered leaf,
 a scope that keeps its instance has to return the same one by reference, a
 unique scope a new one, a kept class may not refer to a leaf that is gone, and
-nothing may leak. Each program also checks every request its registration
-publishes: one that selects another binding is unreachable, and one that no
-probe makes is unprobed.
+nothing may leak. The probe counts the copies and the moves of leaves each
+resolution makes, until the class or the callable it is made for receives it,
+and the specification says the fewest a resolution needs: a copy where its
+derivation copies the leaf, made where the request holds it, and else a move
+where it moves the leaf, a value made for the request moved into all its new
+layers at once; making the instance, referring to it and sharing it need none. A
+resolution that needs more is excess, which the probe reports and does not fail
+on yet. Each program also checks every request its registration publishes: one
+that selects another binding is unreachable, and one that no probe makes is
+unprobed.
 
 A cell a limitation keeps from resolving is recorded as limited, with the
 limitations. The probe fails when a request does not compile without a

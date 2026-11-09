@@ -73,6 +73,9 @@ class Outcome(Dimension):
     STALE_LIMITATION = "stale_limitation"
     # Not the outcome the semantics expect.
     UNEXPECTED = "unexpected"
+    # Resolved with more copies or moves of the leaf than the specification
+    # needs: reported, not yet a defect.
+    EXCESS = "excess"
     # What the conversion layer of a binding answers a request: a resolution
     # with an available conversion, a wrapper composed of one, a value taken
     # out of a pointer the binding hands over, a reference into the context

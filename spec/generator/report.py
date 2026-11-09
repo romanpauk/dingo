@@ -25,6 +25,7 @@ MARKS = {
     Outcome.LIMITED: "lim",
     Outcome.STALE_LIMITATION: "STALE",
     Outcome.UNEXPECTED: "UNEXP",
+    Outcome.EXCESS: "excess",
     Outcome.PUBLISHED: "pub",
     Outcome.COMPOSED: "comp",
     Outcome.ADOPTED: "adopt",

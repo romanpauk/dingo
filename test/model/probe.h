@@ -32,21 +32,26 @@ namespace dingo::model {
 
 // Keeps the leaves alive, so that a probe sees what it leaks and what it
 // refers to after it is gone. A leaf moved from loses its value, so that a
-// probe sees a kept leaf moved out of.
+// probe sees a kept leaf moved out of. Counts the copies and the moves of
+// leaves while a probe counts them.
 struct leaf_interface {
   leaf_interface() { alive.insert(this); }
   leaf_interface(const leaf_interface &other) : state(other.state) {
+    copied();
     alive.insert(this);
   }
   leaf_interface(leaf_interface &&other) noexcept : state(other.state) {
+    moved();
     other.state = 0;
     alive.insert(this);
   }
   leaf_interface &operator=(const leaf_interface &other) {
+    copied();
     state = other.state;
     return *this;
   }
   leaf_interface &operator=(leaf_interface &&other) noexcept {
+    moved();
     state = other.state;
     other.state = 0;
     return *this;
@@ -60,8 +65,14 @@ struct leaf_interface {
   }
 
   inline static std::set<const leaf_interface *> alive;
+  inline static bool counting = false;
+  inline static long copies = 0;
+  inline static long moves = 0;
 
 protected:
+  static void copied() { copies += counting ? 1 : 0; }
+  static void moved() { moves += counting ? 1 : 0; }
+
   int state = 7;
 };
 
@@ -506,9 +517,11 @@ public:
   static constexpr bool refers = refers_v<result_type>;
   static constexpr bool hands_over = std::is_pointer_v<result_type>;
 
+  // What the library does to resolve R ends where it receives it.
   template <typename Arg, typename = std::enable_if_t<!std::is_same_v<
                               dingo::detail::remove_cvref_t<Arg>, received>>>
   explicit received(Arg &&arg) {
+    leaf_interface::counting = false;
     if constexpr (holds && unwraps) {
       value_.emplace(unwrap<result_type>(arg));
       address_ = leaf_of(*value_);
@@ -671,17 +684,51 @@ const char *violation(keeps scope, const First &first, const Second &second) {
   }
   return nullptr;
 }
+// The copies and the moves of leaves of each of the two resolutions of a
+// probe.
+struct counts {
+  long copies[2];
+  long moves[2];
+};
+
+// Counts the copies and the moves of leaves a resolution makes into one of
+// counts, while the library resolves it.
+template <typename Resolve>
+decltype(auto) counted(int index, counts &into, Resolve &&resolve) {
+  leaf_interface::copies = leaf_interface::moves = 0;
+  leaf_interface::counting = true;
+  struct stop {
+    int index;
+    counts &into;
+    ~stop() {
+      leaf_interface::counting = false;
+      into.copies[index] = leaf_interface::copies;
+      into.moves[index] = leaf_interface::moves;
+    }
+  } stopping{index, into};
+  return resolve();
+}
+
+// Records a resolved probe with the copies and the moves of its resolutions.
+inline void record_resolved(const char *cell, const counts &made) {
+  std::printf("{\"cell\": %s, \"outcome\": \"resolved\", \"copies\": "
+              "[%ld, %ld], \"moves\": [%ld, %ld]}\n",
+              json_string(cell).c_str(), made.copies[0], made.copies[1],
+              made.moves[0], made.moves[1]);
+}
+
 // Runs the resolutions of a probe and records its outcome: what is wrong
 // with them, or the exception they threw. A raw pointer resolved from a scope
 // that keeps nothing hands the leaf to the caller, so it is not counted as
 // leaked. It is not a template: only what resolves depends on the request.
 inline void run_probe(const char *cell, keeps scope, bool hands_over,
-                      const char *(*resolutions)(const void *, keeps),
+                      const char *(*resolutions)(const void *, keeps, counts &),
                       const void *state) {
   const long live = leaf_interface::live();
   const char *error = nullptr;
+  counts made{};
   try {
-    error = resolutions(state, scope);
+    error = resolutions(state, scope, made);
     if (!error && leaf_interface::live() != live &&
         !(scope == keeps::nothing && hands_over)) {
       error = "the leaves alive differ after the container is destroyed";
@@ -695,7 +742,10 @@ inline void run_probe(const char *cell, keeps scope, bool hands_over,
   } catch (const std::exception &e) {
     return record(cell, "exception", e.what());
   }
-  record(cell, error ? "violated" : "resolved", error);
+  if (error) {
+    return record(cell, "violated", error);
+  }
+  record_resolved(cell, made);
 }
 
 // Resolves a request twice in one container, which is destroyed before the
@@ -709,12 +759,12 @@ void probe(const char *cell, keeps scope, Setup setup, Resolve resolve) {
   } state{setup, resolve};
   run_probe(
       cell, scope, observation<R>::hands_over,
-      [](const void *state, keeps scope) -> const char * {
+      [](const void *state, keeps scope, counts &into) -> const char * {
         const calls &made = *static_cast<const calls *>(state);
         Container c;
         made.setup(c);
-        R first = made.resolve(c);
-        R second = made.resolve(c);
+        R first = counted(0, into, [&]() -> R { return made.resolve(c); });
+        R second = counted(1, into, [&]() -> R { return made.resolve(c); });
         return violation<R>(scope, first, second);
       },
       &state);

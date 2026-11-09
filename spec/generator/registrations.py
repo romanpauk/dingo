@@ -160,6 +160,15 @@ class Registration:
         return semantics.failure(self.container, *request, self.selection,
                                  self.interfaces_declared), limitations
 
+    def fewest(self, probe):
+        """The fewest copies and moves of the leaf the specification
+        resolves a probe with, as (copies, moves)."""
+        return semantics.fewest(
+            self.scope, self.form, self.leaf, probe.request.interface.bound,
+            probe.request.shape, probe.request.category,
+            probe.operation.position, probe.operation.entry,
+            semantics.LIMITATIONS, self.selection, self.interfaces_declared)
+
     def keeps(self, probe):
         if self.scope is Scope.UNIQUE:
             return Keeps.NOTHING
@@ -232,4 +241,20 @@ def apply_semantics(cells, units):
         elif limitations:
             cell["outcome"] = Outcome.LIMITED.value
             cell["error"] = f"{expected.value} with {reasons}"
+        elif cell["outcome"] == Outcome.RESOLVED:
+            excess(cell, unit.fewest(probe))
     return cells
+
+
+def excess(cell, fewest):
+    """Records a resolved cell whose resolutions copy or move the leaf more
+    often than the cheapest derivation of the specification as excess."""
+    copies, moves = fewest
+    made = list(zip(cell.get("copies", ()), cell.get("moves", ())))
+    if any(copied > copies or moved > moves for copied, moved in made):
+        cell["outcome"] = Outcome.EXCESS.value
+        cell["error"] = (
+            "copies and moves the leaf " +
+            ", then ".join(f"{copied} and {moved} times"
+                           for copied, moved in made) +
+            f", where it needs {copies} and {moves}")
