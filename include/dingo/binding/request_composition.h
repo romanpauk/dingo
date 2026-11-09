@@ -9,10 +9,11 @@
 
 #include <dingo/base/config.h>
 
-#include <dingo/resolution/resolution_operation.h>
 #include <dingo/type/type_conversion_traits.h>
 #include <dingo/type/type_traits.h>
 
+#include <memory>
+#include <optional>
 #include <type_traits>
 #include <utility>
 
@@ -94,6 +95,21 @@ template <typename Request> constexpr bool composes() {
 template <typename Request>
 inline constexpr bool composes_v = composes<Request>();
 
+// Whether type_traits<Wrapper>::make makes the value of a wrapper of what
+// makes the value, as for the wrappers of the standard library, so that a
+// wrapper of a wrapper is made at once of what its innermost value is made of.
+template <typename Wrapper> inline constexpr bool makes_nested_v = false;
+
+template <typename T>
+inline constexpr bool makes_nested_v<std::optional<T>> = true;
+
+template <typename T>
+inline constexpr bool makes_nested_v<std::shared_ptr<T>> = !std::is_array_v<T>;
+
+template <typename T, typename Deleter>
+inline constexpr bool makes_nested_v<std::unique_ptr<T, Deleter>> =
+    !std::is_array_v<T>;
+
 // Whether a reference or a pointer refers to a wrapper that holds a copy
 // sharing what it was copied of, such as a std::shared_ptr<I> of a kept
 // std::shared_ptr<T>, or a wrapper composed of one: a binding that keeps its
@@ -116,9 +132,5 @@ template <typename Request> constexpr bool refers_to_sharing() {
 template <typename Request>
 inline constexpr bool refers_to_sharing_v = refers_to_sharing<Request>();
 
-// The wrapper made of the value it holds, moved into it.
-template <typename Wrapper, typename Value> Wrapper compose(Value &&value) {
-  return convert_type<Wrapper, consume>(static_cast<Value &&>(value));
-}
 } // namespace detail
 } // namespace dingo

@@ -123,6 +123,39 @@ void refuse_caller_reference(Scope scope, type_descriptor registered,
   }
 }
 
+// A wrapper a binding does not publish, made at once of the shallowest of the
+// values its layers hold that the binding resolves otherwise than by
+// composing it, down the layers that make their values of what makes them: a
+// value is moved into all the layers made of it at once, and a handle into the
+// wrapper as it is. composes(tag) says whether the binding
+// composes a request, as a constant when it is known as the code compiles;
+// with(tag, make) passes make what the binding resolves for a request. Both
+// containers compose a request so.
+template <typename Wrapper, typename Candidate, typename Composes,
+          typename With>
+Wrapper compose_wrapper(Composes &composes, With &with) {
+  auto make = [](auto &&value) -> Wrapper {
+    return type_traits<Wrapper>::make(std::forward<decltype(value)>(value));
+  };
+  if constexpr (composes_v<Candidate> && makes_nested_v<Wrapper> &&
+                makes_nested_v<composed_type_t<Candidate>>) {
+    using deeper = composed_inner_t<Candidate>;
+    using composed = decltype(composes(request_tag<Candidate>{}));
+    if constexpr (std::is_same_v<composed, std::true_type>) {
+      return compose_wrapper<Wrapper, deeper>(composes, with);
+    } else if constexpr (std::is_same_v<composed, std::false_type>) {
+      return with(request_tag<Candidate>{}, make);
+    } else {
+      if (composes(request_tag<Candidate>{})) {
+        return compose_wrapper<Wrapper, deeper>(composes, with);
+      }
+      return with(request_tag<Candidate>{}, make);
+    }
+  } else {
+    return with(request_tag<Candidate>{}, make);
+  }
+}
+
 // Derives a request a binding does not publish, of a shape the derivation
 // applies to, from the request it is derived from, which inner resolves
 // through the binding. What the binding keeps is kept, and published to the
@@ -148,16 +181,12 @@ resolved_address apply_derivation(Scope scope, Context &context,
     refuse_caller_reference<Request>(scope, registered, context);
     auto &value = context.template construct_from<derived>(scope, resolve);
     return {std::addressof(value), access::borrow};
-  } else if constexpr (How == derivation::keep) {
+  } else {
+    static_assert(How == derivation::keep);
     auto &value =
         kept().template keep<derived>(cache::key<derived>(), context, resolve);
     published(std::addressof(value));
     return {std::addressof(value), access::borrow};
-  } else {
-    using wrapper = composed_type_t<Request>;
-    auto &value = context.template construct_from<wrapper>(
-        scope, [&]() -> wrapper { return compose<wrapper>(resolve()); });
-    return {std::addressof(value), access::consume};
   }
 }
 
@@ -166,7 +195,27 @@ template <derivation How, typename T, typename RTTI, typename Binding,
 resolved_address derive_as(const derivation_site &site,
                            construction_scope scope, Binding &binding,
                            Context &context) {
-  if constexpr (derivation_shape_v<How, T>) {
+  if constexpr (How == derivation::compose && derivation_shape_v<How, T>) {
+    // The wrapper is placed in the context, where the binding hands it over.
+    using wrapper = composed_type_t<T>;
+    auto composes = [&](auto tag) -> bool {
+      using candidate = typename decltype(tag)::type;
+      const type_descriptor requested = described_type_v<candidate>;
+      return !site.publishes(requested) &&
+             derive_request<candidate>(site.facts_of(requested)) ==
+                 derivation::compose;
+    };
+    auto with = [&](auto tag, auto &make) -> wrapper {
+      return make(resolve_binding_request<typename decltype(tag)::type, RTTI>(
+          scope, binding, context));
+    };
+    auto &value =
+        context.template construct_from<wrapper>(scope, [&]() -> wrapper {
+          return compose_wrapper<wrapper, derived_request_t<How, T>>(composes,
+                                                                     with);
+        });
+    return {std::addressof(value), resolved_address::access_kind::consume};
+  } else if constexpr (derivation_shape_v<How, T>) {
     return apply_derivation<How, T>(
         scope, context, site.registered,
         [&](auto tag) -> typename decltype(tag)::type {

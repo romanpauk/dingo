@@ -288,14 +288,61 @@ private:
   template <typename InterfaceBinding, typename Request, derivation How,
             typename Host, typename Context, typename Scope>
   Request derive(Scope scope, Host &host, Context &context) {
-    return convert_resolved_binding<Request>(apply_derivation<How, Request>(
-        scope, context,
-        described_type_v<typename InterfaceBinding::storage_type::type>,
-        [&](auto tag) -> typename decltype(tag)::type {
-          return resolve<InterfaceBinding, typename decltype(tag)::type>(
-              scope, host, context);
-        },
-        [&]() -> auto & { return cell_.retained(); }, [](void *) {}));
+    if constexpr (How == derivation::compose && !std::is_reference_v<Request>) {
+      return Request(compose<InterfaceBinding, Request>(scope, host, context));
+    } else if constexpr (How == derivation::compose) {
+      // What an rvalue request refers to is placed in the context.
+      using wrapper = composed_type_t<Request>;
+      return static_cast<Request>(
+          context.template construct_from<wrapper>(scope, [&]() -> wrapper {
+            return compose<InterfaceBinding, Request>(scope, host, context);
+          }));
+    } else {
+      return convert_resolved_binding<Request>(apply_derivation<How, Request>(
+          scope, context,
+          described_type_v<typename InterfaceBinding::storage_type::type>,
+          [&](auto tag) -> typename decltype(tag)::type {
+            return resolve<InterfaceBinding, typename decltype(tag)::type>(
+                scope, host, context);
+          },
+          [&]() -> auto & { return cell_.retained(); }, [](void *) {}));
+    }
+  }
+
+  // Composes a wrapper of what the binding resolves, as the runtime
+  // container does, returned where it is requested: a value the binding
+  // publishes is made into it while its source exists.
+  template <typename InterfaceBinding, typename Request, typename Host,
+            typename Context, typename Scope>
+  composed_type_t<Request> compose(Scope scope, Host &host, Context &context) {
+    using wrapper = composed_type_t<Request>;
+    auto composes = [](auto tag) {
+      return std::bool_constant<static_request_derivation_v<
+                                    typename decltype(tag)::type,
+                                    InterfaceBinding> == derivation::compose>{};
+    };
+    auto with = [&](auto tag, auto &make) -> wrapper {
+      using candidate = typename decltype(tag)::type;
+      if constexpr (static_request_derivation_v<candidate, InterfaceBinding> ==
+                    derivation::none) {
+        return consume<InterfaceBinding, candidate>(
+            scope, host, context, [&](auto &&instance) -> wrapper {
+              using instance_type = decltype(instance);
+              if constexpr (std::is_same_v<remove_cvref_t<instance_type>,
+                                           remove_cvref_t<candidate>>) {
+                return make(std::forward<instance_type>(instance));
+              } else {
+                return make(static_cast<candidate>(
+                    std::forward<instance_type>(instance)));
+              }
+            });
+      } else {
+        return make(resolve<InterfaceBinding, candidate>(scope, host, context));
+      }
+    };
+    return compose_wrapper<wrapper,
+                           derived_request_t<derivation::compose, Request>>(
+        composes, with);
   }
 
   template <typename Host, typename Scope>

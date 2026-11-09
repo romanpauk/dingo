@@ -57,12 +57,15 @@ class retention;
 
 // What a runtime binding hands the derivation of a request it does not
 // publish: its facts, what it keeps of its instance, the type it registers,
-// and the key the request is cached under, if it caches it.
+// the key the request is cached under, if it caches it, and, for another
+// request, whether it publishes it and its facts.
 struct derivation_site {
   derivation_facts facts;
   retention *kept;
   type_descriptor registered;
   const void *cache_key;
+  bool (*publishes)(type_descriptor);
+  derivation_facts (*facts_of)(type_descriptor);
 };
 
 // The owner of a pointer handed over to a request, which a reference to what

@@ -114,7 +114,10 @@ The sequence is:
    the request places the value in the context; a value of what a made pointer
    points to is moved out of it; and a wrapper is composed of the value it
    holds. The derived request is resolved through the same binding, and may be
-   derived itself. A reference into the context is refused to the caller.
+   derived itself. A wrapper whose value is a wrapper the binding composes too
+   is made at once of the first value down its layers that the binding resolves
+   otherwise, so that the value is moved into all of them once. A reference into
+   the context is refused to the caller.
 
 [include/dingo/binding/runtime_binding_interface.h](../../include/dingo/binding/runtime_binding_interface.h)
 defines the request object the runtime container passes to a binding. The object

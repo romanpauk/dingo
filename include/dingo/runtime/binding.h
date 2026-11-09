@@ -326,12 +326,13 @@ private:
 #pragma warning(disable : 4702)
 #endif
   // Derives a request the binding does not publish, from what it tells of
-  // itself, through the derivation the request carries.
-  static resolved_address derive(interface_base &erased,
-                                 construction_scope scope,
-                                 runtime_context_type &context,
-                                 const request_type &request,
-                                 const void *cache_key) {
+  // itself, through the derivation the request carries. It is kept out of the
+  // dispatch, where a request the binding publishes is resolved.
+  DINGO_NOINLINE static resolved_address derive(interface_base &erased,
+                                                construction_scope scope,
+                                                runtime_context_type &context,
+                                                const request_type &request,
+                                                const void *cache_key) {
     if (request.derive == nullptr) {
       throw detail::make_type_not_convertible_exception(
           request.requested_type, registered_type(), context);
@@ -340,8 +341,23 @@ private:
     const detail::derivation_site site{
         detail::runtime_derivation_facts<Storage, request_resolutions>(
             request.requested_type),
-        retained(binding), registered_type(), cached(cache_key)};
+        retained(binding),
+        registered_type(),
+        cached(cache_key),
+        &publishes,
+        &detail::runtime_derivation_facts<Storage, request_resolutions>};
     return request.derive(&erased, site, scope, &context);
+  }
+
+  // Whether the binding publishes a request.
+  static bool publishes([[maybe_unused]] type_descriptor requested) {
+    if constexpr (type_list_size_v<request_resolutions> == 0) {
+      return false;
+    } else {
+      return detail::resolution_request_index(request_resolutions{},
+                                              requested) !=
+             type_list_size_v<request_resolutions>;
+    }
   }
 
   static resolved_address dispatch_request(interface_base &erased,
