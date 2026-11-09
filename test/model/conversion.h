@@ -15,6 +15,7 @@
 
 #include "model/probe.h"
 
+#include <dingo/runtime/binding.h>
 #include <dingo/static/binding.h>
 
 #include <cstddef>
@@ -41,6 +42,49 @@ constexpr std::size_t runtime_index(type_list<Resolutions...>) {
     ++index;
   }
   return index;
+}
+
+// The derivation the runtime container selects for a request its binding
+// does not publish, from the facts the binding tells of itself.
+template <typename Request, typename Storage, typename Resolutions>
+constexpr detail::derivation runtime_derivation() {
+  if constexpr (!detail::derivable_v<Request>) {
+    return detail::derivation::none;
+  } else {
+    return detail::derive_request<Request>(
+        detail::runtime_derivation_facts<Storage, Resolutions>(
+            detail::described_type_v<Request>));
+  }
+}
+
+// Whether the two containers resolve a request alike, down the chain of the
+// requests it is derived from: both publish it, or both derive it the same
+// way from a request they resolve alike, or neither resolves it.
+template <typename Request, typename Binding, typename Storage,
+          typename Resolutions>
+constexpr bool derives_alike() {
+  constexpr bool by_static_list =
+      detail::binding_supports_request_v<Request, Binding>;
+  constexpr bool by_runtime_list =
+      runtime_index<Request>(Resolutions{}) < type_list_size_v<Resolutions>;
+  if constexpr (by_static_list != by_runtime_list) {
+    return false;
+  } else if constexpr (by_static_list) {
+    return true;
+  } else {
+    constexpr detail::derivation by_static =
+        detail::static_derivation_v<Request, Binding>;
+    constexpr detail::derivation by_runtime =
+        runtime_derivation<Request, Storage, Resolutions>();
+    if constexpr (by_static != by_runtime) {
+      return false;
+    } else if constexpr (by_static == detail::derivation::none) {
+      return true;
+    } else {
+      return derives_alike<detail::derived_request_t<by_static, Request>,
+                           Binding, Storage, Resolutions>();
+    }
+  }
 }
 
 template <std::size_t Index, typename Resolutions>
@@ -84,11 +128,15 @@ void publication(const std::string &prefix, const char *name) {
     // How the static container derives a request it does not publish: kept
     // with the instance or composed, taken out of a pointer, or into the
     // context of the resolution.
+    using binding = detail::binding<type, Model>;
     constexpr detail::derivation how =
-        detail::static_request_derivation_v<Request,
-                                            detail::binding<type, Model>>;
-    if constexpr (how == detail::derivation::keep ||
-                  how == detail::derivation::compose) {
+        detail::static_request_derivation_v<Request, binding>;
+    if constexpr (!derives_alike<Request, binding, Storage, resolutions>()) {
+      record(cell.c_str(), "diverged",
+             "the static and the runtime container derive the request "
+             "differently");
+    } else if constexpr (how == detail::derivation::keep ||
+                         how == detail::derivation::compose) {
       record(cell.c_str(), "composed", nullptr);
     } else if constexpr (how == detail::derivation::take) {
       record(cell.c_str(), "adopted", nullptr);

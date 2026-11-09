@@ -127,8 +127,10 @@ A published request has to be one the specification, with the limitations of the
 library, resolves in some position, and a request it resolves for the caller has
 to be published, composed or taken over from a pointer: what the library
 resolves into the context of a call, a value placed there or a reference into a
-pointer it adopts, it does not publish. The check fails when the two containers
-select differently, a registration does not compile, a published request is
+pointer it adopts, it does not publish. Of a request a binding does not publish,
+the check follows the requests it is derived from in both containers, each from
+what its binding tells of itself. The check fails when the two containers select
+or derive differently, a registration does not compile, a published request is
 unprobed or unreachable, or a cell is not what the specification expects. Of a
 storage that cannot be made, and of the other alternative of an alternative
 type, which a probe's never holds, it compares nothing. What resolving a request

@@ -133,8 +133,8 @@ constexpr bool matches_taken_request(type_descriptor requested_type) {
 }
 
 template <typename Storage, typename... Resolutions>
-std::size_t adopted_request_index(type_list<Resolutions...>,
-                                  type_descriptor requested_type) {
+constexpr std::size_t adopted_request_index(type_list<Resolutions...>,
+                                            type_descriptor requested_type) {
   std::size_t index = 0;
   std::size_t result = sizeof...(Resolutions);
   (void)(((matches_adopted_request<Storage, Resolutions>(requested_type)
@@ -145,8 +145,8 @@ std::size_t adopted_request_index(type_list<Resolutions...>,
 }
 
 template <typename Storage, typename... Resolutions>
-std::size_t taken_request_index(type_list<Resolutions...>,
-                                type_descriptor requested_type) {
+constexpr std::size_t taken_request_index(type_list<Resolutions...>,
+                                          type_descriptor requested_type) {
   std::size_t index = 0;
   std::size_t result = sizeof...(Resolutions);
   (void)(((matches_taken_request<Storage, Resolutions>(requested_type)
@@ -154,6 +154,33 @@ std::size_t taken_request_index(type_list<Resolutions...>,
                : (++index, false)) ||
           ...));
   return result;
+}
+
+// What a runtime binding of a storage tells the derivation of a request it
+// does not publish, of its resolutions: whether it keeps its instance,
+// places what it makes, and publishes the pointer it makes that a reference
+// request refers into, or that a value request is taken out of, as the value
+// can be moved.
+template <typename Storage, typename Resolutions>
+constexpr derivation_facts runtime_derivation_facts(type_descriptor requested) {
+  derivation_facts facts{binding_cell<Storage>::keeps_conversions,
+                         places_made_values_v<Storage>, false, false};
+  if constexpr (hands_over_made_pointers_v<Storage>) {
+    facts.adopts = requested.reference == type_reference_kind::lvalue &&
+                   adopted_request_index<Storage>(Resolutions{}, requested) !=
+                       type_list_size_v<Resolutions>;
+  }
+  if constexpr (takes_made_pointee_v<Storage>) {
+    if (requested.reference != type_reference_kind::lvalue &&
+        requested.pointee == nullptr) {
+      type_descriptor pointee = requested;
+      pointee.reference = type_reference_kind::lvalue;
+      pointee.cv = type_cv_flags::none;
+      facts.takes = taken_request_index<Storage>(Resolutions{}, pointee) !=
+                    type_list_size_v<Resolutions>;
+    }
+  }
+  return facts;
 }
 
 // Applies a resolution to a source. A source the transaction keeps is an
@@ -272,38 +299,6 @@ private:
     }
   }
 
-  // Whether a reference request refers to what a pointer the storage makes
-  // points to: the storage publishes the pointer.
-  static bool adopts(type_descriptor requested) {
-    if constexpr (detail::hands_over_made_pointers_v<Storage>) {
-      return requested.reference == type_reference_kind::lvalue &&
-             detail::adopted_request_index<Storage>(request_resolutions{},
-                                                    requested) !=
-                 type_list_size_v<request_resolutions>;
-    } else {
-      (void)requested;
-      return false;
-    }
-  }
-
-  // Whether a value request is taken out of what a pointer the storage makes
-  // points to: the storage publishes the pointer, and the value can be moved.
-  static bool takes(type_descriptor requested) {
-    if constexpr (detail::takes_made_pointee_v<Storage>) {
-      if (refers(requested)) {
-        return false;
-      }
-      type_descriptor pointee = referred_value(requested);
-      pointee.reference = type_reference_kind::lvalue;
-      return detail::taken_request_index<Storage>(request_resolutions{},
-                                                  pointee) !=
-             type_list_size_v<request_resolutions>;
-    } else {
-      (void)requested;
-      return false;
-    }
-  }
-
   // The key a composed reference is published in the request cache under;
   // none when the binding has no cache.
   static const void *cached(const void *cache_key) noexcept {
@@ -343,12 +338,9 @@ private:
     }
     auto &binding = static_cast<runtime_binding &>(erased);
     const detail::derivation_site site{
-        {state_type::cell_type::keeps_conversions,
-         detail::places_made_values_v<Storage>, adopts(request.requested_type),
-         takes(request.requested_type)},
-        retained(binding),
-        registered_type(),
-        cached(cache_key)};
+        detail::runtime_derivation_facts<Storage, request_resolutions>(
+            request.requested_type),
+        retained(binding), registered_type(), cached(cache_key)};
     return request.derive(&erased, site, scope, &context);
   }
 
