@@ -35,6 +35,18 @@ inline constexpr bool
     holds_wrapper_v<Type, std::void_t<typename type_traits<Type>::value_type>> =
         type_traits<Type>::enabled && !std::is_pointer_v<Type> &&
         type_traits<typename type_traits<Type>::value_type>::enabled;
+
+// The element of a wrapper that holds another wrapper, of the leaf U, which a
+// unique scope makes with the wrapper and moves out of it.
+template <typename Type, typename U, typename = void> struct nested_element {
+  using type = type_list<>;
+};
+
+template <typename Type, typename U>
+struct nested_element<Type, U, std::enable_if_t<holds_wrapper_v<Type>>> {
+  using type = type_list<
+      wrapper_rebind_leaf_t<typename type_traits<Type>::value_type, U> &&>;
+};
 } // namespace detail
 
 template <> struct scope_traits<unique> {
@@ -83,16 +95,17 @@ template <> struct scope_traits<unique> {
     using rule = detail::scope_rule_requests<unique, Type, U>;
     using handles = detail::owning_handles_of_t<U>;
     static constexpr bool nested = detail::holds_wrapper_v<Type>;
+    using element = typename detail::nested_element<Type, U>::type;
     using wrapped = std::conditional_t<
         Form == storage_form::plain || Form == storage_form::alternative,
         handles,
         std::conditional_t<
             Form == storage_form::optional,
-            type_list_cat_t<type_list<U &&>, handles>,
+            type_list_cat_t<type_list<U &&>, element, handles>,
             std::conditional_t<
                 Form == storage_form::unique_handle,
                 type_list_cat_t<
-                    type_list<U &&>,
+                    type_list<U &&>, element,
                     std::conditional_t<nested, handles, type_list<>>>,
                 type_list<>>>>;
 

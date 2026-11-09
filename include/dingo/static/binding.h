@@ -256,10 +256,8 @@ public:
       not_convertible<Request, InterfaceBinding>(context);
     } else if constexpr (!std::is_reference_v<Request> &&
                          !std::is_pointer_v<Request>) {
-      return consume<InterfaceBinding, Request>(
-          scope, host, context, [](auto &&instance) -> Request {
-            return Request(std::forward<decltype(instance)>(instance));
-          });
+      return activation(scope, host)
+          .template resolve_request_value<Request, resolution>(context);
     } else {
       return convert_resolved_binding<Request>(
           activation(scope, host)

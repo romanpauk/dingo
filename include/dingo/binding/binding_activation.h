@@ -358,6 +358,31 @@ struct binding_activation {
     });
   }
 
+  // The value of a resolution selected at compile time, made where it is
+  // requested: a value the resolution makes initializes it.
+  template <typename Request, typename Resolution, typename Context>
+  Request resolve_request_value(Context &context) {
+    return with_source<Request>(context, [&](auto &&source) -> Request {
+      using applied_type = decltype(apply<Resolution>(
+          context, std::forward<decltype(source)>(source),
+          detail::described_type_v<Request>));
+      if constexpr (!std::is_reference_v<applied_type>) {
+        return Request(apply<Resolution>(context,
+                                         std::forward<decltype(source)>(source),
+                                         detail::described_type_v<Request>));
+      } else {
+        auto &&instance =
+            apply<Resolution>(context, std::forward<decltype(source)>(source),
+                              detail::described_type_v<Request>);
+        return consume_resolved_binding<Request>(
+            std::forward<decltype(instance)>(instance),
+            [](auto &&value) -> Request {
+              return Request(std::forward<decltype(value)>(value));
+            });
+      }
+    });
+  }
+
   // Passes the instance of a resolution selected at compile time to fn.
   template <typename Request, typename Resolution, typename Context,
             typename Fn>
