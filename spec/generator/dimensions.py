@@ -74,13 +74,15 @@ class Outcome(Dimension):
     # Not the outcome the semantics expect.
     UNEXPECTED = "unexpected"
     # What the conversion layer of a binding answers a request: a resolution
-    # with an available conversion, a wrapper composed of one, what a pointer
-    # the binding hands over points to, one whose conversion is not
-    # available, none, and a different answer of the two containers; a
-    # request the binding of another interface answers.
+    # with an available conversion, a wrapper composed of one, a value taken
+    # out of a pointer the binding hands over, a reference into the context
+    # of a resolution, one whose conversion is not available, none, and a
+    # different answer of the two containers; a request the binding of
+    # another interface answers.
     PUBLISHED = "published"
     COMPOSED = "composed"
     ADOPTED = "adopted"
+    PLACED = "placed"
     UNCONVERTIBLE = "unconvertible"
     UNPUBLISHED = "unpublished"
     DIVERGED = "diverged"

@@ -14,6 +14,7 @@
 #include <dingo/binding/binding_model.h>
 #include <dingo/binding/binding_resolution.h>
 #include <dingo/binding/request_composition.h>
+#include <dingo/binding/request_derivation.h>
 #include <dingo/context/resolution_context.h>
 #include <dingo/factory/factory_traits.h>
 #include <dingo/lookup/lookup_key.h>
@@ -165,82 +166,61 @@ struct static_dependencies<Host, static_registry<LocalRegistrations...>> {
                            static_registry<LocalRegistrations...>, Host>;
 };
 
-// A reference or a pointer request of a value the storage makes for the
-// request, which it publishes no address of: the value is placed in the
-// context. A copy is not the instance a reference refers to, so the storage
-// moves its instance into the value, as one that does not share it does.
+// What a static binding tells the derivation of a request it does not
+// publish: whether it keeps its instance, whether a reference may refer to a
+// value it makes, and whether it publishes the pointer it makes that the
+// request refers into or takes a value out of.
 template <typename Request, typename InterfaceBinding>
-inline constexpr bool places_request_value_v = [] {
+constexpr derivation_facts static_derivation_facts() {
   using storage = typename InterfaceBinding::binding_model_type::storage_type;
-  if constexpr ((std::is_lvalue_reference_v<Request> ||
-                 std::is_pointer_v<Request>) &&
-                places_made_values_v<storage>) {
-    return !binding_supports_request_v<Request, InterfaceBinding> &&
-           binding_supports_request_v<referred_value_t<Request>,
-                                      InterfaceBinding>;
-  } else {
-    return false;
-  }
-}();
-
-// A reference request of a storage that hands over a pointer it makes for the
-// request: the request is resolved as the pointer, which an owner placed in
-// the context adopts.
-template <typename Request, typename InterfaceBinding>
-inline constexpr bool adopts_request_pointer_v = [] {
-  using storage = typename InterfaceBinding::binding_model_type::storage_type;
-  using value_type = remove_cvref_t<Request>;
+  derivation_facts facts{binding_cell<storage>::keeps_conversions,
+                         places_made_values_v<storage>, false, false};
   if constexpr (std::is_lvalue_reference_v<Request> &&
                 adopts_made_pointer_v<storage,
                                       std::remove_reference_t<Request>>) {
-    return !binding_supports_request_v<Request, InterfaceBinding> &&
-           !places_request_value_v<Request, InterfaceBinding> &&
-           binding_supports_request_v<
-               std::add_pointer_t<std::remove_reference_t<Request>>,
-               InterfaceBinding>;
-  } else if constexpr (!std::is_lvalue_reference_v<Request> &&
-                       !std::is_pointer_v<Request> &&
-                       std::is_object_v<value_type> &&
-                       !std::is_array_v<value_type> &&
-                       takes_made_pointee_v<storage> &&
-                       std::is_constructible_v<value_type, value_type &&>) {
-    // A value of what the pointer points to is moved out of it.
-    return !binding_supports_request_v<Request, InterfaceBinding> &&
-           binding_supports_request_v<value_type *, InterfaceBinding>;
-  } else {
-    return false;
+    facts.adopts = binding_supports_request_v<
+        std::add_pointer_t<std::remove_reference_t<Request>>, InterfaceBinding>;
   }
-}();
+  if constexpr (takes_shape<Request>() && takes_made_pointee_v<storage>) {
+    facts.takes =
+        binding_supports_request_v<remove_cvref_t<Request> *, InterfaceBinding>;
+  }
+  return facts;
+}
 
-template <typename Request, typename InterfaceBinding> struct composes_request;
-
-// Whether a binding resolves a request: one it publishes, a reference to a
-// value it places in the context or a pointer it adopts, or a wrapper it
-// composes.
+// The derivation of a request a static binding does not publish.
 template <typename Request, typename InterfaceBinding>
-inline constexpr bool resolves_request_v =
-    binding_supports_request_v<Request, InterfaceBinding> ||
-    places_request_value_v<Request, InterfaceBinding> ||
-    adopts_request_pointer_v<Request, InterfaceBinding> ||
-    composes_request<Request, InterfaceBinding>::value;
+inline constexpr derivation static_derivation_v = derive_request<Request>(
+    static_derivation_facts<Request, InterfaceBinding>());
 
-// Whether a binding composes a request of a wrapper it does not publish:
-// it resolves the value the wrapper holds, and makes the wrapper of it.
+// Whether a binding resolves a request: one it publishes, or one it derives
+// from a request it resolves.
 template <typename Request, typename InterfaceBinding>
-constexpr bool composes_request_of() {
-  if constexpr (!composes_v<Request> ||
-                binding_supports_request_v<Request, InterfaceBinding> ||
-                places_request_value_v<Request, InterfaceBinding> ||
-                adopts_request_pointer_v<Request, InterfaceBinding>) {
-    return false;
+constexpr bool resolves_request() {
+  if constexpr (binding_supports_request_v<Request, InterfaceBinding>) {
+    return true;
   } else {
-    return resolves_request_v<composed_inner_t<Request>, InterfaceBinding>;
+    constexpr derivation how = static_derivation_v<Request, InterfaceBinding>;
+    if constexpr (how == derivation::none) {
+      return false;
+    } else {
+      return resolves_request<derived_request_t<how, Request>,
+                              InterfaceBinding>();
+    }
   }
 }
 
 template <typename Request, typename InterfaceBinding>
-struct composes_request
-    : std::bool_constant<composes_request_of<Request, InterfaceBinding>()> {};
+inline constexpr bool resolves_request_v =
+    resolves_request<Request, InterfaceBinding>();
+
+// How a binding resolves a request it does not publish, if it resolves it.
+template <typename Request, typename InterfaceBinding>
+inline constexpr derivation static_request_derivation_v =
+    binding_supports_request_v<Request, InterfaceBinding> ||
+            !resolves_request_v<Request, InterfaceBinding>
+        ? derivation::none
+        : static_derivation_v<Request, InterfaceBinding>;
 
 // The resolution of a request selected at compile time.
 template <typename Request, typename InterfaceBinding, typename Context>
@@ -268,12 +248,10 @@ public:
     using resolution =
         typename static_request_resolution<Request, InterfaceBinding,
                                            Context>::type;
-    if constexpr (places_request_value_v<Request, InterfaceBinding>) {
-      return place_value<InterfaceBinding, Request>(scope, host, context);
-    } else if constexpr (adopts_request_pointer_v<Request, InterfaceBinding>) {
-      return adopt_pointer<InterfaceBinding, Request>(scope, host, context);
-    } else if constexpr (composes_request<Request, InterfaceBinding>::value) {
-      return compose_request<InterfaceBinding, Request>(scope, host, context);
+    constexpr derivation how =
+        static_request_derivation_v<Request, InterfaceBinding>;
+    if constexpr (how != derivation::none) {
+      return derive<InterfaceBinding, Request, how>(scope, host, context);
     } else if constexpr (std::is_void_v<resolution>) {
       not_convertible<Request, InterfaceBinding>(context);
     } else if constexpr (!std::is_reference_v<Request> &&
@@ -305,41 +283,22 @@ public:
   }
 
 private:
-  // Places the value a reference or a pointer request refers to in the
-  // context, which ends before the caller uses what a resolution returns.
-  template <typename InterfaceBinding, typename Request, typename Host,
-            typename Context, typename Scope>
-  Request place_value(Scope scope, Host &host, Context &context) {
-    using value_type = referred_value_t<Request>;
-    refuse_caller<InterfaceBinding, Request>(scope, context);
-    auto &value =
-        context.template construct_from<value_type>(scope, [&]() -> value_type {
-          return resolve<InterfaceBinding, value_type>(scope, host, context);
-        });
-    if constexpr (std::is_pointer_v<Request>) {
-      return &value;
-    } else {
-      return value;
-    }
-  }
-
-  // Resolves a request of what the pointer the storage hands over points to
-  // as the pointer, and adopts it. A reference refers to what it points to,
-  // through an owner placed in the context; a value is moved out of it.
-  template <typename InterfaceBinding, typename Request, typename Host,
-            typename Context, typename Scope>
-  Request adopt_pointer(Scope scope, Host &host, Context &context) {
-    using pointer_type = std::add_pointer_t<std::remove_reference_t<Request>>;
-    if constexpr (std::is_lvalue_reference_v<Request>) {
+  // Derives a request the binding does not publish from the request it
+  // resolves through the binding.
+  template <typename InterfaceBinding, typename Request, derivation How,
+            typename Host, typename Context, typename Scope>
+  Request derive(Scope scope, Host &host, Context &context) {
+    using derived = derived_request_t<How, Request>;
+    auto inner = [&]() -> derived {
+      return resolve<InterfaceBinding, derived>(scope, host, context);
+    };
+    if constexpr (How == derivation::adopt) {
       refuse_caller<InterfaceBinding, Request>(scope, context);
-      pointer_type pointer =
-          resolve<InterfaceBinding, pointer_type>(scope, host, context);
+      derived pointer = inner();
       place_adopted_pointer(scope, context, pointer);
       return *pointer;
-    } else {
-      using value_type = remove_cvref_t<Request>;
-      value_type *pointer =
-          resolve<InterfaceBinding, value_type *>(scope, host, context);
+    } else if constexpr (How == derivation::take) {
+      derived pointer = inner();
       if constexpr (std::is_rvalue_reference_v<Request>) {
         place_adopted_pointer(scope, context, pointer);
         return std::move(*pointer);
@@ -347,48 +306,30 @@ private:
         auto owner = detail::adopt_pointer(pointer);
         return Request(std::move(*owner));
       }
-    }
-  }
-
-  // Makes a wrapper of the value it holds, which it resolves. A reference or
-  // a pointer to the wrapper refers to one the binding keeps, when the
-  // wrapper shares the instance it keeps, or else to one placed in the
-  // context.
-  template <typename InterfaceBinding, typename Request, typename Host,
-            typename Context, typename Scope>
-  Request compose_request(Scope scope, Host &host, Context &context) {
-    using wrapper = composed_type_t<Request>;
-    using inner = composed_inner_t<Request>;
-    if constexpr (!std::is_reference_v<Request> &&
-                  !std::is_pointer_v<Request>) {
-      return compose<wrapper>(
-          resolve<InterfaceBinding, inner>(scope, host, context));
-    } else {
-      auto make = [&]() -> wrapper {
-        return compose<wrapper>(
-            resolve<InterfaceBinding, inner>(scope, host, context));
-      };
-      // A wrapper of what shares the instance the binding keeps is kept with
-      // it; any other lives in the context.
-      constexpr bool retains = retains_composed_v<Request> &&
-                               binding_cell_t<model>::keeps_conversions;
-      if constexpr (!retains && !std::is_rvalue_reference_v<Request>) {
+    } else if constexpr (How == derivation::keep || How == derivation::place) {
+      if constexpr (How == derivation::place) {
         refuse_caller<InterfaceBinding, Request>(scope, context);
       }
-      auto &value = [&]() -> wrapper & {
-        if constexpr (retains) {
-          return cell_.retained().template keep<wrapper>(cache::key<wrapper>(),
-                                                         context, make);
+      auto &value = [&]() -> derived & {
+        if constexpr (How == derivation::keep) {
+          return cell_.retained().template keep<derived>(cache::key<derived>(),
+                                                         context, inner);
         } else {
-          return context.template construct_from<wrapper>(scope, make);
+          return context.template construct_from<derived>(scope, inner);
         }
       }();
       if constexpr (std::is_pointer_v<Request>) {
         return &value;
-      } else if constexpr (std::is_rvalue_reference_v<Request>) {
-        return std::move(value);
       } else {
         return value;
+      }
+    } else {
+      using wrapper = composed_type_t<Request>;
+      if constexpr (std::is_rvalue_reference_v<Request>) {
+        return std::move(context.template construct_from<wrapper>(
+            scope, [&]() -> wrapper { return compose<wrapper>(inner()); }));
+      } else {
+        return compose<wrapper>(inner());
       }
     }
   }

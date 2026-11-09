@@ -126,13 +126,13 @@ def apply_semantics(cells, units):
             continue
         anywhere, for_caller = expected
         outcome = Outcome(cell["outcome"])
-        if (outcome in (Outcome.PUBLISHED, Outcome.COMPOSED, Outcome.ADOPTED)
-                and not anywhere):
+        if (outcome in (Outcome.PUBLISHED, Outcome.COMPOSED, Outcome.ADOPTED,
+                        Outcome.PLACED) and not anywhere):
             cell.update(outcome=Outcome.UNEXPECTED.value,
                         error=f"{outcome.value}, which the specification "
                         "resolves nowhere")
-        elif (outcome in (Outcome.UNPUBLISHED, Outcome.UNCONVERTIBLE) and
-              for_caller):
+        elif (outcome in (Outcome.UNPUBLISHED, Outcome.UNCONVERTIBLE,
+                          Outcome.PLACED) and for_caller):
             cell.update(outcome=Outcome.UNEXPECTED.value,
                         error=f"{outcome.value}, which the specification "
                         "resolves for the caller")

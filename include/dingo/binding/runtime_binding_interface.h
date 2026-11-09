@@ -17,7 +17,7 @@
 
 namespace dingo {
 namespace detail {
-class retention;
+struct derivation_site;
 } // namespace detail
 
 struct resolved_address {
@@ -30,18 +30,16 @@ struct resolved_address {
 
 template <typename RTTI> struct instance_request {
   using type_index = typename RTTI::type_index;
-  // Composes a wrapper the binding does not publish of the value it holds,
-  // which it resolves through the binding, into the context.
-  using compose_function = resolved_address (*)(void *binding,
-                                                detail::retention *kept,
-                                                construction_scope scope,
-                                                void *context,
-                                                const void *cache_key);
+  // Derives a request the binding does not publish from one it resolves
+  // through the binding.
+  using derive_function =
+      resolved_address (*)(void *binding, const detail::derivation_site &site,
+                           construction_scope scope, void *context);
 
   type_index lookup_type;
   type_descriptor requested_type;
   // Called only when the binding does not publish the request.
-  compose_function compose = nullptr;
+  derive_function derive = nullptr;
 };
 
 template <typename RTTI, typename Context> class runtime_binding_interface {

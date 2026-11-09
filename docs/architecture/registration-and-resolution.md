@@ -105,6 +105,16 @@ The sequence is:
 5. A selected binding applies its resolution through a binding activation. A
    static container selects the resolution at compile time; a runtime binding
    matches the requested type descriptor in its `instance_request`.
+6. A request the binding does not publish is derived from one it resolves, by
+   the rule in
+   [include/dingo/binding/request_derivation.h](../../include/dingo/binding/request_derivation.h),
+   which both containers apply: a reference to what a pointer the binding makes
+   points to adopts the pointer; a reference to a wrapper that shares what the
+   binding keeps is kept with the binding; a reference to another value made for
+   the request places the value in the context; a value of what a made pointer
+   points to is moved out of it; and a wrapper is composed of the value it
+   holds. The derived request is resolved through the same binding, and may be
+   derived itself. A reference into the context is refused to the caller.
 
 [include/dingo/binding/runtime_binding_interface.h](../../include/dingo/binding/runtime_binding_interface.h)
 defines the request object the runtime container passes to a binding. The object
@@ -112,6 +122,10 @@ stores:
 
 - the lookup type index
 - the requested type descriptor
+- the derivation of the request, which the binding calls when it publishes no
+  resolution of it, with what it tells of itself: whether it keeps its instance,
+  places what it makes, and publishes the pointer the request refers into or
+  takes a value out of
 
 The containers differ in their binding table and their selection, not in the
 algorithm: registration child containers, the runtime container and the static

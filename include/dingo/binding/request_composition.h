@@ -44,6 +44,19 @@ inline constexpr bool copy_shares_v<
     (std::is_base_of_v<semantics::optional_value, type_traits<Type>> &&
      copy_shares_v<typename type_traits<Type>::value_type>);
 
+// Whether a value composed for a request holds a copy that shares what it
+// was copied of: it is such a copy, or a wrapper that cannot be copied, made
+// of one.
+template <typename Type, typename = void>
+inline constexpr bool holds_sharing_copy_v = copy_shares_v<Type>;
+
+template <typename Type>
+inline constexpr bool holds_sharing_copy_v<
+    Type,
+    std::enable_if_t<type_traits<Type>::enabled && !std::is_pointer_v<Type> &&
+                     !std::is_copy_constructible_v<Type>>> =
+    holds_sharing_copy_v<typename type_traits<Type>::value_type>;
+
 // The request of the value the wrapper of a request holds: the value itself
 // when it is never a copy of what shares nothing, as one that shares what it
 // holds, or one that cannot be copied, which is made or composed; otherwise
@@ -57,23 +70,6 @@ using composed_inner_t =
                            (copy_shares_v<Value> ||
                             !std::is_copy_constructible_v<Value>),
                        Value, Value &&>;
-
-// Whether a reference or a pointer to a composed wrapper refers to one the
-// binding keeps: the wrapper holds a copy that shares what the binding keeps,
-// so it lives as long as the binding keeps its instance. Any other composed
-// wrapper is made for the request.
-template <typename Request> constexpr bool retains_composed() {
-  if constexpr (std::is_lvalue_reference_v<Request> ||
-                std::is_pointer_v<Request>) {
-    return copy_shares_v<
-        typename type_traits<composed_type_t<Request>>::value_type>;
-  } else {
-    return false;
-  }
-}
-
-template <typename Request>
-inline constexpr bool retains_composed_v = retains_composed<Request>();
 
 // Whether a request is of a wrapper that can be made of the value it holds:
 // a value that can exist, moved into a wrapper that can; a const value is
@@ -97,6 +93,24 @@ template <typename Request> constexpr bool composes() {
 
 template <typename Request>
 inline constexpr bool composes_v = composes<Request>();
+
+// Whether a reference or a pointer to a composed wrapper refers to one the
+// binding keeps: the wrapper holds a copy that shares what the binding keeps,
+// so it lives as long as the binding keeps its instance. Any other composed
+// wrapper is made for the request.
+template <typename Request> constexpr bool retains_composed() {
+  if constexpr ((std::is_lvalue_reference_v<Request> ||
+                 std::is_pointer_v<Request>) &&
+                composes_v<Request>) {
+    return holds_sharing_copy_v<
+        typename type_traits<composed_type_t<Request>>::value_type>;
+  } else {
+    return false;
+  }
+}
+
+template <typename Request>
+inline constexpr bool retains_composed_v = retains_composed<Request>();
 
 // The wrapper made of the value it holds, moved into it.
 template <typename Wrapper, typename Value> Wrapper compose(Value &&value) {

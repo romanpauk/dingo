@@ -81,12 +81,20 @@ void publication(const std::string &prefix, const char *name) {
                   : "the runtime container selects a resolution, the static "
                     "container none");
   } else if constexpr (!listed) {
-    if constexpr (detail::composes_request<
-                      Request, detail::binding<type, Model>>::value) {
+    // How the static container derives a request it does not publish: kept
+    // with the instance or composed, taken out of a pointer, or into the
+    // context of the resolution.
+    constexpr detail::derivation how =
+        detail::static_request_derivation_v<Request,
+                                            detail::binding<type, Model>>;
+    if constexpr (how == detail::derivation::keep ||
+                  how == detail::derivation::compose) {
       record(cell.c_str(), "composed", nullptr);
-    } else if constexpr (detail::adopts_request_pointer_v<
-                             Request, detail::binding<type, Model>>) {
+    } else if constexpr (how == detail::derivation::take) {
       record(cell.c_str(), "adopted", nullptr);
+    } else if constexpr (how == detail::derivation::adopt ||
+                         how == detail::derivation::place) {
+      record(cell.c_str(), "placed", nullptr);
     } else {
       record(cell.c_str(), "unpublished", nullptr);
     }

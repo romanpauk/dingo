@@ -11,6 +11,7 @@
 #include <dingo/base/type_descriptor.h>
 #include <dingo/binding/binding_selection.h>
 #include <dingo/binding/request_composition.h>
+#include <dingo/binding/request_derivation.h>
 #include <dingo/binding/runtime_binding_interface.h>
 #include <dingo/context/resolution_context.h>
 #include <dingo/resolution/resolution_operation.h>
@@ -92,73 +93,136 @@ T resolve_binding_request(construction_scope scope, Binding &binding,
                           Context &context, const void *cache_key = nullptr);
 
 namespace detail {
-// Makes a wrapper the binding does not publish of the value it holds, which
-// it resolves through the binding, and places it in the context. A
-// reference or a pointer to it is refused to the caller, which uses what is
-// returned to it after the context ends.
+template <typename T, typename RTTI, typename Binding, typename Context>
+constexpr typename instance_request<RTTI>::derive_function deriver();
+
+// The erased request of T.
+template <typename T, typename RTTI, typename Binding, typename Context>
+instance_request<RTTI> erased_request() {
+  return {RTTI::template get_type_index<request_lookup_type_t<T>>(),
+          described_type_v<T>, deriver<T, RTTI, Binding, Context>()};
+}
+
+// Resolves the request a derivation of T resolves through the binding.
+template <derivation Derivation, typename T, typename RTTI, typename Binding,
+          typename Context>
+resolved_address resolve_derived(construction_scope scope, Binding &binding,
+                                 Context &context) {
+  using derived = derived_request_t<Derivation, T>;
+  return binding.resolve_request(
+      scope, context, erased_request<derived, RTTI, Binding, Context>(),
+      nullptr);
+}
+
+// Finishes a derivation of T, of a shape it applies to.
+template <derivation Derivation, typename T, typename RTTI, typename Binding,
+          typename Context>
+resolved_address finish_derivation(const derivation_site &site,
+                                   construction_scope scope, Binding &binding,
+                                   Context &context) {
+  using borrow = std::integral_constant<resolved_address::access_kind,
+                                        resolved_address::access_kind::borrow>;
+  if constexpr (Derivation == derivation::adopt ||
+                Derivation == derivation::place) {
+    // A reference into the context ends before the caller uses it.
+    if (scope.is_caller()) {
+      throw_type_not_convertible(described_type_v<T>, site.registered, context);
+    }
+    auto resolved =
+        resolve_derived<Derivation, T, RTTI>(scope, binding, context);
+    if constexpr (Derivation == derivation::adopt) {
+      place_adopted_pointer(
+          scope, context,
+          static_cast<derived_request_t<Derivation, T>>(resolved.address));
+    }
+    return {resolved.address, borrow::value};
+  } else if constexpr (Derivation == derivation::take) {
+    using pointer = derived_request_t<Derivation, T>;
+    auto *address = static_cast<pointer>(
+        resolve_derived<Derivation, T, RTTI>(scope, binding, context).address);
+    place_adopted_pointer(scope, context, address);
+    return {address, resolved_address::access_kind::consume};
+  } else if constexpr (Derivation == derivation::keep) {
+    // Kept with the instance, and published as the request's address.
+    using wrapper = derived_request_t<Derivation, T>;
+    auto &value = site.kept->template keep<wrapper>(
+        cache::key<wrapper>(), context, [&]() -> wrapper {
+          return resolve_binding_request<wrapper, RTTI>(scope, binding,
+                                                        context);
+        });
+    if (site.cache_key != nullptr) {
+      binding.publish_cache(context, site.cache_key, std::addressof(value));
+    }
+    return {std::addressof(value), borrow::value};
+  } else if constexpr (Derivation == derivation::compose) {
+    using wrapper = composed_type_t<T>;
+    using inner = derived_request_t<Derivation, T>;
+    auto &value =
+        context.template construct_from<wrapper>(scope, [&]() -> wrapper {
+          return compose<wrapper>(
+              resolve_binding_request<inner, RTTI>(scope, binding, context));
+        });
+    return {std::addressof(value), resolved_address::access_kind::consume};
+  } else {
+    throw_type_not_convertible(described_type_v<T>, site.registered, context);
+  }
+}
+
+template <derivation Derivation, typename T, typename RTTI, typename Binding,
+          typename Context>
+resolved_address derive_as(const derivation_site &site,
+                           construction_scope scope, Binding &binding,
+                           Context &context) {
+  if constexpr (derivation_shape_v<Derivation, T>) {
+    return finish_derivation<Derivation, T, RTTI>(site, scope, binding,
+                                                  context);
+  } else {
+    throw_type_not_convertible(described_type_v<T>, site.registered, context);
+  }
+}
+
+// Derives a request the binding does not publish from one it resolves.
 template <typename T, typename RTTI, typename Binding, typename Context>
 resolved_address
-compose_binding_request(void *erased, retention *kept, construction_scope scope,
-                        void *erased_context, const void *cache_key) {
-  using wrapper = composed_type_t<T>;
-  using inner = composed_inner_t<T>;
+derive_binding_request(void *erased, const derivation_site &site,
+                       construction_scope scope, void *erased_context) {
   auto &binding = *static_cast<Binding *>(erased);
   auto &context = *static_cast<Context *>(erased_context);
-  constexpr bool refers = std::is_lvalue_reference_v<T> || std::is_pointer_v<T>;
-  // A wrapper of what shares the instance a binding keeps is kept with it,
-  // and published as the request's address.
-  if constexpr (retains_composed_v<T>) {
-    if (kept != nullptr) {
-      auto &value = kept->template keep<wrapper>(
-          cache::key<wrapper>(), context, [&]() -> wrapper {
-            return compose<wrapper>(
-                resolve_binding_request<inner, RTTI>(scope, binding, context));
-          });
-      if (cache_key != nullptr) {
-        binding.publish_cache(context, cache_key, std::addressof(value));
-      }
-      return {std::addressof(value), resolved_address::access_kind::borrow};
-    }
-  } else {
-    (void)kept;
-    (void)cache_key;
+  switch (derive_request<T>(site.facts)) {
+  case derivation::adopt:
+    return derive_as<derivation::adopt, T, RTTI>(site, scope, binding, context);
+  case derivation::keep:
+    return derive_as<derivation::keep, T, RTTI>(site, scope, binding, context);
+  case derivation::place:
+    return derive_as<derivation::place, T, RTTI>(site, scope, binding, context);
+  case derivation::take:
+    return derive_as<derivation::take, T, RTTI>(site, scope, binding, context);
+  case derivation::compose:
+    return derive_as<derivation::compose, T, RTTI>(site, scope, binding,
+                                                   context);
+  case derivation::none:
+    break;
   }
-  if constexpr (refers) {
-    if (scope.is_caller()) {
-      throw_type_not_convertible(described_type_v<T>, described_type_v<inner>,
-                                 context);
-    }
-  }
-  auto &value =
-      context.template construct_from<wrapper>(scope, [&]() -> wrapper {
-        return compose<wrapper>(
-            resolve_binding_request<inner, RTTI>(scope, binding, context));
-      });
-  return {std::addressof(value), refers
-                                     ? resolved_address::access_kind::borrow
-                                     : resolved_address::access_kind::consume};
+  throw_type_not_convertible(described_type_v<T>, site.registered, context);
 }
 
 template <typename T, typename RTTI, typename Binding, typename Context>
-constexpr typename instance_request<RTTI>::compose_function composer() {
-  if constexpr (composes_v<T>) {
-    return &compose_binding_request<T, RTTI, Binding, Context>;
+constexpr typename instance_request<RTTI>::derive_function deriver() {
+  if constexpr (derivable_v<T>) {
+    return &derive_binding_request<T, RTTI, Binding, Context>;
   } else {
     return nullptr;
   }
 }
 } // namespace detail
 
-// Resolves a request through a binding. A wrapper the binding does not
-// publish is composed of the value it holds.
+// Resolves a request through a binding. A request the binding does not
+// publish is derived from one it resolves.
 template <typename T, typename RTTI, typename Binding, typename Context>
 T resolve_binding_request(construction_scope scope, Binding &binding,
                           Context &context, const void *cache_key) {
   return detail::convert_resolved_binding<T>(binding.resolve_request(
-      scope, context,
-      {RTTI::template get_type_index<request_lookup_type_t<T>>(),
-       detail::described_type_v<T>,
-       detail::composer<T, RTTI, Binding, Context>()},
+      scope, context, detail::erased_request<T, RTTI, Binding, Context>(),
       cache_key));
 }
 

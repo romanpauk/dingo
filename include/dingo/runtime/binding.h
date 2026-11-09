@@ -156,28 +156,6 @@ std::size_t taken_request_index(type_list<Resolutions...>,
   return result;
 }
 
-template <typename Target, typename Context>
-void place_adopted(construction_scope scope, Context &context, void *address) {
-  if constexpr (std::is_pointer_v<Target>) {
-    place_adopted_pointer(scope, context, static_cast<Target>(address));
-  } else {
-    (void)scope, (void)context, (void)address;
-  }
-}
-
-// Places an owner of the pointer the resolution at a run-time index resolved.
-template <typename Context, typename... Resolutions>
-void place_adopted_address(construction_scope scope, Context &context,
-                           std::size_t resolution_index,
-                           type_list<Resolutions...>, void *address) {
-  std::size_t index = 0;
-  (void)((resolution_index == index++ &&
-          (place_adopted<typename Resolutions::target_type>(scope, context,
-                                                            address),
-           true)) ||
-         ...);
-}
-
 // Applies a resolution to a source. A source the transaction keeps is an
 // lvalue, so that a reference or a pointer can refer to it; a value is moved
 // out of it as out of any other source. Only the resolutions that refer are
@@ -294,88 +272,35 @@ private:
     }
   }
 
-  // Whether a reference the storage publishes no address for, nor a value it
-  // refers to, refers to what the pointer the storage hands over points to:
-  // it is resolved as the pointer, adopted by an owner placed in the
-  // context.
-  static bool route_adopted(type_descriptor requested,
-                            type_descriptor &resolved_type,
-                            std::size_t &resolution_index) {
-    if (resolution_index != type_list_size_v<request_resolutions> ||
-        requested.reference != type_reference_kind::lvalue) {
+  // Whether a reference request refers to what a pointer the storage makes
+  // points to: the storage publishes the pointer.
+  static bool adopts(type_descriptor requested) {
+    if constexpr (detail::hands_over_made_pointers_v<Storage>) {
+      return requested.reference == type_reference_kind::lvalue &&
+             detail::adopted_request_index<Storage>(request_resolutions{},
+                                                    requested) !=
+                 type_list_size_v<request_resolutions>;
+    } else {
+      (void)requested;
       return false;
     }
-    resolved_type = requested;
-    resolution_index = detail::adopted_request_index<Storage>(
-        request_resolutions{}, requested);
-    return true;
   }
 
-  // Whether a value the storage publishes nothing for is of what the pointer
-  // it hands over points to: it is resolved as the pointer, adopted by an
-  // owner placed in the context, and moved out of what it points to.
-  static bool route_taken(type_descriptor requested,
-                          type_descriptor &resolved_type,
-                          std::size_t &resolution_index) {
-    if (resolution_index != type_list_size_v<request_resolutions> ||
-        refers(requested)) {
-      return false;
-    }
-    type_descriptor pointee = referred_value(requested);
-    pointee.reference = type_reference_kind::lvalue;
-    const std::size_t index =
-        detail::taken_request_index<Storage>(request_resolutions{}, pointee);
-    if (index == type_list_size_v<request_resolutions>) {
-      return false;
-    }
-    resolved_type = pointee;
-    resolution_index = index;
-    return true;
-  }
-
-  // How a request is resolved through the pointer the storage hands over:
-  // not, as a reference to what it points to, or as a value moved out of it.
-  enum class handover : unsigned char { none, referred, taken };
-
-  // Routes a request the storage publishes nothing for. A reference or a
-  // pointer refers to the value the storage makes, placed in the context, or
-  // to what the pointer it hands over points to; a value is moved out of
-  // what that pointer points to.
-  static void route_unpublished(type_descriptor requested,
-                                type_descriptor &resolved_type,
-                                std::size_t &resolution_index, bool &placed,
-                                handover &handed) {
-    if (resolution_index == type_list_size_v<request_resolutions> &&
-        refers(resolved_type)) {
-      resolved_type = referred_value(resolved_type);
-      resolution_index = detail::resolution_request_index(request_resolutions{},
-                                                          resolved_type);
-      placed = true;
-      if constexpr (detail::hands_over_made_pointers_v<Storage>) {
-        if (route_adopted(requested, resolved_type, resolution_index)) {
-          handed = handover::referred;
-        }
-      }
-    }
+  // Whether a value request is taken out of what a pointer the storage makes
+  // points to: the storage publishes the pointer, and the value can be moved.
+  static bool takes(type_descriptor requested) {
     if constexpr (detail::takes_made_pointee_v<Storage>) {
-      if (route_taken(requested, resolved_type, resolution_index)) {
-        handed = handover::taken;
+      if (refers(requested)) {
+        return false;
       }
-    }
-  }
-
-  // Places an owner of the pointer a request is resolved through; a value
-  // is then moved out of what it points to.
-  static void place_adopted(handover handed, construction_scope scope,
-                            runtime_context_type &context,
-                            std::size_t resolution_index,
-                            resolved_address &resolved) {
-    if (handed != handover::none) {
-      detail::place_adopted_address(scope, context, resolution_index,
-                                    request_resolutions{}, resolved.address);
-    }
-    if (handed == handover::taken) {
-      resolved.access = resolved_address::access_kind::consume;
+      type_descriptor pointee = referred_value(requested);
+      pointee.reference = type_reference_kind::lvalue;
+      return detail::taken_request_index<Storage>(request_resolutions{},
+                                                  pointee) !=
+             type_list_size_v<request_resolutions>;
+    } else {
+      (void)requested;
+      return false;
     }
   }
 
@@ -405,40 +330,43 @@ private:
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
+  // Derives a request the binding does not publish, from what it tells of
+  // itself, through the derivation the request carries.
+  static resolved_address derive(interface_base &erased,
+                                 construction_scope scope,
+                                 runtime_context_type &context,
+                                 const request_type &request,
+                                 const void *cache_key) {
+    if (request.derive == nullptr) {
+      throw detail::make_type_not_convertible_exception(
+          request.requested_type, registered_type(), context);
+    }
+    auto &binding = static_cast<runtime_binding &>(erased);
+    const detail::derivation_site site{
+        {state_type::cell_type::keeps_conversions,
+         detail::places_made_values_v<Storage>, adopts(request.requested_type),
+         takes(request.requested_type)},
+        retained(binding),
+        registered_type(),
+        cached(cache_key)};
+    return request.derive(&erased, site, scope, &context);
+  }
+
   static resolved_address dispatch_request(interface_base &erased,
                                            construction_scope scope,
                                            runtime_context_type &context,
                                            const request_type &request,
                                            const void *cache_key) {
-    auto &binding = static_cast<runtime_binding &>(erased);
     if constexpr (type_list_size_v<request_resolutions> == 0) {
-      if (request.compose != nullptr) {
-        return request.compose(&erased, retained(binding), scope, &context,
-                               cached(cache_key));
-      }
-      throw detail::make_type_not_convertible_exception(
-          request.requested_type, registered_type(), context);
+      return derive(erased, scope, context, request, cache_key);
     } else {
-      type_descriptor resolved_type = request.requested_type;
-      auto resolution_index = detail::resolution_request_index(
-          request_resolutions{}, resolved_type);
-      bool placed = false;
-      handover handed = handover::none;
-      if constexpr (detail::places_made_values_v<Storage>) {
-        route_unpublished(request.requested_type, resolved_type,
-                          resolution_index, placed, handed);
-      }
-      if (resolution_index == type_list_size_v<request_resolutions> ||
-          (placed && scope.is_caller())) {
-        if (request.compose != nullptr &&
-            resolution_index == type_list_size_v<request_resolutions>) {
-          return request.compose(&erased, retained(binding), scope, &context,
-                                 cached(cache_key));
-        }
-        throw detail::make_type_not_convertible_exception(
-            request.requested_type, registered_type(), context);
+      const auto resolution_index = detail::resolution_request_index(
+          request_resolutions{}, request.requested_type);
+      if (resolution_index == type_list_size_v<request_resolutions>) {
+        return derive(erased, scope, context, request, cache_key);
       }
 
+      auto &binding = static_cast<runtime_binding &>(erased);
       auto &state = binding.state();
       auto result = state.with_resolution_container(
           [&](auto &container) -> resolved_address {
@@ -451,15 +379,7 @@ private:
                   auto resolved = detail::resolve_indexed_address(
                       activation, context,
                       std::forward<decltype(source)>(source), resolution_index,
-                      request_resolutions{}, resolved_type);
-                  if constexpr (detail::hands_over_made_pointers_v<Storage>) {
-                    place_adopted(handed, scope, context, resolution_index,
-                                  resolved);
-                  }
-                  if (placed) {
-                    resolved.access = resolved_address::access_kind::borrow;
-                    return resolved;
-                  }
+                      request_resolutions{}, request.requested_type);
                   check_caller_address<detail::materializes_value_source_v<
                       Storage, runtime_context_type,
                       std::remove_reference_t<decltype(container)>>>(
