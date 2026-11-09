@@ -119,22 +119,6 @@ template <typename T>
 struct callable_signature<T *, std::enable_if_t<std::is_function_v<T>>>
     : callable_signature<T> {};
 
-template <typename Signature>
-struct callable_signature<std::function<Signature>, void>
-    : callable_signature<Signature> {};
-
-#if defined(__cpp_lib_move_only_function)
-template <typename Signature>
-struct callable_signature<std::move_only_function<Signature>, void>
-    : callable_signature<Signature> {};
-#endif
-
-#if defined(__cpp_lib_copyable_function)
-template <typename Signature>
-struct callable_signature<std::copyable_function<Signature>, void>
-    : callable_signature<Signature> {};
-#endif
-
 template <typename Class, typename R, typename... Args>
 struct callable_signature<R (Class::*)(Args...), void>
     : callable_signature<R(Class &, Args...)> {};
