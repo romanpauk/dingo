@@ -315,9 +315,17 @@ def stack_can(layers, layer_can, element_can):
             (depth <= len(layers) or element_can))
 
 
+def slices(thing):
+    """Whether a new object of a thing would slice the leaf: the interface
+    without a layer is the base the leaf is, which is referred to, never
+    copied, moved or held in place by a new layer."""
+    return thing.element == "interface" and not thing.layers
+
+
 def can_copy(thing, context):
-    return stack_can(thing.layers, lambda layer: layer.copyable,
-                     copies_element(thing, context))
+    return not slices(thing) and stack_can(
+        thing.layers, lambda layer: layer.copyable,
+        copies_element(thing, context))
 
 
 def can_move(thing, context):
@@ -433,7 +441,8 @@ def transitions(thing, context):
             lifetimes = (Lifetime.REQUEST,) + thing.lifetimes
         for made in LAYERS.values():
             if made.made_from_value and not (made.holds_element_only and
-                                             layers):
+                                             layers) and not (
+                    slices(thing) and not made.shares_element):
                 yield "wrap", replace(
                     thing, layers=(made.name,) + layers, lifetimes=lifetimes)
 
@@ -600,6 +609,8 @@ def satisfactions(things, category, lifetime, layers, context):
     found = []
     for thing in of_shape:
         anew = makes_leaf_anew(thing.layers)
+        if slices(thing):
+            continue
         if thing.origin.owned and can_move(thing, context):
             found.append((thing, "move" if anew else None))
         if can_copy(thing, context):

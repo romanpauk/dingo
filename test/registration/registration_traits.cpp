@@ -910,14 +910,9 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
                 type_list<A *>>);
 
   using optional_pointer = std::optional<A> *;
-  static_assert(
-      std::is_same_v<
-          detail::type_conversion_path_t<std::optional<I>, optional_pointer>,
-          detail::conversion_unwrap<
-              detail::borrow_element,
-              detail::optional_element_conversion<
-                  std::optional<I>,
-                  detail::conversion_leaf<detail::base_ref, I, borrow>>>>);
+  // An optional of the base would hold a copy of it, which slices the leaf.
+  static_assert(!detail::type_conversion_path_t<std::optional<I>,
+                                                optional_pointer>::available);
   using optional_pointer_model = detail::binding_model<
       type_registration<scope<external>, storage<optional_pointer>>>;
   using optional_pointer_resolutions = detail::binding_resolutions<
@@ -938,14 +933,14 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
           scope<external>, storage<optional_pointer>, interfaces<I, J>>>;
   using optional_interface_resolutions = detail::binding_resolutions<
       I, typename optional_interface_pointer_model::storage_type>;
-  // The optional of the leaf selects the leaf, which is not bound; the
-  // interface publishes its own optional only.
+  // The optional of the leaf selects the leaf, which is not bound; an optional
+  // of the interface would hold a copy of it, which slices the leaf.
   static_assert(
       !has_resolution_target_v<
           std::optional<A>,
           typename accepted_values<optional_interface_resolutions>::type>);
   static_assert(
-      has_resolution_target_v<
+      !has_resolution_target_v<
           std::optional<I>,
           typename accepted_values<optional_interface_resolutions>::type>);
   static_assert(
@@ -956,10 +951,8 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   using optional_interface_binding =
       detail::binding<I, optional_interface_pointer_model>;
   static_assert(
-      std::is_same_v<
-          typename detail::binding_supports_request<
-              std::optional<I>, optional_interface_binding>::type::target_type,
-          std::optional<I>>);
+      !detail::binding_supports_request_v<std::optional<I>,
+                                          optional_interface_binding>);
   using const_pointer_interface_model = detail::binding_model<
       type_registration<scope<external>, storage<const A *>, interfaces<I, J>>>;
   using const_pointer_interface_resolutions = detail::binding_resolutions<
@@ -1341,20 +1334,11 @@ TEST(type_registration_test,
                      interfaces<service_interface, secondary>>(
           std::addressof(converted_value));
 
-  auto converted =
-      converted_container.resolve<std::optional<service_interface>>();
-  ASSERT_TRUE(converted.has_value());
-  EXPECT_EQ(converted->value, 17);
-
-  std::optional<implementation> empty_converted_value;
-  container<> empty_converted_container;
-  empty_converted_container
-      .register_type<scope<external>, storage<std::optional<implementation> *>,
-                     interfaces<service_interface, secondary>>(
-          std::addressof(empty_converted_value));
-  EXPECT_FALSE(
-      empty_converted_container.resolve<std::optional<service_interface>>()
-          .has_value());
+  // An optional of the interface would hold a copy of it, which slices the
+  // implementation.
+  EXPECT_THROW(
+      (void)converted_container.resolve<std::optional<service_interface>>(),
+      type_not_convertible_exception);
 
   test_optional<implementation> custom_value{implementation{19}};
   container<> custom_container;
@@ -1363,20 +1347,10 @@ TEST(type_registration_test,
                      interfaces<service_interface, secondary>>(
           std::addressof(custom_value));
 
-  auto custom_converted =
-      custom_container.resolve<test_optional<service_interface>>();
-  ASSERT_NE(custom_converted.get(), nullptr);
-  EXPECT_EQ(custom_converted.get()->value, 19);
-
-  test_optional<implementation> empty_custom_value;
-  container<> empty_custom_container;
-  empty_custom_container
-      .register_type<scope<external>, storage<test_optional<implementation> *>,
-                     interfaces<service_interface, secondary>>(
-          std::addressof(empty_custom_value));
-  EXPECT_FALSE(
-      empty_custom_container.resolve<test_optional<service_interface>>()
-          .has_value());
+  // So would an optional of a user's.
+  EXPECT_THROW(
+      (void)custom_container.resolve<test_optional<service_interface>>(),
+      type_not_convertible_exception);
 }
 
 TEST(type_registration_test, const_reference_storage_preserves_const_access) {

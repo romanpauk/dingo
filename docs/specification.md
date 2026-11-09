@@ -27,12 +27,15 @@ Stored forms and request shapes are compositions of `std::shared_ptr`,
 `std::unique_ptr` and `std::optional`. A new layer holds what the request owns,
 moved into it: a value made for the request, or a copy that shares what it was
 copied of, such as a copy of a shared handle, which refers to the same object.
-What a scope keeps that shares nothing gets no new layer, as a copy of it is not
-the instance: a `shared` scope that keeps a `T` gives no `std::shared_ptr<T>`
-and no `std::optional<T>` of it, while one that keeps a `std::shared_ptr<T>`
-gives a `std::optional<std::shared_ptr<T>>`, which shares the `T`. A layer
-holding a copy that shares what the scope or the caller keeps is kept with it,
-so the caller may refer to it.
+The interface a leaf is bound to is the base it is: it is referred to, by
+reference, pointer or a handle of the leaf, and never copied, moved or held in
+place by a new layer, which would slice the leaf. What a scope keeps that shares
+nothing gets no new layer, as a copy of it is not the instance: a `shared` scope
+that keeps a `T` gives no `std::shared_ptr<T>` and no `std::optional<T>` of it,
+while one that keeps a `std::shared_ptr<T>` gives a
+`std::optional<std::shared_ptr<T>>`, which shares the `T`. A layer holding a
+copy that shares what the scope or the caller keeps is kept with it, so the
+caller may refer to it.
 
 ## Limitations
 

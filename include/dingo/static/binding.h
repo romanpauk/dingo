@@ -226,8 +226,20 @@ inline constexpr derivation static_request_derivation_v =
 template <typename Request, typename InterfaceBinding, typename Context>
 struct static_request_resolution
     : binding_supports_request<Request, InterfaceBinding> {
-  static_assert(is_runtime_context_v<Context> ||
-                    resolves_request_v<Request, InterfaceBinding>,
+private:
+  static constexpr bool resolves =
+      is_runtime_context_v<Context> ||
+      resolves_request_v<Request, InterfaceBinding>;
+  // A request that does not resolve because it would slice the registered
+  // type is told so.
+  static constexpr bool slices =
+      slices_v<Request,
+               leaf_type_t<typename InterfaceBinding::storage_type::type>>;
+
+  static_assert(resolves || !slices,
+                "a value of a base of the registered type would slice it; "
+                "request the base by reference, by pointer or by a handle");
+  static_assert(resolves || slices,
                 "static resolution cannot satisfy a request the storage "
                 "does not publish");
 };

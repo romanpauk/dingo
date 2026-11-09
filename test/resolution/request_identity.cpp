@@ -180,13 +180,16 @@ TYPED_TEST(request_identity_test, second_interface_is_adjusted) {
       });
 }
 
-TYPED_TEST(request_identity_test, concrete_interface_is_copied_by_value) {
-  TypeParam::template with<
-      dingo::bind<scope<shared>, storage<concrete_implementation>,
-                  interfaces<concrete_interface>>>([](auto &container) {
-    concrete_interface copy = container.template resolve<concrete_interface>();
-    EXPECT_EQ(copy.marker, 6);
-  });
+// A concrete interface is given by reference, not as a copy of the base of
+// the implementation, which would slice it. The static container rejects the
+// copy as it compiles.
+TEST(request_identity_runtime_test, concrete_interface_is_not_sliced) {
+  runtime_container<> container;
+  container.register_type<scope<shared>, storage<concrete_implementation>,
+                          interfaces<concrete_interface>>();
+  EXPECT_EQ(container.resolve<concrete_interface &>().marker, 6);
+  EXPECT_THROW(container.resolve<concrete_interface>(),
+               type_not_convertible_exception);
 }
 
 // Every element of a multi-dimensional array is constructed, and its

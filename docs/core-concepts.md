@@ -635,7 +635,9 @@ See:
 
 Registrations can be exposed through base classes or other interface types. The
 upcast is fixed at registration time, which keeps multiple-inheritance cases
-predictable without relying on `dynamic_cast` for ordinary resolution.
+predictable without relying on `dynamic_cast` for ordinary resolution. A base is
+given by reference, by pointer or by a handle, which holds the registered
+object; never by value, as a copy of the base would slice it.
 
 This is the right fit when:
 

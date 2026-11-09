@@ -23,6 +23,17 @@ namespace dingo {
 struct borrow {};
 struct consume {};
 
+// Whether a value of Target made of Source would slice it: Target is a base
+// of Source, other than Source itself. A base is given by reference, by
+// pointer or by a handle holding the object, never as a copy of it.
+template <typename Target, typename Source>
+inline constexpr bool slices_v =
+    !std::is_reference_v<Target> &&
+    std::is_base_of_v<std::remove_cv_t<Target>,
+                      std::remove_cv_t<std::remove_reference_t<Source>>> &&
+    !std::is_same_v<std::remove_cv_t<Target>,
+                    std::remove_cv_t<std::remove_reference_t<Source>>>;
+
 template <typename TargetType, typename SourceType, typename = void>
 struct type_conversion_traits {
   static constexpr bool is_default = true;
@@ -30,7 +41,7 @@ struct type_conversion_traits {
   template <
       typename Source, typename Result = TargetType,
       std::enable_if_t<
-          !std::is_array_v<Result> &&
+          !std::is_array_v<Result> && !slices_v<Result, Source> &&
               ((std::is_reference_v<Result> &&
                 std::is_lvalue_reference_v<Source &&> &&
                 std::is_convertible_v<
@@ -489,7 +500,8 @@ template <typename Held> struct box {
 enum class basic_conversion_kind { none, identity, reference };
 
 // The default conversions that keep the source object: a reference to it or to
-// its base, a copy of it or of its base, or the object moved from an rvalue.
+// its base, a copy of it, or the object moved from an rvalue. A copy of its
+// base would slice it.
 // Every other conversion, taking the address included, is found by the paths
 // after it.
 template <typename Target, typename Source, typename Access>
@@ -513,10 +525,6 @@ constexpr basic_conversion_kind basic_conversion_selected() {
   } else if constexpr (by_value && borrows &&
                        std::is_same_v<std::remove_cv_t<Target>, source_type>) {
     return is_copy_constructible_v<Target> ? kind::identity : kind::none;
-  } else if constexpr (by_value && borrows &&
-                       std::is_convertible_v<source_pointer,
-                                             std::add_pointer_t<Target>>) {
-    return is_copy_constructible_v<Target> ? kind::reference : kind::none;
   } else if constexpr (by_value && std::is_rvalue_reference_v<Source> &&
                        std::is_same_v<std::remove_cv_t<Target>, source_type> &&
                        access_satisfies<Access, consume>::value) {
