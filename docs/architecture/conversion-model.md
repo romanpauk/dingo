@@ -100,7 +100,7 @@ already-converted value; the resolver only keeps it and never performs a second
 conversion, in the retention of the binding, which holds any type, so no list of
 retained types is derived for it. A new operation provides `apply`, a function
 returning its path, and a place in `op`; the conversion its path makes provides
-`available`, `required_access`, `cache_types` and `apply`.
+`available`, `required_access`, `retains` and `apply`.
 
 Factory construction and storage rebinding use this operation model as well, and
 so does `construct<T>()` of a wrapper of a bound type that its binding does not

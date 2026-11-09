@@ -119,11 +119,12 @@ struct custom_conversion_access<
 // of op, and the first available one is taken.
 //
 // A conversion says whether it is available, the access it requires of its
-// source, the conversions it retains in its binding, and how it applies.
+// source, whether it retains what it makes in its binding, and how it
+// applies.
 struct unavailable_type_conversion {
   static constexpr bool available = false;
   using required_access = unavailable_access;
-  using cache_types = type_list<>;
+  static constexpr bool retains = false;
 };
 
 // Op applied to the source.
@@ -131,7 +132,7 @@ template <typename Op, typename Target, typename RequiredAccess>
 struct conversion_leaf {
   static constexpr bool available = true;
   using required_access = RequiredAccess;
-  using cache_types = type_list<>;
+  static constexpr bool retains = false;
 
   template <typename Resolver, typename Context, typename Actual>
   static decltype(auto) apply(Resolver &, Context &, Actual &&source,
@@ -140,11 +141,11 @@ struct conversion_leaf {
   }
 };
 
-// The availability, access and retained conversions of an inner conversion.
+// The availability, access and retention of an inner conversion.
 template <typename Inner> struct conversion_inner {
   static constexpr bool available = Inner::available;
   using required_access = typename Inner::required_access;
-  using cache_types = typename Inner::cache_types;
+  static constexpr bool retains = Inner::retains;
 };
 
 // Inner applied to what Op unwraps of the source.
@@ -162,12 +163,10 @@ struct conversion_unwrap : conversion_inner<Inner> {
 
 // Op wrapping what Inner returns for the source. Op is given a function that
 // applies Inner, so that a value Inner returns initializes what Op makes
-// directly. Op lists what it keeps in the binding in retained_types.
+// directly. Op says whether it keeps what it makes in the binding.
 template <typename Op, typename Target, typename Inner>
 struct conversion_wrap : conversion_inner<Inner> {
-  using cache_types = type_list_unique_t<
-      type_list_cat_t<typename Op::template retained_types<Target>,
-                      typename Inner::cache_types>>;
+  static constexpr bool retains = Op::retains || Inner::retains;
 
   template <typename Resolver, typename Context, typename Actual>
   static Target apply(Resolver &resolver, Context &context, Actual &&source,
@@ -342,8 +341,7 @@ struct alternative_type_conversion<Target, Source, type_list<Branches...>> {
 
   using required_access =
       alternative_access<typename Branches::conversion::required_access...>;
-  using cache_types = type_list_unique_t<
-      type_list_cat_t<typename Branches::conversion::cache_types...>>;
+  static constexpr bool retains = (Branches::conversion::retains || ...);
 
   // The result of the branch that converts the held alternative is passed
   // through as that branch produces it.
@@ -400,7 +398,7 @@ constexpr auto held_alternative_branches(type_list<Alternatives...>) {
 
 // What a wrapping operation keeps in the binding: nothing, unless it says so.
 struct wrap_base {
-  template <typename Target> using retained_types = type_list<>;
+  static constexpr bool retains = false;
 };
 
 // An alternative type holding the converted source as the alternative
@@ -483,8 +481,7 @@ using retained_type_t = std::remove_cv_t<
 // A wrapper the binding keeps, converted from the source, that a reference or
 // a pointer target refers to.
 struct retain {
-  template <typename Target>
-  using retained_types = type_list<retained_type_t<Target>>;
+  static constexpr bool retains = true;
 
   template <typename Target, typename Resolver, typename Context,
             typename Inner>

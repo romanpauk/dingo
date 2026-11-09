@@ -67,19 +67,4 @@ inline constexpr bool is_resolution_request_for_v =
     is_resolution_request_v<typename Resolution::target_type, Request>;
 } // namespace detail
 
-namespace detail {
-// The conversions the operations of the resolutions retain.
-template <typename Resolutions> struct resolution_cache_types;
-
-template <typename... Resolutions>
-struct resolution_cache_types<type_list<Resolutions...>> {
-  using type = type_list_unique_t<
-      type_list_cat_t<typename Resolutions::operation::cache_types...>>;
-};
-
-template <typename Resolutions>
-using resolution_cache_types_t =
-    typename resolution_cache_types<Resolutions>::type;
-
-} // namespace detail
 } // namespace dingo

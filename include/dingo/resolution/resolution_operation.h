@@ -28,7 +28,7 @@ Target convert_type(Source &&source, Conversion) {
   using source_type = Source &&;
   static_assert(Conversion::available,
                 "requested type conversion is unavailable");
-  static_assert(type_list_size_v<typename Conversion::cache_types> == 0,
+  static_assert(!Conversion::retains,
                 "conversion outside resolution cannot retain its result");
 
   empty_conversion_context state;
@@ -45,7 +45,6 @@ Target convert_type(Source &&source) {
 }
 
 template <typename Source, typename Conversion> struct type_resolution {
-  using cache_types = typename Conversion::cache_types;
 
   template <typename Resolver, typename Context, typename MaterializedSource>
   static decltype(auto)

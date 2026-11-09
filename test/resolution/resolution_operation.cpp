@@ -154,8 +154,7 @@ TEST(resolution_operation_test, rvalue_source_destroys_materialized_value) {
   ASSERT_EQ(order, (std::vector<int>{0}));
 }
 
-TEST(resolution_operation_test,
-     nested_conversions_publish_retained_cache_types) {
+TEST(resolution_operation_test, nested_conversions_say_they_retain) {
   using retained =
       detail::conversion_wrap<detail::retain, std::shared_ptr<int> &,
                               detail::convert_t<std::shared_ptr<int>, int &>>;
@@ -173,16 +172,12 @@ TEST(resolution_operation_test,
                               retained>;
   using construction = detail::converted_construction<selected>;
 
-  static_assert(std::is_same_v<typename borrowed::cache_types,
-                               type_list<std::shared_ptr<int>>>);
-  static_assert(std::is_same_v<typename alternative::cache_types,
-                               type_list<std::shared_ptr<int>>>);
-  static_assert(std::is_same_v<typename wrapped::cache_types,
-                               type_list<std::shared_ptr<int>>>);
-  static_assert(std::is_same_v<typename selected::cache_types,
-                               type_list<std::shared_ptr<int>>>);
-  static_assert(std::is_same_v<typename construction::cache_types,
-                               type_list<std::shared_ptr<int>>>);
+  static_assert(borrowed::retains);
+  static_assert(alternative::retains);
+  static_assert(wrapped::retains);
+  static_assert(selected::retains);
+  static_assert(construction::retains);
+  static_assert(!detail::convert_t<std::shared_ptr<int>, int &>::retains);
 }
 
 TEST(resolution_operation_test,
