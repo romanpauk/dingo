@@ -35,6 +35,8 @@ template <typename T> class test_shared {
 public:
   test_shared() = default;
   explicit test_shared(std::shared_ptr<T> ptr) : ptr_(std::move(ptr)) {}
+  // Takes over what a raw pointer points to.
+  explicit test_shared(T *ptr) : ptr_(ptr) {}
 
   // Converts to the handle of a base, as std::shared_ptr does.
   template <typename U,
@@ -64,6 +66,8 @@ template <typename T> class test_unique {
 public:
   test_unique() = default;
   explicit test_unique(std::unique_ptr<T> ptr) : ptr_(std::move(ptr)) {}
+  // Takes over what a raw pointer points to.
+  explicit test_unique(T *ptr) : ptr_(ptr) {}
 
   template <typename U,
             typename = std::enable_if_t<std::is_convertible_v<U *, T *>>>

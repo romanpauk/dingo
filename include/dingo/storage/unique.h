@@ -70,17 +70,18 @@ template <> struct scope_traits<unique> {
     return storage_exposure::none;
   }
 
-  // A new value is additionally moved into an owning handle of its own: a
-  // plain one or an alternative, or the element of an optional. The element of
-  // an optional or a unique_ptr is moved out of it; that of a shared_ptr is
-  // copied. The leaf of one that holds another wrapper is moved out of both,
-  // and into an owning handle. Any other wrapper of what is moved out is
+  // A new value is additionally moved into an owning handle of its own, of
+  // the families owning_handles declares: a plain one or an alternative, or
+  // the element of an optional. The element of an optional or of a sole
+  // owner is moved out of it; that of a shared owner is copied. The leaf of
+  // one that holds another wrapper is moved out of both, and into an owning
+  // handle. Any other wrapper of what is moved out is
   // composed of it.
   template <storage_form Form, typename Type, typename U>
   struct requests : detail::scope_rule_requests<unique, Type, U> {
   private:
     using rule = detail::scope_rule_requests<unique, Type, U>;
-    using handles = type_list<std::unique_ptr<U> &&, std::shared_ptr<U> &&>;
+    using handles = detail::owning_handles_of_t<U>;
     static constexpr bool nested = detail::holds_wrapper_v<Type>;
     using wrapped = std::conditional_t<
         Form == storage_form::plain || Form == storage_form::alternative,

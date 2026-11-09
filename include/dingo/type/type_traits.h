@@ -725,4 +725,43 @@ template <typename T, typename... Args> T make_nested(Args &&...args) {
 }
 } // namespace detail
 
+// The element a handle names its family by in owning_handles.
+struct handle_element {};
+
+// The owning handles a scope makes of what it makes for a request: of a value
+// it makes, of a pointer it makes, and of an array, each family named by a
+// handle of handle_element. A scope rebinds them with rebind_t to what it
+// makes, leaving out those whose rebound handle no type_traits describes. A
+// user adds a family by specializing owning_handles<>, listing these with it.
+template <typename = void> struct owning_handles {
+  using type = type_list<std::unique_ptr<handle_element>,
+                         std::shared_ptr<handle_element>>;
+};
+
+namespace detail {
+// The handles of the families of owning_handles of Element, as rvalue
+// references, which a scope publishes. The families are looked up where a
+// scope rebinds them, after a user's specialization of owning_handles.
+template <typename Element> struct owning_handles_key {
+  using type = void;
+};
+
+template <typename Element,
+          typename Families = typename owning_handles<
+              typename owning_handles_key<Element>::type>::type>
+struct owning_handles_of;
+
+template <typename Element, typename... Families>
+struct owning_handles_of<Element, type_list<Families...>> {
+  using type = type_list_cat_t<std::conditional_t<
+      type_traits<
+          typename type_traits<Families>::template rebind_t<Element>>::enabled,
+      type_list<typename type_traits<Families>::template rebind_t<Element> &&>,
+      type_list<>>...>;
+};
+
+template <typename Element>
+using owning_handles_of_t = typename owning_handles_of<Element>::type;
+} // namespace detail
+
 } // namespace dingo

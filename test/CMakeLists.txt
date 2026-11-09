@@ -116,6 +116,15 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
     )
 endif()
 
+# The owning handle families are one list for a program, which this test
+# extends with handles of its own.
+add_executable(dingo_owning_handles_test registration/owning_handles.cpp)
+add_test(NAME dingo_owning_handles_test COMMAND dingo_owning_handles_test)
+set_tests_properties(dingo_owning_handles_test PROPERTIES LABELS "unit")
+target_link_libraries(dingo_owning_handles_test dingo::dingo gtest_main)
+target_include_directories(dingo_owning_handles_test
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+
 option(DINGO_LIT_TESTS_ENABLED "Enable lit-based tests for static assertions and diagnostics." ON)
 if(DINGO_LIT_TESTS_ENABLED)
     set(DINGO_LIT_EXEC_ROOT "${PROJECT_BINARY_DIR}/test/lit")

@@ -155,16 +155,15 @@ template <typename T> struct storage_form_traits<T *> {
     using pointer_types = type_list<U *>;
   };
 
+  // A pointer it makes is taken over by an owning handle.
   template <typename U> struct consumed {
-    using rvalue_reference_types =
-        type_list<std::unique_ptr<U> &&, std::shared_ptr<U> &&>;
+    using rvalue_reference_types = owning_handles_of_t<U>;
   };
 };
 
 // An array is consumed as an owning handle to its rows.
 template <typename T, typename U> struct array_row_handle_promotions {
-  using type = type_list<wrapper_rebind_leaf_t<std::unique_ptr<T[]>, U> &&,
-                         wrapper_rebind_leaf_t<std::shared_ptr<T[]>, U> &&>;
+  using type = owning_handles_of_t<wrapper_rebind_leaf_t<T, U>[]>;
 };
 
 template <typename T> struct storage_form_traits<T[]> {
@@ -196,11 +195,11 @@ template <typename T, size_t N> struct storage_form_traits<T[N]> {
     using pointer_types = type_list<row_type *, exact_lookup<exact_type> *>;
   };
 
-  // A shared_ptr of the bounded array takes it over too.
+  // An owning handle of the bounded array takes it over too.
   template <typename U> struct consumed {
-    using rvalue_reference_types = type_list_cat_t<
-        typename array_row_handle_promotions<T, U>::type,
-        type_list<wrapper_rebind_leaf_t<std::shared_ptr<T[N]>, U> &&>>;
+    using rvalue_reference_types =
+        type_list_cat_t<typename array_row_handle_promotions<T, U>::type,
+                        owning_handles_of_t<wrapper_rebind_leaf_t<T[N], U>>>;
   };
 };
 
