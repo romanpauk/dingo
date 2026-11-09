@@ -6,6 +6,8 @@ Dingo is extended by traits, one per thing being added:
 - a storage scope: a tag type and one `scope_traits` specialization
 - a conversion between two types that no constructor performs: one
   `type_conversion_traits` specialization
+- a type constructed otherwise than its constructors tell: one
+  `constructor_traits` specialization
 
 Dingo's container and resolution pipeline do not hard-code a closed list of
 supported wrapper forms. Library support for standard smart pointers, arrays,
@@ -146,6 +148,19 @@ instead of falling through to another conversion route. Default value
 construction from an lvalue is borrowable only when it accepts a const view of
 the source. Direct compatible lvalue-reference binding remains borrowable
 because it aliases the existing object rather than constructing a value.
+
+### 4. `constructor_traits`
+
+Specialize `constructor_traits` in
+[include/dingo/factory/constructor_traits.h](../../include/dingo/factory/constructor_traits.h)
+when a type is constructed in a way its constructors do not show. It provides
+`construct(args...)` and `construct(ptr, args...)`, and may declare how
+constructor detection sees the type: `arguments`, the type list of its one
+signature, which detection takes instead of searching for a constructor, and
+`initializable<Args...>`, whether it is list-initialized of `Args`, where
+probing `T{args...}` would not tell. `std::array` is described so: it is made of
+its elements with the braces its nested array requires, which MSVC does not
+elide while probing.
 
 ## Extension Example
 

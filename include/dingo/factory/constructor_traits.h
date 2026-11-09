@@ -23,6 +23,14 @@
 
 namespace dingo {
 
+// A specialization may also declare how detection sees the type:
+//
+//   arguments            the type_list of the arguments it is constructed of
+//                        when it has one fixed signature, which detection
+//                        takes instead of searching for a constructor
+//   initializable<Args>  whether it is list-initialized of Args, where probing
+//                        T{args...} would not tell, as for a nested array
+//
 // The overloads that construct in place are declared with a deduced `auto`
 // return type, which is `void`. A deduced return type is instantiated at the
 // call, so the construction of a dependency does not add template depth levels
@@ -57,8 +65,27 @@ template <typename T, size_t N> struct constructor_traits<T[N]> {
   }
 };
 
+namespace detail {
+template <typename T, typename Sequence> struct repeated_arguments;
+
+template <typename T, std::size_t... Is>
+struct repeated_arguments<T, std::index_sequence<Is...>> {
+  using type = type_list<
+      std::conditional_t<true, T, std::integral_constant<std::size_t, Is>>...>;
+};
+} // namespace detail
+
+// std::array stores its elements in a nested native array: it is made of its
+// elements with the braces the nested array requires, which MSVC does not
+// elide while probing, and it has the one signature of its N elements.
 template <typename T, std::size_t N>
 struct constructor_traits<std::array<T, N>> {
+  using arguments =
+      typename detail::repeated_arguments<T, std::make_index_sequence<N>>::type;
+  template <typename... Args>
+  static constexpr bool initializable =
+      detail::is_bounded_array_initializable_v<T, N, Args...>;
+
   template <typename... Args>
   static std::array<T, N> construct(Args &&...args) {
     return {{std::forward<Args>(args)...}};
