@@ -33,9 +33,9 @@ template <typename T> inline constexpr bool is_selected_maker_v = false;
 template <typename Make>
 inline constexpr bool is_selected_maker_v<selected_maker<Make>> = true;
 
-// The value a selection holds: T of a selected<T, Selector>, or of the
-// selection a type such as annotated derives from as its base_type.
-template <typename R, typename = void> struct selection_value {
+// The value a selection holds: T of a selected<T, Selector>, and of a type a
+// selection declares to hold it.
+template <typename R> struct selection_value {
   using type = void;
 };
 
@@ -43,10 +43,6 @@ template <typename T, typename Selector>
 struct selection_value<selected<T, Selector>> {
   using type = T;
 };
-
-template <typename R>
-struct selection_value<R, std::void_t<typename R::base_type>>
-    : selection_value<typename R::base_type> {};
 
 // What a request returns, made of what make returns: in place, when it is a
 // selection of the value make returns.

@@ -85,6 +85,10 @@ struct alternative_value {
 //                  as an object (not an array)
 //   empty(w)       whether the wrapper holds no element
 //   make(args...)  a wrapper of an element made from args
+//   makes_nested   optional, false by default: whether make(args...) makes
+//                  an element that is a wrapper of what makes its element too,
+//                  so that a wrapper of wrappers is made at once of what
+//                  makes its innermost element
 //   share_t<U>     for a sole owner: the sharing handle of the element U
 //   wrap(v), make_empty()
 //                  for an optional value: a wrapper of v, and an empty one
@@ -544,6 +548,7 @@ struct type_traits<std::unique_ptr<T, Deleter>,
   template <typename U>
   using rebind_t = std::unique_ptr<U, std::default_delete<U>>;
   template <typename U> using share_t = std::shared_ptr<U>;
+  static constexpr bool makes_nested = true;
 
   static T *get(const std::unique_ptr<T, Deleter> &wrapper) {
     return wrapper.get();
@@ -636,6 +641,7 @@ struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>>
     : semantics::shared_owner {
   using value_type = T;
   template <typename U> using rebind_t = std::shared_ptr<U>;
+  static constexpr bool makes_nested = true;
 
   static T *get(const std::shared_ptr<T> &wrapper) { return wrapper.get(); }
   static T &borrow(const std::shared_ptr<T> &wrapper) { return *wrapper; }
@@ -664,6 +670,7 @@ template <typename T>
 struct type_traits<std::optional<T>> : semantics::optional_value {
   using value_type = T;
   template <typename U> using rebind_t = std::optional<U>;
+  static constexpr bool makes_nested = true;
 
   static T *get(std::optional<T> &wrapper) {
     return wrapper ? std::addressof(*wrapper) : nullptr;

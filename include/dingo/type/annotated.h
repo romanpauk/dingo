@@ -33,6 +33,12 @@ struct annotated : detail::selected<T, detail::type_selector<Tag>> {
   explicit annotated(Maker &&maker) : base_type(std::forward<Maker>(maker)) {}
 };
 
+namespace detail {
+template <typename T, typename Tag> struct selection_value<annotated<T, Tag>> {
+  using type = T;
+};
+} // namespace detail
+
 template <typename T, typename Tag>
 struct annotated<T &, Tag> : detail::selected<T &, detail::type_selector<Tag>> {
   annotated(T &value)

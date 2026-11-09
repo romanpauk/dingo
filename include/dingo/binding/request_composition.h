@@ -12,8 +12,6 @@
 #include <dingo/type/type_conversion_traits.h>
 #include <dingo/type/type_traits.h>
 
-#include <memory>
-#include <optional>
 #include <type_traits>
 #include <utility>
 
@@ -95,20 +93,15 @@ template <typename Request> constexpr bool composes() {
 template <typename Request>
 inline constexpr bool composes_v = composes<Request>();
 
-// Whether type_traits<Wrapper>::make makes the value of a wrapper of what
-// makes the value, as for the wrappers of the standard library, so that a
-// wrapper of a wrapper is made at once of what its innermost value is made of.
-template <typename Wrapper> inline constexpr bool makes_nested_v = false;
+// Whether type_traits<Wrapper>::make makes its element of what makes the
+// element's own element, as the wrapper declares with makes_nested.
+template <typename Wrapper, typename = void>
+inline constexpr bool makes_nested_v = false;
 
-template <typename T>
-inline constexpr bool makes_nested_v<std::optional<T>> = true;
-
-template <typename T>
-inline constexpr bool makes_nested_v<std::shared_ptr<T>> = !std::is_array_v<T>;
-
-template <typename T, typename Deleter>
-inline constexpr bool makes_nested_v<std::unique_ptr<T, Deleter>> =
-    !std::is_array_v<T>;
+template <typename Wrapper>
+inline constexpr bool makes_nested_v<
+    Wrapper, std::void_t<decltype(type_traits<Wrapper>::makes_nested)>> =
+    type_traits<Wrapper>::makes_nested;
 
 // Whether a reference or a pointer refers to a wrapper that holds a copy
 // sharing what it was copied of, such as a std::shared_ptr<I> of a kept
