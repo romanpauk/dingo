@@ -421,6 +421,34 @@ struct wrap_optional {
   }
 };
 
+// The element of a source optional value that is exactly the target, or an
+// empty one when the source is empty. A borrowed source gives its element, or
+// the one empty value of the type, to be copied; a consumed source, which the
+// request owns, is given an empty element first, and its element is moved
+// out. The element is not made anew of what it holds.
+struct element_or_empty {
+  template <typename Target, typename Source>
+  static std::conditional_t<std::is_lvalue_reference_v<Source>,
+                            const remove_cvref_t<Target> &,
+                            remove_cvref_t<Target> &&>
+  apply(Source &&source) {
+    using source_traits = type_traits<remove_cvref_t<Source>>;
+    using element = remove_cvref_t<Target>;
+    if constexpr (std::is_lvalue_reference_v<Source>) {
+      if (source_traits::empty(source)) {
+        static const element empty = type_traits<element>::make_empty();
+        return empty;
+      }
+      return *source_traits::get(source);
+    } else {
+      if (source_traits::empty(source)) {
+        source = source_traits::wrap(type_traits<element>::make_empty());
+      }
+      return std::move(*source_traits::get(source));
+    }
+  }
+};
+
 // An optional value made of the converted element of a source optional value,
 // empty when the source is.
 template <typename Target, typename Inner>
@@ -682,6 +710,45 @@ inline constexpr bool wraps_exactly_v = [] {
   }
 }();
 
+// The element of a source optional value that is exactly an optional target,
+// given as it is: copied from a borrowed source, moved out of a consumed one.
+// Whether a target is exactly the element of a source optional value, as an
+// optional value or an rvalue reference to one.
+template <typename Target, typename Source> constexpr bool is_exact_element() {
+  using source_type = remove_cvref_t<Source>;
+  using target_type = remove_cvref_t<Target>;
+  if constexpr (std::is_lvalue_reference_v<Target> ||
+                std::is_pointer_v<Target> ||
+                !is_value_wrapper_type_v<source_type> ||
+                !is_value_wrapper_type_v<target_type>) {
+    return false;
+  } else {
+    return std::is_same_v<
+        std::remove_cv_t<typename type_traits<source_type>::value_type>,
+        target_type>;
+  }
+}
+
+template <typename Target, typename Source, typename Access>
+constexpr auto element_or_empty_path() {
+  constexpr bool exact = is_exact_element<Target, Source>();
+  constexpr bool borrows = exact && std::is_lvalue_reference_v<Source> &&
+                           !std::is_rvalue_reference_v<Target> &&
+                           is_copy_constructible_v<remove_cvref_t<Target>>;
+  constexpr bool consumes =
+      exact && !std::is_lvalue_reference_v<Source> &&
+      access_satisfies<Access, consume>::value &&
+      std::is_move_constructible_v<remove_cvref_t<Target>> &&
+      std::is_move_assignable_v<remove_cvref_t<Source>>;
+  if constexpr (borrows) {
+    return conversion_leaf<element_or_empty, Target, borrow>{};
+  } else if constexpr (consumes) {
+    return conversion_leaf<element_or_empty, Target, consume>{};
+  } else {
+    return unavailable_type_conversion{};
+  }
+}
+
 // An optional value made of the source, or of the element of a source
 // optional value. A source that borrows an optional value is held as itself
 // only by an optional of exactly it.
@@ -868,6 +935,7 @@ enum class op : std::size_t {
   direct,
   wrap_alternative,
   held_alternative,
+  element_or_empty,
   wrap_optional,
   decay,
   array_view,
@@ -888,6 +956,8 @@ constexpr auto path() {
     return wrap_alternative_path<Target, Source, Access>();
   } else if constexpr (Op == op::held_alternative) {
     return held_alternative_path<Target, Source, Access>();
+  } else if constexpr (Op == op::element_or_empty) {
+    return element_or_empty_path<Target, Source, Access>();
   } else if constexpr (Op == op::wrap_optional) {
     return wrap_optional_path<Target, Source, Access>();
   } else if constexpr (Op == op::decay) {

@@ -542,3 +542,35 @@ TEST(wrappers_test, static_values_of_made_pointee_are_moved_out_of_it) {
       bindings<bind<scope<unique>, storage<counted_pointee *>,
                     factory<function<make_counted_pointee>>>>>>();
 }
+
+namespace {
+using nested_optional = std::optional<std::optional<regular>>;
+
+nested_optional empty_nested_optional() { return std::nullopt; }
+} // namespace
+
+// The optional an optional of an optional holds is given as it is: an empty
+// one gives an empty optional, whether the scope makes it or is given it.
+TEST(wrappers_test, empty_optional_of_optional_gives_empty_optional) {
+  container<> runtime;
+  runtime.register_type<scope<unique>, storage<nested_optional>,
+                        factory<function<&empty_nested_optional>>>();
+  EXPECT_FALSE(runtime.resolve<std::optional<regular>>().has_value());
+  EXPECT_FALSE(runtime.invoke(
+      [](std::optional<regular> &&value) { return value.has_value(); }));
+
+  static_container<bindings<bind<scope<unique>, storage<nested_optional>,
+                                 factory<function<&empty_nested_optional>>>>>
+      compile_time;
+  EXPECT_FALSE(compile_time.resolve<std::optional<regular>>().has_value());
+  EXPECT_FALSE(compile_time.invoke(
+      [](std::optional<regular> &&value) { return value.has_value(); }));
+
+  nested_optional given;
+  container<> external_runtime;
+  external_runtime.register_type<scope<external>, storage<nested_optional &>>(
+      given);
+  EXPECT_FALSE(external_runtime.resolve<std::optional<regular>>().has_value());
+  given.emplace(std::in_place);
+  EXPECT_TRUE(external_runtime.resolve<std::optional<regular>>().has_value());
+}
