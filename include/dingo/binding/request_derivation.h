@@ -27,7 +27,7 @@ namespace detail {
 // - keep: a reference or a pointer to a wrapper that shares what the binding
 //   keeps, resolved as the wrapper, which the binding keeps with it;
 // - place: a reference or a pointer to a value made for the request,
-//   resolved as the value, placed in the context;
+//   resolved as what the request may move from, which is in the context;
 // - take: a value of what a pointer the binding makes points to, resolved as
 //   the pointer and moved out of what it points to;
 // - compose: a wrapper of the value it holds, resolved as the value.
@@ -158,7 +158,7 @@ template <typename Request> struct derived_request<derivation::keep, Request> {
 };
 
 template <typename Request> struct derived_request<derivation::place, Request> {
-  using type = referred_value_t<Request>;
+  using type = referred_value_t<Request> &&;
 };
 
 template <typename Request> struct derived_request<derivation::take, Request> {

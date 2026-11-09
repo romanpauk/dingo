@@ -103,79 +103,82 @@ instance_request<RTTI> erased_request() {
           described_type_v<T>, deriver<T, RTTI, Binding, Context>()};
 }
 
-// Resolves the request a derivation of T resolves through the binding.
-template <derivation Derivation, typename T, typename RTTI, typename Binding,
-          typename Context>
-resolved_address resolve_derived(construction_scope scope, Binding &binding,
-                                 Context &context) {
-  using derived = derived_request_t<Derivation, T>;
-  return binding.resolve_request(
-      scope, context, erased_request<derived, RTTI, Binding, Context>(),
-      nullptr);
-}
+template <typename T> struct request_tag {
+  using type = T;
+};
 
-// Finishes a derivation of T, of a shape it applies to.
-template <derivation Derivation, typename T, typename RTTI, typename Binding,
-          typename Context>
-resolved_address finish_derivation(const derivation_site &site,
-                                   construction_scope scope, Binding &binding,
-                                   Context &context) {
-  using borrow = std::integral_constant<resolved_address::access_kind,
-                                        resolved_address::access_kind::borrow>;
-  if constexpr (Derivation == derivation::adopt ||
-                Derivation == derivation::place) {
-    // A reference into the context ends before the caller uses it.
-    if (scope.is_caller()) {
-      throw_type_not_convertible(described_type_v<T>, site.registered, context);
-    }
-    auto resolved =
-        resolve_derived<Derivation, T, RTTI>(scope, binding, context);
-    if constexpr (Derivation == derivation::adopt) {
-      place_adopted_pointer(
-          scope, context,
-          static_cast<derived_request_t<Derivation, T>>(resolved.address));
-    }
-    return {resolved.address, borrow::value};
-  } else if constexpr (Derivation == derivation::take) {
-    using pointer = derived_request_t<Derivation, T>;
-    auto *address = static_cast<pointer>(
-        resolve_derived<Derivation, T, RTTI>(scope, binding, context).address);
-    place_adopted_pointer(scope, context, address);
-    return {address, resolved_address::access_kind::consume};
-  } else if constexpr (Derivation == derivation::keep) {
-    // Kept with the instance, and published as the request's address.
-    using wrapper = derived_request_t<Derivation, T>;
-    auto &value = site.kept->template keep<wrapper>(
-        cache::key<wrapper>(), context, [&]() -> wrapper {
-          return resolve_binding_request<wrapper, RTTI>(scope, binding,
-                                                        context);
-        });
-    if (site.cache_key != nullptr) {
-      binding.publish_cache(context, site.cache_key, std::addressof(value));
-    }
-    return {std::addressof(value), borrow::value};
-  } else if constexpr (Derivation == derivation::compose) {
-    using wrapper = composed_type_t<T>;
-    using inner = derived_request_t<Derivation, T>;
-    auto &value =
-        context.template construct_from<wrapper>(scope, [&]() -> wrapper {
-          return compose<wrapper>(
-              resolve_binding_request<inner, RTTI>(scope, binding, context));
-        });
-    return {std::addressof(value), resolved_address::access_kind::consume};
-  } else {
-    throw_type_not_convertible(described_type_v<T>, site.registered, context);
+// A reference into the context ends before the caller uses what a resolution
+// returns: the caller is refused it, as a static container's compiles.
+template <typename Request, typename Scope, typename Context>
+void refuse_caller_reference(Scope scope, type_descriptor registered,
+                             Context &context) {
+  if constexpr (is_fixed_caller_scope_v<Scope>) {
+    static_assert(!is_fixed_caller_scope_v<Scope>,
+                  "a reference or a pointer to an instance the resolution "
+                  "makes would dangle in what is returned to the caller; "
+                  "take it by value, or let a shared scope keep what refers "
+                  "to it");
+  } else if (scope.is_caller()) {
+    throw_type_not_convertible(described_type_v<Request>, registered, context);
   }
 }
 
-template <derivation Derivation, typename T, typename RTTI, typename Binding,
+// Derives a request a binding does not publish, of a shape the derivation
+// applies to, from the request it is derived from, which inner resolves
+// through the binding. What the binding keeps is kept, and published to the
+// container as it is kept. Both containers derive a request so.
+template <derivation How, typename Request, typename Scope, typename Context,
+          typename Inner, typename Kept, typename Published>
+resolved_address apply_derivation(Scope scope, Context &context,
+                                  type_descriptor registered, Inner &&inner,
+                                  Kept &&kept, Published &&published) {
+  using derived = derived_request_t<How, Request>;
+  using access = resolved_address::access_kind;
+  auto resolve = [&]() -> derived { return inner(request_tag<derived>{}); };
+  if constexpr (How == derivation::adopt || How == derivation::take) {
+    if constexpr (How == derivation::adopt) {
+      refuse_caller_reference<Request>(scope, registered, context);
+    }
+    derived pointer = resolve();
+    place_adopted_pointer(scope, context, pointer);
+    return {
+        const_cast<std::remove_cv_t<std::remove_pointer_t<derived>> *>(pointer),
+        How == derivation::adopt ? access::borrow : access::consume};
+  } else if constexpr (How == derivation::place) {
+    refuse_caller_reference<Request>(scope, registered, context);
+    auto &&value = resolve();
+    return {std::addressof(value), access::borrow};
+  } else if constexpr (How == derivation::keep) {
+    auto &value =
+        kept().template keep<derived>(cache::key<derived>(), context, resolve);
+    published(std::addressof(value));
+    return {std::addressof(value), access::borrow};
+  } else {
+    using wrapper = composed_type_t<Request>;
+    auto &value = context.template construct_from<wrapper>(
+        scope, [&]() -> wrapper { return compose<wrapper>(resolve()); });
+    return {std::addressof(value), access::consume};
+  }
+}
+
+template <derivation How, typename T, typename RTTI, typename Binding,
           typename Context>
 resolved_address derive_as(const derivation_site &site,
                            construction_scope scope, Binding &binding,
                            Context &context) {
-  if constexpr (derivation_shape_v<Derivation, T>) {
-    return finish_derivation<Derivation, T, RTTI>(site, scope, binding,
-                                                  context);
+  if constexpr (derivation_shape_v<How, T>) {
+    return apply_derivation<How, T>(
+        scope, context, site.registered,
+        [&](auto tag) -> typename decltype(tag)::type {
+          return resolve_binding_request<typename decltype(tag)::type, RTTI>(
+              scope, binding, context);
+        },
+        [&]() -> retention & { return *site.kept; },
+        [&](void *address) {
+          if (site.cache_key != nullptr) {
+            binding.publish_cache(context, site.cache_key, address);
+          }
+        });
   } else {
     throw_type_not_convertible(described_type_v<T>, site.registered, context);
   }

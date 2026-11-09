@@ -284,70 +284,18 @@ public:
 
 private:
   // Derives a request the binding does not publish from the request it
-  // resolves through the binding.
+  // resolves through the binding, as the runtime container does.
   template <typename InterfaceBinding, typename Request, derivation How,
             typename Host, typename Context, typename Scope>
   Request derive(Scope scope, Host &host, Context &context) {
-    using derived = derived_request_t<How, Request>;
-    auto inner = [&]() -> derived {
-      return resolve<InterfaceBinding, derived>(scope, host, context);
-    };
-    if constexpr (How == derivation::adopt) {
-      refuse_caller<InterfaceBinding, Request>(scope, context);
-      derived pointer = inner();
-      place_adopted_pointer(scope, context, pointer);
-      return *pointer;
-    } else if constexpr (How == derivation::take) {
-      derived pointer = inner();
-      if constexpr (std::is_rvalue_reference_v<Request>) {
-        place_adopted_pointer(scope, context, pointer);
-        return std::move(*pointer);
-      } else {
-        auto owner = detail::adopt_pointer(pointer);
-        return Request(std::move(*owner));
-      }
-    } else if constexpr (How == derivation::keep || How == derivation::place) {
-      if constexpr (How == derivation::place) {
-        refuse_caller<InterfaceBinding, Request>(scope, context);
-      }
-      auto &value = [&]() -> derived & {
-        if constexpr (How == derivation::keep) {
-          return cell_.retained().template keep<derived>(cache::key<derived>(),
-                                                         context, inner);
-        } else {
-          return context.template construct_from<derived>(scope, inner);
-        }
-      }();
-      if constexpr (std::is_pointer_v<Request>) {
-        return &value;
-      } else {
-        return value;
-      }
-    } else {
-      using wrapper = composed_type_t<Request>;
-      if constexpr (std::is_rvalue_reference_v<Request>) {
-        return std::move(context.template construct_from<wrapper>(
-            scope, [&]() -> wrapper { return compose<wrapper>(inner()); }));
-      } else {
-        return compose<wrapper>(inner());
-      }
-    }
-  }
-
-  // What is placed in the context ends before the caller uses what a
-  // resolution returns: a request of the caller is refused.
-  template <typename InterfaceBinding, typename Request, typename Context,
-            typename Scope>
-  static void refuse_caller(Scope scope, Context &context) {
-    if constexpr (is_fixed_caller_scope_v<Scope>) {
-      static_assert(!is_fixed_caller_scope_v<Scope>,
-                    "a reference or a pointer to an instance the "
-                    "resolution makes would dangle in what is returned to "
-                    "the caller; take it by value, or let a shared scope "
-                    "keep what refers to it");
-    } else if (scope.is_caller()) {
-      not_convertible<Request, InterfaceBinding>(context);
-    }
+    return convert_resolved_binding<Request>(apply_derivation<How, Request>(
+        scope, context,
+        described_type_v<typename InterfaceBinding::storage_type::type>,
+        [&](auto tag) -> typename decltype(tag)::type {
+          return resolve<InterfaceBinding, typename decltype(tag)::type>(
+              scope, host, context);
+        },
+        [&]() -> auto & { return cell_.retained(); }, [](void *) {}));
   }
 
   template <typename Host, typename Scope>
