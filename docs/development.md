@@ -115,6 +115,13 @@ Run directly, `spec/probe.py --cover pairs|triples|all` chooses the
 [cover](specification.md#model-probe), and `--only <regex>` probes the
 registrations whose name matches the expression.
 
+The probes run a compiler per processor at once, at most as many as half the
+memory available holds, or `--jobs <n>`, and each in an address space of 1 GiB
+(`MEMORY_LIMIT` of [`spec/generator/driver.py`](../spec/generator/driver.py)),
+so that they take at most that much memory each. A program the compiler runs out
+of memory on is split in halves, and a probe that does not fit alone is a
+defect.
+
 ## Unit Tests
 
 `dingo_unit_test` tests what the [Specification](specification.md) does not

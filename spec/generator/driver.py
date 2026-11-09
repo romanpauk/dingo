@@ -43,11 +43,37 @@ ASSERTION = re.compile(
     r"^static assertion failed(?: due to requirement '.*')?:\s*(.*)$")
 CRASH = "exited with"
 
+# The memory a compiler may take, in MiB, as the size of its address space:
+# the probes run as many compilers as there are processors, and a program of
+# many probes would otherwise take several GiB. A program the compiler runs
+# out of memory on is split in halves.
+MEMORY_LIMIT = 1024
+EXHAUSTED = re.compile(r"out of memory|memory exhausted|"
+                       r"Cannot allocate memory|bad_alloc")
+OUT_OF_MEMORY = f"error: the compiler ran out of its {MEMORY_LIMIT} MiB"
+
+
+def default_jobs():
+    """How many compilers run at once unless told: one per processor, as
+    many as half the memory available holds at their limit."""
+    available = None
+    try:
+        with open("/proc/meminfo") as meminfo:
+            for line in meminfo:
+                if line.startswith("MemAvailable:"):
+                    available = int(line.split()[1]) // 1024
+    except OSError:
+        pass
+    jobs = os.cpu_count() or 1
+    if available is not None:
+        jobs = min(jobs, available // 2 // MEMORY_LIMIT)
+    return max(jobs, 1)
+
 
 # The compilers running at once, across every program a probe makes: the
 # programs a failed one is split into are compiled concurrently, and this
 # bounds them all.
-COMPILES = threading.BoundedSemaphore(os.cpu_count())
+COMPILES = threading.BoundedSemaphore(default_jobs())
 
 
 def set_jobs(jobs):
@@ -63,6 +89,12 @@ def concurrently(calls):
         return [call() for call in calls]
     with concurrent.futures.ThreadPoolExecutor(len(calls)) as executor:
         return list(executor.map(lambda call: call(), calls))
+
+
+def compiler_command(compiler, *arguments):
+    """The command that runs the compiler within its memory limit."""
+    return ["sh", "-c", f'ulimit -v {MEMORY_LIMIT * 1024} && exec "$0" "$@"',
+            compiler, *arguments]
 
 
 def render(template, **context):
@@ -100,9 +132,13 @@ def build_and_run(compiler, flags, directory, name, source):
     exe = directory / name
     cpp.write_text(source)
     with COMPILES:
-        result = subprocess.run([compiler, *flags, str(cpp), "-o", str(exe)],
-                                capture_output=True, text=True)
+        result = subprocess.run(
+            compiler_command(compiler, *flags, str(cpp), "-o", str(exe)),
+            capture_output=True, text=True)
     if result.returncode != 0:
+        if EXHAUSTED.search(result.stderr):
+            # What it reported before is not all it would, and names no probe.
+            return None, OUT_OF_MEMORY, None
         return None, result.stderr, None
     run = subprocess.run([str(exe)], capture_output=True, text=True)
     exe.unlink()
@@ -240,6 +276,13 @@ def probe_shared(compiler, flags, directory, unit, name, probes):
         compiler, flags, directory, unit, name, probes)
     if stderr is None and crash is None:
         return records
+    if stderr == OUT_OF_MEMORY and len(probes) > 1:
+        half = len(probes) // 2
+        return [outcome for found in concurrently([
+            lambda index=index, part=part: probe_shared(
+                compiler, flags, directory, unit, f"{name}_{index}", part)
+            for index, part in enumerate((probes[:half], probes[half:]))])
+            for outcome in found]
     failed = (failed_probes(stderr, name, owners) if stderr else None) or {}
     outcomes = [failure(unit, probe, error)
                 for probe, error in failed.items()]
@@ -287,6 +330,6 @@ def precompile_header(compiler, flags, work, header):
         (directory / "model" / path.name).write_text(path.read_text())
     copy = directory / "model" / header
     result = subprocess.run(
-        [compiler, *flags, "-x", "c++-header", str(copy), "-o",
-         str(copy) + ".gch"], capture_output=True)
+        compiler_command(compiler, *flags, "-x", "c++-header", str(copy),
+                         "-o", str(copy) + ".gch"), capture_output=True)
     return [f"-I{directory}"] if result.returncode == 0 else []

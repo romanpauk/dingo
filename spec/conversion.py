@@ -61,7 +61,8 @@ def main():
     parser.add_argument("--compiler", default=os.environ.get("CXX", "c++"))
     parser.add_argument("--flags", default="-std=c++17 -O0 -Iinclude -Itest",
                         help="compiler flags, with include paths")
-    parser.add_argument("--jobs", type=int, default=os.cpu_count())
+    parser.add_argument("--jobs", type=int,
+                        default=driver.default_jobs())
     parser.add_argument("--batch", type=int, default=8,
                         help="the registrations compiled into one program")
     parser.add_argument(
