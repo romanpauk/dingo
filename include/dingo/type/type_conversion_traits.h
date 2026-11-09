@@ -119,12 +119,10 @@ struct custom_conversion_access<
 // of op, and the first available one is taken.
 //
 // A conversion says whether it is available, the access it requires of its
-// source, whether it retains what it makes in its binding, and how it
-// applies.
+// source, and how it applies.
 struct unavailable_type_conversion {
   static constexpr bool available = false;
   using required_access = unavailable_access;
-  static constexpr bool retains = false;
 };
 
 // Op applied to the source.
@@ -132,7 +130,6 @@ template <typename Op, typename Target, typename RequiredAccess>
 struct conversion_leaf {
   static constexpr bool available = true;
   using required_access = RequiredAccess;
-  static constexpr bool retains = false;
 
   template <typename Resolver, typename Context, typename Actual>
   static decltype(auto) apply(Resolver &, Context &, Actual &&source,
@@ -141,11 +138,10 @@ struct conversion_leaf {
   }
 };
 
-// The availability, access and retention of an inner conversion.
+// The availability and access of an inner conversion.
 template <typename Inner> struct conversion_inner {
   static constexpr bool available = Inner::available;
   using required_access = typename Inner::required_access;
-  static constexpr bool retains = Inner::retains;
 };
 
 // Inner applied to what Op unwraps of the source.
@@ -163,10 +159,9 @@ struct conversion_unwrap : conversion_inner<Inner> {
 
 // Op wrapping what Inner returns for the source. Op is given a function that
 // applies Inner, so that a value Inner returns initializes what Op makes
-// directly. Op says whether it keeps what it makes in the binding.
+// directly.
 template <typename Op, typename Target, typename Inner>
 struct conversion_wrap : conversion_inner<Inner> {
-  static constexpr bool retains = Op::retains || Inner::retains;
 
   template <typename Resolver, typename Context, typename Actual>
   static Target apply(Resolver &resolver, Context &context, Actual &&source,
@@ -341,7 +336,6 @@ struct alternative_type_conversion<Target, Source, type_list<Branches...>> {
 
   using required_access =
       alternative_access<typename Branches::conversion::required_access...>;
-  static constexpr bool retains = (Branches::conversion::retains || ...);
 
   // The result of the branch that converts the held alternative is passed
   // through as that branch produces it.
@@ -396,14 +390,9 @@ constexpr auto held_alternative_branches(type_list<Alternatives...>) {
                  Access>>...>>{};
 }
 
-// What a wrapping operation keeps in the binding: nothing, unless it says so.
-struct wrap_base {
-  static constexpr bool retains = false;
-};
-
 // An alternative type holding the converted source as the alternative
 // overload resolution selects.
-template <typename Selected> struct wrap_alternative : wrap_base {
+template <typename Selected> struct wrap_alternative {
   template <typename Target, typename Resolver, typename Context,
             typename Inner>
   static Target apply(Resolver &, Context &, Inner &&inner) {
@@ -413,7 +402,7 @@ template <typename Selected> struct wrap_alternative : wrap_base {
 };
 
 // An optional value made of the converted source.
-struct wrap_optional : wrap_base {
+struct wrap_optional {
   template <typename Target, typename Resolver, typename Context,
             typename Inner>
   static Target apply(Resolver &, Context &, Inner &&inner) {
@@ -472,35 +461,10 @@ template <typename Source> struct wrapper_element_source<Source, true> {
                            Source>;
 };
 
-// The wrapper a reference or a pointer target refers to.
-template <typename Target>
-using retained_type_t = std::remove_cv_t<
-    std::conditional_t<std::is_pointer_v<Target>, std::remove_pointer_t<Target>,
-                       std::remove_reference_t<Target>>>;
-
-// A wrapper the binding keeps, converted from the source, that a reference or
-// a pointer target refers to.
-struct retain {
-  static constexpr bool retains = true;
-
-  template <typename Target, typename Resolver, typename Context,
-            typename Inner>
-  static Target apply(Resolver &resolver, Context &context, Inner &&inner) {
-    auto &retained =
-        resolver.template retain_conversion<retained_type_t<Target>>(context,
-                                                                     inner());
-    if constexpr (std::is_pointer_v<Target>) {
-      return std::addressof(retained);
-    } else {
-      return retained;
-    }
-  }
-};
-
 // A new owning handle of a consumed value, converted to the element it holds.
 // It is not a converted_construction: a factory makes a handle in place
 // instead of moving into it what it made.
-template <typename Held> struct box : wrap_base {
+template <typename Held> struct box {
   template <typename Target, typename Resolver, typename Context,
             typename Inner>
   static Target apply(Resolver &, Context &, Inner &&inner) {
@@ -818,20 +782,6 @@ constexpr auto borrow_element_path() {
   }
 }
 
-// A wrapper the binding keeps, for a reference or a pointer target.
-template <typename Target, typename Source, typename Access>
-constexpr auto retain_path() {
-  using retained = retained_type_t<Target>;
-  if constexpr ((std::is_lvalue_reference_v<Target> ||
-                 std::is_pointer_v<Target>) &&
-                type_traits<retained>::enabled && !std::is_array_v<retained>) {
-    using inner = path_t<retained, Source, Access>;
-    return available_t<conversion_wrap<retain, Target, inner>, inner>{};
-  } else {
-    return unavailable_type_conversion{};
-  }
-}
-
 // The element of an owning handle Target, made of a Source: Source itself
 // when it derives from the element of a handle of an object. An array holds
 // its element exactly.
@@ -909,7 +859,6 @@ enum class op : std::size_t {
   address,
   element_ptr,
   borrow_element,
-  retain,
   box,
   none
 };
@@ -936,8 +885,6 @@ constexpr auto path() {
     return element_ptr_path<Target, Source, Access>();
   } else if constexpr (Op == op::borrow_element) {
     return borrow_element_path<Target, Source, Access>();
-  } else if constexpr (Op == op::retain) {
-    return retain_path<Target, Source, Access>();
   } else {
     return box_path<Target, Source, Access>();
   }

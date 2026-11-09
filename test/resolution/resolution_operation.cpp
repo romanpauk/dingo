@@ -154,32 +154,6 @@ TEST(resolution_operation_test, rvalue_source_destroys_materialized_value) {
   ASSERT_EQ(order, (std::vector<int>{0}));
 }
 
-TEST(resolution_operation_test, nested_conversions_say_they_retain) {
-  using retained =
-      detail::conversion_wrap<detail::retain, std::shared_ptr<int> &,
-                              detail::convert_t<std::shared_ptr<int>, int &>>;
-  using borrowed = detail::conversion_unwrap<detail::borrow_element, retained>;
-  using alternative = detail::alternative_type_conversion<
-      std::shared_ptr<int> &, alternative_type &,
-      type_list<
-          detail::alternative_type_conversion_branch<alternative_a, borrowed>>>;
-  using wrapped =
-      detail::conversion_wrap<detail::wrap_optional,
-                              std::optional<std::shared_ptr<int>>, retained>;
-  using selected =
-      detail::conversion_wrap<detail::wrap_alternative<std::shared_ptr<int>>,
-                              std::variant<std::shared_ptr<int>, int>,
-                              retained>;
-  using construction = detail::converted_construction<selected>;
-
-  static_assert(borrowed::retains);
-  static_assert(alternative::retains);
-  static_assert(wrapped::retains);
-  static_assert(selected::retains);
-  static_assert(construction::retains);
-  static_assert(!detail::convert_t<std::shared_ptr<int>, int &>::retains);
-}
-
 TEST(resolution_operation_test,
      traits_conversion_explicitly_constructs_the_target_from_its_result) {
   using source = resolution_operation_test::conversion_source;

@@ -27,7 +27,7 @@ namespace detail {
 // - keep: a reference or a pointer to a wrapper that shares what the binding
 //   keeps, resolved as the wrapper, which the binding keeps with it;
 // - place: a reference or a pointer to a value made for the request,
-//   resolved as what the request may move from, which is in the context;
+//   resolved as the value, placed in the context;
 // - take: a value of what a pointer the binding makes points to, resolved as
 //   the pointer and moved out of what it points to;
 // - compose: a wrapper of the value it holds, resolved as the value.
@@ -128,7 +128,7 @@ constexpr bool derivation_shape() {
       return false;
     }
   } else if constexpr (Derivation == derivation::keep) {
-    return retains_composed_v<Request>;
+    return refers_to_sharing_v<Request>;
   } else if constexpr (Derivation == derivation::place) {
     return places_shape<Request>();
   } else if constexpr (Derivation == derivation::take) {
@@ -158,7 +158,7 @@ template <typename Request> struct derived_request<derivation::keep, Request> {
 };
 
 template <typename Request> struct derived_request<derivation::place, Request> {
-  using type = referred_value_t<Request> &&;
+  using type = referred_value_t<Request>;
 };
 
 template <typename Request> struct derived_request<derivation::take, Request> {
@@ -174,11 +174,11 @@ template <derivation Derivation, typename Request>
 using derived_request_t = typename derived_request<Derivation, Request>::type;
 
 // The derivation of a request a binding does not publish. A reference to
-// what a pointer the binding makes points to refers to it; a wrapper of what
-// the binding keeps is kept with it; another value a reference refers to is
-// placed, when the binding makes it or it is a wrapper made of what the
-// binding resolves. A value is taken out of a pointer the binding makes, or
-// composed.
+// what a pointer the binding makes points to refers to it; a wrapper that
+// shares what the binding keeps is kept with it; another value a reference
+// refers to is placed, when the binding makes it, or it is a wrapper made of
+// what the binding resolves or sharing it. A value is taken out of a pointer
+// the binding makes, or composed.
 template <typename Request>
 constexpr derivation derive_request(derivation_facts facts) {
   if constexpr (derivation_shape_v<derivation::adopt, Request>) {
@@ -192,7 +192,7 @@ constexpr derivation derive_request(derivation_facts facts) {
     }
   }
   if constexpr (derivation_shape_v<derivation::place, Request>) {
-    if (facts.places || composes_v<Request>) {
+    if (facts.places || composes_v<Request> || refers_to_sharing_v<Request>) {
       return derivation::place;
     }
   }

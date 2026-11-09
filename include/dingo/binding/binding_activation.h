@@ -102,19 +102,6 @@ public:
 
   storage_type &storage() { return storage_; }
 
-  // A conversion of what the storage keeps is kept with it, once per type;
-  // that of what it makes lives in the context of the request.
-  template <typename T, typename Context, typename Scope, typename... Args>
-  T &retain_conversion(Scope scope, Context &context, Args &&...args) {
-    if constexpr (keeps_conversions) {
-      return retained().template keep<T>(cache::key<T>(), context, [&]() -> T {
-        return T(std::forward<Args>(args)...);
-      });
-    } else {
-      return context.template construct<T>(scope, std::forward<Args>(args)...);
-    }
-  }
-
   // What is kept of the instance, of the types the binding converts it to
   // and composes of it.
   auto &retained() noexcept {
@@ -236,12 +223,6 @@ struct binding_activation {
   Cell &cell;
   Dependencies dependencies;
   Scope scope;
-
-  template <typename T, typename Context, typename Source>
-  decltype(auto) retain_conversion(Context &context, Source &&source) {
-    return cell.template retain_conversion<T>(scope, context,
-                                              std::forward<Source>(source));
-  }
 
   // Materializes the storage and passes its source to fn.
   //

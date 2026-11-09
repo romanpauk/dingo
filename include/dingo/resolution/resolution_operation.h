@@ -28,8 +28,6 @@ Target convert_type(Source &&source, Conversion) {
   using source_type = Source &&;
   static_assert(Conversion::available,
                 "requested type conversion is unavailable");
-  static_assert(!Conversion::retains,
-                "conversion outside resolution cannot retain its result");
 
   empty_conversion_context state;
   return Conversion::apply(state, state, std::forward<Source>(source),

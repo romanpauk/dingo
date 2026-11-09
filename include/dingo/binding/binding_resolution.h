@@ -146,7 +146,7 @@ resolved_address apply_derivation(Scope scope, Context &context,
         How == derivation::adopt ? access::borrow : access::consume};
   } else if constexpr (How == derivation::place) {
     refuse_caller_reference<Request>(scope, registered, context);
-    auto &&value = resolve();
+    auto &value = context.template construct_from<derived>(scope, resolve);
     return {std::addressof(value), access::borrow};
   } else if constexpr (How == derivation::keep) {
     auto &value =

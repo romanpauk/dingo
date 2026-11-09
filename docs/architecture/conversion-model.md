@@ -78,8 +78,7 @@ conversion, or wraps what an inner conversion returns:
   `type_traits::borrow`; the alternative an alternative type holds is unwrapped
   by `alternative_type_conversion`, each alternative a branch of its own
 - `conversion_wrap`: an optional value, an alternative type, or a new owning
-  handle of an object, of a wrapper or an array of it, and a converted wrapper
-  the binding retains for a reference or a pointer to refer to
+  handle of an object, of a wrapper or an array of it
 
 An operation is a class with a static `apply`, called by the shape it is used
 in, and a constexpr function that returns its path, or an unavailable conversion
@@ -95,12 +94,12 @@ Keeping the operation in the resolution makes route selection and execution one
 decision. New wrapper, alternative, and array operations can be introduced by
 the traits that publish those routes without adding matching branches to the
 binding dispatcher. Dispatchers only materialize the source and execute the
-operation carried by the matched resolution. A retained conversion receives an
-already-converted value; the resolver only keeps it and never performs a second
-conversion, in the retention of the binding, which holds any type, so no list of
-retained types is derived for it. A new operation provides `apply`, a function
-returning its path, and a place in `op`; the conversion its path makes provides
-`available`, `required_access`, `retains` and `apply`.
+operation carried by the matched resolution. A conversion makes a value; a
+reference or a pointer to a converted value is not a conversion, but a request
+derived from the value, which the binding keeps or the context holds (see
+[Retention](#retention)). A new operation provides `apply`, a function returning
+its path, and a place in `op`; the conversion its path makes provides
+`available`, `required_access` and `apply`.
 
 Factory construction and storage rebinding use this operation model as well, and
 so does `construct<T>()` of a wrapper of a bound type that its binding does not
@@ -173,16 +172,15 @@ the target, source, and conversion types. It extracts the source with the
 published value category and applies the selected conversion. Every conversion
 in
 [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
-says what it requires of its source, `borrow` or `consume`, the conversions it
-retains, and how it is applied; an unwrapping or a wrapping conversion applies
-its inner conversion to what it unwraps or wraps. Identity conversion forwards
-an exact source, while a custom trait conversion creates a new value.
+says what it requires of its source, `borrow` or `consume`, and how it is
+applied; an unwrapping or a wrapping conversion applies its inner conversion to
+what it unwraps or wraps. Identity conversion forwards an exact source, while a
+custom trait conversion creates a new value.
 
 Broadly, the rules cover:
 
 - direct value resolution for unique storage
 - borrowed references and pointers from borrowable wrappers
-- retained wrapper conversions whose result must outlive one expression
 - fixed-array reference and pointer projections
 - exact lookup handling for requests that must match a precise wrapper spelling
 
@@ -192,17 +190,17 @@ again.
 
 ## Retention
 
-A binding of a scope that keeps its instance keeps what it converts the instance
-to for a reference or a pointer, such as a `std::shared_ptr<I>` of a kept
-`std::shared_ptr<T>`, in the retention of its cell,
+A reference or a pointer to a wrapper that holds a copy sharing the instance,
+such as a `std::shared_ptr<I> &` of a kept `std::shared_ptr<T>`, or the
+`std::optional<std::shared_ptr<T>> &` a request composes of one, is derived from
+the wrapper: a binding of a scope that keeps its instance keeps the wrapper in
+the retention of its cell,
 [include/dingo/storage/retention.h](../../include/dingo/storage/retention.h):
 one object per type, under the key of the type, made the first time it is asked
 for, so that every reference to it refers to the same object for as long as the
-binding lives. A wrapper a request composes of a copy that shares the instance,
-such as the `std::optional<std::shared_ptr<T>>` of a kept `std::shared_ptr<T>`,
-is kept there too, and a runtime binding publishes its address in the request
-cache as it does that of a retained conversion. A runtime container makes the
-objects in its persistent memory and forgets them when the transaction that made
-them rolls back; a static container, which may have no persistent memory, owns
-them in the retention. A binding of a scope that makes an instance for each
-request keeps nothing.
+binding lives, and a runtime binding publishes its address in the request cache.
+A binding of a scope that makes an instance for each request places the wrapper
+in the context instead. A runtime container makes the objects in its persistent
+memory and forgets them when the transaction that made them rolls back; a static
+container, which may have no persistent memory, owns them in the retention. A
+binding of a scope that makes an instance for each request keeps nothing.
