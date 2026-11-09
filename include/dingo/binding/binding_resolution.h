@@ -158,13 +158,15 @@ Wrapper compose_wrapper(Composes &composes, With &with) {
 
 // Derives a request a binding does not publish, of a shape the derivation
 // applies to, from the request it is derived from, which inner resolves
-// through the binding. What the binding keeps is kept, and published to the
-// container as it is kept. Both containers derive a request so.
+// through the binding, and composes says whether the binding composes, as
+// compose_wrapper takes it. What the binding keeps is kept, and published to
+// the container as it is kept. Both containers derive a request so.
 template <derivation How, typename Request, typename Scope, typename Context,
-          typename Inner, typename Kept, typename Published>
+          typename Inner, typename Composes, typename Kept, typename Published>
 resolved_address apply_derivation(Scope scope, Context &context,
                                   type_descriptor registered, Inner &&inner,
-                                  Kept &&kept, Published &&published) {
+                                  Composes &composes, Kept &&kept,
+                                  Published &&published) {
   using derived = derived_request_t<How, Request>;
   using access = resolved_address::access_kind;
   auto resolve = [&]() -> derived { return inner(request_tag<derived>{}); };
@@ -179,8 +181,28 @@ resolved_address apply_derivation(Scope scope, Context &context,
         How == derivation::adopt ? access::borrow : access::consume};
   } else if constexpr (How == derivation::place) {
     refuse_caller_reference<Request>(scope, registered, context);
-    auto &value = context.template construct_from<derived>(scope, resolve);
-    return {std::addressof(value), access::borrow};
+    auto placed = [&]() -> resolved_address {
+      auto &value = context.template construct_from<derived>(scope, resolve);
+      return {std::addressof(value), access::borrow};
+    };
+    if constexpr (composes_v<derived>) {
+      // A value the binding composes is composed in the context, and referred
+      // to there.
+      auto referred = [&]() -> resolved_address {
+        derived &&value = inner(request_tag<derived &&>{});
+        return {std::addressof(value), access::borrow};
+      };
+      using composed = decltype(composes(request_tag<derived>{}));
+      if constexpr (std::is_same_v<composed, std::true_type>) {
+        return referred();
+      } else if constexpr (std::is_same_v<composed, std::false_type>) {
+        return placed();
+      } else {
+        return composes(request_tag<derived>{}) ? referred() : placed();
+      }
+    } else {
+      return placed();
+    }
   } else {
     static_assert(How == derivation::keep);
     auto &value =
@@ -195,16 +217,17 @@ template <derivation How, typename T, typename RTTI, typename Binding,
 resolved_address derive_as(const derivation_site &site,
                            construction_scope scope, Binding &binding,
                            Context &context) {
+  // Whether the binding composes a request.
+  [[maybe_unused]] auto composes = [&](auto tag) -> bool {
+    using candidate = typename decltype(tag)::type;
+    const type_descriptor requested = described_type_v<candidate>;
+    return !site.publishes(requested) &&
+           derive_request<candidate>(site.facts_of(requested)) ==
+               derivation::compose;
+  };
   if constexpr (How == derivation::compose && derivation_shape_v<How, T>) {
     // The wrapper is placed in the context, where the binding hands it over.
     using wrapper = composed_type_t<T>;
-    auto composes = [&](auto tag) -> bool {
-      using candidate = typename decltype(tag)::type;
-      const type_descriptor requested = described_type_v<candidate>;
-      return !site.publishes(requested) &&
-             derive_request<candidate>(site.facts_of(requested)) ==
-                 derivation::compose;
-    };
     auto with = [&](auto tag, auto &make) -> wrapper {
       return make(resolve_binding_request<typename decltype(tag)::type, RTTI>(
           scope, binding, context));
@@ -222,7 +245,7 @@ resolved_address derive_as(const derivation_site &site,
           return resolve_binding_request<typename decltype(tag)::type, RTTI>(
               scope, binding, context);
         },
-        [&]() -> retention & { return *site.kept; },
+        composes, [&]() -> retention & { return *site.kept; },
         [&](void *address) {
           if (site.cache_key != nullptr) {
             binding.publish_cache(context, site.cache_key, address);

@@ -298,6 +298,7 @@ private:
             return compose<InterfaceBinding, Request>(scope, host, context);
           }));
     } else {
+      auto composes = composes_request<InterfaceBinding>();
       return convert_resolved_binding<Request>(apply_derivation<How, Request>(
           scope, context,
           described_type_v<typename InterfaceBinding::storage_type::type>,
@@ -305,8 +306,18 @@ private:
             return resolve<InterfaceBinding, typename decltype(tag)::type>(
                 scope, host, context);
           },
-          [&]() -> auto & { return cell_.retained(); }, [](void *) {}));
+          composes, [&]() -> auto & { return cell_.retained(); },
+          [](void *) {}));
     }
+  }
+
+  // Whether the binding composes a request, known as the code compiles.
+  template <typename InterfaceBinding> static auto composes_request() {
+    return [](auto tag) {
+      return std::bool_constant<static_request_derivation_v<
+                                    typename decltype(tag)::type,
+                                    InterfaceBinding> == derivation::compose>{};
+    };
   }
 
   // Composes a wrapper of what the binding resolves, as the runtime
@@ -316,11 +327,7 @@ private:
             typename Context, typename Scope>
   composed_type_t<Request> compose(Scope scope, Host &host, Context &context) {
     using wrapper = composed_type_t<Request>;
-    auto composes = [](auto tag) {
-      return std::bool_constant<static_request_derivation_v<
-                                    typename decltype(tag)::type,
-                                    InterfaceBinding> == derivation::compose>{};
-    };
+    auto composes = composes_request<InterfaceBinding>();
     auto with = [&](auto tag, auto &make) -> wrapper {
       using candidate = typename decltype(tag)::type;
       if constexpr (static_request_derivation_v<candidate, InterfaceBinding> ==
