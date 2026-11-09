@@ -167,7 +167,8 @@ class Registration:
             self.scope, self.form, self.leaf, probe.request.interface.bound,
             probe.request.shape, probe.request.category,
             probe.operation.position, probe.operation.entry,
-            semantics.LIMITATIONS, self.selection, self.interfaces_declared)
+            semantics.LIMITATIONS, self.selection, self.interfaces_declared,
+            self.container)
 
     def keeps(self, probe):
         if self.scope is Scope.UNIQUE:

@@ -470,10 +470,17 @@ template <typename Held> struct box {
   static Target apply(Resolver &, Context &, Inner &&inner) {
     using handle =
         typename type_traits<remove_cvref_t<Target>>::template rebind_t<Held>;
-    // The value is taken before it is moved into the handle: GCC then folds a
-    // handle that does not escape, as it does the value.
-    Held held(inner());
-    return Target(type_traits<handle>::make(std::move(held)));
+    if constexpr (std::is_reference_v<decltype(inner())> &&
+                  !std::is_trivially_move_constructible_v<Held>) {
+      // A value the source holds is moved into the handle once.
+      return Target(type_traits<handle>::make(inner()));
+    } else {
+      // The value is taken before it is moved into the handle: GCC then folds
+      // a handle that does not escape, as it does the value. Moving a value
+      // that is moved trivially twice costs nothing.
+      Held held(inner());
+      return Target(type_traits<handle>::make(std::move(held)));
+    }
   }
 };
 

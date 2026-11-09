@@ -515,6 +515,16 @@ def affected(cost, effect):
     return cost
 
 
+def handed_over(cost, effect, container):
+    """The copies and the moves of the leaf after a request is handed what
+    satisfies it. A runtime container hands a value over from its context:
+    one that holds a leaf moved for the request is moved once more."""
+    if (container is Container.RUNTIME and effect == "move" and
+            not cost[0]):
+        return cost[0], cost[1] + 1
+    return affected(cost, effect)
+
+
 @functools.lru_cache(maxsize=None)
 def reachable(start, context):
     """The things derived from a start, each with the costs of the
@@ -632,10 +642,10 @@ def entry_of(entry, position, selection, category):
 
 def fewest(scope, form, leaf, bound, shape, category, position, entry,
            limits=frozenset(), selection=Selection.PLAIN,
-           interfaces=InterfaceSet.DEFAULT):
+           interfaces=InterfaceSet.DEFAULT, container=None):
     """The fewest copies and moves of the leaf a request of a shape of the
     bound interface resolves with, as (copies, moves), under the
-    limitations given; None when it does not resolve."""
+    limitations given, in a container; None when it does not resolve."""
     layers, element = SHAPES[shape] + bound.layers, bound.element
     context = Context(LEAVES[leaf], SCOPES[scope], element == "interface",
                       limits)
@@ -648,7 +658,7 @@ def fewest(scope, form, leaf, bound, shape, category, position, entry,
     if selector_rejects(layers, category, position, entry, selection,
                         context):
         return None
-    costs = [affected(cost, effect)
+    costs = [handed_over(cost, effect, container)
              for thing, effect in satisfactions(
                  things, category, required_lifetime(position, entry),
                  layers, context)
@@ -658,15 +668,15 @@ def fewest(scope, form, leaf, bound, shape, category, position, entry,
     # construct<T>() of a value it cannot resolve makes T of the leaf the
     # container resolves by value: a new handle, optional or array of it,
     # the rest of a bounded array value-initialized. The value is moved into
-    # it, unless it is a copy made there.
+    # it once it is resolved.
     bounded = any(LAYERS[name].bounded for name in SHAPES[shape])
     if (direct and entry is Entry.CONSTRUCT and element == "leaf" and
             shape is not Shape.OBJECT and
             (context.leaf.default_constructible or not bounded)):
         value = fewest(scope, form, leaf, LEAF, Shape.OBJECT, Category.VALUE,
                        Position.DIRECT, Entry.RESOLVE, limits, selection,
-                       interfaces)
-        return None if value is None else affected(value, "move")
+                       interfaces, container)
+        return None if value is None else (value[0], value[1] + 1)
     return None
 
 

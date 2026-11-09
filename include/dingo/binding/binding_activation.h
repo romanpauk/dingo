@@ -283,12 +283,37 @@ struct binding_activation {
   template <typename Resolution, typename Context, typename Source>
   resolved_address resolve_address(Context &context, Source &&source,
                                    type_descriptor requested_type) {
-    auto &&instance = apply<Resolution>(context, std::forward<Source>(source),
-                                        requested_type);
+    using target_type = typename Resolution::result_type;
+    using applied_type = decltype(apply<Resolution>(
+        context, std::forward<Source>(source), requested_type));
+    if constexpr (!std::is_reference_v<applied_type> &&
+                  !std::is_pointer_v<applied_type> &&
+                  std::is_constructible_v<target_type, applied_type>) {
+      // A value the resolution makes is made in the context.
+      auto &value = context.template construct_from<target_type>(
+          scope, [&]() -> target_type {
+            return apply<Resolution>(context, std::forward<Source>(source),
+                                     requested_type);
+          });
+      return {std::addressof(value), resolved_address::access_kind::consume};
+    }
+    decltype(auto) instance = apply<Resolution>(
+        context, std::forward<Source>(source), requested_type);
     using instance_type = decltype(instance);
     constexpr bool owns_value =
         !std::is_lvalue_reference_v<instance_type> &&
         !std::is_pointer_v<std::remove_reference_t<instance_type>>;
+    if constexpr (is_runtime_context_v<Context> &&
+                  materialization_traits::consumes &&
+                  std::is_rvalue_reference_v<instance_type>) {
+      // A runtime context holds the source a consuming scope makes, and what
+      // it is converted to by reference lives there too: it is handed over
+      // where it is, not moved into another object of the context.
+      return {const_cast<
+                  std::remove_cv_t<std::remove_reference_t<instance_type>> *>(
+                  std::addressof(instance)),
+              resolved_address::access_kind::consume};
+    }
     return {result_address<typename Resolution::result_type>(
                 scope, context, std::forward<instance_type>(instance)),
             owns_value ? resolved_address::access_kind::consume

@@ -42,13 +42,13 @@ template <typename Dependency, typename Context, typename Container,
           typename Scope>
 decltype(auto) resolve_constructor_dependency(Scope scope, Context &context,
                                               Container &container) {
-  if constexpr (std::is_reference_v<Dependency> ||
-                std::is_move_constructible_v<Dependency>) {
+  if constexpr (std::is_reference_v<Dependency>) {
     return context.template resolve<Dependency>(
         dependency_scope<Dependency>(scope), container);
   } else {
-    // Keep a copy-only prvalue in the final parameter initialization, where
-    // C++17 guaranteed elision avoids selecting a deleted move constructor.
+    // A value is resolved as the parameter is initialized, where C++17
+    // guaranteed elision makes it in place: it is not moved into it, and a
+    // copy-only value does not select a deleted move constructor.
     return constructor_dependency<Dependency, Context, Container, Scope>(
         scope, context, container);
   }

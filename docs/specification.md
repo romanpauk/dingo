@@ -98,6 +98,9 @@ and the specification says the fewest a resolution needs: a copy where its
 derivation copies the leaf, made where the request holds it, and else a move
 where it moves the leaf, a value made for the request moved into all its new
 layers at once; making the instance, referring to it and sharing it need none. A
+runtime container hands a value over from its context, so a value holding a leaf
+moved for the request is moved once more, and `construct<T>()` of a value it
+does not resolve moves the value it resolves into what it makes of it. A
 resolution that needs more is excess, which the probe reports and does not fail
 on yet. Each program also checks every request its registration publishes: one
 that selects another binding is unreachable, and one that no probe makes is
