@@ -213,6 +213,22 @@ struct binding_activation {
   using materialization_traits =
       scope_materialization<typename storage_type::tag_type>;
 
+  // Whether the source of a consuming scope is placed in the context: a
+  // runtime context places every one, and a static one that of an rvalue
+  // request, which refers to what it is converted to, unless it is moved
+  // trivially, which costs nothing.
+  template <typename Request, typename Context>
+  static constexpr bool places_source() {
+    if constexpr (materialization_traits::consumes &&
+                  !is_runtime_context_v<Context> &&
+                  std::is_rvalue_reference_v<Request>) {
+      return !std::is_trivially_move_constructible_v<
+          typename storage_type::type>;
+    } else {
+      return materialization_traits::consumes && is_runtime_context_v<Context>;
+    }
+  }
+
   // Whether an address request is served from a value the storage yields,
   // which is placed in the context and lives only as long as the context.
   template <typename Request, typename Context>
@@ -264,6 +280,12 @@ struct binding_activation {
           });
       auto source = lvalue_source<source_type>(value);
       return std::forward<Fn>(fn)(source);
+    } else if constexpr (places_source<Request, Context>()) {
+      // What an rvalue request refers to lives in the context: so does the
+      // source it is converted from.
+      auto &source = materialization_traits::materialize_source_in_context(
+          scope, context, storage, dependencies);
+      return std::forward<Fn>(fn)(std::move(source));
     } else {
       return std::forward<Fn>(fn)(materialization_traits::materialize_source(
           scope, context, storage, dependencies));
@@ -279,10 +301,14 @@ struct binding_activation {
         detail::described_type_v<typename storage_type::type>);
   }
 
-  // The address of the instance of a resolution, applied to a source.
-  template <typename Resolution, typename Context, typename Source>
+  // The address of the instance of a resolution of Request, applied to a
+  // source, which places_source says whether the context holds.
+  template <typename Resolution, typename Request = void, typename Context,
+            typename Source>
   resolved_address resolve_address(Context &context, Source &&source,
                                    type_descriptor requested_type) {
+    constexpr bool SourceInContext =
+        is_runtime_context_v<Context> || places_source<Request, Context>();
     using target_type = typename Resolution::result_type;
     using applied_type = decltype(apply<Resolution>(
         context, std::forward<Source>(source), requested_type));
@@ -303,12 +329,11 @@ struct binding_activation {
     constexpr bool owns_value =
         !std::is_lvalue_reference_v<instance_type> &&
         !std::is_pointer_v<std::remove_reference_t<instance_type>>;
-    if constexpr (is_runtime_context_v<Context> &&
-                  materialization_traits::consumes &&
+    if constexpr (SourceInContext && materialization_traits::consumes &&
                   std::is_rvalue_reference_v<instance_type>) {
-      // A runtime context holds the source a consuming scope makes, and what
-      // it is converted to by reference lives there too: it is handed over
-      // where it is, not moved into another object of the context.
+      // The context holds the source a consuming scope makes, and what it is
+      // converted to by reference lives there too: it is handed over where it
+      // is, not moved into another object of the context.
       return {const_cast<
                   std::remove_cv_t<std::remove_reference_t<instance_type>> *>(
                   std::addressof(instance)),
@@ -327,9 +352,9 @@ struct binding_activation {
   template <typename Request, typename Resolution, typename Context>
   decltype(auto) resolve_request_address(Context &context) {
     return with_source<Request>(context, [&](auto &&source) {
-      return resolve_address<Resolution>(context,
-                                         std::forward<decltype(source)>(source),
-                                         detail::described_type_v<Request>);
+      return resolve_address<Resolution, Request>(
+          context, std::forward<decltype(source)>(source),
+          detail::described_type_v<Request>);
     });
   }
 

@@ -184,20 +184,32 @@ public:
     if constexpr (detail::is_selected_v<T>) {
       using request_type = detail::selected_type_t<T>;
       using selector_type = detail::selected_selector_t<T>;
-      if constexpr (detail::is_type_selector_v<selector_type>) {
-        using selector_key_type = detail::type_selector_type_t<selector_type>;
-        return T(container.template resolve<request_type, false>(
-            scope, *this,
-            detail::make_lookup_key(
-                detail::type_selector<selector_key_type>{})));
+      auto resolve_selected = [&]() -> request_type {
+        if constexpr (detail::is_type_selector_v<selector_type>) {
+          using selector_key_type = detail::type_selector_type_t<selector_type>;
+          return container.template resolve<request_type, false>(
+              scope, *this,
+              detail::make_lookup_key(
+                  detail::type_selector<selector_key_type>{}));
+        } else {
+          static_assert(detail::is_value_selector_v<selector_type>);
+          return container.template resolve<request_type, false>(
+              scope, *this, detail::make_lookup_key(selector_type{}));
+        }
+      };
+      if constexpr (!std::is_reference_v<request_type> &&
+                    (std::is_move_constructible_v<request_type> ||
+                     std::is_copy_constructible_v<request_type>)) {
+        return detail::make_result<T>(resolve_selected);
       } else {
-        static_assert(detail::is_value_selector_v<selector_type>);
-        return T(container.template resolve<request_type, false>(
-            scope, *this, detail::make_lookup_key(selector_type{})));
+        return T(resolve_selected());
       }
     } else {
-      return container.template resolve<T, false>(scope, *this,
-                                                  detail::no_lookup_key());
+      // An annotated value is made in place of what its interface resolves.
+      return detail::make_result<T>([&]() -> decltype(auto) {
+        return container.template resolve<T, false>(scope, *this,
+                                                    detail::no_lookup_key());
+      });
     }
   }
 };

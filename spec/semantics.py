@@ -658,7 +658,13 @@ def fewest(scope, form, leaf, bound, shape, category, position, entry,
     if selector_rejects(layers, category, position, entry, selection,
                         context):
         return None
-    costs = [handed_over(cost, effect, container)
+    # resolve<T &&>() and construct<T &&>() return the value moved out of
+    # what the request refers to.
+    returned = (direct and entry in (Entry.RESOLVE, Entry.CONSTRUCT) and
+                category is Category.RVALUE_REFERENCE)
+    costs = [handed_over(cost,
+                         "move" if returned and makes_leaf_anew(thing.layers)
+                         else effect, container)
              for thing, effect in satisfactions(
                  things, category, required_lifetime(position, entry),
                  layers, context)

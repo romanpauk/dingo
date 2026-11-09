@@ -20,6 +20,49 @@ namespace detail {
 
 template <typename T, typename Selector> struct selected;
 template <typename Tag> struct type_selector {};
+
+// What makes the value of a selection in place: a selection is constructed of
+// it, and of nothing else that converts to it, so that constructor detection
+// does not see the constructor.
+template <typename Make> struct selected_maker {
+  Make &make;
+};
+
+template <typename T> inline constexpr bool is_selected_maker_v = false;
+
+template <typename Make>
+inline constexpr bool is_selected_maker_v<selected_maker<Make>> = true;
+
+// The value a selection holds: T of a selected<T, Selector>, or of the
+// selection a type such as annotated derives from as its base_type.
+template <typename R, typename = void> struct selection_value {
+  using type = void;
+};
+
+template <typename T, typename Selector>
+struct selection_value<selected<T, Selector>> {
+  using type = T;
+};
+
+template <typename R>
+struct selection_value<R, std::void_t<typename R::base_type>>
+    : selection_value<typename R::base_type> {};
+
+// What a request returns, made of what make returns: in place, when it is a
+// selection of the value make returns.
+template <typename R, typename Make> R make_result(Make &&make) {
+  using made = decltype(make());
+  using selected_value = typename selection_value<std::remove_cv_t<R>>::type;
+  if constexpr (!std::is_reference_v<R> && !std::is_reference_v<made> &&
+                std::is_same_v<std::remove_cv_t<selected_value>,
+                               std::remove_cv_t<made>> &&
+                (std::is_move_constructible_v<selected_value> ||
+                 std::is_copy_constructible_v<selected_value>)) {
+    return R(selected_maker<std::remove_reference_t<Make>>{make});
+  } else {
+    return std::forward<Make>(make)();
+  }
+}
 template <typename Key, auto Value> struct value_selector {};
 
 template <typename T, typename Selector,
@@ -41,6 +84,10 @@ struct selected_base<T, Selector, true> {
   template <typename U = T,
             std::enable_if_t<std::is_move_constructible_v<U>, int> = 0>
   explicit selected_base(T &&value) : value_(std::move(value)) {}
+  // The value the maker makes, made in place.
+  template <typename Maker,
+            std::enable_if_t<is_selected_maker_v<std::decay_t<Maker>>, int> = 0>
+  explicit selected_base(Maker &&maker) : value_(maker.make()) {}
 
   operator T() {
     if constexpr (std::is_move_constructible_v<T>) {
