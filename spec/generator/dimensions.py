@@ -74,7 +74,7 @@ class Outcome(Dimension):
     # Not the outcome the semantics expect.
     UNEXPECTED = "unexpected"
     # Resolved with more copies or moves of the leaf than the specification
-    # needs: reported, not yet a defect.
+    # needs.
     EXCESS = "excess"
     # What the conversion layer of a binding answers a request: a resolution
     # with an available conversion, a wrapper composed of one, a value taken
@@ -97,4 +97,4 @@ class Outcome(Dimension):
                         Outcome.VIOLATED, Outcome.UNPROBED,
                         Outcome.UNREACHABLE, Outcome.MISDETECTED,
                         Outcome.STALE_LIMITATION, Outcome.UNEXPECTED,
-                        Outcome.DIVERGED)
+                        Outcome.DIVERGED, Outcome.EXCESS)

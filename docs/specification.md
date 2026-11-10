@@ -105,10 +105,9 @@ runtime container hands a value over from its context, so a value holding a leaf
 moved for the request is moved once more, and `construct<T>()` of a value it
 does not resolve moves the value it resolves into what it makes of it.
 `resolve<T &&>()` and `construct<T &&>()` return the value moved out of what the
-request refers to. A resolution that needs more is excess, which the probe
-reports and does not fail on yet. Each program also checks every request its
-registration publishes: one that selects another binding is unreachable, and one
-that no probe makes is unprobed.
+request refers to. A resolution that needs more is excess. Each program also
+checks every request its registration publishes: one that selects another
+binding is unreachable, and one that no probe makes is unprobed.
 
 The copies and the moves of a resolution are those of its layers, each checked
 alone, of every registration the library accepts: the storage, the conversion
@@ -125,8 +124,9 @@ A cell a limitation keeps from resolving is recorded as limited, with the
 limitations. The probe fails when a request does not compile without a
 `static_assert`, crashes or fails these checks, when a published request is
 unreachable or unprobed, when a cell is not what the specification expects
-(unexpected), when a limited cell resolves (a stale limitation), or when a
-registration binds other interfaces than the specification says.
+(unexpected), when a resolution is excess, when a limited cell resolves (a stale
+limitation), or when a registration binds other interfaces than the
+specification says.
 
 A cover probes a covering array of the registrations the specification says the
 library accepts: every combination of values of two (small) or three (medium) of
@@ -166,7 +166,7 @@ object of what it converts, and makes the request of what it returns as a
 binding makes it. It counts the copies and the moves of the leaf that makes,
 which the specification says are the fewest of the derivations that reach what
 satisfies the request and of satisfying it, before a resolution hands it over;
-more are excess.
+more are excess, which fails the check.
 
 ## Constructor Detection Probe
 
