@@ -69,11 +69,6 @@ struct selected_base;
 
 template <typename T, typename Selector>
 struct selected_base<T, Selector, true> {
-  selected_base(const selected_base &) = default;
-  selected_base(selected_base &&) = default;
-  selected_base &operator=(const selected_base &) = default;
-  selected_base &operator=(selected_base &&) = default;
-
   template <typename U = T,
             std::enable_if_t<std::is_copy_constructible_v<U>, int> = 0>
   explicit selected_base(const T &value) : value_(value) {}
@@ -99,11 +94,6 @@ private:
 
 template <typename T, typename Selector>
 struct selected_base<T &, Selector, false> {
-  selected_base(const selected_base &) = default;
-  selected_base(selected_base &&) = default;
-  selected_base &operator=(const selected_base &) = default;
-  selected_base &operator=(selected_base &&) = default;
-
   explicit selected_base(T &value) : value_(value) {}
 
   operator T &() { return value_; }
@@ -116,11 +106,6 @@ private:
 // back as one.
 template <typename T, typename Selector>
 struct selected_base<T &&, Selector, false> {
-  selected_base(const selected_base &) = default;
-  selected_base(selected_base &&) = default;
-  selected_base &operator=(const selected_base &) = default;
-  selected_base &operator=(selected_base &&) = default;
-
   explicit selected_base(T &&value) : value_(value) {}
 
   operator T &&() { return std::move(value_); }
@@ -152,11 +137,6 @@ private:
 template <typename T, typename Selector>
 struct selected : selected_base<T, Selector> {
   using selected_base<T, Selector>::selected_base;
-};
-
-template <typename T, typename Selector>
-struct selected<T &, Selector> : selected_base<T &, Selector> {
-  using selected_base<T &, Selector>::selected_base;
 };
 
 template <typename T> struct selected_traits {

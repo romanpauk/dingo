@@ -302,7 +302,8 @@ protected:
   template <typename Request, typename Result>
   static Result resolve_cached(cache_result result) {
     assert(result.hit);
-    return detail::convert_resolved_binding<Request>(result.address);
+    return detail::convert_resolved_binding<Request>(
+        {result.address, resolved_address::access_kind::borrow});
   }
 
   template <typename T> static T invalid_registration_return();

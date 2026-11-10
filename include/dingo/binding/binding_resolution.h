@@ -63,11 +63,6 @@ template <typename T> T convert_resolved_binding(resolved_address result) {
   }
 }
 
-template <typename T> T convert_resolved_binding(void *ptr) {
-  return convert_resolved_binding<T>(
-      {ptr, resolved_address::access_kind::borrow});
-}
-
 template <typename T, typename Instance, typename Fn>
 decltype(auto) consume_resolved_binding(Instance &&instance, Fn &&fn) {
   if constexpr (std::is_lvalue_reference_v<T> || std::is_pointer_v<T> ||
@@ -263,7 +258,7 @@ derive_binding_request(void *erased, const derivation_site &site,
                        construction_scope scope, void *erased_context) {
   auto &binding = *static_cast<Binding *>(erased);
   auto &context = *static_cast<Context *>(erased_context);
-  switch (derive_request<T>(site.facts)) {
+  switch (derive_request<T>(site.facts_of(described_type_v<T>))) {
   case derivation::adopt:
     return derive_as<derivation::adopt, T, RTTI>(site, scope, binding, context);
   case derivation::keep:

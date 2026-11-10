@@ -133,27 +133,15 @@ constexpr bool matches_taken_request(type_descriptor requested_type) {
 }
 
 template <typename Storage, typename... Resolutions>
-constexpr std::size_t adopted_request_index(type_list<Resolutions...>,
-                                            type_descriptor requested_type) {
-  std::size_t index = 0;
-  std::size_t result = sizeof...(Resolutions);
-  (void)(((matches_adopted_request<Storage, Resolutions>(requested_type)
-               ? (result = index, true)
-               : (++index, false)) ||
-          ...));
-  return result;
+constexpr bool adopts_request(type_list<Resolutions...>,
+                              type_descriptor requested_type) {
+  return (matches_adopted_request<Storage, Resolutions>(requested_type) || ...);
 }
 
 template <typename Storage, typename... Resolutions>
-constexpr std::size_t taken_request_index(type_list<Resolutions...>,
-                                          type_descriptor requested_type) {
-  std::size_t index = 0;
-  std::size_t result = sizeof...(Resolutions);
-  (void)(((matches_taken_request<Storage, Resolutions>(requested_type)
-               ? (result = index, true)
-               : (++index, false)) ||
-          ...));
-  return result;
+constexpr bool takes_request(type_list<Resolutions...>,
+                             type_descriptor requested_type) {
+  return (matches_taken_request<Storage, Resolutions>(requested_type) || ...);
 }
 
 // What a runtime binding of a storage tells the derivation of a request it
@@ -167,8 +155,7 @@ constexpr derivation_facts runtime_derivation_facts(type_descriptor requested) {
                          places_made_values_v<Storage>, false, false};
   if constexpr (hands_over_made_pointers_v<Storage>) {
     facts.adopts = requested.reference == type_reference_kind::lvalue &&
-                   adopted_request_index<Storage>(Resolutions{}, requested) !=
-                       type_list_size_v<Resolutions>;
+                   adopts_request<Storage>(Resolutions{}, requested);
   }
   if constexpr (takes_made_pointee_v<Storage>) {
     if (requested.reference != type_reference_kind::lvalue &&
@@ -176,8 +163,7 @@ constexpr derivation_facts runtime_derivation_facts(type_descriptor requested) {
       type_descriptor pointee = requested;
       pointee.reference = type_reference_kind::lvalue;
       pointee.cv = type_cv_flags::none;
-      facts.takes = taken_request_index<Storage>(Resolutions{}, pointee) !=
-                    type_list_size_v<Resolutions>;
+      facts.takes = takes_request<Storage>(Resolutions{}, pointee);
     }
   }
   return facts;
@@ -272,15 +258,6 @@ private:
            requested.pointee != nullptr;
   }
 
-  // The value an address request refers to.
-  static constexpr type_descriptor referred_value(type_descriptor requested) {
-    type_descriptor value =
-        requested.pointee != nullptr ? *requested.pointee : requested;
-    value.reference = type_reference_kind::none;
-    value.cv = type_cv_flags::none;
-    return value;
-  }
-
   // A storage that makes a value for the request places it in the context,
   // which ends before the caller of the container uses an address into it,
   // or into what it owns, as the static container knows as it compiles. A
@@ -339,12 +316,7 @@ private:
     }
     auto &binding = static_cast<runtime_binding &>(erased);
     const detail::derivation_site site{
-        detail::runtime_derivation_facts<Storage, request_resolutions>(
-            request.requested_type),
-        retained(binding),
-        registered_type(),
-        cached(cache_key),
-        &publishes,
+        retained(binding), registered_type(), cached(cache_key), &publishes,
         &detail::runtime_derivation_facts<Storage, request_resolutions>};
     return request.derive(&erased, site, scope, &context);
   }

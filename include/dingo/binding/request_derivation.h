@@ -56,11 +56,10 @@ struct derivation_facts {
 class retention;
 
 // What a runtime binding hands the derivation of a request it does not
-// publish: its facts, what it keeps of its instance, the type it registers,
-// the key the request is cached under, if it caches it, and, for another
-// request, whether it publishes it and its facts.
+// publish: what it keeps of its instance, the type it registers, the key the
+// request is cached under, if it caches it, and, of a request, whether it
+// publishes it and its facts.
 struct derivation_site {
-  derivation_facts facts;
   retention *kept;
   type_descriptor registered;
   const void *cache_key;
@@ -210,13 +209,10 @@ constexpr derivation derive_request(derivation_facts facts) {
   return derivation::none;
 }
 
-// Whether a request may be derived at all, by any binding.
+// Whether a request may be derived at all, by any binding: by one of which
+// every fact holds.
 template <typename Request>
 inline constexpr bool derivable_v =
-    derivation_shape_v<derivation::adopt, Request> ||
-    derivation_shape_v<derivation::keep, Request> ||
-    derivation_shape_v<derivation::place, Request> ||
-    derivation_shape_v<derivation::take, Request> ||
-    derivation_shape_v<derivation::compose, Request>;
+    derive_request<Request>({true, true, true, true}) != derivation::none;
 } // namespace detail
 } // namespace dingo
