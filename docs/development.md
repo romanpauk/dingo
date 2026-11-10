@@ -118,8 +118,10 @@ registrations whose name matches the expression.
 The probes run a compiler per processor at once, at most as many as half the
 memory available holds, or `--jobs <n>`, and each in an address space of 1 GiB
 (`MEMORY_LIMIT` of [`spec/generator/driver.py`](../spec/generator/driver.py)),
-so that they take at most that much memory each. A program the compiler runs out
-of memory on is split in halves, and a probe that does not fit alone is a
+so that they take at most that much memory each. A program holds as many probes
+as fit in three quarters of it, learned from the peak memory of the compiles of
+probes of the same container and position; one the compiler runs out of memory
+on anyway is split into smaller ones, and a probe that does not fit alone is a
 defect.
 
 ## Unit Tests

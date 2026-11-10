@@ -180,6 +180,11 @@ class Registration:
     def render(self, probes):
         return driver.render("probe.cpp.j2", r=self, probes=probes)
 
+    def memory_class(self, probe):
+        """The container and the position of a probe, which the memory a
+        compile of it takes depends on most."""
+        return (self.container, probe.operation.position)
+
 
 def registrations():
     return [Registration(container, scope, form, leaf, interfaces, selection)
