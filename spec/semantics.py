@@ -225,6 +225,10 @@ class Thing:
       it, rather than a copy of it
     contained: the holder made for the request it is the element of, or
       was copied from the element of, or None
+    unconstructed: whether it is a wrapper the instance of a scope that
+      publishes it before it constructs it holds in place: it is not
+      constructed when it is published, so it is only referred to, and
+      nothing is derived from it
     """
     layers: tuple
     element: str
@@ -232,6 +236,7 @@ class Thing:
     origin: Origin
     instance: bool
     contained: str = None
+    unconstructed: bool = False
 
     @property
     def lifetime(self):
@@ -346,6 +351,8 @@ def transitions(thing, context):
     """The steps the semantics allow from a thing, each as its kind and the
     thing it reaches."""
     layers = thing.layers
+    if thing.unconstructed:
+        return
     if layers:
         layer = LAYERS[layers[0]]
         below = layers[1:]
@@ -381,7 +388,9 @@ def transitions(thing, context):
                 origin=(thing.origin if layer.owner is Owner.SOLE
                         else Origin.BORROWED),
                 contained=thing.contained or
-                (layer.name if made else None))
+                (layer.name if made else None),
+                unconstructed=(context.scope.publishes_early and
+                               thing.instance and bool(below)))
         # A handle the request owns converts to another, sharing or taking
         # over its element.
         if thing.origin.owned:
@@ -609,7 +618,7 @@ def satisfactions(things, category, lifetime, layers, context):
     found = []
     for thing in of_shape:
         anew = makes_leaf_anew(thing.layers)
-        if slices(thing):
+        if slices(thing) or thing.unconstructed:
             continue
         if thing.origin.owned and can_move(thing, context):
             found.append((thing, "move" if anew else None))
@@ -806,11 +815,13 @@ def registrable(container, scope, form, leaf, interfaces):
     elif form is StoredForm.REFERENCE:
         # Only what the scope is given can be stored as a reference.
         return False
-    if traits.publishes_early and not (
-            not layers or (len(layers) == 1 and
-                           LAYERS[layers[0]].constructs_in_place)):
+    if traits.publishes_early and layers and not (
+            LAYERS[layers[0]].constructs_in_place and
+            (len(layers) == 1 or (LAYERS[layers[0]].shares_element and all(
+                LAYERS[name].made_from_value for name in layers[1:])))):
         # A cyclical scope publishes its instance before it constructs it,
-        # in storage it holds.
+        # in storage it holds: a handle that shares what it holds may hold a
+        # wrapper made of a value, constructed there.
         return False
     if interfaces is not InterfaceSet.DEFAULT and any(
             LAYERS[name].decays_to or LAYERS[name].holds_element_only

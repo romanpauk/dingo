@@ -230,6 +230,15 @@ assert(b.aptr_ == &a);
 
 <!-- } -->
 
+A `shared_cyclical` scope publishes its instance before it constructs it, in
+storage it allocates, so it stores what can be constructed there: a class, a
+bounded array, an alternative type, or a `std::shared_ptr` of a class or of a
+wrapper of one, such as `std::shared_ptr<std::optional<A>>`. Of a wrapper, it
+publishes the wrapper, `std::optional<A> &` or
+`std::shared_ptr<std::optional<A>>`, to close a cycle over; what the wrapper
+holds is not there until the wrapper is constructed, so the scope does not
+publish `A &`.
+
 See:
 
 - [include/dingo/storage/external.h](../include/dingo/storage/external.h)

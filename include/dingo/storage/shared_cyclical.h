@@ -47,13 +47,34 @@ template <typename Type, typename U>
 struct shared_cyclical_requests<storage_form::bounded_array, Type, U>
     : scope_rule_requests<shared_cyclical, Type, U> {};
 
-template <typename Type, typename U>
-struct shared_cyclical_requests<storage_form::shared_handle, Type, U> {
+// A shared_ptr publishes what it holds, which the scope constructs in place:
+// the leaf U, or a wrapper of it. What the wrapper holds is not in place until
+// the wrapper is constructed, so it is not published.
+template <typename Type, typename U,
+          typename Held = typename type_traits<Type>::value_type,
+          bool = type_traits<Held>::enabled>
+struct shared_cyclical_handle_requests {
   using value_types = type_list<std::shared_ptr<U>>;
   using lvalue_reference_types = type_list<U &, std::shared_ptr<U> &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *, std::shared_ptr<U> *>;
 };
+
+template <typename Type, typename U, typename Held>
+struct shared_cyclical_handle_requests<Type, U, Held, true> {
+private:
+  using held = wrapper_rebind_leaf_t<Held, U>;
+
+public:
+  using value_types = type_list<std::shared_ptr<held>>;
+  using lvalue_reference_types = type_list<held &, std::shared_ptr<held> &>;
+  using rvalue_reference_types = type_list<>;
+  using pointer_types = type_list<held *, std::shared_ptr<held> *>;
+};
+
+template <typename Type, typename U>
+struct shared_cyclical_requests<storage_form::shared_handle, Type, U>
+    : shared_cyclical_handle_requests<Type, U> {};
 } // namespace detail
 
 template <> struct scope_traits<shared_cyclical> {

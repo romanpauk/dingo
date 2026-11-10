@@ -12,6 +12,7 @@
 #include <gtest/gtest.h>
 
 #include <memory>
+#include <optional>
 #include <typeinfo>
 
 namespace {
@@ -175,6 +176,60 @@ TYPED_TEST(cycle_test, value_nodes_close_over_references_and_pointers) {
 TYPED_TEST(cycle_test, shared_ptr_nodes_close_over_every_edge) {
   check_cycles<TypeParam, by_shared_ptr_storage, by_shared_ptr_storage>(
       all_edges{}, all_edges{});
+}
+
+// A shared_ptr of a wrapper of a node: the scope constructs the wrapper in
+// place and publishes it, so a cycle closes over the wrapper, and the node it
+// holds is there once the wrapper is constructed.
+struct as_optional {
+  template <typename T> using type = std::optional<T>;
+};
+
+struct as_unique_ptr {
+  template <typename T> using type = std::unique_ptr<T>;
+};
+
+struct as_shared_ptr {
+  template <typename T> using type = std::shared_ptr<T>;
+};
+
+template <typename Wrapper> struct wrapped_b;
+
+template <typename Wrapper> struct wrapped_a {
+  explicit wrapped_a(wrapped_b<Wrapper> &target) : other(&target) {}
+  wrapped_b<Wrapper> *other;
+};
+
+template <typename Wrapper> struct wrapped_b {
+  using held = typename Wrapper::template type<wrapped_a<Wrapper>>;
+  explicit wrapped_b(held &target) : other(&target) {}
+  held *other;
+};
+
+template <typename Kind, typename Wrapper> void check_wrapped_cycle() {
+  using b = wrapped_b<Wrapper>;
+  using held = typename b::held;
+  SCOPED_TRACE(::testing::Message() << typeid(held).name());
+  Kind::template with<
+      dingo::bind<dingo::scope<dingo::shared_cyclical>,
+                  dingo::storage<std::shared_ptr<held>>,
+                  dingo::dependencies<b &>>,
+      dingo::bind<dingo::scope<dingo::shared_cyclical>, dingo::storage<b>,
+                  dingo::dependencies<held &>>>([](auto &container) {
+    auto &wrapper = container.template resolve<held &>();
+    auto &second = container.template resolve<b &>();
+    EXPECT_EQ(second.other, &wrapper);
+    EXPECT_EQ((*wrapper).other, &second);
+    EXPECT_EQ(container.template resolve<std::shared_ptr<held>>().get(),
+              &wrapper);
+    EXPECT_EQ(container.template resolve<held *>(), &wrapper);
+  });
+}
+
+TYPED_TEST(cycle_test, shared_ptr_of_a_wrapper_closes_over_the_wrapper) {
+  check_wrapped_cycle<TypeParam, as_optional>();
+  check_wrapped_cycle<TypeParam, as_unique_ptr>();
+  check_wrapped_cycle<TypeParam, as_shared_ptr>();
 }
 
 TYPED_TEST(cycle_test, mixed_nodes_close_over_what_each_publishes) {
