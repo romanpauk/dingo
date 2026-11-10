@@ -216,35 +216,6 @@ using alternative_source_t =
                        qualified_alternative_t<Alternative, Source> &,
                        qualified_alternative_t<Alternative, Source> &&>;
 
-template <typename Type>
-inline constexpr bool is_value_wrapper_type_v = is_optional_type_v<Type>;
-
-// A target an operation makes rather than converts to: an alternative type or
-// an optional value.
-template <typename Target>
-inline constexpr bool is_structural_conversion_target_v = [] {
-  using target_type = remove_cvref_t<Target>;
-  return !std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
-         (is_alternative_type_v<target_type> ||
-          is_value_wrapper_type_v<target_type>);
-}();
-
-template <typename Type, typename = void>
-struct borrows_value_wrapper : std::false_type {};
-
-template <typename Type>
-struct borrows_value_wrapper<
-    Type, std::void_t<decltype(type_traits<remove_cvref_t<Type>>::borrow(
-              std::declval<Type>()))>>
-    : std::bool_constant<is_value_borrowable_v<remove_cvref_t<Type>> &&
-                         is_value_wrapper_type_v<
-                             decltype(type_traits<remove_cvref_t<Type>>::borrow(
-                                 std::declval<Type>()))>> {};
-
-template <typename Type>
-inline constexpr bool borrows_value_wrapper_v =
-    borrows_value_wrapper<Type>::value;
-
 template <typename Conversion, typename Access>
 using conversion_for_access_t = std::conditional_t<
     Conversion::available &&
@@ -252,6 +223,15 @@ using conversion_for_access_t = std::conditional_t<
     Conversion, unavailable_type_conversion>;
 
 // --- The operations.
+
+// The element of a source, as the source is: borrowed of an lvalue, moved out
+// of any other.
+template <typename Actual, typename Element>
+std::conditional_t<std::is_lvalue_reference_v<Actual>, Element &, Element &&>
+forward_element(Element &element) {
+  return static_cast<std::conditional_t<std::is_lvalue_reference_v<Actual>,
+                                        Element &, Element &&>>(element);
+}
 
 // The source itself.
 struct identity {
@@ -370,13 +350,9 @@ private:
       if (auto *value =
               source_traits::template get<typename Branch::alternative_type>(
                   source)) {
-        if constexpr (std::is_lvalue_reference_v<Actual>) {
-          return conversion::apply(resolver, context, *value, requested,
-                                   registered);
-        } else {
-          return conversion::apply(resolver, context, std::move(*value),
-                                   requested, registered);
-        }
+        return conversion::apply(resolver, context,
+                                 forward_element<Actual>(*value), requested,
+                                 registered);
       }
     }
     if constexpr ((Rest::conversion::available || ...)) {
@@ -461,14 +437,9 @@ struct optional_element_conversion : conversion_inner<Inner> {
     if (source_traits::empty(source)) {
       return target::make_empty();
     }
-    auto *value = source_traits::get(source);
-    if constexpr (std::is_lvalue_reference_v<Actual>) {
-      return target::wrap(
-          Inner::apply(resolver, context, *value, requested, registered));
-    } else {
-      return target::wrap(Inner::apply(resolver, context, std::move(*value),
-                                       requested, registered));
-    }
+    return target::wrap(Inner::apply(
+        resolver, context, forward_element<Actual>(*source_traits::get(source)),
+        requested, registered));
   }
 };
 
@@ -488,7 +459,7 @@ struct optional_conversion<Target, converted_construction<Inner>, OfElement> {
 };
 
 // The element of an optional source, with the value category of the source.
-template <typename Source, bool Unwrap = is_value_wrapper_type_v<Source>>
+template <typename Source, bool Unwrap = is_optional_type_v<Source>>
 struct wrapper_element_source {
   using type = Source;
 };
@@ -525,70 +496,18 @@ template <typename Held> struct box {
 
 // --- The paths of the operations.
 
-enum class basic_conversion_kind { none, identity, reference };
-
-// The default conversions that keep the source object: a reference to it or to
-// its base, a copy of it, or the object moved from an rvalue. A copy of its
-// base would slice it.
-// Every other conversion, taking the address included, is found by the paths
-// after it.
-template <typename Target, typename Source, typename Access>
-constexpr basic_conversion_kind basic_conversion_selected() {
-  using kind = basic_conversion_kind;
-  using source_type = remove_cvref_t<Source>;
-  using source_pointer = std::add_pointer_t<std::remove_reference_t<Source>>;
-  constexpr bool borrows = std::is_lvalue_reference_v<Source> &&
-                           access_satisfies<Access, borrow>::value;
-  constexpr bool defaults = !std::is_pointer_v<Target>;
-  // A value target of a non-volatile source.
-  constexpr bool by_value =
-      defaults && !std::is_reference_v<Target> &&
-      !std::is_volatile_v<std::remove_reference_t<Source>>;
-  if constexpr (defaults && std::is_lvalue_reference_v<Target>) {
-    return borrows && std::is_convertible_v<
-                          source_pointer,
-                          std::add_pointer_t<std::remove_reference_t<Target>>>
-               ? kind::reference
-               : kind::none;
-  } else if constexpr (by_value && borrows &&
-                       std::is_same_v<std::remove_cv_t<Target>, source_type>) {
-    return is_copy_constructible_v<Target> ? kind::identity : kind::none;
-  } else if constexpr (by_value && std::is_rvalue_reference_v<Source> &&
-                       std::is_same_v<std::remove_cv_t<Target>, source_type> &&
-                       access_satisfies<Access, consume>::value) {
-    return std::is_constructible_v<Target, Source> ? kind::identity
-                                                   : kind::none;
-  } else {
-    return kind::none;
-  }
-}
-
-// Whether the default conversion borrows its source: it consumes an rvalue
-// source, and any source of a target that takes ownership; it borrows any
-// other source, an lvalue only when the target can be built from it as a const
-// lvalue.
-template <typename Target, typename Source, typename Traits,
-          bool TakesOwnership>
-constexpr bool direct_conversion_borrows() {
-  if constexpr (std::is_rvalue_reference_v<Source> || TakesOwnership) {
-    return false;
-  } else if constexpr (std::is_lvalue_reference_v<Source>) {
-    return has_compatible_conversion<
-        Target, Traits,
-        std::add_lvalue_reference_t<
-            std::add_const_t<std::remove_reference_t<Source>>>>::value;
-  } else {
-    return true;
-  }
-}
-
-template <typename Type, typename = void>
+// Whether the element a wrapper gets is a Target pointer.
+template <typename Target, typename Type, typename = void>
 inline constexpr bool has_element_ptr_v = false;
 
-template <typename Type>
+template <typename Target, typename Type>
 inline constexpr bool has_element_ptr_v<
-    Type, std::void_t<decltype(type_traits<remove_cvref_t<Type>>::get(
-              std::declval<Type>()))>> = true;
+    Target, Type,
+    std::void_t<decltype(type_traits<remove_cvref_t<Type>>::get(
+        std::declval<Type>()))>> =
+    std::is_convertible_v<decltype(type_traits<remove_cvref_t<Type>>::get(
+                              std::declval<Type>())),
+                          Target>;
 
 template <typename Type, typename = void>
 inline constexpr bool has_borrow_element_v = false;
@@ -598,6 +517,18 @@ inline constexpr bool has_borrow_element_v<
     Type, std::void_t<decltype(type_traits<remove_cvref_t<Type>>::borrow(
               std::declval<Type>()))>> =
     is_value_borrowable_v<remove_cvref_t<Type>>;
+
+// Whether the element a wrapper borrows is an optional value.
+template <typename Type>
+inline constexpr bool borrows_value_wrapper_v = [] {
+  if constexpr (has_borrow_element_v<Type>) {
+    return is_optional_type_v<
+        decltype(type_traits<remove_cvref_t<Type>>::borrow(
+            std::declval<Type>()))>;
+  } else {
+    return false;
+  }
+}();
 
 template <typename Target, typename Source, typename = void>
 inline constexpr bool has_selected_alternative_v = false;
@@ -612,18 +543,36 @@ inline constexpr bool has_selected_alternative_v<
 // conversion of what it unwraps or wraps, or unavailable when the operation
 // does not apply. A path whose inner conversion is unavailable is unavailable.
 
-// The source kept: itself, a reference to it or to its base, or a copy or a
-// move of it, tried before the general search.
+// The source kept, tried before the general search: a reference to it or to
+// its base, a copy of it, or the object moved from an rvalue. A copy of its
+// base would slice it. Every other conversion, taking the address included,
+// is found by the paths after it.
 template <typename Target, typename Source, typename Access>
 constexpr auto basic_path() {
-  constexpr auto kind = basic_conversion_selected<Target, Source, Access>();
-  if constexpr (kind == basic_conversion_kind::identity) {
-    return conversion_leaf<
-        identity, Target,
-        std::conditional_t<std::is_rvalue_reference_v<Source>, consume,
-                           borrow>>{};
-  } else if constexpr (kind == basic_conversion_kind::reference) {
-    return conversion_leaf<base_ref, Target, borrow>{};
+  using object = std::remove_reference_t<Source>;
+  if constexpr (std::is_lvalue_reference_v<Target>) {
+    if constexpr (std::is_lvalue_reference_v<Source> &&
+                  std::is_convertible_v<
+                      object *,
+                      std::add_pointer_t<std::remove_reference_t<Target>>>) {
+      return conversion_leaf<base_ref, Target, borrow>{};
+    } else {
+      return unavailable_type_conversion{};
+    }
+  } else if constexpr (!std::is_reference_v<Target> &&
+                       !std::is_pointer_v<Target> &&
+                       !std::is_volatile_v<object> &&
+                       std::is_same_v<std::remove_cv_t<Target>,
+                                      std::remove_cv_t<object>>) {
+    if constexpr (std::is_lvalue_reference_v<Source> &&
+                  is_copy_constructible_v<Target>) {
+      return conversion_leaf<identity, Target, borrow>{};
+    } else if constexpr (std::is_rvalue_reference_v<Source> &&
+                         std::is_constructible_v<Target, Source>) {
+      return conversion_leaf<identity, Target, consume>{};
+    } else {
+      return unavailable_type_conversion{};
+    }
   } else {
     return unavailable_type_conversion{};
   }
@@ -631,23 +580,34 @@ constexpr auto basic_path() {
 
 // What the default type_conversion_traits converts the source to. Wrappers and
 // alternatives are made by the operations after it instead.
+//
+// It consumes an rvalue source, and any source of a target that takes
+// ownership; it borrows any other source, an lvalue only when the target can
+// be built from it as a const lvalue.
 template <typename Target, typename Source, typename Access>
 constexpr auto direct_path() {
-  if constexpr (is_structural_conversion_target_v<Target>) {
+  if constexpr (!std::is_reference_v<Target> &&
+                (is_alternative_type_v<Target> || is_optional_type_v<Target>)) {
     return unavailable_type_conversion{};
   } else {
     using source_type = remove_cvref_t<Source>;
     using traits = type_conversion_traits<Target, source_type>;
-    constexpr bool takes_ownership =
-        type_traits<remove_cvref_t<Target>>::is_owning_handle &&
-        !type_traits<source_type>::is_owning_handle;
-    constexpr bool borrows =
-        direct_conversion_borrows<Target, Source, traits, takes_ownership>();
+    using const_lvalue = std::add_lvalue_reference_t<
+        std::add_const_t<std::remove_reference_t<Source>>>;
+    constexpr bool borrows = [] {
+      if constexpr (std::is_rvalue_reference_v<Source> ||
+                    (type_traits<remove_cvref_t<Target>>::is_owning_handle &&
+                     !type_traits<source_type>::is_owning_handle)) {
+        return false;
+      } else if constexpr (std::is_lvalue_reference_v<Source>) {
+        return has_compatible_conversion<Target, traits, const_lvalue>::value;
+      } else {
+        return true;
+      }
+    }();
     using argument =
         std::conditional_t<borrows && std::is_lvalue_reference_v<Source>,
-                           std::add_lvalue_reference_t<std::add_const_t<
-                               std::remove_reference_t<Source>>>,
-                           Source>;
+                           const_lvalue, Source>;
     if constexpr (has_compatible_conversion<Target, traits, argument>::value) {
       return convert_t<Target, Source,
                        std::conditional_t<borrows, borrow, consume>,
@@ -662,8 +622,7 @@ constexpr auto direct_path() {
 // resolution selects.
 template <typename Target, typename Source, typename Access>
 constexpr auto wrap_alternative_path() {
-  if constexpr (is_structural_conversion_target_v<Target> &&
-                is_alternative_type_v<Target> &&
+  if constexpr (is_alternative_type_v<Target> &&
                 has_selected_alternative_v<Target, Source>) {
     using selected = typename type_traits<
         std::remove_cv_t<Target>>::template selected_type<Source>;
@@ -701,7 +660,7 @@ constexpr auto held_alternative_path() {
 // source borrows.
 template <typename Target, typename Source>
 inline constexpr bool wraps_exactly_v = [] {
-  if constexpr (is_value_wrapper_type_v<remove_cvref_t<Target>>) {
+  if constexpr (is_optional_type_v<Target>) {
     return std::is_same_v<std::remove_cv_t<typename type_traits<
                               remove_cvref_t<Target>>::value_type>,
                           remove_cvref_t<Source>>;
@@ -711,39 +670,25 @@ inline constexpr bool wraps_exactly_v = [] {
 }();
 
 // The element of a source optional value that is exactly an optional target,
-// given as it is: copied from a borrowed source, moved out of a consumed one.
-// Whether a target is exactly the element of a source optional value, as an
-// optional value or an rvalue reference to one.
-template <typename Target, typename Source> constexpr bool is_exact_element() {
-  using source_type = remove_cvref_t<Source>;
-  using target_type = remove_cvref_t<Target>;
-  if constexpr (std::is_lvalue_reference_v<Target> ||
-                std::is_pointer_v<Target> ||
-                !is_value_wrapper_type_v<source_type> ||
-                !is_value_wrapper_type_v<target_type>) {
-    return false;
-  } else {
-    return std::is_same_v<
-        std::remove_cv_t<typename type_traits<source_type>::value_type>,
-        target_type>;
-  }
-}
-
+// or an rvalue reference to one, given as it is: copied from a borrowed
+// source, moved out of a consumed one.
 template <typename Target, typename Source, typename Access>
 constexpr auto element_or_empty_path() {
-  constexpr bool exact = is_exact_element<Target, Source>();
-  constexpr bool borrows = exact && std::is_lvalue_reference_v<Source> &&
-                           !std::is_rvalue_reference_v<Target> &&
-                           is_copy_constructible_v<remove_cvref_t<Target>>;
-  constexpr bool consumes =
-      exact && !std::is_lvalue_reference_v<Source> &&
-      access_satisfies<Access, consume>::value &&
-      std::is_move_constructible_v<remove_cvref_t<Target>> &&
-      std::is_move_assignable_v<remove_cvref_t<Source>>;
-  if constexpr (borrows) {
-    return conversion_leaf<element_or_empty, Target, borrow>{};
-  } else if constexpr (consumes) {
-    return conversion_leaf<element_or_empty, Target, consume>{};
+  using target_type = remove_cvref_t<Target>;
+  if constexpr (!std::is_lvalue_reference_v<Target> &&
+                is_optional_type_v<Target> && wraps_exactly_v<Source, Target>) {
+    constexpr bool borrows = std::is_lvalue_reference_v<Source> &&
+                             !std::is_rvalue_reference_v<Target> &&
+                             is_copy_constructible_v<target_type>;
+    constexpr bool consumes = !std::is_lvalue_reference_v<Source> &&
+                              std::is_move_constructible_v<target_type> &&
+                              std::is_move_assignable_v<remove_cvref_t<Source>>;
+    if constexpr (borrows || consumes) {
+      return conversion_leaf<element_or_empty, Target,
+                             std::conditional_t<borrows, borrow, consume>>{};
+    } else {
+      return unavailable_type_conversion{};
+    }
   } else {
     return unavailable_type_conversion{};
   }
@@ -754,9 +699,8 @@ constexpr auto element_or_empty_path() {
 // only by an optional of exactly it.
 template <typename Target, typename Source, typename Access>
 constexpr auto wrap_optional_path() {
-  constexpr bool of_element = is_value_wrapper_type_v<Source>;
-  if constexpr (is_structural_conversion_target_v<Target> &&
-                is_value_wrapper_type_v<Target> &&
+  constexpr bool of_element = is_optional_type_v<Source>;
+  if constexpr (!std::is_reference_v<Target> && is_optional_type_v<Target> &&
                 (of_element || !borrows_value_wrapper_v<Source> ||
                  wraps_exactly_v<Target, Source>)) {
     using inner =
@@ -769,37 +713,17 @@ constexpr auto wrap_optional_path() {
   }
 }
 
-// The pointer an lvalue array decays to, for a pointer target it converts to.
-template <typename Target, typename Source, typename Access>
-constexpr auto decay_path() {
-  using array = std::remove_reference_t<Source>;
-  if constexpr (std::is_pointer_v<Target> &&
-                std::is_lvalue_reference_v<Source> && std::is_array_v<array> &&
-                std::is_convertible_v<
-                    std::add_pointer_t<std::remove_extent_t<array>>, Target>) {
-    return conversion_leaf<decay, Target, borrow>{};
-  } else {
-    return unavailable_type_conversion{};
-  }
-}
-
 // A pointer to the array a pointer to its first element points to.
-template <typename Array, typename Element> constexpr bool views_array() {
-  if constexpr (std::is_array_v<Array>) {
-    using row = std::remove_extent_t<Array>;
-    return std::is_same_v<std::remove_cv_t<Element>, std::remove_cv_t<row>> &&
-           std::is_convertible_v<Element *, row *>;
-  } else {
-    return false;
-  }
-}
-
 template <typename Target, typename Source, typename Access>
 constexpr auto array_view_path() {
   using source = std::remove_reference_t<Source>;
-  if constexpr (std::is_pointer_v<Target> && std::is_pointer_v<source>) {
-    if constexpr (views_array<std::remove_pointer_t<Target>,
-                              std::remove_pointer_t<source>>()) {
+  if constexpr (std::is_pointer_v<Target> && std::is_pointer_v<source> &&
+                std::is_array_v<std::remove_pointer_t<Target>>) {
+    using row = std::remove_extent_t<std::remove_pointer_t<Target>>;
+    using element = std::remove_pointer_t<source>;
+    if constexpr (std::is_same_v<std::remove_cv_t<element>,
+                                 std::remove_cv_t<row>> &&
+                  std::is_convertible_v<element *, row *>) {
       return conversion_leaf<array_view, Target, borrow>{};
     } else {
       return unavailable_type_conversion{};
@@ -809,14 +733,18 @@ constexpr auto array_view_path() {
   }
 }
 
-// The address of an lvalue source, for a pointer target it converts to.
+// The address of an lvalue source, for a pointer target it converts to: of
+// its first element when the source is an array that decays to the target.
 template <typename Target, typename Source, typename Access>
 constexpr auto address_path() {
-  if constexpr (std::is_pointer_v<Target> &&
-                std::is_lvalue_reference_v<Source> &&
+  using object = std::remove_reference_t<Source>;
+  constexpr bool addressed =
+      std::is_pointer_v<Target> && std::is_lvalue_reference_v<Source>;
+  if constexpr (addressed && std::is_array_v<object> &&
                 std::is_convertible_v<
-                    std::add_pointer_t<std::remove_reference_t<Source>>,
-                    Target>) {
+                    std::add_pointer_t<std::remove_extent_t<object>>, Target>) {
+    return conversion_leaf<decay, Target, borrow>{};
+  } else if constexpr (addressed && std::is_convertible_v<object *, Target>) {
     return conversion_leaf<address, Target, borrow>{};
   } else {
     return unavailable_type_conversion{};
@@ -829,15 +757,8 @@ template <typename Target, typename Source, typename Access>
 constexpr auto element_ptr_path() {
   if constexpr (std::is_pointer_v<Target> &&
                 std::is_lvalue_reference_v<Source> &&
-                has_element_ptr_v<Source>) {
-    if constexpr (std::is_convertible_v<
-                      decltype(type_traits<remove_cvref_t<Source>>::get(
-                          std::declval<Source>())),
-                      Target>) {
-      return conversion_leaf<element_ptr, Target, borrow>{};
-    } else {
-      return unavailable_type_conversion{};
-    }
+                has_element_ptr_v<Target, Source>) {
+    return conversion_leaf<element_ptr, Target, borrow>{};
   } else {
     return unavailable_type_conversion{};
   }
@@ -950,7 +871,6 @@ enum class op : std::size_t {
   held_alternative,
   element_or_empty,
   wrap_optional,
-  decay,
   array_view,
   address,
   element_ptr,
@@ -973,8 +893,6 @@ constexpr auto path() {
     return element_or_empty_path<Target, Source, Access>();
   } else if constexpr (Op == op::wrap_optional) {
     return wrap_optional_path<Target, Source, Access>();
-  } else if constexpr (Op == op::decay) {
-    return decay_path<Target, Source, Access>();
   } else if constexpr (Op == op::array_view) {
     return array_view_path<Target, Source, Access>();
   } else if constexpr (Op == op::address) {

@@ -339,22 +339,20 @@ template <typename T, typename... Args> T *make_dynamic_array(Args &&...args) {
   }
 }
 
-// Whether a handle can be made of Args: the array a handle of one holds is
-// initialized with them, its first elements copy-initialized from them and
-// the rest of a bounded one value-initialized.
+// Whether a handle can be made of Args, as its type_traits declares with
+// makeable<Args...>; one that declares nothing is made of what makes its
+// element.
+template <typename Handle, typename Args, typename = void>
+struct declared_makeable : std::true_type {};
+
 template <typename Handle, typename... Args>
-struct handle_makeable : std::true_type {};
+struct declared_makeable<
+    Handle, type_list<Args...>,
+    std::void_t<decltype(type_traits<Handle>::template makeable<Args...>)>>
+    : std::bool_constant<type_traits<Handle>::template makeable<Args...>> {};
 
-template <typename Array, typename... Args>
-        struct handle_makeable<std::shared_ptr<Array>, Args...>
-    : std::bool_constant < !std::is_array_v<Array> ||
-    is_bounded_array_initializable_v < std::remove_extent_t<Array>,
-    std::extent_v<Array> != 0 ? std::extent_v<Array> : sizeof...(Args),
-    Args... >> {};
-
-template <typename Array, typename Deleter, typename... Args>
-struct handle_makeable<std::unique_ptr<Array, Deleter>, Args...>
-    : handle_makeable<std::shared_ptr<Array>, Args...> {};
+template <typename Handle, typename... Args>
+struct handle_makeable : declared_makeable<Handle, type_list<Args...>> {};
 
 template <typename T, size_t> using repeated_argument_t = T;
 
@@ -413,35 +411,15 @@ template <typename Handle, typename = void> struct wrapper_storage_types {
                          type_list<Handle>, type_list<>>;
 };
 
+// A handle or an optional is walked through to its element too: the chain is
+// walked once, collecting every list together instead of recursing over it
+// separately for each.
 template <typename Handle>
 struct wrapper_storage_types<
-    Handle, std::enable_if_t<type_traits<Handle>::enabled &&
-                             type_traits<Handle>::is_pointer_like>> {
-private:
-  // Walk the wrapper chain once and collect all derived interface types
-  // together instead of recursing over the same chain separately for each
-  // result list.
-  using next = wrapper_storage_types<typename type_traits<Handle>::value_type>;
-  using copyable_handle_types =
-      std::conditional_t<std::is_copy_constructible_v<Handle>,
-                         type_list<Handle>, type_list<>>;
-
-public:
-  using lvalue_reference_types =
-      type_list_cat_t<type_list<Handle &>,
-                      typename next::lvalue_reference_types>;
-  using pointer_types =
-      type_list_cat_t<type_list<Handle *>, typename next::pointer_types>;
-  using copyable_value_types =
-      type_list_cat_t<copyable_handle_types,
-                      typename next::copyable_value_types>;
-};
-
-// An optional is walked through to its element too.
-template <typename Handle>
-struct wrapper_storage_types<
-    Handle,
-    std::enable_if_t<has_semantics<Handle, semantics::optional_value>::value>> {
+    Handle, std::enable_if_t<
+                type_traits<Handle>::enabled &&
+                (type_traits<Handle>::is_pointer_like ||
+                 has_semantics<Handle, semantics::optional_value>::value)>> {
 private:
   using next = wrapper_storage_types<typename type_traits<Handle>::value_type>;
   using copyable_handle_types =
@@ -465,8 +443,7 @@ public:
 template <typename Type> constexpr bool is_wrapper_formable() {
   if constexpr (type_traits<Type>::enabled && !std::is_pointer_v<Type>) {
     using element = typename type_traits<Type>::value_type;
-    constexpr bool element_formable =
-        !type_traits<element>::enabled || is_wrapper_formable<element>();
+    constexpr bool element_formable = is_wrapper_formable<element>();
     if constexpr (type_traits<Type>::is_pointer_like) {
       return element_formable;
     } else {
@@ -532,6 +509,12 @@ struct type_traits<
   static bool empty(const std::unique_ptr<Array, Deleter> &wrapper) {
     return wrapper.get() == nullptr;
   }
+
+  // The array is made of an element of each argument, copy-initialized.
+  template <typename... Args>
+  static constexpr bool makeable =
+      detail::is_bounded_array_initializable_v<value_type, sizeof...(Args),
+                                               Args...>;
 
   template <typename... Args>
   static std::unique_ptr<Array, Deleter> make(Args &&...args) {
@@ -601,6 +584,12 @@ struct type_traits<
     return wrapper.get() == nullptr;
   }
 
+  // The array is made of an element of each argument, copy-initialized.
+  template <typename... Args>
+  static constexpr bool makeable =
+      detail::is_bounded_array_initializable_v<value_type, sizeof...(Args),
+                                               Args...>;
+
   template <typename... Args>
   static std::shared_ptr<Array> make(Args &&...args) {
     return std::shared_ptr<Array>(
@@ -627,6 +616,12 @@ struct type_traits<
   static bool empty(const std::shared_ptr<Array> &wrapper) {
     return wrapper.get() == nullptr;
   }
+
+  // The first elements are copy-initialized from the arguments, the rest
+  // value-initialized.
+  template <typename... Args>
+  static constexpr bool makeable = detail::is_bounded_array_initializable_v<
+      value_type, std::extent_v<Array, 0>, Args...>;
 
   template <typename... Args>
   static std::shared_ptr<Array> make(Args &&...args) {
