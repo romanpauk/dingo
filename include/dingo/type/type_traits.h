@@ -89,6 +89,9 @@ struct alternative_value {
 //                  an element that is a wrapper of what makes its element too,
 //                  so that a wrapper of wrappers is made at once of what
 //                  makes its innermost element
+//   makeable<Args...>  optional, true by default: whether make(args...)
+//                  makes the wrapper of Args, for a make that cannot take any,
+//                  such as that of a handle of an array
 //   share_t<U>     for a sole owner: the sharing handle of the element U
 //   wrap(v), make_empty()
 //                  for an optional value: a wrapper of v, and an empty one

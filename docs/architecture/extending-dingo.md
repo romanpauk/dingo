@@ -78,7 +78,11 @@ constructor, as `std::shared_ptr` does; such a wrapper needs no other trait.
 A `make` that makes its element of what makes the element's own element, as
 those of the standard wrappers do, declares
 `static constexpr bool makes_nested = true`, so that a wrapper of such wrappers
-is made at once of what makes its innermost element.
+is made at once of what makes its innermost element. A `make` that cannot be
+called with every argument list, as that of a handle of an array, whose elements
+are initialized of the arguments, declares
+`template <typename... Args> static constexpr bool makeable`, whether it makes
+the wrapper of `Args`.
 
 The owning handles a scope makes of a value, a pointer or an array it makes for
 a request are the families `owning_handles<>` lists, each named by a handle of
