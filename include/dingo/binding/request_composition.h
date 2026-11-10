@@ -103,6 +103,24 @@ inline constexpr bool makes_nested_v<
     Wrapper, std::void_t<decltype(type_traits<Wrapper>::makes_nested)>> =
     type_traits<Wrapper>::makes_nested;
 
+// Whether a wrapper is made at once of Value, its innermost value, down
+// layers that each make their value of what makes it.
+template <typename Wrapper, typename Value> constexpr bool makes_of() {
+  if constexpr (!makes_nested_v<Wrapper>) {
+    return false;
+  } else {
+    using value_type = typename type_traits<Wrapper>::value_type;
+    if constexpr (std::is_same_v<std::remove_cv_t<value_type>, Value>) {
+      return true;
+    } else {
+      return makes_of<std::remove_cv_t<value_type>, Value>();
+    }
+  }
+}
+
+template <typename Wrapper, typename Value>
+inline constexpr bool makes_of_v = makes_of<Wrapper, Value>();
+
 // Whether a reference or a pointer refers to a wrapper that holds a copy
 // sharing what it was copied of, such as a std::shared_ptr<I> of a kept
 // std::shared_ptr<T>, or a wrapper composed of one: a binding that keeps its

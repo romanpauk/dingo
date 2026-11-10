@@ -220,11 +220,18 @@ struct request_resolution {
             typename Scope>
   static R resolve_normalized(Host &host, Scope scope, Context &context) {
     using normalized = request_type<typename Request::value_type>;
+    using made = std::decay_t<typename Request::user_type>;
     auto &&instance = resolve<normalized, typename normalized::lookup_type>(
         host, scope, context, host, no_lookup_key());
-    return detail::convert_type<std::decay_t<typename Request::user_type>,
-                                consume>(
-        std::forward<decltype(instance)>(instance));
+    if constexpr (detail::makes_of_v<made,
+                                     remove_cvref_t<decltype(instance)>>) {
+      // A wrapper of wrappers is made at once of the value.
+      return type_traits<made>::make(
+          std::forward<decltype(instance)>(instance));
+    } else {
+      return detail::convert_type<made, consume>(
+          std::forward<decltype(instance)>(instance));
+    }
   }
 
   // A request that no container of the chain binds. A collection is
