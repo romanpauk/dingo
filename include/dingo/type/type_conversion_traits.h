@@ -877,8 +877,10 @@ using held_t =
 
 // A new owning handle of a consumed value: of an object, of a wrapper, or an
 // array of it, the rest of a bounded one value-initialized. A pointer is not
-// held: a handle takes it over instead. A wrapper is held as itself only by a
-// handle of it; another handle is made of what the wrapper holds.
+// held: a handle takes it over instead. A wrapper is held by a handle of it,
+// as itself or converted to the wrapper of its kind the handle holds, such as
+// a handle of an interface of its element; another handle is made of what the
+// wrapper holds.
 template <typename Target, typename Source>
 inline constexpr bool boxes_source_v = [] {
   using source_type = remove_cvref_t<Source>;
@@ -887,9 +889,18 @@ inline constexpr bool boxes_source_v = [] {
   } else if constexpr (!type_traits<remove_cvref_t<Target>>::enabled) {
     return false;
   } else {
-    return std::is_same_v<std::remove_cv_t<typename type_traits<
-                              remove_cvref_t<Target>>::value_type>,
-                          source_type>;
+    using held = std::remove_cv_t<
+        typename type_traits<remove_cvref_t<Target>>::value_type>;
+    if constexpr (std::is_same_v<held, source_type>) {
+      return true;
+    } else if constexpr (type_traits<held>::enabled) {
+      return std::is_same_v<
+          typename type_traits<source_type>::template rebind_t<
+              typename type_traits<held>::value_type>,
+          held>;
+    } else {
+      return false;
+    }
   }
 }();
 
@@ -929,7 +940,9 @@ constexpr auto box_path() {
   }
 }
 
-// The operations, in the order their paths are tried.
+// The operations, in the order their paths are tried. A consumed wrapper is
+// boxed before its element is borrowed: what holds it is made of it, rather
+// than of a new element.
 enum class op : std::size_t {
   basic,
   direct,
@@ -941,8 +954,8 @@ enum class op : std::size_t {
   array_view,
   address,
   element_ptr,
-  borrow_element,
   box,
+  borrow_element,
   none
 };
 
@@ -968,10 +981,10 @@ constexpr auto path() {
     return address_path<Target, Source, Access>();
   } else if constexpr (Op == op::element_ptr) {
     return element_ptr_path<Target, Source, Access>();
-  } else if constexpr (Op == op::borrow_element) {
-    return borrow_element_path<Target, Source, Access>();
-  } else {
+  } else if constexpr (Op == op::box) {
     return box_path<Target, Source, Access>();
+  } else {
+    return borrow_element_path<Target, Source, Access>();
   }
 }
 
