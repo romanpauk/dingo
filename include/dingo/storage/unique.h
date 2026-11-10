@@ -58,9 +58,6 @@ template <> struct scope_traits<unique> {
 
   static constexpr storage_exposure exposed(storage_form form) {
     switch (form) {
-    case storage_form::plain:
-      return storage_exposure::lvalue | storage_exposure::rvalue |
-             storage_exposure::pointer;
     case storage_form::pointer:
     case storage_form::array:
     case storage_form::bounded_array:
@@ -68,6 +65,7 @@ template <> struct scope_traits<unique> {
     case storage_form::shared_handle:
       return storage_exposure::value | storage_exposure::lvalue |
              storage_exposure::rvalue | storage_exposure::pointer;
+    case storage_form::plain:
     case storage_form::alternative:
     case storage_form::unique_handle:
     case storage_form::unique_array_handle:
@@ -87,27 +85,25 @@ template <> struct scope_traits<unique> {
   // the element of an optional. The element of an optional or of a sole
   // owner is moved out of it; that of a shared owner is copied. The leaf of
   // one that holds another wrapper is moved out of both, and into an owning
-  // handle. Any other wrapper of what is moved out is
-  // composed of it.
+  // handle. Any other wrapper of what is moved out is composed of it.
   template <storage_form Form, typename Type, typename U>
   struct requests : detail::scope_rule_requests<unique, Type, U> {
   private:
     using rule = detail::scope_rule_requests<unique, Type, U>;
-    using handles = detail::owning_handles_of_t<U>;
-    static constexpr bool nested = detail::holds_wrapper_v<Type>;
-    using element = typename detail::nested_element<Type, U>::type;
-    using wrapped = std::conditional_t<
-        Form == storage_form::plain || Form == storage_form::alternative,
-        handles,
+    static constexpr bool moves_out =
+        Form == storage_form::optional || Form == storage_form::unique_handle;
+    static constexpr bool into_handles =
+        Form == storage_form::plain || Form == storage_form::alternative ||
+        Form == storage_form::optional ||
+        (Form == storage_form::unique_handle && detail::holds_wrapper_v<Type>);
+    using wrapped = type_list_cat_t<
         std::conditional_t<
-            Form == storage_form::optional,
-            type_list_cat_t<type_list<U &&>, element, handles>,
-            std::conditional_t<
-                Form == storage_form::unique_handle,
-                type_list_cat_t<
-                    type_list<U &&>, element,
-                    std::conditional_t<nested, handles, type_list<>>>,
-                type_list<>>>>;
+            moves_out,
+            type_list_cat_t<type_list<U &&>,
+                            typename detail::nested_element<Type, U>::type>,
+            type_list<>>,
+        std::conditional_t<into_handles, detail::owning_handles_of_t<U>,
+                           type_list<>>>;
 
   public:
     using rvalue_reference_types =

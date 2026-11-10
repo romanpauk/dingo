@@ -32,38 +32,21 @@ template <typename Type, typename StoredType, typename Factory,
           typename Conversions>
 class shared_cyclical_storage;
 
-// Cells of shared_cyclical, which publishes the leaf U and a shared_ptr<U>
-// directly, whatever the registered shape.
+// Cells of shared_cyclical: the lists of the rule for what it exposes, but
+// of a shared_ptr, which publishes what it holds, constructed in place: the
+// leaf U, or a wrapper of it. What the wrapper holds is not in place until
+// the wrapper is constructed, so it is not published, and nothing is copied
+// of what is published before it is constructed.
 template <storage_form Form, typename Type, typename U>
-struct shared_cyclical_requests {
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<U &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *>;
-};
-
-// A bounded array publishes the lists of its form: its rows, and itself.
-template <typename Type, typename U>
-struct shared_cyclical_requests<storage_form::bounded_array, Type, U>
+struct shared_cyclical_requests
     : scope_rule_requests<shared_cyclical, Type, U> {};
 
-// A shared_ptr publishes what it holds, which the scope constructs in place:
-// the leaf U, or a wrapper of it. What the wrapper holds is not in place until
-// the wrapper is constructed, so it is not published.
-template <typename Type, typename U,
-          typename Held = typename type_traits<Type>::value_type,
-          bool = type_traits<Held>::enabled>
-struct shared_cyclical_handle_requests {
-  using value_types = type_list<std::shared_ptr<U>>;
-  using lvalue_reference_types = type_list<U &, std::shared_ptr<U> &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *, std::shared_ptr<U> *>;
-};
-
-template <typename Type, typename U, typename Held>
-struct shared_cyclical_handle_requests<Type, U, Held, true> {
+template <typename Type, typename U>
+struct shared_cyclical_requests<storage_form::shared_handle, Type, U> {
 private:
-  using held = wrapper_rebind_leaf_t<Held, U>;
+  using element = typename type_traits<Type>::value_type;
+  using held = std::conditional_t<type_traits<element>::enabled,
+                                  wrapper_rebind_leaf_t<element, U>, U>;
 
 public:
   using value_types = type_list<std::shared_ptr<held>>;
@@ -71,10 +54,6 @@ public:
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<held *, std::shared_ptr<held> *>;
 };
-
-template <typename Type, typename U>
-struct shared_cyclical_requests<storage_form::shared_handle, Type, U>
-    : shared_cyclical_handle_requests<Type, U> {};
 } // namespace detail
 
 template <> struct scope_traits<shared_cyclical> {
@@ -275,7 +254,8 @@ public:
       //
       // A failed construction is undone here; a context that keeps a
       // transaction also undoes the publication when it rolls back later.
-      // The static context does not, so it relies on the local guard alone.
+      // One without, as the static container resolves a binding without
+      // dependencies through, relies on the local guard alone.
       if constexpr (has_on_rollback<Context>::value) {
         context.on_rollback(
             +[](void *self, void *) noexcept {

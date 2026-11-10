@@ -7,8 +7,6 @@
 
 #pragma once
 
-// #include <dingo/base/config.h>
-
 #include <dingo/base/type_list.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/factory/factory_traits.h>
@@ -191,16 +189,19 @@ template <typename... Args> struct registration_args {
   using bindings_type = registration_arg_t<::dingo::bindings<void>, Args...>;
 };
 
-template <typename T>
-inline constexpr bool is_supported_registration_arg_v =
-    registration_arg_matches<::dingo::scope<void>, T>::value ||
-    registration_arg_matches<::dingo::storage<void>, T>::value ||
-    registration_arg_matches<::dingo::factory<void>, T>::value ||
-    registration_arg_matches<::dingo::interfaces<void>, T>::value ||
-    registration_arg_matches<::dingo::key_type<::dingo::none_t>, T>::value ||
-    registration_arg_matches<::dingo::conversions<void>, T>::value ||
-    registration_arg_matches<::dingo::dependencies<void>, T>::value ||
-    registration_arg_matches<::dingo::bindings<void>, T>::value;
+// The roles of a registration argument, each named by its default.
+using registration_roles =
+    type_list<::dingo::scope<void>, ::dingo::storage<void>,
+              ::dingo::factory<void>, ::dingo::interfaces<void>,
+              ::dingo::key_type<::dingo::none_t>, ::dingo::conversions<void>,
+              ::dingo::dependencies<void>, ::dingo::bindings<void>>;
+
+template <typename T, typename Roles = registration_roles>
+inline constexpr bool is_supported_registration_arg_v = false;
+
+template <typename T, typename... Roles>
+inline constexpr bool is_supported_registration_arg_v<T, type_list<Roles...>> =
+    (registration_arg_matches<Roles, T>::value || ...);
 
 template <typename ParsedArgs>
 using registration_scope_t = typename ParsedArgs::scope_type;
@@ -444,7 +445,7 @@ private:
   using parsed_args = detail::registration_args<Args...>;
 
 public:
-  // Scope has to be scpecified as there is no way how to deduce it
+  // Scope has to be specified as there is no way how to deduce it
   using scope_type = detail::registration_scope_t<parsed_args>;
   static_assert((detail::is_supported_registration_arg_v<Args> && ...),
                 "type_registration expects "

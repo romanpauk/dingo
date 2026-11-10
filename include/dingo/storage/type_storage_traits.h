@@ -27,26 +27,8 @@ struct no_materialization_scope {};
 } // namespace detail
 
 namespace detail {
-template <typename Storage>
-using storage_source_type_t =
-    std::remove_reference_t<typename Storage::resolved_type>;
-
-// The source helpers below read a storage_shape (defined further down).
-template <typename Storage> struct storage_borrow_source {
-private:
-  using source_type = typename Storage::resolved_type;
-
-public:
-  using type = std::conditional_t<std::is_pointer_v<source_type>, source_type,
-                                  source_type &>;
-};
-
-template <typename Storage>
-using storage_borrow_source_t = typename storage_borrow_source<Storage>::type;
-
-template <typename Storage>
-using storage_consume_source_t = typename Storage::resolved_type &&;
-
+// What a storage resolves, borrowed and consumed: a pointer is borrowed as
+// itself.
 template <typename Storage> struct storage_source_traits {
 private:
   using stored_value_type = remove_cvref_t<typename Storage::type>;
@@ -58,8 +40,9 @@ private:
 public:
   using direct_leaf_type =
       std::remove_cv_t<std::remove_pointer_t<stored_value_type>>;
-  using borrowed_type = storage_borrow_source_t<Storage>;
-  using consumed_type = storage_consume_source_t<Storage>;
+  using borrowed_type = std::conditional_t<std::is_pointer_v<resolved_type>,
+                                           resolved_type, resolved_type &>;
+  using consumed_type = resolved_type &&;
   using qualification_type = resolved_leaf_type;
 
   static constexpr bool is_pointer = std::is_pointer_v<stored_value_type>;
@@ -85,7 +68,8 @@ struct storage_shape {
 
 template <typename Storage>
 using storage_shape_t =
-    storage_shape<typename Storage::type, storage_source_type_t<Storage>,
+    storage_shape<typename Storage::type,
+                  std::remove_reference_t<typename Storage::resolved_type>,
                   typename Storage::conversions>;
 
 template <typename Target, typename Qualification> struct qualified_target {
@@ -175,24 +159,6 @@ template <typename Request, typename Interface, typename Storage>
 using storage_published_type_t =
     typename storage_published_type<Request, Interface, Storage>::type;
 
-template <typename Request, typename Interface, typename Storage,
-          bool PublishValue>
-struct storage_resolution_target {
-  using type = storage_published_type_t<Request, Interface, Storage>;
-};
-
-template <typename Request, typename Interface, typename Storage>
-struct storage_resolution_target<Request, Interface, Storage, true> {
-  using type =
-      remove_cvref_t<storage_published_type_t<Request, Interface, Storage>>;
-};
-
-template <typename Request, typename Interface, typename Storage,
-          bool PublishValue>
-using storage_resolution_target_t =
-    typename storage_resolution_target<Request, Interface, Storage,
-                                       PublishValue>::type;
-
 template <typename Storage, typename Access>
 using storage_resolution_source_t =
     std::conditional_t<std::is_same_v<Access, borrow>,
@@ -206,25 +172,30 @@ inline constexpr bool selects_interface_v =
     std::is_same_v<typename request_type<Target>::value_type, Interface> ||
     std::is_same_v<typename request_type<Target>::exact_type, Interface>;
 
-// The resolution of a request the storage publishes, when a request of its
-// target selects the binding; a binding of another interface serves the
-// others.
-template <typename Target, typename Interface, typename Source, typename Access,
-          bool Selects = selects_interface_v<Target, Interface>>
-struct selected_resolution {
+// The resolution of Target from Source when Enabled, and none otherwise: a
+// conversion is not probed for a storage category that is empty, nor for a
+// request a binding of another interface serves.
+template <bool Enabled, typename Target, typename Source, typename Access>
+struct interface_resolution_if {
   using type = type_list<>;
 };
 
-template <typename Target, typename Interface, typename Source, typename Access>
-struct selected_resolution<Target, Interface, Source, Access, true>
+template <typename Target, typename Source, typename Access>
+struct interface_resolution_if<true, Target, Source, Access>
     : available_resolution<Target, Source, Access> {};
 
-template <typename Request, typename Interface, typename Storage,
-          typename Access, bool PublishValue>
-using storage_resolution_t = typename selected_resolution<
-    storage_resolution_target_t<Request, Interface, Storage, PublishValue>,
-    std::remove_cv_t<Interface>, storage_resolution_source_t<Storage, Access>,
-    Access>::type;
+// The resolution of a request the storage publishes, as a value when
+// PublishValue, when a request of its target selects the binding.
+template <
+    typename Request, typename Interface, typename Storage, typename Access,
+    bool PublishValue,
+    typename Target = std::conditional_t<
+        PublishValue,
+        remove_cvref_t<storage_published_type_t<Request, Interface, Storage>>,
+        storage_published_type_t<Request, Interface, Storage>>>
+using storage_resolution_t = typename interface_resolution_if<
+    selects_interface_v<Target, std::remove_cv_t<Interface>>, Target,
+    storage_resolution_source_t<Storage, Access>, Access>::type;
 
 template <typename Requests, typename Interface, typename Storage,
           typename Access, bool PublishValue>
@@ -262,16 +233,6 @@ template <typename Requests, typename Interface, typename Storage,
 using storage_resolutions_t =
     typename storage_resolutions<Requests, Interface, Storage, Access,
                                  PublishValue>::type;
-
-// Avoid probing conversions for empty storage categories.
-template <bool Enabled, typename Target, typename Source, typename Access>
-struct interface_resolution_if {
-  using type = type_list<>;
-};
-
-template <typename Target, typename Source, typename Access>
-struct interface_resolution_if<true, Target, Source, Access>
-    : available_resolution<Target, Source, Access> {};
 
 template <bool Enabled, typename Source, typename Interface, typename Access>
 struct wrapper_resolution_if {

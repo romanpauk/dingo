@@ -137,9 +137,6 @@ private:
 template <typename Type, typename StoredType, typename Factory,
           typename Conversions>
 class shared_storage {
-  // TODO
-  // static_assert(std::is_trivially_destructible_v< Type > ==
-  // std::is_trivially_destructible_v< storage_instance< Type, shared > >);
   storage_instance<shared, Type, StoredType, Factory> instance_;
 
 public:

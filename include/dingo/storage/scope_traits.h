@@ -269,6 +269,10 @@ template <typename Wrapper, bool Array> struct owner_storage_form_base {
             handle, typename type_traits<Wrapper>::value_type, U>::type,
         typename types::pointer_types>;
     using copyable_value_types = typename types::copyable_value_types;
+    // What a kept owner is copied as: its leaf, and what it holds that can
+    // be copied.
+    using owned_value_types =
+        type_list_unique_t<type_list_cat_t<type_list<U>, copyable_value_types>>;
   };
 };
 
@@ -285,9 +289,8 @@ struct wrapper_storage_form<Wrapper, semantics::sole_owner, Borrowable> {
       : owner_storage_form_base<Wrapper, !Borrowable>::template borrowed<U> {
     using value_types = std::conditional_t<
         Borrowable,
-        type_list_unique_t<type_list_cat_t<
-            type_list<U>, typename owner_storage_form_base<Wrapper, false>::
-                              template borrowed<U>::copyable_value_types>>,
+        typename owner_storage_form_base<
+            Wrapper, !Borrowable>::template borrowed<U>::owned_value_types,
         type_list<>>;
   };
 
@@ -311,9 +314,8 @@ struct wrapper_storage_form<Wrapper, semantics::shared_owner, Borrowable> {
       : owner_storage_form_base<Wrapper, !Borrowable>::template borrowed<U> {
     using value_types = std::conditional_t<
         Borrowable,
-        type_list_unique_t<type_list_cat_t<
-            type_list<U>, typename owner_storage_form_base<Wrapper, false>::
-                              template borrowed<U>::copyable_value_types>>,
+        typename owner_storage_form_base<
+            Wrapper, !Borrowable>::template borrowed<U>::owned_value_types,
         type_list<wrapper_rebind_leaf_t<Wrapper, U>>>;
   };
 
@@ -430,23 +432,20 @@ struct scope_requests<StorageTag, Form, Type, U,
 
 struct no_scope_requests {};
 
-template <typename StorageTag, typename Stored, typename U>
-struct stored_type_requests
-    : std::conditional_t<
-          has_storage_cell_v<StorageTag, Stored>,
-          scope_requests<StorageTag,
-                         storage_form_traits<remove_cvref_t<Stored>>::form,
-                         remove_cvref_t<Stored>, U>,
-          no_scope_requests> {
-  static_assert(has_storage_cell_v<StorageTag, Stored>,
-                "the scope does not store this type");
-  static constexpr bool is_stable = scope_traits<StorageTag>::is_stable;
-};
-
 // The requests a registration publishes when it declares no conversions: the
 // request lists its scope publishes for the form of the stored type.
 template <typename StorageTag, typename Type, typename U>
-struct conversions : stored_type_requests<StorageTag, Type, U> {};
+struct conversions
+    : std::conditional_t<
+          has_storage_cell_v<StorageTag, Type>,
+          scope_requests<StorageTag,
+                         storage_form_traits<remove_cvref_t<Type>>::form,
+                         remove_cvref_t<Type>, U>,
+          no_scope_requests> {
+  static_assert(has_storage_cell_v<StorageTag, Type>,
+                "the scope does not store this type");
+  static constexpr bool is_stable = scope_traits<StorageTag>::is_stable;
+};
 } // namespace detail
 
 namespace detail {
