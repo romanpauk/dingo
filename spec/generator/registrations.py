@@ -4,9 +4,9 @@ registration binds, made through every entry point, in every position."""
 from dataclasses import dataclass
 
 from spec import semantics
-from spec.vocabulary import (NESTED_SHAPES, Answer, Container, Entry,
-                             InterfaceSet, Leaf, Position, Scope, Selection,
-                             StoredForm)
+from spec.vocabulary import (NESTED_SHAPES, Answer, Category, Container,
+                             Entry, InterfaceSet, Leaf, Position, Scope,
+                             Selection, Shape, StoredForm)
 
 from . import cover, driver
 from .dimensions import Keeps, Outcome
@@ -180,6 +180,32 @@ class Registration:
     def render(self, probes):
         return driver.render("probe.cpp.j2", r=self, probes=probes)
 
+    def stores(self, probe):
+        """Whether a probe requests what the registration stores, as it is:
+        by reference from a scope that keeps it, and as an rvalue reference
+        a call takes from a scope that makes it, so that the storage alone
+        copies and moves the leaf."""
+        source = semantics.source(self.scope, self.form,
+                                  self.interfaces_declared)
+        request = probe.request
+        bound = request.interface.bound
+        if (probe.operation.position is not Position.DIRECT or
+                semantics.SHAPES[request.shape] + bound.layers !=
+                source.layers or bound.element != source.element):
+            return False
+        if semantics.SCOPES[self.scope].makes:
+            return (probe.operation.entry is Entry.INVOKE and
+                    request.category is Category.RVALUE_REFERENCE)
+        return (probe.operation.entry is Entry.RESOLVE and
+                request.category is Category.LVALUE_REFERENCE)
+
+    def passes(self, probe):
+        """Whether a probe requests the leaf a plain registration stores,
+        which no conversion copies or moves: what resolving it copies and
+        moves is what passing it on in its position does."""
+        return (probe.request.shape is Shape.OBJECT and
+                probe.request.interface.bound == semantics.LEAF)
+
     def memory_class(self, probe):
         """The container and the position of a probe, which the memory a
         compile of it takes depends on most."""
@@ -204,13 +230,16 @@ def covering(strength):
             Container.RUNTIME, *registration[:4]))
 
 
-def probe_registration(compiler, flags, directory, registration, position):
-    """Makes the probes of a registration in a position, the invalid ones
-    aside, in a program of their own, which bounds the memory of a
-    compile."""
+def probe_registration(compiler, flags, directory, registration, position,
+                       selected=None):
+    """Makes the probes of a registration in a position, those selected
+    when told which, the invalid ones aside, in a program of their own,
+    which bounds the memory of a compile."""
     outcomes = []
     probes = []
     for probe, invalid in registration.probes(position):
+        if selected is not None and not selected(registration, probe):
+            continue
         if invalid:
             outcomes.append(driver.invalid(registration, probe, invalid))
         else:

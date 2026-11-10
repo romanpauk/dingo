@@ -651,6 +651,28 @@ def entry_of(entry, position, selection, category):
     return entry
 
 
+def converted(scope, form, leaf, bound, shape, category, limits=frozenset(),
+              interfaces=InterfaceSet.DEFAULT):
+    """The fewest copies and moves of the leaf a conversion of what a scope
+    stores into a request of a shape of the bound interface makes, as
+    (copies, moves): those of the derivations that reach what satisfies the
+    request, and of satisfying it, for as long as a call runs. None when
+    nothing does. A resolution takes the cost of handing the request over on
+    top of it."""
+    layers, element = SHAPES[shape] + bound.layers, bound.element
+    context = Context(LEAVES[leaf], SCOPES[scope], element == "interface",
+                      limits)
+    if not makes_storage(form, context):
+        return None
+    reached = reachable(source(scope, form, interfaces), context)
+    things = [thing for thing in reached if thing.element == element]
+    costs = [affected(cost, effect)
+             for thing, effect in satisfactions(
+                 things, category, Lifetime.REQUEST, layers, context)
+             for cost in reached[thing]]
+    return min(costs) if costs else None
+
+
 def fewest(scope, form, leaf, bound, shape, category, position, entry,
            limits=frozenset(), selection=Selection.PLAIN,
            interfaces=InterfaceSet.DEFAULT, container=None):

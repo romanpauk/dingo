@@ -20,7 +20,7 @@ struct unit_{{ loop.index0 }} {
       check_probed<registration, I{{ index }}{% for request in requests %}, {{ cpp.request(request) }}{% endfor %}>("{{ u.published_prefix(interface) }}");
 {% endfor %}
 {% for request in u.requests() %}
-      publication<model, I{{ request.index }}, {{ cpp.request(request) }}>("{{ u.prefix(request) }}", "{{ request.name }}");
+      publication<model, I{{ request.index }}, {{ cpp.request(request) }}, {{ cpp.LEAF[u.leaf.value] }}>("{{ u.prefix(request) }}", "{{ request.name }}");
 {% endfor %}
     } else {
       record("{{ u.prefix(none) }}", "not_registrable", nullptr);

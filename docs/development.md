@@ -48,8 +48,13 @@ Run a quality target with `cmake --build build -t <target>`.
   report and is not part of `check`. See
   [Complexity Report](#complexity-report).
 - `conversion-check`: checks what the conversion layer of every registration
-  publishes against the [Specification](specification.md#conversion-check), in
-  about a minute; it is part of `check` with GCC and clang.
+  publishes, and the copies and the moves of its conversions, against the
+  [Specification](specification.md#conversion-check), in about three minutes; it
+  is part of `check` with GCC and clang.
+- `storage-check`, `resolution-check`: check the copies and the moves of the
+  storage of every registration and of passing a leaf on in every position
+  against the [Specification](specification.md#model-probe), in about a minute
+  each; they are part of `check` with GCC and clang.
 - `model-check-small`, `model-check-medium`, `model-check-large`: run both model
   probes of the [Specification](specification.md), on a cover of their
   dimensions: small every pair of their values, in about eight minutes; medium

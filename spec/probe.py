@@ -46,12 +46,31 @@ import sys
 # The root, which the specification is a package of.
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
+from spec import semantics  # noqa: E402
 from spec.generator import driver, report  # noqa: E402
 from spec.generator.registrations import (  # noqa: E402
-    apply_semantics, covering, probe_registration, registrations)
+    Registration, apply_semantics, covering, probe_registration,
+    registrations)
 from spec.generator.survey import survey  # noqa: E402
 from spec.vocabulary import (Category, Container,  # noqa: E402
-                             Position, Shape)
+                             InterfaceSet, Leaf, Position, Selection, Shape,
+                             StoredForm)
+
+# The layers a probe checks alone, by the registrations and the probes of
+# them it makes: what every registration stores, requested as it is, which
+# only the storage copies or moves; and the leaf of a plain registration,
+# which only passing it on in its position does. A factory leaf is copied
+# and moved as a copyable one. As in a cover, only the registrations the
+# library is to accept are probed.
+LAYERS = {
+    "storage": (lambda unit: unit.selection is Selection.PLAIN,
+                Registration.stores),
+    "resolution": (lambda unit: (unit.form is StoredForm.PLAIN and
+                                 unit.interfaces_declared is
+                                 InterfaceSet.DEFAULT and
+                                 unit.leaf is not Leaf.FACTORY),
+                   Registration.passes),
+}
 
 DIMENSIONS = ("container", "scope", "form", "leaf", "interfaces", "selection",
               "operation", "interface", "request")
@@ -118,6 +137,11 @@ def main():
         help="probe every registration, or the registrations that hold every "
         "combination of values of two or three of scope, stored form, leaf, "
         "interfaces and selection, in both containers")
+    parser.add_argument(
+        "--layer", choices=sorted(LAYERS),
+        help="probe only the copies and the moves of a layer: what every "
+        "registration stores, requested as it is, or the leaf of a plain "
+        "registration, in every position")
     options = parser.parse_args()
     options.work.mkdir(parents=True, exist_ok=True)
     flags = (shlex.split(options.flags) +
@@ -130,6 +154,11 @@ def main():
     if options.cover != "all":
         covered = covering({"pairs": 2, "triples": 3}[options.cover])
         units = [unit for unit in units if unit.dimensions in covered]
+    selected = None
+    if options.layer:
+        layered, selected = LAYERS[options.layer]
+        units = [unit for unit in units if layered(unit) and
+                 semantics.registrable(unit.container, *unit.dimensions[:4])]
     mismatches = [f"{unit.survey_key} binds other interfaces than "
                   f"{[bound.name for bound in unit.interfaces()]}"
                   for unit in survey(options.compiler, flags, options.work,
@@ -145,7 +174,8 @@ def main():
     with concurrent.futures.ThreadPoolExecutor(options.jobs) as executor:
         for outcomes in executor.map(
                 lambda task: probe_registration(options.compiler, flags,
-                                                options.work, *task), tasks):
+                                                options.work, *task,
+                                                selected), tasks):
             cells += outcomes
     cells = report.write(options.output, apply_semantics(cells, units))
     write_report(options.output.with_suffix(".md"), cells, mismatches)

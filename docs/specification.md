@@ -110,6 +110,17 @@ reports and does not fail on yet. Each program also checks every request its
 registration publishes: one that selects another binding is unreachable, and one
 that no probe makes is unprobed.
 
+The copies and the moves of a resolution are those of its layers, each checked
+alone, of every registration the library accepts: the storage, the conversion
+and passing the result on. `probe.py --layer storage` requests what every
+registration stores as it is, by reference from a scope that keeps it and as an
+rvalue reference a call takes from one that makes it, which only the storage
+copies or moves: it needs none. The [Conversion Check](#conversion-check) counts
+the conversion of every published request. `probe.py --layer resolution`
+requests the leaf of a plain registration, which no conversion copies or moves,
+in every category, position and entry point, of every scope, leaf, selection and
+container.
+
 A cell a limitation keeps from resolving is recorded as limited, with the
 limitations. The probe fails when a request does not compile without a
 `static_assert`, crashes or fails these checks, when a published request is
@@ -149,6 +160,13 @@ unprobed or unreachable, or a cell is not what the specification expects. Of a
 storage that cannot be made, and of the other alternative of an alternative
 type, which a probe's never holds, it compares nothing. What resolving a request
 does is the [Model Probe](#model-probe)'s.
+
+The check also applies the conversion of every published request alone to a new
+object of what it converts, and makes the request of what it returns as a
+binding makes it. It counts the copies and the moves of the leaf that makes,
+which the specification says are the fewest of the derivations that reach what
+satisfies the request and of satisfying it, before a resolution hands it over;
+more are excess.
 
 ## Constructor Detection Probe
 

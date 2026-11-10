@@ -85,8 +85,36 @@ function(configure_quality_targets out_check_targets)
     VERBATIM
   )
   add_custom_target(conversion-check DEPENDS ${conversion_dir}/checked)
+
+  # The layer checks: probe.py --layer probes what the storage of every
+  # registration copies and moves of its leaf, requested as it is stored,
+  # and what passing the leaf of a plain registration on does, in every
+  # position. With the conversion check, which counts what the conversion of
+  # every published request does, they check the copies and the moves of
+  # each layer against the specification in a minute or so each.
+  foreach(layer IN ITEMS storage resolution)
+    set(layer_dir ${PROJECT_BINARY_DIR}/${layer})
+    set(layer_configuration ${layer_dir}/configuration.txt)
+    file(CONFIGURE OUTPUT ${layer_configuration} CONTENT
+      "${CMAKE_CXX_COMPILER} ${CMAKE_CXX_COMPILER_VERSION}\n${model_flags}\n")
+    add_custom_command(
+      OUTPUT ${layer_dir}/checked
+      COMMENT "Checking the copies and the moves of the ${layer}"
+      COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/spec/probe.py
+        ${layer_dir}/probe.json --work ${layer_dir}/probe
+        --compiler ${CMAKE_CXX_COMPILER} --layer ${layer}
+        "--flags=${model_flags}"
+      COMMAND ${CMAKE_COMMAND} -E touch ${layer_dir}/checked
+      DEPENDS ${model_inputs} ${layer_configuration}
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+      USES_TERMINAL
+      VERBATIM
+    )
+    add_custom_target(${layer}-check DEPENDS ${layer_dir}/checked)
+  endforeach()
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    list(APPEND check_targets conversion-check model-check-small)
+    list(APPEND check_targets conversion-check storage-check resolution-check
+      model-check-small)
   endif()
 
   # A report, not a check: it ranks the headers and never fails.

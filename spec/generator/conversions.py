@@ -72,6 +72,19 @@ class Unit(Registration):
                 resolves(Position.DIRECT, Entry.RESOLVE))
 
 
+    def converted(self, request):
+        """The fewest copies and moves of the leaf the conversion of a
+        request makes, as the specification says; None when it says nothing
+        of them, as of the other alternative, which holds no leaf."""
+        bound = request.interface.bound
+        if bound.element == "other":
+            return None
+        return semantics.converted(self.scope, self.form, self.leaf, bound,
+                                   request.shape, request.category,
+                                   semantics.LIMITATIONS,
+                                   self.interfaces_declared)
+
+
 def units():
     """Every registration of the runtime container the library accepts."""
     return [Unit(Container.RUNTIME, scope, form, leaf, interfaces,
@@ -114,7 +127,9 @@ def apply_semantics(cells, units):
     resolves for the caller, are unexpected. A published request has to be
     resolved somewhere; one the caller resolves, as a value or through a scope
     that keeps it, has to be published: what a request resolves into the
-    context of a call is placed there, not published."""
+    context of a call is placed there, not published. The conversion of a
+    published request that copies or moves the leaf more often than the
+    specification needs to is excess."""
     requests = {cell: (unit, request) for unit in units
                 for cell, request in unit.cells().items()}
     for cell in cells:
@@ -136,4 +151,19 @@ def apply_semantics(cells, units):
             cell.update(outcome=Outcome.UNEXPECTED.value,
                         error=f"{outcome.value}, which the specification "
                         "resolves for the caller")
+        elif outcome is Outcome.PUBLISHED and "copies" in cell:
+            excess(cell, unit.converted(request))
     return cells
+
+
+def excess(cell, fewest):
+    """Records a published cell whose conversion copies or moves the leaf
+    more often than the specification needs to as excess."""
+    if fewest is None:
+        return
+    copies, moves = fewest
+    if cell["copies"] > copies or cell["moves"] > moves:
+        cell.update(outcome=Outcome.EXCESS.value,
+                    error=f"copies and moves the leaf {cell['copies']} and "
+                    f"{cell['moves']} times, where it needs {copies} and "
+                    f"{moves}")
