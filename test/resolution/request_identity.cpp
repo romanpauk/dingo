@@ -17,6 +17,8 @@
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 
+#include "support/containers.h"
+
 #include <gtest/gtest.h>
 
 #include <cstddef>
@@ -35,26 +37,6 @@ struct value {
   int marker() const { return 3; }
 
   std::string name;
-};
-
-struct runtime {
-  template <typename... Args, typename Container>
-  static void add(Container &container, type_registration<Args...> *) {
-    container.template register_type<Args...>();
-  }
-
-  template <typename... Binds, typename F> static void with(F &&function) {
-    runtime_container<> container;
-    (add(container, static_cast<Binds *>(nullptr)), ...);
-    function(container);
-  }
-};
-
-struct fixed {
-  template <typename... Binds, typename F> static void with(F &&function) {
-    static_container<bindings<Binds...>> container;
-    function(container);
-  }
 };
 
 struct padding {
@@ -110,7 +92,6 @@ struct keyed_consumer {
 
 template <typename T> struct request_identity_test : testing::Test {};
 
-using container_kinds = testing::Types<runtime, fixed>;
 TYPED_TEST_SUITE(request_identity_test, container_kinds, );
 
 // Every reference and pointer request of a kept instance, whatever its cv

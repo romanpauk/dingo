@@ -9,6 +9,8 @@
 #include <dingo/static_container.h>
 #include <dingo/storage/shared_cyclical.h>
 
+#include "support/containers.h"
+
 #include <gtest/gtest.h>
 
 #include <memory>
@@ -84,28 +86,6 @@ using cycle_binding =
                 dingo::storage<typename Storage::template type<Node>>,
                 dingo::dependencies<typename Node::edge_type::type>>;
 
-struct runtime_kind {
-  template <typename... Args, typename Container>
-  static void add(Container &container, dingo::bind<Args...> *) {
-    container.template register_type<Args...>();
-  }
-
-  template <typename... Bindings, typename Function>
-  static void with(Function &&function) {
-    dingo::runtime_container<> container;
-    (add(container, static_cast<Bindings *>(nullptr)), ...);
-    function(container);
-  }
-};
-
-struct static_kind {
-  template <typename... Bindings, typename Function>
-  static void with(Function &&function) {
-    dingo::static_container<dingo::bindings<Bindings...>> container;
-    function(container);
-  }
-};
-
 // Every request a node's storage publishes reaches the one instance.
 template <typename Storage, typename Node, typename Container>
 void check_node(Container &container, Node &node) {
@@ -164,7 +144,6 @@ void check_cycles(edges<AToB...>, BToAEdges b_to_a) {
 
 template <typename Kind> class cycle_test : public ::testing::Test {};
 
-using container_kinds = ::testing::Types<runtime_kind, static_kind>;
 TYPED_TEST_SUITE(cycle_test, container_kinds, );
 
 // A node stored by value publishes only a reference and a pointer, so only

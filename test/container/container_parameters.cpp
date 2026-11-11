@@ -12,6 +12,8 @@
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 
+#include "support/containers.h"
+
 #include <gtest/gtest.h>
 
 #include <cstddef>
@@ -145,31 +147,8 @@ struct counted {
   inline static std::size_t destroyed = 0;
 };
 
-struct runtime_kind {
-  template <typename... Args, typename Container>
-  static void add(Container &container, dingo::bind<Args...> *) {
-    container.template register_type<Args...>();
-  }
-
-  template <typename... Bindings, typename Function>
-  static void with(Function &&function) {
-    dingo::runtime_container<> container;
-    (add(container, static_cast<Bindings *>(nullptr)), ...);
-    function(container);
-  }
-};
-
-struct static_kind {
-  template <typename... Bindings, typename Function>
-  static void with(Function &&function) {
-    dingo::static_container<dingo::bindings<Bindings...>> container;
-    function(container);
-  }
-};
-
 template <typename Kind> class lifetime_count_test : public ::testing::Test {};
 
-using container_kinds = ::testing::Types<runtime_kind, static_kind>;
 TYPED_TEST_SUITE(lifetime_count_test, container_kinds, );
 
 struct count_bounds {

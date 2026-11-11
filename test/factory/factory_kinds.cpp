@@ -14,6 +14,8 @@
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 
+#include "support/containers.h"
+
 #include <gtest/gtest.h>
 
 #include <cstddef>
@@ -34,26 +36,6 @@ struct marked {
 };
 
 using value_binding = dingo::bind<scope<shared>, storage<marked>>;
-
-template <typename Container, typename... Args>
-void add(Container &container, type_registration<Args...> *) {
-  container.template register_type<Args...>();
-}
-
-struct runtime {
-  template <typename... Binds, typename F> static void with(F &&function) {
-    runtime_container<> container;
-    (add(container, static_cast<Binds *>(nullptr)), ...);
-    function(container);
-  }
-};
-
-struct fixed {
-  template <typename... Binds, typename F> static void with(F &&function) {
-    static_container<bindings<Binds...>> container;
-    function(container);
-  }
-};
 
 struct made_by_function {
   static made_by_function create(marked &dependency) {
@@ -103,7 +85,6 @@ struct overloaded_factory {
 
 template <typename T> struct factory_kinds_test : testing::Test {};
 
-using container_kinds = testing::Types<runtime, fixed>;
 TYPED_TEST_SUITE(factory_kinds_test, container_kinds, );
 
 TYPED_TEST(factory_kinds_test, function_factory_resolves_its_parameters) {

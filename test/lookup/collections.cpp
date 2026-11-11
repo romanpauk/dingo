@@ -8,6 +8,8 @@
 #include <dingo/container.h>
 #include <dingo/storage/shared.h>
 
+#include "support/containers.h"
+
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -60,28 +62,11 @@ template <typename Range> std::vector<int> sorted_ids(const Range &elements) {
   return ids;
 }
 
-// The arguments of one registration, given to a static container as a
-// dingo::bind and to a runtime container as register_type.
-template <typename... Args> struct registration {};
-
 template <int Id, typename... Key>
 using shared_element =
-    registration<dingo::scope<dingo::shared>,
-                 dingo::storage<std::shared_ptr<element<Id>>>,
-                 dingo::interfaces<element_interface>, Key...>;
-
-template <typename Registration> struct static_binding;
-template <typename... Args> struct static_binding<registration<Args...>> {
-  using type = dingo::bind<Args...>;
-};
-
-struct static_mode {
-  template <typename... Registrations> struct with {
-    dingo::static_container<
-        dingo::bindings<typename static_binding<Registrations>::type...>>
-        container;
-  };
-};
+    dingo::bind<dingo::scope<dingo::shared>,
+                dingo::storage<std::shared_ptr<element<Id>>>,
+                dingo::interfaces<element_interface>, Key...>;
 
 // A runtime container takes several unkeyed or key_a bindings of an interface
 // only when its lookups say so.
@@ -91,26 +76,18 @@ struct collection_traits : dingo::runtime_container_traits {
                      dingo::typed<key_a, element_interface, dingo::many>>;
 };
 
-struct runtime_mode {
-  template <typename... Registrations> struct with {
-    with() { (add(Registrations{}), ...); }
-
-    dingo::runtime_container<collection_traits> container;
-
-  private:
-    template <typename... Args> void add(registration<Args...>) {
-      container.template register_type<Args...>();
-    }
-  };
+// A container holding Bindings, made by Kind.
+template <typename Kind, typename... Bindings> struct with_bindings {
+  typename Kind::template container<Bindings...> container;
 };
 
 template <typename Mode> struct collections_test : testing::Test {};
 
-using modes = testing::Types<static_mode, runtime_mode>;
+using modes = testing::Types<static_kind, runtime_kind<collection_traits>>;
 TYPED_TEST_SUITE(collections_test, modes, );
 
 TYPED_TEST(collections_test, resolves_every_unkeyed_binding_of_an_interface) {
-  typename TypeParam::template with<shared_element<0>, shared_element<1>> setup;
+  with_bindings<TypeParam, shared_element<0>, shared_element<1>> setup;
 
   auto elements =
       setup.container
@@ -120,9 +97,9 @@ TYPED_TEST(collections_test, resolves_every_unkeyed_binding_of_an_interface) {
 }
 
 TYPED_TEST(collections_test, resolves_every_binding_of_a_typed_key) {
-  typename TypeParam::template with<shared_element<0, dingo::key_type<key_a>>,
-                                    shared_element<1, dingo::key_type<key_a>>,
-                                    shared_element<2, dingo::key_type<key_b>>>
+  with_bindings<TypeParam, shared_element<0, dingo::key_type<key_a>>,
+                shared_element<1, dingo::key_type<key_a>>,
+                shared_element<2, dingo::key_type<key_b>>>
       setup;
 
   auto elements =
@@ -134,7 +111,7 @@ TYPED_TEST(collections_test, resolves_every_binding_of_a_typed_key) {
 }
 
 TYPED_TEST(collections_test, constructs_a_collection_of_every_binding) {
-  typename TypeParam::template with<shared_element<0>, shared_element<1>> setup;
+  with_bindings<TypeParam, shared_element<0>, shared_element<1>> setup;
 
   auto elements = setup.container.template construct_collection<
       std::vector<std::shared_ptr<element_interface>>>();
@@ -144,7 +121,7 @@ TYPED_TEST(collections_test, constructs_a_collection_of_every_binding) {
 
 TYPED_TEST(collections_test,
            constructs_a_collection_through_an_insert_callable) {
-  typename TypeParam::template with<shared_element<0>, shared_element<1>> setup;
+  with_bindings<TypeParam, shared_element<0>, shared_element<1>> setup;
 
   auto elements = setup.container.template construct_collection<
       std::map<int, std::shared_ptr<element_interface>>>(
@@ -158,8 +135,8 @@ TYPED_TEST(collections_test,
 }
 
 TYPED_TEST(collections_test, typed_keys_select_bindings_of_one_interface) {
-  typename TypeParam::template with<shared_element<0, dingo::key_type<key_a>>,
-                                    shared_element<1, dingo::key_type<key_b>>>
+  with_bindings<TypeParam, shared_element<0, dingo::key_type<key_a>>,
+                shared_element<1, dingo::key_type<key_b>>>
       setup;
 
   auto &first =
@@ -174,11 +151,12 @@ TYPED_TEST(collections_test, typed_keys_select_bindings_of_one_interface) {
 }
 
 TYPED_TEST(collections_test, keyed_binding_resolves_its_dependencies_unkeyed) {
-  typename TypeParam::template with<
-      registration<dingo::scope<dingo::shared>, dingo::storage<value_type>>,
-      registration<dingo::scope<dingo::shared>,
-                   dingo::storage<std::shared_ptr<keyed_implementation>>,
-                   dingo::interfaces<keyed_interface>, dingo::key_type<key_a>>>
+  with_bindings<
+      TypeParam,
+      dingo::bind<dingo::scope<dingo::shared>, dingo::storage<value_type>>,
+      dingo::bind<dingo::scope<dingo::shared>,
+                  dingo::storage<std::shared_ptr<keyed_implementation>>,
+                  dingo::interfaces<keyed_interface>, dingo::key_type<key_a>>>
       setup;
 
   auto &instance = setup.container.template resolve<keyed_interface &>(

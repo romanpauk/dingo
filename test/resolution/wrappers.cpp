@@ -18,6 +18,8 @@
 
 #include "support/custom_wrappers.h"
 
+#include "support/containers.h"
+
 #include <gtest/gtest.h>
 
 #include <array>
@@ -175,28 +177,18 @@ using shared_custom_optional = std::shared_ptr<test_optional<regular>>;
 using shared_unique_move_only = std::shared_ptr<std::unique_ptr<move_only>>;
 using shared_optional_move_only = std::shared_ptr<std::optional<move_only>>;
 
-// Containers holding one registration, made either way.
-struct runtime_mode {
-  template <typename... Parts> struct with {
-    with() { container.template register_type<Parts...>(); }
-    runtime_container<> container;
-  };
-};
-
-struct static_mode {
-  template <typename... Parts> struct with {
-    static_container<bindings<bind<Parts...>>> container;
-  };
+// A container holding one registration of Parts, made by Kind.
+template <typename Kind, typename... Parts> struct with_binding {
+  typename Kind::template container<bind<Parts...>> container;
 };
 
 // A registration made by make<X>, optionally bound as X itself.
 template <typename Mode, typename Scope, typename X, bool Bound = false>
 using made_by_factory = std::conditional_t<
     Bound,
-    typename Mode::template with<scope<Scope>, storage<X>, interfaces<X>,
-                                 factory<function<&make<X>>>>,
-    typename Mode::template with<scope<Scope>, storage<X>,
-                                 factory<function<&make<X>>>>>;
+    with_binding<Mode, scope<Scope>, storage<X>, interfaces<X>,
+                 factory<function<&make<X>>>>,
+    with_binding<Mode, scope<Scope>, storage<X>, factory<function<&make<X>>>>>;
 
 // Every cv-qualified reference to a stable composition, resolved or injected,
 // is the stored object itself.
@@ -249,8 +241,7 @@ template <typename Mode, typename X> void expect_pointer_composition() {
 }
 
 template <typename Mode> struct wrappers_test : ::testing::Test {};
-using modes = ::testing::Types<runtime_mode, static_mode>;
-TYPED_TEST_SUITE(wrappers_test, modes, );
+TYPED_TEST_SUITE(wrappers_test, container_kinds, );
 
 } // namespace
 
@@ -374,13 +365,13 @@ TYPED_TEST(wrappers_test, shared_handle_of_value_wrapper_copies_its_leaf) {
 }
 
 TEST(wrappers_runtime_test, nested_handle_of_move_only_leaf_refuses_a_copy) {
-  made_by_factory<runtime_mode, shared, shared_unique_move_only> unique;
+  made_by_factory<runtime_kind<>, shared, shared_unique_move_only> unique;
   auto &leaf = unique.container.resolve<move_only &>();
   EXPECT_EQ(unique.container.resolve<move_only *>(), &leaf);
   EXPECT_THROW((void)unique.container.resolve<move_only>(),
                type_not_convertible_exception);
 
-  made_by_factory<runtime_mode, shared, shared_optional_move_only> optional;
+  made_by_factory<runtime_kind<>, shared, shared_optional_move_only> optional;
   EXPECT_THROW((void)optional.container.resolve<move_only>(),
                type_not_convertible_exception);
 }
@@ -427,21 +418,19 @@ test_optional<regular> &expect_custom_optional(Container &container) {
 } // namespace
 
 TYPED_TEST(wrappers_test, custom_shared_handle_shares_its_instance) {
-  typename TypeParam::template with<scope<shared>,
-                                    storage<test_shared<regular>>>
-      fixture;
+  with_binding<TypeParam, scope<shared>, storage<test_shared<regular>>> fixture;
   expect_custom_shared<regular>(fixture.container);
 
-  typename TypeParam::template with<
-      scope<shared>, storage<test_shared<service_impl>>, interfaces<service>>
+  with_binding<TypeParam, scope<shared>, storage<test_shared<service_impl>>,
+               interfaces<service>>
       interface_fixture;
   EXPECT_EQ(
       expect_custom_shared<service>(interface_fixture.container)->marker(), 3);
 }
 
 TYPED_TEST(wrappers_test, custom_unique_handle_converts_to_its_shared_handle) {
-  typename TypeParam::template with<
-      scope<unique>, storage<test_unique<service_impl>>, interfaces<service>>
+  with_binding<TypeParam, scope<unique>, storage<test_unique<service_impl>>,
+               interfaces<service>>
       fixture;
   auto &container = fixture.container;
   auto unique_handle = container.template resolve<test_unique<service>>();
@@ -454,12 +443,10 @@ TYPED_TEST(wrappers_test, custom_unique_handle_converts_to_its_shared_handle) {
 
 TYPED_TEST(wrappers_test, custom_optional_publishes_its_value) {
   using optional_type = test_optional<regular>;
-  typename TypeParam::template with<scope<shared>, storage<optional_type>>
-      fixture;
+  with_binding<TypeParam, scope<shared>, storage<optional_type>> fixture;
   expect_custom_optional(fixture.container);
 
-  typename TypeParam::template with<scope<unique>, storage<optional_type>>
-      unique_fixture;
+  with_binding<TypeParam, scope<unique>, storage<optional_type>> unique_fixture;
   auto value = unique_fixture.container.template resolve<optional_type>();
   ASSERT_NE(value.get(), nullptr);
   EXPECT_EQ(value.get()->marker(), 3);

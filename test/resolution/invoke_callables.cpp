@@ -9,6 +9,8 @@
 #include <dingo/static_container.h>
 #include <dingo/storage/shared.h>
 
+#include "support/containers.h"
+
 #include <gtest/gtest.h>
 
 #include <functional>
@@ -26,21 +28,6 @@ struct value {
 };
 
 using value_binding = dingo::bind<scope<shared>, storage<value>>;
-
-struct runtime {
-  template <typename F> static void with(F &&function) {
-    runtime_container<> container;
-    container.register_type<scope<shared>, storage<value>>();
-    function(container);
-  }
-};
-
-struct fixed {
-  template <typename F> static void with(F &&function) {
-    static_container<bindings<value_binding>> container;
-    function(container);
-  }
-};
 
 int free_function(value &dependency) { return dependency.marker() + 54; }
 
@@ -86,36 +73,35 @@ struct move_only_functor {
 
 template <typename T> struct invoke_callables_test : testing::Test {};
 
-using container_kinds = testing::Types<runtime, fixed>;
 TYPED_TEST_SUITE(invoke_callables_test, container_kinds, );
 
 TYPED_TEST(invoke_callables_test, free_function_pointer) {
-  TypeParam::with([](auto &container) {
+  TypeParam::template with<value_binding>([](auto &container) {
     EXPECT_EQ(container.invoke(free_function), 57);
     EXPECT_EQ(container.invoke(&free_function), 57);
   });
 }
 
 TYPED_TEST(invoke_callables_test, noexcept_function_pointer) {
-  TypeParam::with([](auto &container) {
+  TypeParam::template with<value_binding>([](auto &container) {
     EXPECT_EQ(container.invoke(noexcept_function), 63);
   });
 }
 
 TYPED_TEST(invoke_callables_test, static_member_function_pointer) {
-  TypeParam::with([](auto &container) {
+  TypeParam::template with<value_binding>([](auto &container) {
     EXPECT_EQ(container.invoke(static_member::invoke), 69);
   });
 }
 
 // The object a member function is called on is resolved like a parameter.
 TYPED_TEST(invoke_callables_test, member_function_pointer) {
-  TypeParam::with(
+  TypeParam::template with<value_binding>(
       [](auto &container) { EXPECT_EQ(container.invoke(&value::marker), 3); });
 }
 
 TYPED_TEST(invoke_callables_test, std_function) {
-  TypeParam::with([](auto &container) {
+  TypeParam::template with<value_binding>([](auto &container) {
     EXPECT_EQ(container.invoke(std::function<int(value &)>(
                   [](value &dependency) { return dependency.marker() + 48; })),
               51);
@@ -124,7 +110,7 @@ TYPED_TEST(invoke_callables_test, std_function) {
 
 TYPED_TEST(invoke_callables_test, move_only_function) {
 #if defined(__cpp_lib_move_only_function)
-  TypeParam::with([](auto &container) {
+  TypeParam::template with<value_binding>([](auto &container) {
     EXPECT_EQ(container.invoke(std::move_only_function<int(value &)>(
                   [](value &dependency) { return dependency.marker() + 114; })),
               117);
@@ -135,13 +121,13 @@ TYPED_TEST(invoke_callables_test, move_only_function) {
 }
 
 TYPED_TEST(invoke_callables_test, move_only_functor) {
-  TypeParam::with([](auto &container) {
+  TypeParam::template with<value_binding>([](auto &container) {
     EXPECT_EQ(container.invoke(move_only_functor{}), 93);
   });
 }
 
 TYPED_TEST(invoke_callables_test, mutable_lambda) {
-  TypeParam::with([](auto &container) {
+  TypeParam::template with<value_binding>([](auto &container) {
     EXPECT_EQ(container.invoke([offset = 96](value &dependency) mutable {
       return dependency.marker() + offset++;
     }),
@@ -150,34 +136,34 @@ TYPED_TEST(invoke_callables_test, mutable_lambda) {
 }
 
 TYPED_TEST(invoke_callables_test, noexcept_functor) {
-  TypeParam::with([](auto &container) {
+  TypeParam::template with<value_binding>([](auto &container) {
     EXPECT_EQ(container.invoke(noexcept_functor{}), 87);
   });
 }
 
 TYPED_TEST(invoke_callables_test, lvalue_ref_qualified_functor) {
-  TypeParam::with([](auto &container) {
+  TypeParam::template with<value_binding>([](auto &container) {
     lvalue_qualified invoker;
     EXPECT_EQ(container.invoke(invoker), 75);
   });
 }
 
 TYPED_TEST(invoke_callables_test, rvalue_ref_qualified_functor) {
-  TypeParam::with([](auto &container) {
+  TypeParam::template with<value_binding>([](auto &container) {
     EXPECT_EQ(container.invoke(rvalue_qualified{}), 81);
   });
 }
 
 // A signature given to invoke picks one overload of the call operator.
 TYPED_TEST(invoke_callables_test, explicit_signature_selects_overload) {
-  TypeParam::with([](auto &container) {
+  TypeParam::template with<value_binding>([](auto &container) {
     EXPECT_EQ(container.template invoke<int(value &)>(overloaded{}), 45);
   });
 }
 
 // A signature given to invoke instantiates a generic lambda.
 TYPED_TEST(invoke_callables_test, explicit_signature_of_generic_lambda) {
-  TypeParam::with([](auto &container) {
+  TypeParam::template with<value_binding>([](auto &container) {
     EXPECT_EQ(container.template invoke<int(value &)>(
                   [](auto &dependency) { return dependency.marker() + 102; }),
               105);
@@ -186,7 +172,7 @@ TYPED_TEST(invoke_callables_test, explicit_signature_of_generic_lambda) {
 
 // Every parameter is resolved, each from its own request.
 TYPED_TEST(invoke_callables_test, multi_argument_callable) {
-  TypeParam::with([](auto &container) {
+  TypeParam::template with<value_binding>([](auto &container) {
     EXPECT_EQ(container.template invoke<int(value &, const value &)>(
                   [](value &first, const value &second) {
                     EXPECT_EQ(&first, &second);
