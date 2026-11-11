@@ -1,25 +1,25 @@
 # Architecture
 
-This section documents Dingo's internal model: how registrations are reduced to
-factories, how requests are matched to stored types, and where custom wrappers
+This section documents the internal model of Dingo. It shows how a registration
+becomes a binding, how a request selects a binding, and where custom wrappers
 and conversions plug in.
 
-Read these pages in order for the full picture:
+Read these pages in this order:
 
-- [Containers](containers.md): the public entry points, include layout, and how
-  combined, runtime-only, and static-only containers relate.
-- [Overview](overview.md): the main data flow and the key owners.
+- [Containers](containers.md): the public entry points, the include layout, and
+  the runtime and static containers.
+- [Overview](overview.md): the main data flow and the main owners.
 - [Registration And Resolution](registration-and-resolution.md): runtime and
   compile-time registration, and the shared path to `resolve<T>()`.
 - [Handles, Leaf Types, And Lookup](handles-leaf-types-and-lookup.md): wrapper
   algebra, `leaf_type_t`, `rebind_leaf_t`, `lookup_type_t`, and
   `exact_lookup<T>`.
 - [Extending Dingo](extending-dingo.md): which trait to specialize for a new
-  wrapper, storage exposure policy, or conversion.
-- [Conversion Model](conversion-model.md): how Dingo chooses value, reference,
+  wrapper, storage scope, or conversion.
+- [Conversion Model](conversion-model.md): how Dingo selects value, reference,
   pointer, and wrapper conversions at resolution time.
 
-The public API is centered on three container entry points:
+The public API has three container headers:
 
 ```text
 include/dingo/runtime_container.h  -> runtime_container, also named container
@@ -27,23 +27,22 @@ include/dingo/static_container.h   -> static_container
 include/dingo/container.h          -> both
 ```
 
-Below those headers, the architecture is centered on one resolution flow fed by
-two registration modes:
+Two registration modes feed one resolution flow:
 
 ```text
-register_type / bindings -> type_registration -> storage/factory record
-resolve<T> -> lookup type -> factory traits -> resolver -> conversion -> T
+register_type / bindings -> type_registration -> binding_model -> binding cell
+resolve<T> -> request_type -> binding selection -> binding activation -> conversion -> T
 ```
 
-The shared binding and resolution kernel for that flow lives under
+The shared binding and resolution code for this flow is in
 `include/dingo/binding/`.
 
-Runtime and static implementation code sits under:
+The code of each container is in its own directory:
 
-- `include/dingo/runtime/` for runtime registry internals
-- `include/dingo/static/` for static registry and graph internals
+- `include/dingo/runtime/`: the runtime registry
+- `include/dingo/static/`: the static registry and the static graph
 
-The main owners for the current architecture are:
+The main owners are:
 
 - [include/dingo/container.h](../../include/dingo/container.h)
 - [include/dingo/runtime_container.h](../../include/dingo/runtime_container.h)

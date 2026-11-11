@@ -2,25 +2,24 @@
 
 Container images for local development and CI.
 
-`Containerfile` is parameterized: each build installs exactly one selected
-toolchain plus common development tools. The recipe accepts `gcc-*`, `clang-*`,
-and `msvc` / `msvc-wine` values. The `BASE_IMAGE` build argument selects the
-Ubuntu release and defaults to `ubuntu:26.04`; a toolchain that Ubuntu 26.04
+Each build of `Containerfile` installs one toolchain and the common development
+tools. The `TOOLCHAIN` build argument selects the toolchain. It accepts `gcc-*`,
+`clang-*`, `msvc` and `msvc-wine`. The `BASE_IMAGE` build argument selects the
+Ubuntu release. The default is `ubuntu:26.04`. A toolchain that Ubuntu 26.04
 does not package is built on a newer release.
 
-Linux image-backed CI currently builds and exercises:
+Linux CI builds and tests with these images:
 
-- `dingo-toolchains:ubuntu-26.04-gcc-15`
-- `dingo-toolchains:ubuntu-26.04-clang-20`
-- `dingo-toolchains:ubuntu-26.10-gcc-16`, with `BASE_IMAGE=ubuntu:26.10`; C++23
-  with sanitizers and C++26 without them, as GCC 16 reports false
-  uninitialized-variable warnings for C++26 with sanitizers
+- `dingo-toolchains:ubuntu-26.04-gcc-15`: C++23 and C++26, with sanitizers.
+- `dingo-toolchains:ubuntu-26.04-clang-20`: C++23 and C++26, with sanitizers.
+- `dingo-toolchains:ubuntu-26.10-gcc-16`, built with `BASE_IMAGE=ubuntu:26.10`:
+  C++23 with sanitizers, C++26 without sanitizers. With sanitizers in C++26
+  mode, GCC 16 reports false uninitialized-variable warnings.
 
-For MSVC, the commands below build and run a local example tag:
+For MSVC, the commands below build and run the local tag
+`dingo-toolchains:ubuntu-26.04-msvc-wine`.
 
-- `dingo-toolchains:ubuntu-26.04-msvc-wine`
-
-Every image includes the shared build/runtime baseline:
+Every image contains:
 
 - `cmake`
 - `ninja`
@@ -29,9 +28,9 @@ Every image includes the shared build/runtime baseline:
 - `python3`
 - `uv`
 
-Python development tooling for this repository is resolved from the checked-in
-`pyproject.toml` / `uv.lock`, so Markdown verification and other helper scripts
-should be run through `uv run ...` instead of a globally installed `mdformat`.
+The checked-in `pyproject.toml` / `uv.lock` define the Python development tools.
+Run Markdown verification and the other helper scripts with `uv run ...`. Do not
+use a globally installed `mdformat`.
 
 ## GCC image
 
@@ -45,7 +44,7 @@ podman build \
   docker/ubuntu25-toolchains
 ```
 
-Build and test Dingo in one shot:
+Build and test Dingo in one command:
 
 ```bash
 podman run --rm \
@@ -84,7 +83,7 @@ podman build \
   docker/ubuntu25-toolchains
 ```
 
-Build and test Dingo in one shot:
+Build and test Dingo in one command:
 
 ```bash
 podman run --rm \
@@ -102,9 +101,9 @@ podman run --rm \
 
 ## MSVC via local msvc-wine image
 
-The MSVC path stays separate from the Linux images above. It uses the
-`msvc-wine` Containerfile mode, and the commands below build and run the local
-example tag `dingo-toolchains:ubuntu-26.04-msvc-wine`.
+The MSVC image is separate from the Linux images above. It uses
+`TOOLCHAIN=msvc-wine`. The commands below build and run the local tag
+`dingo-toolchains:ubuntu-26.04-msvc-wine`.
 
 Build the image:
 
@@ -116,7 +115,7 @@ podman build \
   docker/ubuntu25-toolchains
 ```
 
-Build and test Dingo in one shot:
+Build and test Dingo in one command:
 
 ```bash
 podman run --rm \
@@ -134,7 +133,7 @@ podman run --rm \
 
 ## GitHub Actions example
 
-If the selected image is already available on the runner:
+This example requires the image to be available on the runner:
 
 ```yaml
 jobs:
@@ -143,7 +142,7 @@ jobs:
     container:
       image: dingo-toolchains:ubuntu-26.04-gcc-15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.0
       - run: cmake -S . -B build -G Ninja \
           -DCMAKE_C_COMPILER=gcc-15 \
           -DCMAKE_CXX_COMPILER=g++-15 \

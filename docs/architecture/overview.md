@@ -1,6 +1,6 @@
 # Overview
 
-Dingo is easiest to understand when separated into four concerns:
+Dingo has four concerns:
 
 - registration deduction
 - lookup shape normalization
@@ -9,10 +9,10 @@ Dingo is easiest to understand when separated into four concerns:
 
 ## Header Layers
 
-The headers under `include/dingo/` form a hierarchy. A header may include
-headers of the layers below its own and of its own directory; directories that
-share a layer do not include each other. The `layers-check` target enforces
-this, and the layer list lives in [tools/layers.py](../../tools/layers.py).
+The headers under `include/dingo/` form a hierarchy. A header can include
+headers of lower layers and headers of its own directory. Directories in the
+same layer do not include each other. The `layers-check` target enforces this
+rule. The layer list is in [tools/layers.py](../../tools/layers.py).
 
 From the bottom:
 
@@ -26,9 +26,9 @@ From the bottom:
 4. `context/`: resolution context base and recursion guard
 5. `storage/`: storage tags, scope policies, storage exposure traits
 6. `registration/`: registration options, requirements
-7. `binding/`: the binding model, its selection and resolution, the algorithm a
-   container resolves a request with, and the requests both containers answer
-8. `runtime/`, `static/`: the runtime and the static container, their
+7. `binding/`: the binding model, binding selection and resolution, the request
+   algorithm of both containers, and the requests both containers answer
+8. `runtime/`, `static/`: the runtime and the static container, with their
    registries, bindings, contexts and traits, and the static graph
 9. `dingo/*.h`: `runtime_container` (also named `container`), `static_container`
 
@@ -44,25 +44,24 @@ The public entry points are:
   the static container, `static_container<bindings<...>>`
 - [include/dingo/container.h](../../include/dingo/container.h): both
 
-`container<>` holds runtime registrations and `static_container<bindings<...>>`
+`container<>` holds runtime registrations. `static_container<bindings<...>>`
 holds compile-time bindings. A container uses one registration mode.
 
-Below the runtime container, the runtime registration path owns:
+The runtime registration path owns:
 
-- runtime binding state (`runtime_binding_state`)
-- stable runtime binding entries that own lookup identities
-- the runtime lookup table used for lookup, collection enumeration, counting,
-  and duplicate checks
-- dynamic type maps for outer per-interface dispatch
-- the resolved-instance cache (`runtime_binding_state::type_cache`)
-- parent lookup for nested containers
+- `runtime_binding_state`: the binding cell, the request cache and the child
+  container of one registration
+- one `runtime_binding` for each exposed interface
+- the lookup index (`lookup_indexes`), which does lookup, collection
+  enumeration, counting, and duplicate checks
+- the parent lookup for nested containers
 - the public registration and resolution entry points
 
-The root container owns one runtime domain for itself and for the internal child
-containers created by runtime bindings. Those child containers retain their own
-lazily allocated lookup state, reached through a dense root-owned scope table,
-while borrowing the root arena. Explicit public parent/child containers remain
-independent owners.
+The root container owns one runtime domain. This domain also serves the internal
+child containers that runtime bindings create. Each child container borrows the
+root arena. A child container has its own lookup state. The child allocates it
+when it registers its first local binding. The root keeps these states in a
+dense scope table. Public parent and child containers are independent owners.
 
 The compile-time binding path owns:
 
@@ -70,14 +69,14 @@ The compile-time binding path owns:
 - static dependency graph validation
 - compile-time binding selection and static resolution state
 
-The container layer coordinates registration and resolution. It does not
-construct objects directly. It stores or selects bindings and asks factories or
-static resolution helpers for values, references, or pointers.
+The container layer coordinates registration and resolution and does not
+construct objects. It stores or selects bindings and asks factories or static
+resolution helpers for values, references, or pointers.
 
 ### Type Registration
 
 [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
-reduces a `register_type<...>()` declaration into a complete policy set:
+reduces a `register_type<...>()` declaration to a complete policy set:
 
 - `scope_type`
 - `storage_type`
@@ -85,88 +84,88 @@ reduces a `register_type<...>()` declaration into a complete policy set:
 - `interface_type`
 - `conversions_type`
 
-That deduction step is the boundary between the public registration syntax and
-the internal binding machinery.
+This deduction is the boundary between the public registration syntax and the
+internal binding code.
 
-For compile-time sources, the public spelling is `bindings<...>`. Those bindings
-are normalized internally through the static registry path under
-[include/dingo/static/registry.h](../../include/dingo/static/registry.h).
+Compile-time sources use `bindings<...>`. The static registry in
+[include/dingo/static/registry.h](../../include/dingo/static/registry.h)
+normalizes them.
 
 ### Factory And Storage
 
-Both containers keep the state of a registration in a binding cell,
-[include/dingo/binding/binding_activation.h](../../include/dingo/binding/binding_activation.h):
-the storage object and what its interfaces keep of the instance, its retention.
-A static container holds one cell per registration inline. A runtime binding
-holds its cell in `runtime_binding_state` from
-[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h),
-together with the child container used to resolve constructor dependencies.
+Both containers keep the state of a registration in a binding cell, defined in
+[include/dingo/binding/binding_activation.h](../../include/dingo/binding/binding_activation.h).
+The cell holds the storage object and its retention: what it keeps of the
+instance for its interfaces. A static container holds one cell per registration
+inline. A runtime binding holds its cell in `runtime_binding_state` from
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h), with
+the child container that resolves constructor dependencies.
 
 The storage classes under [include/dingo/storage/](../../include/dingo/storage)
-own lifetime policy:
+own the lifetime policy:
 
-- `unique`: construct a fresh instance per resolution
-- `shared`: cache a single instance
-- `external`: refer to an existing object
-- `shared_cyclical`: shared storage with cycle support
+- `unique`: constructs a new instance for each resolution
+- `shared`: caches one instance
+- `external`: refers to an existing object
+- `shared_cyclical`: shared storage that supports cycles
 
 ### Resolution And Conversion Path
 
 [include/dingo/binding/binding_activation.h](../../include/dingo/binding/binding_activation.h)
-owns the conversion-facing resolution flow of both containers. It is responsible
-for:
+owns the resolution flow of both containers. A binding activation:
 
-- asking storage to `resolve(...)` its native source shape
-- applying guard and closure scope as the `scope_traits` of the scope say
-- constructing cached conversion objects for shared and external cases
-- rolling back what a failed runtime transaction left in the cell
+- asks the storage to `resolve(...)` its source
+- applies the recursion guard that the `scope_traits` of the scope declare
+- places the source in the resolution context when the request needs it
+- keeps converted objects in the retention of a scope that keeps its instance
+- rolls back what a failed runtime transaction left in the cell
 
-The containers differ only in how they select the resolution of a request: a
-static container selects it at compile time, while a runtime binding matches the
+The containers differ only in how they select the resolution of a request. A
+static container selects it at compile time. A runtime binding matches the
 requested type descriptor at run time.
 
 [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
-contains the last-mile conversion rules from the stored source shape to the
-requested target shape; each rule selects and applies its step.
+defines the last conversion step, from the stored source to the requested
+target. A conversion is a path of operations. Dingo takes the first available
+path.
 
-The shared runtime/static binding and resolution kernel now lives under
+The shared binding and resolution code is in
 [include/dingo/binding/](../../include/dingo/binding):
 
 - `binding_model.h`
 - `binding_selection.h`
 - `binding_resolution.h`
 
-Runtime and static implementation code sits under:
+The code of each container is in:
 
 - [include/dingo/runtime/](../../include/dingo/runtime)
 - [include/dingo/static/](../../include/dingo/static)
 
 ## Resolution Sketch
 
-At a high level, Dingo runs this sequence:
+Dingo runs this sequence:
 
 1. `register_type<...>()` deduces the missing registration policies.
-2. The runtime path creates storage-backed factories for each exposed interface,
-   or the static path normalizes `bindings<...>` into a validated static source.
-3. `resolve<T>()` converts `T` into the internal lookup form.
+2. The runtime path creates one binding for each exposed interface. The static
+   path normalizes `bindings<...>` into a validated static source.
+3. `resolve<T>()` converts `T` into `request_type<T>` and a lookup key.
 4. The container selects the matching runtime or static binding.
-5. The selected source builds an `instance_request` with the lookup type and
-   requested descriptor, then calls the matching factory method for value,
-   lvalue reference, rvalue reference, or pointer resolution.
-6. The factory or static resolution path gets or builds the stored instance
-   using its scope-specific state.
-7. The matched resolution operation converts that materialized source into the
-   requested `T`.
+5. A runtime container passes an `instance_request` to the binding. The request
+   holds the lookup type and the requested type descriptor. The binding matches
+   the descriptor against the requests it publishes. A static container selects
+   the resolution at compile time.
+6. The binding activation gets or builds the stored instance through its
+   storage.
+7. The selected resolution operation converts the source into the requested `T`.
 
 Registration child bindings and static local bindings take precedence over the
-container they extend, for singular and collection requests alike.
+container they extend, for singular and collection requests.
 
-The pieces above are not independent extension systems. They cooperate in one
-pipeline.
+These steps are parts of one pipeline, not independent extension systems.
 
 ## Reading The Code
 
-For the core path in source order, start here:
+To read the core path in source order, start here:
 
 - [include/dingo/container.h](../../include/dingo/container.h)
 - [include/dingo/runtime_container.h](../../include/dingo/runtime_container.h)

@@ -1,12 +1,11 @@
 # Development
 
-This document covers repository development tasks. The library itself remains
-header-only for consumers.
+This document covers repository development tasks. For consumers, the library is
+header-only.
 
 ## Development Build
 
-Development builds enable tests, benchmarks, and runnable examples through
-`DINGO_DEVELOPMENT_MODE=ON`.
+`DINGO_DEVELOPMENT_MODE=ON` enables tests, benchmarks and runnable examples.
 
 ```bash
 cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON
@@ -14,8 +13,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Individual development features can be controlled with the matching CMake
-options, including:
+These CMake options control individual development features:
 
 - `DINGO_TESTING_ENABLED`
 - `DINGO_BENCHMARK_ENABLED`
@@ -24,59 +22,58 @@ options, including:
 
 ## Quality Targets
 
-Run a quality target with `cmake --build build -t <target>`.
+Run a quality target with `cmake --build build -t <target>`. The locked `uv`
+environment provides the development tools.
 
 - `format`: runs `sources-format` and `markdown-format`.
-- `sources-format`: updates C++ files under `benchmark`, `examples`, `include`,
-  and `test`.
+- `sources-format`: formats the C++ files under `benchmark`, `examples`,
+  `include` and `test`.
 - `sources-format-check`: verifies the same C++ files.
-- `markdown-format`: updates Markdown files under the repository root, `docs`,
-  and `docker`.
+- `markdown-format`: formats `README.md` and the Markdown files under `docs` and
+  `docker`.
 - `markdown-format-check`: verifies the same Markdown files.
 - `format-check`: runs `sources-format-check` and `markdown-format-check`.
-- `layers-check`: verifies that headers include only headers of lower layers or
-  of their own directory, as described in
+- `layers-check`: verifies that a header includes only headers of lower layers
+  or of its own directory. See
   [Header Layers](architecture/overview.md#header-layers).
-- `includes-compile`: compiles one generated translation unit per standalone
-  public header.
-- `includes-tidy`: runs clang-tidy on those generated translation units on
-  non-Windows builds.
-- `includes-check`: checks includes on those generated translation units on
-  non-Windows builds.
-- `check`: runs all verification targets available on the platform.
-- `complexity-report`: prints where the complexity of the headers is; it is a
-  report and is not part of `check`. See
-  [Complexity Report](#complexity-report).
-- `conversion-check`: checks what the conversion layer of every registration
+- `includes-compile`: compiles one generated translation unit for each public
+  header.
+- `includes-tidy`: runs clang-tidy on those translation units.
+- `includes-check`: checks the includes of those translation units.
+- `check`: runs all verification targets that are available on the platform.
+- `complexity-report`: prints where the complexity of the headers is. It is a
+  report, not part of `check`. See [Complexity Report](#complexity-report).
+- `conversion-check`: checks what the conversion layer of each registration
   publishes, and the copies and the moves of its conversions, against the
-  [Specification](specification.md#conversion-check), in about three minutes; it
-  is part of `check` with GCC and clang.
-- `storage-check`, `resolution-check`: check the copies and the moves of the
-  storage of every registration and of passing a leaf on in every position
-  against the [Specification](specification.md#model-probe), in about a minute
-  each; they are part of `check` with GCC and clang.
+  [Specification](specification.md#conversion-check). It takes about three
+  minutes.
+- `storage-check`: checks the copies and the moves of the storage of each
+  registration against the [Specification](specification.md#model-probe). It
+  takes about a minute.
+- `resolution-check`: checks the copies and the moves when a leaf is passed on
+  in each position, against the [Specification](specification.md#model-probe).
+  It takes about a minute.
 - `model-check-small`, `model-check-medium`, `model-check-large`: run both model
-  probes of the [Specification](specification.md), on a cover of their
-  dimensions: small every pair of their values, in about eight minutes; medium
-  every three, in about twenty-five; large every combination, which takes longer
-  still. They fail on a defect and read the diagnostics of GCC and clang;
-  `model-check-small` is part of `check` with them. See
+  probes of the [Specification](specification.md). See
   [Model Checks](#model-checks).
 
-The development tools are provided by the locked `uv` environment.
+With GCC and clang, `check` includes `conversion-check`, `storage-check`,
+`resolution-check` and `model-check-small`. `includes-tidy` and `includes-check`
+are not available on Windows. The `sources-format*`, `includes-tidy` and
+`includes-check` targets need `DINGO_CLANG_TOOLS_ENABLED=ON` (the default).
 
 ## Complexity Report
 
 [`tools/complexity.py`](../tools/complexity.py) ranks the headers to find
-candidates for simplification. Its sections are:
+candidates for simplification. The report has these sections:
 
 - `functions`: function bodies by cyclomatic complexity, measured by lizard.
-- `headers`: template declarations, specializations, `if constexpr` branches,
-  SFINAE constructs and type definitions per header, and how many of those
-  definitions are named at most once outside their definition.
-- `modules`: non-comment lines per directory under `include/dingo`.
+- `headers`: for each header, the template declarations, specializations,
+  `if constexpr` branches, SFINAE constructs and type definitions. It also
+  counts the definitions that are named at most once outside their definition.
+- `modules`: non-comment lines for each directory under `include/dingo`.
 - `duplicates`: repeated code blocks, found by lizard.
-- `compile`: template instantiation time per template, from clang
+- `compile`: template instantiation time for each template, from clang
   `-ftime-trace`, for the translation units selected with `--profile`.
 
 The first four sections run by default:
@@ -85,8 +82,8 @@ The first four sections run by default:
 uv run tools/complexity.py --top 30
 ```
 
-Compile-time profiling reads `compile_commands.json` from the build directory
-and recompiles the selected units with clang:
+For compile-time profiling, the tool reads `compile_commands.json` from the
+build directory and recompiles the selected units with clang:
 
 ```bash
 uv run tools/complexity.py --sections modules --build-dir build \
@@ -94,62 +91,78 @@ uv run tools/complexity.py --sections modules --build-dir build \
   --profile test/registration/runtime_registration.cpp
 ```
 
-The rankings are heuristics to compare between revisions. A definition named
-once is a candidate for inlining, not a defect, and an instantiation is charged
-its own time, excluding the instantiations nested in it.
+The rankings are heuristics to compare revisions. A definition that is named
+once is a candidate for inlining, not a defect. The time of an instantiation
+excludes the instantiations nested in it.
 
 ## Model Checks
 
-The model checks compare the library with its [Specification](specification.md),
-through the [Model Probe](specification.md#model-probe) and the
+The model checks compare the library with its [Specification](specification.md).
+They use the [Model Probe](specification.md#model-probe) and the
 [Constructor Detection Probe](specification.md#constructor-detection-probe).
 
 ```bash
 cmake --build build -t model-check-small
 ```
 
-writes the outcome of every cell to `build/model-small/probe.json`, and a
-summary with a table per container, leaf, interfaces, selection and operation
-next to it, as `probe.md`, and those of the detection probe as `detection.json`
-and `detection.md`; `model-check-medium` and `model-check-large` write theirs to
-`build/model-medium/` and `build/model-large/`. A target runs again only when
-what it reads changes: the headers, the specification, the probe headers, the
-locked environment, or the compiler and flags.
+The sizes probe these covers of the dimensions:
 
-Run directly, `spec/probe.py --cover pairs|triples|all` chooses the
-[cover](specification.md#model-probe), and `--only <regex>` probes the
-registrations whose name matches the expression.
+- `model-check-small`: every pair of values, in about eight minutes.
+- `model-check-medium`: every three values, in about twenty-five minutes.
+- `model-check-large`: every combination. It takes longer.
 
-The probes run a compiler per processor at once, at most as many as half the
-memory available holds, or `--jobs <n>`, and each in an address space of 1 GiB
-(`MEMORY_LIMIT` of [`spec/generator/driver.py`](../spec/generator/driver.py)),
-so that they take at most that much memory each. A program holds as many probes
-as fit in three quarters of it, learned from the peak memory of the compiles of
-probes of the same container and position; one the compiler runs out of memory
-on anyway is split into smaller ones, and a probe that does not fit alone is a
-defect.
+A model check fails on a defect. It reads the diagnostics of GCC and clang.
+
+`model-check-small` writes these files to `build/model-small/`:
+
+- `probe.json`: the outcome of each cell of the model probe.
+- `probe.md`: a summary, with a table for each container, leaf, interfaces,
+  selection and operation.
+- `detection.json`, `detection.md`: the same for the detection probe.
+
+`model-check-medium` and `model-check-large` write to `build/model-medium/` and
+`build/model-large/`. A target runs again only when its inputs change: the
+headers, the specification, the probe headers, the locked environment, or the
+compiler and flags.
+
+When you run `spec/probe.py` directly, `--cover pairs|triples|all` selects the
+[cover](specification.md#model-probe). `--only <regex>` probes only the
+registrations with a name that matches the expression.
+
+The probes limit the memory of the compilers:
+
+- The probes run one compiler for each processor, at most as many as half of the
+  available memory holds. `--jobs <n>` sets a different number.
+- Each compiler runs in an address space of 1 GiB (`MEMORY_LIMIT` in
+  [`spec/generator/driver.py`](../spec/generator/driver.py)).
+- A program holds as many probes as fit in three quarters of that limit. The
+  peak memory of earlier compiles with the same container and position gives
+  this number.
+- When the compiler runs out of memory, the probes split the program into
+  smaller programs. A probe that does not fit in a program alone is a defect.
 
 ## Unit Tests
 
 `dingo_unit_test` tests what the [Specification](specification.md) does not
-speak of, a test for each behaviour, in the directory of what it tests:
-collections and lookups in `test/lookup`, parent containers in
-`test/container/parent`, the kinds of factory and constructor detection in
-`test/factory`, wrappers, callables and identity across requests in
-`test/resolution`, and the runtime container's regressions in `test/runtime`.
+cover, one test for each behavior. A test is in the directory of what it tests:
+
+- `test/lookup`: collections and lookups.
+- `test/container/parent`: parent containers.
+- `test/factory`: the kinds of factory and constructor detection.
+- `test/resolution`: wrappers, callables and identity across requests.
+- `test/runtime`: regressions of the runtime container.
 
 ## Code Size Tests
 
-The lit suite also contains code-generation probes in
+The lit suite contains code-generation probes in
 [`test/lit/codegen-static-probes.cpp`](../test/lit/codegen-static-probes.cpp).
-They compile representative static and runtime resolution paths, inspect symbol
-sizes with `nm`, and inspect selected tiny static probes with `objdump`.
+They compile representative static and runtime resolution paths. They inspect
+symbol sizes with `nm` and selected small static probes with `objdump`.
 
-The checks are implemented by
 [`test/lit/check_codegen_probe_sizes.py`](../test/lit/check_codegen_probe_sizes.py)
 and
-[`test/lit/check_codegen_probe_instructions.py`](../test/lit/check_codegen_probe_instructions.py).
-Run them through the normal lit test target:
+[`test/lit/check_codegen_probe_instructions.py`](../test/lit/check_codegen_probe_instructions.py)
+implement the checks. Run them through the lit test:
 
 ```bash
 ctest --test-dir build --output-on-failure -R dingo_lit_tests
@@ -157,24 +170,22 @@ ctest --test-dir build --output-on-failure -R dingo_lit_tests
 
 ## Compile-Time Profiling
 
-For template compile-cost investigations, use
+To find the compile cost of templates, use
 [`time-trace`](https://github.com/romanpauk/time-trace). It wraps a direct Clang
-compile, reads Clang's time-trace JSON, and writes synthetic `perf.data` that
-can be inspected with normal `perf` commands.
+compile, reads the time-trace JSON of Clang, and writes a synthetic `perf.data`.
+Inspect that file with the usual `perf` commands.
 
-This is useful when a registration or resolution change affects compile time and
-the expensive template instantiations need to be identified directly.
+Use it to find the expensive template instantiations when a change affects
+compile time.
 
 ## Container Images
 
-The CI toolchain images are documented under
-[`docker/ubuntu25-toolchains/README.md`](../docker/ubuntu25-toolchains/README.md).
+[`docker/ubuntu25-toolchains/README.md`](../docker/ubuntu25-toolchains/README.md)
+documents the CI toolchain images. Linux images:
 
-Linux image examples:
+- `dingo-toolchains:ubuntu-26.04-gcc-15`: GCC 15 on Ubuntu 26.04.
+- `dingo-toolchains:ubuntu-26.04-clang-20`: Clang 20 on Ubuntu 26.04.
+- `dingo-toolchains:ubuntu-26.10-gcc-16`: GCC 16 on Ubuntu 26.10.
 
-- `dingo-toolchains:ubuntu-26.04-gcc-15` for GCC 15 builds on Ubuntu 26.04
-- `dingo-toolchains:ubuntu-26.04-clang-20` for Clang 20 builds on Ubuntu 26.04
-- `dingo-toolchains:ubuntu-26.10-gcc-16` for GCC 16 builds on Ubuntu 26.10
-
-For an MSVC-style local workflow, build a local image from
+For a local MSVC workflow, build an image from
 `docker/ubuntu25-toolchains/Containerfile` with `TOOLCHAIN=msvc-wine`.

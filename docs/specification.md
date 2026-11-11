@@ -1,220 +1,316 @@
 # Specification
 
-[`spec/`](../spec) says what the library should do, without asking it, and holds
-the probes that compare the library with it:
-[`vocabulary.py`](../spec/vocabulary.py) names the concepts of the library, an
-enum each, and [`semantics.py`](../spec/semantics.py) says, for a registration
-and a request of it, whether the library accepts the registration, which
-interfaces it binds, whether the request resolves, and how it fails when it does
-not. The C++ headers the probes include are in [`test/model/`](../test/model).
-How to run the probes is in [Development](development.md#model-checks).
+[`spec/`](../spec) holds an executable specification of the library and the
+checks that compare the library with it. The specification does not ask the
+library anything:
+
+- [`vocabulary.py`](../spec/vocabulary.py) names the concepts of the library,
+  one enum for each concept.
+- [`semantics.py`](../spec/semantics.py) takes a registration and a request. It
+  decides whether the library accepts the registration, which interfaces the
+  registration binds, whether the request resolves, and how the request fails.
+
+The C++ headers that the checks include are in [`test/model/`](../test/model).
+[Development](development.md#model-checks) tells how to run the checks.
 
 ## Semantics
 
-A type is a stack of layers around an element, `std::shared_ptr<L>` the layer
-`shared_ptr` around `L`, and each layer, leaf and scope is declared by its
-properties: what it owns, whether a copy of it shares what it holds, whether it
-can be copied, moved or made of a value. A request resolves when what it asks
-for can be derived from what the scope stores, by steps such as taking the
-element of a handle, copying, converting a handle, or moving a value into a new
-layer, and when what it refers to lives long enough: what is returned to the
-caller only refers to what the container or the caller keeps. A request that
-does not resolve the static container rejects as it compiles, except a request
-for the alternative an alternative type does not hold; the runtime container
-throws `type_not_convertible`, except for what the types of a request rule out.
+Terms:
 
-Stored forms and request shapes are compositions of `std::shared_ptr`,
-`std::unique_ptr` and `std::optional`. A new layer holds what the request owns,
-moved into it: a value made for the request, or a copy that shares what it was
-copied of, such as a copy of a shared handle, which refers to the same object.
-The interface a leaf is bound to is the base it is: it is referred to, by
-reference, pointer or a handle of the leaf, and never copied, moved or held in
-place by a new layer, which would slice the leaf. What a scope keeps that shares
-nothing gets no new layer, as a copy of it is not the instance: a `shared` scope
-that keeps a `T` gives no `std::shared_ptr<T>` and no `std::optional<T>` of it,
-while one that keeps a `std::shared_ptr<T>` gives a
-`std::optional<std::shared_ptr<T>>`, which shares the `T`. A layer holding a
-copy that shares what the scope or the caller keeps is kept with it, so the
-caller may refer to it.
+- A _registration_ stores a type in a scope and binds interfaces.
+- The _leaf_ `L` is the object type at the center of the stored type.
+- The _stored form_ is the type around the leaf: `L`, `L &`, `L *`, `L[2]`,
+  `std::unique_ptr<L>`, `std::unique_ptr<L[]>`, `std::shared_ptr<L>`,
+  `std::shared_ptr<L[]>`, `std::shared_ptr<L[2]>`, `std::optional<L>`,
+  `std::variant<L, other>`, or two of `std::shared_ptr`, `std::unique_ptr` and
+  `std::optional`.
+- A _request_ asks for a _shape_ of a bound interface `I` in a _category_. A
+  shape is `I`, an array handle of `I`, or up to three of `std::shared_ptr`,
+  `std::unique_ptr` and `std::optional` around `I`. A category is value,
+  `const`, `&`, `const &`, `&&`, `*` or `const *`.
+
+The semantics see a type as a stack of layers around an element:
+`std::shared_ptr<L>` is the layer `shared_ptr` around `L`. Each layer, leaf and
+scope has declared properties: what it owns, whether a copy of it shares what it
+holds, and whether it can be copied, moved or made from a value. The rules use
+only these properties, never a stored form.
+
+A request resolves if both conditions are true:
+
+1. A derivation reaches the request from what the scope stores. A derivation is
+   a sequence of steps, such as `element` (take the element of a handle),
+   `copy`, `convert` (a `std::unique_ptr` to a `std::shared_ptr`), `upcast` (to
+   the abstract interface), or `wrap` (move a value into a new layer).
+2. Everything that the result refers to lives long enough. A result returned to
+   the caller can refer only to objects that the container or the caller keeps.
+   A dependency of a call through `invoke`, or of a kept class, can also refer
+   to objects made for the request.
+
+A new layer holds only what the request owns: a value made for the request, or a
+copy that shares the instance, such as a copy of a shared handle. A copy that
+shares nothing is not the instance, so no new layer holds it. For example, a
+`shared` scope that keeps a `T` gives no `std::shared_ptr<T>` and no
+`std::optional<T>`. A `shared` scope that keeps a `std::shared_ptr<T>` gives a
+`std::optional<std::shared_ptr<T>>`, which shares the `T`. The binding keeps
+such a layer with the instance, so the caller can refer to it.
+
+The abstract interface of the leaf is a base of the leaf. A reference, a pointer
+or a handle refers to it. The semantics never copy it and never put it by value
+into a new optional or alternative type, because that would slice the leaf.
+
+A request that does not resolve fails as follows:
+
+- Both containers reject at compile time a request that its types rule out.
+- The static container rejects all other such requests at compile time, except a
+  request for the alternative that an alternative type does not hold. That
+  request throws `type_not_convertible`.
+- The runtime container throws `type_not_convertible` for all other such
+  requests.
 
 ## Limitations
 
-What the library does not do, although the semantics allow it, is a named
-limitation: a filter over the steps and references of the semantics, kept apart
-from them. A cell a limitation keeps from resolving is limited, and one that
-resolves although a limitation says it does not is a stale limitation, which the
-[Model Probe](#model-probe) fails on.
+A _limitation_ is a step or a reference that the semantics allow and the library
+does not do. The semantics name each limitation and apply it as a filter over
+the steps and references of a derivation.
 
-The library has one, which it keeps on purpose: `POINTER_OUT_OF_MADE_HOLDER`, a
-raw pointer handed to the caller out of a holder the registration makes, such as
-the `T *` of a `std::unique_ptr<T[]>` a unique scope makes. Handing it over
-would release the holder the registration declares and give the caller an owning
-raw pointer instead. The caller requests the holder; a pointer a callable
-`invoke` calls or a kept class takes points into a holder kept for as long as it
-is used.
+A _cell_ is one combination of the dimensions of a check, such as one request of
+one registration. Its _outcome_ is what the library does in it. A cell that a
+limitation keeps from resolving is `limited`. A cell that resolves although a
+limitation says it does not is a `stale_limitation`. The
+[Model Probe](#model-probe) fails on a stale limitation.
+
+The library has one limitation, `POINTER_OUT_OF_MADE_HOLDER`, and keeps it on
+purpose. The library gives no raw pointer out of a holder that the registration
+makes, such as the `T *` of a `std::unique_ptr<T[]>` that a unique scope makes.
+To give it, the library would release the holder that the registration declares,
+and the caller would get an owning raw pointer. The caller requests the holder
+instead. A pointer that a call through `invoke` or a kept class takes points
+into a holder that the library keeps while the pointer is in use.
 
 ## Model Probe
 
-[`spec/probe.py`](../spec/probe.py) asks the library what every combination of
+[`spec/probe.py`](../spec/probe.py) asks the library about every combination of
 container, scope, stored form, leaf, interfaces declared, selection, operation
-and request does, and compares it with what the specification expects.
+and request. It compares each outcome with the specification.
 
-A registration declares no interfaces, so that the library binds those it
-derives from the stored type; its abstract interface `leaf_interface`; or both
-its leaf and that interface. Its requests select it plainly, by an annotation,
-or by a key.
+- Leaf: copyable, move-only, immovable, or `factory` (only its factory makes
+  it).
+- Interfaces declared: none (the library binds the interfaces it derives from
+  the stored type), the abstract interface `leaf_interface`, or both the leaf
+  and `leaf_interface`.
+- Selection: plain, by an annotation, or by a key.
 
-The specification says which interfaces each registration binds, and a survey
-program first checks that the library binds exactly those types. The requests
-are every shape of every bound interface `I`: `I`, `std::shared_ptr<I>`,
-`std::unique_ptr<I>`, `std::optional<I>`, `std::shared_ptr<I[]>` and
-`std::unique_ptr<I[]>`, each by value, `const`, as `&`, `const &`, `&&`, `*` and
-`const *`. A registration of a stored form of two wrappers, such as
-`std::shared_ptr<std::optional<L>>`, requests its own shape too, and a unique
-handle of one the shape of the shared handle it converts to; a registration of a
-leaf that can be moved, stored plainly or in one wrapper, however it is declared
-and selected, requests every shape of two wrappers, such as
-`std::optional<std::shared_ptr<I>>`. A request that is not valid C++, such as an
-abstract type held by value, is recorded as invalid with the reason.
+A survey program first checks that each registration binds exactly the
+interfaces that the specification gives. Then the probe makes these requests of
+each bound interface `I`:
 
-Each request is made through every entry point, `resolve`, `invoke` and
-`construct`, in four positions: itself; as the dependency of the constructor of
-an unregistered class, which the container constructs; and as the dependency of
-a class registered in the `shared` or `shared_cyclical` scope, which keeps it
-and what it receives.
+- The shapes `I`, `std::shared_ptr<I>`, `std::unique_ptr<I>`,
+  `std::optional<I>`, `std::shared_ptr<I[]>`, `std::unique_ptr<I[]>` and
+  `std::shared_ptr<I[2]>`, each in every category.
+- For a stored form of two wrappers, such as
+  `std::shared_ptr<std::optional<L>>`, also its own shape. For a
+  `std::unique_ptr` outside, also the shape with `std::shared_ptr` outside,
+  because the unique handle converts to it.
+- For a copyable or move-only leaf stored as `L` or in one wrapper, also every
+  shape of two wrappers, such as `std::optional<std::shared_ptr<I>>`.
 
-Each registration is compiled into a program per position with
-[`test/model/probe.h`](../test/model/probe.h), which makes each request,
-resolving it twice, and records the outcome. A request the library rejects at
-compile time is recorded with the message of its `static_assert`: the compiler
-names the requests that fail by their lines in the program, and the others are
-compiled again without them. Probes share instantiations, which the compiler
-reports once, so the operations of a failed request are then compiled in a
-program each. The header is precompiled once, and clang's error limit is lifted.
+The probe records a request that is not valid C++ as `invalid`, with the reason.
+An example is an abstract type held by value.
 
-A resolved request is also checked: its result has to reach the registered leaf,
-a scope that keeps its instance has to return the same one by reference, a
-unique scope a new one, a kept class may not refer to a leaf that is gone, and
-nothing may leak. The probe counts the copies and the moves of leaves each
-resolution makes, until the class or the callable it is made for receives it,
-and the specification says the fewest a resolution needs: a copy where its
-derivation copies the leaf, made where the request holds it, and else a move
-where it moves the leaf, a value made for the request moved into all its new
-layers at once; making the instance, referring to it and sharing it need none. A
-runtime container hands a value over from its context, so a value holding a leaf
-moved for the request is moved once more, and `construct<T>()` of a value it
-does not resolve moves the value it resolves into what it makes of it.
-`resolve<T &&>()` and `construct<T &&>()` return the value moved out of what the
-request refers to. A resolution that needs more is excess. Each program also
-checks every request its registration publishes: one that selects another
-binding is unreachable, and one that no probe makes is unprobed.
+An operation is an entry point and a position. The entry points are `resolve`,
+`invoke` and `construct`. The positions are:
 
-The copies and the moves of a resolution are those of its layers, each checked
-alone, of every registration the library accepts: the storage, the conversion
-and passing the result on. `probe.py --layer storage` requests what every
-registration stores as it is, by reference from a scope that keeps it and as an
-rvalue reference a call takes from one that makes it, which only the storage
-copies or moves: it needs none. The [Conversion Check](#conversion-check) counts
-the conversion of every published request. `probe.py --layer resolution`
-requests the leaf of a plain registration, which no conversion copies or moves,
-in every category, position and entry point, of every scope, leaf, selection and
-container.
+- `direct`: the request itself.
+- `consumer`: a dependency of an unregistered class that the container
+  constructs.
+- `shared` and `cyclical`: a dependency of a class that the `shared` or
+  `shared_cyclical` scope keeps, together with what the class receives.
 
-A cell a limitation keeps from resolving is recorded as limited, with the
-limitations. The probe fails when a request does not compile without a
-`static_assert`, crashes or fails these checks, when a published request is
-unreachable or unprobed, when a cell is not what the specification expects
-(unexpected), when a resolution is excess, when a limited cell resolves (a stale
-limitation), or when a registration binds other interfaces than the
-specification says.
+The probe compiles a program for each registration and position, with
+[`test/model/probe.h`](../test/model/probe.h). Each probe resolves its request
+twice and records the outcome. A request that the library rejects at compile
+time is `rejected`, with the message of its `static_assert`. The compiler names
+the program lines of each failed request. The driver records those requests and
+compiles the others again. Probes share template instantiations, and the
+compiler reports a shared error only once. So the driver compiles the probes of
+a failed operation or request in a program for each operation. The driver
+precompiles the header once and turns off the error limit of clang.
 
-A cover probes a covering array of the registrations the specification says the
-library accepts: every combination of values of two (small) or three (medium) of
-scope, stored form, leaf, interfaces declared and selection that such a
-registration holds is probed in both containers, with 82 or 260 of the 2880
-registrations (large). A registration the library does not accept resolves
-nothing, so it covers nothing.
+A resolved request is `violated` if one of these checks fails:
+
+- The result reaches the registered leaf.
+- A scope that keeps its instance gives the same leaf by reference each time.
+- A `unique` scope gives a different leaf each time.
+- A kept result does not refer to a leaf that is gone.
+- No leaf leaks.
+
+The probe counts the copies and the moves of leaves in each resolution, until
+the class or the callable that the request is for receives the result.
+`semantics.fewest()` gives the fewest copies and moves that the resolution
+needs:
+
+- A derivation that copies the leaf needs one copy, made where the request holds
+  it.
+- A derivation that only moves the leaf needs one move. A value made for the
+  request moves once, into all its new layers.
+- Making, referring to and sharing the instance need none.
+- The runtime container gives a value from its context. If the derivation moved
+  the leaf, a request that takes the value by a move needs one more move.
+- `construct<T>()` of a `T` that it does not resolve resolves the leaf by value
+  and moves it into the `T`: one more move.
+- `resolve<T &&>()` and `construct<T &&>()` return the value moved out of what
+  the request refers to.
+
+A resolution with more copies or more moves than the fewest is `excess`.
+
+Each program also checks every request that its registration publishes. A
+published request that selects the binding of another interface is
+`unreachable`. A published request that no probe makes is `unprobed`.
+
+The copies and the moves of a resolution come from three layers: the storage,
+the conversion and passing the result on. A check counts each layer alone, for
+every registration that the library accepts:
+
+- `probe.py --layer storage` requests the stored form itself, directly and
+  selected plainly: as `&` through `resolve` from a scope that keeps it, and as
+  `&&` through `invoke` from a scope that makes it. Only the storage copies or
+  moves the leaf here, and the specification needs none.
+- The [Conversion Check](#conversion-check) counts the conversion of every
+  published request.
+- `probe.py --layer resolution` requests the leaf of a plain registration,
+  stored as `L` with no interfaces declared. No conversion copies or moves it.
+  It covers every category, operation, scope, selection and container, and every
+  leaf except `factory`, which copies and moves like a copyable leaf.
+
+The probe fails if one of these is true:
+
+- A request does not compile, other than by a `static_assert`
+  (`does_not_compile`), or its probe crashes (`crashed`).
+- A resolved request is `violated` or `excess`.
+- A published request is `unreachable` or `unprobed`.
+- A cell has another outcome than the specification expects (`unexpected`).
+- A limited cell resolves (`stale_limitation`).
+- A registration binds other interfaces than the specification gives.
+
+A _cover_ probes a covering array of the registrations that the library accepts.
+The array holds every combination of values of two (small) or three (medium) of
+scope, stored form, leaf, interfaces declared and selection. Each registration
+of the array is probed in both containers. The array has 82 or 268 of the 2880
+registrations; the large cover probes all of them. A registration that the
+library does not accept resolves nothing, so it covers nothing.
 
 ## Conversion Check
 
-[`spec/conversion.py`](../spec/conversion.py) asks the conversion layer of every
-registration the library accepts what it publishes for every request of every
-shape of up to three wrappers, as the code compiles: whether the request lists
-of the static container select a resolution of the request, whether the
-descriptors the runtime container dispatches on select the same one, and whether
-its conversion is available, and whether it composes a wrapper it does not
-publish or takes a value over from a pointer it makes
+[`spec/conversion.py`](../spec/conversion.py) asks the conversion layer of each
+registration what it publishes for every request of up to three wrappers, and of
+each array shape. The answer comes from compilation only
 ([`test/model/conversion.h`](../test/model/conversion.h)). No container is made
-and nothing resolves, so every registration is checked, many in a program, in
-about a minute.
+and nothing resolves, so the check covers every registration of the runtime
+container that the library accepts, several in one program. The request lists
+are the same in both containers, and selection does not change them.
 
-A published request has to be one the specification, with the limitations of the
-library, resolves in some position, and a request it resolves for the caller has
-to be published, composed or taken over from a pointer: what the library
-resolves into the context of a call, a value placed there or a reference into a
-pointer it adopts, it does not publish. Of a request a binding does not publish,
-the check follows the requests it is derived from in both containers, each from
-what its binding tells of itself. The check fails when the two containers select
-or derive differently, a registration does not compile, a published request is
-unprobed or unreachable, or a cell is not what the specification expects. Of a
-storage that cannot be made, and of the other alternative of an alternative
-type, which a probe's never holds, it compares nothing. What resolving a request
-does is the [Model Probe](#model-probe)'s.
+| Outcome           | Meaning                                                                                                                       |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `published`       | Both containers select a resolution, and its conversion is available.                                                         |
+| `unconvertible`   | Both select a resolution, and its conversion is not available.                                                                |
+| `composed`        | The binding composes a wrapper of a request it resolves, or keeps it with the instance.                                       |
+| `adopted`         | The binding takes the value out of a pointer that it hands over.                                                              |
+| `placed`          | The binding resolves the request into the context of the call: a value placed there, or a reference into a pointer it adopts. |
+| `unpublished`     | None of the above.                                                                                                            |
+| `selects_another` | The request selects the binding of another interface.                                                                         |
+| `diverged`        | The containers select or derive the request differently.                                                                      |
 
-The check also applies the conversion of every published request alone to a new
-object of what it converts, and makes the request of what it returns as a
-binding makes it. It counts the copies and the moves of the leaf that makes,
-which the specification says are the fewest of the derivations that reach what
-satisfies the request and of satisfying it, before a resolution hands it over;
-more are excess, which fails the check.
+The static container selects by its request lists, the runtime container by type
+descriptors. For a request that a binding does not publish, the check follows
+the chain of requests it derives from, in both containers. Each container
+derives from what its own binding tells about itself.
+
+The check compares each outcome with the specification, with the limitations of
+the library:
+
+- A `published`, `composed`, `adopted` or `placed` request must resolve as the
+  dependency of a direct `invoke`.
+- A request that resolves for the caller of a direct `resolve` must be
+  `published`, `composed` or `adopted`. A placed value ends with the call, so it
+  cannot go back to the caller.
+- A storage that cannot be made is not compared.
+- The alternative type of a probe never holds its other alternative, so the
+  check compares the other alternative as a copyable type of its own.
+
+Another outcome is `unexpected`. The check fails on an `unexpected` or
+`diverged` cell, on a registration that does not compile, and on a published
+request that is `unprobed` or `unreachable`. The [Model Probe](#model-probe)
+checks what resolving a request does.
+
+The check also applies the conversion of each `published` request alone to a new
+object of its source. It makes the request from the result as a binding does,
+and counts the copies and the moves of the leaf. `semantics.converted()` gives
+the fewest copies and moves of the derivations that reach a match for the
+request, and of the match. It does not include giving the result to the request.
+More copies or more moves are `excess`, which fails the check.
 
 ## Constructor Detection Probe
 
 [`spec/detection.py`](../spec/detection.py) probes constructor detection. A
-parameter is every shape of every supported leaf (copyable, move-only, and an
-abstract interface), plain, annotated and keyed, in every category. Each is the
-parameter of a class of each kind: a constructor, an explicit constructor, an
-aggregate member, and the two parameters of a constructor
+parameter is a request of a copyable leaf, a move-only leaf or the abstract
+interface, in each shape of at most one wrapper and each array shape. It is
+plain, annotated or keyed, in every category. Each parameter is used in a class
+of each kind: a constructor, an explicit constructor, an aggregate member, and
+the two parameters of a constructor
 ([`test/model/detection.h`](../test/model/detection.h)).
 
-For each class it records what shape and signature detection say, against the
-constructor the generator wrote, and makes the class through `resolve`,
-`construct` and `invoke` of an unregistered class and through a `shared`
-registration of it, in both containers over a few registrations of the leaf. It
-makes the class with the constructor an explicit factory names, the one shape
-detection finds and the one signature detection finds. A detected constructor
-has to make what the explicit one makes: through a registration as a
-registration does, and through `resolve` or `construct` as `construct` does. A
-class `invoke` makes has no explicit counterpart, as it may refer to what the
-request makes, which a class returned to the caller may not; it is checked only
-for defects.
+For each class, the probe records what shape detection and signature detection
+report, against the constructor that the generator wrote: `detected` or
+`misdetected`. Then it makes the class in both containers, over a few
+registrations of the leaf:
 
-The known limitations of detection are listed, with their reasons, in
-`LIMITATIONS` of
-[`spec/generator/detection.py`](../spec/generator/detection.py): each says which
-detections report a class wrongly and which detected constructions make it
-differently from its explicit constructor. A misdetection one of them describes
-is recorded as `limited`, and a construction one of them describes is not
-compared with the explicit constructor; a limitation whose misdetection no
-longer occurs is a defect, `stale_limitation`.
+| Constructor                            | Made through                                                                       |
+| -------------------------------------- | ---------------------------------------------------------------------------------- |
+| The one that an explicit factory names | `construct`, a `shared` registration                                               |
+| The one that shape detection finds     | `resolve`, `construct`, `invoke` of an unregistered class, a `shared` registration |
+| The one that signature detection finds | `construct`, a `shared` registration                                               |
 
-The probe covers leaf, selection, kind and provider on the same cover sizes.
+A class made with a detected constructor must have the outcome of the explicit
+constructor. Through a registration, the probe compares it with the explicit
+registration. Through `resolve` or `construct`, it compares it with explicit
+`construct`. A class that `invoke` makes has no explicit counterpart: it can
+refer to what the request makes, and a class returned to the caller cannot. The
+probe checks it only for defects. Another outcome is a disagreement, which fails
+the probe.
+
+`LIMITATIONS` in [`spec/generator/detection.py`](../spec/generator/detection.py)
+lists the known limitations of detection, with their reasons. Each says which
+detections report a class wrongly, and which detected constructions make it
+differently from its explicit constructor:
+
+- A misdetection that a limitation describes is `limited`.
+- A construction that a limitation describes is not compared with the explicit
+  constructor.
+- A correct detection that a limitation describes as wrong is a
+  `stale_limitation`, which is a defect.
+
+A cover makes classes over a covering array of leaf, selection, kind and
+registration of the leaf, with the same sizes as the Model Probe. The probe
+records what detection reports for every class.
 
 ## Generator
 
-The probe and the detection probe share [`spec/generator/`](../spec/generator):
+The checks share [`spec/generator/`](../spec/generator):
 
-- `dimensions.py`: an enum per dimension only the probes have, beside the
-  vocabulary of the specification. The value of a member is its name in a cell.
-- `model.py`: an interface the library names, a request of the grammar as a
-  shape and a category of an interface, with the rules for requests that are not
+- `dimensions.py`: an enum for each dimension that only the checks have, next to
+  the vocabulary. The value of a member is its name in a cell.
+  `Outcome.is_defect` tells which outcomes are defects.
+- `model.py`: the interfaces that the library names, the requests of the grammar
+  (a shape and a category of an interface), the rules for requests that are not
   valid C++, and a probe of a request.
-- `registrations.py` and `detection.py`: the units of each family and their
-  cells, without any C++.
+- `registrations.py`, `conversions.py` and `detection.py`: the units of each
+  check and their cells, without any C++, and their comparison with the
+  specification.
+- `cover.py`: the covering arrays.
 - `templates/`: the Jinja templates that spell the units in C++. `macros.j2`
-  holds the spellings of the dimensions, `registration.j2` those of a
-  registration of the probe.
-- `driver.py`: compiles and runs the programs, and tells compile errors apart by
-  probe. A template marks the lines of each probe with `// probe N`.
-- `survey.py` and `report.py`: the survey that checks the interfaces a
-  registration binds, and the baseline, its defects and its disagreements.
+  spells the dimensions, `registration.j2` a registration.
+- `driver.py`: compiles and runs the programs, and finds the probe of each
+  compile error. A template marks the lines of each probe with `// probe N`.
+  Each compiler can use at most 1 GiB; a program that does not fit is split.
+- `survey.py` and `report.py`: the survey of the interfaces that a registration
+  binds, and the baseline with its defects and disagreements.
