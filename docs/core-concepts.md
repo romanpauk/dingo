@@ -821,13 +821,18 @@ either succeeds completely or leaves the container unchanged. The container
 rolls back partial registrations, cached resolutions, lookup entries and the
 objects that it owns.
 
-In a container hierarchy, each container with runtime state is a separate atomic
-unit. A fallback to the parent runs as an operation of the parent:
+Both the runtime and the static container roll back. In a container hierarchy,
+each container is a separate atomic unit. A fallback to the parent runs as an
+operation of the parent:
 
 - If the parent resolution succeeds and a later child construction fails, the
   parent keeps its result.
 - If the parent operation fails, the parent rolls back before the exception
   propagates.
+
+A static parent of a runtime child is the exception. It resolves in the
+transaction of the child. If a later child construction fails, the child also
+undoes what the parent made for that construction.
 
 This guarantee covers the state that the container manages. Dingo cannot undo
 side effects of user constructors, factories, callbacks or destructors that

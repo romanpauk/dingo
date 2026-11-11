@@ -10,13 +10,18 @@
 #include <dingo/runtime_container.h>
 #include <dingo/static_container.h>
 #include <dingo/storage/shared.h>
+#include <dingo/storage/unique.h>
 
+#include "support/containers.h"
+
+#include <memory>
 #include <stdexcept>
 
-// Rollback across a parent and a child of each kind. The parent binds a
-// shared Q and a shared P made of Q; the child binds a shared C made of P.
-// Each container is an atomic unit: a resolution that falls back to the
-// parent is an operation of the parent.
+// Rollback of a container alone and across a parent and a child of each
+// kind. The parent binds a shared Q and a shared P made of Q; the child binds
+// a shared C made of P. Each container is an atomic unit: a resolution that
+// falls back to the parent is an operation of the parent, but a static
+// parent's of a runtime child, which joins the child's transaction.
 
 namespace dingo::scenarios {
 namespace {
@@ -137,7 +142,90 @@ template <typename Parent, typename Child> void expect_parent_rolls_back() {
   EXPECT_EQ(rollback_p::made, 1);
 }
 
+// A resolution of a container alone that fails after it made Q rolls Q back.
+template <typename Container> void expect_container_rolls_back() {
+  reset_rollback();
+  typename Container::type container;
+  Container::prepare(container);
+
+  rollback_p::fail = true;
+  EXPECT_THROW(container.template resolve<rollback_p &>(), std::runtime_error);
+  EXPECT_EQ(rollback_q::made, 1);
+  EXPECT_EQ(rollback_q::destroyed, 1);
+
+  container.template resolve<rollback_p &>();
+  EXPECT_EQ(rollback_q::made, 2);
+  EXPECT_EQ(rollback_p::made, 1);
+}
+
+// A static parent of a runtime child resolves in the child's transaction: a
+// child construction that fails undoes what the parent made for it too.
+template <typename Parent, typename Child>
+void expect_parent_joins_child_transaction() {
+  reset_rollback();
+  typename Parent::type parent;
+  Parent::prepare(parent);
+  typename Child::template type<typename Parent::type> child(&parent);
+  Child::prepare(child);
+
+  rollback_c::fail = true;
+  EXPECT_THROW(child.template resolve<rollback_c &>(), std::runtime_error);
+  EXPECT_EQ(rollback_p::made, 1);
+
+  child.template resolve<rollback_c &>();
+  EXPECT_EQ(rollback_p::made, 2);
+  EXPECT_EQ(rollback_c::made, 1);
+}
+
+// A shared class whose destructor reads the shared class it refers to: a
+// rollback resets it first.
+struct ordered_dependency {
+  ordered_dependency() {}
+  std::unique_ptr<int> value = std::make_unique<int>(9);
+};
+
+struct ordered_dependent {
+  explicit ordered_dependent(ordered_dependency &referred)
+      : dependency(referred) {}
+  ~ordered_dependent() { seen = *dependency.value; }
+
+  ordered_dependency &dependency;
+  static inline int seen = 0;
+};
+
+struct ordered_failure {
+  ordered_failure(ordered_dependent &, ordered_dependency &) {
+    throw std::runtime_error("ordered_failure");
+  }
+};
+
+template <typename Kind> class rollback_order_test : public ::testing::Test {};
+TYPED_TEST_SUITE(rollback_order_test, container_kinds, );
+
 } // namespace
+
+TYPED_TEST(rollback_order_test, resets_what_refers_to_an_instance_first) {
+  ordered_dependent::seen = 0;
+  TypeParam::template with<
+      bind<scope<shared>, storage<ordered_dependency>>,
+      bind<scope<shared>, storage<ordered_dependent>,
+           dependencies<ordered_dependency &>>,
+      bind<scope<unique>, storage<ordered_failure>,
+           dependencies<ordered_dependent &, ordered_dependency &>>>(
+      [](auto &container) {
+        EXPECT_THROW(container.template resolve<ordered_failure>(),
+                     std::runtime_error);
+        EXPECT_EQ(ordered_dependent::seen, 9);
+      });
+}
+
+TEST(parent_rollback, runtime_container) {
+  expect_container_rolls_back<runtime_parent>();
+}
+
+TEST(parent_rollback, static_container) {
+  expect_container_rolls_back<static_parent>();
+}
 
 TEST(parent_rollback, runtime_parent_runtime_child) {
   expect_parent_keeps_result<runtime_parent, runtime_child>();
@@ -150,11 +238,13 @@ TEST(parent_rollback, runtime_parent_static_child) {
 }
 
 TEST(parent_rollback, static_parent_runtime_child) {
+  expect_parent_joins_child_transaction<static_parent, runtime_child>();
   expect_parent_rolls_back<static_parent, runtime_child>();
 }
 
 TEST(parent_rollback, static_parent_static_child) {
   expect_parent_keeps_result<static_parent, static_child>();
+  expect_parent_rolls_back<static_parent, static_child>();
 }
 
 } // namespace dingo::scenarios

@@ -218,23 +218,34 @@ public:
 
   using container_requests<static_container_impl>::resolve;
 
-  // A request a child container forwards here constructs what this container
-  // keeps in the memory of this container, which outlives the child.
+  // A request a static child forwards here is an operation of this container,
+  // which constructs what it keeps in its own memory, as that outlives the
+  // child. A runtime child resolves it in its own transaction.
   template <typename Request, typename R, typename Context, typename Origin,
             typename LookupKey, typename Scope>
   R resolve_request(Scope scope, Context &context, Origin &origin,
                     LookupKey key) {
-    if constexpr (std::is_same_v<Context, static_persistent_context> &&
-                  has_persistent_memory_v) {
+    if constexpr (!is_runtime_context_v<Context>) {
       if (static_cast<void *>(std::addressof(origin)) != this) {
-        persistent_memory_scope memory(context, persistent_memory());
-        return request_resolution::resolve<Request, R>(*this, scope, context,
-                                                       origin, std::move(key));
+        return as_operation([&]() -> R {
+          if constexpr (std::is_same_v<Context, static_persistent_context> &&
+                        has_persistent_memory_v) {
+            persistent_memory_scope memory(context, persistent_memory());
+            return request_resolution::resolve<Request, R>(
+                *this, scope, context, origin, std::move(key));
+          } else {
+            return request_resolution::resolve<Request, R>(
+                *this, scope, context, origin, std::move(key));
+          }
+        });
       }
     }
     return request_resolution::resolve<Request, R>(*this, scope, context,
                                                    origin, std::move(key));
   }
+
+  // The order of the next binding this container resolves first.
+  std::size_t next_resolved_order() noexcept { return ++resolved_count_; }
 
 public:
   using container_requests<static_container_impl>::construct_collection;
@@ -266,7 +277,28 @@ public:
   template <typename Fn>
   DINGO_ALWAYS_INLINE decltype(auto) with_context(Fn &&fn) {
     context_type context(persistent_memory());
-    return std::forward<Fn>(fn)(context);
+    return as_operation(
+        [&]() -> decltype(auto) { return std::forward<Fn>(fn)(context); });
+  }
+
+  // Runs fn as an operation of this container: if it fails, the bindings it
+  // resolved first are reset, the last first, before its exception leaves
+  // the container.
+  template <typename Fn>
+  DINGO_ALWAYS_INLINE decltype(auto) as_operation(Fn &&fn) {
+    const std::size_t mark = resolved_count_;
+    try {
+      return std::forward<Fn>(fn)();
+    } catch (...) {
+      rollback_to(mark);
+      throw;
+    }
+  }
+
+  DINGO_NOINLINE void rollback_to(std::size_t mark) noexcept {
+    for (; resolved_count_ > mark; --resolved_count_) {
+      storage_.reset_resolved(resolved_count_);
+    }
   }
 
   // The scope a request enters with, known as the code compiles: what
@@ -333,13 +365,17 @@ private:
                   "request it by value, or as a dependency");
     if constexpr (uses_static_minimal_context_v<Request, R, LookupKey>) {
       no_dependency_context context;
-      return resolve_bound<
-          typename request_type<typename Request::user_type, true>::lookup_type,
-          R, LookupKey>(caller_scope, context);
+      return as_operation([&]() -> R {
+        return resolve_bound<typename request_type<typename Request::user_type,
+                                                   true>::lookup_type,
+                             R, LookupKey>(caller_scope, context);
+      });
     } else {
       context_type context(persistent_memory());
-      return request_resolution::resolve<Request, R>(*this, caller_scope,
-                                                     context, *this, key);
+      return as_operation([&]() -> R {
+        return request_resolution::resolve<Request, R>(*this, caller_scope,
+                                                       context, *this, key);
+      });
     }
   }
 
@@ -428,6 +464,7 @@ private:
                      no_persistent_memory>
       persistent_;
   storage_type storage_;
+  std::size_t resolved_count_ = 0;
   parent_container_type *parent_ = nullptr;
 };
 

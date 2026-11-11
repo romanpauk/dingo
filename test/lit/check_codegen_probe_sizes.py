@@ -16,12 +16,14 @@ PROBE_LIMITS = {
     "probe_runtime_resolution_consumer_read": {
         "default": None,
     },
+    # The resolution can throw, from make_shared: the static container keeps
+    # what rolls back the shared cell it resolves first.
     "probe_static_resolution_shared_config": {
-        "default": 0x90,
-        "clang": 0xc8,
-        "clang_arm64": 0xd0,
-        "gcc14": 0xB0,
-        "gcc14_arm64": 0xD0,
+        "default": 0xA8,
+        "clang": 0x190,
+        "clang_arm64": 0x1A0,
+        "gcc14": 0xC8,
+        "gcc14_arm64": 0xE8,
     },
     "probe_runtime_resolution_shared_config": {
         "default": None,
@@ -80,9 +82,11 @@ PROBE_LIMITS = {
     "probe_runtime_resolution_interface_handle": {
         "default": None,
     },
+    # The resolution can throw, from the vector: the static container keeps
+    # what rolls back the shared cells it resolves first.
     "probe_static_resolution_collection_sum": {
         "default": 0x500,
-        "gcc16": 0x520,
+        "gcc16": 0x550,
     },
     "probe_runtime_resolution_collection_sum": {
         "default": None,

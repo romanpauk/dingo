@@ -51,12 +51,33 @@ struct binding_storage_is_default_constructible
 template <typename Registration,
           typename BindingsType =
               typename detail::binding_model<Registration>::bindings_type>
-struct local_binding_scope_slot {};
+struct local_binding_scope_slot {
+  static constexpr bool has_local_bindings = false;
+};
 
 template <typename Registration, typename... LocalRegistrations>
 struct local_binding_scope_slot<Registration,
                                 static_registry<LocalRegistrations...>> {
+  static constexpr bool has_local_bindings = true;
   static_bindings_state<LocalRegistrations...> scope;
+};
+
+// What a resolution of a binding that keeps nothing, or in a runtime
+// transaction, orders: nothing.
+struct no_resolution_order {};
+
+// The order in which a binding that keeps what it resolves was first
+// resolved, which a failed operation resets it in: the last first, so that
+// what refers to an instance is reset before the instance. Zero while the
+// binding is unresolved. Only a number is kept, no address, so that a
+// resolution which cannot throw still folds.
+template <bool Keeps> struct resolved_order {
+  static constexpr bool is_tracked = false;
+};
+
+template <> struct resolved_order<true> {
+  static constexpr bool is_tracked = true;
+  std::size_t resolved_order_ = 0;
 };
 
 template <typename Request, typename Resolutions>
@@ -248,10 +269,29 @@ private:
 // of the local bindings the registration declares, and the resolution of a
 // request through one of its interfaces.
 template <typename Registration>
-class static_binding : private local_binding_scope_slot<Registration> {
+class static_binding
+    : private local_binding_scope_slot<Registration>,
+      private resolved_order<storage_can_reset<
+          typename binding_model<Registration>::storage_type>::value> {
   using model = binding_model<Registration>;
+  static constexpr bool keeps =
+      storage_can_reset<typename model::storage_type>::value;
 
 public:
+  // Resets the binding the static container resolved as the order-th, and
+  // those its registration binds locally.
+  void reset_resolved([[maybe_unused]] std::size_t order) noexcept {
+    if constexpr (keeps) {
+      if (this->resolved_order_ == order) {
+        this->resolved_order_ = 0;
+        cell_.reset();
+      }
+    }
+    if constexpr (local_binding_scope_slot<Registration>::has_local_bindings) {
+      this->scope.reset_resolved(order);
+    }
+  }
+
   // Selects the resolution of a request at compile time and applies it
   // through a binding activation.
   template <typename InterfaceBinding, typename Request, typename Host,
@@ -268,9 +308,11 @@ public:
       not_convertible<Request, InterfaceBinding>(context);
     } else if constexpr (!std::is_reference_v<Request> &&
                          !std::is_pointer_v<Request>) {
+      [[maybe_unused]] auto order = ordered(host, context);
       return activation(scope, host)
           .template resolve_request_value<Request, resolution>(context);
     } else {
+      [[maybe_unused]] auto order = ordered(host, context);
       return convert_resolved_binding<Request>(
           activation(scope, host)
               .template resolve_request_address<Request, resolution>(context));
@@ -286,6 +328,7 @@ public:
     if constexpr (std::is_void_v<resolution>) {
       not_convertible<Request, InterfaceBinding>(context);
     } else {
+      [[maybe_unused]] auto order = ordered(host, context);
       return activation(scope, host)
           .template consume_request<Request, resolution>(context,
                                                          std::forward<Fn>(fn));
@@ -362,6 +405,40 @@ private:
         composes, with);
   }
 
+  // A resolution of the cell, which takes the next order of the static
+  // container when it resolves the cell first, once the cell is resolved:
+  // after what the cell depends on. A runtime transaction resets what it
+  // resolves itself.
+  template <typename Host> class resolution_order {
+  public:
+    resolution_order(static_binding &binding, Host &host)
+        : binding_(binding), host_(host),
+          first_(!binding.cell_.storage().is_resolved()) {}
+    ~resolution_order() {
+      if (first_ && binding_.cell_.storage().is_resolved() &&
+          binding_.resolved_order_ == 0) {
+        binding_.resolved_order_ = host_.next_resolved_order();
+      }
+    }
+
+    resolution_order(const resolution_order &) = delete;
+    resolution_order &operator=(const resolution_order &) = delete;
+
+  private:
+    static_binding &binding_;
+    Host &host_;
+    bool first_;
+  };
+
+  template <typename Host, typename Context>
+  auto ordered(Host &host, Context &) {
+    if constexpr (keeps && !is_runtime_context_v<Context>) {
+      return resolution_order<Host>(*this, host);
+    } else {
+      return no_resolution_order{};
+    }
+  }
+
   template <typename Host, typename Scope>
   auto activation(Scope scope, Host &host) {
     using dependencies =
@@ -391,6 +468,13 @@ private:
 template <typename... Registrations>
 class static_bindings_state : private static_binding<Registrations>... {
 public:
+  // Resets the binding resolved as the order-th, of these or of what they
+  // bind locally.
+  void reset_resolved([[maybe_unused]] std::size_t order) noexcept {
+    (static_cast<static_binding<Registrations> &>(*this).reset_resolved(order),
+     ...);
+  }
+
   template <typename InterfaceBinding, typename Request, typename Host,
             typename Context, typename Scope>
   Request resolve(Scope scope, Host &host, Context &context) {
