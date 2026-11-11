@@ -506,8 +506,12 @@ Constructor deduction has these limits:
   `type_not_found_exception` for an unbound `T`. Both containers reject at
   compile time a registration of such a `T` without a factory.
 - Auto-construction requires a complete `T`.
-- `resolve<T&>()` and `resolve<T*>()` accept a forward-declared `T` if `T` is
-  registered.
+- A runtime container resolves a forward-declared `T` that another translation
+  unit registers as `T &` and `T *`. If the registration stores a
+  `std::shared_ptr<T>`, it also resolves the handle by value, by reference and
+  by pointer, and copies it into a `std::optional<std::shared_ptr<T>>`. A
+  request that needs a value of `T`, or a new wrapper of one, needs a complete
+  `T`.
 - The construction of another type can depend on a forward-declared `T&` or
   `T*`. Dingo looks up the dependency and does not auto-construct it.
 - A wrapper value takes part in the reference-based deduction only if its
