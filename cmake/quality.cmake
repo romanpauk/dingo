@@ -66,8 +66,7 @@ function(configure_quality_targets out_check_targets)
   # The conversion check: conversion.py asks the conversion layer of every
   # registration what it publishes for every request, as the code compiles,
   # and compares it with the specification. It resolves nothing, so it
-  # checks every registration in seconds; the model probes check what
-  # resolutions do.
+  # checks every registration; the model probes check what resolutions do.
   set(conversion_dir ${PROJECT_BINARY_DIR}/conversion)
   set(conversion_configuration ${conversion_dir}/configuration.txt)
   file(CONFIGURE OUTPUT ${conversion_configuration} CONTENT
@@ -91,7 +90,7 @@ function(configure_quality_targets out_check_targets)
   # and what passing the leaf of a plain registration on does, in every
   # position. With the conversion check, which counts what the conversion of
   # every published request does, they check the copies and the moves of
-  # each layer against the specification in a minute or so each.
+  # each layer against the specification.
   foreach(layer IN ITEMS storage resolution)
     set(layer_dir ${PROJECT_BINARY_DIR}/${layer})
     set(layer_configuration ${layer_dir}/configuration.txt)

@@ -418,25 +418,13 @@ with code generated for each dependency. The compiler instantiates these
 functions one inside the other. In a dependency chain, each type depends on one
 other type, and each link adds one nested set of instantiations.
 
-`-ftemplate-depth` limits the nesting depth. The default is 1024 in Clang and
-900 in GCC. The depth follows the longest dependency chain, not the number of
-bindings. Bindings that do not depend on each other, or that all depend on the
-same type, do not nest.
+`-ftemplate-depth` limits the nesting depth. The depth follows the longest
+dependency chain, not the number of bindings. Bindings that do not depend on
+each other, or that all depend on the same type, do not nest. A binding with a
+detected constructor, and a `unique` binding, add more levels to each link than
+a binding with an explicit factory.
 
-Measured with Clang, a chain needs a `-ftemplate-depth` of
-`links * levels per link + 15`:
-
-| Binding in the chain                   | Levels per link | Longest chain at the default depth |
-| -------------------------------------- | --------------- | ---------------------------------- |
-| shared, constructor detected           | 7               | 144                                |
-| shared, `factory<constructor<T(...)>>` | 6               | 168                                |
-| shared, `factory<function<...>>`       | 6               | 168                                |
-| unique, constructor detected           | 8               | 126                                |
-
-A chain of 100 links with detected constructors needs about
-`-ftemplate-depth=720`. Each additional 100 links need 700 more. GCC uses about
-17 levels per link and reaches 52 links at its default depth. If a longer chain
-does not compile, do one of these:
+If a long chain does not compile, do one of these:
 
 - Raise `-ftemplate-depth`.
 - Register the chain through `container<>` or `runtime_container`. Runtime

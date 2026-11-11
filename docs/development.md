@@ -45,14 +45,11 @@ environment provides the development tools.
   report, not part of `check`. See [Complexity Report](#complexity-report).
 - `conversion-check`: checks what the conversion layer of each registration
   publishes, and the copies and the moves of its conversions, against the
-  [Specification](specification.md#conversion-check). It takes about three
-  minutes.
+  [Specification](specification.md#conversion-check).
 - `storage-check`: checks the copies and the moves of the storage of each
-  registration against the [Specification](specification.md#model-probe). It
-  takes about a minute.
+  registration against the [Specification](specification.md#model-probe).
 - `resolution-check`: checks the copies and the moves when a leaf is passed on
   in each position, against the [Specification](specification.md#model-probe).
-  It takes about a minute.
 - `model-check-small`, `model-check-medium`, `model-check-large`: run both model
   probes of the [Specification](specification.md). See
   [Model Checks](#model-checks).
@@ -107,9 +104,9 @@ cmake --build build -t model-check-small
 
 The sizes probe these covers of the dimensions:
 
-- `model-check-small`: every pair of values, in about eight minutes.
-- `model-check-medium`: every three values, in about twenty-five minutes.
-- `model-check-large`: every combination. It takes longer.
+- `model-check-small`: every pair of values.
+- `model-check-medium`: every three values.
+- `model-check-large`: every combination.
 
 A model check fails on a defect. It reads the diagnostics of GCC and clang.
 
