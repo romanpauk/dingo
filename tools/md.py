@@ -97,7 +97,10 @@ def process(lines):
 
 
 def format(lines):
-    return mdformat.text("".join(lines), options={"number": True, "wrap": 80})
+    # GitHub-flavored Markdown keeps tables.
+    return mdformat.text(
+        "".join(lines), options={"number": True, "wrap": 80}, extensions={"gfm"}
+    )
 
 
 def iter_non_code_lines(lines):
