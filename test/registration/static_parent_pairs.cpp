@@ -32,8 +32,32 @@ struct child_config : parent_config {
   child_config() { value = 2; }
 };
 
+// A parent made of Bindings: a static container binds them in its type, and
+// a runtime container registers them once it is made.
 struct static_parent_shape {
   template <typename Bindings> using type = dingo::static_container<Bindings>;
+
+  template <typename Bindings, typename Parent> static void prepare(Parent &) {}
+};
+
+struct runtime_parent_shape {
+  template <typename Bindings> using type = dingo::runtime_container<>;
+
+  template <typename Bindings, typename Parent>
+  static void prepare(Parent &parent) {
+    add(parent, Bindings{});
+  }
+
+private:
+  template <typename Parent, typename... Registrations>
+  static void add(Parent &parent, dingo::bindings<Registrations...>) {
+    (add(parent, static_cast<Registrations *>(nullptr)), ...);
+  }
+
+  template <typename Parent, typename... Args>
+  static void add(Parent &parent, dingo::bind<Args...> *) {
+    parent.template register_type<Args...>();
+  }
 };
 
 struct static_child_shape {
@@ -52,6 +76,7 @@ void assert_static_parent_dependency_fallback() {
       typename ChildShape::template type<child_bindings, parent_type>;
 
   parent_type parent;
+  ParentShape::template prepare<parent_bindings>(parent);
   child_type child(&parent);
 
   ASSERT_EQ(child.template resolve<parent_config &>().value, 1);
@@ -71,6 +96,7 @@ void assert_static_parent_child_override() {
       typename ChildShape::template type<child_bindings, parent_type>;
 
   parent_type parent;
+  ParentShape::template prepare<parent_bindings>(parent);
   child_type child(&parent);
 
   ASSERT_EQ(parent.template resolve<parent_config &>().value, 1);
@@ -89,6 +115,7 @@ void assert_static_parent_collection_fallback() {
       typename ChildShape::template type<child_bindings, parent_type>;
 
   parent_type parent;
+  ParentShape::template prepare<parent_bindings>(parent);
   child_type child(&parent);
 
   auto values = child.template resolve<std::vector<parent_config *>>();
@@ -109,6 +136,7 @@ void assert_static_parent_collection_override() {
       typename ChildShape::template type<child_bindings, parent_type>;
 
   parent_type parent;
+  ParentShape::template prepare<parent_bindings>(parent);
   child_type child(&parent);
 
   auto values = child.template resolve<std::vector<parent_config *>>();
@@ -167,6 +195,11 @@ TEST(static_parent_container, runtime_child) {
 
 TEST(static_parent_container, static_child) {
   exercise_static_parent_container_pair<static_parent_shape,
+                                        static_child_shape>();
+}
+
+TEST(runtime_parent_container, static_child) {
+  exercise_static_parent_container_pair<runtime_parent_shape,
                                         static_child_shape>();
 }
 

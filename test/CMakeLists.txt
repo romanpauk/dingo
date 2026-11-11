@@ -19,6 +19,7 @@ add_executable(dingo_unit_test
     container/parent/ownership.cpp
     container/parent/recursion.cpp
     container/parent/resolution.cpp
+    container/parent/rollback.cpp
     container/parent/search.cpp
     container/parent/semantics.cpp
     container/parent/transactions.cpp

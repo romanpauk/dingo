@@ -44,15 +44,24 @@ container_implementation_t<T> *container_implementation_of(T *container) {
   return container_implementation<T>::get(container);
 }
 
+template <typename T, typename = void>
+inline constexpr bool names_container_traits_v = false;
+
+template <typename T>
+inline constexpr bool names_container_traits_v<
+    T, std::void_t<typename T::container_traits_type>> = true;
+
 // Whether T is a container traits type: it names an allocator, an rtti and
-// optionally lookup definitions. Both containers take one.
+// optionally lookup definitions. Both containers take one. A container names
+// these too, and its traits as well: it is not a traits type.
 template <typename T, typename = void>
 struct is_container_traits : std::false_type {};
 
 template <typename T>
 struct is_container_traits<
     T, std::void_t<typename T::rtti_type, typename T::allocator_type,
-                   container_lookup_definition_type_t<T>>> : std::true_type {};
+                   container_lookup_definition_type_t<T>>>
+    : std::bool_constant<!names_container_traits_v<T>> {};
 
 template <typename T>
 inline constexpr bool is_container_traits_v = is_container_traits<T>::value;

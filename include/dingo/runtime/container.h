@@ -220,6 +220,21 @@ private:
     }
     return resolve_nested<Request, R>(scope, context, origin, std::move(key));
   }
+  // A request in the context of a static container, which a static child
+  // passes to this parent, opens a transaction of this container: the parent
+  // resolves it as an operation of its own, and rolls it back if it fails.
+  template <
+      typename Request, typename R, typename Context, typename Origin,
+      typename LookupKey, typename Scope,
+      std::enable_if_t<!std::is_same_v<Context, runtime_context_type>, int> = 0>
+  DINGO_NOINLINE R resolve_request(Scope scope, Context &, Origin &origin,
+                                   LookupKey key) {
+    return with_context([&](runtime_context_type &context) -> R {
+      return detail::request_resolution::resolve<Request, R>(
+          *this, construction_scope(scope), context, origin, std::move(key));
+    });
+  }
+
   template <typename Request, typename R, typename Origin, typename LookupKey>
   DINGO_NOINLINE R resolve_nested(construction_scope scope,
                                   runtime_context_type &context, Origin &origin,
