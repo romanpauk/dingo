@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/base/config.h>
+#include <dingo/base/flags.h>
 
 #include <dingo/base/meta.h>
 #include <dingo/base/type_descriptor.h>
@@ -60,30 +61,23 @@ template <typename T> struct request_tag {
   using type = T;
 };
 
-// What a binding tells of itself, which the derivation of a request depends
-// on: whether it keeps its instance, whether a reference may refer to a value
-// it makes, whether it publishes a pointer it makes that the request refers
-// into or takes a value out of, whether a value of the request would slice
-// what it stores, as one of a base of it does, and whether it publishes what
-// it resolves before it constructs it, so that nothing is copied or moved of
-// what it publishes; and, of the derivations that resolve a request through
-// one the binding publishes, whether it publishes that one.
-struct derivation_sources {
-  bool refer = false;
-  bool address = false;
-  bool move = false;
-  bool copy = false;
-  bool convert = false;
+// What a binding is, which the derivation of a request depends on: it keeps
+// its instance; a reference may refer to a value it makes; a value of the
+// request would slice what it stores, as one of a base of it does; it
+// publishes what it resolves before it constructs it, so that nothing is
+// copied or moved of what it publishes.
+enum class binding_trait : unsigned char {
+  keeps,
+  places,
+  slices,
+  publishes_early,
 };
 
+// What a binding tells of itself for a request: what it is, and the
+// derivations whose source it publishes, the request each resolves through.
 struct derivation_facts {
-  bool keeps;
-  bool places;
-  bool adopts;
-  bool takes;
-  bool slices;
-  bool publishes_early;
-  derivation_sources published = {};
+  flags<binding_trait> traits;
+  flags<derivation> sources;
 };
 
 class retention;
@@ -337,111 +331,109 @@ struct derived_request<derivation::compose, Request> {
 template <derivation Derivation, typename Request>
 using derived_request_t = typename derived_request<Derivation, Request>::type;
 
-// Whether a binding publishes the request each derivation of Request resolves
-// through, as published(tag) says of the request of a tag: a static binding
-// knows it as the code compiles. A runtime binding finds the requests of the
-// descriptor of the request in its own resolutions.
-template <typename Request, typename Published>
-constexpr derivation_sources published_sources(Published published) {
-  derivation_sources sources;
-  if constexpr (derivation_shape_v<derivation::refer, Request>) {
-    sources.refer =
-        published(request_tag<derived_request_t<derivation::refer, Request>>{});
-  }
-  if constexpr (derivation_shape_v<derivation::address, Request>) {
-    sources.address = published(
-        request_tag<derived_request_t<derivation::address, Request>>{});
-  }
-  if constexpr (derivation_shape_v<derivation::move, Request>) {
-    sources.move =
-        published(request_tag<derived_request_t<derivation::move, Request>>{});
-  }
-  if constexpr (derivation_shape_v<derivation::copy, Request>) {
-    sources.copy =
-        published(request_tag<derived_request_t<derivation::copy, Request>>{});
-  }
-  if constexpr (derivation_shape_v<derivation::convert, Request>) {
-    sources.convert = published(
-        request_tag<derived_request_t<derivation::convert, Request>>{});
+// Derivations, as a list of them.
+template <derivation... Hows> struct derivations {};
+
+// The derivations whose source a binding knows of the request alone, as it
+// knows of a pointer it makes whether it publishes it.
+using request_sources =
+    derivations<derivation::refer, derivation::address, derivation::move,
+                derivation::copy, derivation::convert>;
+
+// Whether a binding publishes the source of a derivation of Request, as
+// published(tag) says of the request of a tag; none where the derivation does
+// not apply to the request.
+template <derivation How, typename Request, typename Published>
+constexpr flags<derivation> source_of(Published published) {
+  flags<derivation> sources;
+  if constexpr (derivation_shape_v<How, Request>) {
+    sources.set(How, published(request_tag<derived_request_t<How, Request>>{}));
   }
   return sources;
 }
 
-// The derivation of a request a binding does not publish, from what the
-// binding tells of itself. A reference to what a pointer the binding makes
-// points to refers to it; a reference or a pointer to a value the binding
-// makes refers to it, and a pointer to what the binding refers to is its
-// address; a wrapper that shares what the binding keeps is kept with it;
-// another value a reference refers to is placed, when the binding makes it,
-// or it is a wrapper made of what the binding resolves or sharing it. A value
-// is taken out of a pointer the binding makes, moved out of a value it makes,
-// copied of one it keeps, converted of a sole owner it makes, or composed.
-template <typename Request>
-constexpr derivation derive_request(derivation_facts facts) {
-  if constexpr (derivation_shape_v<derivation::adopt, Request>) {
-    if (facts.adopts) {
-      return derivation::adopt;
-    }
-  }
-  if constexpr (derivation_shape_v<derivation::refer, Request>) {
-    if (facts.published.refer) {
-      return derivation::refer;
-    }
-  }
-  if constexpr (derivation_shape_v<derivation::address, Request>) {
-    if (facts.published.address) {
-      return derivation::address;
-    }
-  }
-  if constexpr (derivation_shape_v<derivation::keep, Request>) {
-    if (facts.keeps) {
-      return derivation::keep;
-    }
-  }
-  if constexpr (derivation_shape_v<derivation::place, Request>) {
-    if (facts.places || composes_v<Request> || refers_to_sharing_v<Request>) {
-      return derivation::place;
-    }
-  }
-  if constexpr (derivation_shape_v<derivation::take, Request>) {
-    if (facts.takes) {
-      return derivation::take;
-    }
-  }
-  if constexpr (derivation_shape_v<derivation::move, Request>) {
-    if (!facts.slices && !facts.publishes_early && facts.published.move) {
-      return derivation::move;
-    }
-  }
-  if constexpr (derivation_shape_v<derivation::copy, Request>) {
-    if (!facts.slices && !facts.publishes_early && facts.published.copy) {
-      return derivation::copy;
-    }
-  }
-  if constexpr (derivation_shape_v<derivation::convert, Request>) {
-    if (facts.published.convert) {
-      return derivation::convert;
-    }
-  }
-  if constexpr (derivation_shape_v<derivation::compose, Request>) {
-    return derivation::compose;
+// The derivations of Request whose source a binding publishes, as
+// published(tag) says: a static binding knows it as the code compiles. A
+// runtime binding finds the sources of the descriptor of the request in its
+// own resolutions.
+template <typename Request, typename Published, derivation... Hows>
+constexpr flags<derivation> published_sources(Published published,
+                                              derivations<Hows...>) {
+  return (source_of<Hows, Request>(published) | ...);
+}
+
+// Whether a request copies or moves nothing of what a binding publishes: a
+// value of it would slice what the binding stores, or the binding publishes
+// it before it constructs it.
+constexpr bool copies_nothing(derivation_facts facts) {
+  return facts.traits.has(binding_trait::slices) ||
+         facts.traits.has(binding_trait::publishes_early);
+}
+
+// Whether a derivation applies to a request of a binding, of what the
+// binding tells of itself: one that resolves through a source applies where
+// the binding publishes the source; a wrapper that shares what the binding
+// keeps is kept with it; a value a reference refers to is placed, when the
+// binding makes it, or it is a wrapper made of what the binding resolves or
+// sharing it; a value is moved or copied only of what may be; anything else
+// is composed.
+template <derivation How, typename Request>
+constexpr bool applies(derivation_facts facts) {
+  if constexpr (!derivation_shape_v<How, Request>) {
+    return false;
+  } else if constexpr (How == derivation::keep) {
+    return facts.traits.has(binding_trait::keeps);
+  } else if constexpr (How == derivation::place) {
+    return facts.traits.has(binding_trait::places) || composes_v<Request> ||
+           refers_to_sharing_v<Request>;
+  } else if constexpr (How == derivation::move || How == derivation::copy) {
+    return !copies_nothing(facts) && facts.sources.has(How);
+  } else if constexpr (How == derivation::compose) {
+    return true;
   } else {
-    return derivation::none;
+    return facts.sources.has(How);
   }
 }
 
-// Whether a request may be derived at all, by any binding: by one of which
-// every fact holds, whose values do not slice what it stores, which
-// constructs what it publishes first, and which publishes every request.
+// The order the derivations of a request are tried in. A reference to what a
+// pointer the binding makes points to refers to it; a reference or a pointer
+// to a value the binding makes refers to it, and a pointer to what the
+// binding refers to is its address; then a wrapper is kept, or a value
+// placed. A value is taken out of a pointer the binding makes, moved out of a
+// value it makes, copied of one it keeps, converted of a sole owner it makes,
+// or composed.
+using derivation_order =
+    derivations<derivation::adopt, derivation::refer, derivation::address,
+                derivation::keep, derivation::place, derivation::take,
+                derivation::move, derivation::copy, derivation::convert,
+                derivation::compose>;
+
+template <typename Request, derivation... Hows>
+constexpr derivation first_applying(derivation_facts facts,
+                                    derivations<Hows...>) {
+  derivation found = derivation::none;
+  (void)((applies<Hows, Request>(facts) ? (found = Hows, true) : false) || ...);
+  return found;
+}
+
+// The derivation of a request a binding does not publish: the first that
+// applies to it.
+template <typename Request>
+constexpr derivation derive_request(derivation_facts facts) {
+  return first_applying<Request>(facts, derivation_order{});
+}
+
+// Whether a request may be derived at all, by any binding: by one that keeps
+// its instance and places what it makes, whose values do not slice what it
+// stores, which constructs what it publishes first, and which publishes the
+// source of every derivation.
 template <typename Request>
 inline constexpr bool derivable_v =
-    derive_request<Request>({true,
-                             true,
-                             true,
-                             true,
-                             false,
-                             false,
-                             {true, true, true, true, true}}) !=
-    derivation::none;
+    derive_request<Request>(
+        {flags<binding_trait>::of(binding_trait::keeps, binding_trait::places),
+         flags<derivation>::of(derivation::adopt, derivation::take,
+                               derivation::refer, derivation::address,
+                               derivation::move, derivation::copy,
+                               derivation::convert)}) != derivation::none;
 } // namespace detail
 } // namespace dingo

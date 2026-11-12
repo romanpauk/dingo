@@ -194,22 +194,28 @@ template <typename Request, typename InterfaceBinding>
 constexpr derivation_facts static_derivation_facts() {
   using storage = typename InterfaceBinding::binding_model_type::storage_type;
   derivation_facts facts{
-      binding_cell<storage>::keeps_conversions,
-      places_made_values_v<storage>,
-      false,
-      false,
-      slices_v<remove_cvref_t<Request>, leaf_type_t<typename storage::type>>,
-      scope_allows_cycles_v<typename storage::tag_type>,
-      published_sources<Request>(static_publishes<InterfaceBinding>{})};
+      {},
+      published_sources<Request>(static_publishes<InterfaceBinding>{},
+                                 request_sources{})};
+  facts.traits
+      .set(binding_trait::keeps, binding_cell<storage>::keeps_conversions)
+      .set(binding_trait::places, places_made_values_v<storage>)
+      .set(binding_trait::slices, slices_v<remove_cvref_t<Request>,
+                                           leaf_type_t<typename storage::type>>)
+      .set(binding_trait::publishes_early,
+           scope_allows_cycles_v<typename storage::tag_type>);
   if constexpr (std::is_lvalue_reference_v<Request> &&
                 adopts_made_pointer_v<storage,
                                       std::remove_reference_t<Request>>) {
-    facts.adopts = binding_supports_request_v<
-        std::add_pointer_t<std::remove_reference_t<Request>>, InterfaceBinding>;
+    facts.sources.set(derivation::adopt,
+                      binding_supports_request_v<
+                          std::add_pointer_t<std::remove_reference_t<Request>>,
+                          InterfaceBinding>);
   }
   if constexpr (takes_shape<Request>() && takes_made_pointee_v<storage>) {
-    facts.takes =
-        binding_supports_request_v<remove_cvref_t<Request> *, InterfaceBinding>;
+    facts.sources.set(derivation::take,
+                      binding_supports_request_v<remove_cvref_t<Request> *,
+                                                 InterfaceBinding>);
   }
   return facts;
 }

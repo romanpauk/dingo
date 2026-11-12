@@ -159,55 +159,58 @@ publishes_descriptor(type_list<Resolutions...>,
 // pointer is the address of what an lvalue reference refers to. A sole owner
 // a sharing handle converts of is known only to the request.
 template <typename Resolutions>
-constexpr derivation_sources runtime_published(type_descriptor requested) {
-  derivation_sources sources;
-  auto as = [](type_descriptor source, type_reference_kind reference,
-               type_cv_flags cv) {
+constexpr flags<derivation> runtime_published(type_descriptor requested) {
+  flags<derivation> sources;
+  auto publish = [&sources](derivation how, type_descriptor source,
+                            type_reference_kind reference, type_cv_flags cv) {
     source.reference = reference;
     source.cv = cv;
-    return publishes_descriptor(Resolutions{}, source);
+    sources.set(how, publishes_descriptor(Resolutions{}, source));
   };
   if (requested.pointee != nullptr &&
       requested.reference == type_reference_kind::none) {
     const type_descriptor pointee = *requested.pointee;
-    sources.refer =
-        as(pointee, type_reference_kind::rvalue, type_cv_flags::none);
-    sources.address = as(pointee, type_reference_kind::lvalue, pointee.cv);
+    publish(derivation::refer, pointee, type_reference_kind::rvalue,
+            type_cv_flags::none);
+    publish(derivation::address, pointee, type_reference_kind::lvalue,
+            pointee.cv);
   } else if (requested.reference == type_reference_kind::lvalue) {
-    sources.refer =
-        as(requested, type_reference_kind::rvalue, type_cv_flags::none);
+    publish(derivation::refer, requested, type_reference_kind::rvalue,
+            type_cv_flags::none);
   } else if (requested.reference == type_reference_kind::none) {
-    sources.move =
-        as(requested, type_reference_kind::rvalue, type_cv_flags::none);
-    sources.copy = as(requested, type_reference_kind::lvalue,
-                      requested.cv | type_cv_flags::is_const);
+    publish(derivation::move, requested, type_reference_kind::rvalue,
+            type_cv_flags::none);
+    publish(derivation::copy, requested, type_reference_kind::lvalue,
+            requested.cv | type_cv_flags::is_const);
   }
   return sources;
 }
 
 // What a runtime binding of a storage tells the derivation of a request it
 // does not publish, of its resolutions: whether it keeps its instance,
-// places what it makes, and publishes the pointer it makes that a reference
-// request refers into, or that a value request is taken out of, as the value
-// can be moved, whether a value of its interface would slice what it stores,
-// and what it publishes of what each derivation resolves through.
+// places what it makes, whether a value of its interface would slice what it
+// stores, and whether it publishes before it constructs; and the derivations
+// whose source it publishes, among them the pointer it makes that a
+// reference request refers into, or that a value request is taken out of,
+// as the value can be moved.
 template <typename Interface, typename Storage, typename Resolutions>
 constexpr derivation_facts runtime_derivation_facts(type_descriptor requested) {
   using interface_type = std::remove_cv_t<Interface>;
-  derivation_facts facts{
-      binding_cell<Storage>::keeps_conversions,
-      places_made_values_v<Storage>,
-      false,
-      false,
-      slices_v<interface_type, leaf_type_t<typename Storage::type>> &&
-          requested.reference != type_reference_kind::lvalue &&
-          requested.pointee == nullptr &&
-          requested.tag == described_type_v<interface_type>.tag,
-      scope_allows_cycles_v<typename Storage::tag_type>,
-      runtime_published<Resolutions>(requested)};
+  derivation_facts facts{{}, runtime_published<Resolutions>(requested)};
+  facts.traits
+      .set(binding_trait::keeps, binding_cell<Storage>::keeps_conversions)
+      .set(binding_trait::places, places_made_values_v<Storage>)
+      .set(binding_trait::slices,
+           slices_v<interface_type, leaf_type_t<typename Storage::type>> &&
+               requested.reference != type_reference_kind::lvalue &&
+               requested.pointee == nullptr &&
+               requested.tag == described_type_v<interface_type>.tag)
+      .set(binding_trait::publishes_early,
+           scope_allows_cycles_v<typename Storage::tag_type>);
   if constexpr (hands_over_made_pointers_v<Storage>) {
-    facts.adopts = requested.reference == type_reference_kind::lvalue &&
-                   adopts_request<Storage>(Resolutions{}, requested);
+    facts.sources.set(derivation::adopt,
+                      requested.reference == type_reference_kind::lvalue &&
+                          adopts_request<Storage>(Resolutions{}, requested));
   }
   if constexpr (takes_made_pointee_v<Storage>) {
     if (requested.reference != type_reference_kind::lvalue &&
@@ -215,7 +218,8 @@ constexpr derivation_facts runtime_derivation_facts(type_descriptor requested) {
       type_descriptor pointee = requested;
       pointee.reference = type_reference_kind::lvalue;
       pointee.cv = type_cv_flags::none;
-      facts.takes = takes_request<Storage>(Resolutions{}, pointee);
+      facts.sources.set(derivation::take,
+                        takes_request<Storage>(Resolutions{}, pointee));
     }
   }
   return facts;

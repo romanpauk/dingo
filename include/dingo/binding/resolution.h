@@ -236,7 +236,7 @@ derivation_facts runtime_facts(const derivation_site &site,
   if constexpr (derivation_shape_v<derivation::convert, T>) {
     const type_descriptor owner =
         described_type_v<derived_request_t<derivation::convert, T>>;
-    facts.published.convert = site.publishes(owner);
+    facts.sources.set(derivation::convert, site.publishes(owner));
   }
   return facts;
 }

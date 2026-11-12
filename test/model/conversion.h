@@ -67,9 +67,10 @@ constexpr detail::derivation runtime_derivation() {
     // The binding tells what it publishes of the descriptor of the request,
     // but of the sole owner a sharing handle converts of, which only the
     // request names.
-    facts.published.convert =
-        detail::published_sources<Request>(runtime_publishes<Resolutions>{})
-            .convert;
+    facts.sources =
+        facts.sources | detail::published_sources<Request>(
+                            runtime_publishes<Resolutions>{},
+                            detail::derivations<detail::derivation::convert>{});
     return detail::derive_request<Request>(facts);
   }
 }
