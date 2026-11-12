@@ -8,7 +8,7 @@
 #pragma once
 
 #include <dingo/base/config.h>
-#include <dingo/context/resolution_context.h>
+#include <dingo/context/resolution.h>
 #include <dingo/memory/arena_allocator.h>
 #include <dingo/memory/object_store.h>
 

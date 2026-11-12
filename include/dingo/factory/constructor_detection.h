@@ -25,9 +25,9 @@
 #include <dingo/base/type_list.h>
 #include <dingo/factory/constructor_traits.h>
 #include <dingo/factory/constructor_typedef.h>
+#include <dingo/request/decomposition.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/key.h>
-#include <dingo/type/request.h>
 #include <dingo/type/shape.h>
 
 #include <type_traits>

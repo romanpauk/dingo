@@ -22,6 +22,7 @@
 #include <dingo/registration/requirements.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/request/collection.h>
+#include <dingo/request/decomposition.h>
 #include <dingo/request/entry_points.h>
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/runtime/binding.h>
@@ -31,7 +32,6 @@
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/collection_traits.h>
-#include <dingo/type/request.h>
 #include <dingo/type/shape.h>
 
 #include <cstddef>

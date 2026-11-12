@@ -12,7 +12,7 @@
 #include <dingo/base/meta.h>
 #include <dingo/base/type_descriptor.h>
 #include <dingo/request/composition.h>
-#include <dingo/type/request.h>
+#include <dingo/request/decomposition.h>
 
 #include <cstddef>
 #include <memory>

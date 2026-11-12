@@ -177,7 +177,7 @@ needs no runtime arena and lookup set of its own.
 The runtime binding has a list of resolutions, derived from
 `Storage::conversions`. It matches the requested type descriptor against this
 list. If a resolution matches, the storage produces the source object.
-[include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
+[include/dingo/resolution/operation.h](../../include/dingo/resolution/operation.h)
 converts it to the requested shape.
 
 The static path uses the same binding model and conversion rules. It selects

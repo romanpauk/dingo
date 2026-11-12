@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/context/resolution_context.h>
+#include <dingo/context/resolution.h>
 #include <dingo/memory/object_store.h>
 #include <dingo/runtime/transaction.h>
 

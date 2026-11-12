@@ -55,4 +55,4 @@ The main owners are:
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
 - [include/dingo/type/shape.h](../../include/dingo/type/shape.h)
-- [include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
+- [include/dingo/resolution/operation.h](../../include/dingo/resolution/operation.h)

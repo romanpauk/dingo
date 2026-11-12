@@ -150,18 +150,18 @@ if(DINGO_DEVELOPMENT_MODE)
         lookup/tags.h
         lookup/unordered.h
         resolution/cache.h
-        resolution/conversion_resolution.h
+        resolution/conversion.h
         binding/interface.h
         runtime/binding.h
         storage/interface_storage_traits.h
-        context/resolution_context.h
+        context/resolution.h
         runtime/context.h
         static/context.h
         rtti/static_provider.h
         rtti/rtti.h
         rtti/typeid_provider.h
         storage/external.h
-        resolution/materialized_source.h
+        resolution/source.h
         storage/shared_cyclical.h
         storage/shared.h
         storage/storage.h
@@ -174,7 +174,7 @@ if(DINGO_DEVELOPMENT_MODE)
         base/type_descriptor.h
         base/type_list.h
         type/type_traits.h
-        resolution/resolution_operation.h
+        resolution/operation.h
         base/meta.h
         base/construction_scope.h
         base/selected.h
@@ -182,8 +182,8 @@ if(DINGO_DEVELOPMENT_MODE)
         context/recursion_guard.h
         lookup/container_lookup_definition.h
         registration/requirements.h
-        resolution/resolution.h
-        type/request.h
+        resolution/route.h
+        request/decomposition.h
     )
 
     set(DINGO_INTERFACE_SOURCES "")

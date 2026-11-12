@@ -10,7 +10,7 @@
 #include <dingo/base/config.h>
 
 #include <dingo/base/construction_scope.h>
-#include <dingo/context/resolution_context.h>
+#include <dingo/context/resolution.h>
 
 #include <memory>
 #include <new>

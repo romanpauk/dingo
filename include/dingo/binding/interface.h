@@ -10,8 +10,8 @@
 #include <dingo/base/config.h>
 #include <dingo/base/construction_scope.h>
 #include <dingo/base/type_descriptor.h>
+#include <dingo/request/decomposition.h>
 #include <dingo/resolution/cache.h>
-#include <dingo/type/request.h>
 
 #include <cassert>
 

@@ -11,15 +11,15 @@
 #include <dingo/base/type_descriptor.h>
 #include <dingo/binding/interface.h>
 #include <dingo/binding/selection.h>
-#include <dingo/context/resolution_context.h>
+#include <dingo/context/resolution.h>
 #include <dingo/request/composition.h>
+#include <dingo/request/decomposition.h>
 #include <dingo/request/derivation.h>
-#include <dingo/resolution/resolution_operation.h>
+#include <dingo/resolution/operation.h>
 #include <dingo/storage/retention.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/collection_traits.h>
-#include <dingo/type/request.h>
 #include <dingo/type/shape.h>
 #include <dingo/type/type_traits.h>
 

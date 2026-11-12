@@ -49,9 +49,9 @@ rule for each wrapper combination.
 
 A runtime request is keyed by its shape, not by the exact type of the request.
 `request_lookup_type_t<T>` in
-[include/dingo/type/request.h](../../include/dingo/type/request.h) gives this
-key. It replaces the leaf with `runtime_type`, keeps the references, pointers
-and wrappers, and removes the qualifiers:
+[include/dingo/request/decomposition.h](../../include/dingo/request/decomposition.h)
+gives this key. It replaces the leaf with `runtime_type`, keeps the references,
+pointers and wrappers, and removes the qualifiers:
 
 - `A&` -> `runtime_type&`
 - `A*` -> `runtime_type*`
@@ -112,5 +112,5 @@ The rebinding utilities let these three layers work together.
 
 - [include/dingo/type/shape.h](../../include/dingo/type/shape.h)
 - [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
-- [include/dingo/type/request.h](../../include/dingo/type/request.h)
+- [include/dingo/request/decomposition.h](../../include/dingo/request/decomposition.h)
 - [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)

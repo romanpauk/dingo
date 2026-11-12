@@ -10,9 +10,9 @@
 #include <dingo/base/type_list.h>
 #include <dingo/binding/model.h>
 #include <dingo/binding/resolution.h>
-#include <dingo/context/resolution_context.h>
+#include <dingo/context/resolution.h>
 #include <dingo/resolution/cache.h>
-#include <dingo/resolution/resolution_operation.h>
+#include <dingo/resolution/operation.h>
 #include <dingo/storage/retention.h>
 #include <dingo/storage/scope_traits.h>
 #include <dingo/storage/type_storage_traits.h>

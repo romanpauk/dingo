@@ -180,4 +180,4 @@ To read the core path in source order, start here:
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
 - [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)
-- [include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
+- [include/dingo/resolution/operation.h](../../include/dingo/resolution/operation.h)

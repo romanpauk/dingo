@@ -14,9 +14,9 @@
 #include <dingo/factory/constructor.h>
 #include <dingo/lookup/lookup_key.h>
 #include <dingo/request/collection.h>
+#include <dingo/request/decomposition.h>
 #include <dingo/request/resolution.h>
 #include <dingo/type/collection_traits.h>
-#include <dingo/type/request.h>
 #include <dingo/type/shape.h>
 
 #include <type_traits>

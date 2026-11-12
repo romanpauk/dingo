@@ -10,7 +10,7 @@
 #include <dingo/base/config.h>
 
 #include <dingo/factory/constructor.h>
-#include <dingo/resolution/resolution_operation.h>
+#include <dingo/resolution/operation.h>
 #include <dingo/storage/scope_traits.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>

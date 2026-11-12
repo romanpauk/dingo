@@ -7,7 +7,7 @@
 
 #include <dingo/base/exceptions.h>
 #include <dingo/binding/resolution.h>
-#include <dingo/resolution/resolution_operation.h>
+#include <dingo/resolution/operation.h>
 #include <dingo/storage/shared.h>
 
 #include <gtest/gtest.h>

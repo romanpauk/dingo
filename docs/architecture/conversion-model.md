@@ -24,7 +24,7 @@ The main source files are:
 - [include/dingo/storage/scope_traits.h](../../include/dingo/storage/scope_traits.h)
 - [include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
 - [include/dingo/binding/interface.h](../../include/dingo/binding/interface.h)
-- [include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
+- [include/dingo/resolution/operation.h](../../include/dingo/resolution/operation.h)
 - [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
 
 ## Storage Exposure
@@ -185,7 +185,7 @@ uses only the address, because it borrows.
 
 ## Runtime Conversion
 
-[include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
+[include/dingo/resolution/operation.h](../../include/dingo/resolution/operation.h)
 executes the operation that publication selected. `type_resolution` carries the
 source and conversion types. The `resolution` that holds it carries the target.
 `type_resolution` gets the source in the published value category and applies

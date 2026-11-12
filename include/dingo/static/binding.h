@@ -12,7 +12,7 @@
 #include <dingo/binding/activation.h>
 #include <dingo/binding/model.h>
 #include <dingo/binding/resolution.h>
-#include <dingo/context/resolution_context.h>
+#include <dingo/context/resolution.h>
 #include <dingo/factory/factory_traits.h>
 #include <dingo/lookup/lookup_key.h>
 #include <dingo/request/collection.h>

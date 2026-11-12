@@ -21,6 +21,7 @@
 #include <dingo/memory/allocator.h>
 #include <dingo/registration/requirements.h>
 #include <dingo/request/collection.h>
+#include <dingo/request/decomposition.h>
 #include <dingo/request/resolution.h>
 #include <dingo/runtime/binding.h>
 #include <dingo/runtime/container_traits.h>
@@ -31,7 +32,6 @@
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/collection_traits.h>
-#include <dingo/type/request.h>
 #include <dingo/type/shape.h>
 
 #include <algorithm>
