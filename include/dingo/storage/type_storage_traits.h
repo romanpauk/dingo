@@ -369,20 +369,70 @@ public:
       copied_leaf_t<Storage>>::type;
 };
 
+// Whether the requests a storage publishes consume what it makes for each.
+template <typename Conversions, typename = void>
+struct consumes_made : std::false_type {};
+
+template <typename Conversions>
+struct consumes_made<Conversions, std::void_t<decltype(Conversions::consumes)>>
+    : std::bool_constant<Conversions::consumes> {};
+
+// The lvalue reference resolutions of a storage but those of what it
+// publishes an rvalue reference to: a request refers to what the storage
+// makes for it through that.
+template <typename LvalueResolutions, typename RvalueResolutions>
+struct without_referred_resolutions;
+
+template <typename... Lvalues, typename... Rvalues>
+struct without_referred_resolutions<type_list<Lvalues...>,
+                                    type_list<Rvalues...>> {
+private:
+  using referred = type_list<remove_cvref_t<typename Rvalues::target_type>...>;
+
+public:
+  using type = type_list_cat_t<std::conditional_t<
+      type_list_contains_v<remove_cvref_t<typename Lvalues::target_type>,
+                           referred>,
+      type_list<>, type_list<Lvalues>>...>;
+};
+
+// The resolutions a storage publishes of a category. A storage that makes a
+// value for each request publishes no lvalue reference to what it publishes
+// an rvalue reference to.
+template <request_category Category, typename Interface, typename Storage>
+struct published_resolutions
+    : category_resolutions<Category, Interface, Storage> {};
+
+template <typename Interface, typename Storage>
+struct published_resolutions<request_category::lvalue_reference, Interface,
+                             Storage> {
+private:
+  using all = typename category_resolutions<request_category::lvalue_reference,
+                                            Interface, Storage>::type;
+
+public:
+  using type = typename std::conditional_t<
+      consumes_made<typename Storage::conversions>::value,
+      without_referred_resolutions<
+          all, typename category_resolutions<request_category::rvalue_reference,
+                                             Interface, Storage>::type>,
+      std::enable_if<true, all>>::type;
+};
+
 template <request_category Category, typename Interface, typename Storage>
 using category_resolutions_t =
-    typename category_resolutions<Category, Interface, Storage>::type;
+    typename published_resolutions<Category, Interface, Storage>::type;
 
 template <typename Interface, typename Shape> struct shape_resolutions {
   using value_resolutions =
       category_resolutions_t<request_category::value, Interface, Shape>;
+  using rvalue_reference_resolutions =
+      category_resolutions_t<request_category::rvalue_reference, Interface,
+                             Shape>;
   using object_resolutions = type_list_cat_t<
       category_resolutions_t<request_category::lvalue_reference, Interface,
                              Shape>,
       category_resolutions_t<request_category::pointer, Interface, Shape>>;
-  using rvalue_reference_resolutions =
-      category_resolutions_t<request_category::rvalue_reference, Interface,
-                             Shape>;
   // Target forms are disjoint across the value, object, and rvalue-reference
   // categories, so concatenating their already-unique lists cannot duplicate
   // a resolution.

@@ -34,29 +34,51 @@ inline constexpr bool slices_v =
     !std::is_same_v<std::remove_cv_t<Target>,
                     std::remove_cv_t<std::remove_reference_t<Source>>>;
 
+namespace detail {
+// Whether a reference of Result binds to Source as it is: a reference of the
+// same kind to an object Source is, or a base of it.
+template <typename Result, typename Source>
+inline constexpr bool binds_reference_v =
+    std::is_reference_v<Result> &&
+    std::is_lvalue_reference_v<Result> ==
+        std::is_lvalue_reference_v<Source &&> &&
+    std::is_convertible_v<std::add_pointer_t<std::remove_reference_t<Source>>,
+                          std::add_pointer_t<std::remove_reference_t<Result>>>;
+
+// The object a conversion to Result makes when it does not bind a reference:
+// the value of a value, and the object an rvalue reference refers to; none of
+// an lvalue reference.
+template <typename Result>
+using made_result_t = std::conditional_t<std::is_lvalue_reference_v<Result>,
+                                         void, std::remove_reference_t<Result>>;
+} // namespace detail
+
 template <typename TargetType, typename SourceType, typename = void>
 struct type_conversion_traits {
   static constexpr bool is_default = true;
 
+  // A reference bound to the source.
   template <
       typename Source, typename Result = TargetType,
-      std::enable_if_t<
-          !std::is_array_v<Result> && !slices_v<Result, Source> &&
-              ((std::is_reference_v<Result> &&
-                std::is_lvalue_reference_v<Source &&> &&
-                std::is_convertible_v<
-                    std::add_pointer_t<std::remove_reference_t<Source>>,
-                    std::add_pointer_t<std::remove_reference_t<Result>>>) ||
-               (!(std::is_reference_v<Result> &&
-                  std::is_lvalue_reference_v<Source &&>) &&
-                std::is_constructible_v<Result, Source &&>)),
-          int> = 0>
+      std::enable_if_t<!std::is_array_v<std::remove_reference_t<Result>> &&
+                           detail::binds_reference_v<Result, Source>,
+                       int> = 0>
   static Result convert(Source &&source) {
-    if constexpr (std::is_reference_v<Result>) {
-      return static_cast<Result>(source);
-    } else {
-      return Result(std::forward<Source>(source));
-    }
+    return static_cast<Result>(source);
+  }
+
+  // A new object made of the source, which an rvalue reference refers to
+  // where it is placed.
+  template <
+      typename Source, typename Result = TargetType,
+      typename Made = detail::made_result_t<Result>,
+      std::enable_if_t<!detail::binds_reference_v<Result, Source> &&
+                           !std::is_void_v<Made> && !std::is_array_v<Made> &&
+                           !slices_v<Made, Source> &&
+                           std::is_constructible_v<Made, Source &&>,
+                       int> = 0>
+  static Made convert(Source &&source) {
+    return Made(std::forward<Source>(source));
   }
 };
 
@@ -249,16 +271,25 @@ struct base_ref {
   }
 };
 
-// What type_conversion_traits converts the source to, given as Argument.
+// What type_conversion_traits converts the source to, given as Argument. A
+// new object an rvalue reference refers to is returned as it is made.
 template <typename Source, typename Argument> struct convert {
   template <typename Target, typename Actual>
-  static Target apply(Actual &&source) {
+  static decltype(auto) apply(Actual &&source) {
     using traits = type_conversion_traits<Target, remove_cvref_t<Actual>>;
-    if constexpr (std::is_same_v<Argument, Source>) {
-      return static_cast<Target>(traits::convert(std::forward<Actual>(source)));
+    auto converted = [&]() -> decltype(auto) {
+      if constexpr (std::is_same_v<Argument, Source>) {
+        return traits::convert(std::forward<Actual>(source));
+      } else {
+        return traits::convert(static_cast<Argument>(source));
+      }
+    };
+    using converted_type = decltype(converted());
+    if constexpr (std::is_rvalue_reference_v<Target> &&
+                  !std::is_reference_v<converted_type>) {
+      return std::remove_reference_t<Target>(converted());
     } else {
-      return static_cast<Target>(
-          traits::convert(static_cast<Argument>(source)));
+      return static_cast<Target>(converted());
     }
   }
 };

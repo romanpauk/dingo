@@ -455,6 +455,7 @@ struct conversions
   static_assert(has_storage_cell_v<StorageTag, Type>,
                 "the scope does not store this type");
   static constexpr bool is_stable = scope_traits<StorageTag>::is_stable;
+  static constexpr bool consumes = scope_traits<StorageTag>::consumes;
 };
 } // namespace detail
 

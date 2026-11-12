@@ -195,8 +195,10 @@ resolved_address apply_derivation(Scope scope, Context &context,
       return placed();
     }
   } else if constexpr (How == derivation::refer) {
-    refuse_caller_reference<Request>(scope, registered, context);
+    // The value is resolved first, as a published reference to it is: what
+    // fails as it is made fails before the caller is refused it.
     derived value = resolve();
+    refuse_caller_reference<Request>(scope, registered, context);
     return {std::addressof(value), access::borrow};
   } else if constexpr (How == derivation::address) {
     derived value = resolve();

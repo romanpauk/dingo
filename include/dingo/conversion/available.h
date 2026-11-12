@@ -18,29 +18,47 @@ namespace dingo {
 
 namespace detail {
 
-template <typename Target>
-using conversion_target_t =
-    std::conditional_t<std::is_rvalue_reference_v<Target>,
-                       std::remove_reference_t<Target>, Target>;
+// The target the conversion of Source to Target is planned for. An rvalue
+// reference refers to the source, or to what it converts to without a new
+// object, where that is available; otherwise to a new object made of the
+// source, such as a handle it is boxed into.
+template <typename Target, typename Source, typename Access>
+using conversion_target_t = std::conditional_t<
+    !std::is_rvalue_reference_v<Target> ||
+        is_type_conversion_available_v<Target, Source, Access>,
+    Target, std::remove_reference_t<Target>>;
 
 template <typename Target, typename Source, typename Access = consume>
 using conversion_resolution = resolution<
     Target,
-    type_resolution<Source, type_conversion_path_t<conversion_target_t<Target>,
-                                                   Source, Access>>>;
+    type_resolution<Source, type_conversion_path_t<
+                                conversion_target_t<Target, Source, Access>,
+                                Source, Access>>>;
+
+// Whether what an rvalue reference of Target refers to can be moved out, as
+// what takes it may: not an abstract interface, which is moved out of only
+// as a value of it, which would slice it.
+template <typename Target>
+inline constexpr bool movable_referent_v =
+    !std::is_abstract_v<remove_cvref_t<Target>> &&
+    std::is_move_constructible_v<remove_cvref_t<Target>>;
 
 // Whether a conversion of Source to Target is available. A target whose
 // object cannot exist, such as an optional of an abstract interface a request
-// is rebound to, has none. An rvalue reference moves from what the request
-// owns: its conversion consumes the source, rather than borrowing from it,
-// such as the element a shared handle shares.
+// is rebound to, has none. An rvalue reference refers to what the request
+// owns, which can be moved out: its conversion consumes the source, rather
+// than borrowing from it, such as the element a shared handle shares.
 template <typename Target, typename Source, typename Access>
 inline constexpr bool resolution_available_v = [] {
-  using target = conversion_target_t<Target>;
   if constexpr (is_wrapper_formable_v<
-                    std::remove_pointer_t<remove_cvref_t<target>>>) {
-    if constexpr (!is_type_conversion_available_v<target, Source, Access> ||
-                  !std::is_rvalue_reference_v<Target>) {
+                    std::remove_pointer_t<remove_cvref_t<Target>>>) {
+    using target = conversion_target_t<Target, Source, Access>;
+    if constexpr (std::is_rvalue_reference_v<Target> &&
+                  !movable_referent_v<Target>) {
+      return false;
+    } else if constexpr (!is_type_conversion_available_v<target, Source,
+                                                         Access> ||
+                         !std::is_rvalue_reference_v<Target>) {
       return is_type_conversion_available_v<target, Source, Access>;
     } else {
       return !access_satisfies<
