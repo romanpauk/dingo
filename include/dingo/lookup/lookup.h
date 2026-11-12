@@ -146,26 +146,20 @@ template <typename Entries>
 inline constexpr bool has_duplicate_lookup_definition_v =
     has_duplicate_lookup_entry<is_same_lookup_definition, Entries>::value;
 
+template <typename Entry, typename Interface, typename Key>
+inline constexpr bool is_lookup_entry_for_v =
+    std::is_same_v<typename Entry::interface_type, Interface> &&
+    std::is_same_v<typename Entry::key_domain::definition_type,
+                   typename Key::definition_type>;
+
 template <typename Interface, typename Key, typename Entries>
 struct matching_lookup_entry;
 
-template <typename Interface, typename Key>
-struct matching_lookup_entry<Interface, Key, type_list<>> {
-  using type = void;
-};
-
-template <typename Interface, typename Key, typename Head, typename... Tail>
-struct matching_lookup_entry<Interface, Key, type_list<Head, Tail...>> {
-private:
-  static constexpr bool exact =
-      std::is_same_v<typename Head::interface_type, Interface> &&
-      std::is_same_v<typename Head::key_domain::definition_type,
-                     typename Key::definition_type>;
-
-public:
-  using type = std::conditional_t<
-      exact, Head,
-      typename matching_lookup_entry<Interface, Key, type_list<Tail...>>::type>;
+template <typename Interface, typename Key, typename... Entries>
+struct matching_lookup_entry<Interface, Key, type_list<Entries...>> {
+  using type =
+      type_list_find_t<void, type_list<Entries...>,
+                       is_lookup_entry_for_v<Entries, Interface, Key>...>;
 };
 
 // The lookup of an interface: the one defined for the interface itself, or

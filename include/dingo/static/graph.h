@@ -75,13 +75,9 @@ struct graph_universe<type_list<Bindings...>, true> {
 // binding that is not a node (void stands for a dependency without a binding).
 template <typename Binding, typename... Universe>
 constexpr std::size_t graph_type_index() {
-  constexpr bool same[] = {std::is_same_v<Binding, Universe>..., false};
-  for (std::size_t i = 0; i < sizeof...(Universe); ++i) {
-    if (same[i]) {
-      return i;
-    }
-  }
-  return graph_npos;
+  constexpr std::size_t index =
+      pack_find<std::is_same_v<Binding, Universe>...>();
+  return index < sizeof...(Universe) ? index : graph_npos;
 }
 
 template <typename Binding, typename Universe> struct graph_type_index_in;

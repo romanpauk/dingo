@@ -55,6 +55,33 @@ TEST(type_list_test, meta_utilities) {
           type_list<type_list_a, type_list_a>>);
 }
 
+TEST(type_list_test, indexed_access) {
+  using list = type_list<type_list_a, type_list_b, type_list_a>;
+
+  static_assert(std::is_same_v<type_list_at_t<0, list>, type_list_a>);
+  static_assert(std::is_same_v<type_list_at_t<1, list>, type_list_b>);
+  static_assert(std::is_same_v<type_list_at_t<2, list>, type_list_a>);
+  static_assert(
+      std::is_same_v<
+          detail::pack_at_portable_t<1, type_list_a, type_list_b, type_list_a>,
+          type_list_b>);
+  static_assert(
+      std::is_same_v<
+          detail::pack_at_portable_t<2, type_list_a, type_list_b, type_list_a>,
+          type_list_a>);
+
+  static_assert(pack_find<>() == 0);
+  static_assert(pack_find<false, true, true>() == 1);
+  static_assert(pack_find<false, false>() == 2);
+
+  static_assert(std::is_same_v<type_list_find_t<void, type_list<>>, void>);
+  static_assert(std::is_same_v<type_list_find_t<void, list, false, true, true>,
+                               type_list_b>);
+  static_assert(
+      std::is_same_v<type_list_find_t<type_list_c, list, false, false, false>,
+                     type_list_c>);
+}
+
 TEST(type_list_test, for_each_visits_types_in_order) {
   std::vector<int> visited;
 

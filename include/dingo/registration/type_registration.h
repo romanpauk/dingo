@@ -161,19 +161,10 @@ struct registration_arg_matches<
     : std::true_type {};
 
 // The first argument that fills the role of Expected, or Expected itself.
-template <typename Expected, typename... Args> struct registration_arg {
-  using type = Expected;
-};
-
-template <typename Expected, typename Head, typename... Tail>
-struct registration_arg<Expected, Head, Tail...> {
-  using type = typename std::conditional_t<
-      registration_arg_matches<Expected, Head>::value,
-      std::enable_if<true, Head>, registration_arg<Expected, Tail...>>::type;
-};
-
 template <typename Expected, typename... Args>
-using registration_arg_t = typename registration_arg<Expected, Args...>::type;
+using registration_arg_t =
+    type_list_find_t<Expected, type_list<Args...>,
+                     registration_arg_matches<Expected, Args>::value...>;
 
 template <typename... Args> struct registration_args {
   using scope_type = registration_arg_t<::dingo::scope<void>, Args...>;

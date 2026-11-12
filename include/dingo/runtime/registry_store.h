@@ -707,21 +707,14 @@ protected:
   // qualified one, else the first unqualified one.
   template <typename Entry, typename... Args>
   static constexpr std::size_t registration_key_value_index() {
-    constexpr bool qualified[] = {
-        runtime_registration_arg_keys_entry_v<Entry, Args, true>...};
-    constexpr bool unqualified[] = {
-        runtime_registration_arg_keys_entry_v<Entry, Args, false>...};
-    for (std::size_t index = 0; index < sizeof...(Args); ++index) {
-      if (qualified[index]) {
-        return index;
-      }
+    constexpr std::size_t qualified = pack_find<
+        runtime_registration_arg_keys_entry_v<Entry, Args, true>...>();
+    if constexpr (qualified < sizeof...(Args)) {
+      return qualified;
+    } else {
+      return pack_find<
+          runtime_registration_arg_keys_entry_v<Entry, Args, false>...>();
     }
-    for (std::size_t index = 0; index < sizeof...(Args); ++index) {
-      if (unqualified[index]) {
-        return index;
-      }
-    }
-    return sizeof...(Args);
   }
 
   template <typename Entry, typename... Args>

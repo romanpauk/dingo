@@ -114,13 +114,12 @@ struct first_missing_declared_dependency {
   using type = void;
 };
 
-template <typename Head, typename... Tail, typename InterfaceBindings>
-struct first_missing_declared_dependency<type_list<Head, Tail...>,
+template <typename... Dependencies, typename InterfaceBindings>
+struct first_missing_declared_dependency<type_list<Dependencies...>,
                                          InterfaceBindings> {
-  using type = typename std::conditional_t<
-      dependency_is_registered_v<Head, InterfaceBindings>,
-      first_missing_declared_dependency<type_list<Tail...>, InterfaceBindings>,
-      std::enable_if<true, Head>>::type;
+  using type = type_list_find_t<
+      void, type_list<Dependencies...>,
+      !dependency_is_registered_v<Dependencies, InterfaceBindings>...>;
 };
 
 template <typename BindingModel, typename MissingDependency,

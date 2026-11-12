@@ -41,6 +41,19 @@
 
 // MSVC applies the empty base optimization only to the first empty base class
 // unless the derived class opts in.
+// Whether the compiler has __type_pack_element, which selects a type of a pack
+// by its index.
+#if !defined(DINGO_HAS_TYPE_PACK_ELEMENT)
+#if defined(__has_builtin)
+#if __has_builtin(__type_pack_element)
+#define DINGO_HAS_TYPE_PACK_ELEMENT 1
+#endif
+#endif
+#endif
+#if !defined(DINGO_HAS_TYPE_PACK_ELEMENT)
+#define DINGO_HAS_TYPE_PACK_ELEMENT 0
+#endif
+
 #if !defined(DINGO_EMPTY_BASES)
 #if defined(_MSC_VER)
 #define DINGO_EMPTY_BASES __declspec(empty_bases)

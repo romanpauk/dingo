@@ -83,20 +83,11 @@ template <> struct resolved_order<true> {
 template <typename Request, typename Resolutions>
 struct matching_binding_resolution;
 
-template <typename Request>
-struct matching_binding_resolution<Request, type_list<>> {
-  using type = void;
-};
-
-template <typename Request, typename Head, typename... Tail>
-struct matching_binding_resolution<Request, type_list<Head, Tail...>> {
-private:
-  using unwrapped_request = unannotated_t<Request>;
-
-public:
-  using type = std::conditional_t<
-      is_resolution_request_for_v<Head, unwrapped_request>, Head,
-      typename matching_binding_resolution<Request, type_list<Tail...>>::type>;
+template <typename Request, typename... Resolutions>
+struct matching_binding_resolution<Request, type_list<Resolutions...>> {
+  using type = type_list_find_t<
+      void, type_list<Resolutions...>,
+      is_resolution_request_for_v<Resolutions, unannotated_t<Request>>...>;
 };
 
 // Resolution target shapes are disjoint, so static lookup only needs to form
