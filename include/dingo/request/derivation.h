@@ -66,7 +66,16 @@ template <typename T> struct request_tag {
 // into or takes a value out of, whether a value of the request would slice
 // what it stores, as one of a base of it does, and whether it publishes what
 // it resolves before it constructs it, so that nothing is copied or moved of
-// what it publishes.
+// what it publishes; and, of the derivations that resolve a request through
+// one the binding publishes, whether it publishes that one.
+struct derivation_sources {
+  bool refer = false;
+  bool address = false;
+  bool move = false;
+  bool copy = false;
+  bool convert = false;
+};
+
 struct derivation_facts {
   bool keeps;
   bool places;
@@ -74,17 +83,20 @@ struct derivation_facts {
   bool takes;
   bool slices;
   bool publishes_early;
+  derivation_sources published = {};
 };
 
 class retention;
 
 // What a runtime binding hands the derivation of a request it does not
-// publish: what it keeps of its instance, the type it registers, the key the
-// request is cached under, if it caches it, and, of a request, whether it
-// publishes it and its facts.
+// publish: what it keeps of its instance, the type it registers, the
+// descriptor the request was dispatched with, the key the request is cached
+// under, if it caches it, and, of a request, whether it publishes it and its
+// facts.
 struct derivation_site {
   retention *kept;
   type_descriptor registered;
+  type_descriptor requested;
   const void *cache_key;
   bool (*publishes)(type_descriptor);
   derivation_facts (*facts_of)(type_descriptor);
@@ -325,41 +337,59 @@ struct derived_request<derivation::compose, Request> {
 template <derivation Derivation, typename Request>
 using derived_request_t = typename derived_request<Derivation, Request>::type;
 
-// Whether a binding publishes every request, as no binding does: what may be
-// derived at all is asked of it.
-struct publishes_every_request {
-  template <typename T> constexpr bool operator()(request_tag<T>) const {
-    return true;
+// Whether a binding publishes the request each derivation of Request resolves
+// through, as published(tag) says of the request of a tag: a static binding
+// knows it as the code compiles. A runtime binding finds the requests of the
+// descriptor of the request in its own resolutions.
+template <typename Request, typename Published>
+constexpr derivation_sources published_sources(Published published) {
+  derivation_sources sources;
+  if constexpr (derivation_shape_v<derivation::refer, Request>) {
+    sources.refer =
+        published(request_tag<derived_request_t<derivation::refer, Request>>{});
   }
-};
+  if constexpr (derivation_shape_v<derivation::address, Request>) {
+    sources.address = published(
+        request_tag<derived_request_t<derivation::address, Request>>{});
+  }
+  if constexpr (derivation_shape_v<derivation::move, Request>) {
+    sources.move =
+        published(request_tag<derived_request_t<derivation::move, Request>>{});
+  }
+  if constexpr (derivation_shape_v<derivation::copy, Request>) {
+    sources.copy =
+        published(request_tag<derived_request_t<derivation::copy, Request>>{});
+  }
+  if constexpr (derivation_shape_v<derivation::convert, Request>) {
+    sources.convert = published(
+        request_tag<derived_request_t<derivation::convert, Request>>{});
+  }
+  return sources;
+}
 
 // The derivation of a request a binding does not publish, from what the
-// binding tells of itself and from what it publishes, which publishes(tag)
-// says of the request of a tag. A reference to what a pointer the binding
-// makes points to refers to it; a reference or a pointer to a value the
-// binding makes refers to it, and a pointer to what the binding refers to is
-// its address; a wrapper that shares what the binding keeps is kept with it;
+// binding tells of itself. A reference to what a pointer the binding makes
+// points to refers to it; a reference or a pointer to a value the binding
+// makes refers to it, and a pointer to what the binding refers to is its
+// address; a wrapper that shares what the binding keeps is kept with it;
 // another value a reference refers to is placed, when the binding makes it,
 // or it is a wrapper made of what the binding resolves or sharing it. A value
 // is taken out of a pointer the binding makes, moved out of a value it makes,
 // copied of one it keeps, converted of a sole owner it makes, or composed.
-template <typename Request, typename Publishes>
-constexpr derivation derive_request(derivation_facts facts,
-                                    Publishes publishes) {
+template <typename Request>
+constexpr derivation derive_request(derivation_facts facts) {
   if constexpr (derivation_shape_v<derivation::adopt, Request>) {
     if (facts.adopts) {
       return derivation::adopt;
     }
   }
   if constexpr (derivation_shape_v<derivation::refer, Request>) {
-    if (publishes(
-            request_tag<derived_request_t<derivation::refer, Request>>{})) {
+    if (facts.published.refer) {
       return derivation::refer;
     }
   }
   if constexpr (derivation_shape_v<derivation::address, Request>) {
-    if (publishes(
-            request_tag<derived_request_t<derivation::address, Request>>{})) {
+    if (facts.published.address) {
       return derivation::address;
     }
   }
@@ -379,29 +409,25 @@ constexpr derivation derive_request(derivation_facts facts,
     }
   }
   if constexpr (derivation_shape_v<derivation::move, Request>) {
-    if (!facts.slices && !facts.publishes_early &&
-        publishes(
-            request_tag<derived_request_t<derivation::move, Request>>{})) {
+    if (!facts.slices && !facts.publishes_early && facts.published.move) {
       return derivation::move;
     }
   }
   if constexpr (derivation_shape_v<derivation::copy, Request>) {
-    if (!facts.slices && !facts.publishes_early &&
-        publishes(
-            request_tag<derived_request_t<derivation::copy, Request>>{})) {
+    if (!facts.slices && !facts.publishes_early && facts.published.copy) {
       return derivation::copy;
     }
   }
   if constexpr (derivation_shape_v<derivation::convert, Request>) {
-    if (publishes(
-            request_tag<derived_request_t<derivation::convert, Request>>{})) {
+    if (facts.published.convert) {
       return derivation::convert;
     }
   }
   if constexpr (derivation_shape_v<derivation::compose, Request>) {
     return derivation::compose;
+  } else {
+    return derivation::none;
   }
-  return derivation::none;
 }
 
 // Whether a request may be derived at all, by any binding: by one of which
@@ -409,7 +435,13 @@ constexpr derivation derive_request(derivation_facts facts,
 // constructs what it publishes first, and which publishes every request.
 template <typename Request>
 inline constexpr bool derivable_v =
-    derive_request<Request>({true, true, true, true, false, false},
-                            publishes_every_request{}) != derivation::none;
+    derive_request<Request>({true,
+                             true,
+                             true,
+                             true,
+                             false,
+                             false,
+                             {true, true, true, true, true}}) !=
+    derivation::none;
 } // namespace detail
 } // namespace dingo

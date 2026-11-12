@@ -12,7 +12,14 @@
 #include <type_traits>
 
 namespace dingo::detail::cache {
-template <typename T> inline constexpr unsigned char type_key = 0;
+// One object per type, whose address is the key of the type. It holds its
+// own address: a linker may fold identical data, as MSVC's /OPT:ICF does,
+// and no two keys are identical.
+struct type_key_object {
+  const void *self;
+};
+
+template <typename T> inline const type_key_object type_key{&type_key<T>};
 
 template <typename T>
 inline constexpr bool supports_v =

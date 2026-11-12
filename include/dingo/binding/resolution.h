@@ -226,14 +226,20 @@ resolved_address apply_derivation(Scope scope, Context &context,
   }
 }
 
-// Whether a runtime binding publishes a request, as its site tells.
-struct site_publishes {
-  const derivation_site &site;
-
-  template <typename T> bool operator()(request_tag<T>) const {
-    return site.publishes(described_type_v<T>);
+// What a runtime binding tells of itself for a request of T, of its
+// descriptor, with whether it publishes the sole owner a sharing handle the
+// request asks for converts of, which only the request names.
+template <typename T>
+derivation_facts runtime_facts(const derivation_site &site,
+                               type_descriptor requested) {
+  derivation_facts facts = site.facts_of(requested);
+  if constexpr (derivation_shape_v<derivation::convert, T>) {
+    const type_descriptor owner =
+        described_type_v<derived_request_t<derivation::convert, T>>;
+    facts.published.convert = site.publishes(owner);
   }
-};
+  return facts;
+}
 
 template <derivation How, typename T, typename RTTI, typename Binding,
           typename Context>
@@ -245,9 +251,8 @@ resolved_address derive_as(const derivation_site &site,
     using candidate = typename decltype(tag)::type;
     const type_descriptor requested = described_type_v<candidate>;
     return !site.publishes(requested) &&
-           derive_request<candidate>(site.facts_of(requested),
-                                     site_publishes{site}) ==
-               derivation::compose;
+           derive_request<candidate>(runtime_facts<candidate>(
+               site, requested)) == derivation::compose;
   };
   if constexpr (How == derivation::compose && derivation_shape_v<How, T>) {
     // The wrapper is placed in the context, where the binding hands it over.
@@ -288,8 +293,8 @@ derive_binding_request(void *erased, const derivation_site &site,
                        construction_scope scope, void *erased_context) {
   auto &binding = *static_cast<Binding *>(erased);
   auto &context = *static_cast<Context *>(erased_context);
-  switch (derive_request<T>(site.facts_of(described_type_v<T>),
-                            site_publishes{site})) {
+  // The request is derived of the descriptor it was dispatched with.
+  switch (derive_request<T>(runtime_facts<T>(site, site.requested))) {
   case derivation::adopt:
     return derive_as<derivation::adopt, T, RTTI>(site, scope, binding, context);
   case derivation::keep:

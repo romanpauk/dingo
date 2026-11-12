@@ -297,11 +297,11 @@ TEST(cache_test, runtime_binding_keeps_composed_wrapper) {
 }
 
 TEST(cache_test, static_binding_keeps_composed_wrapper) {
-  static_container<bindings<
-      bind<scope<shared>,
-           storage<std::shared_ptr<runtime_conversion_rollback_implementation>>,
-           interfaces<runtime_conversion_rollback_interface,
-                      runtime_conversion_rollback_implementation>>>>
+  static_container<bindings<dingo::bind<
+      scope<shared>,
+      storage<std::shared_ptr<runtime_conversion_rollback_implementation>>,
+      interfaces<runtime_conversion_rollback_interface,
+                 runtime_conversion_rollback_implementation>>>>
       container;
   expect_kept_composition(container);
 }

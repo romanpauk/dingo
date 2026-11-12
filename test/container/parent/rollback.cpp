@@ -67,10 +67,10 @@ void reset_rollback() {
 }
 
 using rollback_parent_bindings =
-    bindings<bind<scope<shared>, storage<rollback_q>>,
-             bind<scope<shared>, storage<rollback_p>>>;
+    bindings<dingo::bind<scope<shared>, storage<rollback_q>>,
+             dingo::bind<scope<shared>, storage<rollback_p>>>;
 using rollback_child_bindings =
-    bindings<bind<scope<shared>, storage<rollback_c>>>;
+    bindings<dingo::bind<scope<shared>, storage<rollback_c>>>;
 
 struct runtime_parent {
   using type = runtime_container<>;
@@ -207,11 +207,11 @@ TYPED_TEST_SUITE(rollback_order_test, container_kinds, );
 TYPED_TEST(rollback_order_test, resets_what_refers_to_an_instance_first) {
   ordered_dependent::seen = 0;
   TypeParam::template with<
-      bind<scope<shared>, storage<ordered_dependency>>,
-      bind<scope<shared>, storage<ordered_dependent>,
-           dependencies<ordered_dependency &>>,
-      bind<scope<unique>, storage<ordered_failure>,
-           dependencies<ordered_dependent &, ordered_dependency &>>>(
+      dingo::bind<scope<shared>, storage<ordered_dependency>>,
+      dingo::bind<scope<shared>, storage<ordered_dependent>,
+                  dependencies<ordered_dependency &>>,
+      dingo::bind<scope<unique>, storage<ordered_failure>,
+                  dependencies<ordered_dependent &, ordered_dependency &>>>(
       [](auto &container) {
         EXPECT_THROW(container.template resolve<ordered_failure>(),
                      std::runtime_error);

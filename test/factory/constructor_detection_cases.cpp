@@ -322,7 +322,7 @@ TEST(constructor_detection_cases, detected_constructor_constructs) {
     auto *placed = std::launder(reinterpret_cast<target *>(storage));
     EXPECT_EQ(placed->integer, 42);
     EXPECT_EQ(placed->real, 2.5f);
-    placed->~target();
+    std::destroy_at(placed);
 
     EXPECT_EQ(context.integers, 2);
     EXPECT_EQ(context.reals, 2);

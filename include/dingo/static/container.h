@@ -118,7 +118,7 @@ private:
   // a scope that does not keep its instance asks for the type its storage
   // yields: that instantiates the factory, and so the dependency chain.
   template <typename Request, typename Result, typename LookupKey>
-  static constexpr bool escapes_context_v = [] {
+  static constexpr bool escapes_context() {
     using selection = selection_t<typename Request::lookup_type, LookupKey>;
     if constexpr (collection_traits<Result>::is_collection ||
                   (!std::is_lvalue_reference_v<Result> &&
@@ -138,14 +138,14 @@ private:
                                                             context_type>;
       }
     }
-  }();
+  }
 
   // Keep the public static boundary out of static_context when the request is a
   // direct stored reference/pointer read. Those paths are part of the tiny
   // static codegen contract; any temporary, collection, conversion, or parent
   // path must use the real context instead.
   template <typename Request, typename Result, typename LookupKey>
-  static constexpr bool uses_static_minimal_context_v = [] {
+  static constexpr bool uses_static_minimal_context() {
     using selection = selection_t<typename Request::lookup_type, LookupKey>;
     if constexpr (collection_traits<Result>::is_collection ||
                   selection::status != binding_status::found) {
@@ -159,9 +159,9 @@ private:
              stored_request_identity_v<interface_type,
                                        typename model::storage_type> &&
              factory_without_dependencies_v<typename model::factory_type> &&
-             !escapes_context_v<Request, Result, LookupKey>;
+             !escapes_context<Request, Result, LookupKey>();
     }
-  }();
+  }
 
   template <typename Lookup, typename Result, typename LookupKey,
             typename Context, typename Scope>
@@ -333,12 +333,13 @@ public:
       using resolve_type = typename collection_traits<R>::resolve_type;
       throw make_collection_type_not_found_exception<R, resolve_type>();
     } else {
-      using value_type = typename Request::value_type;
+      using requested_value = typename Request::value_type;
       constexpr bool constructible = [] {
         if constexpr (MayAutoConstruct &&
                       is_auto_constructible<
                           std::decay_t<typename Request::user_type>>::value) {
-          return constructor<value_type>::kind == constructor_kind::concrete;
+          return constructor<requested_value>::kind ==
+                 constructor_kind::concrete;
         } else {
           return false;
         }
@@ -359,11 +360,11 @@ private:
     static_assert(detail::is_static_lookup_key_v<LookupKey>,
                   "static_container fixed runtime-key request requires "
                   "dingo::key_type<Key, Value>");
-    static_assert(!escapes_context_v<Request, R, LookupKey>,
+    static_assert(!escapes_context<Request, R, LookupKey>(),
                   "static_container cannot return a reference or a pointer to "
                   "an instance the resolution constructs and does not keep; "
                   "request it by value, or as a dependency");
-    if constexpr (uses_static_minimal_context_v<Request, R, LookupKey>) {
+    if constexpr (uses_static_minimal_context<Request, R, LookupKey>()) {
       no_dependency_context context;
       return as_operation([&]() -> R {
         return resolve_bound<typename request_type<typename Request::user_type,

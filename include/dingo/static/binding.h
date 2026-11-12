@@ -144,7 +144,7 @@ struct local_binding_router {
     using R = typename request::interface_type;
     constexpr bool collection = collection_traits<R>::is_collection;
     constexpr bool bound_locally = [] {
-      if constexpr (collection) {
+      if constexpr (collection_traits<R>::is_collection) {
         return static_collection_binding_count<LocalBindings, R, LookupKey>() !=
                0;
       } else {
@@ -178,10 +178,18 @@ struct static_dependencies<Host, static_registry<LocalRegistrations...>> {
                            static_registry<LocalRegistrations...>, Host>;
 };
 
+// Whether a static binding publishes a request.
+template <typename InterfaceBinding> struct static_publishes {
+  template <typename T> constexpr bool operator()(request_tag<T>) const {
+    return binding_supports_request_v<T, InterfaceBinding>;
+  }
+};
+
 // What a static binding tells the derivation of a request it does not
 // publish: whether it keeps its instance, whether a reference may refer to a
-// value it makes, and whether it publishes the pointer it makes that the
-// request refers into or takes a value out of.
+// value it makes, whether it publishes the pointer it makes that the request
+// refers into or takes a value out of, and what it publishes of what each
+// derivation resolves through.
 template <typename Request, typename InterfaceBinding>
 constexpr derivation_facts static_derivation_facts() {
   using storage = typename InterfaceBinding::binding_model_type::storage_type;
@@ -191,7 +199,8 @@ constexpr derivation_facts static_derivation_facts() {
       false,
       false,
       slices_v<remove_cvref_t<Request>, leaf_type_t<typename storage::type>>,
-      scope_allows_cycles_v<typename storage::tag_type>};
+      scope_allows_cycles_v<typename storage::tag_type>,
+      published_sources<Request>(static_publishes<InterfaceBinding>{})};
   if constexpr (std::is_lvalue_reference_v<Request> &&
                 adopts_made_pointer_v<storage,
                                       std::remove_reference_t<Request>>) {
@@ -205,18 +214,10 @@ constexpr derivation_facts static_derivation_facts() {
   return facts;
 }
 
-// Whether a static binding publishes a request.
-template <typename InterfaceBinding> struct static_publishes {
-  template <typename T> constexpr bool operator()(request_tag<T>) const {
-    return binding_supports_request_v<T, InterfaceBinding>;
-  }
-};
-
 // The derivation of a request a static binding does not publish.
 template <typename Request, typename InterfaceBinding>
 inline constexpr derivation static_derivation_v = derive_request<Request>(
-    static_derivation_facts<Request, InterfaceBinding>(),
-    static_publishes<InterfaceBinding>{});
+    static_derivation_facts<Request, InterfaceBinding>());
 
 // Whether a binding resolves a request: one it publishes, or one it derives
 // from a request it resolves.

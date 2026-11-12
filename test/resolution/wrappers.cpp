@@ -179,7 +179,7 @@ using shared_optional_move_only = std::shared_ptr<std::optional<move_only>>;
 
 // A container holding one registration of Parts, made by Kind.
 template <typename Kind, typename... Parts> struct with_binding {
-  typename Kind::template container<bind<Parts...>> container;
+  typename Kind::template container<dingo::bind<Parts...>> container;
 };
 
 // A registration made by make<X>, optionally bound as X itself.
@@ -526,8 +526,8 @@ TEST(wrappers_test, runtime_values_of_made_pointee_are_moved_out_of_it) {
 
 TEST(wrappers_test, static_values_of_made_pointee_are_moved_out_of_it) {
   expect_values_of_made_pointee<static_container<
-      bindings<bind<scope<unique>, storage<counted_pointee *>,
-                    factory<function<make_counted_pointee>>>>>>();
+      bindings<dingo::bind<scope<unique>, storage<counted_pointee *>,
+                           factory<function<make_counted_pointee>>>>>>();
 }
 
 namespace {
@@ -546,8 +546,9 @@ TEST(wrappers_test, empty_optional_of_optional_gives_empty_optional) {
   EXPECT_FALSE(runtime.invoke(
       [](std::optional<regular> &&value) { return value.has_value(); }));
 
-  static_container<bindings<bind<scope<unique>, storage<nested_optional>,
-                                 factory<function<&empty_nested_optional>>>>>
+  static_container<
+      bindings<dingo::bind<scope<unique>, storage<nested_optional>,
+                           factory<function<&empty_nested_optional>>>>>
       compile_time;
   EXPECT_FALSE(compile_time.resolve<std::optional<regular>>().has_value());
   EXPECT_FALSE(compile_time.invoke(

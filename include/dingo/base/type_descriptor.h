@@ -32,7 +32,7 @@ struct type_descriptor {
   // translation unit, so identity is carried by `tag`, never by this text.
   std::string_view raw_name;
   // Address of the per-type detail::type_tag<T>; null for pointer levels.
-  const char *tag = nullptr;
+  const void *tag = nullptr;
   type_cv_flags cv = type_cv_flags::none;
   type_reference_kind reference = type_reference_kind::none;
   // Descriptor of the pointed-to type; null unless this is a pointer level.
@@ -59,9 +59,14 @@ inline void append_type_name(std::string &name, type_descriptor descriptor);
 namespace detail {
 
 // One object per type, merged across translation units by vague linkage, so
-// its address identifies the type regardless of how a compiler spells it.
-// Deliberately not const: identical read-only data may be folded by linkers.
-template <typename T> inline char type_tag = 0;
+// its address identifies the type regardless of how a compiler spells it. It
+// holds its own address: a linker may fold identical data, as MSVC's
+// /OPT:ICF does, and no two tags are identical.
+struct type_tag_object {
+  const void *self;
+};
+
+template <typename T> inline const type_tag_object type_tag{&type_tag<T>};
 
 constexpr bool same_type_shape(type_descriptor lhs, type_descriptor rhs) {
   if (lhs.reference != rhs.reference ||
@@ -276,14 +281,19 @@ inline void append_described_type_name(std::string &name,
 } // namespace detail
 
 namespace detail {
-// The descriptor of a type, made once at compile time: a function computing
-// it would be emitted for every type a message names.
-template <typename T>
-inline constexpr type_descriptor described_type_v = [] {
+// The descriptor of a type with its reference kind.
+template <typename T> constexpr type_descriptor make_described_type() {
   auto descriptor = make_type_descriptor<std::remove_reference_t<T>>();
   descriptor.reference = make_type_reference_kind<T>();
   return descriptor;
-}();
+}
+
+// The descriptor of a type, made once at compile time: a function computing
+// it would be emitted for every type a message names. It is made by a
+// function, not by a lambda: MSVC leaves a variable a lambda initializes
+// zero where it is only read at run time.
+template <typename T>
+inline constexpr type_descriptor described_type_v = make_described_type<T>();
 } // namespace detail
 
 template <typename T> constexpr type_descriptor describe_type() {

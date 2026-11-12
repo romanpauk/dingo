@@ -1720,8 +1720,8 @@ TEST(type_registration_test, abstract_interface_binds_over_value_storage) {
   EXPECT_EQ(optional_container.resolve<I &>().value(), 7);
   EXPECT_EQ(optional_container.resolve<I *>()->value(), 7);
 
-  static_container<
-      bindings<bind<scope<shared>, storage<std::optional<A>>, interfaces<I>>>>
+  static_container<bindings<
+      dingo::bind<scope<shared>, storage<std::optional<A>>, interfaces<I>>>>
       static_optional;
   EXPECT_EQ(static_optional.resolve<I &>().value(), 7);
 }
@@ -1742,8 +1742,9 @@ TEST(type_registration_test,
   EXPECT_THROW(runtime.resolve<I &>(), type_not_convertible_exception);
   EXPECT_THROW(runtime.resolve<I *>(), type_not_convertible_exception);
 
-  static_container<bindings<bind<scope<unique>, storage<A>, interfaces<I>>,
-                            bind<scope<shared>, storage<reader>>>>
+  static_container<
+      bindings<dingo::bind<scope<unique>, storage<A>, interfaces<I>>,
+               dingo::bind<scope<shared>, storage<reader>>>>
       compile_time;
   EXPECT_EQ(compile_time.resolve<reader &>().value, 7);
 
@@ -1845,8 +1846,9 @@ TEST(type_registration_test, unique_value_is_moved_into_owning_handle) {
   EXPECT_EQ(runtime.resolve<std::shared_ptr<I>>()->value(), 7);
   EXPECT_EQ(runtime.resolve<owner>().instance->value(), 7);
 
-  static_container<bindings<bind<scope<unique>, storage<A>, interfaces<I>>,
-                            bind<scope<unique>, storage<owner>>>>
+  static_container<
+      bindings<dingo::bind<scope<unique>, storage<A>, interfaces<I>>,
+               dingo::bind<scope<unique>, storage<owner>>>>
       compile_time;
   EXPECT_EQ(compile_time.resolve<std::unique_ptr<I>>()->value(), 7);
   EXPECT_EQ(compile_time.resolve<owner>().instance->value(), 7);
@@ -1960,9 +1962,10 @@ template <typename Scope> void check_runtime() {
 
 template <typename Scope> void check_static() {
   {
-    static_container<bindings<bind<scope<unique>, storage<part>>,
-                              bind<scope<Scope>, storage<service>,
-                                   factory<constructor<service(part &)>>>>>
+    static_container<
+        bindings<dingo::bind<scope<unique>, storage<part>>,
+                 dingo::bind<scope<Scope>, storage<service>,
+                             factory<constructor<service(part &)>>>>>
         fixed;
     service &kept = fixed.template resolve<service &>();
     EXPECT_EQ(part::alive, 1);
@@ -2028,7 +2031,7 @@ TEST(type_registration_test, construct_of_dynamic_array_handle_holds_value) {
   std::shared_ptr<A[]> made = runtime.construct<std::shared_ptr<A[]>>();
   EXPECT_EQ(made[0].value(), 7);
 
-  static_container<bindings<bind<scope<unique>, storage<A>>>> fixed;
+  static_container<bindings<dingo::bind<scope<unique>, storage<A>>>> fixed;
   std::shared_ptr<A[]> fixed_made = fixed.construct<std::shared_ptr<A[]>>();
   EXPECT_EQ(fixed_made[0].value(), 7);
 }
@@ -2042,7 +2045,7 @@ TEST(type_registration_test, invoke_returns_what_the_callable_returns) {
   A &kept = runtime.invoke([](A &a) -> A & { return a; });
   EXPECT_EQ(&kept, &runtime.resolve<A &>());
 
-  static_container<bindings<bind<scope<shared>, storage<A>>>> fixed;
+  static_container<bindings<dingo::bind<scope<shared>, storage<A>>>> fixed;
   A &fixed_kept = fixed.invoke([](A &a) -> A & { return a; });
   EXPECT_EQ(&fixed_kept, &fixed.resolve<A &>());
 }
@@ -2093,8 +2096,8 @@ TEST(type_registration_test, construct_of_annotated_abstract_pointer) {
   EXPECT_EQ(constructed, static_cast<I *>(runtime.resolve<request>()));
   EXPECT_EQ(constructed->value(), 7);
 
-  static_container<
-      bindings<bind<scope<shared>, storage<A>, interfaces<annotated<I, tag>>>>>
+  static_container<bindings<
+      dingo::bind<scope<shared>, storage<A>, interfaces<annotated<I, tag>>>>>
       fixed;
   I *fixed_constructed = fixed.construct<request>();
   EXPECT_EQ(fixed_constructed, static_cast<I *>(fixed.resolve<request>()));
@@ -2112,7 +2115,7 @@ TEST(type_registration_test, shared_pointer_of_bounded_array) {
   EXPECT_EQ(runtime.resolve<A *>(), &kept[0]);
   EXPECT_EQ(kept[1].value(), 7);
 
-  static_container<bindings<bind<scope<unique>, storage<handle>>>> fixed;
+  static_container<bindings<dingo::bind<scope<unique>, storage<handle>>>> fixed;
   handle made = fixed.resolve<handle>();
   EXPECT_EQ(made[1].value(), 7);
 }
@@ -2137,7 +2140,8 @@ TEST(type_registration_test, reference_to_immovable_unique_value) {
   runtime.register_type<scope<unique>, storage<immovable>>();
   EXPECT_EQ(runtime.invoke(read), 7);
 
-  static_container<bindings<bind<scope<unique>, storage<immovable>>>> fixed;
+  static_container<bindings<dingo::bind<scope<unique>, storage<immovable>>>>
+      fixed;
   EXPECT_EQ(fixed.invoke(read), 7);
 }
 
@@ -2153,7 +2157,7 @@ TEST(type_registration_test, shared_optional_of_immovable_value) {
   EXPECT_EQ(&runtime.resolve<stored &>().value(),
             &runtime.resolve<immovable &>());
 
-  static_container<bindings<bind<scope<shared>, storage<stored>>>> fixed;
+  static_container<bindings<dingo::bind<scope<shared>, storage<stored>>>> fixed;
   EXPECT_EQ(fixed.resolve<immovable &>().value, 7);
 }
 
@@ -2178,8 +2182,8 @@ TEST(type_registration_test, runtime_construct_of_undetected_type) {
                         factory<function<&make>>>();
   EXPECT_EQ(std::get<int>(runtime.construct<alternative>()), 7);
 
-  static_container<bindings<
-      bind<scope<shared>, storage<alternative>, factory<function<&make>>>>>
+  static_container<bindings<dingo::bind<scope<shared>, storage<alternative>,
+                                        factory<function<&make>>>>>
       fixed;
   EXPECT_EQ(std::get<int>(fixed.construct<alternative>()), 7);
 }
@@ -2240,6 +2244,6 @@ TEST(type_registration_test, construct_of_rvalue_reference_resolves_it) {
   kept.register_type<scope<shared>, storage<A>>();
   EXPECT_THROW(kept.construct<A &&>(), type_not_convertible_exception);
 
-  static_container<bindings<bind<scope<unique>, storage<A>>>> fixed;
+  static_container<bindings<dingo::bind<scope<unique>, storage<A>>>> fixed;
   EXPECT_EQ(fixed.construct<A &&>().value, 7);
 }

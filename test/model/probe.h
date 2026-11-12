@@ -586,8 +586,8 @@ template <typename... Bindings, typename Traits, typename R, typename Scope>
 struct with_consumer<static_container<bindings<Bindings...>, Traits>, R,
                      Scope> {
   using type = static_container<
-      bindings<Bindings..., bind<scope<Scope>, storage<consumer<R>>,
-                                 factory<constructor<consumer<R>(R)>>>>,
+      bindings<Bindings..., dingo::bind<scope<Scope>, storage<consumer<R>>,
+                                        factory<constructor<consumer<R>(R)>>>>,
       Traits>;
 };
 

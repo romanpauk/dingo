@@ -388,27 +388,16 @@ private:
         // is registered once the cell is resolved, after what it depends
         // on, so that a rollback, which runs the last registered first,
         // resets the cell before what it refers to. A cell that fails as it
-        // resolves is reset at once.
-        auto reset = +[](void *self, void *) noexcept {
-          static_cast<Cell *>(self)->reset();
-        };
+        // resolves, or as its reset is registered, is reset at once.
+        cell_reset_guard guard{cell};
         return invoke_then(
             [&]() -> decltype(auto) {
-              try {
-                return with_runtime_source(persistent_scope, context,
-                                           std::forward<Fn>(fn));
-              } catch (...) {
-                cell.reset();
-                throw;
-              }
+              return with_runtime_source(persistent_scope, context,
+                                         std::forward<Fn>(fn));
             },
             [&] {
-              try {
-                context.on_rollback(reset, std::addressof(cell));
-              } catch (...) {
-                cell.reset();
-                throw;
-              }
+              context.on_rollback(&reset_cell, std::addressof(cell));
+              guard.release();
               context.add_runtime_destructor(
                   std::addressof(cell), +[](void *self) noexcept {
                     static_cast<Cell *>(self)->reset();
@@ -418,6 +407,23 @@ private:
     }
     return with_runtime_source(scope, context, std::forward<Fn>(fn));
   }
+
+  static void reset_cell(void *self, void *) noexcept {
+    static_cast<Cell *>(self)->reset();
+  }
+
+  // Resets a cell as it is destroyed, unless it is released.
+  struct cell_reset_guard {
+    Cell &cell;
+    bool armed = true;
+
+    void release() noexcept { armed = false; }
+    ~cell_reset_guard() {
+      if (armed) {
+        cell.reset();
+      }
+    }
+  };
 
   // Runs after once fn has succeeded and returns what fn returned.
   template <typename Fn, typename After>

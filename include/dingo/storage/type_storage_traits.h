@@ -443,25 +443,35 @@ private:
       type_list<remove_cvref_t<typename Rvalues::target_type>>,
       type_list<>>...>;
 
+  // Whether a request converts a wrapper of the sole owner of an object
+  // the storage publishes an rvalue reference to.
+  template <typename Wrapper> static constexpr bool converted() {
+    using sole_owner = typename converted_from<Wrapper>::type;
+    if constexpr (std::is_void_v<sole_owner>) {
+      return false;
+    } else {
+      return type_list_contains_v<remove_cvref_t<sole_owner>, referred>;
+    }
+  }
+
+  // Whether a request composes a wrapper of an object the storage publishes
+  // an rvalue reference to.
+  template <typename Wrapper> static constexpr bool composed() {
+    if constexpr (composes_v<Wrapper>) {
+      return type_list_contains_v<
+          std::remove_cv_t<typename type_traits<Wrapper>::value_type>,
+          referred>;
+    } else {
+      return false;
+    }
+  }
+
   template <typename Target> static constexpr bool derived() {
     using wrapper = remove_cvref_t<Target>;
     if constexpr (is_base<Target>()) {
       return false;
     } else {
-      using converted = typename converted_from<wrapper>::type;
-      if constexpr (!std::is_void_v<converted>) {
-        if constexpr (type_list_contains_v<remove_cvref_t<converted>,
-                                           referred>) {
-          return true;
-        }
-      }
-      if constexpr (composes_v<wrapper>) {
-        return type_list_contains_v<
-            std::remove_cv_t<typename type_traits<wrapper>::value_type>,
-            referred>;
-      } else {
-        return false;
-      }
+      return converted<wrapper>() || composed<wrapper>();
     }
   }
 

@@ -37,35 +37,40 @@ inline constexpr bool is_object_wrapper_v =
 
 // Whether a copy of a type shares what it holds: a shared handle does, and
 // an optional of one.
-template <typename Type>
-inline constexpr bool copy_shares_v = [] {
+template <typename Type> constexpr bool copy_shares() {
   if constexpr (is_object_wrapper_v<Type>) {
-    if constexpr (std::is_copy_constructible_v<Type>) {
-      if constexpr (std::is_base_of_v<semantics::shared_owner,
-                                      type_traits<Type>>) {
-        return true;
-      } else if constexpr (std::is_base_of_v<semantics::optional_value,
-                                             type_traits<Type>>) {
-        return copy_shares_v<typename type_traits<Type>::value_type>;
-      }
+    using traits = type_traits<Type>;
+    if constexpr (std::is_base_of_v<semantics::shared_owner, traits>) {
+      return std::is_copy_constructible_v<Type>;
+    } else if constexpr (std::is_base_of_v<semantics::optional_value, traits>) {
+      return std::is_copy_constructible_v<Type> &&
+             copy_shares<typename traits::value_type>();
+    } else {
+      return false;
     }
+  } else {
+    return false;
   }
-  return false;
-}();
+}
+
+template <typename Type>
+inline constexpr bool copy_shares_v = copy_shares<Type>();
 
 // Whether a value composed for a request holds a copy that shares what it
 // was copied of: it is such a copy, or a wrapper that cannot be copied, made
 // of one.
-template <typename Type>
-inline constexpr bool holds_sharing_copy_v = [] {
+template <typename Type> constexpr bool holds_sharing_copy() {
   if constexpr (!is_object_wrapper_v<Type>) {
     return false;
   } else if constexpr (!std::is_copy_constructible_v<Type>) {
-    return holds_sharing_copy_v<typename type_traits<Type>::value_type>;
+    return holds_sharing_copy<typename type_traits<Type>::value_type>();
   } else {
-    return copy_shares_v<Type>;
+    return copy_shares<Type>();
   }
-}();
+}
+
+template <typename Type>
+inline constexpr bool holds_sharing_copy_v = holds_sharing_copy<Type>();
 
 // The request of the value the wrapper of a request holds: the value itself
 // when it is never a copy of what shares nothing, as one that shares what it

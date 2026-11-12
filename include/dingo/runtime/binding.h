@@ -144,12 +144,53 @@ constexpr bool takes_request(type_list<Resolutions...>,
   return (matches_taken_request<Storage, Resolutions>(requested_type) || ...);
 }
 
+// Whether a runtime binding publishes a request of a descriptor.
+template <typename... Resolutions>
+constexpr bool
+publishes_descriptor(type_list<Resolutions...>,
+                     [[maybe_unused]] type_descriptor requested) {
+  return (matches_resolution_request<Resolutions>(requested) || ...);
+}
+
+// What a runtime binding publishes of what the derivations of a request
+// resolve through, of the descriptor of the request: a value is moved out of
+// an rvalue reference to it or copied of a const reference to it, and a
+// reference or a pointer refers to what an rvalue reference refers to; a
+// pointer is the address of what an lvalue reference refers to. A sole owner
+// a sharing handle converts of is known only to the request.
+template <typename Resolutions>
+constexpr derivation_sources runtime_published(type_descriptor requested) {
+  derivation_sources sources;
+  auto as = [](type_descriptor source, type_reference_kind reference,
+               type_cv_flags cv) {
+    source.reference = reference;
+    source.cv = cv;
+    return publishes_descriptor(Resolutions{}, source);
+  };
+  if (requested.pointee != nullptr &&
+      requested.reference == type_reference_kind::none) {
+    const type_descriptor pointee = *requested.pointee;
+    sources.refer =
+        as(pointee, type_reference_kind::rvalue, type_cv_flags::none);
+    sources.address = as(pointee, type_reference_kind::lvalue, pointee.cv);
+  } else if (requested.reference == type_reference_kind::lvalue) {
+    sources.refer =
+        as(requested, type_reference_kind::rvalue, type_cv_flags::none);
+  } else if (requested.reference == type_reference_kind::none) {
+    sources.move =
+        as(requested, type_reference_kind::rvalue, type_cv_flags::none);
+    sources.copy = as(requested, type_reference_kind::lvalue,
+                      requested.cv | type_cv_flags::is_const);
+  }
+  return sources;
+}
+
 // What a runtime binding of a storage tells the derivation of a request it
 // does not publish, of its resolutions: whether it keeps its instance,
 // places what it makes, and publishes the pointer it makes that a reference
 // request refers into, or that a value request is taken out of, as the value
-// can be moved, and whether a value of its interface would slice what it
-// stores.
+// can be moved, whether a value of its interface would slice what it stores,
+// and what it publishes of what each derivation resolves through.
 template <typename Interface, typename Storage, typename Resolutions>
 constexpr derivation_facts runtime_derivation_facts(type_descriptor requested) {
   using interface_type = std::remove_cv_t<Interface>;
@@ -162,7 +203,8 @@ constexpr derivation_facts runtime_derivation_facts(type_descriptor requested) {
           requested.reference != type_reference_kind::lvalue &&
           requested.pointee == nullptr &&
           requested.tag == described_type_v<interface_type>.tag,
-      scope_allows_cycles_v<typename Storage::tag_type>};
+      scope_allows_cycles_v<typename Storage::tag_type>,
+      runtime_published<Resolutions>(requested)};
   if constexpr (hands_over_made_pointers_v<Storage>) {
     facts.adopts = requested.reference == type_reference_kind::lvalue &&
                    adopts_request<Storage>(Resolutions{}, requested);
@@ -271,19 +313,17 @@ private:
   // A storage that makes a value for the request places it in the context,
   // which ends before the caller of the container uses an address into it,
   // or into what it owns, as the static container knows as it compiles. A
-  // pointer the storage makes hands over what it points to. Whether it
-  // places the value is given as an argument: MSVC parses a call with an
-  // explicit template argument in a generic lambda as a declaration.
-  template <bool PlacesValue>
-  static void check_caller_address(std::bool_constant<PlacesValue>,
-                                   construction_scope scope,
+  // pointer the storage makes hands over what it points to.
+  template <typename Resolver>
+  struct places_value : std::bool_constant<detail::materializes_value_source_v<
+                            Storage, runtime_context_type, Resolver>> {};
+
+  static void check_caller_address(bool places, construction_scope scope,
                                    const resolved_address &resolved,
                                    const request_type &request,
                                    runtime_context_type &context) {
-    if constexpr (!PlacesValue) {
-      (void)scope, (void)resolved, (void)request, (void)context;
-    } else if (scope.is_caller() && refers(request.requested_type) &&
-               resolved.access == resolved_address::access_kind::borrow) {
+    if (places && scope.is_caller() && refers(request.requested_type) &&
+        resolved.access == resolved_address::access_kind::borrow) {
       throw detail::make_type_not_convertible_exception(
           request.requested_type, registered_type(), context);
     }
@@ -329,7 +369,11 @@ private:
     }
     auto &binding = static_cast<runtime_binding &>(erased);
     const detail::derivation_site site{
-        retained(binding), registered_type(), cached(cache_key), &publishes,
+        retained(binding),
+        registered_type(),
+        request.requested_type,
+        cached(cache_key),
+        &publishes,
         &detail::runtime_derivation_facts<Type, Storage, request_resolutions>};
     return request.derive(&erased, site, scope, &context);
   }
@@ -343,6 +387,28 @@ private:
                                               requested) !=
              type_list_size_v<request_resolutions>;
     }
+  }
+
+  // Applies the resolution at a run-time index through the container the
+  // binding resolves in, and tells whether its storage places a value, which
+  // the caller is refused an address into. It is a function of its own:
+  // MSVC's permissive mode loses the names a generic lambda in a generic
+  // lambda captures.
+  template <typename Resolver>
+  static resolved_address
+  resolve_in(Resolver &container, state_type &state, construction_scope scope,
+             runtime_context_type &context, std::size_t resolution_index,
+             const request_type &request, bool &places) {
+    using activation_type =
+        detail::binding_activation<typename state_type::cell_type, Resolver &>;
+    places = places_value<Resolver>::value;
+    activation_type activation{state.cell(), container, scope};
+    return activation.template with_source<void>(
+        context, [&](auto &&source) -> resolved_address {
+          return detail::resolve_indexed_address(
+              activation, context, std::forward<decltype(source)>(source),
+              resolution_index, request_resolutions{}, request.requested_type);
+        });
   }
 
   static resolved_address dispatch_request(interface_base &erased,
@@ -361,26 +427,13 @@ private:
 
       auto &binding = static_cast<runtime_binding &>(erased);
       auto &state = binding.state();
+      bool places = false;
       auto result = state.with_resolution_container(
           [&](auto &container) -> resolved_address {
-            using activation_type = detail::binding_activation<
-                typename state_type::cell_type,
-                std::remove_reference_t<decltype(container)> &>;
-            activation_type activation{state.cell(), container, scope};
-            return activation.template with_source<void>(
-                context, [&](auto &&source) -> resolved_address {
-                  auto resolved = detail::resolve_indexed_address(
-                      activation, context,
-                      std::forward<decltype(source)>(source), resolution_index,
-                      request_resolutions{}, request.requested_type);
-                  check_caller_address(
-                      std::bool_constant<detail::materializes_value_source_v<
-                          Storage, runtime_context_type,
-                          std::remove_reference_t<decltype(container)>>>{},
-                      scope, resolved, request, context);
-                  return resolved;
-                });
+            return resolve_in(container, state, scope, context,
+                              resolution_index, request, places);
           });
+      check_caller_address(places, scope, result, request, context);
       // Request caching is intentionally stricter than conversion caching and
       // is published with transaction rollback tracking.
       if constexpr (Storage::conversions::is_stable) {

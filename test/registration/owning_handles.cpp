@@ -50,8 +50,8 @@ TEST(owning_handles_test, unique_value_is_moved_into_a_listed_handle) {
   EXPECT_EQ(runtime.resolve<test_shared<interface_type>>().get()->value(), 7);
   EXPECT_EQ(runtime.resolve<std::unique_ptr<interface_type>>()->value(), 7);
 
-  static_container<
-      bindings<bind<scope<unique>, storage<leaf>, interfaces<interface_type>>>>
+  static_container<bindings<
+      dingo::bind<scope<unique>, storage<leaf>, interfaces<interface_type>>>>
       compile_time;
   EXPECT_EQ(compile_time.resolve<test_unique<interface_type>>().get()->value(),
             7);
@@ -65,7 +65,8 @@ TEST(owning_handles_test, unique_pointer_is_taken_over_by_a_listed_handle) {
   EXPECT_EQ(runtime.resolve<test_unique<leaf>>().get()->value(), 7);
   EXPECT_EQ(runtime.resolve<test_shared<leaf>>().get()->value(), 7);
 
-  static_container<bindings<bind<scope<unique>, storage<leaf *>>>> compile_time;
+  static_container<bindings<dingo::bind<scope<unique>, storage<leaf *>>>>
+      compile_time;
   EXPECT_EQ(compile_time.resolve<test_unique<leaf>>().get()->value(), 7);
 }
 } // namespace dingo
