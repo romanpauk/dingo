@@ -1368,7 +1368,7 @@ TEST(type_registration_test, const_reference_storage_preserves_const_access) {
                                type_list<const int &>>);
   static_assert(std::is_same_v<pointer_resolution_targets_t<
                                    typename resolutions::object_resolutions>,
-                               type_list<const int *>>);
+                               type_list<>>);
 
   const int value = 7;
   container<> value_container;

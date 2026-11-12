@@ -385,6 +385,15 @@ inline constexpr bool has_storage_cell_v = [] {
   }
 }();
 
+// Whether a type publishes pointers of its own. A pointer to a plain object
+// is the address of the reference it publishes, which a request takes
+// itself. A pointer, an array, a wrapper and an alternative type publish
+// theirs: a pointer to what a wrapper or an alternative type holds is null
+// when it holds nothing, where a reference to it does not exist.
+template <typename Type> constexpr bool publishes_pointers() {
+  return storage_form_traits<Type>::form != storage_form::plain;
+}
+
 // The generic rule: publish the lists of the form that the scope exposes.
 template <typename StorageTag, typename Type, typename U>
 struct scope_rule_requests {
@@ -415,7 +424,8 @@ public:
                          typename consumed::rvalue_reference_types,
                          type_list<>>;
   using pointer_types =
-      std::conditional_t<exposes_any(exposed, storage_exposure::pointer),
+      std::conditional_t<exposes_any(exposed, storage_exposure::pointer) &&
+                             publishes_pointers<Type>(),
                          typename borrowed::pointer_types, type_list<>>;
 };
 

@@ -329,7 +329,12 @@ public:
     using resolution =
         typename static_request_resolution<Request, InterfaceBinding,
                                            Context>::type;
-    if constexpr (std::is_void_v<resolution>) {
+    if constexpr (static_request_derivation_v<Request, InterfaceBinding> !=
+                  derivation::none) {
+      // A request the binding derives is handed over as it is derived.
+      return std::forward<Fn>(fn)(
+          resolve<InterfaceBinding, Request>(scope, host, context));
+    } else if constexpr (std::is_void_v<resolution>) {
       not_convertible<Request, InterfaceBinding>(context);
     } else {
       [[maybe_unused]] auto order = ordered(host, context);

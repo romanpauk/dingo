@@ -160,15 +160,11 @@ template <typename Request> constexpr bool value_shape() {
 }
 
 // What a reference or a pointer request refers to: an object, not an array.
+// It may be only declared: its address is taken, nothing more.
 template <typename Request> constexpr bool refers_object_shape() {
   if constexpr (refers_request_v<Request>) {
     using value_type = referred_value_t<Request>;
-    if constexpr (std::is_object_v<value_type> &&
-                  is_complete<value_type>::value) {
-      return !std::is_array_v<value_type>;
-    } else {
-      return false;
-    }
+    return std::is_object_v<value_type> && !std::is_array_v<value_type>;
   } else {
     return false;
   }
@@ -340,9 +336,9 @@ struct publishes_every_request {
 // The derivation of a request a binding does not publish, from what the
 // binding tells of itself and from what it publishes, which publishes(tag)
 // says of the request of a tag. A reference to what a pointer the binding
-// makes points to refers to it; a wrapper that shares what the binding keeps
-// is kept with it; a reference or a pointer to a value the binding makes
-// refers to it, a pointer to what the binding refers to is its address;
+// makes points to refers to it; a reference or a pointer to a value the
+// binding makes refers to it, and a pointer to what the binding refers to is
+// its address; a wrapper that shares what the binding keeps is kept with it;
 // another value a reference refers to is placed, when the binding makes it,
 // or it is a wrapper made of what the binding resolves or sharing it. A value
 // is taken out of a pointer the binding makes, moved out of a value it makes,
@@ -355,11 +351,6 @@ constexpr derivation derive_request(derivation_facts facts,
       return derivation::adopt;
     }
   }
-  if constexpr (derivation_shape_v<derivation::keep, Request>) {
-    if (facts.keeps) {
-      return derivation::keep;
-    }
-  }
   if constexpr (derivation_shape_v<derivation::refer, Request>) {
     if (publishes(
             request_tag<derived_request_t<derivation::refer, Request>>{})) {
@@ -370,6 +361,11 @@ constexpr derivation derive_request(derivation_facts facts,
     if (publishes(
             request_tag<derived_request_t<derivation::address, Request>>{})) {
       return derivation::address;
+    }
+  }
+  if constexpr (derivation_shape_v<derivation::keep, Request>) {
+    if (facts.keeps) {
+      return derivation::keep;
     }
   }
   if constexpr (derivation_shape_v<derivation::place, Request>) {
