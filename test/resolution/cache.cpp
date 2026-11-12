@@ -89,15 +89,15 @@ template <typename Container> void expect_kept_composition(Container &c) {
   auto &first = c.template resolve<leaf_wrapper &>();
   auto &again = c.template resolve<const leaf_wrapper &>();
   auto *pointer = c.template resolve<leaf_wrapper *>();
-  auto &interface = c.template resolve<interface_wrapper &>();
+  auto &converted = c.template resolve<interface_wrapper &>();
   auto &kept = c.template resolve<leaf_handle &>();
   EXPECT_EQ(std::addressof(again), std::addressof(first));
   EXPECT_EQ(pointer, std::addressof(first));
   EXPECT_EQ(first->get(), kept.get());
   EXPECT_EQ(std::addressof(c.template resolve<interface_wrapper &>()),
-            std::addressof(interface));
+            std::addressof(converted));
   EXPECT_EQ(static_cast<runtime_conversion_rollback_implementation *>(
-                interface->get()),
+                converted->get()),
             kept.get());
   auto value = c.template resolve<leaf_wrapper>();
   EXPECT_EQ(value->get(), kept.get());

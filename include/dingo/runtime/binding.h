@@ -152,16 +152,16 @@ constexpr bool takes_request(type_list<Resolutions...>,
 // stores.
 template <typename Interface, typename Storage, typename Resolutions>
 constexpr derivation_facts runtime_derivation_facts(type_descriptor requested) {
-  using interface = std::remove_cv_t<Interface>;
+  using interface_type = std::remove_cv_t<Interface>;
   derivation_facts facts{
       binding_cell<Storage>::keeps_conversions,
       places_made_values_v<Storage>,
       false,
       false,
-      slices_v<interface, leaf_type_t<typename Storage::type>> &&
+      slices_v<interface_type, leaf_type_t<typename Storage::type>> &&
           requested.reference != type_reference_kind::lvalue &&
           requested.pointee == nullptr &&
-          requested.tag == described_type_v<interface>.tag,
+          requested.tag == described_type_v<interface_type>.tag,
       scope_allows_cycles_v<typename Storage::tag_type>};
   if constexpr (hands_over_made_pointers_v<Storage>) {
     facts.adopts = requested.reference == type_reference_kind::lvalue &&

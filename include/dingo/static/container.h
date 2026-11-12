@@ -410,16 +410,16 @@ private:
             typename Scope>
   decltype(auto) resolve_selected(Selection &, Scope scope, Context &context) {
     using binding = typename Selection::binding_type;
-    using interface = typename Request::interface_type;
-    if constexpr (std::is_rvalue_reference_v<interface> &&
-                  std::is_same_v<R, std::remove_reference_t<interface>> &&
-                  detail::static_request_derivation_v<interface, binding> ==
+    using requested = typename Request::interface_type;
+    if constexpr (std::is_rvalue_reference_v<requested> &&
+                  std::is_same_v<R, std::remove_reference_t<requested>> &&
+                  detail::static_request_derivation_v<requested, binding> ==
                       detail::derivation::compose) {
       // The value an rvalue request of a wrapper the binding composes returns
       // is composed where it is returned.
       return storage_.template resolve<binding, R>(scope, *this, context);
     } else {
-      return storage_.template resolve<binding, interface>(scope, *this,
+      return storage_.template resolve<binding, requested>(scope, *this,
                                                            context);
     }
   }

@@ -224,31 +224,31 @@ constexpr type_descriptor registration_key_type(const lookup_key<Selector> &) {
   }
 }
 
-inline std::string make_lookup_registration_message(const char *prefix,
-                                                    type_descriptor interface,
-                                                    type_descriptor storage,
-                                                    type_descriptor key_type) {
+inline std::string make_lookup_registration_message(
+    const char *prefix, type_descriptor interface_type, type_descriptor storage,
+    type_descriptor key_type) {
   std::string message = prefix;
-  append_text(message, interface, ", storage ", storage, ", key type ",
+  append_text(message, interface_type, ", storage ", storage, ", key type ",
               key_type);
   return message;
 }
 
 inline lookup_already_registered_exception
-make_lookup_already_registered_exception(type_descriptor interface,
+make_lookup_already_registered_exception(type_descriptor interface_type,
                                          type_descriptor storage,
                                          type_descriptor key_type) {
-  return lookup_already_registered_exception(make_lookup_registration_message(
-      "lookup already registered: interface ", interface, storage, key_type));
+  return lookup_already_registered_exception(
+      make_lookup_registration_message("lookup already registered: interface ",
+                                       interface_type, storage, key_type));
 }
 
 inline container_sealed_exception
-make_container_sealed_exception(type_descriptor interface,
+make_container_sealed_exception(type_descriptor interface_type,
                                 type_descriptor storage,
                                 type_descriptor key_type) {
   return container_sealed_exception(make_lookup_registration_message(
       "container sealed by resolve, lookup can not be replaced: interface ",
-      interface, storage, key_type));
+      interface_type, storage, key_type));
 }
 
 } // namespace detail

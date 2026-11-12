@@ -729,15 +729,15 @@ protected:
 
   // A registration the lookup rejects, named by its descriptors.
   static void check_lookup_commit(lookup_commit result,
-                                  type_descriptor interface,
+                                  type_descriptor interface_type,
                                   type_descriptor storage,
                                   type_descriptor key_type) {
     if (result == lookup_commit::rejected) {
-      throw detail::make_lookup_already_registered_exception(interface, storage,
-                                                             key_type);
+      throw detail::make_lookup_already_registered_exception(interface_type,
+                                                             storage, key_type);
     }
     if (result == lookup_commit::sealed) {
-      throw detail::make_container_sealed_exception(interface, storage,
+      throw detail::make_container_sealed_exception(interface_type, storage,
                                                     key_type);
     }
   }
