@@ -1058,9 +1058,9 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   using compatible_unique_handle_resolutions = detail::binding_resolutions<
       I, typename compatible_unique_handle_model::storage_type>;
   static_assert(
-      has_resolution_target_v<std::unique_ptr<I>,
-                              typename accepted_values<
-                                  compatible_unique_handle_resolutions>::type>);
+      has_resolution_target_v<std::unique_ptr<I> &&,
+                              typename compatible_unique_handle_resolutions::
+                                  rvalue_reference_resolutions>);
 
   using incompatible_unique_handle_model =
       detail::binding_model<type_registration<
@@ -1093,8 +1093,8 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
       detail::binding_resolutions<std::shared_ptr<move_only>,
                                   typename shared_variant_model::storage_type>;
   static_assert(has_resolution_target_v<
-                std::shared_ptr<move_only>,
-                typename accepted_values<shared_variant_resolutions>::type>);
+                std::shared_ptr<move_only> &,
+                typename shared_variant_resolutions::object_resolutions>);
 
   using shared_move_only_variant =
       std::variant<std::unique_ptr<move_only>, std::monostate>;
@@ -1115,9 +1115,6 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   using unique_variant_resolutions =
       detail::binding_resolutions<std::unique_ptr<move_only>,
                                   typename unique_variant_model::storage_type>;
-  static_assert(has_resolution_target_v<
-                std::unique_ptr<move_only>,
-                typename accepted_values<unique_variant_resolutions>::type>);
   static_assert(
       has_resolution_target_v<
           std::unique_ptr<move_only> &&,
@@ -1151,8 +1148,8 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
                         interfaces<std::optional<copy_only>>>>;
   using exact_optional_binding =
       detail::binding<std::optional<copy_only>, exact_optional_model>;
-  static_assert(detail::binding_supports_request_v<std::optional<copy_only>,
-                                                   exact_optional_binding>);
+  static_assert(detail::resolves_request_v<std::optional<copy_only>,
+                                           exact_optional_binding>);
   static_assert(
       !detail::binding_supports_request_v<
           std::optional<std::optional<copy_only>>, exact_optional_binding>);

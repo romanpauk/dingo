@@ -486,11 +486,6 @@ struct derived_resolutions_dropped {
 };
 
 template <typename Interface, typename Storage>
-struct published_resolutions<request_category::value, Interface, Storage>
-    : derived_resolutions_dropped<request_category::value, Interface, Storage> {
-};
-
-template <typename Interface, typename Storage>
 struct published_resolutions<request_category::rvalue_reference, Interface,
                              Storage>
     : derived_resolutions_dropped<request_category::rvalue_reference, Interface,
@@ -510,6 +505,78 @@ public:
                                             request_category::rvalue_reference,
                                             Interface, Storage>::type>,
       std::enable_if<true, all>>::type;
+};
+
+// Whether a storage keeps what it publishes, so that a request may copy it.
+template <typename Conversions, typename = void>
+struct keeps_published : std::false_type {};
+
+template <typename Conversions>
+struct keeps_published<Conversions,
+                       std::void_t<decltype(Conversions::is_stable)>>
+    : std::bool_constant<Conversions::is_stable> {};
+
+// The value resolutions of a storage but those of the wrapper it stores, as
+// it is or rebound to the interface, which it publishes a reference to: a
+// request copies a value of it of the lvalue reference, or moves it out of
+// the rvalue reference. A layer inside it may be absent, where no reference
+// to it exists, and so may what a pointer points to: their values are
+// published.
+template <typename Resolutions, typename Outer, typename Referred>
+struct without_referred_wrapper_values;
+
+template <typename... Resolutions, typename Outer, typename Referred>
+struct without_referred_wrapper_values<type_list<Resolutions...>, Outer,
+                                       Referred> {
+  using type = type_list_cat_t<std::conditional_t<
+      type_list_contains_v<remove_cvref_t<typename Resolutions::target_type>,
+                           Outer> &&
+          type_list_contains_v<
+              remove_cvref_t<typename Resolutions::target_type>, Referred>,
+      type_list<>, type_list<Resolutions>>...>;
+};
+
+// The wrapper a storage stores, as it is and rebound to the interface.
+template <typename Type, typename Interface, typename = void>
+struct outer_layer {
+  using type = type_list<>;
+};
+
+template <typename Type, typename Interface>
+struct outer_layer<Type, Interface,
+                   std::enable_if_t<is_object_wrapper_v<Type>>> {
+  using type = type_list<Type, wrapper_rebind_leaf_t<Type, Interface>>;
+};
+
+template <typename Resolutions> struct resolution_objects;
+
+template <typename... Resolutions>
+struct resolution_objects<type_list<Resolutions...>> {
+  using type = type_list<remove_cvref_t<typename Resolutions::target_type>...>;
+};
+
+template <typename Interface, typename Storage>
+struct published_resolutions<request_category::value, Interface, Storage> {
+private:
+  using values = typename derived_resolutions_dropped<request_category::value,
+                                                      Interface, Storage>::type;
+  using referred = typename resolution_objects<type_list_cat_t<
+      typename published_resolutions<request_category::lvalue_reference,
+                                     Interface, Storage>::type,
+      typename published_resolutions<request_category::rvalue_reference,
+                                     Interface, Storage>::type>>::type;
+
+public:
+  using type = typename std::conditional_t<
+      (keeps_published<typename Storage::conversions>::value ||
+       consumes_made<typename Storage::conversions>::value) &&
+          !storage_source_traits<Storage>::is_pointer,
+      without_referred_wrapper_values<
+          values,
+          typename outer_layer<remove_cvref_t<typename Storage::type>,
+                               std::remove_cv_t<Interface>>::type,
+          referred>,
+      std::enable_if<true, values>>::type;
 };
 
 template <request_category Category, typename Interface, typename Storage>
