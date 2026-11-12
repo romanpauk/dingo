@@ -26,11 +26,11 @@ struct annotated : detail::selected<T, detail::type_selector<Tag>> {
   template <typename U = T,
             std::enable_if_t<std::is_constructible_v<base_type, U &&>, int> = 0>
   annotated(T &&value) : base_type(std::move(value)) {}
-  // The value the maker makes, made in place.
-  template <typename Maker,
-            std::enable_if_t<detail::is_selected_maker_v<std::decay_t<Maker>>,
-                             int> = 0>
-  explicit annotated(Maker &&maker) : base_type(std::forward<Maker>(maker)) {}
+  // The value the call returns, emplaced.
+  template <
+      typename Call,
+      std::enable_if_t<detail::is_in_place_call_v<std::decay_t<Call>>, int> = 0>
+  explicit annotated(Call &&call) : base_type(std::forward<Call>(call)) {}
 };
 
 namespace detail {

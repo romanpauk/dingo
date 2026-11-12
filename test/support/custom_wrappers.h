@@ -133,7 +133,7 @@ struct type_traits<test_shared<T>> : semantics::shared_owner {
   static T &borrow(const test_shared<T> &wrapper) { return *wrapper.get(); }
   static bool empty(const test_shared<T> &wrapper) { return !wrapper.get(); }
 
-  template <typename... Args> static test_shared<T> make(Args &&...args) {
+  template <typename... Args> static test_shared<T> emplace(Args &&...args) {
     return test_shared<T>(
         std::shared_ptr<T>(new T{std::forward<Args>(args)...}));
   }
@@ -149,7 +149,7 @@ struct type_traits<test_unique<T>> : semantics::sole_owner {
   static T &borrow(const test_unique<T> &wrapper) { return *wrapper.get(); }
   static bool empty(const test_unique<T> &wrapper) { return !wrapper.get(); }
 
-  template <typename... Args> static test_unique<T> make(Args &&...args) {
+  template <typename... Args> static test_unique<T> emplace(Args &&...args) {
     return test_unique<T>(
         std::unique_ptr<T>(new T{std::forward<Args>(args)...}));
   }
@@ -174,9 +174,9 @@ struct type_traits<test_optional<T>> : semantics::optional_value {
     return test_optional<T>(T(std::forward<Value>(value)));
   }
 
-  static test_optional<T> make_empty() { return {}; }
+  static test_optional<T> empty_value() { return {}; }
 
-  template <typename... Args> static test_optional<T> make(Args &&...args) {
+  template <typename... Args> static test_optional<T> emplace(Args &&...args) {
     if constexpr (std::is_constructible_v<T, Args...>) {
       return test_optional<T>(T(std::forward<Args>(args)...));
     } else {

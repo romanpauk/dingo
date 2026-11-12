@@ -381,7 +381,7 @@ private:
   composed_type_t<Request> compose(Scope scope, Host &host, Context &context) {
     using wrapper = composed_type_t<Request>;
     auto composes = composes_request<InterfaceBinding>();
-    auto with = [&](auto tag, auto &make) -> wrapper {
+    auto with = [&](auto tag, auto &emplace) -> wrapper {
       using candidate = typename decltype(tag)::type;
       if constexpr (static_request_derivation_v<candidate, InterfaceBinding> ==
                     derivation::none) {
@@ -390,14 +390,15 @@ private:
               using instance_type = decltype(instance);
               if constexpr (std::is_same_v<remove_cvref_t<instance_type>,
                                            remove_cvref_t<candidate>>) {
-                return make(std::forward<instance_type>(instance));
+                return emplace(std::forward<instance_type>(instance));
               } else {
-                return make(static_cast<candidate>(
+                return emplace(static_cast<candidate>(
                     std::forward<instance_type>(instance)));
               }
             });
       } else {
-        return make(resolve<InterfaceBinding, candidate>(scope, host, context));
+        return emplace(
+            resolve<InterfaceBinding, candidate>(scope, host, context));
       }
     };
     return compose_wrapper<wrapper,

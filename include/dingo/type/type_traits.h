@@ -84,16 +84,19 @@ struct alternative_value {
 //   borrow(w)      the element, for a wrapper whose element can be borrowed
 //                  as an object (not an array)
 //   empty(w)       whether the wrapper holds no element
-//   make(args...)  a wrapper of an element made from args
-//   makes_nested   optional, false by default: whether make(args...) makes
-//                  an element that is a wrapper of what makes its element too,
-//                  so that a wrapper of wrappers is made at once of what
-//                  makes its innermost element
-//   makeable<Args...>  optional, true by default: whether make(args...)
-//                  makes the wrapper of Args, for a make that cannot take any,
-//                  such as that of a handle of an array
+//   emplace(args...)
+//                  a wrapper of an element constructed of args
+//   emplaces_element
+//                  optional, false by default: whether emplace(args...) passes
+//                  args to the emplace of an element that is a wrapper too, so
+//                  that a wrapper of wrappers is emplaced at once of the
+//                  arguments of its innermost element
+//   can_emplace<Args...>
+//                  optional, true by default: whether emplace takes Args, for
+//                  an emplace that cannot take any, such as that of a handle
+//                  of an array
 //   share_t<U>     for a sole owner: the sharing handle of the element U
-//   wrap(v), make_empty()
+//   wrap(v), empty_value()
 //                  for an optional value: a wrapper of v, and an empty one
 //
 // An alternative value provides instead
@@ -279,7 +282,7 @@ inline constexpr bool is_alternative_type_interface_compatible_v =
                                    std::remove_cv_t<Interface>>::value == 1;
 
 namespace detail {
-template <typename T, typename... Args> T make_nested(Args &&...args);
+template <typename T, typename... Args> T emplace_element(Args &&...args);
 
 // Whether T[N]{args...} is well-formed: its first elements are copy-initialized
 // from the arguments, and the rest value-initialized.
@@ -342,29 +345,37 @@ template <typename T, typename... Args> T *make_dynamic_array(Args &&...args) {
   }
 }
 
-// Whether a handle can be made of Args, as its type_traits declares with
-// makeable<Args...>; one that declares nothing is made of what makes its
-// element.
+// Whether type_traits<Handle>::emplace takes Args, as the handle declares with
+// can_emplace<Args...>. A handle that declares nothing takes the arguments of
+// its element.
 template <typename Handle, typename Args, typename = void>
-struct declared_makeable : std::true_type {};
+struct emplace_declaration : std::true_type {};
 
 template <typename Handle, typename... Args>
-struct declared_makeable<
+struct emplace_declaration<
     Handle, type_list<Args...>,
-    std::void_t<decltype(type_traits<Handle>::template makeable<Args...>)>>
-    : std::bool_constant<type_traits<Handle>::template makeable<Args...>> {};
+    std::void_t<decltype(type_traits<Handle>::template can_emplace<Args...>)>>
+    : std::bool_constant<type_traits<Handle>::template can_emplace<Args...>> {};
 
 template <typename Handle, typename... Args>
-struct handle_makeable : declared_makeable<Handle, type_list<Args...>> {};
+inline constexpr bool can_emplace_v =
+    emplace_declaration<Handle, type_list<Args...>>::value;
 
 template <typename T, size_t> using repeated_argument_t = T;
 
 template <typename Handle, typename Argument, typename Indexes>
-struct handle_makeable_by;
+struct can_emplace_repeated;
 
 template <typename Handle, typename Argument, size_t... Is>
-struct handle_makeable_by<Handle, Argument, std::index_sequence<Is...>>
-    : handle_makeable<Handle, repeated_argument_t<Argument, Is>...> {};
+struct can_emplace_repeated<Handle, Argument, std::index_sequence<Is...>>
+    : std::bool_constant<
+          can_emplace_v<Handle, repeated_argument_t<Argument, Is>...>> {};
+
+// Whether type_traits<Handle>::emplace takes Count arguments of Argument.
+template <typename Handle, typename Argument, size_t Count>
+inline constexpr bool can_emplace_repeated_v =
+    can_emplace_repeated<Handle, Argument,
+                         std::make_index_sequence<Count>>::value;
 
 template <typename Type, typename U, typename = void>
 struct wrapper_rebind_leaf {
@@ -515,12 +526,12 @@ struct type_traits<
 
   // The array is made of an element of each argument, copy-initialized.
   template <typename... Args>
-  static constexpr bool makeable =
+  static constexpr bool can_emplace =
       detail::is_bounded_array_initializable_v<value_type, sizeof...(Args),
                                                Args...>;
 
   template <typename... Args>
-  static std::unique_ptr<Array, Deleter> make(Args &&...args) {
+  static std::unique_ptr<Array, Deleter> emplace(Args &&...args) {
     return std::unique_ptr<Array, Deleter>(
         detail::make_dynamic_array<value_type>(std::forward<Args>(args)...));
   }
@@ -534,7 +545,7 @@ struct type_traits<std::unique_ptr<T, Deleter>,
   template <typename U>
   using rebind_t = std::unique_ptr<U, std::default_delete<U>>;
   template <typename U> using share_t = std::shared_ptr<U>;
-  static constexpr bool makes_nested = true;
+  static constexpr bool emplaces_element = true;
 
   static T *get(const std::unique_ptr<T, Deleter> &wrapper) {
     return wrapper.get();
@@ -555,7 +566,7 @@ struct type_traits<std::unique_ptr<T, Deleter>,
   }
 
   template <typename... Args>
-  static std::unique_ptr<T, Deleter> make(Args &&...args) {
+  static std::unique_ptr<T, Deleter> emplace(Args &&...args) {
     // An optional is made in place, as a shared_ptr makes one.
     if constexpr (is_optional_type_v<T> &&
                   std::is_constructible_v<T, std::in_place_t, Args...>)
@@ -563,7 +574,7 @@ struct type_traits<std::unique_ptr<T, Deleter>,
           new T(std::in_place, std::forward<Args>(args)...));
     else if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
       return std::unique_ptr<T, Deleter>(
-          new T(detail::make_nested<T>(std::forward<Args>(args)...)));
+          new T(detail::emplace_element<T>(std::forward<Args>(args)...)));
     // Work around direct-initialization in smart-pointer-backed factories.
     else if constexpr (std::is_constructible_v<T, Args...>)
       return std::unique_ptr<T, Deleter>(new T(std::forward<Args>(args)...));
@@ -589,12 +600,12 @@ struct type_traits<
 
   // The array is made of an element of each argument, copy-initialized.
   template <typename... Args>
-  static constexpr bool makeable =
+  static constexpr bool can_emplace =
       detail::is_bounded_array_initializable_v<value_type, sizeof...(Args),
                                                Args...>;
 
   template <typename... Args>
-  static std::shared_ptr<Array> make(Args &&...args) {
+  static std::shared_ptr<Array> emplace(Args &&...args) {
     return std::shared_ptr<Array>(
         detail::make_dynamic_array<value_type>(std::forward<Args>(args)...));
   }
@@ -623,11 +634,11 @@ struct type_traits<
   // The first elements are copy-initialized from the arguments, the rest
   // value-initialized.
   template <typename... Args>
-  static constexpr bool makeable = detail::is_bounded_array_initializable_v<
+  static constexpr bool can_emplace = detail::is_bounded_array_initializable_v<
       value_type, std::extent_v<Array, 0>, Args...>;
 
   template <typename... Args>
-  static std::shared_ptr<Array> make(Args &&...args) {
+  static std::shared_ptr<Array> emplace(Args &&...args) {
     return std::shared_ptr<Array>(
         detail::make_bounded_array<value_type, std::extent_v<Array, 0>>(
             std::forward<Args>(args)...));
@@ -639,7 +650,7 @@ struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>>
     : semantics::shared_owner {
   using value_type = T;
   template <typename U> using rebind_t = std::shared_ptr<U>;
-  static constexpr bool makes_nested = true;
+  static constexpr bool emplaces_element = true;
 
   static T *get(const std::shared_ptr<T> &wrapper) { return wrapper.get(); }
   static T &borrow(const std::shared_ptr<T> &wrapper) { return *wrapper; }
@@ -647,7 +658,8 @@ struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>>
     return wrapper.get() == nullptr;
   }
 
-  template <typename... Args> static std::shared_ptr<T> make(Args &&...args) {
+  template <typename... Args>
+  static std::shared_ptr<T> emplace(Args &&...args) {
     // An optional is made in place of the arguments of its element, which
     // may be moved neither in it nor out of it.
     if constexpr (is_optional_type_v<T> &&
@@ -655,7 +667,7 @@ struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>>
       return std::make_shared<T>(std::in_place, std::forward<Args>(args)...);
     else if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
       return std::make_shared<T>(
-          detail::make_nested<T>(std::forward<Args>(args)...));
+          detail::emplace_element<T>(std::forward<Args>(args)...));
     // Work around direct-initialization in std::make_shared().
     else if constexpr (std::is_constructible_v<T, Args...>)
       return std::make_shared<T>(std::forward<Args>(args)...);
@@ -668,7 +680,7 @@ template <typename T>
 struct type_traits<std::optional<T>> : semantics::optional_value {
   using value_type = T;
   template <typename U> using rebind_t = std::optional<U>;
-  static constexpr bool makes_nested = true;
+  static constexpr bool emplaces_element = true;
 
   static T *get(std::optional<T> &wrapper) {
     return wrapper ? std::addressof(*wrapper) : nullptr;
@@ -691,9 +703,9 @@ struct type_traits<std::optional<T>> : semantics::optional_value {
   template <typename Value> static std::optional<T> wrap(Value &&value) {
     return std::optional<T>(std::in_place, std::forward<Value>(value));
   }
-  static std::optional<T> make_empty() { return std::nullopt; }
+  static std::optional<T> empty_value() { return std::nullopt; }
 
-  template <typename... Args> static std::optional<T> make(Args &&...args) {
+  template <typename... Args> static std::optional<T> emplace(Args &&...args) {
     // An optional of an optional is made in place too, as its element may
     // be moved neither in it nor out of it.
     if constexpr (is_optional_type_v<T> &&
@@ -701,8 +713,8 @@ struct type_traits<std::optional<T>> : semantics::optional_value {
       return std::optional<T>{std::in_place, std::in_place,
                               std::forward<Args>(args)...};
     else if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
-      return std::optional<T>{
-          std::in_place, detail::make_nested<T>(std::forward<Args>(args)...)};
+      return std::optional<T>{std::in_place, detail::emplace_element<T>(
+                                                 std::forward<Args>(args)...)};
     else if constexpr (std::is_constructible_v<T, Args...>)
       return std::optional<T>{std::in_place, std::forward<Args>(args)...};
     else
@@ -711,14 +723,14 @@ struct type_traits<std::optional<T>> : semantics::optional_value {
 };
 
 namespace detail {
-// A nested wrapper made of the arguments of its element, or moved when it is
-// given as itself.
-template <typename T, typename... Args> T make_nested(Args &&...args) {
+// A nested wrapper emplaced of the arguments of its element, or moved when it
+// is given as itself.
+template <typename T, typename... Args> T emplace_element(Args &&...args) {
   if constexpr (sizeof...(Args) == 1 &&
                 (std::is_same_v<remove_cvref_t<Args>, T> && ...)) {
     return T(std::forward<Args>(args)...);
   } else {
-    return type_traits<T>::make(std::forward<Args>(args)...);
+    return type_traits<T>::emplace(std::forward<Args>(args)...);
   }
 }
 } // namespace detail

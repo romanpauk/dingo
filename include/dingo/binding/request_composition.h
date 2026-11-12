@@ -103,33 +103,34 @@ template <typename Request> constexpr bool composes() {
 template <typename Request>
 inline constexpr bool composes_v = composes<Request>();
 
-// Whether type_traits<Wrapper>::make makes its element of what makes the
-// element's own element, as the wrapper declares with makes_nested.
+// Whether type_traits<Wrapper>::emplace emplaces an element that is a wrapper
+// of the arguments of the element's own element, as the wrapper declares with
+// emplaces_element.
 template <typename Wrapper, typename = void>
-inline constexpr bool makes_nested_v = false;
+inline constexpr bool emplaces_element_v = false;
 
 template <typename Wrapper>
-inline constexpr bool makes_nested_v<
-    Wrapper, std::void_t<decltype(type_traits<Wrapper>::makes_nested)>> =
-    type_traits<Wrapper>::makes_nested;
+inline constexpr bool emplaces_element_v<
+    Wrapper, std::void_t<decltype(type_traits<Wrapper>::emplaces_element)>> =
+    type_traits<Wrapper>::emplaces_element;
 
-// Whether a wrapper is made at once of Value, its innermost value, down
-// layers that each make their value of what makes it.
-template <typename Wrapper, typename Value> constexpr bool makes_of() {
-  if constexpr (!makes_nested_v<Wrapper>) {
+// Whether a wrapper is emplaced at once of Value, its innermost value, down
+// layers that each emplace their element.
+template <typename Wrapper, typename Value> constexpr bool emplaces_from() {
+  if constexpr (!emplaces_element_v<Wrapper>) {
     return false;
   } else {
     using value_type = typename type_traits<Wrapper>::value_type;
     if constexpr (std::is_same_v<std::remove_cv_t<value_type>, Value>) {
       return true;
     } else {
-      return makes_of<std::remove_cv_t<value_type>, Value>();
+      return emplaces_from<std::remove_cv_t<value_type>, Value>();
     }
   }
 }
 
 template <typename Wrapper, typename Value>
-inline constexpr bool makes_of_v = makes_of<Wrapper, Value>();
+inline constexpr bool emplaces_from_v = emplaces_from<Wrapper, Value>();
 
 // Whether a reference or a pointer refers to a wrapper that holds a copy
 // sharing what it was copied of, such as a std::shared_ptr<I> of a kept

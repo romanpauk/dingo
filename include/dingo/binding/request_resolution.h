@@ -81,28 +81,29 @@ template <std::size_t Count>
 struct is_constant_count<std::integral_constant<std::size_t, Count>>
     : std::true_type {};
 
-// Whether the default factory makes an unbound request: the class is
-// detected, and an array it makes can be initialized. The argument detection
-// probes with converts as the one that constructs it does. An annotated value
-// is made of the value it annotates, which is copied or moved.
+// Whether the default factory constructs an unbound request: the class is
+// detected, and the handle it returns can emplace the class. The argument
+// detection probes with converts as the one that constructs it does. An
+// annotated value is constructed of the value it annotates, which is copied or
+// moved.
 template <typename Request, typename R,
           bool Factory =
               construct_factory_request_v<typename Request::user_type>>
-struct default_factory_makes : std::true_type {};
+struct default_factory_constructs : std::true_type {};
 
 template <typename Request, typename R>
-struct default_factory_makes<Request, R, true> {
+struct default_factory_constructs<Request, R, true> {
   using value_type = typename Request::value_type;
   using annotated_type = unannotated_t<value_type>;
-  static constexpr bool annotated_is_made =
+  static constexpr bool annotated_is_constructed =
       std::is_same_v<annotated_type, value_type> ||
       std::is_move_constructible_v<annotated_type>;
   static constexpr bool value = [] {
-    if constexpr (annotated_is_made &&
+    if constexpr (annotated_is_constructed &&
                   constructor<value_type>::kind == constructor_kind::concrete) {
-      return handle_makeable_by<
+      return can_emplace_repeated_v<
           std::decay_t<R>, constructor_argument<value_type, constructor_shape>,
-          std::make_index_sequence<constructor<value_type>::arity>>::value;
+          constructor<value_type>::arity>;
     } else {
       return false;
     }
@@ -199,7 +200,7 @@ struct request_resolution {
         // Whether the request is bound is known only now, so a request the
         // default factory cannot make is not found, rather than rejected
         // while it compiles.
-        if constexpr (default_factory_makes<Request, R>::value) {
+        if constexpr (default_factory_constructs<Request, R>::value) {
           return construct_unbound<Request, R>(host, scope, context, factory);
         } else {
           throw_type_not_found(
@@ -223,10 +224,10 @@ struct request_resolution {
     using made = std::decay_t<typename Request::user_type>;
     auto &&instance = resolve<normalized, typename normalized::lookup_type>(
         host, scope, context, host, no_lookup_key());
-    if constexpr (detail::makes_of_v<made,
-                                     remove_cvref_t<decltype(instance)>>) {
+    if constexpr (detail::emplaces_from_v<made,
+                                          remove_cvref_t<decltype(instance)>>) {
       // A wrapper of wrappers is made at once of the value.
-      return type_traits<made>::make(
+      return type_traits<made>::emplace(
           std::forward<decltype(instance)>(instance));
     } else {
       return detail::convert_type<made, consume>(

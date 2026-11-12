@@ -46,7 +46,7 @@ template <typename T, typename = void> struct constructor_traits {
 };
 
 // A pointer is to a new T; one placed at an address is constructed there as T
-// is, a wrapper made of what makes its element.
+// is, a wrapper emplaced of the arguments of its element.
 template <typename T> struct constructor_traits<T *> {
   template <typename... Args> static T *construct(Args &&...args) {
     return new T{std::forward<Args>(args)...};
@@ -54,7 +54,7 @@ template <typename T> struct constructor_traits<T *> {
 
   template <typename... Args> static auto construct(void *ptr, Args &&...args) {
     if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>) {
-      new (ptr) T(type_traits<T>::make(std::forward<Args>(args)...));
+      new (ptr) T(type_traits<T>::emplace(std::forward<Args>(args)...));
     } else {
       new (ptr) T{std::forward<Args>(args)...};
     }
@@ -118,16 +118,16 @@ template <typename T>
 struct constructor_traits<
     T, std::enable_if_t<type_traits<T>::enabled && !std::is_pointer_v<T>>> {
   template <typename... Args> static T construct(Args &&...args) {
-    return type_traits<T>::make(std::forward<Args>(args)...);
+    return type_traits<T>::emplace(std::forward<Args>(args)...);
   }
 
   template <typename... Args> static T &construct(T &ptr, Args &&...args) {
-    ptr = type_traits<T>::make(std::forward<Args>(args)...);
+    ptr = type_traits<T>::emplace(std::forward<Args>(args)...);
     return ptr;
   }
 
   template <typename... Args> static auto construct(void *ptr, Args &&...args) {
-    new (ptr) T(type_traits<T>::make(std::forward<Args>(args)...));
+    new (ptr) T(type_traits<T>::emplace(std::forward<Args>(args)...));
   }
 };
 

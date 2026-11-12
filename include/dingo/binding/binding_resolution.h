@@ -118,36 +118,36 @@ void refuse_caller_reference(Scope scope, type_descriptor registered,
   }
 }
 
-// A wrapper a binding does not publish, made at once of the shallowest of the
-// values its layers hold that the binding resolves otherwise than by
-// composing it, down the layers that make their values of what makes them: a
-// value is moved into all the layers made of it at once, and a handle into the
-// wrapper as it is. composes(tag) says whether the binding
-// composes a request, as a constant when it is known as the code compiles;
-// with(tag, make) passes make what the binding resolves for a request. Both
-// containers compose a request so.
+// A wrapper a binding does not publish, emplaced at once of the shallowest of
+// the values its layers hold that the binding resolves otherwise than by
+// composing it, down the layers that emplace their element: a value is moved
+// into all the layers emplaced of it at once, and a handle into the wrapper as
+// it is. composes(tag) says whether the binding composes a request, as a
+// constant when it is known as the code compiles; with(tag, emplace) passes
+// emplace what the binding resolves for a request. Both containers compose a
+// request so.
 template <typename Wrapper, typename Candidate, typename Composes,
           typename With>
 Wrapper compose_wrapper(Composes &composes, With &with) {
-  auto make = [](auto &&value) -> Wrapper {
-    return type_traits<Wrapper>::make(std::forward<decltype(value)>(value));
+  auto emplace = [](auto &&value) -> Wrapper {
+    return type_traits<Wrapper>::emplace(std::forward<decltype(value)>(value));
   };
-  if constexpr (composes_v<Candidate> && makes_nested_v<Wrapper> &&
-                makes_nested_v<composed_type_t<Candidate>>) {
+  if constexpr (composes_v<Candidate> && emplaces_element_v<Wrapper> &&
+                emplaces_element_v<composed_type_t<Candidate>>) {
     using deeper = composed_inner_t<Candidate>;
     using composed = decltype(composes(request_tag<Candidate>{}));
     if constexpr (std::is_same_v<composed, std::true_type>) {
       return compose_wrapper<Wrapper, deeper>(composes, with);
     } else if constexpr (std::is_same_v<composed, std::false_type>) {
-      return with(request_tag<Candidate>{}, make);
+      return with(request_tag<Candidate>{}, emplace);
     } else {
       if (composes(request_tag<Candidate>{})) {
         return compose_wrapper<Wrapper, deeper>(composes, with);
       }
-      return with(request_tag<Candidate>{}, make);
+      return with(request_tag<Candidate>{}, emplace);
     }
   } else {
-    return with(request_tag<Candidate>{}, make);
+    return with(request_tag<Candidate>{}, emplace);
   }
 }
 
@@ -223,9 +223,10 @@ resolved_address derive_as(const derivation_site &site,
   if constexpr (How == derivation::compose && derivation_shape_v<How, T>) {
     // The wrapper is placed in the context, where the binding hands it over.
     using wrapper = composed_type_t<T>;
-    auto with = [&](auto tag, auto &make) -> wrapper {
-      return make(resolve_binding_request<typename decltype(tag)::type, RTTI>(
-          scope, binding, context));
+    auto with = [&](auto tag, auto &emplace) -> wrapper {
+      return emplace(
+          resolve_binding_request<typename decltype(tag)::type, RTTI>(
+              scope, binding, context));
     };
     auto &value =
         context.template construct_from<wrapper>(scope, [&]() -> wrapper {

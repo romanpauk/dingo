@@ -35,7 +35,7 @@ struct type_traits<my_handle<T>> : semantics::shared_owner {
   static T &borrow(const my_handle<T> &handle) { return *handle; }
   static bool empty(const my_handle<T> &handle) { return !handle; }
 
-  template <typename... Args> static my_handle<T> make(Args &&...args);
+  template <typename... Args> static my_handle<T> emplace(Args &&...args);
 };
 ```
 
@@ -63,7 +63,7 @@ unwrap their contained conversion. They then take its `borrow` or `consume`
 requirement.
 
 An optional wrapper provides `value_type`, `get`, `empty`, `wrap`, and
-`make_empty`. Dingo uses them to keep an empty source empty and to wrap the
+`empty_value`. Dingo uses them to keep an empty source empty and to wrap the
 converted contained value.
 
 An alternative type, such as `std::variant`, derives from
@@ -74,16 +74,17 @@ same rule to the alternative that overload resolution selects.
 A handle converts to the handle of a base of its element through its converting
 constructor, as `std::shared_ptr` does. Such a wrapper needs no other trait.
 
-Two optional members describe `make`:
+`emplace(args...)` returns a wrapper of an element constructed from `args`. Two
+optional members describe `emplace`:
 
-- `static constexpr bool makes_nested = true`: `make` makes its element from the
-  arguments of the element's own element, as the standard wrappers do. Dingo
-  then makes a wrapper of such wrappers at once from the arguments of its
-  innermost element.
-- `template <typename... Args> static constexpr bool makeable`: whether `make`
-  makes the wrapper from `Args`. Declare it when `make` cannot take every
-  argument list. An example is a handle of an array, which initializes its
-  elements from the arguments.
+- `static constexpr bool emplaces_element = true`: when the element is a wrapper
+  too, `emplace` passes its arguments to the element's `emplace`, as the
+  standard wrappers do. Dingo then emplaces a wrapper of such wrappers at once
+  from the arguments of its innermost element.
+- `template <typename... Args> static constexpr bool can_emplace`: whether
+  `emplace` takes `Args`. Declare it when `emplace` cannot take every argument
+  list. An example is a handle of an array, which initializes its elements from
+  the arguments.
 
 `owning_handles<>` lists the owning handle families that a scope makes of a
 value, a pointer or an array that it makes for a request. A handle of

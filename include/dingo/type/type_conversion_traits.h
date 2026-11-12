@@ -412,13 +412,13 @@ struct element_or_empty {
     using element = remove_cvref_t<Target>;
     if constexpr (std::is_lvalue_reference_v<Source>) {
       if (source_traits::empty(source)) {
-        static const element empty = type_traits<element>::make_empty();
+        static const element empty = type_traits<element>::empty_value();
         return empty;
       }
       return *source_traits::get(source);
     } else {
       if (source_traits::empty(source)) {
-        source = source_traits::wrap(type_traits<element>::make_empty());
+        source = source_traits::wrap(type_traits<element>::empty_value());
       }
       return std::move(*source_traits::get(source));
     }
@@ -435,7 +435,7 @@ struct optional_element_conversion : conversion_inner<Inner> {
     using target = type_traits<remove_cvref_t<Target>>;
     using source_traits = type_traits<remove_cvref_t<Actual>>;
     if (source_traits::empty(source)) {
-      return target::make_empty();
+      return target::empty_value();
     }
     return target::wrap(Inner::apply(
         resolver, context, forward_element<Actual>(*source_traits::get(source)),
@@ -483,13 +483,13 @@ template <typename Held> struct box {
     if constexpr (std::is_reference_v<decltype(inner())> &&
                   !std::is_trivially_move_constructible_v<Held>) {
       // A value the source holds is moved into the handle once.
-      return Target(type_traits<handle>::make(inner()));
+      return Target(type_traits<handle>::emplace(inner()));
     } else {
       // The value is taken before it is moved into the handle: GCC then folds
       // a handle that does not escape, as it does the value. Moving a value
       // that is moved trivially twice costs nothing.
       Held held(inner());
-      return Target(type_traits<handle>::make(std::move(held)));
+      return Target(type_traits<handle>::emplace(std::move(held)));
     }
   }
 };
@@ -825,13 +825,13 @@ inline constexpr bool boxes_source_v = [] {
   }
 }();
 
-// Whether a handle of the kind of Target can be made of a held value: asked
-// only of one that can exist, as asking it of another instantiates it.
-template <typename Target, typename Held> constexpr bool box_makeable() {
+// Whether a handle of the kind of Target can emplace a held value: asked only
+// of one that can exist, as asking it of another instantiates it.
+template <typename Target, typename Held> constexpr bool can_box() {
   if constexpr (is_formable_v<Held>) {
-    return handle_makeable<
+    return can_emplace_v<
         typename type_traits<remove_cvref_t<Target>>::template rebind_t<Held>,
-        Held>::value;
+        Held>;
   } else {
     return false;
   }
@@ -850,7 +850,7 @@ constexpr auto box_path() {
                 !std::is_array_v<source_type> &&
                 boxes_source_v<Target, Source>) {
     using held = held_t<Target, Source>;
-    if constexpr (box_makeable<Target, held>()) {
+    if constexpr (can_box<Target, held>()) {
       using inner = path_t<held, Source, Access>;
       return available_t<conversion_wrap<box<held>, Target, inner>, inner>{};
     } else {

@@ -200,13 +200,13 @@ public:
       if constexpr (!std::is_reference_v<request_type> &&
                     (std::is_move_constructible_v<request_type> ||
                      std::is_copy_constructible_v<request_type>)) {
-        return detail::make_result<T>(resolve_selected);
+        return detail::emplace_result<T>(resolve_selected);
       } else {
         return T(resolve_selected());
       }
     } else {
       // An annotated value is made in place of what its interface resolves.
-      return detail::make_result<T>([&]() -> decltype(auto) {
+      return detail::emplace_result<T>([&]() -> decltype(auto) {
         return container.template resolve<T, false>(scope, *this,
                                                     detail::no_lookup_key());
       });
