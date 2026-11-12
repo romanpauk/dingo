@@ -71,24 +71,31 @@ class Layer:
     # Whether a scope can construct the element in storage the layer holds
     # before the layer is made, and so publish it early.
     constructs_in_place: bool = False
+    # Whether it may hold no element: a null pointer or handle, an empty
+    # optional, or an alternative type that holds the other alternative.
+    may_be_empty: bool = False
+    # Whether an empty one is a value of its own, which an empty layer
+    # around it gives.
+    has_empty_value: bool = False
 
 
 LAYERS = {layer.name: layer for layer in (
     Layer("pointer", Owner.NONE, shares_element=True, copyable=True,
-          made_from_value=False, adopted_with=(), rebinds=True),
+          made_from_value=False, adopted_with=(), rebinds=True,
+          may_be_empty=True),
     Layer("shared_ptr", Owner.SHARED, shares_element=True, copyable=True,
           made_from_value=True, adopts=True, rebinds=True,
-          constructs_in_place=True),
+          constructs_in_place=True, may_be_empty=True),
     Layer("unique_ptr", Owner.SOLE, shares_element=True, copyable=False,
           made_from_value=True, converts_to=("shared_ptr",), adopts=True,
-          rebinds=True),
+          rebinds=True, may_be_empty=True),
     Layer("optional", Owner.SOLE, shares_element=False, copyable=True,
-          made_from_value=True),
+          made_from_value=True, may_be_empty=True, has_empty_value=True),
     # An alternative type, std::variant<L, other>: its element is the
     # alternative it holds.
     Layer("variant", Owner.SOLE, shares_element=False, copyable=True,
           made_from_value=True, holds_element_only=True,
-          constructs_in_place=True),
+          constructs_in_place=True, may_be_empty=True),
     # A bounded array of two elements, and an array of unknown bound inside
     # a handle: their element is their first element, reached through the
     # pointer they decay to.
@@ -229,6 +236,9 @@ class Thing:
       publishes it before it constructs it holds in place: it is not
       constructed when it is published, so it is only referred to, and
       nothing is derived from it
+    absent: whether it may not exist, as the element of a layer that may be
+      empty, or what is derived of one: what refers to it or is made of it
+      fails when the layer is empty
     """
     layers: tuple
     element: str
@@ -237,6 +247,7 @@ class Thing:
     instance: bool
     contained: str = None
     unconstructed: bool = False
+    absent: bool = False
 
     @property
     def lifetime(self):
@@ -383,14 +394,18 @@ def transitions(thing, context):
             # and the layer owns its element alone. The element of a copy of
             # a layer that shares it is the element itself, not a copy.
             made = thing.lifetimes[1] is Lifetime.REQUEST
-            yield "element", replace(
+            element = replace(
                 thing, layers=below, lifetimes=thing.lifetimes[1:],
                 origin=(thing.origin if layer.owner is Owner.SOLE
                         else Origin.BORROWED),
                 contained=thing.contained or
                 (layer.name if made else None),
                 unconstructed=(context.scope.publishes_early and
-                               thing.instance and bool(below)))
+                               thing.instance and bool(below)),
+                absent=thing.absent or layer.may_be_empty)
+            yield "element", element
+            if layer.may_be_empty and layer.adopted_with is None:
+                yield from empty_safe_steps(thing, element, context)
         # A handle the request owns converts to another, sharing or taking
         # over its element.
         if thing.origin.owned:
@@ -456,6 +471,31 @@ def transitions(thing, context):
                     thing, layers=(made.name,) + layers, lifetimes=lifetimes)
 
 
+def empty_safe_steps(thing, element, context):
+    """What is derived of the element of a layer that may be empty without
+    failing when it is: a pointer to the element, null when the layer is
+    empty, and the optional the layer holds, empty when the layer is."""
+    below = element.layers
+    inner = LAYERS[below[0]] if below else None
+    if inner is not None and inner.decays_to:
+        pointer = (inner.decays_to,) + below[1:]
+    else:
+        pointer = (POINTER,) + below
+    yield "element_pointer", replace(
+        element, layers=pointer,
+        lifetimes=(thing.lifetimes[0],) + element.lifetimes[
+            len(below) - len(pointer) + 1:],
+        origin=Origin.BORROWED, absent=thing.absent)
+    if inner is not None and inner.has_empty_value and not element.unconstructed:
+        if element.origin.owned:
+            yield "element_or_empty", replace(element, absent=thing.absent)
+        else:
+            for kind, copied in transitions(element, context):
+                if kind == "copy":
+                    yield "element_or_empty_copy", replace(
+                        copied, absent=thing.absent)
+
+
 # The known gaps of the library, as filters over what the rules allow.
 
 
@@ -517,6 +557,8 @@ def makes_leaf_anew(layers):
 
 def effect_of(kind, thing):
     """What a step from a thing does to its leaf: "copy", "move" or None."""
+    if kind == "element_or_empty_copy":
+        return "copy" if makes_leaf_anew(thing.layers[1:]) else None
     if kind in ("copy", "wrap") and makes_leaf_anew(thing.layers):
         return "copy" if kind == "copy" else "move"
     return None
@@ -574,7 +616,8 @@ def reachable(start, context):
 # sources it needs from its own shape. A resolution reaches from the layer
 # sources what it reaches from the stored object, at the same cost.
 
-BINDING_STEPS = frozenset({"element", "upcast"})
+BINDING_STEPS = frozenset({"element", "element_pointer", "element_or_empty",
+                           "element_or_empty_copy", "upcast"})
 
 
 def names_leaf(thing, context):
@@ -583,13 +626,25 @@ def names_leaf(thing, context):
     return context.abstract and thing.element == "leaf"
 
 
-def binding_steps(thing, context):
-    """The steps a binding takes from a thing: those that need the type it
-    stores, every step from what holds the leaf a request cannot name, and
-    the release of what a pointer it made points to, which a request reaches
-    by adopting the pointer and taking its element."""
+def binding_step(kind, thing, following, context, stored):
+    """Whether a binding takes a step: one that needs the type it stores, or
+    one from what holds the leaf a request cannot name that the upcast to
+    the interface needs. That wraps into a layer that rebinds, or wraps the
+    stored layers whole, which keeps them as defined as they are when empty."""
+    if kind in BINDING_STEPS:
+        return True
+    if not names_leaf(thing, context):
+        return False
+    return (kind != "wrap" or LAYERS[following.layers[0]].rebinds or
+            (bool(stored) and thing.layers[-len(stored):] == stored))
+
+
+def binding_steps(thing, context, stored=()):
+    """The steps a binding of the stored layers takes from a thing, and the
+    release of what a pointer it made points to, which a request reaches by
+    adopting the pointer and taking its element."""
     found = [(kind, following) for kind, following in steps(thing, context)
-             if kind in BINDING_STEPS or names_leaf(thing, context)]
+             if binding_step(kind, thing, following, context, stored)]
     for kind, adopted in steps(thing, context):
         if kind == "adopt" and LAYERS[adopted.layers[0]].owner is Owner.SOLE:
             found += [("release", released)
@@ -626,7 +681,9 @@ def closure(states, context, take):
 def layer_sources(start, context):
     """What a binding publishes of its stored object, each with the copies
     and the moves of the leaf that reach it."""
-    return frozenset(closure({(start, (0, 0))}, context, binding_steps))
+    return frozenset(closure(
+        {(start, (0, 0))}, context,
+        lambda thing, each: binding_steps(thing, each, start.layers)))
 
 
 @functools.lru_cache(maxsize=None)
@@ -738,8 +795,21 @@ def entry_of(entry, position, selection, category):
     return entry
 
 
+def fewest_of(answers, defined):
+    """The fewest copies and moves of answers, each of them with whether what
+    it satisfies the request with may be absent; with defined, as the fewest
+    with whether one of so few is defined when a layer is empty. None when
+    there is none."""
+    if not answers:
+        return None
+    cost = min(cost for cost, _ in answers)
+    if not defined:
+        return cost
+    return cost, any(not absent for each, absent in answers if each == cost)
+
+
 def converted(scope, form, leaf, bound, shape, category, limits=frozenset(),
-              interfaces=InterfaceSet.DEFAULT):
+              interfaces=InterfaceSet.DEFAULT, defined=False):
     """The fewest copies and moves of the leaf a conversion of what a scope
     stores into a request of a shape of the bound interface makes, as
     (copies, moves): those of the derivations that reach what satisfies the
@@ -753,16 +823,16 @@ def converted(scope, form, leaf, bound, shape, category, limits=frozenset(),
         return None
     reached = reachable(source(scope, form, interfaces), context)
     things = [thing for thing in reached if thing.element == element]
-    costs = [affected(cost, effect)
-             for thing, effect in satisfactions(
-                 things, category, Lifetime.REQUEST, layers, context)
-             for cost in reached[thing]]
-    return min(costs) if costs else None
+    return fewest_of(
+        [(affected(cost, effect), thing.absent)
+         for thing, effect in satisfactions(
+             things, category, Lifetime.REQUEST, layers, context)
+         for cost in reached[thing]], defined)
 
 
 def fewest(scope, form, leaf, bound, shape, category, position, entry,
            limits=frozenset(), selection=Selection.PLAIN,
-           interfaces=InterfaceSet.DEFAULT, container=None):
+           interfaces=InterfaceSet.DEFAULT, container=None, defined=False):
     """The fewest copies and moves of the leaf a request of a shape of the
     bound interface resolves with, as (copies, moves), under the
     limitations given, in a container; None when it does not resolve."""
@@ -782,15 +852,16 @@ def fewest(scope, form, leaf, bound, shape, category, position, entry,
     # what the request refers to.
     returned = (direct and entry in (Entry.RESOLVE, Entry.CONSTRUCT) and
                 category is Category.RVALUE_REFERENCE)
-    costs = [handed_over(cost,
-                         "move" if returned and makes_leaf_anew(thing.layers)
-                         else effect, container)
-             for thing, effect in satisfactions(
-                 things, category, required_lifetime(position, entry),
-                 layers, context)
-             for cost in reached[thing]]
-    if costs:
-        return min(costs)
+    answers = [(handed_over(cost,
+                            "move" if returned and
+                            makes_leaf_anew(thing.layers) else effect,
+                            container), thing.absent)
+               for thing, effect in satisfactions(
+                   things, category, required_lifetime(position, entry),
+                   layers, context)
+               for cost in reached[thing]]
+    if answers:
+        return fewest_of(answers, defined)
     # construct<T>() of a value it cannot resolve makes T of the leaf the
     # container resolves by value: a new handle, optional or array of it,
     # the rest of a bounded array value-initialized. The value is moved into
@@ -801,8 +872,13 @@ def fewest(scope, form, leaf, bound, shape, category, position, entry,
             (context.leaf.default_constructible or not bounded)):
         value = fewest(scope, form, leaf, LEAF, Shape.OBJECT, Category.VALUE,
                        Position.DIRECT, Entry.RESOLVE, limits, selection,
-                       interfaces, container)
-        return None if value is None else (value[0], value[1] + 1)
+                       interfaces, container, defined)
+        if value is None:
+            return None
+        if defined:
+            (copies, moves), is_defined = value
+            return (copies, moves + 1), is_defined
+        return value[0], value[1] + 1
     return None
 
 

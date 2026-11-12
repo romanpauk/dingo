@@ -67,25 +67,46 @@ A request that does not resolve fails as follows:
 - The runtime container throws `type_not_convertible` for all other such
   requests.
 
+### Empty Layers
+
+A pointer, a handle and an optional may hold nothing. An alternative type may
+hold the other alternative. The element of such a layer may be absent, and so is
+everything that is derived from it. A reference to an absent element, or a value
+of it, fails when the layer is empty. Two steps from such a layer do not fail:
+
+- `element_pointer` gives a pointer to the element, which is null when the layer
+  is empty.
+- `element_or_empty` gives the optional that the layer holds, which is empty
+  when the layer is empty.
+
+Empty layers do not change whether a request resolves, or its cost. The
+semantics also tell whether the cheapest derivation of a request is defined when
+a layer is empty: it is if it reaches the request without going through an
+absent element.
+
 ### Layer Sources
 
 A binding knows the type that it stores. A request knows only the interface that
 it asks for. So the steps of a derivation divide between them:
 
 - The binding takes the steps that need the stored type or that only go into the
-  stored object: `element`, `upcast`, and the release of what a pointer that it
-  made points to. A request of the abstract interface cannot name the leaf, so
-  the binding also takes every step from an object that holds the leaf, such as
-  a new handle of the leaf before its upcast. What these steps reach are the
-  _layer sources_ of the binding. A binding of the leaf has at most one layer
-  source of each layer of the stored type, borrowed and consumed.
+  stored object: `element`, `element_pointer`, `element_or_empty`, `upcast`, and
+  the release of what a pointer that it made points to. A request of the
+  abstract interface cannot name the leaf, so the binding also takes the steps
+  from an object that holds the leaf that the upcast needs: it wraps the leaf
+  into a layer that rebinds to the interface, such as a new handle, or it wraps
+  the stored layers whole. What these steps reach are the _layer sources_ of the
+  binding. A binding of the leaf has at most three layer sources of each layer
+  of the stored type: the layer, a pointer into it, and the optional that it
+  holds.
 - The request takes every other step from the layer sources. Each of these steps
   adds a layer or converts one, so a request finds the layer sources that it
   needs from its own shape.
 
 A request resolves from the layer sources exactly as it resolves from the stored
-object, at the same cost. [`semantics_test.py`](../spec/semantics_test.py)
-checks this for every cell of the conversion check.
+object, at the same cost, and is as defined when a layer is empty.
+[`semantics_test.py`](../spec/semantics_test.py) checks this for every cell of
+the conversion check.
 
 ## Limitations
 
