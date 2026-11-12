@@ -154,7 +154,44 @@ def apply_semantics(cells, units):
                         "resolves for the caller")
         elif outcome is Outcome.PUBLISHED and "copies" in cell:
             excess(cell, unit.converted(request))
+    for unit in units:
+        empty_safe(unit, cells)
     return cells
+
+
+def empty_safe(unit, cells):
+    """A request a binding answers through a step that does not fail when a
+    layer is empty, a pointer into the layer or the optional it holds, has
+    to be published in one of its categories: one a request derives goes
+    through an element that may be absent. The first category of each that
+    the specification resolves is unexpected when none is."""
+    by_cell = {cell["cell"]: cell for cell in cells}
+    requests = {(request.interface.name, request.shape, request.category):
+                request for request in unit.requests()}
+    for interface in {request.interface for request in requests.values()}:
+        if interface.bound.element == "other":
+            continue
+        for shape, categories in semantics.empty_safe_sources(
+                unit.scope, unit.form, unit.leaf, interface.bound,
+                unit.interfaces_declared):
+            asked = [requests[key] for key in
+                     ((interface.name, shape, category)
+                      for category in categories) if key in requests]
+            answered = [by_cell.get(unit.prefix(request) + request.name)
+                        for request in asked]
+            if any(cell is not None and
+                   cell["outcome"] == Outcome.PUBLISHED.value
+                   for cell in answered):
+                continue
+            for request, cell in zip(asked, answered):
+                expected = unit.expectation(request)
+                if cell is None or not expected or not any(expected):
+                    continue
+                cell.update(outcome=Outcome.UNEXPECTED.value,
+                            error=f"{cell['outcome']}, through an element "
+                            "that may be absent where a layer it goes "
+                            "through is empty")
+                break
 
 
 def excess(cell, fewest):

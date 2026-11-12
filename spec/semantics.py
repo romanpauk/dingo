@@ -239,6 +239,8 @@ class Thing:
     absent: whether it may not exist, as the element of a layer that may be
       empty, or what is derived of one: what refers to it or is made of it
       fails when the layer is empty
+    full: how many of its outer layers hold their element for sure, as a
+      layer the derivation made of a value does
     """
     layers: tuple
     element: str
@@ -248,6 +250,7 @@ class Thing:
     contained: str = None
     unconstructed: bool = False
     absent: bool = False
+    full: int = 0
 
     @property
     def lifetime(self):
@@ -402,9 +405,12 @@ def transitions(thing, context):
                 (layer.name if made else None),
                 unconstructed=(context.scope.publishes_early and
                                thing.instance and bool(below)),
-                absent=thing.absent or layer.may_be_empty)
+                absent=thing.absent or (layer.may_be_empty and
+                                        not thing.full),
+                full=max(thing.full - 1, 0))
             yield "element", element
-            if layer.may_be_empty and layer.adopted_with is None:
+            if (layer.may_be_empty and not thing.full and
+                    layer.adopted_with is None):
                 yield from empty_safe_steps(thing, element, context)
         # A handle the request owns converts to another, sharing or taking
         # over its element.
@@ -468,7 +474,8 @@ def transitions(thing, context):
                                              layers) and not (
                     slices(thing) and not made.shares_element):
                 yield "wrap", replace(
-                    thing, layers=(made.name,) + layers, lifetimes=lifetimes)
+                    thing, layers=(made.name,) + layers, lifetimes=lifetimes,
+                    full=thing.full + 1)
 
 
 def empty_safe_steps(thing, element, context):
@@ -519,11 +526,19 @@ class Limitation(Enum):
     # instead. The caller requests the holder; a pointer a call or a kept
     # class takes points into a holder kept in the context.
     POINTER_OUT_OF_MADE_HOLDER = "pointer_out_of_made_holder"
+    # A pointer into a copy a binding converts of what it stores, such as the
+    # std::shared_ptr<I> * into the std::optional<std::shared_ptr<I>> a
+    # binding of I converts of a kept std::optional<std::shared_ptr<T>>. The
+    # library points to the handle it converts of the element instead, which
+    # fails when the stored optional is empty.
+    POINTER_INTO_CONVERTED_COPY = "pointer_into_converted_copy"
 
 
 GAPS = (
     Gap(Limitation.POINTER_OUT_OF_MADE_HOLDER, "point",
         lambda context, category, thing: thing.contained is not None),
+    Gap(Limitation.POINTER_INTO_CONVERTED_COPY, "element_pointer",
+        lambda context, thing, following: thing.origin is Origin.COPIED),
 )
 
 
@@ -695,6 +710,47 @@ def requested(start, context):
                                request_steps):
         found.setdefault(thing, set()).add(cost)
     return {thing: frozenset(costs) for thing, costs in found.items()}
+
+
+# The steps that do not fail when a layer is empty.
+EMPTY_SAFE_STEPS = frozenset({"element_pointer", "element_or_empty",
+                              "element_or_empty_copy"})
+
+
+def empty_safe_sources(scope, form, leaf, bound, interfaces):
+    """The requests a binding answers with what it reaches through a step
+    that does not fail when a layer is empty, each as the shape and the
+    categories that take it: a pointer into a layer, and the optional a layer
+    holds. A request cannot take these steps, so the binding publishes one
+    of the categories of each."""
+    context = Context(LEAVES[leaf], SCOPES[scope], bound.element == "interface",
+                      LIMITATIONS)
+    if not makes_storage(form, context):
+        return []
+    start = source(scope, form, interfaces)
+    upcasts = (lambda thing, each:
+               [(kind, following) for kind, following in steps(thing, each)
+                if kind == "upcast"])
+    shape_of = {layers + bound.layers: shape for shape, layers in SHAPES.items()}
+    found = set()
+    for thing, _ in layer_sources(start, context):
+        for kind, safe in binding_steps(thing, context, start.layers):
+            if kind not in EMPTY_SAFE_STEPS or safe.absent:
+                continue
+            for reached, _ in closure({(safe, (0, 0))}, context, upcasts):
+                if reached.element != bound.element or reached.absent:
+                    continue
+                layers = reached.layers
+                if layers[0] in (POINTER, "array_pointer"):
+                    shape = shape_of.get(layers[1:])
+                    categories = (Category.POINTER, Category.CONST_POINTER)
+                else:
+                    shape = shape_of.get(layers)
+                    categories = (Category.VALUE, Category.CONST,
+                                  Category.RVALUE_REFERENCE)
+                if shape is not None:
+                    found.add((shape, categories))
+    return sorted(found, key=str)
 
 
 # What a request asks of the things.

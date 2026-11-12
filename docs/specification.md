@@ -120,13 +120,22 @@ limitation keeps from resolving is `limited`. A cell that resolves although a
 limitation says it does not is a `stale_limitation`. The
 [Model Probe](#model-probe) fails on a stale limitation.
 
-The library has one limitation, `POINTER_OUT_OF_MADE_HOLDER`, and keeps it on
-purpose. The library gives no raw pointer out of a holder that the registration
-makes, such as the `T *` of a `std::unique_ptr<T[]>` that a unique scope makes.
-To give it, the library would release the holder that the registration declares,
-and the caller would get an owning raw pointer. The caller requests the holder
-instead. A pointer that a call through `invoke` or a kept class takes points
-into a holder that the library keeps while the pointer is in use.
+The library has two limitations.
+
+`POINTER_OUT_OF_MADE_HOLDER` is kept on purpose. The library gives no raw
+pointer out of a holder that the registration makes, such as the `T *` of a
+`std::unique_ptr<T[]>` that a unique scope makes. To give it, the library would
+release the holder that the registration declares, and the caller would get an
+owning raw pointer. The caller requests the holder instead. A pointer that a
+call through `invoke` or a kept class takes points into a holder that the
+library keeps while the pointer is in use.
+
+`POINTER_INTO_CONVERTED_COPY`: the library gives no pointer into a copy that a
+binding converts of what it stores. An example is the `std::shared_ptr<I> *`
+into the `std::optional<std::shared_ptr<I>>` that a binding of `I` converts of a
+kept `std::optional<std::shared_ptr<T>>`. The library points to the handle that
+it converts of the element instead. That pointer is not null when the stored
+optional is empty: the resolution fails.
 
 ## Model Probe
 
@@ -250,16 +259,17 @@ and nothing resolves, so the check covers every registration of the runtime
 container that the library accepts, several in one program. The request lists
 are the same in both containers, and selection does not change them.
 
-| Outcome           | Meaning                                                                                                                       |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `published`       | Both containers select a resolution, and its conversion is available.                                                         |
-| `unconvertible`   | Both select a resolution, and its conversion is not available.                                                                |
-| `composed`        | The binding composes a wrapper of a request it resolves, or keeps it with the instance.                                       |
-| `adopted`         | The binding takes the value out of a pointer that it hands over.                                                              |
-| `placed`          | The binding resolves the request into the context of the call: a value placed there, or a reference into a pointer it adopts. |
-| `unpublished`     | None of the above.                                                                                                            |
-| `selects_another` | The request selects the binding of another interface.                                                                         |
-| `diverged`        | The containers select or derive the request differently.                                                                      |
+| Outcome           | Meaning                                                                                                                                         |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `published`       | Both containers select a resolution, and its conversion is available.                                                                           |
+| `unconvertible`   | Both select a resolution, and its conversion is not available.                                                                                  |
+| `composed`        | The binding composes a wrapper of a request it resolves, or keeps it with the instance.                                                         |
+| `derived`         | The request derives the request from what the binding publishes: refers to it, takes its address, copies or moves it, or converts a sole owner. |
+| `adopted`         | The binding takes the value out of a pointer that it hands over.                                                                                |
+| `placed`          | The binding resolves the request into the context of the call: a value placed there, or a reference into a pointer it adopts.                   |
+| `unpublished`     | None of the above.                                                                                                                              |
+| `selects_another` | The request selects the binding of another interface.                                                                                           |
+| `diverged`        | The containers select or derive the request differently.                                                                                        |
 
 The static container selects by its request lists, the runtime container by type
 descriptors. For a request that a binding does not publish, the check follows
@@ -269,14 +279,18 @@ derives from what its own binding tells about itself.
 The check compares each outcome with the specification, with the limitations of
 the library:
 
-- A `published`, `composed`, `adopted` or `placed` request must resolve as the
-  dependency of a direct `invoke`.
+- A `published`, `composed`, `derived`, `adopted` or `placed` request must
+  resolve as the dependency of a direct `invoke`.
 - A request that resolves for the caller of a direct `resolve` must be
   `published`, `composed` or `adopted`. A placed value ends with the call, so it
   cannot go back to the caller.
 - A storage that cannot be made is not compared.
 - The alternative type of a probe never holds its other alternative, so the
   check compares the other alternative as a copyable type of its own.
+- What a binding reaches through `element_pointer` or `element_or_empty` must be
+  `published` in one of the categories that take it. A request that derives it
+  goes through an element that may be absent, and fails where the layer is
+  empty.
 
 Another outcome is `unexpected`. The check fails on an `unexpected` or
 `diverged` cell, on a registration that does not compile, and on a published
@@ -289,6 +303,30 @@ and counts the copies and the moves of the leaf. `semantics.converted()` gives
 the fewest copies and moves of the derivations that reach a match for the
 request, and of the match. It does not include giving the result to the request.
 More copies or more moves are `excess`, which fails the check.
+
+## Emptiness Check
+
+[`spec/emptiness.py`](../spec/emptiness.py) registers a stored object that holds
+no leaf, in each container, each scope that is given or makes its instance, and
+each stored form with a layer that may be empty. The outermost layer is empty,
+or the layer that it holds is: a null handle, an empty optional, or an
+alternative type that holds the other alternative. The check resolves through
+`invoke` each request that the specification says is defined when a layer is
+empty ([`test/model/emptiness.h`](../test/model/emptiness.h)).
+
+| Outcome            | Meaning                                                   |
+| ------------------ | --------------------------------------------------------- |
+| `defined`          | The request gives what holds no leaf.                     |
+| `violated`         | The request gives what holds a leaf.                      |
+| `unexpected`       | The request throws.                                       |
+| `crashed`          | The request ends the program, as a null dereference does. |
+| `does_not_compile` | The request does not compile.                             |
+
+A request that is not defined when a layer is empty may fail in any way, so the
+check does not make it. The check fails on any outcome other than `defined`. A
+program that does not compile or that crashes is made again with half of its
+registrations, and a registration with half of its requests, down to one
+request.
 
 ## Constructor Detection Probe
 

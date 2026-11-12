@@ -85,6 +85,29 @@ function(configure_quality_targets out_check_targets)
   )
   add_custom_target(conversion-check DEPENDS ${conversion_dir}/checked)
 
+  # The emptiness check: emptiness.py registers a stored object that holds
+  # no leaf, a null handle, an empty optional or an alternative type that
+  # holds the other alternative, and resolves every request the
+  # specification says is defined when a layer is empty: each has to give
+  # what holds no leaf, without failing.
+  set(emptiness_dir ${PROJECT_BINARY_DIR}/emptiness)
+  set(emptiness_configuration ${emptiness_dir}/configuration.txt)
+  file(CONFIGURE OUTPUT ${emptiness_configuration} CONTENT
+    "${CMAKE_CXX_COMPILER} ${CMAKE_CXX_COMPILER_VERSION}\n${model_flags}\n")
+  add_custom_command(
+    OUTPUT ${emptiness_dir}/checked
+    COMMENT "Checking what an empty stored object gives"
+    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/spec/emptiness.py
+      ${emptiness_dir}/emptiness.json --work ${emptiness_dir}/work
+      --compiler ${CMAKE_CXX_COMPILER} "--flags=${model_flags}"
+    COMMAND ${CMAKE_COMMAND} -E touch ${emptiness_dir}/checked
+    DEPENDS ${model_inputs} ${emptiness_configuration}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    USES_TERMINAL
+    VERBATIM
+  )
+  add_custom_target(emptiness-check DEPENDS ${emptiness_dir}/checked)
+
   # The layer checks: probe.py --layer probes what the storage of every
   # registration copies and moves of its leaf, requested as it is stored,
   # and what passing the leaf of a plain registration on does, in every
@@ -112,8 +135,8 @@ function(configure_quality_targets out_check_targets)
     add_custom_target(${layer}-check DEPENDS ${layer_dir}/checked)
   endforeach()
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    list(APPEND check_targets conversion-check storage-check resolution-check
-      model-check-small)
+    list(APPEND check_targets conversion-check emptiness-check storage-check
+      resolution-check model-check-small)
   endif()
 
   # A report, not a check: it ranks the headers and never fails.

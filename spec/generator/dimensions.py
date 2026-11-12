@@ -84,6 +84,9 @@ class Outcome(Dimension):
     # answer of the two containers; a request the binding of another
     # interface answers.
     PUBLISHED = "published"
+    # What a request of an empty stored object gives: what holds no leaf,
+    # as the specification says.
+    DEFINED = "defined"
     COMPOSED = "composed"
     DERIVED = "derived"
     ADOPTED = "adopted"

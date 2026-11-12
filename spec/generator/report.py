@@ -27,6 +27,7 @@ MARKS = {
     Outcome.UNEXPECTED: "UNEXP",
     Outcome.EXCESS: "excess",
     Outcome.PUBLISHED: "pub",
+    Outcome.DEFINED: "def",
     Outcome.COMPOSED: "comp",
     Outcome.DERIVED: "deriv",
     Outcome.ADOPTED: "adopt",

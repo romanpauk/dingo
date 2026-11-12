@@ -46,6 +46,9 @@ environment provides the development tools.
 - `conversion-check`: checks what the conversion layer of each registration
   publishes, and the copies and the moves of its conversions, against the
   [Specification](specification.md#conversion-check).
+- `emptiness-check`: checks what each registration whose stored object holds no
+  leaf gives the requests that are defined when a layer is empty, against the
+  [Specification](specification.md#emptiness-check).
 - `storage-check`: checks the copies and the moves of the storage of each
   registration against the [Specification](specification.md#model-probe).
 - `resolution-check`: checks the copies and the moves when a leaf is passed on
@@ -54,10 +57,11 @@ environment provides the development tools.
   probes of the [Specification](specification.md). See
   [Model Checks](#model-checks).
 
-With GCC and clang, `check` includes `conversion-check`, `storage-check`,
-`resolution-check` and `model-check-small`. `includes-tidy` and `includes-check`
-are not available on Windows. The `sources-format*`, `includes-tidy` and
-`includes-check` targets need `DINGO_CLANG_TOOLS_ENABLED=ON` (the default).
+With GCC and clang, `check` includes `conversion-check`, `emptiness-check`,
+`storage-check`, `resolution-check` and `model-check-small`. `includes-tidy` and
+`includes-check` are not available on Windows. The `sources-format*`,
+`includes-tidy` and `includes-check` targets need `DINGO_CLANG_TOOLS_ENABLED=ON`
+(the default).
 
 ## Complexity Report
 
