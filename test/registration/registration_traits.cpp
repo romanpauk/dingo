@@ -1005,7 +1005,7 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
                                   typename external_unique_model::storage_type>;
   static_assert(std::is_same_v<resolution_targets_t<typename accepted_values<
                                    external_unique_resolutions>::type>,
-                               type_list<A>>);
+                               type_list<>>);
   using external_move_only_unique_model = detail::binding_model<
       type_registration<scope<external>, storage<std::unique_ptr<move_only>>>>;
   using external_move_only_unique_resolutions = detail::binding_resolutions<
@@ -1048,10 +1048,10 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   using unique_resolutions = detail::binding_resolutions<
       move_only, typename unique_move_only_model::storage_type>;
   static_assert(
-      std::is_same_v<resolution_targets_t<
-                         typename accepted_values<unique_resolutions>::type>,
-                     type_list<move_only, std::unique_ptr<move_only>,
-                               std::shared_ptr<move_only>>>);
+      std::is_same_v<
+          resolution_targets_t<
+              typename accepted_values<unique_resolutions>::type>,
+          type_list<std::unique_ptr<move_only>, std::shared_ptr<move_only>>>);
 
   using compatible_unique_handle_model =
       detail::binding_model<type_registration<
@@ -1079,7 +1079,7 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   static_assert(
       std::is_same_v<resolution_targets_t<
                          typename accepted_values<fresh_resolutions>::type>,
-                     type_list<move_only>>);
+                     type_list<>>);
   using immovable_fresh_resolutions =
       detail::binding_resolutions<immovable, fresh_value_storage<immovable>>;
   static_assert(std::is_same_v<
@@ -1362,7 +1362,7 @@ TEST(type_registration_test, const_reference_storage_preserves_const_access) {
   static_assert(
       std::is_same_v<
           resolution_targets_t<typename accepted_values<resolutions>::type>,
-          type_list<int>>);
+          type_list<>>);
   static_assert(std::is_same_v<reference_resolution_targets_t<
                                    typename resolutions::object_resolutions>,
                                type_list<const int &>>);
@@ -1383,7 +1383,7 @@ TEST(type_registration_test, const_reference_storage_preserves_const_access) {
       type_registration<scope<external>, storage<const std::optional<int> &>>>;
   using optional_resolutions =
       detail::binding_resolutions<int, typename optional_model::storage_type>;
-  static_assert(has_resolution_target_v<
+  static_assert(!has_resolution_target_v<
                 int, typename accepted_values<optional_resolutions>::type>);
 
   container<> optional_container;

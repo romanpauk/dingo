@@ -309,8 +309,30 @@ public:
                             typename category::access>>;
 };
 
+// The leaf a storage stores, whose value a request copies of the reference
+// to it or moves out of the rvalue reference to it itself. None of a
+// volatile one, which is not copied of a const reference, nor of a pointer,
+// whose value is published: the pointer may be null, where no reference to
+// what it points to exists.
+template <typename Storage,
+          typename Stored = std::remove_reference_t<typename Storage::type>>
+using copied_leaf_t = std::conditional_t<
+    std::is_volatile_v<Stored> || storage_source_traits<Storage>::is_pointer,
+    void, std::remove_cv_t<leaf_type_t<std::remove_cv_t<Stored>>>>;
+
+// The value resolutions of a storage but those of the leaf it stores.
+template <typename Resolutions, typename Leaf> struct without_leaf_values;
+
+template <typename... Resolutions, typename Leaf>
+struct without_leaf_values<type_list<Resolutions...>, Leaf> {
+  using type = type_list_cat_t<std::conditional_t<
+      std::is_same_v<std::remove_cv_t<typename Resolutions::target_type>, Leaf>,
+      type_list<>, type_list<Resolutions>>...>;
+};
+
 // A value is converted from the borrowed and the consumed source alike, into
-// the interface or into a wrapper of it.
+// the interface or into a wrapper of it. A value of the leaf the storage
+// stores is not: a request copies or moves it itself.
 template <typename Interface, typename Storage>
 struct category_resolutions<request_category::value, Interface, Storage> {
 private:
@@ -341,9 +363,10 @@ private:
                             Interface, Storage, consume, true>;
 
 public:
-  using type =
+  using type = typename without_leaf_values<
       type_list_merge_t<type_list_merge_t<interface_values, wrapper_values>,
-                        type_list_merge_t<stored_values, consumed_values>>;
+                        type_list_merge_t<stored_values, consumed_values>>,
+      copied_leaf_t<Storage>>::type;
 };
 
 template <request_category Category, typename Interface, typename Storage>
