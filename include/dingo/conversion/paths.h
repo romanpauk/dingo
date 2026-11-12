@@ -428,18 +428,21 @@ struct wrap_optional {
   }
 };
 
-// The element of a source optional value that is exactly the target, or an
+// The element of a source wrapper that is exactly the optional target, or an
 // empty one when the source is empty. A borrowed source gives its element, or
 // the one empty value of the type, to be copied; a consumed source, which the
-// request owns, is given an empty element first, and its element is moved
-// out. The element is not made anew of what it holds.
+// request owns, gives its element moved out, or an empty one: an optional is
+// given an empty element first, and another wrapper gives the one empty
+// value, which stays empty as it is moved from. The element is not made anew
+// of what it holds.
 struct element_or_empty {
   template <typename Target, typename Source>
   static std::conditional_t<std::is_lvalue_reference_v<Source>,
                             const remove_cvref_t<Target> &,
                             remove_cvref_t<Target> &&>
   apply(Source &&source) {
-    using source_traits = type_traits<remove_cvref_t<Source>>;
+    using source_type = remove_cvref_t<Source>;
+    using source_traits = type_traits<source_type>;
     using element = remove_cvref_t<Target>;
     if constexpr (std::is_lvalue_reference_v<Source>) {
       if (source_traits::empty(source)) {
@@ -447,9 +450,15 @@ struct element_or_empty {
         return empty;
       }
       return *source_traits::get(source);
-    } else {
+    } else if constexpr (is_optional_type_v<source_type>) {
       if (source_traits::empty(source)) {
         source = source_traits::wrap(type_traits<element>::empty_value());
+      }
+      return std::move(*source_traits::get(source));
+    } else {
+      if (source_traits::empty(source)) {
+        static element empty = type_traits<element>::empty_value();
+        return std::move(empty);
       }
       return std::move(*source_traits::get(source));
     }
@@ -700,6 +709,35 @@ inline constexpr bool wraps_exactly_v = [] {
   }
 }();
 
+template <typename Type, typename = void>
+struct has_value_type : std::false_type {};
+
+template <typename Type>
+struct has_value_type<Type, std::void_t<typename type_traits<Type>::value_type>>
+    : std::true_type {};
+
+// Whether a wrapper that may be empty holds exactly the target: an optional
+// value, or a handle that may be null.
+template <typename Source, typename Target>
+inline constexpr bool holds_exactly_v = [] {
+  using source = remove_cvref_t<Source>;
+  bool holds = false;
+  if constexpr (has_value_type<source>::value) {
+    if constexpr (type_traits<source>::enabled && !std::is_pointer_v<source> &&
+                  !is_array_like_type_v<source> &&
+                  (is_optional_type_v<source> ||
+                   std::is_base_of_v<semantics::sole_owner,
+                                     type_traits<source>> ||
+                   std::is_base_of_v<semantics::shared_owner,
+                                     type_traits<source>>)) {
+      holds = std::is_same_v<
+          std::remove_cv_t<typename type_traits<source>::value_type>,
+          remove_cvref_t<Target>>;
+    }
+  }
+  return holds;
+}();
+
 // The element of a source optional value that is exactly an optional target,
 // or an rvalue reference to one, given as it is: copied from a borrowed
 // source, moved out of a consumed one.
@@ -707,13 +745,18 @@ template <typename Target, typename Source, typename Access>
 constexpr auto element_or_empty_path() {
   using target_type = remove_cvref_t<Target>;
   if constexpr (!std::is_lvalue_reference_v<Target> &&
-                is_optional_type_v<Target> && wraps_exactly_v<Source, Target>) {
+                is_optional_type_v<Target> && holds_exactly_v<Source, Target>) {
+    using source_type = remove_cvref_t<Source>;
     constexpr bool borrows = std::is_lvalue_reference_v<Source> &&
                              !std::is_rvalue_reference_v<Target> &&
                              is_copy_constructible_v<target_type>;
-    constexpr bool consumes = !std::is_lvalue_reference_v<Source> &&
-                              std::is_move_constructible_v<target_type> &&
-                              std::is_move_assignable_v<remove_cvref_t<Source>>;
+    constexpr bool consumes =
+        !std::is_lvalue_reference_v<Source> &&
+        std::is_move_constructible_v<target_type> &&
+        (is_optional_type_v<source_type>
+             ? std::is_move_assignable_v<source_type>
+             : std::is_base_of_v<semantics::sole_owner,
+                                 type_traits<source_type>>);
     if constexpr (borrows || consumes) {
       return conversion_leaf<element_or_empty, Target,
                              std::conditional_t<borrows, borrow, consume>>{};
