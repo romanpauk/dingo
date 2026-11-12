@@ -10,11 +10,11 @@
 #include <dingo/base/config.h>
 #include <dingo/base/construction_scope.h>
 #include <dingo/base/none.h>
-#include <dingo/binding/binding_collection.h>
-#include <dingo/binding/request_resolution.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/lookup/lookup_key.h>
+#include <dingo/request/collection.h>
+#include <dingo/request/resolution.h>
 #include <dingo/type/collection_traits.h>
 #include <dingo/type/request.h>
 #include <dingo/type/shape.h>

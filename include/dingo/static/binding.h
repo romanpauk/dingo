@@ -9,15 +9,15 @@
 
 #include <dingo/base/exceptions.h>
 #include <dingo/base/type_descriptor.h>
-#include <dingo/binding/binding_activation.h>
-#include <dingo/binding/binding_collection.h>
-#include <dingo/binding/binding_model.h>
-#include <dingo/binding/binding_resolution.h>
-#include <dingo/binding/request_composition.h>
-#include <dingo/binding/request_derivation.h>
+#include <dingo/binding/activation.h>
+#include <dingo/binding/model.h>
+#include <dingo/binding/resolution.h>
 #include <dingo/context/resolution_context.h>
 #include <dingo/factory/factory_traits.h>
 #include <dingo/lookup/lookup_key.h>
+#include <dingo/request/collection.h>
+#include <dingo/request/composition.h>
+#include <dingo/request/derivation.h>
 #include <dingo/resolution/cache.h>
 #include <dingo/static/graph.h>
 #include <dingo/type/annotated.h>

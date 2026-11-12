@@ -59,9 +59,9 @@ and wrappers, and removes the qualifiers:
 - `test_unique<A>` -> `test_unique<runtime_type>`
 
 The erased request of a runtime binding,
-[`instance_request`](../../include/dingo/binding/runtime_binding_interface.h),
-holds this key as `lookup_type`. The key tells whether a request asks for a
-value, a borrowed reference, a pointer or a wrapper, independently of its leaf.
+[`instance_request`](../../include/dingo/binding/interface.h), holds this key as
+`lookup_type`. The key tells whether a request asks for a value, a borrowed
+reference, a pointer or a wrapper, independently of its leaf.
 
 A request selects a binding by its normalized type or by its exact type. The
 binding then matches the type descriptor of the request against its resolutions

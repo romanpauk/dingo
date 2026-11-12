@@ -8,8 +8,8 @@
 #pragma once
 
 #include <dingo/base/type_list.h>
-#include <dingo/binding/binding_model.h>
-#include <dingo/binding/binding_selection.h>
+#include <dingo/binding/model.h>
+#include <dingo/binding/selection.h>
 #include <dingo/factory/factory_traits.h>
 #include <dingo/lookup/lookup.h>
 #include <dingo/lookup/lookup_key.h>

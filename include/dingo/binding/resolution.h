@@ -9,11 +9,11 @@
 
 #include <dingo/base/exceptions.h>
 #include <dingo/base/type_descriptor.h>
-#include <dingo/binding/binding_selection.h>
-#include <dingo/binding/request_composition.h>
-#include <dingo/binding/request_derivation.h>
-#include <dingo/binding/runtime_binding_interface.h>
+#include <dingo/binding/interface.h>
+#include <dingo/binding/selection.h>
 #include <dingo/context/resolution_context.h>
+#include <dingo/request/composition.h>
+#include <dingo/request/derivation.h>
 #include <dingo/resolution/resolution_operation.h>
 #include <dingo/storage/retention.h>
 #include <dingo/storage/type_storage_traits.h>

@@ -54,9 +54,9 @@ A container uses one registration mode. The modes do not mix.
 A registration can expose a type through one or more interfaces. The stored type
 does not always match the interface.
 
-[include/dingo/binding/binding_model.h](../../include/dingo/binding/binding_model.h)
-rewrites the stored leaf type to the interface leaf type when all of these
-conditions are true:
+[include/dingo/binding/model.h](../../include/dingo/binding/model.h) rewrites
+the stored leaf type to the interface leaf type when all of these conditions are
+true:
 
 - the registration exposes exactly one interface
 - the interface is a class with a virtual destructor
@@ -69,9 +69,9 @@ to the interface shape and avoids temporary conversions.
 ## Resolution
 
 Both containers derive the public `resolve<T>()` from `container_requests` in
-`binding/requests.h`. It calls `resolve_entry` of the container, for example in
-[include/dingo/runtime/container.h](../../include/dingo/runtime/container.h). At
-this boundary Dingo normalizes two independent request descriptions:
+`request/entry_points.h`. It calls `resolve_entry` of the container, for example
+in [include/dingo/runtime/container.h](../../include/dingo/runtime/container.h).
+At this boundary Dingo normalizes two independent request descriptions:
 
 - The type request becomes `request_type<T>`.
 - The key request becomes the result of `make_lookup_key(...)`.
@@ -81,7 +81,7 @@ uses its `user_type`, `lookup_type`, `interface_type`, `value_type`, and
 `exact_type` members. It does not compute these aliases again on each path.
 
 Both containers resolve a request with the algorithm in
-[include/dingo/binding/request_resolution.h](../../include/dingo/binding/request_resolution.h).
+[include/dingo/request/resolution.h](../../include/dingo/request/resolution.h).
 The sequence is:
 
 1. For a reference or pointer request, the runtime container first reads the
@@ -104,7 +104,7 @@ The sequence is:
    matches the requested type descriptor in its `instance_request`.
 6. If the binding does not publish the request, Dingo derives it from a request
    that the binding resolves. Both containers apply the rules in
-   [include/dingo/binding/request_derivation.h](../../include/dingo/binding/request_derivation.h).
+   [include/dingo/request/derivation.h](../../include/dingo/request/derivation.h).
 
 The derivation rules are:
 
@@ -121,7 +121,7 @@ wrapper of wrappers is composed at once, of the first value down its layers that
 the binding resolves by another rule. Dingo moves that value once. The caller
 cannot get a reference into the context.
 
-[include/dingo/binding/runtime_binding_interface.h](../../include/dingo/binding/runtime_binding_interface.h)
+[include/dingo/binding/interface.h](../../include/dingo/binding/interface.h)
 defines `instance_request`. The runtime container passes this object to a
 binding. The object stores:
 
@@ -206,7 +206,7 @@ parent.
 
 If no container binds an unwrapped, auto-constructible type, Dingo constructs it
 through constructor deduction. `request_resolution::unresolved` in
-[include/dingo/binding/request_resolution.h](../../include/dingo/binding/request_resolution.h)
+[include/dingo/request/resolution.h](../../include/dingo/request/resolution.h)
 does this.
 
 [include/dingo/factory/constructor_detection.h](../../include/dingo/factory/constructor_detection.h)
@@ -237,5 +237,5 @@ These files are useful while you read this flow:
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
 - [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)
-- [include/dingo/binding/runtime_binding_interface.h](../../include/dingo/binding/runtime_binding_interface.h)
+- [include/dingo/binding/interface.h](../../include/dingo/binding/interface.h)
 - [include/dingo/factory/constructor_detection.h](../../include/dingo/factory/constructor_detection.h)

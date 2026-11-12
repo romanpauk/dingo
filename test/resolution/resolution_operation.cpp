@@ -6,7 +6,7 @@
 //
 
 #include <dingo/base/exceptions.h>
-#include <dingo/binding/binding_resolution.h>
+#include <dingo/binding/resolution.h>
 #include <dingo/resolution/resolution_operation.h>
 #include <dingo/storage/shared.h>
 

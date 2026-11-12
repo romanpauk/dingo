@@ -10,10 +10,8 @@
 #include <dingo/base/exceptions.h>
 #include <dingo/base/meta.h>
 #include <dingo/base/none.h>
-#include <dingo/binding/binding_collection.h>
-#include <dingo/binding/binding_resolution.h>
-#include <dingo/binding/binding_selection.h>
-#include <dingo/binding/requests.h>
+#include <dingo/binding/resolution.h>
+#include <dingo/binding/selection.h>
 #include <dingo/factory/auto_constructible.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/constructor.h>
@@ -23,6 +21,8 @@
 #include <dingo/memory/allocator.h>
 #include <dingo/registration/requirements.h>
 #include <dingo/registration/type_registration.h>
+#include <dingo/request/collection.h>
+#include <dingo/request/entry_points.h>
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/runtime/binding.h>
 #include <dingo/runtime/container_traits.h>

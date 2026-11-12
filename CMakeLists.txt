@@ -94,13 +94,14 @@ if(DINGO_DEVELOPMENT_MODE)
         static/registry.h
         container.h
         factory/auto_constructible.h
-        binding/binding_model.h
-        binding/binding_resolution.h
-        binding/binding_selection.h
-        binding/binding_activation.h
-        binding/request_composition.h
-        binding/request_resolution.h
-        binding/requests.h
+        binding/model.h
+        binding/resolution.h
+        binding/selection.h
+        binding/activation.h
+        request/composition.h
+        request/derivation.h
+        request/resolution.h
+        request/entry_points.h
         factory/factory_traits.h
         type/key.h
         lookup/lookup_key.h
@@ -150,7 +151,7 @@ if(DINGO_DEVELOPMENT_MODE)
         lookup/unordered.h
         resolution/cache.h
         resolution/conversion_resolution.h
-        binding/runtime_binding_interface.h
+        binding/interface.h
         runtime/binding.h
         storage/interface_storage_traits.h
         context/resolution_context.h
@@ -177,7 +178,7 @@ if(DINGO_DEVELOPMENT_MODE)
         base/meta.h
         base/construction_scope.h
         base/selected.h
-        binding/binding_collection.h
+        request/collection.h
         context/recursion_guard.h
         lookup/container_lookup_definition.h
         registration/requirements.h

@@ -11,10 +11,8 @@
 #include <dingo/base/exceptions.h>
 #include <dingo/base/none.h>
 #include <dingo/base/type_list.h>
-#include <dingo/binding/binding_collection.h>
-#include <dingo/binding/binding_model.h>
-#include <dingo/binding/binding_selection.h>
-#include <dingo/binding/request_resolution.h>
+#include <dingo/binding/model.h>
+#include <dingo/binding/selection.h>
 #include <dingo/factory/auto_constructible.h>
 #include <dingo/factory/callable.h>
 #include <dingo/lookup/lookup.h>
@@ -22,6 +20,8 @@
 #include <dingo/lookup/operations.h>
 #include <dingo/memory/allocator.h>
 #include <dingo/registration/requirements.h>
+#include <dingo/request/collection.h>
+#include <dingo/request/resolution.h>
 #include <dingo/runtime/binding.h>
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>

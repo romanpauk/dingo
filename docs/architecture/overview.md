@@ -94,7 +94,7 @@ normalizes them.
 ### Factory And Storage
 
 Both containers keep the state of a registration in a binding cell, defined in
-[include/dingo/binding/binding_activation.h](../../include/dingo/binding/binding_activation.h).
+[include/dingo/binding/activation.h](../../include/dingo/binding/activation.h).
 The cell holds the storage object and its retention: what it keeps of the
 instance for its interfaces. A static container holds one cell per registration
 inline. A runtime binding holds its cell in `runtime_binding_state` from
@@ -111,7 +111,7 @@ own the lifetime policy:
 
 ### Resolution And Conversion Path
 
-[include/dingo/binding/binding_activation.h](../../include/dingo/binding/binding_activation.h)
+[include/dingo/binding/activation.h](../../include/dingo/binding/activation.h)
 owns the resolution flow of both containers. A binding activation:
 
 - asks the storage to `resolve(...)` its source
@@ -129,12 +129,17 @@ defines the last conversion step, from the stored source to the requested
 target. A conversion is a path of operations. Dingo takes the first available
 path.
 
-The shared binding and resolution code is in
-[include/dingo/binding/](../../include/dingo/binding):
+The code both containers share is in two folders:
 
-- `binding_model.h`
-- `binding_selection.h`
-- `binding_resolution.h`
+- [include/dingo/binding/](../../include/dingo/binding): what a binding is and
+  how it answers a request. `model.h` holds what a registration declares,
+  `selection.h` how a request selects a binding, `activation.h` the cell of a
+  binding, and `resolution.h` how a binding resolves a request.
+- [include/dingo/request/](../../include/dingo/request): what a request is and
+  how a container runs it. `entry_points.h` holds the requests a container
+  answers, `resolution.h` the algorithm both containers run, and `derivation.h`
+  and `composition.h` how a request that a binding does not publish is derived
+  or composed.
 
 The code of each container is in:
 

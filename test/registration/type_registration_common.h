@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/binding/binding_model.h>
+#include <dingo/binding/model.h>
 #include <dingo/container.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/factory_traits.h>

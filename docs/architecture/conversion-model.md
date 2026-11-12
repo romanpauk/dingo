@@ -23,7 +23,7 @@ The main source files are:
 
 - [include/dingo/storage/scope_traits.h](../../include/dingo/storage/scope_traits.h)
 - [include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
-- [include/dingo/binding/runtime_binding_interface.h](../../include/dingo/binding/runtime_binding_interface.h)
+- [include/dingo/binding/interface.h](../../include/dingo/binding/interface.h)
 - [include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
 - [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
 

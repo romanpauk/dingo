@@ -9,9 +9,9 @@
 
 #include <dingo/base/config.h>
 
-#include <dingo/binding/binding_activation.h>
-#include <dingo/binding/binding_resolution.h>
-#include <dingo/binding/runtime_binding_interface.h>
+#include <dingo/binding/activation.h>
+#include <dingo/binding/interface.h>
+#include <dingo/binding/resolution.h>
 #include <dingo/runtime/context.h>
 #include <dingo/runtime/memory.h>
 #include <dingo/type/shape.h>

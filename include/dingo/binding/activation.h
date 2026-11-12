@@ -8,8 +8,8 @@
 #pragma once
 
 #include <dingo/base/type_list.h>
-#include <dingo/binding/binding_model.h>
-#include <dingo/binding/binding_resolution.h>
+#include <dingo/binding/model.h>
+#include <dingo/binding/resolution.h>
 #include <dingo/context/resolution_context.h>
 #include <dingo/resolution/cache.h>
 #include <dingo/resolution/resolution_operation.h>

@@ -11,7 +11,7 @@
 
 #include <dingo/base/meta.h>
 #include <dingo/base/type_descriptor.h>
-#include <dingo/binding/request_composition.h>
+#include <dingo/request/composition.h>
 #include <dingo/type/request.h>
 
 #include <cstddef>
