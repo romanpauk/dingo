@@ -8,8 +8,8 @@
 #pragma once
 
 #include <dingo/base/type_list.h>
-#include <dingo/resolution/route.h>
-#include <dingo/type/type_conversion_traits.h>
+#include <dingo/conversion/paths.h>
+#include <dingo/conversion/route.h>
 #include <dingo/type/type_traits.h>
 
 #include <type_traits>

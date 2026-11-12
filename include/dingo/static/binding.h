@@ -10,6 +10,7 @@
 #include <dingo/base/exceptions.h>
 #include <dingo/base/type_descriptor.h>
 #include <dingo/binding/activation.h>
+#include <dingo/binding/cache.h>
 #include <dingo/binding/model.h>
 #include <dingo/binding/resolution.h>
 #include <dingo/context/resolution.h>
@@ -18,7 +19,6 @@
 #include <dingo/request/collection.h>
 #include <dingo/request/composition.h>
 #include <dingo/request/derivation.h>
-#include <dingo/resolution/cache.h>
 #include <dingo/static/graph.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/collection_traits.h>

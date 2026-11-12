@@ -1,6 +1,6 @@
 // RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
 
-#include <dingo/type/type_conversion_traits.h>
+#include <dingo/conversion/paths.h>
 
 struct wrapper {
   int value;

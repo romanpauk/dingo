@@ -9,11 +9,11 @@
 
 #include <dingo/base/config.h>
 
+#include <dingo/conversion/apply.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/factory/factory_traits.h>
 #include <dingo/memory/aligned_storage.h>
 #include <dingo/memory/object_lifetime.h>
-#include <dingo/resolution/operation.h>
 #include <dingo/storage/scope_traits.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>

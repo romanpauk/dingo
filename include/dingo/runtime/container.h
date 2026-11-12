@@ -23,7 +23,7 @@
 #include <dingo/registration/type_registration.h>
 #include <dingo/request/collection.h>
 #include <dingo/request/decomposition.h>
-#include <dingo/request/entry_points.h>
+#include <dingo/resolution/entry_points.h>
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/runtime/binding.h>
 #include <dingo/runtime/container_traits.h>

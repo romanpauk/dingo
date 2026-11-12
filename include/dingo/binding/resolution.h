@@ -12,10 +12,10 @@
 #include <dingo/binding/interface.h>
 #include <dingo/binding/selection.h>
 #include <dingo/context/resolution.h>
+#include <dingo/conversion/apply.h>
 #include <dingo/request/composition.h>
 #include <dingo/request/decomposition.h>
 #include <dingo/request/derivation.h>
-#include <dingo/resolution/operation.h>
 #include <dingo/storage/retention.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/annotated.h>

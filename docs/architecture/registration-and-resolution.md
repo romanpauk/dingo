@@ -69,9 +69,10 @@ to the interface shape and avoids temporary conversions.
 ## Resolution
 
 Both containers derive the public `resolve<T>()` from `container_requests` in
-`request/entry_points.h`. It calls `resolve_entry` of the container, for example
-in [include/dingo/runtime/container.h](../../include/dingo/runtime/container.h).
-At this boundary Dingo normalizes two independent request descriptions:
+`resolution/entry_points.h`. It calls `resolve_entry` of the container, for
+example in
+[include/dingo/runtime/container.h](../../include/dingo/runtime/container.h). At
+this boundary Dingo normalizes two independent request descriptions:
 
 - The type request becomes `request_type<T>`.
 - The key request becomes the result of `make_lookup_key(...)`.
@@ -81,7 +82,7 @@ uses its `user_type`, `lookup_type`, `interface_type`, `value_type`, and
 `exact_type` members. It does not compute these aliases again on each path.
 
 Both containers resolve a request with the algorithm in
-[include/dingo/request/resolution.h](../../include/dingo/request/resolution.h).
+[include/dingo/resolution/algorithm.h](../../include/dingo/resolution/algorithm.h).
 The sequence is:
 
 1. For a reference or pointer request, the runtime container first reads the
@@ -177,7 +178,7 @@ needs no runtime arena and lookup set of its own.
 The runtime binding has a list of resolutions, derived from
 `Storage::conversions`. It matches the requested type descriptor against this
 list. If a resolution matches, the storage produces the source object.
-[include/dingo/resolution/operation.h](../../include/dingo/resolution/operation.h)
+[include/dingo/conversion/apply.h](../../include/dingo/conversion/apply.h)
 converts it to the requested shape.
 
 The static path uses the same binding model and conversion rules. It selects
@@ -206,7 +207,7 @@ parent.
 
 If no container binds an unwrapped, auto-constructible type, Dingo constructs it
 through constructor deduction. `request_resolution::unresolved` in
-[include/dingo/request/resolution.h](../../include/dingo/request/resolution.h)
+[include/dingo/resolution/algorithm.h](../../include/dingo/resolution/algorithm.h)
 does this.
 
 [include/dingo/factory/constructor_detection.h](../../include/dingo/factory/constructor_detection.h)

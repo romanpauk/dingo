@@ -11,9 +11,9 @@
 
 #include <dingo/base/meta.h>
 #include <dingo/base/type_list.h>
+#include <dingo/conversion/paths.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/shape.h>
-#include <dingo/type/type_conversion_traits.h>
 #include <dingo/type/type_traits.h>
 
 #include <type_traits>

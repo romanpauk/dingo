@@ -12,7 +12,7 @@
 #include <dingo/base/construction_scope.h>
 #include <dingo/base/type_list.h>
 #include <dingo/context/recursion_guard.h>
-#include <dingo/resolution/source.h>
+#include <dingo/conversion/source.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/shape.h>

@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: MIT
 //
 
+#include <dingo/binding/cache.h>
 #include <dingo/container.h>
-#include <dingo/resolution/cache.h>
 #include <dingo/static_container.h>
 #include <dingo/storage/retention.h>
 #include <dingo/storage/shared.h>

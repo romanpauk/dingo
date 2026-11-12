@@ -13,12 +13,14 @@ import sys
 LAYERS = [
     ("base",),
     ("memory", "rtti", "type"),
-    ("resolution", "lookup"),
+    ("conversion", "lookup"),
+    ("request",),
     ("factory",),
     ("context",),
     ("storage",),
     ("registration",),
     ("binding",),
+    ("resolution",),
     ("runtime", "static"),
     (".",),
 ]

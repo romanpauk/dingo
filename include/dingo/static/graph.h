@@ -8,8 +8,8 @@
 #pragma once
 
 #include <dingo/base/type_list.h>
+#include <dingo/conversion/apply.h>
 #include <dingo/registration/type_registration.h>
-#include <dingo/resolution/operation.h>
 #include <dingo/static/registry.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>

@@ -17,15 +17,15 @@ The conversion rules are in these parts of the library:
 - `instance_request` carries a runtime request: its lookup type, its type
   descriptor, and a function that derives a request the binding does not
   publish.
-- Each conversion of `type_conversion_traits.h` applies itself.
+- Each conversion of `conversion/paths.h` applies itself.
 
 The main source files are:
 
 - [include/dingo/storage/scope_traits.h](../../include/dingo/storage/scope_traits.h)
 - [include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
 - [include/dingo/binding/interface.h](../../include/dingo/binding/interface.h)
-- [include/dingo/resolution/operation.h](../../include/dingo/resolution/operation.h)
-- [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
+- [include/dingo/conversion/apply.h](../../include/dingo/conversion/apply.h)
+- [include/dingo/conversion/paths.h](../../include/dingo/conversion/paths.h)
 
 ## Storage Exposure
 
@@ -185,13 +185,13 @@ uses only the address, because it borrows.
 
 ## Runtime Conversion
 
-[include/dingo/resolution/operation.h](../../include/dingo/resolution/operation.h)
+[include/dingo/conversion/apply.h](../../include/dingo/conversion/apply.h)
 executes the operation that publication selected. `type_resolution` carries the
 source and conversion types. The `resolution` that holds it carries the target.
 `type_resolution` gets the source in the published value category and applies
 the selected conversion. If the conversion is not available, it throws
 `type_not_convertible`. Each conversion in
-[include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
+[include/dingo/conversion/paths.h](../../include/dingo/conversion/paths.h)
 states what it requires of its source, `borrow` or `consume`, and how it
 applies. An unwrapping or a wrapping conversion applies its inner conversion to
 what it unwraps or wraps. The identity conversion forwards an exact source. A

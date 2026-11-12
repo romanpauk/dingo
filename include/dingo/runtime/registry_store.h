@@ -22,7 +22,7 @@
 #include <dingo/registration/requirements.h>
 #include <dingo/request/collection.h>
 #include <dingo/request/decomposition.h>
-#include <dingo/request/resolution.h>
+#include <dingo/resolution/algorithm.h>
 #include <dingo/runtime/binding.h>
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>

@@ -9,7 +9,7 @@
 
 #include <dingo/base/config.h>
 
-#include <dingo/type/type_conversion_traits.h>
+#include <dingo/conversion/paths.h>
 #include <dingo/type/type_traits.h>
 
 #include <type_traits>

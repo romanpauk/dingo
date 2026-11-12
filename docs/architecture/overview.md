@@ -16,21 +16,26 @@ rule. The layer list is in [tools/layers.py](../../tools/layers.py).
 
 From the bottom:
 
-0. `base/`: configuration, `none`, `selected`, exceptions, `type_list`, type
-   descriptors
-1. `memory/`, `rtti/`, `type/`: allocators and object stores, rtti providers,
-   type traits, conversions, keys, annotations
-2. `resolution/`, `lookup/`: resolution operations and conversion resolutions,
-   lookup indexes
-3. `factory/`: constructors, callables, constructor detection, factory traits
-4. `context/`: resolution context base and recursion guard
-5. `storage/`: storage tags, scope policies, storage exposure traits
-6. `registration/`: registration options, requirements
-7. `binding/`: the binding model, binding selection and resolution, the request
-   algorithm of both containers, and the requests both containers answer
-8. `runtime/`, `static/`: the runtime and the static container, with their
-   registries, bindings, contexts and traits, and the static graph
-9. `dingo/*.h`: `runtime_container` (also named `container`), `static_container`
+00. `base/`: configuration, `none`, `selected`, exceptions, `type_list`, type
+    descriptors
+01. `memory/`, `rtti/`, `type/`: allocators and object stores, rtti providers,
+    type traits, keys, annotations
+02. `conversion/`, `lookup/`: the conversion paths, the routes from a source to
+    a target and their application, lookup indexes
+03. `request/`: what a request is, how a request that a binding does not publish
+    is derived or composed, collection requests
+04. `factory/`: constructors, callables, constructor detection, factory traits
+05. `context/`: resolution context base and recursion guard
+06. `storage/`: storage tags, scope policies, storage exposure traits
+07. `registration/`: registration options, requirements
+08. `binding/`: the binding model, binding selection, the cell of a binding, and
+    how a binding answers a request
+09. `resolution/`: the resolution algorithm of both containers, and the requests
+    both containers answer
+10. `runtime/`, `static/`: the runtime and the static container, with their
+    registries, bindings, contexts and traits, and the static graph
+11. `dingo/*.h`: `runtime_container` (also named `container`),
+    `static_container`
 
 ## Main Owners
 
@@ -124,22 +129,28 @@ The containers differ only in how they select the resolution of a request. A
 static container selects it at compile time. A runtime binding matches the
 requested type descriptor at run time.
 
-[include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
+[include/dingo/conversion/paths.h](../../include/dingo/conversion/paths.h)
 defines the last conversion step, from the stored source to the requested
 target. A conversion is a path of operations. Dingo takes the first available
 path.
 
-The code both containers share is in two folders:
+A request passes through four folders that both containers share:
 
+- [include/dingo/resolution/](../../include/dingo/resolution): how a container
+  runs a request. `entry_points.h` holds the requests a container answers, and
+  `algorithm.h` the algorithm both containers run.
 - [include/dingo/binding/](../../include/dingo/binding): what a binding is and
   how it answers a request. `model.h` holds what a registration declares,
   `selection.h` how a request selects a binding, `activation.h` the cell of a
   binding, and `resolution.h` how a binding resolves a request.
-- [include/dingo/request/](../../include/dingo/request): what a request is and
-  how a container runs it. `entry_points.h` holds the requests a container
-  answers, `resolution.h` the algorithm both containers run, and `derivation.h`
-  and `composition.h` how a request that a binding does not publish is derived
+- [include/dingo/request/](../../include/dingo/request): what a request is.
+  `decomposition.h` takes a request apart, and `derivation.h` and
+  `composition.h` say how a request that a binding does not publish is derived
   or composed.
+- [include/dingo/conversion/](../../include/dingo/conversion): the conversion of
+  the stored source to the requested target. `paths.h` holds the conversion
+  paths, `available.h` the routes a stored type publishes, and `apply.h` their
+  application.
 
 The code of each container is in:
 
@@ -180,4 +191,4 @@ To read the core path in source order, start here:
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
 - [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)
-- [include/dingo/resolution/operation.h](../../include/dingo/resolution/operation.h)
+- [include/dingo/conversion/apply.h](../../include/dingo/conversion/apply.h)

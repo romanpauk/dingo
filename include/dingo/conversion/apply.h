@@ -11,8 +11,8 @@
 
 #include <dingo/base/exceptions.h>
 #include <dingo/base/type_list.h>
-#include <dingo/resolution/source.h>
-#include <dingo/type/type_conversion_traits.h>
+#include <dingo/conversion/paths.h>
+#include <dingo/conversion/source.h>
 #include <dingo/type/type_traits.h>
 
 #include <memory>

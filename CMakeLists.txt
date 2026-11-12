@@ -100,8 +100,8 @@ if(DINGO_DEVELOPMENT_MODE)
         binding/activation.h
         request/composition.h
         request/derivation.h
-        request/resolution.h
-        request/entry_points.h
+        resolution/algorithm.h
+        resolution/entry_points.h
         factory/factory_traits.h
         type/key.h
         lookup/lookup_key.h
@@ -149,8 +149,8 @@ if(DINGO_DEVELOPMENT_MODE)
         lookup/storage.h
         lookup/tags.h
         lookup/unordered.h
-        resolution/cache.h
-        resolution/conversion.h
+        binding/cache.h
+        conversion/available.h
         binding/interface.h
         runtime/binding.h
         storage/interface_storage_traits.h
@@ -161,7 +161,7 @@ if(DINGO_DEVELOPMENT_MODE)
         rtti/rtti.h
         rtti/typeid_provider.h
         storage/external.h
-        resolution/source.h
+        conversion/source.h
         storage/shared_cyclical.h
         storage/shared.h
         storage/storage.h
@@ -170,11 +170,11 @@ if(DINGO_DEVELOPMENT_MODE)
         storage/type_storage_traits.h
         storage/unique.h
         type/shape.h
-        type/type_conversion_traits.h
+        conversion/paths.h
         base/type_descriptor.h
         base/type_list.h
         type/type_traits.h
-        resolution/operation.h
+        conversion/apply.h
         base/meta.h
         base/construction_scope.h
         base/selected.h
@@ -182,7 +182,7 @@ if(DINGO_DEVELOPMENT_MODE)
         context/recursion_guard.h
         lookup/container_lookup_definition.h
         registration/requirements.h
-        resolution/route.h
+        conversion/route.h
         request/decomposition.h
     )
 

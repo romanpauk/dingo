@@ -20,7 +20,7 @@
 #include <dingo/registration/type_registration.h>
 #include <dingo/request/collection.h>
 #include <dingo/request/decomposition.h>
-#include <dingo/request/entry_points.h>
+#include <dingo/resolution/entry_points.h>
 #include <dingo/static/binding.h>
 #include <dingo/static/container_traits.h>
 #include <dingo/static/context.h>

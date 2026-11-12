@@ -123,5 +123,5 @@ The main implementation headers of this model are:
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
 - [include/dingo/binding/selection.h](../../include/dingo/binding/selection.h)
 - [include/dingo/binding/resolution.h](../../include/dingo/binding/resolution.h)
-- [include/dingo/request/resolution.h](../../include/dingo/request/resolution.h)
-- [include/dingo/request/entry_points.h](../../include/dingo/request/entry_points.h)
+- [include/dingo/resolution/algorithm.h](../../include/dingo/resolution/algorithm.h)
+- [include/dingo/resolution/entry_points.h](../../include/dingo/resolution/entry_points.h)

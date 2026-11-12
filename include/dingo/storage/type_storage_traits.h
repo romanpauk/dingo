@@ -11,12 +11,12 @@
 
 #include <dingo/base/type_list.h>
 #include <dingo/context/recursion_guard.h>
+#include <dingo/conversion/available.h>
+#include <dingo/conversion/paths.h>
+#include <dingo/conversion/route.h>
+#include <dingo/conversion/source.h>
 #include <dingo/request/decomposition.h>
-#include <dingo/resolution/conversion.h>
-#include <dingo/resolution/route.h>
-#include <dingo/resolution/source.h>
 #include <dingo/type/shape.h>
-#include <dingo/type/type_conversion_traits.h>
 #include <dingo/type/type_traits.h>
 
 #include <type_traits>

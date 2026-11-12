@@ -129,9 +129,9 @@ defines a scope outside the library and registers it with both containers.
 ### 3. `type_conversion_traits`
 
 Specialize `type_conversion_traits` in
-[include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
-when two types need a conversion step that a converting constructor or a pointer
-cast does not cover.
+[include/dingo/conversion/paths.h](../../include/dingo/conversion/paths.h) when
+two types need a conversion step that a converting constructor or a pointer cast
+does not cover.
 
 The `convert` function performs the last step: it builds the target wrapper from
 the source wrapper. It is also the availability signal. A conversion is
@@ -202,6 +202,6 @@ constructor.
 
 - [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
 - [include/dingo/storage/scope_traits.h](../../include/dingo/storage/scope_traits.h)
-- [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
+- [include/dingo/conversion/paths.h](../../include/dingo/conversion/paths.h)
 - [test/support/custom_wrappers.h](../../test/support/custom_wrappers.h)
 - [test/registration/custom_scope.cpp](../../test/registration/custom_scope.cpp)
