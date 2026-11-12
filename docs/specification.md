@@ -74,9 +74,11 @@ it asks for. So the steps of a derivation divide between them:
 
 - The binding takes the steps that need the stored type or that only go into the
   stored object: `element`, `upcast`, and the release of what a pointer that it
-  made points to. What these steps reach are the _layer sources_ of the binding.
-  A binding has at most one layer source of each layer of the stored type,
-  borrowed and consumed, of the leaf and of its interface.
+  made points to. A request of the abstract interface cannot name the leaf, so
+  the binding also takes every step from an object that holds the leaf, such as
+  a new handle of the leaf before its upcast. What these steps reach are the
+  _layer sources_ of the binding. A binding of the leaf has at most one layer
+  source of each layer of the stored type, borrowed and consumed.
 - The request takes every other step from the layer sources. Each of these steps
   adds a layer or converts one, so a request finds the layer sources that it
   needs from its own shape.

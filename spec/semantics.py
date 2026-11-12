@@ -566,21 +566,30 @@ def reachable(start, context):
 # interface it asks for, so a request cannot name what the binding stores. The
 # binding takes the steps that need the stored type, or that only go into
 # what it stores: it gives the element of a layer, rebinds the leaf to its
-# interface, and releases what a pointer it made points to. What these reach
-# are its layer sources, which it publishes. A request takes every other step
-# from them: each adds a layer or converts one, so a request finds the layer
+# interface, and releases what a pointer it made points to. It takes every
+# step from what holds the leaf, when the request asks for the interface: a
+# request of the interface cannot name the leaf. What these reach are its
+# layer sources, which it publishes. A request takes every other step from
+# them: each adds a layer or converts one, so a request finds the layer
 # sources it needs from its own shape. A resolution reaches from the layer
 # sources what it reaches from the stored object, at the same cost.
 
 BINDING_STEPS = frozenset({"element", "upcast"})
 
 
+def names_leaf(thing, context):
+    """Whether a thing holds the leaf a request of the interface cannot
+    name."""
+    return context.abstract and thing.element == "leaf"
+
+
 def binding_steps(thing, context):
     """The steps a binding takes from a thing: those that need the type it
-    stores, and the release of what a pointer it made points to, which a
-    request reaches by adopting the pointer and taking its element."""
+    stores, every step from what holds the leaf a request cannot name, and
+    the release of what a pointer it made points to, which a request reaches
+    by adopting the pointer and taking its element."""
     found = [(kind, following) for kind, following in steps(thing, context)
-             if kind in BINDING_STEPS]
+             if kind in BINDING_STEPS or names_leaf(thing, context)]
     for kind, adopted in steps(thing, context):
         if kind == "adopt" and LAYERS[adopted.layers[0]].owner is Owner.SOLE:
             found += [("release", released)
@@ -592,6 +601,8 @@ def binding_steps(thing, context):
 def request_steps(thing, context):
     """The steps a request takes from a layer source: every step a binding
     does not take, each of which adds a layer or converts one."""
+    if names_leaf(thing, context):
+        return []
     return [(kind, following) for kind, following in steps(thing, context)
             if kind not in BINDING_STEPS]
 

@@ -48,13 +48,15 @@ class LayerSourcesTest(unittest.TestCase):
             self.fail(f"{len(differing)} cells differ:\n" +
                       "\n".join(differing[:20]))
 
-    def test_a_binding_publishes_few_layer_sources(self):
-        """A binding publishes at most a layer source of each layer of what it
-        stores, borrowed and consumed, of the leaf and of its interface."""
+    def test_a_binding_of_the_leaf_publishes_few_layer_sources(self):
+        """A binding of the leaf publishes at most a layer source of each
+        layer of what it stores, borrowed and consumed. One of the abstract
+        interface publishes too what the request cannot make of the leaf it
+        cannot name."""
         for unit in units():
             for interface in {request.interface.bound
                               for request in unit.requests()}:
-                if interface.element == "other":
+                if interface.element != "leaf":
                     continue
                 context = semantics.Context(
                     semantics.LEAVES[unit.leaf], semantics.SCOPES[unit.scope],
