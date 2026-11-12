@@ -271,9 +271,12 @@ private:
   // A storage that makes a value for the request places it in the context,
   // which ends before the caller of the container uses an address into it,
   // or into what it owns, as the static container knows as it compiles. A
-  // pointer the storage makes hands over what it points to.
+  // pointer the storage makes hands over what it points to. Whether it
+  // places the value is given as an argument: MSVC parses a call with an
+  // explicit template argument in a generic lambda as a declaration.
   template <bool PlacesValue>
-  static void check_caller_address(construction_scope scope,
+  static void check_caller_address(std::bool_constant<PlacesValue>,
+                                   construction_scope scope,
                                    const resolved_address &resolved,
                                    const request_type &request,
                                    runtime_context_type &context) {
@@ -370,9 +373,10 @@ private:
                       activation, context,
                       std::forward<decltype(source)>(source), resolution_index,
                       request_resolutions{}, request.requested_type);
-                  check_caller_address<detail::materializes_value_source_v<
-                      Storage, runtime_context_type,
-                      std::remove_reference_t<decltype(container)>>>(
+                  check_caller_address(
+                      std::bool_constant<detail::materializes_value_source_v<
+                          Storage, runtime_context_type,
+                          std::remove_reference_t<decltype(container)>>>{},
                       scope, resolved, request, context);
                   return resolved;
                 });
