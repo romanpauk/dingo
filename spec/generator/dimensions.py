@@ -79,11 +79,13 @@ class Outcome(Dimension):
     # What the conversion layer of a binding answers a request: a resolution
     # with an available conversion, a wrapper composed of one, a value taken
     # out of a pointer the binding hands over, a reference into the context
-    # of a resolution, one whose conversion is not available, none, and a
-    # different answer of the two containers; a request the binding of
-    # another interface answers.
+    # of a resolution, one a request derives from a layer source by a step of
+    # its own, one whose conversion is not available, none, and a different
+    # answer of the two containers; a request the binding of another
+    # interface answers.
     PUBLISHED = "published"
     COMPOSED = "composed"
+    DERIVED = "derived"
     ADOPTED = "adopted"
     PLACED = "placed"
     UNCONVERTIBLE = "unconvertible"

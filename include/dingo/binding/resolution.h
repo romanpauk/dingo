@@ -98,10 +98,6 @@ instance_request<RTTI> erased_request() {
           described_type_v<T>, deriver<T, RTTI, Binding, Context>()};
 }
 
-template <typename T> struct request_tag {
-  using type = T;
-};
-
 // A reference into the context ends before the caller uses what a resolution
 // returns: the caller is refused it, as a static container's compiles.
 template <typename Request, typename Scope, typename Context>
@@ -198,6 +194,27 @@ resolved_address apply_derivation(Scope scope, Context &context,
     } else {
       return placed();
     }
+  } else if constexpr (How == derivation::refer) {
+    refuse_caller_reference<Request>(scope, registered, context);
+    derived value = resolve();
+    return {std::addressof(value), access::borrow};
+  } else if constexpr (How == derivation::address) {
+    derived value = resolve();
+    return {const_cast<std::remove_cv_t<std::remove_reference_t<derived>> *>(
+                std::addressof(value)),
+            access::borrow};
+  } else if constexpr (How == derivation::move) {
+    derived value = resolve();
+    return {std::addressof(value), access::consume};
+  } else if constexpr (How == derivation::copy) {
+    derived value = resolve();
+    return {const_cast<remove_cvref_t<derived> *>(std::addressof(value)),
+            access::borrow};
+  } else if constexpr (How == derivation::convert) {
+    using shared = remove_cvref_t<Request>;
+    auto &value = context.template construct_from<shared>(
+        scope, [&]() -> shared { return shared(resolve()); });
+    return {std::addressof(value), access::consume};
   } else {
     static_assert(How == derivation::keep);
     auto &value =
@@ -206,6 +223,15 @@ resolved_address apply_derivation(Scope scope, Context &context,
     return {std::addressof(value), access::borrow};
   }
 }
+
+// Whether a runtime binding publishes a request, as its site tells.
+struct site_publishes {
+  const derivation_site &site;
+
+  template <typename T> bool operator()(request_tag<T>) const {
+    return site.publishes(described_type_v<T>);
+  }
+};
 
 template <derivation How, typename T, typename RTTI, typename Binding,
           typename Context>
@@ -217,7 +243,8 @@ resolved_address derive_as(const derivation_site &site,
     using candidate = typename decltype(tag)::type;
     const type_descriptor requested = described_type_v<candidate>;
     return !site.publishes(requested) &&
-           derive_request<candidate>(site.facts_of(requested)) ==
+           derive_request<candidate>(site.facts_of(requested),
+                                     site_publishes{site}) ==
                derivation::compose;
   };
   if constexpr (How == derivation::compose && derivation_shape_v<How, T>) {
@@ -259,7 +286,8 @@ derive_binding_request(void *erased, const derivation_site &site,
                        construction_scope scope, void *erased_context) {
   auto &binding = *static_cast<Binding *>(erased);
   auto &context = *static_cast<Context *>(erased_context);
-  switch (derive_request<T>(site.facts_of(described_type_v<T>))) {
+  switch (derive_request<T>(site.facts_of(described_type_v<T>),
+                            site_publishes{site})) {
   case derivation::adopt:
     return derive_as<derivation::adopt, T, RTTI>(site, scope, binding, context);
   case derivation::keep:
@@ -268,6 +296,18 @@ derive_binding_request(void *erased, const derivation_site &site,
     return derive_as<derivation::place, T, RTTI>(site, scope, binding, context);
   case derivation::take:
     return derive_as<derivation::take, T, RTTI>(site, scope, binding, context);
+  case derivation::refer:
+    return derive_as<derivation::refer, T, RTTI>(site, scope, binding, context);
+  case derivation::address:
+    return derive_as<derivation::address, T, RTTI>(site, scope, binding,
+                                                   context);
+  case derivation::move:
+    return derive_as<derivation::move, T, RTTI>(site, scope, binding, context);
+  case derivation::copy:
+    return derive_as<derivation::copy, T, RTTI>(site, scope, binding, context);
+  case derivation::convert:
+    return derive_as<derivation::convert, T, RTTI>(site, scope, binding,
+                                                   context);
   case derivation::compose:
     return derive_as<derivation::compose, T, RTTI>(site, scope, binding,
                                                    context);

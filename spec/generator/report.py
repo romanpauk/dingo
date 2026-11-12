@@ -28,6 +28,7 @@ MARKS = {
     Outcome.EXCESS: "excess",
     Outcome.PUBLISHED: "pub",
     Outcome.COMPOSED: "comp",
+    Outcome.DERIVED: "deriv",
     Outcome.ADOPTED: "adopt",
     Outcome.PLACED: "place",
     Outcome.UNCONVERTIBLE: "unconv",

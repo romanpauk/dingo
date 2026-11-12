@@ -148,11 +148,21 @@ constexpr bool takes_request(type_list<Resolutions...>,
 // does not publish, of its resolutions: whether it keeps its instance,
 // places what it makes, and publishes the pointer it makes that a reference
 // request refers into, or that a value request is taken out of, as the value
-// can be moved.
-template <typename Storage, typename Resolutions>
+// can be moved, and whether a value of its interface would slice what it
+// stores.
+template <typename Interface, typename Storage, typename Resolutions>
 constexpr derivation_facts runtime_derivation_facts(type_descriptor requested) {
-  derivation_facts facts{binding_cell<Storage>::keeps_conversions,
-                         places_made_values_v<Storage>, false, false};
+  using interface = std::remove_cv_t<Interface>;
+  derivation_facts facts{
+      binding_cell<Storage>::keeps_conversions,
+      places_made_values_v<Storage>,
+      false,
+      false,
+      slices_v<interface, leaf_type_t<typename Storage::type>> &&
+          requested.reference != type_reference_kind::lvalue &&
+          requested.pointee == nullptr &&
+          requested.tag == described_type_v<interface>.tag,
+      scope_allows_cycles_v<typename Storage::tag_type>};
   if constexpr (hands_over_made_pointers_v<Storage>) {
     facts.adopts = requested.reference == type_reference_kind::lvalue &&
                    adopts_request<Storage>(Resolutions{}, requested);
@@ -317,7 +327,7 @@ private:
     auto &binding = static_cast<runtime_binding &>(erased);
     const detail::derivation_site site{
         retained(binding), registered_type(), cached(cache_key), &publishes,
-        &detail::runtime_derivation_facts<Storage, request_resolutions>};
+        &detail::runtime_derivation_facts<Type, Storage, request_resolutions>};
     return request.derive(&erased, site, scope, &context);
   }
 

@@ -44,24 +44,35 @@ constexpr std::size_t runtime_index(type_list<Resolutions...>) {
   return index;
 }
 
+// Whether the runtime container dispatches a request to a resolution.
+template <typename Resolutions> struct runtime_publishes {
+  template <typename T>
+  constexpr bool operator()(detail::request_tag<T>) const {
+    return runtime_index<T>(Resolutions{}) < type_list_size_v<Resolutions>;
+  }
+};
+
 // The derivation the runtime container selects for a request its binding
-// does not publish, from the facts the binding tells of itself.
-template <typename Request, typename Storage, typename Resolutions>
+// does not publish, from the facts the binding tells of itself and from what
+// it publishes.
+template <typename Request, typename Interface, typename Storage,
+          typename Resolutions>
 constexpr detail::derivation runtime_derivation() {
   if constexpr (!detail::derivable_v<Request>) {
     return detail::derivation::none;
   } else {
     return detail::derive_request<Request>(
-        detail::runtime_derivation_facts<Storage, Resolutions>(
-            detail::described_type_v<Request>));
+        detail::runtime_derivation_facts<Interface, Storage, Resolutions>(
+            detail::described_type_v<Request>),
+        runtime_publishes<Resolutions>{});
   }
 }
 
 // Whether the two containers resolve a request alike, down the chain of the
 // requests it is derived from: both publish it, or both derive it the same
 // way from a request they resolve alike, or neither resolves it.
-template <typename Request, typename Binding, typename Storage,
-          typename Resolutions>
+template <typename Request, typename Interface, typename Binding,
+          typename Storage, typename Resolutions>
 constexpr bool derives_alike() {
   constexpr bool by_static_list =
       detail::binding_supports_request_v<Request, Binding>;
@@ -75,14 +86,14 @@ constexpr bool derives_alike() {
     constexpr detail::derivation by_static =
         detail::static_derivation_v<Request, Binding>;
     constexpr detail::derivation by_runtime =
-        runtime_derivation<Request, Storage, Resolutions>();
+        runtime_derivation<Request, Interface, Storage, Resolutions>();
     if constexpr (by_static != by_runtime) {
       return false;
     } else if constexpr (by_static == detail::derivation::none) {
       return true;
     } else {
       return derives_alike<detail::derived_request_t<by_static, Request>,
-                           Binding, Storage, Resolutions>();
+                           Interface, Binding, Storage, Resolutions>();
     }
   }
 }
@@ -274,7 +285,8 @@ void publication(const std::string &prefix, const char *name) {
     using binding = detail::binding<type, Model>;
     constexpr detail::derivation how =
         detail::static_request_derivation_v<Request, binding>;
-    if constexpr (!derives_alike<Request, binding, Storage, resolutions>()) {
+    if constexpr (!derives_alike<Request, type, binding, Storage,
+                                 resolutions>()) {
       record(cell.c_str(), "diverged",
              "the static and the runtime container derive the request "
              "differently");
@@ -283,6 +295,12 @@ void publication(const std::string &prefix, const char *name) {
       record(cell.c_str(), "composed", nullptr);
     } else if constexpr (how == detail::derivation::take) {
       record(cell.c_str(), "adopted", nullptr);
+    } else if constexpr (how == detail::derivation::refer ||
+                         how == detail::derivation::address ||
+                         how == detail::derivation::move ||
+                         how == detail::derivation::copy ||
+                         how == detail::derivation::convert) {
+      record(cell.c_str(), "derived", nullptr);
     } else if constexpr (how == detail::derivation::adopt ||
                          how == detail::derivation::place) {
       record(cell.c_str(), "placed", nullptr);
