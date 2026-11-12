@@ -16,6 +16,7 @@
 #include <dingo/conversion/route.h>
 #include <dingo/conversion/source.h>
 #include <dingo/request/decomposition.h>
+#include <dingo/request/derivation.h>
 #include <dingo/type/shape.h>
 #include <dingo/type/type_traits.h>
 
@@ -403,6 +404,98 @@ template <request_category Category, typename Interface, typename Storage>
 struct published_resolutions
     : category_resolutions<Category, Interface, Storage> {};
 
+// The layers of a stored type, as stored and rebound to the interface: a
+// wrapper a request asks for that is one of them is handed over as it is.
+template <typename Type, typename Interface, typename = void>
+struct stored_layers {
+  using type = type_list<>;
+};
+
+template <typename Type, typename Interface>
+struct stored_layers<Type, Interface,
+                     std::enable_if_t<is_object_wrapper_v<Type>>> {
+  using type = type_list_cat_t<
+      type_list<Type, wrapper_rebind_leaf_t<Type, Interface>>,
+      typename stored_layers<
+          std::remove_cv_t<typename type_traits<Type>::value_type>,
+          Interface>::type>;
+};
+
+// The value and rvalue reference resolutions of a storage that makes a value
+// for each request but those of a wrapper a request derives from what the
+// storage makes: one composed of an object it publishes an rvalue reference
+// to, or a sharing handle converted of the sole owner of one. A layer of
+// what the storage stores is handed over as it is, not derived.
+template <typename Resolutions, typename Rvalues, typename Layers>
+struct without_derived_resolutions;
+
+template <typename... Resolutions, typename... Rvalues, typename Layers>
+struct without_derived_resolutions<type_list<Resolutions...>,
+                                   type_list<Rvalues...>, Layers> {
+private:
+  template <typename Target> static constexpr bool is_base() {
+    using object = remove_cvref_t<Target>;
+    return !is_object_wrapper_v<object> || type_list_contains_v<object, Layers>;
+  }
+
+  using referred = type_list_cat_t<std::conditional_t<
+      is_base<typename Rvalues::target_type>(),
+      type_list<remove_cvref_t<typename Rvalues::target_type>>,
+      type_list<>>...>;
+
+  template <typename Target> static constexpr bool derived() {
+    using wrapper = remove_cvref_t<Target>;
+    if constexpr (is_base<Target>()) {
+      return false;
+    } else {
+      using converted = typename converted_from<wrapper>::type;
+      if constexpr (!std::is_void_v<converted>) {
+        if constexpr (type_list_contains_v<remove_cvref_t<converted>,
+                                           referred>) {
+          return true;
+        }
+      }
+      if constexpr (composes_v<wrapper>) {
+        return type_list_contains_v<
+            std::remove_cv_t<typename type_traits<wrapper>::value_type>,
+            referred>;
+      } else {
+        return false;
+      }
+    }
+  }
+
+public:
+  using type = type_list_cat_t<
+      std::conditional_t<derived<typename Resolutions::target_type>(),
+                         type_list<>, type_list<Resolutions>>...>;
+};
+
+template <request_category Category, typename Interface, typename Storage>
+struct derived_resolutions_dropped {
+  using all = typename category_resolutions<Category, Interface, Storage>::type;
+  using type = typename std::conditional_t<
+      consumes_made<typename Storage::conversions>::value,
+      without_derived_resolutions<
+          all,
+          typename category_resolutions<request_category::rvalue_reference,
+                                        Interface, Storage>::type,
+          typename stored_layers<remove_cvref_t<typename Storage::type>,
+                                 std::remove_cv_t<Interface>>::type>,
+      std::enable_if<true, all>>::type;
+};
+
+template <typename Interface, typename Storage>
+struct published_resolutions<request_category::value, Interface, Storage>
+    : derived_resolutions_dropped<request_category::value, Interface, Storage> {
+};
+
+template <typename Interface, typename Storage>
+struct published_resolutions<request_category::rvalue_reference, Interface,
+                             Storage>
+    : derived_resolutions_dropped<request_category::rvalue_reference, Interface,
+                                  Storage> {};
+
 template <typename Interface, typename Storage>
 struct published_resolutions<request_category::lvalue_reference, Interface,
                              Storage> {
@@ -413,9 +506,9 @@ private:
 public:
   using type = typename std::conditional_t<
       consumes_made<typename Storage::conversions>::value,
-      without_referred_resolutions<
-          all, typename category_resolutions<request_category::rvalue_reference,
-                                             Interface, Storage>::type>,
+      without_referred_resolutions<all, typename published_resolutions<
+                                            request_category::rvalue_reference,
+                                            Interface, Storage>::type>,
       std::enable_if<true, all>>::type;
 };
 

@@ -1048,10 +1048,9 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   using unique_resolutions = detail::binding_resolutions<
       move_only, typename unique_move_only_model::storage_type>;
   static_assert(
-      std::is_same_v<
-          resolution_targets_t<
-              typename accepted_values<unique_resolutions>::type>,
-          type_list<std::unique_ptr<move_only>, std::shared_ptr<move_only>>>);
+      std::is_same_v<resolution_targets_t<
+                         typename accepted_values<unique_resolutions>::type>,
+                     type_list<>>);
 
   using compatible_unique_handle_model =
       detail::binding_model<type_registration<
