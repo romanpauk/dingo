@@ -384,18 +384,31 @@ private:
     if constexpr (materialization_traits::retains_unresolved_source) {
       if (materialization_traits::retains_source(cell.storage())) {
         // A source is retained only while the storage is unresolved, so a
-        // failed transaction returns the storage to that state.
-        context.on_rollback(
-            +[](void *self, void *) noexcept {
-              static_cast<Cell *>(self)->reset();
-            },
-            std::addressof(cell));
+        // failed transaction returns the storage to that state. The reset
+        // is registered once the cell is resolved, after what it depends
+        // on, so that a rollback, which runs the last registered first,
+        // resets the cell before what it refers to. A cell that fails as it
+        // resolves is reset at once.
+        auto reset = +[](void *self, void *) noexcept {
+          static_cast<Cell *>(self)->reset();
+        };
         return invoke_then(
             [&]() -> decltype(auto) {
-              return with_runtime_source(persistent_scope, context,
-                                         std::forward<Fn>(fn));
+              try {
+                return with_runtime_source(persistent_scope, context,
+                                           std::forward<Fn>(fn));
+              } catch (...) {
+                cell.reset();
+                throw;
+              }
             },
             [&] {
+              try {
+                context.on_rollback(reset, std::addressof(cell));
+              } catch (...) {
+                cell.reset();
+                throw;
+              }
               context.add_runtime_destructor(
                   std::addressof(cell), +[](void *self) noexcept {
                     static_cast<Cell *>(self)->reset();
