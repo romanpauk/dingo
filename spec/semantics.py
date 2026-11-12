@@ -562,6 +562,73 @@ def reachable(start, context):
     return {thing: frozenset(costs) for thing, costs in found.items()}
 
 
+# Who takes a step. A binding knows the type it stores, a request only the
+# interface it asks for, so a request cannot name what the binding stores. The
+# binding takes the steps that need the stored type, or that only go into
+# what it stores: it gives the element of a layer, rebinds the leaf to its
+# interface, and releases what a pointer it made points to. What these reach
+# are its layer sources, which it publishes. A request takes every other step
+# from them: each adds a layer or converts one, so a request finds the layer
+# sources it needs from its own shape. A resolution reaches from the layer
+# sources what it reaches from the stored object, at the same cost.
+
+BINDING_STEPS = frozenset({"element", "upcast"})
+
+
+def binding_steps(thing, context):
+    """The steps a binding takes from a thing: those that need the type it
+    stores, and the release of what a pointer it made points to, which a
+    request reaches by adopting the pointer and taking its element."""
+    found = [(kind, following) for kind, following in steps(thing, context)
+             if kind in BINDING_STEPS]
+    for kind, adopted in steps(thing, context):
+        if kind == "adopt" and LAYERS[adopted.layers[0]].owner is Owner.SOLE:
+            found += [("release", released)
+                      for step, released in steps(adopted, context)
+                      if step == "element"]
+    return found
+
+
+def request_steps(thing, context):
+    """The steps a request takes from a layer source: every step a binding
+    does not take, each of which adds a layer or converts one."""
+    return [(kind, following) for kind, following in steps(thing, context)
+            if kind not in BINDING_STEPS]
+
+
+def closure(states, context, take):
+    """The states reached from states by the steps take gives, each a thing
+    with the copies and the moves of the leaf that reach it."""
+    seen = set(states)
+    frontier = list(seen)
+    while frontier:
+        thing, cost = frontier.pop()
+        for kind, following in take(thing, context):
+            state = (following, affected(cost, effect_of(kind, thing)))
+            if state not in seen:
+                seen.add(state)
+                frontier.append(state)
+    return seen
+
+
+@functools.lru_cache(maxsize=None)
+def layer_sources(start, context):
+    """What a binding publishes of its stored object, each with the copies
+    and the moves of the leaf that reach it."""
+    return frozenset(closure({(start, (0, 0))}, context, binding_steps))
+
+
+@functools.lru_cache(maxsize=None)
+def requested(start, context):
+    """What requests reach from the layer sources of a stored object, as
+    reachable gives what is reached from the stored object itself."""
+    found = {}
+    for thing, cost in closure(set(layer_sources(start, context)), context,
+                               request_steps):
+        found.setdefault(thing, set()).add(cost)
+    return {thing: frozenset(costs) for thing, costs in found.items()}
+
+
 # What a request asks of the things.
 
 

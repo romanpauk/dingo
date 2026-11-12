@@ -67,6 +67,24 @@ A request that does not resolve fails as follows:
 - The runtime container throws `type_not_convertible` for all other such
   requests.
 
+### Layer Sources
+
+A binding knows the type that it stores. A request knows only the interface that
+it asks for. So the steps of a derivation divide between them:
+
+- The binding takes the steps that need the stored type or that only go into the
+  stored object: `element`, `upcast`, and the release of what a pointer that it
+  made points to. What these steps reach are the _layer sources_ of the binding.
+  A binding has at most one layer source of each layer of the stored type,
+  borrowed and consumed, of the leaf and of its interface.
+- The request takes every other step from the layer sources. Each of these steps
+  adds a layer or converts one, so a request finds the layer sources that it
+  needs from its own shape.
+
+A request resolves from the layer sources exactly as it resolves from the stored
+object, at the same cost. [`semantics_test.py`](../spec/semantics_test.py)
+checks this for every cell of the conversion check.
+
 ## Limitations
 
 A _limitation_ is a step or a reference that the semantics allow and the library
