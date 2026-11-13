@@ -229,29 +229,31 @@ constexpr derivation_facts runtime_derivation_facts(type_descriptor requested) {
 // lvalue, so that a reference or a pointer can refer to it; a value is moved
 // out of it as out of any other source. Only the resolutions that refer are
 // then made for an lvalue source as well.
-template <typename Resolution, typename Activation, typename Context,
+template <typename Resolution, typename Application, typename Context,
           typename MaterializedSource>
 DINGO_ALWAYS_INLINE resolved_address resolve_address_from(
-    Activation &activation, Context &context, MaterializedSource &&source,
+    Application &application, Context &context, MaterializedSource &&source,
     type_descriptor requested_type) {
   if constexpr (std::is_lvalue_reference_v<MaterializedSource> &&
                 !request_may_escape_v<typename Resolution::result_type>) {
     // The source is an lvalue here; it is moved on purpose.
-    return activation.template resolve_address<Resolution>(
+    return application.template resolve_address<Resolution>(
         context,
         static_cast<std::remove_reference_t<MaterializedSource> &&>(source),
         requested_type);
   } else {
-    return activation.template resolve_address<Resolution>(
+    return application.template resolve_address<Resolution>(
         context, std::forward<MaterializedSource>(source), requested_type);
   }
 }
 
-// Applies the resolution at a run-time index to a source.
-template <typename Activation, typename Context, typename MaterializedSource,
+// Applies the resolution at a run-time index to a source. It is given the
+// application of the binding, not its activation, so that it is instantiated
+// once for both containers a factory may resolve through.
+template <typename Application, typename Context, typename MaterializedSource,
           typename... Resolutions>
 resolved_address
-resolve_indexed_address(Activation &activation, Context &context,
+resolve_indexed_address(Application &application, Context &context,
                         MaterializedSource &&source,
                         std::size_t resolution_index, type_list<Resolutions...>,
                         type_descriptor requested_type) {
@@ -261,7 +263,7 @@ resolve_indexed_address(Activation &activation, Context &context,
   const bool matched =
       (((resolution_index == index++)
             ? (result = resolve_address_from<Resolutions>(
-                   activation, context,
+                   application, context,
                    std::forward<MaterializedSource>(
                        source), // NOLINT(bugprone-use-after-move)
                    requested_type),
@@ -407,10 +409,11 @@ private:
         detail::binding_activation<typename state_type::cell_type, Resolver &>;
     places = places_value<Resolver>::value;
     activation_type activation{state.cell(), container, scope};
+    auto application = activation.application();
     return activation.template with_source<void>(
         context, [&](auto &&source) -> resolved_address {
           return detail::resolve_indexed_address(
-              activation, context, std::forward<decltype(source)>(source),
+              application, context, std::forward<decltype(source)>(source),
               resolution_index, request_resolutions{}, request.requested_type);
         });
   }

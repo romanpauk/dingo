@@ -176,21 +176,14 @@ inline constexpr bool takes_made_pointee_v =
     hands_over_made_pointers_v<Storage> &&
     storage_form_traits<typename Storage::type>::form == storage_form::pointer;
 
-// One resolution of a binding: the cell it resolves, the dependencies its
-// factory resolves through and the scope of the request. Both containers
-// resolve their bindings through it; they differ only in how they select the
-// resolution and in the dependencies they pass.
-//
-// Dependencies is what the factory of the binding receives as its container:
-// a container reference, or a value that routes requests through the local
-// bindings of a static registration first. In a runtime transaction the
-// activation tracks what it leaves in the cell, so that a failed transaction
-// rolls it back.
-template <typename Cell, typename Dependencies,
-          typename Scope = construction_scope>
-struct binding_activation {
-  using storage_type = typename Cell::storage_type;
-  using owner_type = std::remove_reference_t<Dependencies>;
+// The application of the resolutions of a binding to the source its storage
+// yields. It is apart from the activation, which also knows the container
+// the factory resolves its dependencies through, so that a resolution is
+// instantiated once for a storage, whatever container the factory resolves
+// through: no conversion uses it.
+template <typename Storage, typename Scope = construction_scope>
+struct binding_application {
+  using storage_type = Storage;
   using materialization_traits =
       scope_materialization<typename storage_type::tag_type>;
 
@@ -207,56 +200,7 @@ struct binding_activation {
                  typename storage_type::type>));
   }
 
-  // Whether an address request is served from a value the storage yields,
-  // which is placed in the context and lives only as long as the context.
-  template <typename Request, typename Context>
-  static constexpr bool places_value_in_context =
-      (std::is_lvalue_reference_v<Request> || std::is_pointer_v<Request>) &&
-      materializes_value_source_v<storage_type, Context, owner_type>;
-
-  Cell &cell;
-  Dependencies dependencies;
   Scope scope;
-
-  // Materializes the storage and passes its source to fn.
-  //
-  // An address request (an lvalue reference or a pointer) of a storage that
-  // yields a value places the value in the context.
-  template <typename Request, typename Context, typename Fn>
-  decltype(auto) with_source(Context &context, Fn &&fn) {
-    auto &storage = cell.storage();
-    [[maybe_unused]] auto guard = materialization_traits::template make_guard<
-        leaf_type_t<typename storage_type::type>>(context, storage);
-    if constexpr (is_runtime_context_v<Context>) {
-      return with_transaction_source(context, std::forward<Fn>(fn));
-    } else if constexpr ((std::is_lvalue_reference_v<Request> ||
-                          std::is_pointer_v<Request>) &&
-                         materializes_value_source_v<storage_type, Context,
-                                                     owner_type>) {
-      // places_value_in_context, spelled out: a dependency chain resolves
-      // through here, and every template level it adds is paid per link.
-      using source_type =
-          std::remove_cv_t<std::remove_reference_t<decltype(storage.resolve(
-              scope, context, dependencies))>>;
-      refuse_caller_reference<Request>(
-          scope, detail::described_type_v<source_type>, context);
-      auto &value = context.template construct_from<source_type>(
-          scope, [&]() -> decltype(auto) {
-            return storage.resolve(scope, context, dependencies);
-          });
-      auto source = lvalue_source<source_type>(value);
-      return std::forward<Fn>(fn)(source);
-    } else if constexpr (places_source<Request, Context>()) {
-      // What an rvalue request refers to lives in the context: so does the
-      // source it is converted from.
-      auto &source = materialization_traits::materialize_source_in_context(
-          scope, context, storage, dependencies);
-      return std::forward<Fn>(fn)(std::move(source));
-    } else {
-      return std::forward<Fn>(fn)(materialization_traits::materialize_source(
-          scope, context, storage, dependencies));
-    }
-  }
 
   // Applies a resolution to a source.
   template <typename Resolution, typename Context, typename Source>
@@ -323,6 +267,84 @@ struct binding_activation {
       }
     }
   }
+};
+
+// One resolution of a binding: the cell it resolves, the dependencies its
+// factory resolves through and the scope of the request. Both containers
+// resolve their bindings through it; they differ only in how they select the
+// resolution and in the dependencies they pass.
+//
+// Dependencies is what the factory of the binding receives as its container:
+// a container reference, or a value that routes requests through the local
+// bindings of a static registration first. In a runtime transaction the
+// activation tracks what it leaves in the cell, so that a failed transaction
+// rolls it back.
+template <typename Cell, typename Dependencies,
+          typename Scope = construction_scope>
+struct binding_activation {
+  using storage_type = typename Cell::storage_type;
+  using owner_type = std::remove_reference_t<Dependencies>;
+  using materialization_traits =
+      scope_materialization<typename storage_type::tag_type>;
+  using application_type = binding_application<storage_type, Scope>;
+
+  template <typename Request, typename Context>
+  static constexpr bool places_source() {
+    return application_type::template places_source<Request, Context>();
+  }
+
+  // Whether an address request is served from a value the storage yields,
+  // which is placed in the context and lives only as long as the context.
+  template <typename Request, typename Context>
+  static constexpr bool places_value_in_context =
+      (std::is_lvalue_reference_v<Request> || std::is_pointer_v<Request>) &&
+      materializes_value_source_v<storage_type, Context, owner_type>;
+
+  Cell &cell;
+  Dependencies dependencies;
+  Scope scope;
+
+  application_type application() const { return {scope}; }
+
+  // Materializes the storage and passes its source to fn.
+  //
+  // An address request (an lvalue reference or a pointer) of a storage that
+  // yields a value places the value in the context.
+  template <typename Request, typename Context, typename Fn>
+  decltype(auto) with_source(Context &context, Fn &&fn) {
+    auto &storage = cell.storage();
+    [[maybe_unused]] auto guard = materialization_traits::template make_guard<
+        leaf_type_t<typename storage_type::type>>(context, storage);
+    if constexpr (is_runtime_context_v<Context>) {
+      return with_transaction_source(context, std::forward<Fn>(fn));
+    } else if constexpr ((std::is_lvalue_reference_v<Request> ||
+                          std::is_pointer_v<Request>) &&
+                         materializes_value_source_v<storage_type, Context,
+                                                     owner_type>) {
+      // places_value_in_context, spelled out: a dependency chain resolves
+      // through here, and every template level it adds is paid per link.
+      using source_type =
+          std::remove_cv_t<std::remove_reference_t<decltype(storage.resolve(
+              scope, context, dependencies))>>;
+      refuse_caller_reference<Request>(
+          scope, detail::described_type_v<source_type>, context);
+      auto &value = context.template construct_from<source_type>(
+          scope, [&]() -> decltype(auto) {
+            return storage.resolve(scope, context, dependencies);
+          });
+      auto source = lvalue_source<source_type>(value);
+      return std::forward<Fn>(fn)(source);
+    } else if constexpr (places_source<Request, Context>()) {
+      // What an rvalue request refers to lives in the context: so does the
+      // source it is converted from.
+      auto &source = materialization_traits::materialize_source_in_context(
+          scope, context, storage, dependencies);
+      return std::forward<Fn>(fn)(std::move(source));
+    } else {
+      return std::forward<Fn>(fn)(materialization_traits::materialize_source(
+          scope, context, storage, dependencies));
+    }
+  }
 
   // The address of the instance of a resolution selected at compile time.
   // The address is deduced: a deduced return type is instantiated at the
@@ -331,7 +353,7 @@ struct binding_activation {
   template <typename Request, typename Resolution, typename Context>
   decltype(auto) resolve_request_address(Context &context) {
     return with_source<Request>(context, [&](auto &&source) {
-      return resolve_address<Resolution, Request>(
+      return application().template resolve_address<Resolution, Request>(
           context, std::forward<decltype(source)>(source),
           detail::described_type_v<Request>);
     });
@@ -342,17 +364,18 @@ struct binding_activation {
   template <typename Request, typename Resolution, typename Context>
   Request resolve_request_value(Context &context) {
     return with_source<Request>(context, [&](auto &&source) -> Request {
-      using applied_type = decltype(apply<Resolution>(
+      using applied_type = decltype(application().template apply<Resolution>(
           context, std::forward<decltype(source)>(source),
           detail::described_type_v<Request>));
       if constexpr (!std::is_reference_v<applied_type>) {
-        return Request(apply<Resolution>(context,
-                                         std::forward<decltype(source)>(source),
-                                         detail::described_type_v<Request>));
+        return Request(application().template apply<Resolution>(
+            context, std::forward<decltype(source)>(source),
+            detail::described_type_v<Request>));
       } else {
-        auto &&instance =
-            apply<Resolution>(context, std::forward<decltype(source)>(source),
-                              detail::described_type_v<Request>);
+        auto applied = application();
+        auto &&instance = applied.template apply<Resolution>(
+            context, std::forward<decltype(source)>(source),
+            detail::described_type_v<Request>);
         return consume_resolved_binding<Request>(
             std::forward<decltype(instance)>(instance),
             [](auto &&value) -> Request {
@@ -367,9 +390,10 @@ struct binding_activation {
             typename Fn>
   decltype(auto) consume_request(Context &context, Fn &&fn) {
     return with_source<Request>(context, [&](auto &&source) -> decltype(auto) {
-      auto &&instance =
-          apply<Resolution>(context, std::forward<decltype(source)>(source),
-                            detail::described_type_v<Request>);
+      auto applied = application();
+      auto &&instance = applied.template apply<Resolution>(
+          context, std::forward<decltype(source)>(source),
+          detail::described_type_v<Request>);
       return consume_resolved_binding<Request>(
           std::forward<decltype(instance)>(instance), std::forward<Fn>(fn));
     });
