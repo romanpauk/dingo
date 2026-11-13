@@ -366,6 +366,13 @@ def probe_group(compiler, flags, directory, unit, name, probes):
         probes = [probe for probe in probes if probe not in failed]
         if not told_apart:
             break
+    if len(probes) > 2:
+        # Halves, each made as a group: the half without a failure compiles
+        # at once, and the failures of the other are told apart in fewer
+        # probes.
+        return outcomes + in_parts(probe_group, compiler, flags, directory,
+                                   unit, name, split(probes,
+                                                     -(-len(probes) // 2)))
     for alone in concurrently([
             lambda index=index, probe=probe: probe_alone(
                 compiler, flags, directory, unit, f"{name}__{index}", probe)
