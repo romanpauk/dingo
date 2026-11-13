@@ -300,14 +300,39 @@ public:
   // the container.
   template <typename Fn>
   DINGO_ALWAYS_INLINE decltype(auto) as_operation(Fn &&fn) {
-    const std::size_t mark = resolved_count_;
-    try {
-      return std::forward<Fn>(fn)();
-    } catch (...) {
-      rollback_to(mark);
-      throw;
+    using result_type = decltype(std::forward<Fn>(fn)());
+    if constexpr (std::is_reference_v<result_type>) {
+      // A reference is kept while the guard is released: a cleanup costs
+      // less code than a handler that rethrows.
+      operation_guard guard{*this, resolved_count_};
+      result_type result = std::forward<Fn>(fn)();
+      guard.release();
+      return static_cast<result_type>(result);
+    } else {
+      const std::size_t mark = resolved_count_;
+      try {
+        return std::forward<Fn>(fn)();
+      } catch (...) {
+        rollback_to(mark);
+        throw;
+      }
     }
   }
+
+  // Rolls an operation back, unless it is released when it succeeds.
+  struct operation_guard {
+    static_container_impl &container;
+    std::size_t mark;
+    bool released = false;
+
+    void release() noexcept { released = true; }
+
+    ~operation_guard() {
+      if (!released) {
+        container.rollback_to(mark);
+      }
+    }
+  };
 
   DINGO_NOINLINE void rollback_to(std::size_t mark) noexcept {
     for (; resolved_count_ > mark; --resolved_count_) {
