@@ -109,8 +109,11 @@ public:
             std::enable_if_t<is_lookup_key_v<LookupKey>, int> = 0,
             typename Scope>
   DINGO_ALWAYS_INLINE R resolve(Scope scope, Context &context, LookupKey key) {
-    return resolve<T, RemoveRvalueReferences>(scope, context, self(),
-                                              std::move(key));
+    // The host is called directly: each level counts against the template
+    // depth of a dependency chain.
+    return self()
+        .template resolve_request<request_type<T, RemoveRvalueReferences>, R>(
+            scope, context, self(), std::move(key));
   }
 
   template <typename T, bool RemoveRvalueReferences, typename Context,

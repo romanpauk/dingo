@@ -129,7 +129,7 @@ private:
       }
       return with_context([&](runtime_context_type &context) -> R {
         return detail::request_resolution::resolve<Request, R>(
-            *this, selected, entry_scope(caller_scope), context, *this, key);
+            *this, entry_scope(caller_scope), context, *this, key, selected);
       });
     } else {
       return with_context([&](runtime_context_type &context) -> R {

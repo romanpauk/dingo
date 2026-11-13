@@ -131,50 +131,62 @@ struct default_factory_constructs<Request, R, true> {
 // only the branch they select. Every branch calls the host directly: a static
 // dependency chain instantiates the algorithm once per link, and each call
 // level counts against the template depth of the chain.
+// The selection a resolution makes in its host.
+struct select_in_host {};
+
 struct request_resolution {
+  // The selection of a request: the one given, or the one the host makes.
+  template <typename Request, typename Host, typename Selection,
+            typename LookupKey>
+  static auto selected(Host &host, Selection given, LookupKey &key) {
+    if constexpr (std::is_same_v<Selection, select_in_host>) {
+      return host.template select_request<Request>(key);
+    } else {
+      (void)host, (void)key;
+      return given;
+    }
+  }
+
   // A no-key collection that is bound as a type resolves as that binding.
   // Otherwise the collection is constructed from the bindings of its element,
-  // and a host without any is answered by the parent or the origin.
+  // and a host without any is answered by the parent or the origin. Any other
+  // request resolves the binding the host selects, or the selection given,
+  // as one the cache of a runtime host was looked up in: one function, as a
+  // static dependency chain instantiates it once per link. A miss of a
+  // collection request constructs the collection when the host constructs
+  // collections.
   template <typename Request, typename R, typename Host, typename Context,
-            typename Origin, typename LookupKey, typename Scope>
+            typename Origin, typename LookupKey, typename Scope,
+            typename Selection = select_in_host>
   static R resolve(Host &host, Scope scope, Context &context, Origin &origin,
-                   LookupKey key) {
+                   LookupKey key, Selection given = {}) {
     constexpr bool collection = collection_traits<R>::is_collection;
     if constexpr (collection && !is_no_lookup_key_v<LookupKey>) {
       return construct_collection<Request, R>(host, scope, context, origin,
                                               key);
     } else {
-      auto selection = host.template select_request<Request>(key);
-      return resolve<Request, R, collection>(host, selection, scope, context,
-                                             origin, key);
-    }
-  }
-
-  // A selection resolves its binding. A miss of a collection request
-  // constructs the collection when the host constructs collections.
-  template <typename Request, typename R, bool Collection = false,
-            typename Host, typename Selection, typename Context,
-            typename Origin, typename LookupKey, typename Scope>
-  static R resolve(Host &host, Selection selection, Scope scope,
-                   Context &context, Origin &origin, LookupKey &key) {
-    if constexpr (is_runtime_binding_selection<Selection>::value) {
-      if (selection.status == binding_status::ambiguous) {
-        host.template ambiguous<Request>(context);
-      }
-      if (selection.status == binding_status::found) {
+      auto selection = selected<Request>(host, given, key);
+      using selection_type = decltype(selection);
+      if constexpr (is_runtime_binding_selection<selection_type>::value) {
+        if (selection.status == binding_status::ambiguous) {
+          host.template ambiguous<Request>(context);
+        }
+        if (selection.status == binding_status::found) {
+          return host.template resolve_selected<Request, R>(selection, scope,
+                                                            context);
+        }
+        return resolve_unbound<Request, R, collection>(host, scope, context,
+                                                       origin, key);
+      } else if constexpr (selection_type::status == binding_status::found) {
         return host.template resolve_selected<Request, R>(selection, scope,
                                                           context);
+      } else if constexpr (selection_type::status ==
+                           binding_status::ambiguous) {
+        host.template ambiguous<Request>(context);
+      } else {
+        return resolve_unbound<Request, R, collection>(host, scope, context,
+                                                       origin, key);
       }
-      return resolve_unbound<Request, R, Collection>(host, scope, context,
-                                                     origin, key);
-    } else if constexpr (Selection::status == binding_status::found) {
-      return host.template resolve_selected<Request, R>(selection, scope,
-                                                        context);
-    } else if constexpr (Selection::status == binding_status::ambiguous) {
-      host.template ambiguous<Request>(context);
-    } else {
-      return resolve_unbound<Request, R, Collection>(host, scope, context,
-                                                     origin, key);
     }
   }
 
