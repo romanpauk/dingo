@@ -1,196 +1,229 @@
 # Conversion Model
 
-Dingo resolves requests in two stages:
+Dingo resolves a request in two stages:
 
-1. determine whether the requested shape is allowed for the stored instance
-2. convert the stored source shape into the requested target shape
+1. It checks whether the stored instance can give the requested shape.
+2. It converts the stored source shape into the requested target shape.
 
 ## Where The Rules Come From
 
-The full conversion behavior is spread across a few layers:
+The conversion rules are in these parts of the library:
 
-- `storage_traits` says which target shapes are legal for a storage/scope pair
-- `type_conversion_traits` validates and performs custom type conversions
-- `resolution` records the operation for an allowed source-to-result route
-- `instance_request` carries the lookup type and requested descriptor
-- `resolution_operation` executes the selected route
+- `scope_traits` gives the target shapes that a scope publishes for a stored
+  type.
+- `type_conversion_traits` checks and performs custom type conversions.
+- `resolution` records the operation of an allowed route from a source to a
+  result.
+- `instance_request` carries a runtime request: its lookup type, its type
+  descriptor, and a function that derives a request the binding does not
+  publish.
+- Each conversion of `conversion/paths.h` applies itself.
 
-The important source files are:
+The main source files are:
 
+- [include/dingo/storage/scope_traits.h](../../include/dingo/storage/scope_traits.h)
 - [include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
-- [include/dingo/binding/runtime_binding_interface.h](../../include/dingo/binding/runtime_binding_interface.h)
-- [include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
-- [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
+- [include/dingo/binding/interface.h](../../include/dingo/binding/interface.h)
+- [include/dingo/conversion/apply.h](../../include/dingo/conversion/apply.h)
+- [include/dingo/conversion/paths.h](../../include/dingo/conversion/paths.h)
 
 ## Storage Exposure
 
-`storage_traits` and `resolution_traits` combine into `type_storage_traits`. The
-built-in `storage_traits` lists are generated from a per-scope
-`storage_scope_policy` and the shape of the stored type. That combined type
-lists the result forms a stored object may service:
+The request lists of a registration, `detail::conversions`, come from the
+`scope_traits` of the scope and the form of the stored type. The `type_traits`
+semantics of the stored type decide its form. Dingo rejects a form that the
+scope does not store. The lists name the results that a stored object can give:
 
 - `value_types`
 - `lvalue_reference_types`
 - `rvalue_reference_types`
 - `pointer_types`
 
-Those lists describe the storage's primitive request shapes. Dingo combines each
-shape with the source category actually produced by the storage and turns it
-into a `resolution<Target, Operation>` before either resolver sees it. A
-resolution records:
+The lists give the primitive request shapes of the storage. Dingo combines each
+shape with the source category that the storage produces. The result is a
+`resolution<Target, Operation>`, which both containers use. A resolution
+records:
 
-- the concrete target used for request matching
-- an operation containing the source type and selected conversion
+- the target type that requests are matched against;
+- an operation that contains the source type and the selected conversion.
 
-A route to an object that already exists in the stored source presents the same
-object whatever the request category is. When a storage lists both the reference
-and the pointer request of an object, and the conversion is the default
-conversion of the source (the object of an lvalue source, or the pointee of a
-pointer source), the binding publishes one route to the object address instead
-of one route per category. That route also serves the copy of the object when
-the value request is the identity copy of the stored object and the storage does
-not consume its source. The request site applies the category to the resolved
-address: a reference request binds to it, a pointer request takes it, and a
-value request copies from it. Objects reached through wrapper traits,
-alternatives, arrays, retained conversions and custom conversions keep a route
-per category because each selects its object by its own rule. Static requests
-resolve value requests from the separate value routes; the runtime list, which
-type-erased requests are matched against, publishes the shared route.
+A binding has its own routes for each request category: value, lvalue reference,
+rvalue reference and pointer.
 
-Each descriptor exposes its concrete `request_types`. A mutable reference or
-pointer resolution also accepts its const-borrowed form; wrapper and leaf
-identity are otherwise preserved.
+A resolution matches a request of the same type, reference and pointer shape
+(`is_resolution_request`). A value resolution matches the value with any `const`
+or `volatile`. A reference or a pointer resolution also matches a request with
+more `const`. The wrapper and the leaf must be the same.
 
-`value_types` declares values copied from borrowed storage. Each `T&&` in
-`rvalue_reference_types` publishes both the rvalue result and its value delivery
-as consumed resolutions. Unique storage therefore declares consumed results only
-once, while shared and external values become borrowed resolutions. Raw pointer
-storage publishes concrete resolutions for its stored pointee shape and, when
-the pointee is a convertible wrapper, separate interface-rebound conversions.
-Shared and external storage alike copy out the leaf of a raw pointer, of a
-`unique_ptr` and of a `shared_ptr`, together with the copyable layers of a
-nested wrapper; a pointee that is not copy constructible publishes no copy.
-Wrapper composition applies only when the registered interface is a leaf type;
-an interface that is already a wrapper is published as that exact shape rather
-than being nested inside the stored wrapper again. Storage stability remains a
-separate property controlling reference and pointer lifetime.
+These rules apply to the lists:
 
-Publication decomposes a conversion into identity forwarding, compatible
-reference access, custom trait conversion, address-taking, array projection,
-pointer dereferencing, wrapper pointer access, wrapper borrowing, alternative
-selection, or retention of a converted wrapper. Pointer-backed storage keeps the
-pointer as its source; wrapper composition inspects the pointee shape, and the
-conversion route records the dereference explicitly. The chosen decomposition is
-stored in the operation and executed directly; execution does not classify the
-target and source a second time. Custom `type_conversion_traits` take precedence
-over the default compatible-reference shortcut.
+- `value_types` lists the values copied from borrowed storage.
+- Each `T&&` in `rvalue_reference_types` publishes two consumed resolutions: the
+  rvalue reference and the value. So unique storage declares its consumed
+  results once. Shared and external values are borrowed resolutions.
+- Raw pointer storage publishes resolutions for its stored pointee shape. If the
+  pointee is a convertible wrapper, it also publishes conversions rebound to the
+  interface.
+- Shared and external storage copy out the leaf of a raw pointer, of a
+  `unique_ptr` and of a `shared_ptr`, and the copyable layers of a nested
+  wrapper. A pointee that is not copy constructible publishes no copy.
+- Wrapper composition applies only if the registered interface is a leaf type.
+  An interface that is a wrapper is published in exactly its shape. Dingo does
+  not nest it in the stored wrapper again.
+- Storage stability (`is_stable`) is a separate property. It controls the
+  lifetime of references and pointers.
 
-Keeping the operation in the resolution makes route selection and execution one
-decision. New wrapper, alternative, and array operations can be introduced by
-the traits that publish those routes without adding matching branches to the
-binding dispatcher. Dispatchers only materialize the source and execute the
-operation carried by the matched resolution. A retained conversion receives an
-already-converted value; the resolver only stores or caches it and never
-performs a second conversion. Operations also publish any cache,
-source-retention, and static temporary-storage requirements created by their
-execution. The runtime and static backends derive those resources from the same
-resolution list instead of maintaining a parallel list of conversion types on
-the storage. A new operation must provide `cache_types`,
-`temporary_types<Storage>`, and `requires_source_retention` along with its
-`apply` function, even when those requirements are empty.
+Publication finds the conversion from the source to the target as a path of
+operations. These are the operations by which the
+[specification](../specification.md) derives a request. An operation applies to
+the source, unwraps the source before an inner conversion, or wraps what an
+inner conversion returns:
 
-Factory construction and storage rebinding use this operation model as well.
+- `conversion_leaf` applies to the source. It gives the source itself, a
+  reference to it or to its base, its address, or the pointer an array decays
+  to. It gives a pointer to the array that an owning pointer to its first
+  element points to; a unique scope hands over an array it makes in this form.
+  It also gives the address of the element of a wrapper, or what
+  `type_conversion_traits` converts the source to.
+- `conversion_unwrap` gives the element that a pointer or a wrapper lends, its
+  `type_traits::borrow`. `alternative_type_conversion` unwraps the alternative
+  that an alternative type holds, with one branch for each alternative.
+- `conversion_wrap` makes an optional value, an alternative type, or a new
+  owning handle of an object, of a wrapper or of an array.
+
+An operation is a class with a static `apply`. The shape that uses the operation
+calls it. Each operation also has a constexpr function that returns its path, or
+an unavailable conversion if the operation does not apply. `select` tries the
+paths in the order of `op` and takes the first available one. It does not
+instantiate the paths of later operations. Pointer storage keeps the pointer as
+its source, and the path borrows the pointee explicitly. The operation stores
+the chosen conversion, and the binding executes it directly. Execution does not
+classify the target and the source again. A source and target pair with a custom
+`type_conversion_traits` uses only that conversion and tries no default path.
+
+The resolution keeps its operation, so route selection and execution are one
+decision. The traits that publish a route can add wrapper, alternative and array
+operations, and the binding dispatcher needs no matching branches. A dispatcher
+only materializes the source and executes the operation of the matched
+resolution. A conversion makes a value. A reference or a pointer to a converted
+value is not a conversion. It is a request derived from the value, which the
+binding keeps or the context holds (see [Retention](#retention)). An operation
+provides `apply`, a function that returns its path, and a place in `op`. The
+conversion that its path makes provides `available`, `required_access` and
+`apply`.
+
+Factory construction and storage rebinding use the same operation model. So does
+`construct<T>()` of a wrapper of a bound type that its binding does not publish:
+the wrapper is the conversion from the value that the binding resolves. A
+storage hands out an array like any other object, and the conversion decays it.
 When a factory selects an alternative to construct, Dingo plans the conversion
-from that selected value to the requested wrapper shape and executes the
-resulting wrapper/alternative operations. Storage rebinding similarly selects a
-conversion operation rather than calling `type_conversion_traits` directly.
-There is no separate recursive construction trait for wrapper composition.
-Conversion planning marks a route that starts by constructing the selected
-factory type. Factory dispatch consumes that route directly; it does not inspect
-the conversion tree for variants or wrappers.
+from the selected value to the requested wrapper shape. It then executes the
+wrapper and alternative operations of that conversion. Storage rebinding
+converts through `convert_type`, which selects a conversion operation. No
+separate recursive construction trait exists for wrapper composition. Conversion
+planning marks a route that starts with the construction of the selected factory
+type (`converted_construction`). Factory dispatch uses that route directly. It
+does not inspect the conversion tree for alternatives or wrappers.
 
-The conversion's `available` value and required source access come from that
-same recursive decomposition. Leaf operations require either `borrow` or
-`consume`; dereference, wrapper borrowing, and retention inherit the inner
-operation's requirement, while an alternative keeps the requirements of its
-viable branches. Conversion selection applies one rule: consumed storage
-satisfies both requirements, while borrowed storage satisfies only `borrow`.
+The `available` value and the required source access of a conversion come from
+the same recursive decomposition:
 
-Specialize `type_conversion_traits` when a custom conversion cannot be inferred
-from the default rules. A conversion is available exactly when `convert(Source)`
-is well-formed and its result can construct the target. Restrict accepted source
-categories through `convert` overloads or SFINAE rather than a separate
-availability declaration. Every specialization also declares
-`required_access<Source>` as either `borrow` or `consume`. This describes the
-conversion directly instead of encoding source access in callability or relying
-on a separate ownership exception.
+- A leaf operation requires `borrow` or `consume`.
+- An unwrapping or a wrapping conversion has the requirement of its inner
+  conversion.
+- An alternative has the requirements of its available branches.
+- Conversion selection uses one rule: consumed storage satisfies both
+  requirements, and borrowed storage satisfies only `borrow`.
 
-For default value construction from an lvalue, Dingo infers `borrow` only when
-the conversion accepts a const view of the source and then uses that same const
-view during execution. Construction available only from a mutable lvalue
-requires `consume`. Direct compatible lvalue-reference binding is also a borrow:
-it aliases the existing object and preserves the requested reference
-qualification instead of constructing a value. For other default conversions,
-Dingo requires `consume` when an owning leaf handle is constructed from a
-non-owning leaf handle. Wrapper and alternative operations preserve their inner
-conversion's access requirement, so this decision is made once at the actual
-handle conversion rather than inferred recursively from the outer types.
+Specialize `type_conversion_traits` if the default rules cannot infer a custom
+conversion. A conversion is available only if `convert(Source)` is well-formed
+and its result can construct the target. To restrict the source categories, use
+`convert` overloads or SFINAE, not a separate availability declaration. Each
+specialization also declares `required_access<Source>` as `borrow` or `consume`.
+This states the access of the conversion directly. Callability does not encode
+the access, and no separate ownership exception exists.
+
+For a default conversion, Dingo infers the access:
+
+- A value constructed from an lvalue borrows only if the conversion accepts a
+  const view of the source. Execution then uses the same const view. A
+  construction that needs a mutable lvalue consumes.
+- A compatible lvalue reference binds directly and borrows. It aliases the
+  object and keeps the requested reference qualification. It does not construct
+  a value.
+- An owning handle constructed from a source that is not an owning handle, such
+  as a raw pointer, consumes.
+- Wrapper and alternative operations keep the access of their inner conversion.
+  So Dingo decides the access once, at the handle conversion itself, and does
+  not infer it from the outer types.
 
 ## Factory Dispatch
 
-The container builds an `instance_request` and calls the matching factory
-method:
+Both containers match a request against the resolution list of the binding,
+`detail::binding_resolutions`, and take the first resolution that matches:
 
-- `T` uses `get_value(...)`
-- `T&` and `const T&` use `get_lvalue_reference(...)`
-- `T&&` uses `get_rvalue_reference(...)`
-- `T*` uses `get_pointer(...)`
+- The static container matches at compile time (`matching_binding_resolution`).
+  It forms only the resolutions of the request category, because the target
+  shapes of the categories are disjoint.
+- The runtime container matches the type descriptor of the request,
+  `instance_request::requested_type`, against the descriptor of each target
+  (`matches_resolution_request`). `runtime_binding::dispatch_request` then
+  applies the resolution at the matched index.
+- If no resolution matches, the binding derives the request from one that it
+  resolves. In the runtime container, the `derive` function of the
+  `instance_request` does this.
 
-Each factory entry point dispatches through the same concrete resolution list.
-Static lookup compares the caller against each resolution's accepted request
-types at compile time; runtime lookup compares the corresponding concrete type
-descriptors. Leaf normalization is limited to binding selection and is not
-repeated when choosing a conversion route.
+Leaf normalization applies only to the selection of the binding. Dingo does not
+repeat it to choose a conversion route.
 
-Runtime value resolution returns a `resolved_address`, which accompanies the
-erased address with the access of the actual conversion result. The typed caller
-moves a consumable result and copies a borrowed result. Unique storage
-materializes an rvalue source, while shared and external storage normally expose
-an lvalue or pointer source. Reference and pointer entry points continue to
-return only an address because they are borrowed by definition.
+A runtime resolution returns a `resolved_address`. It holds the erased address
+and the access of the conversion result. The typed caller
+(`convert_resolved_binding`) moves a consumed value and copies a borrowed one.
+Unique storage materializes an rvalue source. Shared and external storage
+usually give an lvalue or a pointer source. A reference or a pointer request
+uses only the address, because it borrows.
 
 ## Runtime Conversion
 
-[include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
-executes the operation selected during publication. `type_resolution` carries
-the target, source, and conversion types. It extracts the source with the
-published value category and delegates to the selected conversion node. Identity
-conversion forwards an exact source, while a custom trait conversion creates a
-new value.
+[include/dingo/conversion/apply.h](../../include/dingo/conversion/apply.h)
+executes the operation that publication selected. `type_resolution` carries the
+source and conversion types. The `resolution` that holds it carries the target.
+`type_resolution` gets the source in the published value category and applies
+the selected conversion. If the conversion is not available, it throws
+`type_not_convertible`. Each conversion in
+[include/dingo/conversion/paths.h](../../include/dingo/conversion/paths.h)
+states what it requires of its source, `borrow` or `consume`, and how it
+applies. An unwrapping or a wrapping conversion applies its inner conversion to
+what it unwraps or wraps. The identity conversion forwards an exact source. A
+custom trait conversion makes a value.
 
-Broadly, the rules cover:
+The rules cover:
 
 - direct value resolution for unique storage
-- borrowed references and pointers from borrowable wrappers
-- retained wrapper conversions whose result must outlive one expression
-- fixed-array reference and pointer projections
-- exact lookup handling for requests that must match a precise wrapper spelling
+- borrowed references and pointers from wrappers that lend their element
+- reference and pointer projections of fixed arrays
+- requests that must match an exact wrapper type (`exact_lookup`)
 
-New conversion behavior should be modeled as a route operation first. This keeps
-availability, ownership, and execution from becoming independent rule sets
-again.
+Model each additional conversion behavior as a route operation first. Then
+availability, ownership and execution stay one set of rules.
 
-## Conversion Cache
+## Retention
 
-Shared and external resolution can preserve conversion objects through
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
-and
-[include/dingo/resolution/conversion_cache.h](../../include/dingo/resolution/conversion_cache.h).
+A reference or a pointer to a wrapper that holds a copy sharing the instance is
+derived from the wrapper. Examples are a `std::shared_ptr<I> &` of a kept
+`std::shared_ptr<T>`, and the `std::optional<std::shared_ptr<T>> &` that a
+request composes of one.
 
-That cache matters when a conversion object must outlive a single expression,
-for example when a resolved shared object hands out references into a converted
-wrapper form.
+- A binding of a scope that keeps its instance keeps the wrapper in the
+  retention of its cell,
+  [include/dingo/storage/retention.h](../../include/dingo/storage/retention.h).
+  The retention holds one object for each type, under the key of the type. It
+  makes the object the first time a request asks for it. So every reference to
+  it refers to the same object while the binding lives. A runtime binding also
+  publishes the address in the request cache.
+- A binding of a scope that makes an instance for each request keeps nothing. It
+  places the wrapper in the context instead.
 
-The current implementation is intentionally narrow: the conversions object is
-closer to an expanded variant of cached conversion instances than to a general
-conversion graph.
+A runtime container makes the retained objects in its persistent memory. It
+forgets them when the transaction that made them rolls back. A static container
+can have no persistent memory, so its retention owns the objects.

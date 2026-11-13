@@ -14,6 +14,139 @@ function(configure_quality_targets out_check_targets)
   )
   list(APPEND check_targets layers-check)
 
+  # The model probes: probe.py resolves every request of registrations in both
+  # containers, detection.py detects and makes the classes generated around
+  # them. Each writes the outcome of every cell to model-<size>/, with a
+  # summary as .md, and fails on a defect.
+  # They read the diagnostics of GCC and clang. A size probes a cover of the
+  # dimensions: small every pair of their values, medium every three, large
+  # every combination, which takes longest. model-check-small is
+  # part of check with those compilers.
+  #
+  # A check that passed is not made again until what it reads changes: the
+  # library, the specification and its generator, the headers of the probes,
+  # the Python environment, or the compiler and its flags, which configure
+  # writes to a file of its own only when they change.
+  set(model_flags
+    "-std=c++17 -O0 -I${PROJECT_SOURCE_DIR}/include -I${PROJECT_SOURCE_DIR}/test")
+  file(GLOB_RECURSE model_inputs CONFIGURE_DEPENDS
+    ${PROJECT_SOURCE_DIR}/include/*.h ${PROJECT_SOURCE_DIR}/include/*.hpp
+    ${PROJECT_SOURCE_DIR}/spec/*.py ${PROJECT_SOURCE_DIR}/spec/*.j2
+    ${PROJECT_SOURCE_DIR}/test/model/*.h)
+  list(APPEND model_inputs ${PROJECT_SOURCE_DIR}/pyproject.toml
+    ${PROJECT_SOURCE_DIR}/uv.lock)
+  foreach(size_cover IN ITEMS small:pairs medium:triples large:all)
+    string(REPLACE ":" ";" size_cover "${size_cover}")
+    list(GET size_cover 0 size)
+    list(GET size_cover 1 cover)
+    set(model_dir ${PROJECT_BINARY_DIR}/model-${size})
+    set(model_configuration ${model_dir}/configuration.txt)
+    file(CONFIGURE OUTPUT ${model_configuration} CONTENT
+      "${CMAKE_CXX_COMPILER} ${CMAKE_CXX_COMPILER_VERSION}\n${cover}\n${model_flags}\n")
+    add_custom_command(
+      OUTPUT ${model_dir}/checked
+      COMMENT "Probing the ${size} cover of the model"
+      COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/spec/probe.py
+        ${model_dir}/probe.json --work ${model_dir}/probe
+        --compiler ${CMAKE_CXX_COMPILER} --cover ${cover}
+        "--flags=${model_flags}"
+      COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/spec/detection.py
+        ${model_dir}/detection.json --work ${model_dir}/detection
+        --compiler ${CMAKE_CXX_COMPILER} --cover ${cover}
+        "--flags=${model_flags}"
+      COMMAND ${CMAKE_COMMAND} -E touch ${model_dir}/checked
+      DEPENDS ${model_inputs} ${model_configuration}
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+      USES_TERMINAL
+      VERBATIM
+    )
+    add_custom_target(model-check-${size} DEPENDS ${model_dir}/checked)
+  endforeach()
+
+  # The conversion check: conversion.py asks the conversion layer of every
+  # registration what it publishes for every request, as the code compiles,
+  # and compares it with the specification. It resolves nothing, so it
+  # checks every registration; the model probes check what resolutions do.
+  set(conversion_dir ${PROJECT_BINARY_DIR}/conversion)
+  set(conversion_configuration ${conversion_dir}/configuration.txt)
+  file(CONFIGURE OUTPUT ${conversion_configuration} CONTENT
+    "${CMAKE_CXX_COMPILER} ${CMAKE_CXX_COMPILER_VERSION}\n${model_flags}\n")
+  add_custom_command(
+    OUTPUT ${conversion_dir}/checked
+    COMMENT "Checking the conversion layer of every registration"
+    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/spec/conversion.py
+      ${conversion_dir}/conversion.json --work ${conversion_dir}/work
+      --compiler ${CMAKE_CXX_COMPILER} "--flags=${model_flags}"
+    COMMAND ${CMAKE_COMMAND} -E touch ${conversion_dir}/checked
+    DEPENDS ${model_inputs} ${conversion_configuration}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    USES_TERMINAL
+    VERBATIM
+  )
+  add_custom_target(conversion-check DEPENDS ${conversion_dir}/checked)
+
+  # The emptiness check: emptiness.py registers a stored object that holds
+  # no leaf, a null handle, an empty optional or an alternative type that
+  # holds the other alternative, and resolves every request the
+  # specification says is defined when a layer is empty: each has to give
+  # what holds no leaf, without failing.
+  set(emptiness_dir ${PROJECT_BINARY_DIR}/emptiness)
+  set(emptiness_configuration ${emptiness_dir}/configuration.txt)
+  file(CONFIGURE OUTPUT ${emptiness_configuration} CONTENT
+    "${CMAKE_CXX_COMPILER} ${CMAKE_CXX_COMPILER_VERSION}\n${model_flags}\n")
+  add_custom_command(
+    OUTPUT ${emptiness_dir}/checked
+    COMMENT "Checking what an empty stored object gives"
+    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/spec/emptiness.py
+      ${emptiness_dir}/emptiness.json --work ${emptiness_dir}/work
+      --compiler ${CMAKE_CXX_COMPILER} "--flags=${model_flags}"
+    COMMAND ${CMAKE_COMMAND} -E touch ${emptiness_dir}/checked
+    DEPENDS ${model_inputs} ${emptiness_configuration}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    USES_TERMINAL
+    VERBATIM
+  )
+  add_custom_target(emptiness-check DEPENDS ${emptiness_dir}/checked)
+
+  # The layer checks: probe.py --layer probes what the storage of every
+  # registration copies and moves of its leaf, requested as it is stored,
+  # and what passing the leaf of a plain registration on does, in every
+  # position. With the conversion check, which counts what the conversion of
+  # every published request does, they check the copies and the moves of
+  # each layer against the specification.
+  foreach(layer IN ITEMS storage resolution)
+    set(layer_dir ${PROJECT_BINARY_DIR}/${layer})
+    set(layer_configuration ${layer_dir}/configuration.txt)
+    file(CONFIGURE OUTPUT ${layer_configuration} CONTENT
+      "${CMAKE_CXX_COMPILER} ${CMAKE_CXX_COMPILER_VERSION}\n${model_flags}\n")
+    add_custom_command(
+      OUTPUT ${layer_dir}/checked
+      COMMENT "Checking the copies and the moves of the ${layer}"
+      COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/spec/probe.py
+        ${layer_dir}/probe.json --work ${layer_dir}/probe
+        --compiler ${CMAKE_CXX_COMPILER} --layer ${layer}
+        "--flags=${model_flags}"
+      COMMAND ${CMAKE_COMMAND} -E touch ${layer_dir}/checked
+      DEPENDS ${model_inputs} ${layer_configuration}
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+      USES_TERMINAL
+      VERBATIM
+    )
+    add_custom_target(${layer}-check DEPENDS ${layer_dir}/checked)
+  endforeach()
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    list(APPEND check_targets conversion-check emptiness-check storage-check
+      resolution-check model-check-small)
+  endif()
+
+  # A report, not a check: it ranks the headers and never fails.
+  add_custom_target(complexity-report
+    COMMENT "Ranking header complexity"
+    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/tools/complexity.py
+      ${PROJECT_SOURCE_DIR}/include --build-dir ${PROJECT_BINARY_DIR}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+  )
+
   if(NOT DINGO_CLANG_TOOLS_ENABLED)
     add_custom_target(format DEPENDS markdown-format)
     add_custom_target(format-check DEPENDS markdown-format-check)

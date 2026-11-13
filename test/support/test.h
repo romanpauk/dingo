@@ -7,11 +7,10 @@
 
 #pragma once
 
-#include <dingo/base/type_name.h>
-
 #include <gtest/gtest.h>
 
 #include "class.h"
+#include "type_name.h"
 
 namespace dingo {
 

@@ -3,185 +3,69 @@ uv_get_run_command(DINGO_UV_RUN_COMMAND
     PROJECT_DIRECTORY "${PROJECT_SOURCE_DIR}"
 )
 
-set(DINGO_MATRIX_PROFILE "full" CACHE STRING
-    "Generated matrix execution profile (full or portable)")
-set_property(CACHE DINGO_MATRIX_PROFILE PROPERTY STRINGS full portable)
-if(NOT DINGO_MATRIX_PROFILE MATCHES "^(full|portable)$")
-    message(FATAL_ERROR
-        "DINGO_MATRIX_PROFILE must be either full or portable")
-endif()
-option(DINGO_MATRIX_TEST_AFTER_BUILD
-    "Run each matrix test executable immediately after linking" OFF)
-
-set(DINGO_MATRIX_TEST_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/matrix")
-set(DINGO_MATRIX_TEST_CMAKE
-    "${PROJECT_BINARY_DIR}/generated/matrix-tests.cmake")
-set(DINGO_MATRIX_GENERATOR
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/generate.py")
-set(DINGO_MATRIX_COMPILER_ARCHITECTURE "${CMAKE_GENERATOR_PLATFORM}")
-if(NOT DINGO_MATRIX_COMPILER_ARCHITECTURE)
-    set(DINGO_MATRIX_COMPILER_ARCHITECTURE "${CMAKE_SYSTEM_PROCESSOR}")
-endif()
-if(MSVC)
-    set(DINGO_MATRIX_DEPENDENCY_COMPOSITION_CASE_LIMIT 12)
-
-    # To identify any future crashing row, uncomment these lines after its
-    # failing executable is known.
-    # list(APPEND DINGO_MATRIX_DEPENDENCY_COMPOSITION_DIAGNOSTIC_ARGS
-    #     --dependency-composition-isolate-executable invoke:4
-    #     --dependency-composition-isolate-executable resolve:4)
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "^(GNU|Clang|AppleClang)$")
-    # Bound peak compiler memory as the full composition matrix expands.
-    set(DINGO_MATRIX_DEPENDENCY_COMPOSITION_CASE_LIMIT 64)
-else()
-    set(DINGO_MATRIX_DEPENDENCY_COMPOSITION_CASE_LIMIT 0)
-endif()
-file(GLOB DINGO_MATRIX_AXIS_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/axes/*.py")
-
-set(DINGO_MATRIX_TEST_HEADERS
-    matrix/common/assertions.h
-    matrix/containers/allocator.h
-    matrix/containers/container.h
-    matrix/containers/custom_rtti.h
-    matrix/containers/indexed.h
-    matrix/containers/runtime.h
-    matrix/containers/static.h
-    matrix/containers/storage.h
-    matrix/fixtures/constructor_detection.h
-    matrix/fixtures/dependency_shapes.h
-    matrix/fixtures/factory.h
-    matrix/fixtures/local_bindings.h
-    matrix/fixtures/nested_wrappers.h
-    matrix/fixtures/shared_cyclical.h
-    matrix/fixtures/values.h
-    matrix/fixtures/variant_types.h
-    matrix/policies/constructor_detection.h
-    matrix/policies/policy_aggregate.h
-    matrix/policies/policy_collection.h
-    matrix/policies/policy_core.h
-    matrix/policies/policy_lifetime.h
-    matrix/policies/policy_special.h
-    matrix/policies/resolution.h
-    matrix/scenarios/factory.h
-    matrix/scenarios/indexed_registration.h
-    matrix/scenarios/invoke.h
-    matrix/scenarios/lookup/routes.h
-    matrix/scenarios/lookup/runtime_routing.h
-    matrix/scenarios/parent/allocators.h
-    matrix/scenarios/parent/cache.h
-    matrix/scenarios/parent/collections.h
-    matrix/scenarios/parent/common.h
-    matrix/scenarios/parent/native.h
-    matrix/scenarios/parent/origin.h
-    matrix/scenarios/parent/ownership.h
-    matrix/scenarios/parent/recursion.h
-    matrix/scenarios/parent/resolution.h
-    matrix/scenarios/parent/search.h
-    matrix/scenarios/parent/semantics.h
-    matrix/scenarios/parent/transactions.h
-    matrix/scenarios/runtime/common.h
-    matrix/scenarios/runtime/construct_dependency.h
-    matrix/scenarios/runtime/container.h
-    matrix/scenarios/runtime/exceptions.h
-    matrix/scenarios/runtime/shared_cyclical.h
-    matrix/scenarios/runtime/unique_reference.h
-    matrix/scenarios/static_indexed.h
-    matrix/scenarios/static_parent.h
-)
-set(DINGO_MATRIX_TEST_HEADER_DEPENDS ${DINGO_MATRIX_TEST_HEADERS})
-list(TRANSFORM DINGO_MATRIX_TEST_HEADER_DEPENDS
-    PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
-
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    ${DINGO_MATRIX_AXIS_SOURCES}
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/data.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/constructor_detection.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/dependency_contract.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/dependency_composition.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/exclusions.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/family.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/invoke.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/plugins.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/report.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/scenarios.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/shared_cyclical.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/schema.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/cmake.cmake.j2"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/constructor_detection.cpp.j2"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/constructor_detection_runner.cpp.j2"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/dependency_composition.cpp.j2"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/dependency_composition_runner.cpp.j2"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/runner.cpp.j2"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/scenario.cpp.j2"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/shared_cyclical.cpp.j2"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/shared_cyclical_runner.cpp.j2"
-    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/source.cpp.j2"
-    ${DINGO_MATRIX_TEST_HEADER_DEPENDS}
-    "${DINGO_MATRIX_GENERATOR}")
-
-set(DINGO_MATRIX_GENERATOR_COMMAND
-    ${DINGO_UV_RUN_COMMAND} python
-        ${DINGO_MATRIX_GENERATOR}
-        --out ${DINGO_MATRIX_TEST_DIR}
-        --cmake ${DINGO_MATRIX_TEST_CMAKE}
-        --profile ${DINGO_MATRIX_PROFILE}
-        --compiler-id=${CMAKE_CXX_COMPILER_ID}
-        --compiler-version=${CMAKE_CXX_COMPILER_VERSION}
-        --compiler-architecture=${DINGO_MATRIX_COMPILER_ARCHITECTURE}
-        --dependency-composition-case-limit
-            ${DINGO_MATRIX_DEPENDENCY_COMPOSITION_CASE_LIMIT}
-        ${DINGO_MATRIX_DEPENDENCY_COMPOSITION_DIAGNOSTIC_ARGS})
-
-execute_process(
-    COMMAND ${DINGO_MATRIX_GENERATOR_COMMAND}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    RESULT_VARIABLE DINGO_MATRIX_GENERATOR_RESULT)
-if(NOT DINGO_MATRIX_GENERATOR_RESULT EQUAL 0)
-    message(FATAL_ERROR
-        "Failed to generate matrix tests: "
-        "${DINGO_MATRIX_GENERATOR_RESULT}")
-endif()
-include(${DINGO_MATRIX_TEST_CMAKE})
-
-add_test(NAME dingo_matrix_generator_test
-    COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q
-        ${CMAKE_CURRENT_SOURCE_DIR}/matrix/generator_test.py)
-set_tests_properties(dingo_matrix_generator_test PROPERTIES
-    LABELS "unit;generator"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/matrix)
-
 add_executable(dingo_unit_test
     container/construct_dependency.cpp
     container/container_move.cpp
+    container/container_parameters.cpp
+    container/cycles.cpp
     container/dependency_chain.cpp
-    container/dingo.cpp
     container/incomplete_resolve.cpp
     container/incomplete_resolve_fixture.cpp
+    container/parent/allocators.cpp
+    container/parent/cache.cpp
+    container/parent/collections.cpp
+    container/parent/common.h
+    container/parent/origin.cpp
+    container/parent/ownership.cpp
+    container/parent/recursion.cpp
+    container/parent/resolution.cpp
+    container/parent/rollback.cpp
+    container/parent/search.cpp
+    container/parent/semantics.cpp
+    container/parent/transactions.cpp
     container/parent_container_resolution.cpp
     container/recursion.cpp
     factory/constructor_detection.cpp
+    factory/constructor_detection_cases.cpp
+    factory/constructor_detection_fixture.h
+    factory/factory_kinds.cpp
     lookup/associative_backends.cpp
+    lookup/collections.cpp
     lookup/index_injection.cpp
     lookup/index_registration.cpp
     lookup/index_runtime.cpp
     lookup/index_typed.cpp
     lookup/index_unkeyed.cpp
+    lookup/indexed_registration.cpp
     lookup/lookup_index.cpp
+    lookup/routes.cpp
+    lookup/runtime_routing.cpp
+    lookup/static_indexed.cpp
     memory/arena_allocator.cpp
     memory/object_store.cpp
     registration/binding_graph.cpp
-    registration/object_routes.cpp
     registration/object_sizes.cpp
+    registration/custom_scope.cpp
     registration/registration_traits.cpp
     registration/replace_registration.cpp
     registration/runtime_registration.cpp
     registration/static_bindings_source.cpp
     registration/static_parent_container.cpp
+    registration/static_parent_pairs.cpp
     registration/type_registration.cpp
     resolution/cache.cpp
-    runtime/container_runtime.cpp
+    resolution/conversions.cpp
+    resolution/invoke_callables.cpp
+    resolution/request_identity.cpp
+    resolution/wrappers.cpp
+    runtime/common.h
+    runtime/construct_dependency.cpp
+    runtime/container.cpp
+    runtime/exceptions.cpp
+    runtime/memory.cpp
+    runtime/shared_cyclical.cpp
     runtime/transaction.cpp
+    runtime/unique_reference.cpp
     resolution/resolution_operation.cpp
     container/construct_common.h
     lookup/index_common.h
@@ -190,6 +74,7 @@ add_executable(dingo_unit_test
     support/class.h
     support/containers.h
     support/test.h
+    support/values.h
     type/type_identity.cpp
     type/type_identity_fixture.cpp
     type/type_identity_shared.h
@@ -219,61 +104,6 @@ target_compile_options(dingo_unit_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj
 # Force-include windows.h to each test to make sure library builds with windows.h included
 target_compile_options(dingo_unit_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
 
-add_custom_target(dingo_matrix_test
-    DEPENDS ${DINGO_MATRIX_TEST_TARGETS})
-
-function(dingo_configure_matrix_compile_target DINGO_MATRIX_TARGET)
-    target_link_libraries(${DINGO_MATRIX_TARGET}
-        PRIVATE dingo::dingo gtest_main)
-    target_include_directories(${DINGO_MATRIX_TARGET}
-        PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_compile_options(${DINGO_MATRIX_TARGET} PRIVATE
-        $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
-    target_compile_options(${DINGO_MATRIX_TARGET} PRIVATE
-        $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
-endfunction()
-
-foreach(DINGO_MATRIX_TEST_TARGET IN LISTS DINGO_MATRIX_TEST_TARGETS)
-    add_executable(${DINGO_MATRIX_TEST_TARGET}
-        ${${DINGO_MATRIX_TEST_TARGET}_SOURCES}
-        ${DINGO_MATRIX_TEST_HEADERS}
-    )
-    add_test(NAME ${DINGO_MATRIX_TEST_TARGET}
-        COMMAND ${DINGO_MATRIX_TEST_TARGET})
-    if(DINGO_MATRIX_TEST_AFTER_BUILD)
-        add_custom_command(TARGET ${DINGO_MATRIX_TEST_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E env
-                ASAN_OPTIONS=use_sigaltstack=false
-                $<TARGET_FILE:${DINGO_MATRIX_TEST_TARGET}>
-            COMMENT "Running ${DINGO_MATRIX_TEST_TARGET}"
-            USES_TERMINAL
-            VERBATIM)
-    endif()
-    set_tests_properties(${DINGO_MATRIX_TEST_TARGET}
-        PROPERTIES LABELS "runtime")
-    dingo_configure_matrix_compile_target(${DINGO_MATRIX_TEST_TARGET})
-
-    set(DINGO_MATRIX_DIAGNOSTIC_INDEX 0)
-    foreach(DINGO_MATRIX_ISOLATED_SOURCE IN LISTS
-            ${DINGO_MATRIX_TEST_TARGET}_ISOLATED_SOURCES)
-        math(EXPR DINGO_MATRIX_DIAGNOSTIC_INDEX
-            "${DINGO_MATRIX_DIAGNOSTIC_INDEX} + 1")
-        string(REPLACE "dingo_matrix_test_" "dingo_matrix_diag_"
-            DINGO_MATRIX_DIAGNOSTIC_PREFIX ${DINGO_MATRIX_TEST_TARGET})
-        set(DINGO_MATRIX_DIAGNOSTIC_TARGET
-            "${DINGO_MATRIX_DIAGNOSTIC_PREFIX}_${DINGO_MATRIX_DIAGNOSTIC_INDEX}")
-        message(STATUS
-            "${DINGO_MATRIX_DIAGNOSTIC_TARGET}: "
-            "${DINGO_MATRIX_ISOLATED_SOURCE}")
-        add_library(${DINGO_MATRIX_DIAGNOSTIC_TARGET} OBJECT
-            "${DINGO_MATRIX_ISOLATED_SOURCE}")
-        dingo_configure_matrix_compile_target(
-            ${DINGO_MATRIX_DIAGNOSTIC_TARGET})
-        target_sources(${DINGO_MATRIX_TEST_TARGET} PRIVATE
-            $<TARGET_OBJECTS:${DINGO_MATRIX_DIAGNOSTIC_TARGET}>)
-    endforeach()
-endforeach()
-
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
     # The unit test binary still carries some template-heavy coverage
     # from the old integration tests. Keep this runner's executable
@@ -286,6 +116,15 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
         $<$<AND:$<CXX_COMPILER_ID:GNU>,$<CONFIG:Release>>:-Os>
     )
 endif()
+
+# The owning handle families are one list for a program, which this test
+# extends with handles of its own.
+add_executable(dingo_owning_handles_test registration/owning_handles.cpp)
+add_test(NAME dingo_owning_handles_test COMMAND dingo_owning_handles_test)
+set_tests_properties(dingo_owning_handles_test PROPERTIES LABELS "unit")
+target_link_libraries(dingo_owning_handles_test dingo::dingo gtest_main)
+target_include_directories(dingo_owning_handles_test
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 option(DINGO_LIT_TESTS_ENABLED "Enable lit-based tests for static assertions and diagnostics." ON)
 if(DINGO_LIT_TESTS_ENABLED)

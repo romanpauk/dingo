@@ -218,15 +218,6 @@ public:
   inline_arena &operator=(const inline_arena &) = delete;
 };
 
-template <typename T> struct arena_allocator_alignment {
-  static constexpr std::size_t value =
-      alignof(std::conditional_t<std::is_same_v<T, void>, std::max_align_t, T>);
-};
-
-template <typename T>
-static constexpr std::size_t arena_allocator_alignment_v =
-    arena_allocator_alignment<T>::value;
-
 template <typename T, typename Arena = arena<>,
           std::size_t Alignment = alignof(std::max_align_t)>
 class arena_allocator {
@@ -238,8 +229,7 @@ class arena_allocator {
 
 public:
   using value_type = T;
-  static constexpr std::size_t alignment =
-      std::max(Alignment, arena_allocator_alignment_v<T>);
+  static constexpr std::size_t alignment = std::max(Alignment, alignof(T));
 
   template <typename U> struct rebind {
     using other = arena_allocator<U, Arena, Alignment>;
@@ -263,25 +253,6 @@ public:
   void deallocate(value_type *ptr, std::size_t n) noexcept {
     arena_->deallocate(ptr, sizeof(T) * n);
   }
-};
-
-template <typename Arena, std::size_t Alignment>
-class arena_allocator<void, Arena, Alignment> {
-  template <typename U, typename ArenaU, std::size_t AlignmentU>
-  friend class arena_allocator;
-  Arena *arena_ = nullptr;
-
-public:
-  using value_type = void;
-  template <typename U> struct rebind {
-    using other = arena_allocator<U, Arena, Alignment>;
-  };
-
-  arena_allocator(Arena &arena) noexcept : arena_(&arena) {}
-
-  template <typename U, std::size_t AlignmentU>
-  arena_allocator(const arena_allocator<U, Arena, AlignmentU> &other) noexcept
-      : arena_(other.arena_) {}
 };
 
 template <typename T, std::size_t AlignmentT, typename U,

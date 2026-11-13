@@ -9,7 +9,7 @@
 
 #include <dingo/memory/arena_allocator.h>
 #include <dingo/memory/object_store.h>
-#include <dingo/runtime/container_runtime.h>
+#include <dingo/runtime/memory.h>
 
 #include <cassert>
 #include <cstddef>
@@ -26,7 +26,7 @@ namespace dingo {
 #endif
 
 template <typename Allocator> class runtime_transaction {
-  using runtime_type = container_runtime<Allocator>;
+  using runtime_type = runtime_memory<Allocator>;
 
   struct action_link {
     action_link(action_link *previous_node,
@@ -51,27 +51,9 @@ template <typename Allocator> class runtime_transaction {
     Fn callback;
   };
 
-  struct rollback_node final : action_link {
-    rollback_node(action_link *previous_node,
-                  void (*fn)(void *, void *) noexcept, void *first_arg,
-                  void *second_arg) noexcept
-        : action_link(previous_node, &invoke_node), callback(fn),
-          first(first_arg), second(second_arg) {}
-
-    static void invoke_node(action_link *base) noexcept {
-      auto *node = static_cast<rollback_node *>(base);
-      node->callback(node->first, node->second);
-    }
-
-    void (*callback)(void *, void *) noexcept;
-    void *first;
-    void *second;
-  };
-
   using action_store = detail::object_store<arena<>>;
 
   struct action_checkpoint {
-    action_link *commit_tail;
     action_link *rollback_tail;
     typename action_store::checkpoint objects;
   };
@@ -83,7 +65,7 @@ template <typename Allocator> class runtime_transaction {
     ~action_state() { objects.destroy(*scratch_arena); }
 
     action_checkpoint mark() const noexcept {
-      return {commit_tail, rollback_tail, objects.mark()};
+      return {rollback_tail, objects.mark()};
     }
 
     template <typename T, typename... Args> T &construct(Args &&...args) {
@@ -97,7 +79,6 @@ template <typename Allocator> class runtime_transaction {
 
     arena<> *scratch_arena;
     action_store objects;
-    action_link *commit_tail = nullptr;
     action_link *rollback_tail = nullptr;
   };
 
@@ -114,7 +95,7 @@ public:
       : parent_(runtime.active_transaction()),
         runtime_(std::addressof(runtime)), checkpoint_(runtime.mark()) {
     static_assert(alignof(runtime_transaction) > 1,
-                  "container_runtime stores its sealed flag in the low bit of "
+                  "runtime_memory stores its sealed flag in the low bit of "
                   "the active transaction pointer");
     if (parent_ == nullptr) {
       new (std::addressof(actions_.state)) action_state(scratch);
@@ -147,13 +128,8 @@ public:
 
   template <typename T, typename... Args>
   T *construct_persistent(Args &&...args) {
-    auto *instance =
-        static_cast<T *>(allocate_persistent(sizeof(T), alignof(T)));
-    new (instance) T(std::forward<Args>(args)...);
-    if constexpr (!std::is_trivially_destructible_v<T>) {
-      add_persistent_destructor(instance, &destructor<T>);
-    }
-    return instance;
+    return construct_persistent_with<T>(
+        [&](void *instance) { new (instance) T(std::forward<Args>(args)...); });
   }
 
   template <typename T, typename ConstructFn>
@@ -170,9 +146,8 @@ public:
   void on_rollback(void (*fn)(void *, void *) noexcept, void *first,
                    void *second = nullptr) {
     auto &actions = shared_actions();
-    auto &created = actions.template construct<rollback_node>(
-        actions.rollback_tail, fn, first, second);
-    actions.rollback_tail = std::addressof(created);
+    add_action(actions, actions.rollback_tail,
+               [fn, first, second]() noexcept { fn(first, second); });
   }
 
   template <typename Fn> void on_rollback(Fn &&fn) {
@@ -180,25 +155,6 @@ public:
     static_assert(std::is_nothrow_destructible_v<std::decay_t<Fn>>);
     auto &actions = shared_actions();
     add_action(actions, actions.rollback_tail, std::forward<Fn>(fn));
-  }
-
-  template <typename Fn> void on_commit(Fn &&fn) {
-    static_assert(std::is_nothrow_invocable_v<std::decay_t<Fn> &>);
-    static_assert(std::is_nothrow_destructible_v<std::decay_t<Fn>>);
-    auto &actions = shared_actions();
-    add_action(actions, actions.commit_tail, std::forward<Fn>(fn));
-  }
-
-  template <typename Fn> void on_finish(Fn &&fn) {
-    static_assert(std::is_nothrow_invocable_v<std::decay_t<Fn> &>);
-    static_assert(std::is_nothrow_destructible_v<std::decay_t<Fn>>);
-    using action_type = std::decay_t<Fn>;
-    auto &actions = shared_actions();
-    auto &callback =
-        actions.template construct<action_type>(std::forward<Fn>(fn));
-    auto invoke = [&callback]() noexcept { callback(); };
-    add_action(actions, actions.commit_tail, invoke);
-    add_action(actions, actions.rollback_tail, invoke);
   }
 
   void add_runtime_destructor(void *instance, void (*dtor)(void *) noexcept) {
@@ -259,9 +215,7 @@ private:
 
   void finish_runtime(bool commit) {
     assert(runtime_->active_transaction() == this);
-    if (commit) {
-      runtime_->commit(checkpoint_);
-    } else {
+    if (!commit) {
       runtime_->rollback(checkpoint_);
     }
     assert(runtime_->active_transaction() == this);
@@ -273,17 +227,14 @@ private:
     const action_checkpoint checkpoint =
         parent_ != nullptr
             ? actions_.checkpoint
-            : action_checkpoint{nullptr, nullptr,
+            : action_checkpoint{nullptr,
                                 typename action_store::checkpoint{nullptr}};
-    auto *&tail = committing ? actions.commit_tail : actions.rollback_tail;
-    auto *end = committing ? checkpoint.commit_tail : checkpoint.rollback_tail;
-    while (tail != end) {
-      auto *action = tail;
-      tail = action->previous;
+    // A committed transaction discards its rollback actions.
+    while (!committing && actions.rollback_tail != checkpoint.rollback_tail) {
+      auto *action = actions.rollback_tail;
+      actions.rollback_tail = action->previous;
       action->invoke(action);
     }
-
-    actions.commit_tail = checkpoint.commit_tail;
     actions.rollback_tail = checkpoint.rollback_tail;
     actions.destroy(checkpoint.objects);
   }

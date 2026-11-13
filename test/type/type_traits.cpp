@@ -5,10 +5,9 @@
 // SPDX-License-Identifier: MIT
 //
 
+#include <dingo/request/decomposition.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/collection_traits.h>
-#include <dingo/type/dependency.h>
-#include <dingo/type/dependency_traits.h>
 #include <dingo/type/type_traits.h>
 
 #include <gtest/gtest.h>
@@ -50,11 +49,10 @@ static_assert(std::is_empty_v<request_type<int>>);
 static_assert(std::is_same_v<request_type<int>::user_type, int>);
 static_assert(std::is_same_v<request_type<int>::lookup_type, int>);
 static_assert(std::is_same_v<request_type<int>::interface_type, int>);
-static_assert(std::is_same_v<request_type<int>::result_type, int>);
+static_assert(std::is_same_v<request_type<int>::interface_type, int>);
 static_assert(std::is_same_v<request_type<int>::value_type, int>);
 static_assert(std::is_same_v<request_type<int>::exact_type, int>);
 static_assert(!request_type<int>::removes_rvalue_references);
-static_assert(!request_type<int>::is_rvalue_request);
 
 static_assert(std::is_same_v<request_type<int &>::lookup_type, int &>);
 static_assert(std::is_same_v<request_type<int &>::interface_type, int &>);
@@ -63,15 +61,13 @@ static_assert(std::is_same_v<request_type<int &>::exact_type, int>);
 
 static_assert(std::is_same_v<request_type<int &&>::lookup_type, int &&>);
 static_assert(std::is_same_v<request_type<int &&>::interface_type, int &&>);
-static_assert(std::is_same_v<request_type<int &&>::result_type, int &&>);
+static_assert(std::is_same_v<request_type<int &&>::interface_type, int &&>);
 static_assert(std::is_same_v<request_type<int &&>::value_type, int>);
 static_assert(std::is_same_v<request_type<int &&>::exact_type, int>);
-static_assert(request_type<int &&>::is_rvalue_request);
 static_assert(std::is_same_v<request_type<int &&, true>::lookup_type, int>);
 static_assert(std::is_same_v<request_type<int &&, true>::interface_type, int>);
-static_assert(std::is_same_v<request_type<int &&, true>::result_type, int>);
+static_assert(std::is_same_v<request_type<int &&, true>::interface_type, int>);
 static_assert(request_type<int &&, true>::removes_rvalue_references);
-static_assert(request_type<int &&, true>::is_rvalue_request);
 
 static_assert(std::is_same_v<request_type<int *>::lookup_type, int *>);
 static_assert(std::is_same_v<request_type<int *>::interface_type, int *>);

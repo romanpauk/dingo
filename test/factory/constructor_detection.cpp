@@ -19,7 +19,7 @@
 #include <utility>
 #include <variant>
 
-#include "matrix/fixtures/constructor_detection.h"
+#include "factory/constructor_detection_fixture.h"
 
 namespace dingo {
 
@@ -114,15 +114,15 @@ TEST(constructor_detection_test, public_constructor_argument_metadata) {
           typename constructor<explicit_constructor(int, float)>::arguments,
           type_list<int, float>>);
   static_assert(std::is_same_v<typename constructor_detection<
-                                   matrix::constructor_two_values,
+                                   fixture::constructor_two_values,
                                    detail::constructor_signature>::arguments,
                                type_list<int, float>>);
   static_assert(
       std::is_same_v<typename constructor_detection<
-                         matrix::constructor_typedef_selected>::arguments,
+                         fixture::constructor_typedef_selected>::arguments,
                      type_list<double, const char *>>);
   static_assert(std::is_same_v<typename constructor_detection<
-                                   matrix::constructor_defaulted>::arguments,
+                                   fixture::constructor_defaulted>::arguments,
                                type_list<>>);
 }
 
@@ -130,14 +130,14 @@ TEST(constructor_detection_test, public_constructor_argument_metadata) {
 TEST(constructor_detection_test,
      unresolved_signature_arguments_fall_back_to_void) {
   using arguments = typename detail::constructor_signature_arguments<
-      matrix::constructor_two_values, unresolved_argument_category,
+      fixture::constructor_two_values, unresolved_argument_category,
       std::make_index_sequence<2>>::type;
   static_assert(std::is_void_v<arguments>);
 }
 #endif
 
 TEST(constructor_detection_test, traits_limit_only_the_public_search) {
-  using target = matrix::constructor_trait_limited;
+  using target = fixture::constructor_trait_limited;
   static_assert(constructor_detection<target>::arity == 2);
   static_assert(constructor_detection<target>::kind ==
                 detail::constructor_kind::concrete);
@@ -157,16 +157,16 @@ TEST(constructor_detection_test, traits_limit_only_the_public_search) {
 
 TEST(constructor_detection_test, public_detection_defaults_to_shape) {
   static_assert(
-      std::is_same_v<constructor_detection<matrix::constructor_two_values>,
-                     constructor_detection<matrix::constructor_two_values,
+      std::is_same_v<constructor_detection<fixture::constructor_two_values>,
+                     constructor_detection<fixture::constructor_two_values,
                                            detail::constructor_shape>>);
 }
 
 TEST(constructor_detection_test, auto_construction_uses_public_selection) {
   container<> container;
-  EXPECT_EQ(
-      container.construct<matrix::constructor_public_selected_consumer>().value,
-      1);
+  EXPECT_EQ(container.construct<fixture::constructor_public_selected_consumer>()
+                .value,
+            1);
 }
 
 TEST(constructor_detection_test,
@@ -207,7 +207,7 @@ TEST(constructor_detection_test,
 
 TEST(constructor_detection_test,
      array_traits_construct_nested_move_only_values_in_place) {
-  using inner_array_type = std::array<matrix::dependency_move_only, 2>;
+  using inner_array_type = std::array<fixture::dependency_move_only, 2>;
   using array_type = std::array<inner_array_type, 2>;
   alignas(array_type) std::byte storage[sizeof(array_type)];
 
@@ -296,8 +296,8 @@ TEST(constructor_detection_test,
 
 TEST(constructor_detection_test, selected_conversion_route_is_executed) {
   using target = std::variant<int, long>;
-  using conversion = detail::target_alternative_type_conversion<
-      target, int &&, long,
+  using conversion = detail::conversion_wrap<
+      detail::wrap_alternative<long>, target,
       detail::type_conversion_path_t<long, int &&, consume>>;
   using dispatch =
       detail::construction_dispatch<target, int,

@@ -32,7 +32,7 @@ struct type_descriptor {
   // translation unit, so identity is carried by `tag`, never by this text.
   std::string_view raw_name;
   // Address of the per-type detail::type_tag<T>; null for pointer levels.
-  const char *tag = nullptr;
+  const void *tag = nullptr;
   type_cv_flags cv = type_cv_flags::none;
   type_reference_kind reference = type_reference_kind::none;
   // Descriptor of the pointed-to type; null unless this is a pointer level.
@@ -59,9 +59,14 @@ inline void append_type_name(std::string &name, type_descriptor descriptor);
 namespace detail {
 
 // One object per type, merged across translation units by vague linkage, so
-// its address identifies the type regardless of how a compiler spells it.
-// Deliberately not const: identical read-only data may be folded by linkers.
-template <typename T> inline char type_tag = 0;
+// its address identifies the type regardless of how a compiler spells it. It
+// holds its own address: a linker may fold identical data, as MSVC's
+// /OPT:ICF does, and no two tags are identical.
+struct type_tag_object {
+  const void *self;
+};
+
+template <typename T> inline const type_tag_object type_tag{&type_tag<T>};
 
 constexpr bool same_type_shape(type_descriptor lhs, type_descriptor rhs) {
   if (lhs.reference != rhs.reference ||
@@ -76,29 +81,6 @@ constexpr bool same_type_shape(type_descriptor lhs, type_descriptor rhs) {
   return same_type_shape(*lhs.pointee, *rhs.pointee);
 }
 
-constexpr size_t type_name_not_found = static_cast<size_t>(-1);
-
-constexpr size_t type_name_find(std::string_view haystack,
-                                std::string_view needle, size_t offset = 0) {
-  if (needle.empty()) {
-    return offset <= haystack.size() ? offset : type_name_not_found;
-  }
-
-  for (size_t i = offset; i + needle.size() <= haystack.size(); ++i) {
-    size_t j = 0;
-    for (; j < needle.size(); ++j) {
-      if (haystack[i + j] != needle[j]) {
-        break;
-      }
-    }
-    if (j == needle.size()) {
-      return i;
-    }
-  }
-
-  return type_name_not_found;
-}
-
 template <typename T> constexpr std::string_view wrapped_type_name() {
 #if defined(__clang__) || defined(__GNUC__)
   return __PRETTY_FUNCTION__;
@@ -109,46 +91,37 @@ template <typename T> constexpr std::string_view wrapped_type_name() {
 #endif
 }
 
-constexpr std::string_view wrapped_type_name_prefix() {
+// The text a compiler's signature puts before and after T.
 #if defined(__clang__)
-  return "[T = ";
+inline constexpr std::string_view wrapped_type_name_prefix = "[T = ";
+inline constexpr std::string_view wrapped_type_name_suffix = "]";
 #elif defined(__GNUC__)
-  return "with T = ";
+inline constexpr std::string_view wrapped_type_name_prefix = "with T = ";
+inline constexpr std::string_view wrapped_type_name_suffix = ";";
 #elif defined(_MSC_VER)
-  return "wrapped_type_name<";
+inline constexpr std::string_view wrapped_type_name_prefix =
+    "wrapped_type_name<";
+inline constexpr std::string_view wrapped_type_name_suffix = ">(void)";
 #else
-  return "";
+inline constexpr std::string_view wrapped_type_name_prefix = "";
+inline constexpr std::string_view wrapped_type_name_suffix = "";
 #endif
-}
-
-constexpr std::string_view wrapped_type_name_suffix() {
-#if defined(__clang__)
-  return "]";
-#elif defined(__GNUC__)
-  return ";";
-#elif defined(_MSC_VER)
-  return ">(void)";
-#else
-  return "";
-#endif
-}
 
 // Compiler type-name signatures have fixed text around T. Locate that text
 // once instead of repeating two constexpr linear searches for every type.
 constexpr auto wrapped_type_name_sample = wrapped_type_name<void>();
 constexpr auto wrapped_type_name_prefix_pos =
-    type_name_find(wrapped_type_name_sample, wrapped_type_name_prefix());
+    wrapped_type_name_sample.find(wrapped_type_name_prefix);
 
-static_assert(wrapped_type_name_prefix_pos != type_name_not_found,
+static_assert(wrapped_type_name_prefix_pos != std::string_view::npos,
               "failed to parse compiler type name prefix");
 
 constexpr auto wrapped_type_name_start =
-    wrapped_type_name_prefix_pos + wrapped_type_name_prefix().size();
-constexpr auto wrapped_type_name_suffix_pos =
-    type_name_find(wrapped_type_name_sample, wrapped_type_name_suffix(),
-                   wrapped_type_name_start);
+    wrapped_type_name_prefix_pos + wrapped_type_name_prefix.size();
+constexpr auto wrapped_type_name_suffix_pos = wrapped_type_name_sample.find(
+    wrapped_type_name_suffix, wrapped_type_name_start);
 
-static_assert(wrapped_type_name_suffix_pos != type_name_not_found,
+static_assert(wrapped_type_name_suffix_pos != std::string_view::npos,
               "failed to parse compiler type name suffix");
 
 constexpr auto wrapped_type_name_trailer_size =
@@ -307,14 +280,24 @@ inline void append_described_type_name(std::string &name,
 
 } // namespace detail
 
-template <typename T> constexpr std::string_view raw_type_name() {
-  return detail::raw_type_name<T>();
+namespace detail {
+// The descriptor of a type with its reference kind.
+template <typename T> constexpr type_descriptor make_described_type() {
+  auto descriptor = make_type_descriptor<std::remove_reference_t<T>>();
+  descriptor.reference = make_type_reference_kind<T>();
+  return descriptor;
 }
 
+// The descriptor of a type, made once at compile time: a function computing
+// it would be emitted for every type a message names. It is made by a
+// function, not by a lambda: MSVC leaves a variable a lambda initializes
+// zero where it is only read at run time.
+template <typename T>
+inline constexpr type_descriptor described_type_v = make_described_type<T>();
+} // namespace detail
+
 template <typename T> constexpr type_descriptor describe_type() {
-  auto descriptor = detail::make_type_descriptor<std::remove_reference_t<T>>();
-  descriptor.reference = detail::make_type_reference_kind<T>();
-  return descriptor;
+  return detail::described_type_v<T>;
 }
 
 inline void append_type_name(std::string &name, type_descriptor descriptor) {

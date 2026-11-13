@@ -12,24 +12,22 @@
 
 namespace dingo {
 
-template <typename T, T fn> struct function_decl {
-  template <typename Type, typename Context, typename Container>
-  static auto construct(construction_scope scope, Context &ctx,
-                        Container &container) {
-    return detail::callable_invoke<detail::callable_signature_t<T>>::construct(
-        fn, scope, ctx, container);
+// A factory that calls fn with the dependencies its parameters name.
+template <auto fn> struct function {
+  using signature = detail::callable_signature_t<decltype(fn)>;
+
+  template <typename Type, typename Context, typename Container, typename Scope>
+  static auto construct(Scope scope, Context &ctx, Container &container) {
+    return detail::callable_invoke<signature>::construct(fn, scope, ctx,
+                                                         container);
   }
 
-  template <typename Type, typename Context, typename Container>
-  static auto construct(void *ptr, construction_scope scope, Context &ctx,
+  template <typename Type, typename Context, typename Container, typename Scope>
+  static auto construct(void *ptr, Scope scope, Context &ctx,
                         Container &container) {
-    detail::callable_invoke<
-        detail::callable_signature_t<T>>::template construct<Type>(ptr, fn,
-                                                                   scope, ctx,
-                                                                   container);
+    detail::callable_invoke<signature>::template construct<Type>(
+        ptr, fn, scope, ctx, container);
   }
 };
-
-template <auto fn> struct function : function_decl<decltype(fn), fn> {};
 
 } // namespace dingo

@@ -8,7 +8,7 @@
 #pragma once
 
 #include <dingo/base/config.h>
-#include <dingo/resolution/resolution_operation.h>
+#include <dingo/conversion/apply.h>
 #include <dingo/type/type_traits.h>
 
 #include <array>
@@ -23,12 +23,23 @@
 
 namespace dingo {
 
+// A specialization may also declare how detection sees the type:
+//
+//   arguments            the type_list of the arguments it is constructed of
+//                        when it has one fixed signature, which detection
+//                        takes instead of searching for a constructor
+//   initializable<Args>  whether it is list-initialized of Args, where probing
+//                        T{args...} would not tell, as for a nested array
+//
 // The overloads that construct in place are declared with a deduced `auto`
 // return type, which is `void`. A deduced return type is instantiated at the
 // call, so the construction of a dependency does not add template depth levels
 // to the dependency chain it is part of (see docs/advanced-topics.md).
 template <typename T, typename = void> struct constructor_traits {
-  template <typename... Args> static T construct(Args &&...args) {
+  // A volatile value is returned without the qualifier, which C++20 does
+  // not take on a return type.
+  template <typename... Args>
+  static std::remove_volatile_t<T> construct(Args &&...args) {
     return T{std::forward<Args>(args)...};
   }
 
@@ -37,13 +48,19 @@ template <typename T, typename = void> struct constructor_traits {
   }
 };
 
+// A pointer is to a new T; one placed at an address is constructed there as T
+// is, a wrapper emplaced of the arguments of its element.
 template <typename T> struct constructor_traits<T *> {
   template <typename... Args> static T *construct(Args &&...args) {
     return new T{std::forward<Args>(args)...};
   }
 
   template <typename... Args> static auto construct(void *ptr, Args &&...args) {
-    new (ptr) T{std::forward<Args>(args)...};
+    if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>) {
+      new (ptr) T(type_traits<T>::emplace(std::forward<Args>(args)...));
+    } else {
+      new (ptr) T{std::forward<Args>(args)...};
+    }
   }
 };
 
@@ -57,8 +74,27 @@ template <typename T, size_t N> struct constructor_traits<T[N]> {
   }
 };
 
+namespace detail {
+template <typename T, typename Sequence> struct repeated_arguments;
+
+template <typename T, std::size_t... Is>
+struct repeated_arguments<T, std::index_sequence<Is...>> {
+  using type = type_list<
+      std::conditional_t<true, T, std::integral_constant<std::size_t, Is>>...>;
+};
+} // namespace detail
+
+// std::array stores its elements in a nested native array: it is made of its
+// elements with the braces the nested array requires, which MSVC does not
+// elide while probing, and it has the one signature of its N elements.
 template <typename T, std::size_t N>
 struct constructor_traits<std::array<T, N>> {
+  using arguments =
+      typename detail::repeated_arguments<T, std::make_index_sequence<N>>::type;
+  template <typename... Args>
+  static constexpr bool initializable =
+      detail::is_bounded_array_initializable_v<T, N, Args...>;
+
   template <typename... Args>
   static std::array<T, N> construct(Args &&...args) {
     return {{std::forward<Args>(args)...}};
@@ -85,16 +121,16 @@ template <typename T>
 struct constructor_traits<
     T, std::enable_if_t<type_traits<T>::enabled && !std::is_pointer_v<T>>> {
   template <typename... Args> static T construct(Args &&...args) {
-    return type_traits<T>::make(std::forward<Args>(args)...);
+    return type_traits<T>::emplace(std::forward<Args>(args)...);
   }
 
   template <typename... Args> static T &construct(T &ptr, Args &&...args) {
-    ptr = type_traits<T>::make(std::forward<Args>(args)...);
+    ptr = type_traits<T>::emplace(std::forward<Args>(args)...);
     return ptr;
   }
 
   template <typename... Args> static auto construct(void *ptr, Args &&...args) {
-    new (ptr) T(type_traits<T>::make(std::forward<Args>(args)...));
+    new (ptr) T(type_traits<T>::emplace(std::forward<Args>(args)...));
   }
 };
 

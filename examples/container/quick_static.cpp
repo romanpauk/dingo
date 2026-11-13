@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 //
 
-#include <dingo/container.h>
+#include <dingo/static_container.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 
@@ -29,7 +29,7 @@ int main() {
                dingo::bind<scope<shared>, storage<std::unique_ptr<B>>>,
                dingo::bind<scope<unique>, storage<C>>>;
 
-  container<app_bindings> container;
+  static_container<app_bindings> container;
   // Resolution still uses the same API.
   C c = container.resolve<C>();
 

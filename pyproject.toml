@@ -11,8 +11,9 @@ dev = [
     "filecheck>=1.0.3",
     "jinja2>=3.1.0",
     "lit>=18.1.8",
+    "lizard>=1.17",
     "mdformat",
-    "pytest>=8.0",
+    "mdformat-gfm>=1.0.0",
 ]
 
 [tool.uv]

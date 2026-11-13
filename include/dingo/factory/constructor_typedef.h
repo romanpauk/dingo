@@ -25,15 +25,13 @@ struct has_constructor_typedef<
     : std::true_type {};
 
 template <typename T>
-static constexpr bool has_constructor_typedef_v = has_constructor_typedef<T>{};
+inline constexpr bool has_constructor_typedef_v = has_constructor_typedef<T>{};
 
 namespace detail {
 enum class constructor_kind { concrete, generic, invalid };
 
-template <typename T, bool = has_constructor_typedef_v<T>>
+template <typename T>
 struct constructor_typedef_impl : T::dingo_constructor_type {};
-
-template <typename T> struct constructor_typedef_impl<T, false> {};
 } // namespace detail
 
 template <typename T>

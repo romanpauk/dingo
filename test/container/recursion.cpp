@@ -67,13 +67,6 @@ TEST(recursion_test, container_unique_default_constructible_cycle) {
   ASSERT_THROW(container.resolve<recursion_a>(), type_recursion_exception);
 }
 
-TEST(recursion_test, container_bindings_default_constructible_cycle) {
-  container<recursion_bindings> container;
-
-  ASSERT_THROW(container.resolve<recursion_a &>(), type_recursion_exception);
-  ASSERT_THROW(container.resolve<recursion_b &>(), type_recursion_exception);
-}
-
 TEST(recursion_test, static_container_detected_constructor_cycle) {
   static_container<recursion_bindings> container;
 

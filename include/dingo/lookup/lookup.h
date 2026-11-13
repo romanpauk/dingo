@@ -12,10 +12,10 @@
 #include <dingo/lookup/array.h>
 #include <dingo/lookup/base.h>
 #include <dingo/lookup/collection.h>
+#include <dingo/lookup/lookup_key.h>
 #include <dingo/lookup/ordered.h>
 #include <dingo/lookup/unordered.h>
-#include <dingo/type/key.h>
-#include <dingo/type/normalized_type.h>
+#include <dingo/type/shape.h>
 
 #include <tuple>
 #include <type_traits>
@@ -65,8 +65,9 @@ template <typename... Types> struct lookup_interface_arg<interfaces<Types...>> {
   using type = type_list<Types...>;
 };
 
-template <typename T>
-using normalized_lookup_interface_t = normalized_type_t<T>;
+// A lookup is defined for the interface it names, as a binding is bound to
+// it: an array and its element are two interfaces.
+template <typename T> using normalized_lookup_interface_t = std::remove_cv_t<T>;
 
 template <typename Interfaces, typename KeyDomain, typename Cardinality,
           typename Backend>
@@ -95,21 +96,13 @@ struct normalize_lookup_definition<::dingo::base<Cardinality, Backend>> {
   using type = type_list<>;
 };
 
-template <typename DefinitionList> struct normalize_lookup_definitions;
+template <typename Definitions> struct normalize_lookup_definitions;
 
 template <typename... Definitions>
-struct normalize_lookup_definitions<type_list<Definitions...>> {
+struct normalize_lookup_definitions<::dingo::lookups<Definitions...>> {
   using type = type_list_cat_t<
       typename normalize_lookup_definition<Definitions>::type...>;
 };
-
-template <> struct normalize_lookup_definitions<std::tuple<>> {
-  using type = type_list<>;
-};
-
-template <typename... Definitions>
-struct normalize_lookup_definitions<::dingo::lookups<Definitions...>>
-    : normalize_lookup_definitions<type_list<Definitions...>> {};
 
 template <typename Definitions>
 using normalize_lookup_definitions_t =
@@ -129,152 +122,71 @@ struct is_same_lookup_definition
                          std::is_same_v<typename Candidate::cardinality,
                                         typename Entry::cardinality>> {};
 
-template <typename Candidate, typename List> struct contains_lookup_key_type;
+// The number of entries of Entries that are the same as Entry under Same.
+template <template <typename, typename> typename Same, typename Entry,
+          typename... Entries>
+inline constexpr std::size_t same_lookup_entry_count_v =
+    (std::size_t{0} + ... + (Same<Entry, Entries>::value ? 1 : 0));
 
-template <typename Candidate>
-struct contains_lookup_key_type<Candidate, type_list<>> : std::false_type {};
+// Whether two entries of Entries are the same under Same.
+template <template <typename, typename> typename Same, typename Entries>
+struct has_duplicate_lookup_entry;
 
-template <typename Candidate, typename Head, typename... Tail>
-struct contains_lookup_key_type<Candidate, type_list<Head, Tail...>>
-    : std::bool_constant<
-          is_same_lookup_key_type<Candidate, Head>::value ||
-          contains_lookup_key_type<Candidate, type_list<Tail...>>::value> {};
-
-template <typename Candidate, typename List> struct contains_lookup_definition;
-
-template <typename Candidate>
-struct contains_lookup_definition<Candidate, type_list<>> : std::false_type {};
-
-template <typename Candidate, typename Head, typename... Tail>
-struct contains_lookup_definition<Candidate, type_list<Head, Tail...>>
-    : std::bool_constant<
-          is_same_lookup_definition<Candidate, Head>::value ||
-          contains_lookup_definition<Candidate, type_list<Tail...>>::value> {};
-
-template <typename Seen, typename Remaining>
-struct has_duplicate_lookup_key_type;
-
-template <typename... Seen>
-struct has_duplicate_lookup_key_type<type_list<Seen...>, type_list<>>
-    : std::false_type {};
-
-template <typename... Seen, typename Head, typename... Tail>
-struct has_duplicate_lookup_key_type<type_list<Seen...>,
-                                     type_list<Head, Tail...>>
-    : std::bool_constant<
-          contains_lookup_key_type<Head, type_list<Seen...>>::value ||
-          has_duplicate_lookup_key_type<type_list<Seen..., Head>,
-                                        type_list<Tail...>>::value> {};
+template <template <typename, typename> typename Same, typename... Entries>
+struct has_duplicate_lookup_entry<Same, type_list<Entries...>>
+    : std::bool_constant<(
+          (same_lookup_entry_count_v<Same, Entries, Entries...> > 1) || ...)> {
+};
 
 template <typename Entries>
 inline constexpr bool has_duplicate_lookup_key_type_v =
-    has_duplicate_lookup_key_type<type_list<>, Entries>::value;
-
-template <typename Seen, typename Remaining>
-struct has_duplicate_lookup_definition;
-
-template <typename... Seen>
-struct has_duplicate_lookup_definition<type_list<Seen...>, type_list<>>
-    : std::false_type {};
-
-template <typename... Seen, typename Head, typename... Tail>
-struct has_duplicate_lookup_definition<type_list<Seen...>,
-                                       type_list<Head, Tail...>>
-    : std::bool_constant<
-          contains_lookup_definition<Head, type_list<Seen...>>::value ||
-          has_duplicate_lookup_definition<type_list<Seen..., Head>,
-                                          type_list<Tail...>>::value> {};
+    has_duplicate_lookup_entry<is_same_lookup_key_type, Entries>::value;
 
 template <typename Entries>
 inline constexpr bool has_duplicate_lookup_definition_v =
-    has_duplicate_lookup_definition<type_list<>, Entries>::value;
+    has_duplicate_lookup_entry<is_same_lookup_definition, Entries>::value;
+
+template <typename Entry, typename Interface, typename Key>
+inline constexpr bool is_lookup_entry_for_v =
+    std::is_same_v<typename Entry::interface_type, Interface> &&
+    std::is_same_v<typename Entry::key_domain::definition_type,
+                   typename Key::definition_type>;
 
 template <typename Interface, typename Key, typename Entries>
 struct matching_lookup_entry;
 
-template <typename Interface, typename Key>
-struct matching_lookup_entry<Interface, Key, type_list<>> {
-  using type = void;
+template <typename Interface, typename Key, typename... Entries>
+struct matching_lookup_entry<Interface, Key, type_list<Entries...>> {
+  using type =
+      type_list_find_t<void, type_list<Entries...>,
+                       is_lookup_entry_for_v<Entries, Interface, Key>...>;
 };
 
-template <typename Interface, typename Key, typename Head, typename... Tail>
-struct matching_lookup_entry<Interface, Key, type_list<Head, Tail...>> {
-private:
-  static constexpr bool exact =
-      std::is_same_v<typename Head::interface_type, Interface> &&
-      std::is_same_v<typename Head::key_domain::definition_type,
-                     typename Key::definition_type>;
-
-public:
-  using type = std::conditional_t<
-      exact, Head,
-      typename matching_lookup_entry<Interface, Key, type_list<Tail...>>::type>;
-};
-
+// The lookup of an interface: the one defined for the interface itself, or
+// else the one of its normalized interface, as a request selects the bindings
+// of its exact interface or else those of its normalized one.
 template <typename Interface, typename Key, typename Entries>
 struct selected_lookup_entry {
 private:
-  using normalized_interface = normalized_lookup_interface_t<Interface>;
+  using exact_interface = std::remove_cv_t<std::remove_reference_t<Interface>>;
   using normalized_key = std::decay_t<Key>;
   static_assert(is_lookup_key_v<normalized_key>,
                 "internal lookup selection requires dingo::detail::lookup_key");
+  using exact_entry =
+      typename matching_lookup_entry<exact_interface, normalized_key,
+                                     Entries>::type;
 
 public:
-  using type = typename matching_lookup_entry<normalized_interface,
-                                              normalized_key, Entries>::type;
+  using type = std::conditional_t<
+      std::is_void_v<exact_entry>,
+      typename matching_lookup_entry<normalized_type_t<Interface>,
+                                     normalized_key, Entries>::type,
+      exact_entry>;
 };
 
 template <typename Interface, typename Key, typename Entries>
 using selected_lookup_entry_t =
     typename selected_lookup_entry<Interface, Key, Entries>::type;
-
-template <typename Interface, typename Key, typename Cardinality,
-          typename Entries>
-struct matching_lookup_entry_with_cardinality;
-
-template <typename Interface, typename Key, typename Cardinality>
-struct matching_lookup_entry_with_cardinality<Interface, Key, Cardinality,
-                                              type_list<>> {
-  using type = void;
-};
-
-template <typename Interface, typename Key, typename Cardinality, typename Head,
-          typename... Tail>
-struct matching_lookup_entry_with_cardinality<Interface, Key, Cardinality,
-                                              type_list<Head, Tail...>> {
-private:
-  static constexpr bool exact =
-      std::is_same_v<typename Head::interface_type, Interface> &&
-      std::is_same_v<typename Head::key_domain::definition_type,
-                     typename Key::definition_type> &&
-      std::is_same_v<typename Head::cardinality, Cardinality>;
-
-public:
-  using type = std::conditional_t<
-      exact, Head,
-      typename matching_lookup_entry_with_cardinality<
-          Interface, Key, Cardinality, type_list<Tail...>>::type>;
-};
-
-template <typename Interface, typename Key, typename Cardinality,
-          typename Entries>
-struct selected_lookup_entry_with_cardinality {
-private:
-  using normalized_interface = normalized_lookup_interface_t<Interface>;
-  using normalized_key = std::decay_t<Key>;
-  static_assert(is_lookup_key_v<normalized_key>,
-                "internal lookup selection requires dingo::detail::lookup_key");
-
-public:
-  using type = typename matching_lookup_entry_with_cardinality<
-      normalized_interface, normalized_key, Cardinality, Entries>::type;
-};
-
-template <typename Interface, typename Key, typename Cardinality,
-          typename Entries>
-using selected_lookup_entry_with_cardinality_t =
-    typename selected_lookup_entry_with_cardinality<Interface, Key, Cardinality,
-                                                    Entries>::type;
 
 } // namespace detail
 

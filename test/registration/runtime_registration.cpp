@@ -10,6 +10,7 @@
 #include "support/containers.h"
 #include "support/custom_wrappers.h"
 #include "support/resolution_test_types.h"
+#include <dingo/static_container.h>
 
 #include <variant>
 
@@ -30,24 +31,14 @@ template <typename T>
 struct type_traits<runtime_registration_test::observer_pointer<T>> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = false;
 
   using value_type = T;
 
   template <typename U>
   using rebind_t = runtime_registration_test::observer_pointer<U>;
-  template <typename> static constexpr bool is_handle_rebindable = false;
-
-  template <typename Target>
-  static constexpr bool is_rebindable =
-      std::is_same_v<std::remove_cv_t<Target>, rebind_t<T>>;
 };
 } // namespace dingo
-
-namespace {
-bool runtime_proxy_service_should_throw = false;
-} // namespace
 
 template <typename Container>
 class resolution_access_test : public ::testing::Test {};
@@ -338,30 +329,6 @@ TEST(type_registration_test,
 }
 
 TEST(type_registration_test,
-     runtime_local_resolution_container_rolls_back_after_failed_resolution) {
-  runtime_scoped_local_dependency::constructions = 0;
-  runtime_scoped_local_dependency::destructions = 0;
-  runtime_scoped_local_service::should_throw = true;
-
-  dingo::container<> container;
-  container.register_type<
-      scope<shared>, storage<runtime_scoped_local_service>,
-      dependencies<runtime_scoped_local_dependency &>,
-      dingo::bindings<dingo::bind<scope<shared>,
-                                  storage<runtime_scoped_local_dependency>>>>();
-
-  EXPECT_THROW((container.resolve<runtime_scoped_local_service &>()),
-               std::runtime_error);
-  EXPECT_EQ(runtime_scoped_local_dependency::constructions, 1);
-  EXPECT_EQ(runtime_scoped_local_dependency::destructions, 1);
-
-  runtime_scoped_local_service::should_throw = false;
-  (void)container.resolve<runtime_scoped_local_service &>();
-  EXPECT_EQ(runtime_scoped_local_dependency::constructions, 2);
-  EXPECT_EQ(runtime_scoped_local_dependency::destructions, 1);
-}
-
-TEST(type_registration_test,
      first_failed_shared_resolve_resets_partial_storage) {
   runtime_shared_retry_service::construction_attempts = 0;
   runtime_shared_retry_service::should_throw = true;
@@ -429,6 +396,33 @@ TEST(type_registration_test,
 }
 
 TEST(type_registration_test,
+     failed_first_static_shared_cyclical_resolve_rolls_back_publication) {
+  runtime_cyclical_rollback_implementation::should_throw = true;
+
+  dingo::static_container<dingo::bindings<dingo::bind<
+      scope<shared_cyclical>,
+      storage<std::shared_ptr<runtime_cyclical_rollback_implementation>>,
+      interfaces<runtime_cyclical_rollback_interface,
+                 runtime_cyclical_rollback_implementation>>>>
+      container;
+
+  EXPECT_THROW(
+      (container
+           .resolve<std::shared_ptr<runtime_cyclical_rollback_interface> &>()),
+      std::runtime_error);
+
+  runtime_cyclical_rollback_implementation::should_throw = false;
+  const int constructions =
+      runtime_cyclical_rollback_implementation::constructions;
+  auto &resolved =
+      container
+          .resolve<std::shared_ptr<runtime_cyclical_rollback_interface> &>();
+  EXPECT_NE(resolved.get(), nullptr);
+  EXPECT_EQ(runtime_cyclical_rollback_implementation::constructions,
+            constructions + 1);
+}
+
+TEST(type_registration_test,
      later_failed_resolve_preserves_committed_shared_cyclical_storage) {
   runtime_cyclical_rollback_implementation::should_throw = false;
 
@@ -462,10 +456,10 @@ TEST(type_registration_test,
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
   {
     {
-      container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+      runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
       runtime_transaction transaction(runtime, scratch);
       {
-        runtime_context context(scratch, transaction);
+        runtime_context<std::allocator<char>> context(scratch, transaction);
         (void)context.construct<runtime_arena_tracker>(ephemeral_scope, &events,
                                                        1);
         (void)context.construct<runtime_arena_tracker>(persistent_scope,
@@ -489,11 +483,11 @@ TEST(type_registration_test,
 
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
   {
-    container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+    runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
     runtime_transaction transaction(runtime, scratch);
     {
       dingo::container<> container;
-      runtime_context context(scratch, transaction);
+      runtime_context<std::allocator<char>> context(scratch, transaction);
 
       runtime_policy_detected_tracker::next_value = 1;
       (void)context.construct<runtime_policy_detected_tracker &,
@@ -524,10 +518,10 @@ TEST(type_registration_test,
   };
 
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
   runtime_transaction transaction(runtime, scratch);
   dingo::container<> container;
-  runtime_context context(scratch, transaction);
+  runtime_context<std::allocator<char>> context(scratch, transaction);
 
   auto value = context.construct<copy_only_value, detail::constructor_shape>(
       ephemeral_scope, container);
@@ -543,10 +537,10 @@ TEST(type_registration_test, runtime_context_explicit_scopes_are_independent) {
   std::vector<int> events;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
   {
-    container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+    runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
     runtime_transaction transaction(runtime, scratch);
     {
-      runtime_context context(scratch, transaction);
+      runtime_context<std::allocator<char>> context(scratch, transaction);
       const auto retained = persistent_scope;
       const auto temporary = ephemeral_scope;
       (void)context.construct<runtime_arena_tracker>(retained, &events, 2);
@@ -564,10 +558,10 @@ TEST(type_registration_test,
      runtime_context_scratch_destructor_runs_once_on_commit) {
   runtime_scoped_source_dependency::destructions = 0;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
   runtime_transaction transaction(runtime, scratch);
   {
-    runtime_context context(scratch, transaction);
+    runtime_context<std::allocator<char>> context(scratch, transaction);
     (void)context.construct<runtime_scoped_source_dependency>(ephemeral_scope);
     transaction.commit();
   }
@@ -579,11 +573,11 @@ TEST(type_registration_test,
      runtime_context_scratch_destructor_runs_once_on_rollback) {
   runtime_scoped_source_dependency::destructions = 0;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
   {
     runtime_transaction transaction(runtime, scratch);
     {
-      runtime_context context(scratch, transaction);
+      runtime_context<std::allocator<char>> context(scratch, transaction);
       (void)context.construct<runtime_scoped_source_dependency>(
           ephemeral_scope);
     }
@@ -596,11 +590,11 @@ TEST(type_registration_test,
      runtime_context_ephemeral_store_preserves_pending_transaction_actions) {
   std::vector<int> events;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
-  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
   {
     runtime_transaction transaction(runtime, scratch);
     {
-      runtime_context context(scratch, transaction);
+      runtime_context<std::allocator<char>> context(scratch, transaction);
       (void)context.construct<runtime_arena_tracker>(ephemeral_scope, &events,
                                                      1);
       context.on_rollback(
@@ -762,17 +756,17 @@ TEST(type_registration_test,
         : allocator(parent->get_allocator()),
           runtime_storage(parent->get_allocator()), parent_storage(parent) {}
 
-    container_runtime<allocator_type> &runtime() { return runtime_storage; }
+    runtime_memory<allocator_type> &runtime() { return runtime_storage; }
     parent_container_type *parent() { return parent_storage; }
     allocator_type &get_allocator() { return allocator; }
 
     allocator_type allocator;
-    container_runtime<allocator_type> runtime_storage;
+    runtime_memory<allocator_type> runtime_storage;
     parent_container_type *parent_storage;
   } state_owner(&parent);
 
   runtime_binding_state<owner, counting_runtime_binding_container,
-                        counting_runtime_binding_storage>
+                        detail::binding_cell<counting_runtime_binding_storage>>
       state(&state_owner);
 
   EXPECT_EQ(counting_runtime_binding_container::constructions, 0);
@@ -783,24 +777,6 @@ TEST(type_registration_test,
   EXPECT_EQ(counting_runtime_binding_container::constructions, 1);
   EXPECT_EQ(std::addressof(state.container()), std::addressof(container));
   EXPECT_EQ(counting_runtime_binding_container::constructions, 1);
-}
-
-TEST(type_registration_test,
-     runtime_unique_registration_constructs_nested_container_on_demand) {
-  runtime_unique_local_dependency::live_count = 0;
-
-  dingo::container<> container;
-  container.register_type<
-      scope<unique>, storage<runtime_unique_local_service>,
-      dependencies<runtime_unique_local_dependency &>,
-      dingo::bindings<dingo::bind<
-          scope<unique>, storage<runtime_unique_local_dependency>,
-          factory<function<make_runtime_unique_local_dependency>>>>>();
-
-  auto service = container.resolve<runtime_unique_local_service>();
-  EXPECT_EQ(service.value, 13);
-  EXPECT_TRUE(service.dependency_was_live);
-  EXPECT_EQ(runtime_unique_local_dependency::live_count, 0);
 }
 
 TEST(type_registration_test,
@@ -826,112 +802,6 @@ TEST(type_registration_test,
 }
 
 TEST(type_registration_test,
-     registration_static_bindings_and_proxy_registrations_compose) {
-  dingo::container<> container;
-  container
-      .register_type<scope<shared>, storage<runtime_composed_root_dependency>>(
-          callable([] { return runtime_composed_root_dependency{11}; }));
-  auto child = container.register_type<
-      scope<shared>, storage<runtime_composed_service>,
-      dependencies<runtime_composed_static_dependency &,
-                   runtime_composed_child_dependency &,
-                   runtime_composed_root_dependency &>,
-      dingo::bindings<dingo::bind<
-          scope<shared>, storage<runtime_composed_static_dependency>>>>();
-
-  child->register_type<scope<shared>,
-                       storage<runtime_composed_child_dependency>>(
-      callable([] { return runtime_composed_child_dependency{13}; }));
-
-  auto &service = container.resolve<runtime_composed_service &>();
-  EXPECT_EQ(service.static_result, 7);
-  EXPECT_EQ(service.child_result, 13);
-  EXPECT_EQ(service.root_result, 11);
-}
-
-TEST(type_registration_test,
-     proxy_binding_dependencies_resolve_through_registration_container) {
-  struct static_dependency {
-    static_dependency() : value(7) {}
-
-    int value;
-  };
-  struct runtime_dependency {
-    runtime_dependency() : value(11) {}
-
-    int value;
-  };
-  struct nested_runtime_dependency {
-    nested_runtime_dependency() : value(13) {}
-
-    int value;
-  };
-  struct proxy_service {
-    proxy_service(static_dependency &static_value,
-                  runtime_dependency &runtime_value,
-                  nested_runtime_dependency &nested_runtime_value)
-        : value(static_value.value + runtime_value.value +
-                nested_runtime_value.value) {
-      if (runtime_proxy_service_should_throw) {
-        throw std::runtime_error("resolution failed");
-      }
-    }
-
-    int value;
-  };
-  struct root_service {
-    explicit root_service(proxy_service &dependency)
-        : value(dependency.value) {}
-
-    int value;
-  };
-
-  dingo::container<> container;
-  runtime_proxy_service_should_throw = true;
-  auto child = container.register_type<
-      scope<shared>, storage<root_service>, dependencies<proxy_service &>,
-      dingo::bindings<
-          dingo::bind<scope<shared>, storage<static_dependency>>>>();
-  child->register_type<scope<shared>, storage<runtime_dependency>>();
-  auto nested = child->register_type<
-      scope<shared>, storage<proxy_service>,
-      dependencies<static_dependency &, runtime_dependency &,
-                   nested_runtime_dependency &>>();
-  nested->register_type<scope<shared>, storage<nested_runtime_dependency>>();
-
-  auto *child_container = std::addressof(child.get());
-  auto *nested_container = std::addressof(nested.get());
-  EXPECT_THROW((container.resolve<root_service &>()), std::runtime_error);
-  runtime_proxy_service_should_throw = false;
-
-  EXPECT_EQ(std::addressof(child.get()), child_container);
-  EXPECT_EQ(std::addressof(nested.get()), nested_container);
-  EXPECT_EQ(container.resolve<root_service &>().value, 31);
-}
-
-TEST(type_registration_test,
-     registration_static_runtime_and_root_collections_compose) {
-  dingo::container<> container;
-  container.register_type<scope<shared>,
-                          storage<runtime_composed_collection_dependency>>(
-      callable([] { return runtime_composed_collection_dependency{11}; }));
-  auto child = container.register_type<
-      scope<shared>, storage<runtime_composed_collection_service>,
-      dependencies<std::vector<runtime_composed_collection_dependency *>>,
-      dingo::bindings<dingo::bind<
-          scope<shared>, storage<runtime_composed_collection_dependency>,
-          factory<function<
-              make_runtime_composed_static_collection_dependency>>>>>();
-
-  child->register_type<scope<shared>,
-                       storage<runtime_composed_collection_dependency>>(
-      callable([] { return runtime_composed_collection_dependency{33}; }));
-
-  auto &service = container.resolve<runtime_composed_collection_service &>();
-  EXPECT_EQ(service.values, (std::vector<int>{11, 33, 22}));
-}
-
-TEST(type_registration_test,
      shared_runtime_domain_rolls_back_nested_registration) {
   runtime_domain_retry_factory::should_throw = true;
 
@@ -944,34 +814,6 @@ TEST(type_registration_test,
 
   runtime_domain_retry_factory::should_throw = false;
   EXPECT_NO_THROW((container.resolve<runtime_domain_retry_service &>()));
-}
-
-TEST(type_registration_test,
-     registration_container_scopes_preserve_array_lookup_backend) {
-  dingo::container<runtime_domain_array_traits> container;
-  auto first = container.register_type<
-      scope<shared>, storage<runtime_domain_array_service>,
-      dependencies<
-          dependency<runtime_domain_dependency &, key_type<std::size_t, 0>>>,
-      dingo::bindings<dingo::bind<
-          scope<shared>, storage<runtime_composed_static_dependency>>>>();
-  auto second = container.register_type<
-      scope<shared>, storage<runtime_domain_second_array_service>,
-      dependencies<
-          dependency<runtime_domain_dependency &, key_type<std::size_t, 0>>>>();
-
-  first->register_type<scope<shared>, storage<runtime_domain_dependency>>(
-      callable([] { return runtime_domain_dependency{11}; }),
-      dingo::key_value{std::size_t(0)});
-  second->register_type<scope<shared>, storage<runtime_domain_dependency>>(
-      callable([] { return runtime_domain_dependency{22}; }),
-      dingo::key_value{std::size_t(0)});
-
-  EXPECT_EQ(container.resolve<runtime_domain_array_service &>().value.value,
-            11);
-  EXPECT_EQ(
-      container.resolve<runtime_domain_second_array_service &>().value.value,
-      22);
 }
 
 TEST(type_registration_test,
@@ -1003,4 +845,72 @@ TEST(type_registration_test,
   EXPECT_EQ(service.associative_dependencies.front()->value, 22);
   ASSERT_EQ(service.typed_dependencies.size(), 1);
   EXPECT_EQ(service.typed_dependencies.front()->value, 33);
+}
+
+TEST(type_registration_test,
+     registration_container_scopes_preserve_array_lookup_backend) {
+  dingo::container<runtime_domain_array_traits> container;
+  auto first =
+      container
+          .register_type<scope<shared>, storage<runtime_domain_array_service>,
+                         dependencies<dependency<runtime_domain_dependency &,
+                                                 key_type<std::size_t, 0>>>>();
+  auto second = container.register_type<
+      scope<shared>, storage<runtime_domain_second_array_service>,
+      dependencies<
+          dependency<runtime_domain_dependency &, key_type<std::size_t, 0>>>>();
+
+  first->register_type<scope<shared>, storage<runtime_domain_dependency>>(
+      callable([] { return runtime_domain_dependency{11}; }),
+      dingo::key_value{std::size_t(0)});
+  second->register_type<scope<shared>, storage<runtime_domain_dependency>>(
+      callable([] { return runtime_domain_dependency{22}; }),
+      dingo::key_value{std::size_t(0)});
+
+  EXPECT_EQ(container.resolve<runtime_domain_array_service &>().value.value,
+            11);
+  EXPECT_EQ(
+      container.resolve<runtime_domain_second_array_service &>().value.value,
+      22);
+}
+
+namespace {
+struct ambiguity_interface {
+  virtual ~ambiguity_interface() = default;
+  virtual int id() const = 0;
+};
+
+template <int Id> struct ambiguity_implementation : ambiguity_interface {
+  int id() const override { return Id; }
+};
+
+struct ambiguity_traits : runtime_container_traits {
+  using lookup_definition_type = lookups<base<many>>;
+};
+} // namespace
+
+TEST(type_registration_test,
+     ambiguous_exact_interface_does_not_fall_back_to_normalized) {
+  runtime_container<ambiguity_traits> container;
+  container.register_type<scope<shared>,
+                          storage<std::shared_ptr<ambiguity_implementation<1>>>,
+                          interfaces<std::shared_ptr<ambiguity_interface>>>();
+  container.register_type<scope<shared>,
+                          storage<std::shared_ptr<ambiguity_implementation<2>>>,
+                          interfaces<std::shared_ptr<ambiguity_interface>>>();
+  container.register_type<scope<shared>,
+                          storage<std::shared_ptr<ambiguity_implementation<3>>>,
+                          interfaces<ambiguity_interface>>();
+
+  EXPECT_THROW(container.resolve<std::shared_ptr<ambiguity_interface>>(),
+               type_ambiguous_exception);
+}
+
+TEST(type_registration_test, unbound_exact_interface_falls_back_to_normalized) {
+  runtime_container<ambiguity_traits> container;
+  container.register_type<scope<shared>,
+                          storage<std::shared_ptr<ambiguity_implementation<3>>>,
+                          interfaces<ambiguity_interface>>();
+
+  EXPECT_EQ(container.resolve<std::shared_ptr<ambiguity_interface>>()->id(), 3);
 }

@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/base/type_name.h>
+#include "support/type_name.h"
 #include <dingo/container.h>
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/runtime/lookup_index.h>
@@ -326,22 +326,13 @@ template <typename T, ::dingo::external_fixed_string Value>
 struct is_key_value<::dingo::external_key_string<T, Value>> : std::true_type {};
 
 template <typename T, ::dingo::external_fixed_string Value>
-struct key_value_traits<::dingo::external_key_string<T, Value>> {
-  using type = T;
-
-  static T make() {
-    constexpr auto size = sizeof(Value.value) - 1;
-    return T{std::string_view{Value.value, size}};
-  }
-};
-
-template <typename T, ::dingo::external_fixed_string Value>
 struct is_value_selector<::dingo::external_key_string<T, Value>>
     : std::true_type {
   using type = T;
 
   static T make() {
-    return key_value_traits<::dingo::external_key_string<T, Value>>::make();
+    constexpr auto size = sizeof(Value.value) - 1;
+    return T{std::string_view{Value.value, size}};
   }
 };
 } // namespace detail

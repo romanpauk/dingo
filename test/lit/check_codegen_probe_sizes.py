@@ -13,30 +13,17 @@ PROBE_LIMITS = {
         "gcc": 0x50,
         "gcc_arm64": 0x60,
     },
-    "probe_static_resolution_mixed_container_consumer_read": {
-        "default": 0x850,
-        "gcc": 0x850,
-        "gcc_arm64": 0x850,
-    },
     "probe_runtime_resolution_consumer_read": {
         "default": None,
     },
+    # The resolution can throw, from make_shared: the static container keeps
+    # what rolls back the shared cell it resolves first.
     "probe_static_resolution_shared_config": {
-        "default": 0x90,
-        "clang_arm64": 0xd0,
-        "gcc14": 0xB0,
-        "gcc14_arm64": 0xD0,
-    },
-    "probe_static_resolution_mixed_container_shared_config": {
-        "default": 0x430,
-        "clang": 0x5E0,
-        "clang18": 0x680,
-        "clang19": 0x680,
-        "clang20": 0x680,
-        "gcc13": 0x4C0,
-        "gcc14": 0x530,
-        "clang_arm64": 0x450,
-        "gcc_arm64": 0x620,
+        "default": 0xA8,
+        "clang": 0x190,
+        "clang_arm64": 0x1A0,
+        "gcc14": 0xC8,
+        "gcc14_arm64": 0xE8,
     },
     "probe_runtime_resolution_shared_config": {
         "default": None,
@@ -46,13 +33,6 @@ PROBE_LIMITS = {
         "gcc": 0x50,
         "gcc_arm64": 0x60,
     },
-    "probe_static_resolution_mixed_container_shared_value_config": {
-        "default": 0x300,
-        "gcc": 0x300,
-        "gcc13": 0x360,
-        "gcc15": 0x330,
-        "gcc_arm64": 0x300,
-    },
     "probe_runtime_resolution_shared_value_config": {
         "default": None,
     },
@@ -61,31 +41,11 @@ PROBE_LIMITS = {
         "gcc": 0x50,
         "gcc_arm64": 0x60,
     },
-    "probe_static_resolution_mixed_container_shared_reference_config": {
-        "default": 0x2E0,
-        "clang18": 0x390,
-        "clang19": 0x390,
-        "clang20": 0x390,
-        "gcc": 0x2E0,
-        "gcc13": 0x2E0,
-        "gcc_arm64": 0x2E0,
-    },
     "probe_runtime_resolution_shared_reference_config": {
         "default": None,
     },
     "probe_static_resolution_optional_config": {
         "default": 0x60,
-    },
-    "probe_static_resolution_mixed_container_optional_config": {
-        "default": 0x3C0,
-        "clang": 0x520,
-        "clang18": 0x5B0,
-        "clang19": 0x5B0,
-        "clang20": 0x5B0,
-        "gcc13": 0x390,
-        "gcc14": 0x480,
-        "gcc15": 0x3F0,
-        "gcc_arm64": 0x560,
     },
     "probe_runtime_resolution_optional_config": {
         "default": None,
@@ -103,24 +63,6 @@ PROBE_LIMITS = {
         "gcc": 0x50,
         "gcc_arm64": 0x60,
     },
-    "probe_static_resolution_mixed_container_unique_value_config": {
-        "default": 0x280,
-        "clang18": 0x2D0,
-        "clang19": 0x2D0,
-        "clang20": 0x2D0,
-        "gcc": 0x280,
-        "gcc13": 0x290,
-        "gcc_arm64": 0x280,
-    },
-    "probe_static_resolution_mixed_container_unique_rvalue_config": {
-        "default": 0x320,
-        "clang18": 0x3C0,
-        "clang19": 0x3C0,
-        "clang20": 0x3C0,
-        "gcc": 0x320,
-        "gcc13": 0x320,
-        "gcc_arm64": 0x320,
-    },
     "probe_runtime_resolution_unique_rvalue_config": {
         "default": None,
     },
@@ -128,14 +70,6 @@ PROBE_LIMITS = {
         "default": 0x10,
         "gcc": 0x50,
         "gcc_arm64": 0x60,
-    },
-    "probe_static_resolution_mixed_container_unique_wrapper_config": {
-        "default": 0x440,
-        "clang": 0x540,
-        "clang18": 0x5C0,
-        "clang19": 0x5C0,
-        "clang20": 0x5C0,
-        "gcc_arm64": 0x540,
     },
     "probe_runtime_resolution_unique_wrapper_config": {
         "default": None,
@@ -145,23 +79,14 @@ PROBE_LIMITS = {
         "clang": 0x1a0,
         "clang_arm64": 0x1d0,
     },
-    "probe_static_resolution_mixed_container_interface_handle": {
-        "default": 0x570,
-        "clang": 0x580,
-        "clang18": 0x5D0,
-        "clang19": 0x5D0,
-        "clang20": 0x5D0,
-        "gcc_arm64": 0x570,
-    },
     "probe_runtime_resolution_interface_handle": {
         "default": None,
     },
+    # The resolution can throw, from the vector: the static container keeps
+    # what rolls back the shared cells it resolves first.
     "probe_static_resolution_collection_sum": {
         "default": 0x500,
-        "gcc16": 0x520,
-    },
-    "probe_static_resolution_mixed_container_collection_sum": {
-        "default": 0xc00,
+        "gcc16": 0x550,
     },
     "probe_runtime_resolution_collection_sum": {
         "default": None,
@@ -177,12 +102,6 @@ PROBE_LIMITS = {
         "gcc16": 0x590,
         "gcc_arm64": 0x590,
     },
-    "probe_runtime_resolution_mixed_container_external_value_storage": {
-        "default": 0x520,
-        "gcc14": 0x5d0,
-        "gcc15": 0x580,
-        "gcc_arm64": 0x560,
-    },
     "probe_runtime_resolution_external_reference_storage": {
         "default": 0x300,
         "clang": 0x440,
@@ -194,12 +113,6 @@ PROBE_LIMITS = {
         "gcc16": 0x5a0,
         "gcc_arm64": 0x5a0,
     },
-    "probe_runtime_resolution_mixed_container_external_reference_storage": {
-        "default": 0x520,
-        "gcc13": 0x530,
-        "gcc14": 0x5c0,
-        "gcc15": 0x560,
-    },
     "probe_runtime_resolution_external_wrapper_storage": {
         "default": 0x420,
         "clang": 0x940,
@@ -210,20 +123,17 @@ PROBE_LIMITS = {
         "gcc15": 0x750,
         "gcc_arm64": 0x750,
     },
-    "probe_runtime_resolution_mixed_container_external_wrapper_storage": {
-        "default": 0x580,
-        "clang": 0x930,
-        "gcc13": 0x780,
-        "gcc14": 0x780,
-        "gcc15": 0x7B0,
-        "gcc_arm64": 0x780,
-    },
 }
 
-# Mixed-container probes are smoke limits, not static-container performance
-# targets.  A mixed container intentionally carries runtime lookup, parent
-# fallback, and runtime/static collection composition paths; code-size pressure
-# should stay strict on static_container probes.
+# The bytes a static probe may exceed its runtime probe by. The static
+# interface handle rolls the container back when the operation fails: a
+# cleanup that resets what it resolved, which keeps clang from folding the
+# kept wrappers it destroys. Clang 18 compiles the runtime probe smaller than
+# the static one by up to 0x3c bytes on arm64.
+RUNTIME_PATH_MARGIN = {
+    "probe_static_resolution_interface_handle": 0x40,
+}
+
 EXPECTED_FASTER_THAN_RUNTIME = (
     ("probe_static_resolution_consumer_read", "probe_runtime_resolution_consumer_read"),
     ("probe_static_resolution_shared_value_config", "probe_runtime_resolution_shared_value_config"),
@@ -243,64 +153,51 @@ EXPECTED_FASTER_THAN_RUNTIME = (
 SHAPES = {
     "consumer_read": (
         "static_resolution",
-        "static_resolution_mixed_container",
         "runtime_resolution",
     ),
     "shared_config": (
         "static_resolution",
-        "static_resolution_mixed_container",
         "runtime_resolution",
     ),
     "shared_value_config": (
         "static_resolution",
-        "static_resolution_mixed_container",
         "runtime_resolution",
     ),
     "shared_reference_config": (
         "static_resolution",
-        "static_resolution_mixed_container",
         "runtime_resolution",
     ),
     "optional_config": (
         "static_resolution",
-        "static_resolution_mixed_container",
         "runtime_resolution",
     ),
     "unique_value_config": (
         "static_resolution",
-        "static_resolution_mixed_container",
         "runtime_resolution",
     ),
     "unique_rvalue_config": (
         "static_resolution",
-        "static_resolution_mixed_container",
         "runtime_resolution",
     ),
     "unique_wrapper_config": (
         "static_resolution",
-        "static_resolution_mixed_container",
         "runtime_resolution",
     ),
     "interface_handle": (
         "static_resolution",
-        "static_resolution_mixed_container",
         "runtime_resolution",
     ),
     "collection_sum": (
         "static_resolution",
-        "static_resolution_mixed_container",
         "runtime_resolution",
     ),
     "external_value_storage": (
-        "runtime_resolution_mixed_container",
         "runtime_resolution",
     ),
     "external_reference_storage": (
-        "runtime_resolution_mixed_container",
         "runtime_resolution",
     ),
     "external_wrapper_storage": (
-        "runtime_resolution_mixed_container",
         "runtime_resolution",
     ),
 }
@@ -422,10 +319,12 @@ def main() -> int:
             failed = True
 
     for faster_symbol, slower_symbol in EXPECTED_FASTER_THAN_RUNTIME:
-        if sizes[faster_symbol] > sizes[slower_symbol]:
+        margin = RUNTIME_PATH_MARGIN.get(faster_symbol, 0)
+        if sizes[faster_symbol] > sizes[slower_symbol] + margin:
             print(
                 f"{faster_symbol} regressed past runtime path: "
-                f"0x{sizes[faster_symbol]:x} > 0x{sizes[slower_symbol]:x}",
+                f"0x{sizes[faster_symbol]:x} > 0x{sizes[slower_symbol]:x}"
+                + (f" + 0x{margin:x}" if margin else ""),
                 file=sys.stderr,
             )
             failed = True

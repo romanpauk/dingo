@@ -8,9 +8,9 @@
 #pragma once
 
 #include <dingo/base/type_list.h>
+#include <dingo/lookup/lookup_key.h>
 #include <dingo/lookup/ordered.h>
 #include <dingo/lookup/tags.h>
-#include <dingo/type/key.h>
 
 #include <cstddef>
 #include <functional>
@@ -39,13 +39,8 @@ template <typename Rtti> struct base_lookup_key {
   type_index key_type;
 
   bool operator<(const base_lookup_key &other) const {
-    if (interface_type < other.interface_type) {
-      return true;
-    }
-    if (other.interface_type < interface_type) {
-      return false;
-    }
-    return key_type < other.key_type;
+    return std::tie(interface_type, key_type) <
+           std::tie(other.interface_type, other.key_type);
   }
 
   bool operator==(const base_lookup_key &other) const {
@@ -68,50 +63,31 @@ template <typename Cardinality, typename Backend>
 struct is_base_lookup_definition<::dingo::base<Cardinality, Backend>>
     : std::true_type {};
 
-template <typename DefinitionList> struct base_lookup_definition_count;
+// The base definitions among lookups<...>; there is at most one.
+template <typename Definitions> struct base_lookup_definitions;
 
 template <typename... Definitions>
-struct base_lookup_definition_count<type_list<Definitions...>>
-    : std::integral_constant<
-          std::size_t,
-          (std::size_t{0} + ... +
-           (is_base_lookup_definition<Definitions>::value ? 1U : 0U))> {};
-
-template <>
-struct base_lookup_definition_count<std::tuple<>>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename... Definitions>
-struct base_lookup_definition_count<::dingo::lookups<Definitions...>>
-    : base_lookup_definition_count<type_list<Definitions...>> {};
+struct base_lookup_definitions<::dingo::lookups<Definitions...>> {
+  using type = type_list_cat_t<
+      std::conditional_t<is_base_lookup_definition<Definitions>::value,
+                         type_list<Definitions>, type_list<>>...>;
+};
 
 template <typename Definitions>
 inline constexpr bool has_duplicate_base_lookup_definition_v =
-    base_lookup_definition_count<Definitions>::value > 1U;
+    type_list_size_v<typename base_lookup_definitions<Definitions>::type> > 1;
 
-template <typename DefinitionList> struct base_lookup_definition;
+// The base definition, or one singular ordered base when none is declared.
+template <typename Definitions,
+          typename Bases = typename base_lookup_definitions<Definitions>::type>
+struct base_lookup_definition {
+  using type = type_list_head_t<Bases>;
+};
 
-template <> struct base_lookup_definition<type_list<>> {
+template <typename Definitions>
+struct base_lookup_definition<Definitions, type_list<>> {
   using type = ::dingo::base<::dingo::one, ::dingo::ordered>;
 };
-
-template <typename Head, typename... Tail>
-struct base_lookup_definition<type_list<Head, Tail...>> {
-private:
-  using tail_type = typename base_lookup_definition<type_list<Tail...>>::type;
-
-public:
-  using type = std::conditional_t<is_base_lookup_definition<Head>::value, Head,
-                                  tail_type>;
-};
-
-template <>
-struct base_lookup_definition<std::tuple<>>
-    : base_lookup_definition<type_list<>> {};
-
-template <typename... Definitions>
-struct base_lookup_definition<::dingo::lookups<Definitions...>>
-    : base_lookup_definition<type_list<Definitions...>> {};
 
 template <typename Definitions>
 using base_lookup_definition_t =

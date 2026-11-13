@@ -9,17 +9,23 @@
 
 #include <dingo/base/config.h>
 
+#include <dingo/conversion/apply.h>
 #include <dingo/factory/constructor.h>
-#include <dingo/resolution/resolution_operation.h>
+#include <dingo/storage/scope_traits.h>
 #include <dingo/storage/storage.h>
-#include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>
-#include <dingo/type/normalized_type.h>
+#include <dingo/type/shape.h>
 
 namespace dingo {
 struct external {};
 
-template <> struct storage_scope_policy<external> {
+namespace detail {
+template <typename Type, typename StoredType, typename Factory,
+          typename Conversions>
+class external_storage;
+} // namespace detail
+
+template <> struct scope_traits<external> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = true;
   static constexpr bool consumes = false;
@@ -30,95 +36,61 @@ template <> struct storage_scope_policy<external> {
     return storage_exposure::value | storage_exposure::lvalue |
            storage_exposure::pointer;
   }
+
+  template <typename Type, typename StoredType, typename Factory,
+            typename Conversions>
+  using storage =
+      detail::external_storage<Type, StoredType, Factory, Conversions>;
 };
 
 namespace detail {
-template <typename Type, typename U>
-struct conversions<external, Type, U> : type_storage_traits<external, Type, U> {
-};
+// A wrapper given by value is held as its stored type.
+template <typename Type>
+inline constexpr bool external_converts_v =
+    !std::is_reference_v<Type> && !std::is_pointer_v<Type> &&
+    !std::is_array_v<Type> && type_traits<Type>::enabled;
 
-template <typename Type, typename U>
-struct conversions<external, Type &, U>
-    : public type_storage_traits<external, Type &, U> {};
+// What an external storage holds: a reference or a pointer to the instance it
+// was given, or the given value, converted to the stored type of a wrapper.
+template <typename Type, typename StoredType>
+using external_held_t =
+    std::conditional_t<external_converts_v<Type>, StoredType,
+                       std::conditional_t<std::is_array_v<Type>, Type &, Type>>;
 
-template <typename Type, typename U>
-struct conversions<external, Type *, U>
-    : public type_storage_traits<external, Type *, U> {};
+template <typename Type, typename StoredType>
+class storage_instance<external, Type, StoredType, void> {
+  using held_type = external_held_t<Type, StoredType>;
+  static constexpr bool converts = external_converts_v<Type>;
 
-template <typename Type, typename StoredType, typename = void>
-class external_storage_instance_impl {
+  template <typename T> static held_type hold(T &&instance) {
+    if constexpr (converts) {
+      return detail::convert_type<StoredType, consume>(
+          std::forward<T>(instance));
+    } else {
+      return std::forward<T>(instance);
+    }
+  }
+
 public:
   template <typename T>
-  external_storage_instance_impl(T &&instance)
-      : instance_(std::forward<T>(instance)) {}
+  storage_instance(T &&instance) : instance_(hold(std::forward<T>(instance))) {}
 
-  Type &get() { return instance_; }
-
-private:
-  Type instance_;
-};
-
-template <typename Type, typename StoredType>
-class external_storage_instance_impl<
-    Type, StoredType, std::enable_if_t<type_traits<Type>::enabled>> {
-public:
-  template <typename T>
-  external_storage_instance_impl(T &&instance)
-      : instance_(detail::convert_type<StoredType, consume>(
-            std::forward<T>(instance))) {}
-
-  StoredType &get() { return instance_; }
+  // A pointer is published by value and anything else by reference.
+  decltype(auto) get() {
+    if constexpr (std::is_pointer_v<Type>) {
+      return instance_;
+    } else {
+      return (instance_);
+    }
+  }
 
 private:
-  StoredType instance_;
-};
-
-template <typename Type, typename StoredType>
-class storage_instance<external, Type, StoredType, void>
-    : public external_storage_instance_impl<Type, StoredType> {
-public:
-  template <typename T>
-  storage_instance(T &&instance)
-      : external_storage_instance_impl<Type, StoredType>(
-            std::forward<T>(instance)) {}
-};
-
-template <typename Type, size_t N, typename StoredType>
-class storage_instance<external, Type[N], StoredType, void> {
-public:
-  storage_instance(Type (&instance)[N]) : instance_(instance) {}
-
-  Type *get() { return instance_; }
-
-private:
-  Type (&instance_)[N];
-};
-
-template <typename Type, typename StoredType>
-class storage_instance<external, Type &, StoredType, void> {
-public:
-  storage_instance(Type &instance) : instance_(instance) {}
-
-  Type &get() { return instance_; }
-
-private:
-  Type &instance_;
-};
-
-template <typename Type, typename StoredType>
-class storage_instance<external, Type *, StoredType, void> {
-public:
-  storage_instance(Type *instance) : instance_(instance) {}
-
-  Type *get() { return instance_; }
-
-private:
-  Type *instance_;
+  held_type instance_;
 };
 
 template <typename Type, typename StoredType, typename Factory,
           typename Conversions>
-class storage<external, Type, StoredType, Factory, Conversions> {
+class external_storage {
   storage_instance<external, Type, StoredType, void> instance_;
 
 public:
@@ -132,10 +104,10 @@ public:
   using tag_type = external;
 
   template <typename T>
-  storage(T &&instance) : instance_(std::forward<T>(instance)) {}
+  external_storage(T &&instance) : instance_(std::forward<T>(instance)) {}
 
-  template <typename Context, typename Container>
-  decltype(auto) resolve(construction_scope, Context &, Container &) {
+  template <typename Context, typename Container, typename Scope>
+  decltype(auto) resolve(Scope, Context &, Container &) {
     return instance_.get();
   }
   constexpr bool is_resolved() const { return true; }

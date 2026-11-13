@@ -33,20 +33,13 @@ template <typename T, ::test_fixed_string Value>
 struct is_key_value<::key_string<T, Value>> : std::true_type {};
 
 template <typename T, ::test_fixed_string Value>
-struct key_value_traits<::key_string<T, Value>> {
+struct is_value_selector<::key_string<T, Value>> : std::true_type {
   using type = T;
 
   static T make() {
     constexpr auto size = sizeof(Value.value) - 1;
     return T{std::string_view{Value.value, size}};
   }
-};
-
-template <typename T, ::test_fixed_string Value>
-struct is_value_selector<::key_string<T, Value>> : std::true_type {
-  using type = T;
-
-  static T make() { return key_value_traits<::key_string<T, Value>>::make(); }
 };
 
 } // namespace dingo::detail
@@ -71,7 +64,7 @@ struct string_literal_consumer {
   string_processor &processor;
 };
 
-struct traits : dingo::dynamic_container_traits {
+struct traits : dingo::runtime_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::associative<std::string, string_processor>>;
 };

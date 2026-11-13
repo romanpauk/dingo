@@ -11,108 +11,25 @@
 
 #include <dingo/base/type_list.h>
 #include <dingo/context/recursion_guard.h>
-#include <dingo/resolution/conversion_resolution.h>
-#include <dingo/resolution/materialized_source.h>
-#include <dingo/resolution/resolution.h>
-#include <dingo/type/rebind_type.h>
-#include <dingo/type/type_conversion_traits.h>
+#include <dingo/conversion/available.h>
+#include <dingo/conversion/paths.h>
+#include <dingo/conversion/route.h>
+#include <dingo/conversion/source.h>
+#include <dingo/request/decomposition.h>
+#include <dingo/request/derivation.h>
+#include <dingo/type/shape.h>
 #include <dingo/type/type_traits.h>
 
 #include <type_traits>
 
 namespace dingo {
-template <typename...> inline constexpr bool always_false_v = false;
-
 namespace detail {
-struct no_materialization_scope {
-  no_materialization_scope() = default;
-
-  template <typename... Args> explicit no_materialization_scope(Args &&...) {}
-};
+struct no_materialization_scope {};
 } // namespace detail
 
-template <typename StorageTag, typename Type, typename = void>
-struct storage_materialization_traits {
-  static constexpr bool can_retain_source = false;
-
-  template <typename Leaf, typename Context, typename Storage>
-  static auto make_guard(Context &, const Storage &) {
-    static_assert(always_false_v<StorageTag, Type>,
-                  "storage_materialization_traits must be specialized for "
-                  "this storage tag");
-  }
-
-  template <typename Storage> static bool retains_source(const Storage &) {
-    static_assert(always_false_v<StorageTag, Type>,
-                  "storage_materialization_traits must be specialized for "
-                  "this storage tag");
-    return false;
-  }
-
-  template <typename Context, typename Storage, typename Container>
-  static auto materialize_source(Context &, Storage &, Container &) {
-    static_assert(always_false_v<StorageTag, Type>,
-                  "storage_materialization_traits must be specialized for "
-                  "this storage tag");
-  }
-};
-
-template <typename StorageTag, typename Type, typename U, typename = void>
-struct resolution_traits {
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<>;
-};
-
 namespace detail {
-template <typename AccessTraits, typename ResolutionTraits>
-struct combined_storage_types {
-  using value_types = type_list_cat_t<typename AccessTraits::value_types,
-                                      typename ResolutionTraits::value_types>;
-  using lvalue_reference_types =
-      type_list_cat_t<typename AccessTraits::lvalue_reference_types,
-                      typename ResolutionTraits::lvalue_reference_types>;
-  using rvalue_reference_types =
-      type_list_cat_t<typename AccessTraits::rvalue_reference_types,
-                      typename ResolutionTraits::rvalue_reference_types>;
-  using pointer_types =
-      type_list_cat_t<typename AccessTraits::pointer_types,
-                      typename ResolutionTraits::pointer_types>;
-};
-
-template <typename T>
-using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
-
-template <typename Storage, typename = void> struct storage_source_type {
-  using type = std::remove_reference_t<typename Storage::type>;
-};
-
-template <typename Storage>
-struct storage_source_type<Storage,
-                           std::void_t<typename Storage::resolved_type>> {
-  using type = std::remove_reference_t<typename Storage::resolved_type>;
-};
-
-template <typename Storage>
-using storage_source_type_t = typename storage_source_type<Storage>::type;
-
-// The source helpers below read a storage_shape (defined further down).
-template <typename Storage> struct storage_borrow_source {
-private:
-  using source_type = typename Storage::resolved_type;
-
-public:
-  using type = std::conditional_t<std::is_pointer_v<source_type>, source_type,
-                                  source_type &>;
-};
-
-template <typename Storage>
-using storage_borrow_source_t = typename storage_borrow_source<Storage>::type;
-
-template <typename Storage>
-using storage_consume_source_t = typename Storage::resolved_type &&;
-
+// What a storage resolves, borrowed and consumed: a pointer is borrowed as
+// itself.
 template <typename Storage> struct storage_source_traits {
 private:
   using stored_value_type = remove_cvref_t<typename Storage::type>;
@@ -122,15 +39,14 @@ private:
                          std::remove_pointer_t<resolved_type>, resolved_type>;
 
 public:
-  using stored_type = stored_value_type;
   using direct_leaf_type =
       std::remove_cv_t<std::remove_pointer_t<stored_value_type>>;
-  using borrowed_type = storage_borrow_source_t<Storage>;
-  using consumed_type = storage_consume_source_t<Storage>;
+  using borrowed_type = std::conditional_t<std::is_pointer_v<resolved_type>,
+                                           resolved_type, resolved_type &>;
+  using consumed_type = resolved_type &&;
   using qualification_type = resolved_leaf_type;
 
   static constexpr bool is_pointer = std::is_pointer_v<stored_value_type>;
-  static constexpr bool is_const = std::is_const_v<resolved_leaf_type>;
 
   template <typename Interface>
   using interface_type = copy_cv_t<resolved_leaf_type, Interface>;
@@ -153,7 +69,8 @@ struct storage_shape {
 
 template <typename Storage>
 using storage_shape_t =
-    storage_shape<typename Storage::type, storage_source_type_t<Storage>,
+    storage_shape<typename Storage::type,
+                  std::remove_reference_t<typename Storage::resolved_type>,
                   typename Storage::conversions>;
 
 template <typename Target, typename Qualification> struct qualified_target {
@@ -243,39 +160,43 @@ template <typename Request, typename Interface, typename Storage>
 using storage_published_type_t =
     typename storage_published_type<Request, Interface, Storage>::type;
 
-template <typename Request, typename Interface, typename Storage,
-          bool PublishValue>
-struct storage_resolution_target {
-  using type = storage_published_type_t<Request, Interface, Storage>;
-};
-
-template <typename Request, typename Interface, typename Storage>
-struct storage_resolution_target<Request, Interface, Storage, true> {
-  using type =
-      remove_cvref_t<storage_published_type_t<Request, Interface, Storage>>;
-};
-
-template <typename Request, typename Interface, typename Storage,
-          bool PublishValue>
-using storage_resolution_target_t =
-    typename storage_resolution_target<Request, Interface, Storage,
-                                       PublishValue>::type;
-
 template <typename Storage, typename Access>
 using storage_resolution_source_t =
     std::conditional_t<std::is_same_v<Access, borrow>,
                        typename storage_source_traits<Storage>::borrowed_type,
                        typename storage_source_traits<Storage>::consumed_type>;
 
-template <typename Request, typename Interface, typename Storage,
-          typename Access, bool PublishValue>
-struct storage_resolution {
-  using target_type =
-      storage_resolution_target_t<Request, Interface, Storage, PublishValue>;
-  using conversion_source_type = storage_resolution_source_t<Storage, Access>;
-  using type =
-      conversion_resolution<target_type, conversion_source_type, Access>;
+// Whether a request of Target selects the binding of Interface: a request is
+// looked up by its normalized type, or by its exact type.
+template <typename Target, typename Interface>
+inline constexpr bool selects_interface_v =
+    std::is_same_v<typename request_type<Target>::value_type, Interface> ||
+    std::is_same_v<typename request_type<Target>::exact_type, Interface>;
+
+// The resolution of Target from Source when Enabled, and none otherwise: a
+// conversion is not probed for a storage category that is empty, nor for a
+// request a binding of another interface serves.
+template <bool Enabled, typename Target, typename Source, typename Access>
+struct interface_resolution_if {
+  using type = type_list<>;
 };
+
+template <typename Target, typename Source, typename Access>
+struct interface_resolution_if<true, Target, Source, Access>
+    : available_resolution<Target, Source, Access> {};
+
+// The resolution of a request the storage publishes, as a value when
+// PublishValue, when a request of its target selects the binding.
+template <
+    typename Request, typename Interface, typename Storage, typename Access,
+    bool PublishValue,
+    typename Target = std::conditional_t<
+        PublishValue,
+        remove_cvref_t<storage_published_type_t<Request, Interface, Storage>>,
+        storage_published_type_t<Request, Interface, Storage>>>
+using storage_resolution_t = typename interface_resolution_if<
+    selects_interface_v<Target, std::remove_cv_t<Interface>>, Target,
+    storage_resolution_source_t<Storage, Access>, Access>::type;
 
 template <typename Requests, typename Interface, typename Storage,
           typename Access, bool PublishValue>
@@ -292,16 +213,8 @@ template <typename Interface, typename Storage, typename Access,
           bool PublishValue, typename Request>
 struct storage_resolutions<type_list<Request>, Interface, Storage, Access,
                            PublishValue> {
-private:
-  using candidate =
-      storage_resolution<Request, Interface, Storage, Access, PublishValue>;
-
-public:
-  using type = std::conditional_t<
-      is_type_conversion_available_v<
-          conversion_target_t<typename candidate::type::target_type>,
-          typename candidate::conversion_source_type, Access>,
-      type_list<typename candidate::type>, type_list<>>;
+  using type =
+      storage_resolution_t<Request, Interface, Storage, Access, PublishValue>;
 };
 
 template <typename Interface, typename Storage, typename Access,
@@ -309,22 +222,11 @@ template <typename Interface, typename Storage, typename Access,
           typename... Requests>
 struct storage_resolutions<type_list<First, Second, Requests...>, Interface,
                            Storage, Access, PublishValue> {
-private:
-  template <typename Request>
-  using candidate =
-      storage_resolution<Request, Interface, Storage, Access, PublishValue>;
-
-  template <typename Request>
-  using selected = std::conditional_t<
-      is_type_conversion_available_v<
-          conversion_target_t<typename candidate<Request>::type::target_type>,
-          typename candidate<Request>::conversion_source_type, Access>,
-      type_list<typename candidate<Request>::type>, type_list<>>;
-
-public:
-  using type =
-      type_list_unique_t<type_list_cat_t<selected<First>, selected<Second>,
-                                         selected<Requests>...>>;
+  using type = type_list_unique_t<type_list_cat_t<
+      storage_resolution_t<First, Interface, Storage, Access, PublishValue>,
+      storage_resolution_t<Second, Interface, Storage, Access, PublishValue>,
+      storage_resolution_t<Requests, Interface, Storage, Access,
+                           PublishValue>...>>;
 };
 
 template <typename Requests, typename Interface, typename Storage,
@@ -332,21 +234,6 @@ template <typename Requests, typename Interface, typename Storage,
 using storage_resolutions_t =
     typename storage_resolutions<Requests, Interface, Storage, Access,
                                  PublishValue>::type;
-
-// Avoid probing conversions for empty storage categories.
-template <bool Enabled, typename Target, typename ConversionTarget,
-          typename Source, typename Access>
-struct interface_resolution_if {
-  using type = type_list<>;
-};
-
-template <typename Target, typename ConversionTarget, typename Source,
-          typename Access>
-struct interface_resolution_if<true, Target, ConversionTarget, Source, Access> {
-  using type = std::conditional_t<
-      is_type_conversion_available_v<ConversionTarget, Source, Access>,
-      type_list<conversion_resolution<Target, Source, Access>>, type_list<>>;
-};
 
 template <bool Enabled, typename Source, typename Interface, typename Access>
 struct wrapper_resolution_if {
@@ -357,514 +244,354 @@ template <typename Source, typename Interface, typename Access>
 struct wrapper_resolution_if<true, Source, Interface, Access>
     : wrapper_resolution_traits<Source, Interface, Access> {};
 
-template <typename Interface, typename Storage> struct interface_resolutions {
-private:
-  using conversions = typename Storage::conversions;
-  using source = storage_source_traits<Storage>;
-  using interface_type = std::remove_cv_t<Interface>;
-  using borrowed_interface_type =
-      typename source::template interface_type<interface_type>;
-  static constexpr bool interface_is_resolvable =
-      type_traits<interface_type>::enabled &&
-      !std::is_pointer_v<interface_type>;
-
-  template <bool Enabled, typename Target, typename SourceType, typename Access>
-  using if_convertible =
-      typename interface_resolution_if<Enabled && interface_is_resolvable,
-                                       Target, Target, SourceType,
-                                       Access>::type;
-
-  using borrowed_interface_value =
-      if_convertible<type_list_size_v<typename conversions::value_types> != 0,
-                     interface_type, typename source::borrowed_type, borrow>;
-  using consumed_interface_value = if_convertible<
-      type_list_size_v<typename conversions::rvalue_reference_types> != 0,
-      interface_type, typename source::consumed_type, consume>;
-  using consumed_interface_rvalue = typename interface_resolution_if<
-      interface_is_resolvable &&
-          type_list_size_v<typename conversions::rvalue_reference_types> != 0,
-      interface_type &&, interface_type, typename source::consumed_type,
-      consume>::type;
-  using borrowed_interface_reference = if_convertible<
-      type_list_size_v<typename conversions::lvalue_reference_types> != 0,
-      borrowed_interface_type &, typename source::borrowed_type, borrow>;
-  using borrowed_interface_pointer =
-      if_convertible<type_list_size_v<typename conversions::pointer_types> != 0,
-                     borrowed_interface_type *, typename source::borrowed_type,
-                     borrow>;
-
-public:
-  using value_resolutions =
-      type_list_cat_t<borrowed_interface_value, consumed_interface_value>;
-  using lvalue_reference_resolutions = borrowed_interface_reference;
-  using rvalue_reference_resolutions = consumed_interface_rvalue;
-  using pointer_resolutions = borrowed_interface_pointer;
+// The categories of requests a storage publishes resolutions for.
+enum class request_category {
+  value,
+  lvalue_reference,
+  rvalue_reference,
+  pointer
 };
 
-template <typename Interface, typename Storage> struct wrapper_resolutions {
-private:
-  using conversions = typename Storage::conversions;
-  using source = storage_source_traits<Storage>;
+// The interface a storage resolves directly, as opposed to the requests it
+// publishes.
+template <typename Interface, typename Storage> struct interface_target {
+  using type = std::remove_cv_t<Interface>;
+  using borrowed_type =
+      typename storage_source_traits<Storage>::template interface_type<type>;
+  static constexpr bool resolvable =
+      type_traits<type>::enabled && !std::is_pointer_v<type>;
+};
 
-  using borrowed_composition = typename wrapper_resolution_if<
-      type_list_size_v<typename conversions::value_types> != 0,
-      typename source::borrowed_type, Interface, borrow>::type;
-  using consumed_composition = typename wrapper_resolution_if<
-      type_list_size_v<typename conversions::rvalue_reference_types> != 0,
-      typename source::consumed_type, Interface, consume>::type;
+// The requests, access, interface target and source of a category of
+// reference or pointer requests.
+template <request_category Category, typename Interface, typename Storage>
+struct object_category;
 
-public:
-  using value_resolutions =
-      type_list_cat_t<borrowed_composition, consumed_composition>;
+template <typename Interface, typename Storage>
+struct object_category<request_category::lvalue_reference, Interface, Storage> {
+  using requests = typename Storage::conversions::lvalue_reference_types;
+  using access = borrow;
+  using target = typename interface_target<Interface, Storage>::borrowed_type &;
+  using source = typename storage_source_traits<Storage>::borrowed_type;
 };
 
 template <typename Interface, typename Storage>
-struct binding_value_resolutions {
+struct object_category<request_category::pointer, Interface, Storage> {
+  using requests = typename Storage::conversions::pointer_types;
+  using access = borrow;
+  using target = typename interface_target<Interface, Storage>::borrowed_type *;
+  using source = typename storage_source_traits<Storage>::borrowed_type;
+};
+
+template <typename Interface, typename Storage>
+struct object_category<request_category::rvalue_reference, Interface, Storage> {
+  using requests = typename Storage::conversions::rvalue_reference_types;
+  using access = consume;
+  using target = typename interface_target<Interface, Storage>::type &&;
+  using source = typename storage_source_traits<Storage>::consumed_type;
+};
+
+// The routes of a category: the interface route, when the storage publishes
+// any request of the category, and the routes of the requests it publishes.
+template <request_category Category, typename Interface, typename Storage>
+struct category_resolutions {
+private:
+  using category = object_category<Category, Interface, Storage>;
+  using requests = typename category::requests;
+
+public:
+  using type = type_list_merge_t<
+      typename interface_resolution_if<
+          interface_target<Interface, Storage>::resolvable &&
+              type_list_size_v<requests> != 0,
+          typename category::target, typename category::source,
+          typename category::access>::type,
+      storage_resolutions_t<requests, Interface, Storage,
+                            typename category::access>>;
+};
+
+// The leaf a storage stores, whose value a request copies of the reference
+// to it or moves out of the rvalue reference to it itself. None of a
+// volatile one, which is not copied of a const reference, nor of a pointer,
+// whose value is published: the pointer may be null, where no reference to
+// what it points to exists.
+template <typename Storage,
+          typename Stored = std::remove_reference_t<typename Storage::type>>
+using copied_leaf_t = std::conditional_t<
+    std::is_volatile_v<Stored> || storage_source_traits<Storage>::is_pointer,
+    void, std::remove_cv_t<leaf_type_t<std::remove_cv_t<Stored>>>>;
+
+// The value resolutions of a storage but those of the leaf it stores.
+template <typename Resolutions, typename Leaf> struct without_leaf_values;
+
+template <typename... Resolutions, typename Leaf>
+struct without_leaf_values<type_list<Resolutions...>, Leaf> {
+  using type = type_list_cat_t<std::conditional_t<
+      std::is_same_v<std::remove_cv_t<typename Resolutions::target_type>, Leaf>,
+      type_list<>, type_list<Resolutions>>...>;
+};
+
+// A value is converted from the borrowed and the consumed source alike, into
+// the interface or into a wrapper of it. A value of the leaf the storage
+// stores is not: a request copies or moves it itself.
+template <typename Interface, typename Storage>
+struct category_resolutions<request_category::value, Interface, Storage> {
 private:
   using conversions = typename Storage::conversions;
+  using source = storage_source_traits<Storage>;
+  using target = interface_target<Interface, Storage>;
+  static constexpr bool borrows =
+      type_list_size_v<typename conversions::value_types> != 0;
+  static constexpr bool consumes =
+      type_list_size_v<typename conversions::rvalue_reference_types> != 0;
+
   using interface_values =
-      typename interface_resolutions<Interface, Storage>::value_resolutions;
-  using wrapper_values =
-      typename wrapper_resolutions<Interface, Storage>::value_resolutions;
+      type_list_cat_t<typename interface_resolution_if<
+                          target::resolvable && borrows, typename target::type,
+                          typename source::borrowed_type, borrow>::type,
+                      typename interface_resolution_if<
+                          target::resolvable && consumes, typename target::type,
+                          typename source::consumed_type, consume>::type>;
+  using wrapper_values = type_list_cat_t<
+      typename wrapper_resolution_if<borrows, typename source::borrowed_type,
+                                     Interface, borrow>::type,
+      typename wrapper_resolution_if<consumes, typename source::consumed_type,
+                                     Interface, consume>::type>;
   using stored_values = storage_resolutions_t<typename conversions::value_types,
                                               Interface, Storage, borrow>;
   using consumed_values =
       storage_resolutions_t<typename conversions::rvalue_reference_types,
                             Interface, Storage, consume, true>;
-  using converted_values = type_list_merge_t<interface_values, wrapper_values>;
-  using published_values = type_list_merge_t<stored_values, consumed_values>;
 
 public:
-  using type = type_list_merge_t<converted_values, published_values>;
+  using type = typename without_leaf_values<
+      type_list_merge_t<type_list_merge_t<interface_values, wrapper_values>,
+                        type_list_merge_t<stored_values, consumed_values>>,
+      copied_leaf_t<Storage>>::type;
 };
 
-template <typename Interface, typename Storage>
-struct binding_rvalue_reference_resolutions {
+// Whether the requests a storage publishes consume what it makes for each.
+template <typename Conversions, typename = void>
+struct consumes_made : std::false_type {};
+
+template <typename Conversions>
+struct consumes_made<Conversions, std::void_t<decltype(Conversions::consumes)>>
+    : std::bool_constant<Conversions::consumes> {};
+
+// The lvalue reference resolutions of a storage but those of what it
+// publishes an rvalue reference to: a request refers to what the storage
+// makes for it through that.
+template <typename LvalueResolutions, typename RvalueResolutions>
+struct without_referred_resolutions;
+
+template <typename... Lvalues, typename... Rvalues>
+struct without_referred_resolutions<type_list<Lvalues...>,
+                                    type_list<Rvalues...>> {
 private:
-  using conversions = typename Storage::conversions;
+  using referred = type_list<remove_cvref_t<typename Rvalues::target_type>...>;
 
 public:
-  using type = type_list_merge_t<
-      typename interface_resolutions<Interface,
-                                     Storage>::rvalue_reference_resolutions,
-      storage_resolutions_t<typename conversions::rvalue_reference_types,
-                            Interface, Storage, consume>>;
-};
-
-// A route to an object that exists in its source presents the same object
-// whether the request takes a reference or a pointer. The category is applied
-// by the request site, so one route to the object address serves both.
-//
-// Taking the address of an object and binding a reference to it select the
-// same object when the conversion is the default pointer conversion of the
-// source: the object of an lvalue source, or the pointee of a pointer source.
-// Every other conversion (wrappers, alternatives, arrays, retained or custom
-// conversions) selects its object by its own rule and keeps a route per
-// category.
-// The object a pointer target and a source share, when the source is an lvalue
-// or a pointer that the target is convertible from.
-template <typename Target, typename Source>
-inline constexpr bool is_object_address_candidate_v =
-    std::is_pointer_v<Target> &&
-    !std::is_array_v<std::remove_pointer_t<Target>> &&
-    !std::is_pointer_v<std::remove_cv_t<std::remove_pointer_t<Target>>> &&
-    (std::is_lvalue_reference_v<Source>
-         ? (!std::is_array_v<std::remove_reference_t<Source>> &&
-            !std::is_pointer_v<
-                std::remove_cv_t<std::remove_reference_t<Source>>> &&
-            std::is_convertible_v<std::remove_reference_t<Source> *, Target> &&
-            // An alternative source selects its alternative, unless the object
-            // is the alternative itself.
-            (!is_alternative_type_v<std::remove_reference_t<Source>> ||
-             std::is_same_v<
-                 std::remove_cv_t<std::remove_pointer_t<Target>>,
-                 std::remove_cv_t<std::remove_reference_t<Source>>>) &&
-            // A direct conversion has priority over taking the address.
-            !std::is_constructible_v<Target, Source> &&
-            !std::is_constructible_v<Target,
-                                     const std::remove_reference_t<Source> &>)
-         : (std::is_pointer_v<Source> &&
-            !std::is_void_v<std::remove_pointer_t<Source>> &&
-            std::is_convertible_v<Source, Target>));
-
-template <typename Target, typename Source>
-constexpr bool is_default_object_route() {
-  bool result = false;
-  if constexpr (is_object_address_candidate_v<Target, Source>) {
-    using object = std::remove_pointer_t<Target>;
-    if constexpr (std::is_lvalue_reference_v<Source>) {
-      using source = std::remove_cv_t<std::remove_reference_t<Source>>;
-      result = is_default_type_conversion<
-                   type_conversion_traits<Target, source>>::value &&
-               is_default_type_conversion<
-                   type_conversion_traits<object &, source>>::value;
-    } else {
-      using pointee = std::remove_cv_t<std::remove_pointer_t<Source>>;
-      result = is_default_type_conversion<
-                   type_conversion_traits<Target, Source>>::value &&
-               is_default_type_conversion<
-                   type_conversion_traits<object &, pointee>>::value;
-    }
-  }
-  return result;
-}
-
-// A pointer request pairs with the reference request of the same object when
-// the route of the pointer request is the default object route.
-template <typename Interface, typename Storage, typename Pointer>
-constexpr bool is_default_object_request() {
-  using source = std::remove_cv_t<std::remove_pointer_t<std::remove_reference_t<
-      typename storage_source_traits<Storage>::borrowed_type>>>;
-  if constexpr (type_traits<source>::enabled &&
-                !type_traits<std::remove_cv_t<Interface>>::enabled &&
-                !type_traits<std::remove_pointer_t<Pointer>>::enabled) {
-    // The object of a wrapper source is reached through the wrapper traits,
-    // unless the published object is a wrapper itself.
-    return false;
-  } else {
-    return is_default_object_route<
-        storage_resolution_target_t<Pointer, Interface, Storage, false>,
-        storage_resolution_source_t<Storage, borrow>>();
-  }
-}
-
-// The value request that copies an object is served by the object route when
-// the copy is the identity copy of the object: the value is the stored object
-// itself, copied from an lvalue source or from the pointee of a pointer source
-// by the default conversions. Every other value (derived to base copies,
-// wrapper and alternative conversions, custom conversions) keeps a route of its
-// own.
-// The value a pointer target and a source share, when the value is copied from
-// an lvalue source or from the pointee of a pointer source.
-template <typename Target, typename Source>
-inline constexpr bool is_value_copy_candidate_v =
-    std::is_pointer_v<Target> &&
-    !std::is_pointer_v<std::remove_cv_t<std::remove_pointer_t<Target>>> &&
-    !std::is_array_v<std::remove_cv_t<std::remove_pointer_t<Target>>> &&
-    (std::is_lvalue_reference_v<Source>
-         ? (std::is_same_v<std::remove_cv_t<std::remove_pointer_t<Target>>,
-                           std::remove_cv_t<std::remove_reference_t<Source>>> &&
-            !std::is_volatile_v<std::remove_reference_t<Source>>)
-         : (std::is_pointer_v<Source> &&
-            std::is_same_v<std::remove_cv_t<std::remove_pointer_t<Target>>,
-                           std::remove_cv_t<std::remove_pointer_t<Source>>> &&
-            !std::is_volatile_v<std::remove_pointer_t<Source>> &&
-            // A pointer source is copied from its pointee unless the value is
-            // constructed from the pointer or selects its source by a
-            // structure of its own.
-            !is_alternative_type_v<std::remove_pointer_t<Source>> &&
-            !type_traits<
-                std::remove_cv_t<std::remove_pointer_t<Source>>>::enabled &&
-            !std::is_constructible_v<
-                std::remove_cv_t<std::remove_pointer_t<Target>>, Source>));
-
-template <typename Target, typename Source>
-constexpr bool is_default_value_route() {
-  bool result = false;
-  if constexpr (is_value_copy_candidate_v<Target, Source>) {
-    using value = std::remove_cv_t<std::remove_pointer_t<Target>>;
-    if constexpr (std::is_lvalue_reference_v<Source>) {
-      result = is_copy_constructible_v<value> &&
-               is_default_type_conversion<
-                   type_conversion_traits<value, value>>::value;
-    } else {
-      result = is_copy_constructible_v<value> &&
-               is_default_type_conversion<
-                   type_conversion_traits<value, value>>::value &&
-               is_default_type_conversion<
-                   type_conversion_traits<value, Source>>::value;
-    }
-  }
-  return result;
-}
-
-template <typename Interface, typename Storage, typename Pointer>
-constexpr bool is_default_value_request() {
-  return is_default_value_route<
-      storage_resolution_target_t<Pointer, Interface, Storage, false>,
-      storage_resolution_source_t<Storage, borrow>>();
-}
-
-// Splits the requests of a storage that has an object into the pointer requests
-// whose route also serves their reference request (and their copy), and the
-// requests that keep a route of their own category. A reference, a pointer and
-// a value request name the same object when they differ only in their category.
-template <typename Interface, typename Storage, typename References,
-          typename Pointers, typename Values, bool Consumes>
-struct pair_object_requests;
-
-template <typename Interface, typename Storage, typename... References,
-          typename... Pointers, typename... Values, bool Consumes>
-struct pair_object_requests<Interface, Storage, type_list<References...>,
-                            type_list<Pointers...>, type_list<Values...>,
-                            Consumes> {
-private:
-  template <typename Pointer>
-  static constexpr bool has_reference_request =
-      (std::is_same_v<std::remove_pointer_t<Pointer>,
-                      std::remove_reference_t<References>> ||
-       ...);
-
-  template <typename Pointer>
-  static constexpr bool has_value_request =
-      (std::is_same_v<std::remove_pointer_t<Pointer>, Values> || ...);
-
-  template <typename Pointer>
-  static constexpr bool shared_pointer =
-      has_reference_request<Pointer> &&
-      is_default_object_request<Interface, Storage, Pointer>();
-
-  // A consumed storage hands out its values, so its values are not copies of
-  // an object.
-  template <typename Pointer> static constexpr bool is_value_pointer() {
-    if constexpr (Consumes || !shared_pointer<Pointer> ||
-                  !has_value_request<Pointer>) {
-      return false;
-    } else {
-      return is_default_value_request<Interface, Storage, Pointer>();
-    }
-  }
-
-  template <typename Pointer>
-  static constexpr bool value_pointer = is_value_pointer<Pointer>();
-
-  // The pointer request of the object, if any, decides.
-  template <typename Reference>
-  static constexpr bool shared_reference =
-      (false || ... ||
-       (std::is_same_v<std::remove_reference_t<Reference>,
-                       std::remove_pointer_t<Pointers>> &&
-        shared_pointer<Pointers>));
-
-  template <typename Value>
-  static constexpr bool shared_value =
-      (false || ... ||
-       (std::is_same_v<Value, std::remove_pointer_t<Pointers>> &&
-        value_pointer<Pointers>));
-
-public:
-  using shared_pointers = type_list_cat_t<
-      std::conditional_t<shared_pointer<Pointers> && !value_pointer<Pointers>,
-                         type_list<Pointers>, type_list<>>...>;
-  using value_pointers =
-      type_list_cat_t<std::conditional_t<value_pointer<Pointers>,
-                                         type_list<Pointers>, type_list<>>...>;
-  using references = type_list_cat_t<std::conditional_t<
-      shared_reference<References>, type_list<>, type_list<References>>...>;
-  using pointers =
-      type_list_cat_t<std::conditional_t<shared_pointer<Pointers>, type_list<>,
-                                         type_list<Pointers>>...>;
-  using values =
-      type_list_cat_t<std::conditional_t<shared_value<Values>, type_list<>,
-                                         type_list<Values>>...>;
-};
-
-// The route that serves both the reference and the pointer request of an
-// object, and the copy of the object when it is a value route as well. It is
-// the default conversion of the source to the object address, which needs no
-// conversion planning.
-template <typename Target, typename Source>
-using default_object_conversion_t =
-    std::conditional_t<std::is_lvalue_reference_v<Source>,
-                       address_type_conversion<Target, Source>,
-                       traits_type_conversion<Target, Source>>;
-
-template <typename Pointers, typename Interface, typename Storage,
-          bool ServesValue>
-struct shared_object_resolutions;
-
-template <typename... Pointers, typename Interface, typename Storage,
-          bool ServesValue>
-struct shared_object_resolutions<type_list<Pointers...>, Interface, Storage,
-                                 ServesValue> {
-private:
-  using source = storage_resolution_source_t<Storage, borrow>;
-
-  // The target of a route is formed once and named by the route.
-  template <typename Target>
-  using route_of =
-      resolution<Target,
-                 type_resolution<Target, source,
-                                 default_object_conversion_t<Target, source>>,
-                 true, ServesValue>;
-
-public:
-  using type = type_list<route_of<
-      storage_resolution_target_t<Pointers, Interface, Storage, false>>...>;
-};
-
-// Whether a shared route already provides a route of a category for the same
-// object, such as the route of an interface that is the stored object.
-template <typename Route, typename Shared, bool Reference>
-struct is_provided_by_shared_route : std::false_type {};
-
-template <typename Route, typename... Shared, bool Reference>
-struct is_provided_by_shared_route<Route, type_list<Shared...>, Reference>
-    : std::bool_constant<(
-          (Reference ? std::is_same_v<
-                           std::remove_reference_t<typename Route::target_type>,
-                           std::remove_pointer_t<typename Shared::target_type>>
-                     : std::is_same_v<typename Route::target_type,
-                                      typename Shared::target_type>) ||
-          ...)> {};
-
-template <typename Routes, typename Shared, bool Reference>
-struct without_shared_forms_impl;
-
-template <typename... Routes, typename Shared, bool Reference>
-struct without_shared_forms_impl<type_list<Routes...>, Shared, Reference> {
   using type = type_list_cat_t<std::conditional_t<
-      is_provided_by_shared_route<Routes, Shared, Reference>::value,
-      type_list<>, type_list<Routes>>...>;
+      type_list_contains_v<remove_cvref_t<typename Lvalues::target_type>,
+                           referred>,
+      type_list<>, type_list<Lvalues>>...>;
 };
 
-template <typename Routes, typename Shared, bool Reference>
-struct without_shared_forms
-    : without_shared_forms_impl<Routes, Shared, Reference> {};
+// The resolutions a storage publishes of a category. A storage that makes a
+// value for each request publishes no lvalue reference to what it publishes
+// an rvalue reference to.
+template <request_category Category, typename Interface, typename Storage>
+struct published_resolutions
+    : category_resolutions<Category, Interface, Storage> {};
 
-template <typename Routes, bool Reference>
-struct without_shared_forms<Routes, type_list<>, Reference> {
-  using type = Routes;
-};
-
-// The reference and pointer routes of a storage that publishes only one of the
-// two categories, which have no object to share.
-template <typename Interface, typename Storage, typename Conversions>
-struct category_object_resolutions {
-private:
-  using interface_routes = interface_resolutions<Interface, Storage>;
-
-public:
-  using type = type_list_cat_t<
-      type_list_merge_t<
-          typename interface_routes::lvalue_reference_resolutions,
-          storage_resolutions_t<typename Conversions::lvalue_reference_types,
-                                Interface, Storage, borrow>>,
-      type_list_merge_t<
-          typename interface_routes::pointer_resolutions,
-          storage_resolutions_t<typename Conversions::pointer_types, Interface,
-                                Storage, borrow>>>;
-};
-
-// The pairing of the requests of a storage that publishes both references and
-// pointers.
-template <typename Interface, typename Storage, typename Conversions>
-using object_request_pairing = pair_object_requests<
-    Interface, Storage, typename Conversions::lvalue_reference_types,
-    typename Conversions::pointer_types, typename Conversions::value_types,
-    type_list_size_v<typename Conversions::rvalue_reference_types> != 0>;
-
-// The reference and pointer routes of a storage that publishes both, where the
-// route of an object serves both categories when the object is the same.
-template <typename Interface, typename Storage, typename Conversions>
-struct paired_object_resolutions {
-private:
-  using pairing = object_request_pairing<Interface, Storage, Conversions>;
-  using interface_routes = interface_resolutions<Interface, Storage>;
-
-  using shared_routes = type_list_cat_t<
-      typename shared_object_resolutions<typename pairing::shared_pointers,
-                                         Interface, Storage, false>::type,
-      typename shared_object_resolutions<typename pairing::value_pointers,
-                                         Interface, Storage, true>::type>;
-  using reference_routes = typename without_shared_forms<
-      type_list_merge_t<typename interface_routes::lvalue_reference_resolutions,
-                        storage_resolutions_t<typename pairing::references,
-                                              Interface, Storage, borrow>>,
-      shared_routes, true>::type;
-  using pointer_routes = typename without_shared_forms<
-      type_list_merge_t<typename interface_routes::pointer_resolutions,
-                        storage_resolutions_t<typename pairing::pointers,
-                                              Interface, Storage, borrow>>,
-      shared_routes, false>::type;
-
-public:
-  using type = type_list_cat_t<shared_routes, reference_routes, pointer_routes>;
-};
-
-template <
-    typename Interface, typename Storage,
-    typename Conversions = typename Storage::conversions,
-    bool References =
-        type_list_size_v<typename Conversions::lvalue_reference_types> != 0,
-    bool Pointers = type_list_size_v<typename Conversions::pointer_types> != 0>
-struct binding_object_resolutions
-    : category_object_resolutions<Interface, Storage, Conversions> {};
-
-// A storage without reference and pointer requests publishes no object.
-template <typename Interface, typename Storage, typename Conversions>
-struct binding_object_resolutions<Interface, Storage, Conversions, false,
-                                  false> {
+// The layers of a stored type, as stored and rebound to the interface: a
+// wrapper a request asks for that is one of them is handed over as it is.
+template <typename Type, typename Interface, typename = void>
+struct stored_layers {
   using type = type_list<>;
 };
 
-template <typename Interface, typename Storage, typename Conversions>
-struct binding_object_resolutions<Interface, Storage, Conversions, true, true>
-    : paired_object_resolutions<Interface, Storage, Conversions> {};
-
-// A value route that a shared route already provides: the route copies the
-// stored object itself from the same source.
-template <typename Route, typename Shared>
-struct is_value_provided_by_shared_route : std::false_type {};
-
-template <typename Route, typename... Shared>
-struct is_value_provided_by_shared_route<Route, type_list<Shared...>>
-    : std::bool_constant<(
-          (Shared::serves_value &&
-           std::is_same_v<typename Route::target_type,
-                          resolution_value_target_t<Shared>> &&
-           std::is_same_v<typename Route::operation::source_type,
-                          typename Shared::operation::source_type>) ||
-          ...)> {};
-
-template <typename Routes, typename Shared> struct without_shared_values;
-
-template <typename... Routes, typename Shared>
-struct without_shared_values<type_list<Routes...>, Shared> {
-  using type = type_list_cat_t<std::conditional_t<
-      is_value_provided_by_shared_route<Routes, Shared>::value, type_list<>,
-      type_list<Routes>>...>;
+template <typename Type, typename Interface>
+struct stored_layers<Type, Interface,
+                     std::enable_if_t<is_object_wrapper_v<Type>>> {
+  using type = type_list_cat_t<
+      type_list<Type, wrapper_rebind_leaf_t<Type, Interface>>,
+      typename stored_layers<
+          std::remove_cv_t<typename type_traits<Type>::value_type>,
+          Interface>::type>;
 };
 
-// The value routes a storage publishes. The values that copy the object of a
-// shared route are served by that route.
-template <
-    typename Interface, typename Storage,
-    typename Conversions = typename Storage::conversions,
-    bool Shared =
-        type_list_size_v<typename Conversions::lvalue_reference_types> != 0 &&
-        type_list_size_v<typename Conversions::pointer_types> != 0 &&
-        type_list_size_v<typename Conversions::value_types> != 0 &&
-        type_list_size_v<typename Conversions::rvalue_reference_types> == 0>
-struct binding_published_value_resolutions
-    : binding_value_resolutions<Interface, Storage> {};
+// The value and rvalue reference resolutions of a storage that makes a value
+// for each request but those of a sharing handle a request converts of the
+// sole owner of an object the storage publishes an rvalue reference to. A
+// layer of what the storage stores is handed over as it is. An owning handle
+// of what the storage makes stays published: the static container makes it
+// where it is requested, which the compiler folds as a composed one is not.
+template <typename Resolutions, typename Rvalues, typename Layers>
+struct without_derived_resolutions;
 
-template <typename Interface, typename Storage, typename Conversions>
-struct binding_published_value_resolutions<Interface, Storage, Conversions,
-                                           true> {
+template <typename... Resolutions, typename... Rvalues, typename Layers>
+struct without_derived_resolutions<type_list<Resolutions...>,
+                                   type_list<Rvalues...>, Layers> {
 private:
-  using pairing = object_request_pairing<Interface, Storage, Conversions>;
-  using shared_routes =
-      typename shared_object_resolutions<typename pairing::value_pointers,
-                                         Interface, Storage, true>::type;
-  using converted_values = type_list_merge_t<
-      typename interface_resolutions<Interface, Storage>::value_resolutions,
-      typename wrapper_resolutions<Interface, Storage>::value_resolutions>;
+  template <typename Target> static constexpr bool is_base() {
+    using object = remove_cvref_t<Target>;
+    return !is_object_wrapper_v<object> || type_list_contains_v<object, Layers>;
+  }
+
+  using referred = type_list_cat_t<std::conditional_t<
+      is_base<typename Rvalues::target_type>(),
+      type_list<remove_cvref_t<typename Rvalues::target_type>>,
+      type_list<>>...>;
+
+  // Whether a request converts a wrapper of the sole owner of an object
+  // the storage publishes an rvalue reference to.
+  template <typename Wrapper> static constexpr bool converted() {
+    using sole_owner = typename converted_from<Wrapper>::type;
+    if constexpr (std::is_void_v<sole_owner>) {
+      return false;
+    } else {
+      return type_list_contains_v<remove_cvref_t<sole_owner>, referred>;
+    }
+  }
+
+  template <typename Target> static constexpr bool derived() {
+    using wrapper = remove_cvref_t<Target>;
+    if constexpr (is_base<Target>()) {
+      return false;
+    } else {
+      return converted<wrapper>();
+    }
+  }
 
 public:
-  using type = type_list_merge_t<
-      typename without_shared_values<converted_values, shared_routes>::type,
-      storage_resolutions_t<typename pairing::values, Interface, Storage,
-                            borrow>>;
+  using type = type_list_cat_t<
+      std::conditional_t<derived<typename Resolutions::target_type>(),
+                         type_list<>, type_list<Resolutions>>...>;
 };
+
+template <request_category Category, typename Interface, typename Storage>
+struct derived_resolutions_dropped {
+  using all = typename category_resolutions<Category, Interface, Storage>::type;
+  using type = typename std::conditional_t<
+      consumes_made<typename Storage::conversions>::value,
+      without_derived_resolutions<
+          all,
+          typename category_resolutions<request_category::rvalue_reference,
+                                        Interface, Storage>::type,
+          typename stored_layers<remove_cvref_t<typename Storage::type>,
+                                 std::remove_cv_t<Interface>>::type>,
+      std::enable_if<true, all>>::type;
+};
+
+template <typename Interface, typename Storage>
+struct published_resolutions<request_category::rvalue_reference, Interface,
+                             Storage>
+    : derived_resolutions_dropped<request_category::rvalue_reference, Interface,
+                                  Storage> {};
+
+template <typename Interface, typename Storage>
+struct published_resolutions<request_category::lvalue_reference, Interface,
+                             Storage> {
+private:
+  using all = typename category_resolutions<request_category::lvalue_reference,
+                                            Interface, Storage>::type;
+
+public:
+  using type = typename std::conditional_t<
+      consumes_made<typename Storage::conversions>::value,
+      without_referred_resolutions<all, typename published_resolutions<
+                                            request_category::rvalue_reference,
+                                            Interface, Storage>::type>,
+      std::enable_if<true, all>>::type;
+};
+
+// Whether a storage keeps what it publishes, so that a request may copy it.
+template <typename Conversions, typename = void>
+struct keeps_published : std::false_type {};
+
+template <typename Conversions>
+struct keeps_published<Conversions,
+                       std::void_t<decltype(Conversions::is_stable)>>
+    : std::bool_constant<Conversions::is_stable> {};
+
+// The value resolutions of a storage but those of the wrapper it stores, as
+// it is or rebound to the interface, which it publishes a reference to: a
+// request copies a value of it of the lvalue reference, or moves it out of
+// the rvalue reference. A layer inside it may be absent, where no reference
+// to it exists, and so may what a pointer points to: their values are
+// published.
+template <typename Resolutions, typename Outer, typename Referred>
+struct without_referred_wrapper_values;
+
+template <typename... Resolutions, typename Outer, typename Referred>
+struct without_referred_wrapper_values<type_list<Resolutions...>, Outer,
+                                       Referred> {
+  using type = type_list_cat_t<std::conditional_t<
+      type_list_contains_v<remove_cvref_t<typename Resolutions::target_type>,
+                           Outer> &&
+          type_list_contains_v<
+              remove_cvref_t<typename Resolutions::target_type>, Referred>,
+      type_list<>, type_list<Resolutions>>...>;
+};
+
+// The wrapper a storage stores, as it is and rebound to the interface.
+template <typename Type, typename Interface, typename = void>
+struct outer_layer {
+  using type = type_list<>;
+};
+
+template <typename Type, typename Interface>
+struct outer_layer<Type, Interface,
+                   std::enable_if_t<is_object_wrapper_v<Type>>> {
+  using type = type_list<Type, wrapper_rebind_leaf_t<Type, Interface>>;
+};
+
+template <typename Resolutions> struct resolution_objects;
+
+template <typename... Resolutions>
+struct resolution_objects<type_list<Resolutions...>> {
+  using type = type_list<remove_cvref_t<typename Resolutions::target_type>...>;
+};
+
+template <typename Interface, typename Storage>
+struct published_resolutions<request_category::value, Interface, Storage> {
+private:
+  using values = typename derived_resolutions_dropped<request_category::value,
+                                                      Interface, Storage>::type;
+  using referred = typename resolution_objects<type_list_cat_t<
+      typename published_resolutions<request_category::lvalue_reference,
+                                     Interface, Storage>::type,
+      typename published_resolutions<request_category::rvalue_reference,
+                                     Interface, Storage>::type>>::type;
+
+public:
+  using type = typename std::conditional_t<
+      (keeps_published<typename Storage::conversions>::value ||
+       consumes_made<typename Storage::conversions>::value) &&
+          !storage_source_traits<Storage>::is_pointer,
+      without_referred_wrapper_values<
+          values,
+          typename outer_layer<remove_cvref_t<typename Storage::type>,
+                               std::remove_cv_t<Interface>>::type,
+          referred>,
+      std::enable_if<true, values>>::type;
+};
+
+template <request_category Category, typename Interface, typename Storage>
+using category_resolutions_t =
+    typename published_resolutions<Category, Interface, Storage>::type;
 
 template <typename Interface, typename Shape> struct shape_resolutions {
   using value_resolutions =
-      typename binding_published_value_resolutions<Interface, Shape>::type;
-  using object_resolutions =
-      typename binding_object_resolutions<Interface, Shape>::type;
+      category_resolutions_t<request_category::value, Interface, Shape>;
   using rvalue_reference_resolutions =
-      typename binding_rvalue_reference_resolutions<Interface, Shape>::type;
+      category_resolutions_t<request_category::rvalue_reference, Interface,
+                             Shape>;
+  using object_resolutions = type_list_cat_t<
+      category_resolutions_t<request_category::lvalue_reference, Interface,
+                             Shape>,
+      category_resolutions_t<request_category::pointer, Interface, Shape>>;
   // Target forms are disjoint across the value, object, and rvalue-reference
   // categories, so concatenating their already-unique lists cannot duplicate
   // a resolution.
@@ -878,17 +605,4 @@ using binding_resolutions =
 
 } // namespace detail
 
-template <typename StorageTag, typename Type, typename U, typename = void>
-struct type_storage_traits;
-
-template <typename StorageTag, typename Type, typename U>
-struct type_storage_traits<
-    StorageTag, Type, U,
-    std::enable_if_t<storage_traits<StorageTag, Type, U>::enabled>>
-    : detail::combined_storage_types<storage_traits<StorageTag, Type, U>,
-                                     resolution_traits<StorageTag, Type, U>> {
-public:
-  static constexpr bool is_stable =
-      storage_traits<StorageTag, Type, U>::is_stable;
-};
 } // namespace dingo

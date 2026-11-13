@@ -2,13 +2,13 @@
 
 Dependency Injection Container for C++, with DI, next-gen and an 'o' in a name.
 
-Dingo builds object graphs from ordinary C++ types with runtime or compile-time
-registration. Scopes and storage policies control ownership explicitly, and user
-types stay free of framework macros or base classes.
+Dingo builds object graphs from ordinary C++ types. Registration is done at
+runtime or at compile time. Scopes and storage policies control ownership
+explicitly. User types need no framework macros or base classes.
 
-Resolution applies supported ownership and interface conversions automatically,
-so one registration can satisfy references, pointers, smart pointers, and
-interface lookups when the selected storage and scope allow it.
+Resolution applies the supported ownership and interface conversions. One
+registration can satisfy references, pointers, smart pointers and interface
+lookups, if the selected storage and scope allow it.
 
 Tested with:
 
@@ -21,8 +21,8 @@ Tested with:
 
 ## Runtime Registration
 
-Runtime registration uses `container<>` with registrations added through
-`register_type<...>()`, which fits graphs assembled by ordinary control flow.
+Runtime registration uses `container<>` and `register_type<...>()`. It fits
+graphs that the program assembles at run time.
 
 <!-- { include("examples/container/quick_runtime.cpp", scope="////") -->
 
@@ -69,8 +69,8 @@ D e = container.invoke([&](A &a, B *b) { return D{a, b}; });
 
 ## Compile-Time Registration
 
-Compile-time registration uses `bindings<...>` with `container<bindings<...>>`
-or `static_container<bindings<...>>`, which fits graphs known in the type
+Compile-time registration uses `bindings<...>` and
+`static_container<bindings<...>>`. It fits graphs that are known in the type
 system.
 
 <!-- { include("examples/container/quick_static.cpp", scope="////") -->
@@ -96,7 +96,7 @@ using app_bindings =
              dingo::bind<scope<shared>, storage<std::unique_ptr<B>>>,
              dingo::bind<scope<unique>, storage<C>>>;
 
-container<app_bindings> container;
+static_container<app_bindings> container;
 // Resolution still uses the same API.
 C c = container.resolve<C>();
 
@@ -114,9 +114,8 @@ D e = container.invoke([&](A &a, B *b) { return D{a, b}; });
 
 ## Installation
 
-For CMake-based projects, `FetchContent` is the documented integration path. The
-project exports the `dingo::dingo` interface target and has no runtime
-dependencies.
+CMake projects integrate Dingo with `FetchContent`. The project exports the
+`dingo::dingo` interface target. It has no runtime dependencies.
 
 <!-- { include("test/fetchcontent/CMakeLists.txt", scope="####") -->
 
@@ -134,8 +133,7 @@ target_link_libraries(dingo_fetchcontent_test PRIVATE dingo::dingo)
 
 <!-- } -->
 
-When working from a checkout, the top-level CMake project also supports
-`add_subdirectory(...)`.
+In a checkout of the repository, `add_subdirectory(...)` also works.
 
 ## Documentation
 
@@ -151,6 +149,8 @@ When working from a checkout, the top-level CMake project also supports
   extension traits, and conversion rules.
 - [Examples](docs/examples.md): a guided index of runnable examples in
   [`examples/`](examples).
+- [Specification](docs/specification.md): what the library should do, its known
+  limitations, and the probes that compare the library with it.
 - [Development](docs/development.md): local development builds, repo tooling,
   Markdown verification, and CI container notes.
 - [Motivation and History](docs/history.md): background on how the library
@@ -169,13 +169,13 @@ When working from a checkout, the top-level CMake project also supports
 - Explicit variant construction plus whole-variant or held-alternative
   resolution
 - Custom RTTI and allocator hooks
-- Extensive generated matrix tests across features, registration modes, scopes,
-  stored types, resolved types, and containers. See the
-  [generated matrix test model](test/matrix/README.md).
+- A [specification](docs/specification.md) of resolution. Probes test every
+  scope, stored type, request and container against it. Focused tests cover the
+  rest.
 
 ## Related Projects
 
-For DI library comparisons, also take a look at:
+Other DI libraries to compare:
 
 - [qlibs/di](https://github.com/qlibs/di)
 - [boost-ex/di](https://github.com/boost-ext/di)

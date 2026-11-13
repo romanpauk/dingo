@@ -12,7 +12,7 @@
 #include <dingo/base/type_list.h>
 #include <dingo/factory/constructor_detection.h>
 #include <dingo/factory/constructor_traits.h>
-#include <dingo/type/normalized_type.h>
+#include <dingo/type/shape.h>
 
 namespace dingo {
 
@@ -20,11 +20,11 @@ template <typename...> struct constructor;
 
 namespace detail {
 
-template <typename Dependency, typename Context, typename Container>
+template <typename Dependency, typename Context, typename Container,
+          typename Scope>
 class constructor_dependency {
 public:
-  constructor_dependency(construction_scope scope, Context &context,
-                         Container &container)
+  constructor_dependency(Scope scope, Context &context, Container &container)
       : scope_(scope), context_(context), container_(container) {}
 
   operator Dependency() {
@@ -33,23 +33,23 @@ public:
   }
 
 private:
-  construction_scope scope_;
+  Scope scope_;
   Context &context_;
   Container &container_;
 };
 
-template <typename Dependency, typename Context, typename Container>
-decltype(auto) resolve_constructor_dependency(construction_scope scope,
-                                              Context &context,
+template <typename Dependency, typename Context, typename Container,
+          typename Scope>
+decltype(auto) resolve_constructor_dependency(Scope scope, Context &context,
                                               Container &container) {
-  if constexpr (std::is_reference_v<Dependency> ||
-                std::is_move_constructible_v<Dependency>) {
+  if constexpr (std::is_reference_v<Dependency>) {
     return context.template resolve<Dependency>(
         dependency_scope<Dependency>(scope), container);
   } else {
-    // Keep a copy-only prvalue in the final parameter initialization, where
-    // C++17 guaranteed elision avoids selecting a deleted move constructor.
-    return constructor_dependency<Dependency, Context, Container>(
+    // A value is resolved as the parameter is initialized, where C++17
+    // guaranteed elision makes it in place: it is not moved into it, and a
+    // copy-only value does not select a deleted move constructor.
+    return constructor_dependency<Dependency, Context, Container, Scope>(
         scope, context, container);
   }
 }
@@ -86,16 +86,15 @@ template <typename T, typename... Args> struct constructor<T(Args...)> {
       valid ? detail::constructor_kind::concrete
             : detail::constructor_kind::invalid;
 
-  template <typename Type, typename Context, typename Container>
-  static auto construct(construction_scope scope, Context &ctx,
-                        Container &container) {
+  template <typename Type, typename Context, typename Container, typename Scope>
+  static auto construct(Scope scope, Context &ctx, Container &container) {
     (void)scope;
     return detail::construction_dispatch<Type, T>::construct(
         detail::resolve_constructor_dependency<Args>(scope, ctx, container)...);
   }
 
-  template <typename Type, typename Context, typename Container>
-  static auto construct(void *ptr, construction_scope scope, Context &ctx,
+  template <typename Type, typename Context, typename Container, typename Scope>
+  static auto construct(void *ptr, Scope scope, Context &ctx,
                         Container &container) {
     (void)scope;
     detail::construction_dispatch<Type, T>::construct(

@@ -7,21 +7,18 @@
 
 #pragma once
 
-// #include <dingo/base/config.h>
-
 #include <dingo/base/type_list.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/factory/factory_traits.h>
 #include <dingo/storage/storage.h>
 #include <dingo/type/key.h>
-#include <dingo/type/rebind_type.h>
+#include <dingo/type/shape.h>
 
 #include <type_traits>
 #include <utility>
 
 namespace dingo {
-struct unique;
-template <typename... Registrations> struct static_bindings;
+template <typename... Registrations> struct static_registry;
 template <typename T> struct storage {
   using type = T;
   template <typename U> using rebind_t = storage<U>;
@@ -60,7 +57,7 @@ template <typename... Args> struct dependencies {
 };
 
 template <typename... Args> struct bindings {
-  using type = static_bindings<Args...>;
+  using type = static_registry<Args...>;
   template <typename U> using rebind_t = bindings<U>;
 };
 
@@ -69,8 +66,8 @@ template <> struct bindings<void> {
   template <typename U> using rebind_t = bindings<U>;
 };
 
-template <typename... Args> struct bindings<static_bindings<Args...>> {
-  using type = static_bindings<Args...>;
+template <typename... Args> struct bindings<static_registry<Args...>> {
+  using type = static_registry<Args...>;
   template <typename U> using rebind_t = bindings<U>;
 };
 
@@ -81,8 +78,8 @@ template <typename... Args> struct static_bindings_source<bindings<Args...>> {
 };
 
 template <typename... Args>
-struct static_bindings_source<static_bindings<Args...>> {
-  using type = static_bindings<Args...>;
+struct static_bindings_source<static_registry<Args...>> {
+  using type = static_registry<Args...>;
 };
 
 template <typename T>
@@ -100,18 +97,15 @@ template <typename... Args> struct dependencies<type_list<Args...>> {
 
 namespace detail {
 template <typename Type, typename = void> struct deduced_interface_types {
-  using type = type_list<std::remove_cv_t<std::remove_reference_t<Type>>>;
+  using type = type_list<remove_cvref_t<Type>>;
 };
 
 template <typename Type>
 struct deduced_interface_types<
-    Type,
-    std::enable_if_t<
-        type_traits<std::remove_cv_t<std::remove_reference_t<Type>>>::enabled &&
-        type_traits<std::remove_cv_t<std::remove_reference_t<Type>>>::
-            is_value_borrowable>> {
+    Type, std::enable_if_t<type_traits<remove_cvref_t<Type>>::enabled &&
+                           is_value_borrowable_v<remove_cvref_t<Type>>>> {
 private:
-  using value_type = std::remove_cv_t<std::remove_reference_t<Type>>;
+  using value_type = remove_cvref_t<Type>;
 
 public:
   using type =
@@ -122,10 +116,9 @@ public:
 
 template <typename Type>
 struct deduced_interface_types<
-    Type, std::enable_if_t<is_alternative_type_v<
-              std::remove_cv_t<std::remove_reference_t<Type>>>>> {
+    Type, std::enable_if_t<is_alternative_type_v<remove_cvref_t<Type>>>> {
 private:
-  using value_type = std::remove_cv_t<std::remove_reference_t<Type>>;
+  using value_type = remove_cvref_t<Type>;
 
   template <typename Alternatives> struct alternatives_interface_types;
 
@@ -167,91 +160,39 @@ struct registration_arg_matches<
     std::enable_if_t<is_registration_key_arg<Candidate>::value>>
     : std::true_type {};
 
-template <typename Current, typename Expected, typename Candidate>
-using registration_arg_t = std::conditional_t<
-    !std::is_same_v<Current, Expected>, Current,
-    std::conditional_t<registration_arg_matches<Expected, Candidate>::value,
-                       Candidate, Current>>;
+// The first argument that fills the role of Expected, or Expected itself.
+template <typename Expected, typename... Args>
+using registration_arg_t =
+    type_list_find_t<Expected, type_list<Args...>,
+                     registration_arg_matches<Expected, Args>::value...>;
 
-template <typename ScopeType, typename StorageType, typename FactoryType,
-          typename InterfaceType, typename KeyType, typename ConversionsType,
-          typename DependenciesType, typename BindingsType>
-struct registration_args {
-  using scope_type = ScopeType;
-  using storage_type = StorageType;
-  using factory_type = FactoryType;
-  using interface_type = InterfaceType;
-  using key_type = KeyType;
-  using conversions_type = ConversionsType;
-  using dependencies_type = DependenciesType;
-  using bindings_type = BindingsType;
+template <typename... Args> struct registration_args {
+  using scope_type = registration_arg_t<::dingo::scope<void>, Args...>;
+  using storage_type = registration_arg_t<::dingo::storage<void>, Args...>;
+  using factory_type = registration_arg_t<::dingo::factory<void>, Args...>;
+  using interface_type = registration_arg_t<::dingo::interfaces<void>, Args...>;
+  using key_type =
+      registration_arg_t<::dingo::key_type<::dingo::none_t>, Args...>;
+  using conversions_type =
+      registration_arg_t<::dingo::conversions<void>, Args...>;
+  using dependencies_type =
+      registration_arg_t<::dingo::dependencies<void>, Args...>;
+  using bindings_type = registration_arg_t<::dingo::bindings<void>, Args...>;
 };
 
-template <typename ParsedArgs, typename... Args> struct parse_registration_args;
+// The roles of a registration argument, each named by its default.
+using registration_roles =
+    type_list<::dingo::scope<void>, ::dingo::storage<void>,
+              ::dingo::factory<void>, ::dingo::interfaces<void>,
+              ::dingo::key_type<::dingo::none_t>, ::dingo::conversions<void>,
+              ::dingo::dependencies<void>, ::dingo::bindings<void>>;
 
-template <typename ParsedArgs> struct parse_registration_args<ParsedArgs> {
-  using type = ParsedArgs;
-};
+template <typename T, typename Roles = registration_roles>
+inline constexpr bool is_supported_registration_arg_v = false;
 
-template <typename ScopeType, typename StorageType, typename FactoryType,
-          typename InterfaceType, typename KeyType, typename ConversionsType,
-          typename DependenciesType, typename BindingsType, typename Head,
-          typename... Tail>
-struct parse_registration_args<
-    registration_args<ScopeType, StorageType, FactoryType, InterfaceType,
-                      KeyType, ConversionsType, DependenciesType, BindingsType>,
-    Head, Tail...> {
-private:
-  using parsed_head = registration_args<
-      registration_arg_t<ScopeType, ::dingo::scope<void>, Head>,
-      registration_arg_t<StorageType, ::dingo::storage<void>, Head>,
-      registration_arg_t<FactoryType, ::dingo::factory<void>, Head>,
-      registration_arg_t<InterfaceType, ::dingo::interfaces<void>, Head>,
-      registration_arg_t<KeyType, ::dingo::key_type<::dingo::none_t>, Head>,
-      registration_arg_t<ConversionsType, ::dingo::conversions<void>, Head>,
-      registration_arg_t<DependenciesType, ::dingo::dependencies<void>, Head>,
-      registration_arg_t<BindingsType, ::dingo::bindings<void>, Head>>;
-
-public:
-  using type = typename parse_registration_args<parsed_head, Tail...>::type;
-};
-
-template <typename... Args>
-using parse_registration_args_t = typename parse_registration_args<
-    registration_args<::dingo::scope<void>, ::dingo::storage<void>,
-                      ::dingo::factory<void>, ::dingo::interfaces<void>,
-                      ::dingo::key_type<::dingo::none_t>,
-                      ::dingo::conversions<void>, ::dingo::dependencies<void>,
-                      ::dingo::bindings<void>>,
-    Args...>::type;
-
-template <typename T>
-inline constexpr bool is_supported_registration_arg_v =
-    registration_arg_matches<::dingo::scope<void>, T>::value ||
-    registration_arg_matches<::dingo::storage<void>, T>::value ||
-    registration_arg_matches<::dingo::factory<void>, T>::value ||
-    registration_arg_matches<::dingo::interfaces<void>, T>::value ||
-    registration_arg_matches<::dingo::key_type<::dingo::none_t>, T>::value ||
-    registration_arg_matches<::dingo::conversions<void>, T>::value ||
-    registration_arg_matches<::dingo::dependencies<void>, T>::value ||
-    registration_arg_matches<::dingo::bindings<void>, T>::value;
-
-template <typename T, typename...> struct get_type;
-template <typename T> struct get_type<T, type_list<>> {
-  using type = T;
-};
-
-template <typename T, typename Head, typename... Tail>
-struct get_type<T, type_list<Head, Tail...>> {
-  using type = std::conditional_t<
-      std::is_same_v<T, typename Head::template rebind_t<void>> &&
-          !std::is_same_v<Head, T>, /* &&... is needed for interface deduction
-                                     */
-      Head, typename get_type<T, type_list<Tail...>>::type>;
-};
-
-template <typename T, typename... Args>
-using get_type_t = typename get_type<T, Args...>::type;
+template <typename T, typename... Roles>
+inline constexpr bool is_supported_registration_arg_v<T, type_list<Roles...>> =
+    (registration_arg_matches<Roles, T>::value || ...);
 
 template <typename ParsedArgs>
 using registration_scope_t = typename ParsedArgs::scope_type;
@@ -264,10 +205,7 @@ using registration_storage_t = std::conditional_t<
 
 template <typename ParsedArgs,
           typename Dependencies = typename ParsedArgs::dependencies_type>
-struct registration_constructor_default {
-  using type = ::dingo::constructor<
-      leaf_type_t<typename registration_storage_t<ParsedArgs>::type>>;
-};
+struct registration_constructor_default;
 
 template <typename ParsedArgs>
 struct registration_constructor_default<ParsedArgs,
@@ -284,9 +222,8 @@ struct registration_constructor_default<ParsedArgs,
 };
 
 template <typename ParsedArgs>
-using registration_factory_default_t =
-    ::dingo::factory<typename registration_constructor_default<
-        ParsedArgs, typename ParsedArgs::dependencies_type>::type>;
+using registration_factory_default_t = ::dingo::factory<
+    typename registration_constructor_default<ParsedArgs>::type>;
 
 template <typename ParsedArgs>
 using registration_factory_t = std::conditional_t<
@@ -302,22 +239,19 @@ struct deduced_interface_type {
 template <typename StorageType, typename ScopeType>
 struct deduced_interface_type<
     StorageType, ScopeType,
-    std::void_t<typename ::dingo::detail::alternative_type_interface_types<
-        std::remove_cv_t<std::remove_reference_t<StorageType>>>::type>> {
+    std::enable_if_t<is_alternative_type_v<remove_cvref_t<StorageType>>>> {
   using type =
       ::dingo::interfaces<typename ::dingo::detail::deduced_interface_types<
-          std::remove_cv_t<std::remove_reference_t<StorageType>>>::type>;
+          remove_cvref_t<StorageType>>::type>;
 };
 
 template <typename StorageType, typename ScopeType>
 struct deduced_interface_type<
     StorageType, ScopeType,
     std::enable_if_t<
-        !std::is_same_v<typename ScopeType::type, unique> &&
-        type_traits<
-            std::remove_cv_t<std::remove_reference_t<StorageType>>>::enabled &&
-        type_traits<std::remove_cv_t<std::remove_reference_t<StorageType>>>::
-            is_value_borrowable &&
+        !scope_consumes_v<typename ScopeType::type> &&
+        type_traits<remove_cvref_t<StorageType>>::enabled &&
+        is_value_borrowable_v<remove_cvref_t<StorageType>> &&
         is_alternative_type_v<std::remove_cv_t<leaf_type_t<StorageType>>>>> {
   using type =
       ::dingo::interfaces<typename ::dingo::detail::deduced_interface_types<
@@ -328,7 +262,7 @@ template <typename StorageType, typename ScopeType>
 struct deduced_interface_type<
     StorageType, ScopeType,
     std::enable_if_t<
-        !std::is_same_v<typename ScopeType::type, unique> &&
+        !scope_consumes_v<typename ScopeType::type> &&
         type_traits<StorageType>::enabled && !std::is_pointer_v<StorageType> &&
         std::is_array_v<typename type_traits<StorageType>::value_type>>> {
   using type =
@@ -382,58 +316,23 @@ struct selected_registration_key<
   using type = ::dingo::key_type<Tag>;
 };
 
-template <typename Left, typename Right> struct merge_selected_registration_key;
-
-template <>
-struct merge_selected_registration_key<::dingo::key_type<::dingo::none_t>,
-                                       ::dingo::key_type<::dingo::none_t>> {
-  using type = ::dingo::key_type<::dingo::none_t>;
-};
-
-template <typename Right>
-struct merge_selected_registration_key<::dingo::key_type<::dingo::none_t>,
-                                       Right> {
-  using type = Right;
-};
-
-template <typename Left>
-struct merge_selected_registration_key<Left,
-                                       ::dingo::key_type<::dingo::none_t>> {
-  using type = Left;
-};
-
-template <typename Key> struct merge_selected_registration_key<Key, Key> {
-  using type = Key;
-};
-
-template <typename Left, typename Right>
-struct merge_selected_registration_key {
-  static_assert(
-      std::is_same_v<Left, Right>,
-      "selected registration interfaces must use one compile-time selector");
-  using type = void;
-};
-
-template <typename... Interfaces>
-struct normalize_selected_registration_interfaces {
-  using type = ::dingo::interfaces<
-      typename selected_registration_interface<Interfaces>::type...>;
-};
-
-template <typename... Interfaces>
-struct selected_registration_key_from_interfaces;
-
-template <> struct selected_registration_key_from_interfaces<> {
+// The selector key of the selected interfaces; they must agree on one.
+template <typename... Keys> struct merge_selected_registration_key {
   using type = ::dingo::key_type<::dingo::none_t>;
 };
 
 template <typename Head, typename... Tail>
-struct selected_registration_key_from_interfaces<Head, Tail...> {
-  using head_key = typename selected_registration_key<Head>::type;
-  using tail_key =
-      typename selected_registration_key_from_interfaces<Tail...>::type;
-  using type =
-      typename merge_selected_registration_key<head_key, tail_key>::type;
+struct merge_selected_registration_key<Head, Tail...> {
+private:
+  using none = ::dingo::key_type<::dingo::none_t>;
+  using tail = typename merge_selected_registration_key<Tail...>::type;
+
+public:
+  static_assert(
+      std::is_same_v<Head, none> || std::is_same_v<tail, none> ||
+          std::is_same_v<Head, tail>,
+      "selected registration interfaces must use one compile-time selector");
+  using type = std::conditional_t<std::is_same_v<Head, none>, tail, Head>;
 };
 
 template <typename Interfaces>
@@ -445,10 +344,10 @@ struct normalize_selected_registration_interface_arg {
 template <typename... Interfaces>
 struct normalize_selected_registration_interface_arg<
     ::dingo::interfaces<Interfaces...>> {
-  using type =
-      typename normalize_selected_registration_interfaces<Interfaces...>::type;
-  using key_type =
-      typename selected_registration_key_from_interfaces<Interfaces...>::type;
+  using type = ::dingo::interfaces<
+      typename selected_registration_interface<Interfaces>::type...>;
+  using key_type = typename merge_selected_registration_key<
+      typename selected_registration_key<Interfaces>::type...>::type;
 };
 
 template <typename ParsedArgs>
@@ -518,7 +417,7 @@ template <typename Bindings> struct is_empty_bindings : std::false_type {};
 template <> struct is_empty_bindings<::dingo::bindings<>> : std::true_type {};
 
 template <>
-struct is_empty_bindings<::dingo::bindings<static_bindings<>>>
+struct is_empty_bindings<::dingo::bindings<static_registry<>>>
     : std::true_type {};
 
 template <typename Bindings>
@@ -533,12 +432,11 @@ using canonical_bindings_t =
 
 template <typename... Args> struct type_registration {
 private:
-  // Parse the explicit registration wrappers once, then derive any defaults
-  // from that cached result instead of rescanning Args... for each role.
-  using parsed_args = detail::parse_registration_args_t<Args...>;
+  // The explicit registration wrappers, from which the defaults are derived.
+  using parsed_args = detail::registration_args<Args...>;
 
 public:
-  // Scope has to be scpecified as there is no way how to deduce it
+  // Scope has to be specified as there is no way how to deduce it
   using scope_type = detail::registration_scope_t<parsed_args>;
   static_assert((detail::is_supported_registration_arg_v<Args> && ...),
                 "type_registration expects "

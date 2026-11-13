@@ -89,19 +89,26 @@ if(DINGO_DEVELOPMENT_MODE)
 
     set(DINGO_SOURCE_FILES
         base/config.h
+        base/flags.h
+        static/diagnostics.h
         static/graph.h
         static/registry.h
         container.h
-        type/auto_constructible.h
-        binding/binding_model.h
-        binding/binding_resolution.h
-        binding/binding_resolution_policy.h
-        binding/binding_selection.h
-        type/dependency.h
+        factory/auto_constructible.h
+        binding/model.h
+        binding/resolution.h
+        binding/selection.h
+        binding/activation.h
+        request/composition.h
+        request/derivation.h
+        resolution/algorithm.h
+        resolution/entry_points.h
         factory/factory_traits.h
         type/key.h
+        lookup/lookup_key.h
         base/none.h
-        static/activation_set.h
+        static/binding.h
+        static/container.h
         static/container_traits.h
         base/exceptions.h
         factory/callable.h
@@ -116,22 +123,22 @@ if(DINGO_DEVELOPMENT_MODE)
         factory/constructor_typedef.h
         factory/constructor.h
         factory/function.h
-        factory/invoke.h
         memory/aligned_storage.h
         memory/allocator.h
         memory/arena_allocator.h
         memory/object_store.h
         memory/object_lifetime.h
-        type/access.h
         type/annotated.h
         type/collection_traits.h
         registration/constructor.h
         registration/type_registration.h
         runtime_container.h
+        runtime/container.h
         runtime/container_traits.h
-        runtime/registration_api.h
         runtime/lookup_index.h
+        runtime/memory.h
         runtime/registry.h
+        runtime/registry_store.h
         runtime/transaction.h
         static_container.h
         lookup/array.h
@@ -143,34 +150,41 @@ if(DINGO_DEVELOPMENT_MODE)
         lookup/storage.h
         lookup/tags.h
         lookup/unordered.h
-        resolution/cache.h
-        resolution/conversion_cache.h
-        resolution/conversion_resolution.h
-        binding/runtime_binding_interface.h
-        runtime/runtime_binding.h
+        binding/cache.h
+        conversion/available.h
+        binding/interface.h
+        runtime/binding.h
         storage/interface_storage_traits.h
-        context/context_base.h
+        context/resolution.h
         runtime/context.h
         static/context.h
         rtti/static_provider.h
         rtti/rtti.h
         rtti/typeid_provider.h
         storage/external.h
-        resolution/materialized_source.h
+        conversion/source.h
         storage/shared_cyclical.h
         storage/shared.h
         storage/storage.h
-        storage/storage_scope_policy.h
+        storage/retention.h
+        storage/scope_traits.h
         storage/type_storage_traits.h
         storage/unique.h
-        type/normalized_type.h
-        type/rebind_type.h
-        type/type_conversion_traits.h
+        type/shape.h
+        conversion/paths.h
         base/type_descriptor.h
         base/type_list.h
-        base/type_name.h
         type/type_traits.h
-        resolution/resolution_operation.h
+        conversion/apply.h
+        base/meta.h
+        base/construction_scope.h
+        base/selected.h
+        request/collection.h
+        context/recursion_guard.h
+        lookup/container_lookup_definition.h
+        registration/requirements.h
+        conversion/route.h
+        request/decomposition.h
     )
 
     set(DINGO_INTERFACE_SOURCES "")

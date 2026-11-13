@@ -10,8 +10,10 @@
 #include <dingo/base/config.h>
 
 #include <dingo/base/exceptions.h>
+#include <dingo/base/meta.h>
 #include <dingo/base/type_list.h>
 
+#include <array>
 #include <memory>
 #include <optional>
 #include <type_traits>
@@ -26,118 +28,182 @@ struct external;
 template <class T> struct exact_lookup;
 template <class T> struct collection_traits;
 
-namespace detail {
-template <typename T, typename, auto... Values>
-struct is_brace_constructible_impl : std::false_type {};
+// The wrapper semantics a type_traits specialization names. The library knows
+// a wrapper only by its semantics and by the operations of its type_traits; the
+// standard wrappers are described below as a user's wrapper is.
+namespace semantics {
+// A handle to an object it does not own, such as a raw pointer.
+struct observer {
+  using semantics = observer;
+  static constexpr bool enabled = true;
+  static constexpr bool is_pointer_like = true;
+  static constexpr bool is_owning_handle = false;
+};
 
-template <typename T, auto... Values>
-struct is_brace_constructible_impl<T, std::void_t<decltype(T{Values...})>,
-                                   Values...> : std::true_type {};
+// The sole owner of an object, such as std::unique_ptr. A sole owner hands its
+// object to the sharing handle of its family, share_t.
+struct sole_owner {
+  using semantics = sole_owner;
+  static constexpr bool enabled = true;
+  static constexpr bool is_pointer_like = true;
+  static constexpr bool is_owning_handle = true;
+};
 
-template <typename T, auto... Values>
-struct is_brace_constructible
-    : is_brace_constructible_impl<T, void, Values...> {};
+// A handle sharing the ownership of an object, such as std::shared_ptr.
+struct shared_owner {
+  using semantics = shared_owner;
+  static constexpr bool enabled = true;
+  static constexpr bool is_pointer_like = true;
+  static constexpr bool is_owning_handle = true;
+};
 
-template <typename T, auto... Values>
-inline constexpr bool is_brace_constructible_v =
-    is_brace_constructible<T, Values...>::value;
-} // namespace detail
+// A value that holds an object in place or none, such as std::optional.
+struct optional_value {
+  using semantics = optional_value;
+  static constexpr bool enabled = true;
+  static constexpr bool is_pointer_like = false;
+  static constexpr bool is_owning_handle = false;
+};
 
+// A value that holds one of several alternatives, such as std::variant. It is
+// not a wrapper of one element, so it is not enabled as one.
+struct alternative_value {
+  using semantics = alternative_value;
+  static constexpr bool enabled = false;
+  static constexpr bool is_pointer_like = false;
+  static constexpr bool is_owning_handle = false;
+};
+} // namespace semantics
+
+// Makes a type a wrapper. A specialization derives from the semantics of the
+// wrapper and provides
+//
+//   value_type     the element type
+//   rebind_t<U>    the same wrapper of the element U
+//   get(w)         the address of the element, or null
+//   borrow(w)      the element, for a wrapper whose element can be borrowed
+//                  as an object (not an array)
+//   empty(w)       whether the wrapper holds no element
+//   emplace(args...)
+//                  a wrapper of an element constructed of args
+//   emplaces_element
+//                  optional, false by default: whether emplace(args...) passes
+//                  args to the emplace of an element that is a wrapper too, so
+//                  that a wrapper of wrappers is emplaced at once of the
+//                  arguments of its innermost element
+//   can_emplace<Args...>
+//                  optional, true by default: whether emplace takes Args, for
+//                  an emplace that cannot take any, such as that of a handle
+//                  of an array
+//   share_t<U>     for a sole owner: the sharing handle of the element U
+//   wrap(v), empty_value()
+//                  for an optional value: a wrapper of v, and an empty one
+//
+// An alternative value provides instead
+//
+//   alternatives        the type_list of its alternatives
+//   selected_type<S>    the alternative a source S constructs
+//   wrap<A>(v)          a value holding v as the alternative A
+//   get<A>(value)       the address of the alternative A, or null
 template <typename T, typename = void> struct type_traits {
   static constexpr bool enabled = false;
   static constexpr bool is_pointer_like = false;
-  static constexpr bool is_value_borrowable = false;
   static constexpr bool is_owning_handle = false;
-
-  template <typename> static constexpr bool is_handle_rebindable = false;
-
-  template <typename> static constexpr bool is_rebindable = false;
 };
 
 template <typename T> struct type_traits<const T> : type_traits<T> {};
 
-template <typename T>
-inline constexpr bool is_pointer_like_type_v =
-    type_traits<T>::enabled && type_traits<T>::is_pointer_like &&
-    !std::is_pointer_v<T>;
-
-template <typename T, typename = void> struct copy_constructible_traits;
-
 namespace detail {
-template <typename T, bool IsCollection>
-struct copy_constructible_with_collection {
-  static constexpr bool value = std::is_copy_constructible_v<T>;
-};
-
-template <typename T> struct copy_constructible_with_collection<T, true> {
-  static constexpr bool value = copy_constructible_traits<
-      typename collection_traits<T>::resolve_type>::value;
-};
-
-template <typename T, typename = void> struct copy_constructible_base {
-  using value_type = std::remove_cv_t<std::remove_reference_t<T>>;
-
-  static constexpr bool value = std::is_copy_constructible_v<value_type>;
-};
+template <typename T, typename = void>
+struct is_value_borrowable : std::false_type {};
 
 template <typename T>
-struct copy_constructible_base<
-    T, std::void_t<decltype(collection_traits<std::remove_cv_t<
-                                std::remove_reference_t<T>>>::is_collection)>> {
-  using collection_type =
-      collection_traits<std::remove_cv_t<std::remove_reference_t<T>>>;
-  using value_type = std::remove_cv_t<std::remove_reference_t<T>>;
-
-  static constexpr bool value =
-      copy_constructible_with_collection<value_type,
-                                         collection_type::is_collection>::value;
-};
+struct is_value_borrowable<
+    T, std::void_t<decltype(type_traits<T>::borrow(std::declval<T &>()))>>
+    : std::true_type {};
 } // namespace detail
 
-template <typename T, typename>
-struct copy_constructible_traits : detail::copy_constructible_base<T> {};
+// Whether the element of a wrapper can be borrowed as an object.
+template <typename T>
+inline constexpr bool is_value_borrowable_v =
+    detail::is_value_borrowable<std::remove_cv_t<T>>::value;
+
+namespace detail {
+// A collection is copied with its elements.
+template <typename T> constexpr bool copy_constructible() {
+  using value_type = remove_cvref_t<T>;
+  if constexpr (collection_traits<value_type>::is_collection) {
+    return copy_constructible<
+        typename collection_traits<value_type>::resolve_type>();
+  } else {
+    return std::is_copy_constructible_v<value_type>;
+  }
+}
+} // namespace detail
 
 template <typename T>
-inline constexpr bool is_copy_constructible_v =
-    copy_constructible_traits<T>::value;
+inline constexpr bool is_copy_constructible_v = detail::copy_constructible<T>();
 
-template <typename T, typename = void> struct alternative_type_traits {
-  static constexpr bool enabled = false;
-};
+namespace detail {
+// Whether the type_traits of T declare Semantics.
+template <typename T, typename Semantics, typename = void>
+struct has_semantics : std::false_type {};
+
+template <typename T, typename Semantics>
+struct has_semantics<T, Semantics,
+                     std::void_t<typename type_traits<T>::semantics>>
+    : std::is_same<typename type_traits<T>::semantics, Semantics> {};
+} // namespace detail
 
 template <typename T>
 inline constexpr bool is_alternative_type_v =
-    alternative_type_traits<std::remove_cv_t<T>>::enabled;
+    detail::has_semantics<std::remove_cv_t<T>,
+                          semantics::alternative_value>::value;
+
+// An optional value: a wrapper that holds one element or none.
+template <typename T>
+inline constexpr bool is_optional_type_v =
+    detail::has_semantics<std::remove_cv_t<std::remove_reference_t<T>>,
+                          semantics::optional_value>::value;
 
 namespace detail {
-template <typename List, typename Selected> struct type_list_count;
+// Whether a value of T can exist: an abstract class cannot, nor can a value
+// that holds an abstract element in place. References and pointers can. It is
+// decided without instantiating T.
+template <typename... Types>
+constexpr bool is_formable_list(type_list<Types...>);
 
-template <typename Selected, typename... Alternatives>
-struct type_list_count<type_list<Alternatives...>, Selected>
-    : std::integral_constant<
-          size_t,
-          (0u + ... + (std::is_same_v<Selected, Alternatives> ? 1u : 0u))> {};
+template <typename T> constexpr bool is_formable() {
+  using type = std::remove_cv_t<T>;
+  if constexpr (has_semantics<type, semantics::optional_value>::value) {
+    return is_formable<typename type_traits<type>::value_type>();
+  } else if constexpr (is_alternative_type_v<type>) {
+    return is_formable_list(typename type_traits<type>::alternatives{});
+  } else if constexpr (std::is_class_v<type>) {
+    return !std::is_abstract_v<type>;
+  } else {
+    return true;
+  }
+}
 
-template <typename List> struct type_list_has_duplicates;
+template <typename... Types>
+constexpr bool is_formable_list(type_list<Types...>) {
+  return (is_formable<Types>() && ...);
+}
 
-template <typename... Alternatives>
-struct type_list_has_duplicates<type_list<Alternatives...>>
-    : std::bool_constant<((type_list_count<type_list<Alternatives...>,
-                                           Alternatives>::value > 1) ||
-                          ...)> {};
+template <typename T> inline constexpr bool is_formable_v = is_formable<T>();
 
 template <typename Type, typename = void>
 struct alternative_type_alternatives {};
 
 template <typename Type>
 struct alternative_type_alternatives<
-    Type, std::enable_if_t<
-              alternative_type_traits<std::remove_cv_t<Type>>::enabled>> {
-  using type =
-      typename alternative_type_traits<std::remove_cv_t<Type>>::alternatives;
+    Type, std::enable_if_t<is_alternative_type_v<Type>>> {
+  using type = typename type_traits<std::remove_cv_t<Type>>::alternatives;
 
-  static_assert(!type_list_has_duplicates<type>::value,
-                "alternative_type_traits<T>::alternatives must not contain "
+  static_assert(type_list_size_v<type_list_unique_t<type>> ==
+                    type_list_size_v<type>,
+                "type_traits<T>::alternatives must not contain "
                 "duplicate types");
 };
 
@@ -177,28 +243,16 @@ template <typename Type, typename Selected, typename = void>
 struct alternative_type_count : std::integral_constant<size_t, 0> {};
 
 template <typename Type, typename Selected>
-struct alternative_type_count<
-    Type, Selected,
-    std::enable_if_t<alternative_type_traits<std::remove_cv_t<Type>>::enabled>>
+struct alternative_type_count<Type, Selected,
+                              std::enable_if_t<is_alternative_type_v<Type>>>
     : type_list_count<alternative_type_alternatives_t<Type>,
                       std::remove_cv_t<Selected>> {};
 
-template <typename Type, typename = void>
-struct alternative_type_interface_types {};
-
-template <typename Type>
-struct alternative_type_interface_types<
-    Type, std::enable_if_t<
-              alternative_type_traits<std::remove_cv_t<Type>>::enabled>> {
-  using type = type_list_cat_t<type_list<std::remove_cv_t<Type>>,
-                               alternative_type_alternatives_t<Type>>;
-};
 } // namespace detail
 
 template <typename... Alternatives>
-struct alternative_type_traits<std::variant<Alternatives...>> {
-  static constexpr bool enabled = true;
-
+struct type_traits<std::variant<Alternatives...>>
+    : semantics::alternative_value {
   using alternatives = type_list<Alternatives...>;
 
   template <typename Source>
@@ -227,90 +281,105 @@ inline constexpr bool is_alternative_type_interface_compatible_v =
     detail::alternative_type_count<std::remove_cv_t<Type>,
                                    std::remove_cv_t<Interface>>::value == 1;
 
-template <typename StorageTag, typename Type, typename U, typename = void>
-struct storage_traits {
-  static constexpr bool enabled = false;
-  static constexpr bool is_stable = false;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<>;
-};
-
-template <typename StorageTag, typename Type, typename U>
-struct storage_traits<StorageTag, const Type, U>
-    : storage_traits<StorageTag, Type, U> {};
-
-template <typename StorageTag, typename Type, typename U>
-struct storage_traits<StorageTag, Type &, U>
-    : storage_traits<StorageTag, Type, U> {};
-
-template <typename StorageTag, typename Type, typename U>
-struct storage_traits<StorageTag, const Type &, U>
-    : storage_traits<StorageTag, Type, U> {};
-
 namespace detail {
-template <typename T, typename... Args> T make_nested(Args &&...args);
+template <typename T, typename... Args> T emplace_element(Args &&...args);
+
+// Whether T[N]{args...} is well-formed: its first elements are copy-initialized
+// from the arguments, and the rest value-initialized.
+template <typename T, size_t N, typename, typename... Args>
+struct is_bounded_array_initializable : std::false_type {};
+
+template <typename T, size_t N, typename... Args>
+struct is_bounded_array_initializable<
+    T, N, std::void_t<decltype(std::array<T, N>{{std::declval<Args>()...}})>,
+    Args...> : std::true_type {};
+
+template <typename T, size_t N, typename... Args>
+inline constexpr bool is_bounded_array_initializable_v =
+    is_bounded_array_initializable<T, N, void, Args...>::value;
 
 template <typename T, size_t N, typename... Args>
 T *make_bounded_array(Args &&...args) {
   static_assert(sizeof...(Args) <= N,
                 "too many initializers for bounded array construction");
-  return new T[N]{std::forward<Args>(args)...};
+  if constexpr (!is_bounded_array_initializable_v<T, N, Args &&...>) {
+    static_assert(is_bounded_array_initializable_v<T, N, Args &&...>,
+                  "bounded array elements cannot be initialized: the first "
+                  "are copy-initialized from the arguments and the rest "
+                  "value-initialized; an array of elements that cannot be "
+                  "is made by a factory");
+    return nullptr;
+  } else {
+    return new T[N]{std::forward<Args>(args)...};
+  }
 }
 
 template <typename T, size_t N, typename... Args>
 void construct_bounded_array(void *ptr, Args &&...args) {
   static_assert(sizeof...(Args) <= N,
                 "too many initializers for bounded array construction");
-  new (ptr) T[N]{std::forward<Args>(args)...};
+  if constexpr (!is_bounded_array_initializable_v<T, N, Args &&...>) {
+    static_assert(is_bounded_array_initializable_v<T, N, Args &&...>,
+                  "bounded array elements cannot be initialized: the first "
+                  "are copy-initialized from the arguments and the rest "
+                  "value-initialized; an array of elements that cannot be "
+                  "is made by a factory");
+  } else {
+    new (ptr) T[N]{std::forward<Args>(args)...};
+  }
 }
 
 template <typename T, typename... Args> T *make_dynamic_array(Args &&...args) {
   static_assert(sizeof...(Args) > 0,
                 "dynamic arrays require an explicit size via a custom "
                 "factory or element initializers");
-  return new T[sizeof...(Args)]{std::forward<Args>(args)...};
+  if constexpr (!is_bounded_array_initializable_v<T, sizeof...(Args),
+                                                  Args &&...>) {
+    static_assert(
+        is_bounded_array_initializable_v<T, sizeof...(Args), Args &&...>,
+        "dynamic array elements cannot be initialized: each is "
+        "copy-initialized from its argument");
+    return nullptr;
+  } else {
+    return new T[sizeof...(Args)]{std::forward<Args>(args)...};
+  }
 }
 
-template <typename Type, typename Pointer, typename = void>
-struct has_type_from_pointer : std::false_type {};
+// Whether type_traits<Handle>::emplace takes Args, as the handle declares with
+// can_emplace<Args...>. A handle that declares nothing takes the arguments of
+// its element.
+template <typename Handle, typename Args, typename = void>
+struct emplace_declaration : std::true_type {};
 
-template <typename Type, typename Pointer>
-struct has_type_from_pointer<
-    Type, Pointer,
-    std::void_t<decltype(type_traits<Type>::from_pointer(
-        std::declval<Pointer>()))>> : std::true_type {};
+template <typename Handle, typename... Args>
+struct emplace_declaration<
+    Handle, type_list<Args...>,
+    std::void_t<decltype(type_traits<Handle>::template can_emplace<Args...>)>>
+    : std::bool_constant<type_traits<Handle>::template can_emplace<Args...>> {};
 
-template <typename Type, typename Pointer>
-inline constexpr bool has_type_from_pointer_v =
-    has_type_from_pointer<Type, Pointer>::value;
+template <typename Handle, typename... Args>
+inline constexpr bool can_emplace_v =
+    emplace_declaration<Handle, type_list<Args...>>::value;
 
-template <typename Type, typename = void>
-struct is_array_like_type : std::is_array<Type> {};
+template <typename T, size_t> using repeated_argument_t = T;
 
-template <typename Type>
-inline constexpr bool is_array_like_type_v = is_array_like_type<Type>::value;
+template <typename Handle, typename Argument, typename Indexes>
+struct can_emplace_repeated;
 
-template <typename Type, typename = void>
-struct array_like_exact_interface_type {
-  using type = Type;
-};
+template <typename Handle, typename Argument, size_t... Is>
+struct can_emplace_repeated<Handle, Argument, std::index_sequence<Is...>>
+    : std::bool_constant<
+          can_emplace_v<Handle, repeated_argument_t<Argument, Is>...>> {};
 
-template <typename Type>
-using array_like_exact_interface_type_t =
-    typename array_like_exact_interface_type<Type>::type;
+// Whether type_traits<Handle>::emplace takes Count arguments of Argument.
+template <typename Handle, typename Argument, size_t Count>
+inline constexpr bool can_emplace_repeated_v =
+    can_emplace_repeated<Handle, Argument,
+                         std::make_index_sequence<Count>>::value;
 
 template <typename Type, typename U, typename = void>
 struct wrapper_rebind_leaf {
-private:
-  using const_type =
-      std::conditional_t<std::is_const_v<Type>, std::add_const_t<U>, U>;
-
-public:
-  using type = std::conditional_t<std::is_volatile_v<Type>,
-                                  std::add_volatile_t<const_type>, const_type>;
+  using type = copy_cv_t<Type, U>;
 };
 
 template <typename Type, size_t N, typename U>
@@ -348,7 +417,7 @@ struct smart_array_pointer_types<Handle, T, U,
                 Handle *>;
 };
 
-template <typename Handle, typename = void> struct wrapper_storage_types_impl {
+template <typename Handle, typename = void> struct wrapper_storage_types {
   using lvalue_reference_types = type_list<Handle &>;
   using pointer_types = type_list<Handle *>;
   using copyable_value_types =
@@ -356,16 +425,17 @@ template <typename Handle, typename = void> struct wrapper_storage_types_impl {
                          type_list<Handle>, type_list<>>;
 };
 
+// A handle or an optional is walked through to its element too: the chain is
+// walked once, collecting every list together instead of recursing over it
+// separately for each.
 template <typename Handle>
-struct wrapper_storage_types_impl<
-    Handle, std::enable_if_t<type_traits<Handle>::enabled &&
-                             type_traits<Handle>::is_pointer_like>> {
+struct wrapper_storage_types<
+    Handle, std::enable_if_t<
+                type_traits<Handle>::enabled &&
+                (type_traits<Handle>::is_pointer_like ||
+                 has_semantics<Handle, semantics::optional_value>::value)>> {
 private:
-  // Walk the wrapper chain once and collect all derived interface types
-  // together instead of recursing over the same chain separately for each
-  // result list.
-  using next =
-      wrapper_storage_types_impl<typename type_traits<Handle>::value_type>;
+  using next = wrapper_storage_types<typename type_traits<Handle>::value_type>;
   using copyable_handle_types =
       std::conditional_t<std::is_copy_constructible_v<Handle>,
                          type_list<Handle>, type_list<>>;
@@ -381,439 +451,327 @@ public:
                       typename next::copyable_value_types>;
 };
 
+// Whether every layer of a wrapper can exist: a handle can hold an abstract
+// element, a value that holds its element in place cannot. It is decided
+// without instantiating the wrapper.
+template <typename Type> constexpr bool is_wrapper_formable() {
+  if constexpr (type_traits<Type>::enabled && !std::is_pointer_v<Type>) {
+    using element = typename type_traits<Type>::value_type;
+    constexpr bool element_formable = is_wrapper_formable<element>();
+    if constexpr (type_traits<Type>::is_pointer_like) {
+      return element_formable;
+    } else {
+      return is_formable_v<Type> && element_formable;
+    }
+  } else {
+    return true;
+  }
+}
+
+template <typename Type>
+inline constexpr bool is_wrapper_formable_v = is_wrapper_formable<Type>();
+
+// An array, or an owning handle whose element cannot be borrowed as an object,
+// which owns an array; its exact interface is the array.
+template <typename Type, typename = void> struct array_like {
+  static constexpr bool value = std::is_array_v<Type>;
+  using exact_interface = Type;
+};
+
 template <typename Handle>
-using wrapper_storage_types = wrapper_storage_types_impl<Handle>;
-
-template <typename Array, typename Deleter>
-struct is_array_like_type<std::unique_ptr<Array, Deleter>,
-                          std::enable_if_t<std::is_array_v<Array>>>
-    : std::true_type {};
-
-template <typename Array, typename Deleter>
-struct array_like_exact_interface_type<
-    std::unique_ptr<Array, Deleter>, std::enable_if_t<std::is_array_v<Array>>> {
-  using type =
-      typename type_traits<std::unique_ptr<Array, Deleter>>::value_type;
+struct array_like<Handle,
+                  std::enable_if_t<type_traits<Handle>::is_owning_handle &&
+                                   !is_value_borrowable_v<Handle>>> {
+  static constexpr bool value = true;
+  using exact_interface = typename type_traits<Handle>::value_type;
 };
 
-template <typename Array>
-struct is_array_like_type<std::shared_ptr<Array>,
-                          std::enable_if_t<std::is_array_v<Array>>>
-    : std::true_type {};
+template <typename Type>
+inline constexpr bool is_array_like_type_v = array_like<Type>::value;
 
-template <typename Array>
-struct array_like_exact_interface_type<
-    std::shared_ptr<Array>, std::enable_if_t<std::is_array_v<Array>>> {
-  using type = typename type_traits<std::shared_ptr<Array>>::value_type;
-};
+template <typename Type>
+using array_like_exact_interface_type_t =
+    typename array_like<Type>::exact_interface;
 } // namespace detail
 
-template <typename T> struct type_traits<T *> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = true;
-  static constexpr bool is_owning_handle = false;
-
-  template <typename Target>
-  static constexpr bool is_handle_rebindable =
-      std::is_constructible_v<Target, T *>;
-
+// A pointer observes its pointee, which it borrows unless it is void.
+template <typename T> struct type_traits<T *> : semantics::observer {
   using value_type = T;
-
   template <typename U> using rebind_t = U *;
-
-  template <typename Target>
-  static constexpr bool is_rebindable = std::is_same_v<Target, rebind_t<T>>;
 
   static T *get(T *ptr) { return ptr; }
-  static T &borrow(T *ptr) { return *ptr; }
+  template <typename U = T, typename = std::enable_if_t<!std::is_void_v<U>>>
+  static U &borrow(T *ptr) {
+    return *ptr;
+  }
   static bool empty(T *ptr) { return ptr == nullptr; }
-  static void reset(T *&ptr) { ptr = nullptr; }
-  static T *from_pointer(T *ptr) { return ptr; }
-
-  template <typename TargetType, typename Factory, typename Context>
-  static TargetType resolve_type(Factory &factory, Context &context,
-                                 type_descriptor requested_type,
-                                 type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetType, rebind_t<T>>)
-      return factory.resolve(context);
-    else
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
-  }
-};
-
-template <> struct type_traits<void *> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = false;
-  static constexpr bool is_owning_handle = false;
-
-  template <typename Target>
-  static constexpr bool is_handle_rebindable =
-      std::is_constructible_v<Target, void *>;
-
-  using value_type = void;
-
-  template <typename U> using rebind_t = U *;
-
-  template <typename Target>
-  static constexpr bool is_rebindable = std::is_same_v<Target, rebind_t<void>>;
-
-  static void *get(void *ptr) { return ptr; }
-  static bool empty(void *ptr) { return ptr == nullptr; }
-  static void reset(void *&ptr) { ptr = nullptr; }
-  static void *from_pointer(void *ptr) { return ptr; }
-
-  template <typename TargetType, typename Factory, typename Context>
-  static TargetType resolve_type(Factory &factory, Context &context,
-                                 type_descriptor requested_type,
-                                 type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetType, rebind_t<void>>)
-      return factory.resolve(context);
-    else
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
-  }
-};
-
-template <> struct type_traits<const void *> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = false;
-  static constexpr bool is_owning_handle = false;
-
-  template <typename Target>
-  static constexpr bool is_handle_rebindable =
-      std::is_constructible_v<Target, const void *>;
-
-  using value_type = const void;
-
-  template <typename U> using rebind_t = U *;
-
-  template <typename Target>
-  static constexpr bool is_rebindable =
-      std::is_same_v<Target, rebind_t<const void>>;
-
-  static const void *get(const void *ptr) { return ptr; }
-  static bool empty(const void *ptr) { return ptr == nullptr; }
-  static void reset(const void *&ptr) { ptr = nullptr; }
-  static const void *from_pointer(const void *ptr) { return ptr; }
-
-  template <typename TargetType, typename Factory, typename Context>
-  static TargetType resolve_type(Factory &factory, Context &context,
-                                 type_descriptor requested_type,
-                                 type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetType, rebind_t<const void>>)
-      return factory.resolve(context);
-    else
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
-  }
 };
 
 template <typename Array, typename Deleter>
-struct type_traits<std::unique_ptr<Array, Deleter>,
-                   std::enable_if_t<std::is_array_v<Array> &&
-                                    (std::extent_v<Array, 0> == 0)>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = false;
-  static constexpr bool is_owning_handle = true;
-
-  template <typename Target>
-  static constexpr bool is_handle_rebindable =
-      std::is_constructible_v<Target, std::unique_ptr<Array, Deleter>>;
-
+struct type_traits<
+    std::unique_ptr<Array, Deleter>,
+    std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> == 0)>>
+    : semantics::sole_owner {
   using value_type = std::remove_extent_t<Array>;
-
   template <typename U>
   using rebind_t = std::unique_ptr<U[], std::default_delete<U[]>>;
+  template <typename U> using share_t = std::shared_ptr<U[]>;
 
-  template <typename Target>
-  static constexpr bool is_rebindable =
-      std::is_same_v<Target, rebind_t<value_type>>;
-
-  static value_type *get(std::unique_ptr<Array, Deleter> &wrapper) {
+  static auto *get(const std::unique_ptr<Array, Deleter> &wrapper) {
     return wrapper.get();
   }
-
-  static const value_type *get(const std::unique_ptr<Array, Deleter> &wrapper) {
-    return wrapper.get();
-  }
-
   static bool empty(const std::unique_ptr<Array, Deleter> &wrapper) {
     return wrapper.get() == nullptr;
   }
 
-  static void reset(std::unique_ptr<Array, Deleter> &wrapper) {
-    wrapper.reset();
-  }
+  // The array is made of an element of each argument, copy-initialized.
+  template <typename... Args>
+  static constexpr bool can_emplace =
+      detail::is_bounded_array_initializable_v<value_type, sizeof...(Args),
+                                               Args...>;
 
   template <typename... Args>
-  static std::unique_ptr<Array, Deleter> make(Args &&...args) {
+  static std::unique_ptr<Array, Deleter> emplace(Args &&...args) {
     return std::unique_ptr<Array, Deleter>(
         detail::make_dynamic_array<value_type>(std::forward<Args>(args)...));
-  }
-
-  static std::unique_ptr<Array, Deleter> from_pointer(value_type *ptr) {
-    return std::unique_ptr<Array, Deleter>(ptr);
-  }
-
-  template <typename TargetType, typename Factory, typename Context>
-  static TargetType &resolve_type(Factory &factory, Context &context,
-                                  type_descriptor requested_type,
-                                  type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetType, rebind_t<value_type>>)
-      return factory.resolve(context);
-    else
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
   }
 };
 
 template <typename T, typename Deleter>
 struct type_traits<std::unique_ptr<T, Deleter>,
-                   std::enable_if_t<!std::is_array_v<T>>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = true;
-  static constexpr bool is_owning_handle = true;
-
-  template <typename Target>
-  static constexpr bool is_handle_rebindable =
-      std::is_constructible_v<Target, std::unique_ptr<T, Deleter>>;
-
+                   std::enable_if_t<!std::is_array_v<T>>>
+    : semantics::sole_owner {
   using value_type = T;
-
   template <typename U>
   using rebind_t = std::unique_ptr<U, std::default_delete<U>>;
+  template <typename U> using share_t = std::shared_ptr<U>;
+  static constexpr bool emplaces_element = true;
 
-  template <typename Target>
-  static constexpr bool is_rebindable = std::is_same_v<Target, rebind_t<T>>;
-
-  static T *get(std::unique_ptr<T, Deleter> &wrapper) { return wrapper.get(); }
-
-  static const T *get(const std::unique_ptr<T, Deleter> &wrapper) {
+  static T *get(const std::unique_ptr<T, Deleter> &wrapper) {
     return wrapper.get();
   }
-
-  static T &borrow(std::unique_ptr<T, Deleter> &wrapper) { return *wrapper; }
-
-  static const T &borrow(const std::unique_ptr<T, Deleter> &wrapper) {
+  static T &borrow(const std::unique_ptr<T, Deleter> &wrapper) {
     return *wrapper;
   }
-
+  // A consumed handle gives its element away, as it owns it alone; one with
+  // a deleter of its own keeps it, as its deleter may expect to find it.
+  template <
+      typename D = Deleter,
+      typename = std::enable_if_t<std::is_same_v<D, std::default_delete<T>>>>
+  static T &&borrow(std::unique_ptr<T, Deleter> &&wrapper) {
+    return std::move(*wrapper);
+  }
   static bool empty(const std::unique_ptr<T, Deleter> &wrapper) {
     return wrapper.get() == nullptr;
   }
 
-  static void reset(std::unique_ptr<T, Deleter> &wrapper) { wrapper.reset(); }
-
   template <typename... Args>
-  static std::unique_ptr<T, Deleter> make(Args &&...args) {
-    if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
+  static std::unique_ptr<T, Deleter> emplace(Args &&...args) {
+    // An optional is made in place, as a shared_ptr makes one.
+    if constexpr (is_optional_type_v<T> &&
+                  std::is_constructible_v<T, std::in_place_t, Args...>)
       return std::unique_ptr<T, Deleter>(
-          new T(detail::make_nested<T>(std::forward<Args>(args)...)));
+          new T(std::in_place, std::forward<Args>(args)...));
+    else if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
+      return std::unique_ptr<T, Deleter>(
+          new T(detail::emplace_element<T>(std::forward<Args>(args)...)));
     // Work around direct-initialization in smart-pointer-backed factories.
     else if constexpr (std::is_constructible_v<T, Args...>)
       return std::unique_ptr<T, Deleter>(new T(std::forward<Args>(args)...));
     else
       return std::unique_ptr<T, Deleter>(new T{std::forward<Args>(args)...});
   }
-
-  static std::unique_ptr<T, Deleter> from_pointer(T *ptr) {
-    return std::unique_ptr<T, Deleter>(ptr);
-  }
-
-  template <typename TargetType, typename Factory, typename Context>
-  static TargetType &resolve_type(Factory &factory, Context &context,
-                                  type_descriptor requested_type,
-                                  type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetType, rebind_t<T>>)
-      return factory.resolve(context);
-    else
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
-  }
 };
 
 template <typename Array>
-struct type_traits<std::shared_ptr<Array>,
-                   std::enable_if_t<std::is_array_v<Array> &&
-                                    (std::extent_v<Array, 0> == 0)>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = false;
-  static constexpr bool is_owning_handle = true;
-
-  template <typename Target>
-  static constexpr bool is_handle_rebindable =
-      std::is_constructible_v<Target, std::shared_ptr<Array>>;
-
+struct type_traits<
+    std::shared_ptr<Array>,
+    std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> == 0)>>
+    : semantics::shared_owner {
   using value_type = std::remove_extent_t<Array>;
-
   template <typename U> using rebind_t = std::shared_ptr<U[]>;
 
-  template <typename Target>
-  static constexpr bool is_rebindable =
-      std::is_constructible_v<std::remove_cv_t<Target>, std::shared_ptr<Array>>;
-
-  static value_type *get(std::shared_ptr<Array> &wrapper) {
+  static auto *get(const std::shared_ptr<Array> &wrapper) {
     return wrapper.get();
   }
-
-  static const value_type *get(const std::shared_ptr<Array> &wrapper) {
-    return wrapper.get();
-  }
-
   static bool empty(const std::shared_ptr<Array> &wrapper) {
     return wrapper.get() == nullptr;
   }
 
-  static void reset(std::shared_ptr<Array> &wrapper) { wrapper.reset(); }
+  // The array is made of an element of each argument, copy-initialized.
+  template <typename... Args>
+  static constexpr bool can_emplace =
+      detail::is_bounded_array_initializable_v<value_type, sizeof...(Args),
+                                               Args...>;
 
   template <typename... Args>
-  static std::shared_ptr<Array> make(Args &&...args) {
+  static std::shared_ptr<Array> emplace(Args &&...args) {
     return std::shared_ptr<Array>(
         detail::make_dynamic_array<value_type>(std::forward<Args>(args)...));
   }
+};
 
-  static std::shared_ptr<Array> from_pointer(value_type *ptr) {
-    return std::shared_ptr<Array>(ptr);
+// A shared_ptr of a bounded array owns the array, as one of a dynamic array
+// does, and releases it with delete[]. Its size is part of its type, so it is
+// made without a size from the factory: its elements are made of the
+// arguments, and the rest value-initialized.
+template <typename Array>
+struct type_traits<
+    std::shared_ptr<Array>,
+    std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> != 0)>>
+    : semantics::shared_owner {
+  using value_type = std::remove_extent_t<Array>;
+  template <typename U>
+  using rebind_t = std::shared_ptr<U[std::extent_v<Array, 0>]>;
+
+  static auto *get(const std::shared_ptr<Array> &wrapper) {
+    return wrapper.get();
+  }
+  static bool empty(const std::shared_ptr<Array> &wrapper) {
+    return wrapper.get() == nullptr;
   }
 
-  template <typename TargetType, typename Factory, typename Context>
-  static TargetType &resolve_type(Factory &factory, Context &context,
-                                  type_descriptor, type_descriptor) {
-    return factory.template resolve<TargetType>(context);
+  // The first elements are copy-initialized from the arguments, the rest
+  // value-initialized.
+  template <typename... Args>
+  static constexpr bool can_emplace = detail::is_bounded_array_initializable_v<
+      value_type, std::extent_v<Array, 0>, Args...>;
+
+  template <typename... Args>
+  static std::shared_ptr<Array> emplace(Args &&...args) {
+    return std::shared_ptr<Array>(
+        detail::make_bounded_array<value_type, std::extent_v<Array, 0>>(
+            std::forward<Args>(args)...));
   }
 };
 
 template <typename T>
-struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = true;
-  static constexpr bool is_owning_handle = true;
-
-  template <typename Target>
-  static constexpr bool is_handle_rebindable =
-      std::is_constructible_v<Target, std::shared_ptr<T>>;
-
+struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>>
+    : semantics::shared_owner {
   using value_type = T;
-
   template <typename U> using rebind_t = std::shared_ptr<U>;
+  static constexpr bool emplaces_element = true;
 
-  template <typename Target>
-  static constexpr bool is_rebindable =
-      std::is_constructible_v<std::remove_cv_t<Target>, std::shared_ptr<T>>;
-
-  static T *get(std::shared_ptr<T> &wrapper) { return wrapper.get(); }
-
-  static const T *get(const std::shared_ptr<T> &wrapper) {
-    return wrapper.get();
-  }
-
-  static T &borrow(std::shared_ptr<T> &wrapper) { return *wrapper; }
-
-  static const T &borrow(const std::shared_ptr<T> &wrapper) { return *wrapper; }
-
+  static T *get(const std::shared_ptr<T> &wrapper) { return wrapper.get(); }
+  static T &borrow(const std::shared_ptr<T> &wrapper) { return *wrapper; }
   static bool empty(const std::shared_ptr<T> &wrapper) {
     return wrapper.get() == nullptr;
   }
 
-  static void reset(std::shared_ptr<T> &wrapper) { wrapper.reset(); }
-
-  template <typename... Args> static std::shared_ptr<T> make(Args &&...args) {
-    if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
+  template <typename... Args>
+  static std::shared_ptr<T> emplace(Args &&...args) {
+    // An optional is made in place of the arguments of its element, which
+    // may be moved neither in it nor out of it.
+    if constexpr (is_optional_type_v<T> &&
+                  std::is_constructible_v<T, std::in_place_t, Args...>)
+      return std::make_shared<T>(std::in_place, std::forward<Args>(args)...);
+    else if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
       return std::make_shared<T>(
-          detail::make_nested<T>(std::forward<Args>(args)...));
+          detail::emplace_element<T>(std::forward<Args>(args)...));
     // Work around direct-initialization in std::make_shared().
     else if constexpr (std::is_constructible_v<T, Args...>)
       return std::make_shared<T>(std::forward<Args>(args)...);
     else
       return std::shared_ptr<T>(new T{std::forward<Args>(args)...});
   }
-
-  static std::shared_ptr<T> from_pointer(T *ptr) {
-    return std::shared_ptr<T>(ptr);
-  }
-
-  template <typename TargetType, typename Factory, typename Context>
-  static TargetType &resolve_type(Factory &factory, Context &context,
-                                  type_descriptor, type_descriptor) {
-    return factory.template resolve<TargetType>(context);
-  }
 };
 
-template <typename T> struct type_traits<std::optional<T>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = false;
-  static constexpr bool is_value_borrowable = true;
-  static constexpr bool is_owning_handle = false;
-
-  template <typename> static constexpr bool is_handle_rebindable = false;
-
+template <typename T>
+struct type_traits<std::optional<T>> : semantics::optional_value {
   using value_type = T;
-
   template <typename U> using rebind_t = std::optional<U>;
-
-  template <typename Target>
-  static constexpr bool is_rebindable = std::is_same_v<Target, rebind_t<T>>;
+  static constexpr bool emplaces_element = true;
 
   static T *get(std::optional<T> &wrapper) {
-    return wrapper ? std::addressof(wrapper.value()) : nullptr;
+    return wrapper ? std::addressof(*wrapper) : nullptr;
   }
-
   static const T *get(const std::optional<T> &wrapper) {
-    return wrapper ? std::addressof(wrapper.value()) : nullptr;
+    return wrapper ? std::addressof(*wrapper) : nullptr;
   }
-
   static T &borrow(std::optional<T> &wrapper) { return wrapper.value(); }
-
   static const T &borrow(const std::optional<T> &wrapper) {
     return wrapper.value();
   }
-
+  // A consumed optional gives its element away.
+  static T &&borrow(std::optional<T> &&wrapper) {
+    return std::move(wrapper.value());
+  }
   static bool empty(const std::optional<T> &wrapper) {
     return !wrapper.has_value();
   }
 
-  static void reset(std::optional<T> &wrapper) { wrapper.reset(); }
-
   template <typename Value> static std::optional<T> wrap(Value &&value) {
     return std::optional<T>(std::in_place, std::forward<Value>(value));
   }
+  static std::optional<T> empty_value() { return std::nullopt; }
 
-  static std::optional<T> make_empty() { return std::nullopt; }
-
-  template <typename... Args> static std::optional<T> make(Args &&...args) {
-    if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
-      return std::optional<T>{
-          std::in_place, detail::make_nested<T>(std::forward<Args>(args)...)};
+  template <typename... Args> static std::optional<T> emplace(Args &&...args) {
+    // An optional of an optional is made in place too, as its element may
+    // be moved neither in it nor out of it.
+    if constexpr (is_optional_type_v<T> &&
+                  std::is_constructible_v<T, std::in_place_t, Args...>)
+      return std::optional<T>{std::in_place, std::in_place,
+                              std::forward<Args>(args)...};
+    else if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
+      return std::optional<T>{std::in_place, detail::emplace_element<T>(
+                                                 std::forward<Args>(args)...)};
     else if constexpr (std::is_constructible_v<T, Args...>)
       return std::optional<T>{std::in_place, std::forward<Args>(args)...};
     else
       return std::optional<T>{std::in_place, T{std::forward<Args>(args)...}};
   }
-
-  template <typename TargetType, typename Factory, typename Context>
-  static TargetType &resolve_type(Factory &factory, Context &context,
-                                  type_descriptor requested_type,
-                                  type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetType, rebind_t<T>>)
-      return factory.resolve(context);
-    else
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
-  }
 };
 
 namespace detail {
-template <typename T, typename... Args> T make_nested(Args &&...args) {
-  return type_traits<T>::make(std::forward<Args>(args)...);
+// A nested wrapper emplaced of the arguments of its element, or moved when it
+// is given as itself.
+template <typename T, typename... Args> T emplace_element(Args &&...args) {
+  if constexpr (sizeof...(Args) == 1 &&
+                (std::is_same_v<remove_cvref_t<Args>, T> && ...)) {
+    return T(std::forward<Args>(args)...);
+  } else {
+    return type_traits<T>::emplace(std::forward<Args>(args)...);
+  }
 }
+} // namespace detail
+
+// The element a handle names its family by in owning_handles.
+struct handle_element {};
+
+// The owning handles a scope makes of what it makes for a request: of a value
+// it makes, of a pointer it makes, and of an array, each family named by a
+// handle of handle_element. A scope rebinds them with rebind_t to what it
+// makes, leaving out those whose rebound handle no type_traits describes. A
+// user adds a family by specializing owning_handles<>, listing these with it.
+template <typename = void> struct owning_handles {
+  using type = type_list<std::unique_ptr<handle_element>,
+                         std::shared_ptr<handle_element>>;
+};
+
+namespace detail {
+// The handles of the families of owning_handles of Element, as rvalue
+// references, which a scope publishes. The families are looked up where a
+// scope rebinds them, after a user's specialization of owning_handles.
+template <typename Element> struct owning_handles_key {
+  using type = void;
+};
+
+template <typename Element,
+          typename Families = typename owning_handles<
+              typename owning_handles_key<Element>::type>::type>
+struct owning_handles_of;
+
+template <typename Element, typename... Families>
+struct owning_handles_of<Element, type_list<Families...>> {
+  using type = type_list_cat_t<std::conditional_t<
+      type_traits<
+          typename type_traits<Families>::template rebind_t<Element>>::enabled,
+      type_list<typename type_traits<Families>::template rebind_t<Element> &&>,
+      type_list<>>...>;
+};
+
+template <typename Element>
+using owning_handles_of_t = typename owning_handles_of<Element>::type;
 } // namespace detail
 
 } // namespace dingo

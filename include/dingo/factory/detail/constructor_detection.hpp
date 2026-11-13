@@ -34,16 +34,11 @@ struct constructor_argument;
 template <class DisabledType, typename DetectionMode>
 struct opaque_constructor_argument;
 
+// The conversions of the argument detection probes a constructor with are
+// those of the argument that constructs it (constructor_argument_impl), so
+// that what is detected is what can be constructed.
 template <class DisabledType>
 struct constructor_argument<DisabledType, constructor_shape> {
-  // Non-scalar wrappers may use constrained converting constructors that
-  // require an xvalue source while checking nested dependency conversions.
-  template <typename T,
-            typename = typename std::enable_if_t<
-                !std::is_same_v<DisabledType, std::decay_t<T>> &&
-                !std::is_scalar_v<T> && is_complete<std::decay_t<T>>::value>>
-  operator T &&() const;
-
   // Lvalue-reference probes stay available for incomplete types. They model
   // borrowed dependencies that can be satisfied by lookup without trying to
   // construct the forward-declared type.
@@ -80,15 +75,15 @@ struct opaque_constructor_argument<DisabledType, constructor_shape> {
 };
 
 template <typename DisabledType, typename Context, typename Container,
-          typename DetectionMode>
+          typename DetectionMode, typename Scope>
 class constructor_argument_impl;
 
-template <typename DisabledType, typename Context, typename Container>
+template <typename DisabledType, typename Context, typename Container,
+          typename Scope>
 class constructor_argument_impl<DisabledType, Context, Container,
-                                constructor_shape> {
+                                constructor_shape, Scope> {
 public:
-  constructor_argument_impl(construction_scope scope, Context &context,
-                            Container &container)
+  constructor_argument_impl(Scope scope, Context &context, Container &container)
       : scope_(scope), context_(context), container_(container) {}
 
   template <typename T, typename = typename std::enable_if_t<
@@ -134,7 +129,7 @@ public:
   }
 
 private:
-  construction_scope scope_;
+  Scope scope_;
   Context &context_;
   Container &container_;
 };
@@ -144,14 +139,6 @@ using list_initialization_expr = decltype(T{std::declval<Args>()...});
 
 template <typename T, typename... Args>
 using direct_initialization_expr = decltype(T(std::declval<Args>()...));
-
-template <typename T, size_t N, typename, typename... Args>
-struct array_list_initialization : std::false_type {};
-
-template <typename T, size_t N, typename... Args>
-struct array_list_initialization<
-    T, N, std::void_t<decltype(std::array<T, N>{{std::declval<Args>()...}})>,
-    Args...> : std::true_type {};
 
 #if defined(_MSC_VER)
 template <typename T, typename = void, typename... Args>
@@ -212,17 +199,27 @@ struct direct_initialization
     : initialization_impl<direct_initialization_expr, T, void, Args...> {};
 #endif
 
-// std::array stores its elements in a nested native array. MSVC does not apply
-// brace elision while probing that aggregate, which otherwise makes every
-// std::array appear to have arity one. Model the required braces explicitly on
-// every compiler so detection and construction agree on the element count.
-template <typename T, size_t N, typename... Args>
-struct list_initialization<std::array<T, N>, Args...>
-    : array_list_initialization<T, N, void, Args...> {};
+// Whether constructor_traits<T> declares the arguments T is list-initialized
+// of, where probing T{args...} would not tell.
+template <typename T, typename = void>
+struct declares_initialization : std::false_type {};
+
+template <typename T>
+struct declares_initialization<
+    T, std::void_t<decltype(constructor_traits<T>::template initializable<>)>>
+    : std::true_type {};
+
+template <typename T, typename... Args> constexpr bool list_initializable() {
+  if constexpr (declares_initialization<T>::value) {
+    return constructor_traits<T>::template initializable<Args...>;
+  } else {
+    return list_initialization<T, Args...>::value;
+  }
+}
 
 template <typename T, typename... Args>
 inline constexpr bool is_list_initializable_v =
-    list_initialization<T, Args...>::value;
+    list_initializable<T, Args...>();
 
 template <typename T, typename... Args>
 inline constexpr bool is_direct_initializable_v =
@@ -245,69 +242,77 @@ struct constructor_methods_impl<T, DetectionMode, std::index_sequence<Is...>> {
   // `Is...` only drives the pack expansion; the runtime construction
   // path still receives `Arity` copies of the same constructor argument
   // adapter without first materializing a type_list of placeholders.
-  template <typename Type, typename Context, typename Container>
-  static auto construct(construction_scope scope, Context &ctx,
-                        Container &container) {
+  template <typename Type, typename Context, typename Container, typename Scope>
+  static auto construct(Scope scope, Context &ctx, Container &container) {
     (void)scope;
     return detail::construction_dispatch<Type, T>::construct(
         ((void)Is,
-         constructor_argument_impl<T, Context, Container, DetectionMode>(
+         constructor_argument_impl<T, Context, Container, DetectionMode, Scope>(
              scope, ctx, container))...);
   }
 
-  template <typename Type, typename Context, typename Container>
-  static auto construct(void *ptr, construction_scope scope, Context &ctx,
+  template <typename Type, typename Context, typename Container, typename Scope>
+  static auto construct(void *ptr, Scope scope, Context &ctx,
                         Container &container) {
     (void)scope;
     detail::construction_dispatch<Type, T>::construct(
-        ptr, ((void)Is,
-              constructor_argument_impl<T, Context, Container, DetectionMode>(
-                  scope, ctx, container))...);
+        ptr,
+        ((void)Is,
+         constructor_argument_impl<T, Context, Container, DetectionMode, Scope>(
+             scope, ctx, container))...);
   }
 };
 
+// The arity of the one signature constructor_traits<T> declares, or
+// invalid_arity when it declares none.
+template <typename T, typename = void>
+inline constexpr size_t declared_arity = invalid_arity;
+
+template <typename T>
+inline constexpr size_t
+    declared_arity<T, std::void_t<typename constructor_traits<T>::arguments>> =
+        type_list_size_v<typename constructor_traits<T>::arguments>;
+
+// The arguments of the one signature constructor_traits<T> declares.
+template <typename T, typename = void> struct declared_arguments {
+  using type = type_list<>;
+};
+
+template <typename T>
+struct declared_arguments<
+    T, std::void_t<typename constructor_traits<T>::arguments>> {
+  using type = typename constructor_traits<T>::arguments;
+};
+
+template <typename T, typename Arguments> struct constructor_from_arguments;
+
+template <typename T, typename... Args>
+struct constructor_from_arguments<T, type_list<Args...>> {
+  // Reuse the recovered list as the construction signature. This keeps
+  // reflection and construction on the same types instead of detecting twice.
+  template <typename Type, typename Context, typename Container, typename Scope>
+  static auto construct(Scope scope, Context &ctx, Container &container) {
+    return ::dingo::constructor<T(Args...)>::template construct<Type>(
+        scope, ctx, container);
+  }
+
+  template <typename Type, typename Context, typename Container, typename Scope>
+  static auto construct(void *ptr, Scope scope, Context &ctx,
+                        Container &container) {
+    ::dingo::constructor<T(Args...)>::template construct<Type>(ptr, scope, ctx,
+                                                               container);
+  }
+};
+
+// A type of the signature it declares is constructed of it, its arguments
+// resolved as they are declared; any other of its detected arity.
 template <typename T, typename DetectionMode, size_t Arity>
 struct constructor_methods
-    : constructor_methods_impl<T, DetectionMode,
-                               std::make_index_sequence<Arity>> {};
-
-template <typename T, size_t N, typename DetectionMode>
-struct constructor_methods<std::array<T, N>, DetectionMode, N> {
-private:
-  template <typename Type, typename Context, typename Container, size_t... Is>
-  static auto construct_impl(construction_scope scope, Context &ctx,
-                             Container &container, std::index_sequence<Is...>) {
-    // std::array publishes its complete construction signature. Resolve its
-    // elements as T before aggregate initialization instead of asking the
-    // aggregate to select conversions from constructor-shape arguments.
-    return ::dingo::constructor<std::array<T, N>(
-        repeated_type<T, Is>...)>::template construct<Type>(scope, ctx,
-                                                            container);
-  }
-
-  template <typename Type, typename Context, typename Container, size_t... Is>
-  static void construct_impl(void *ptr, construction_scope scope, Context &ctx,
-                             Container &container, std::index_sequence<Is...>) {
-    ::dingo::constructor<std::array<T, N>(
-        repeated_type<T, Is>...)>::template construct<Type>(ptr, scope, ctx,
-                                                            container);
-  }
-
-public:
-  template <typename Type, typename Context, typename Container>
-  static auto construct(construction_scope scope, Context &ctx,
-                        Container &container) {
-    return construct_impl<Type>(scope, ctx, container,
-                                std::make_index_sequence<N>{});
-  }
-
-  template <typename Type, typename Context, typename Container>
-  static auto construct(void *ptr, construction_scope scope, Context &ctx,
-                        Container &container) {
-    construct_impl<Type>(ptr, scope, ctx, container,
-                         std::make_index_sequence<N>{});
-  }
-};
+    : std::conditional_t<
+          declared_arity<T> == Arity,
+          constructor_from_arguments<T, typename declared_arguments<T>::type>,
+          constructor_methods_impl<T, DetectionMode,
+                                   std::make_index_sequence<Arity>>> {};
 
 template <typename T, typename DetectionMode, size_t Arity,
           constructor_kind Kind>
@@ -321,15 +326,15 @@ struct constructor_detection_dispatch<T, DetectionMode, Arity,
 template <typename T, typename DetectionMode, size_t Arity>
 struct constructor_detection_dispatch<T, DetectionMode, Arity,
                                       constructor_kind::generic> {
-  template <typename Type, typename Context, typename Container>
-  static Type construct(construction_scope, Context &, Container &) {
+  template <typename Type, typename Context, typename Container, typename Scope>
+  static Type construct(Scope, Context &, Container &) {
     static_assert(always_false_v<Type>,
                   "generic constructor detected; use explicit "
                   "factory<constructor<...>>");
   }
 
-  template <typename Type, typename Context, typename Container>
-  static void construct(void *, construction_scope, Context &, Container &) {
+  template <typename Type, typename Context, typename Container, typename Scope>
+  static void construct(void *, Scope, Context &, Container &) {
     static_assert(always_false_v<Type>,
                   "generic constructor detected; use explicit "
                   "factory<constructor<...>>");
@@ -339,18 +344,57 @@ struct constructor_detection_dispatch<T, DetectionMode, Arity,
 template <typename T, typename DetectionMode, size_t Arity>
 struct constructor_detection_dispatch<T, DetectionMode, Arity,
                                       constructor_kind::invalid> {
-  template <typename Type, typename Context, typename Container>
-  static Type construct(construction_scope, Context &, Container &) {
+  template <typename Type, typename Context, typename Container, typename Scope>
+  static Type construct(Scope, Context &, Container &) {
     static_assert(always_false_v<Type>,
-                  "class T construction not detected or ambiguous");
+                  "class T construction not detected or ambiguous; a parameter "
+                  "whose type converts from anything its element can be made "
+                  "of, such as std::optional or std::any by value, cannot be "
+                  "detected: name the constructor with "
+                  "factory<constructor<...>>, or take it by reference");
   }
 
-  template <typename Type, typename Context, typename Container>
-  static void construct(void *, construction_scope, Context &, Container &) {
+  template <typename Type, typename Context, typename Container, typename Scope>
+  static void construct(void *, Scope, Context &, Container &) {
     static_assert(always_false_v<Type>,
-                  "class T construction not detected or ambiguous");
+                  "class T construction not detected or ambiguous; a parameter "
+                  "whose type converts from anything its element can be made "
+                  "of, such as std::optional or std::any by value, cannot be "
+                  "detected: name the constructor with "
+                  "factory<constructor<...>>, or take it by reference");
   }
 };
+
+// Whether an aggregate initialized from Args has one more member: an empty
+// braced initializer value-initializes a member without a conversion, so it is
+// never ambiguous.
+template <typename T, typename, typename... Args>
+struct aggregate_has_more_members : std::false_type {};
+
+template <typename T, typename... Args>
+struct aggregate_has_more_members<
+    T, std::void_t<decltype(T{std::declval<Args>()..., {}})>, Args...>
+    : std::true_type {};
+
+template <typename T, typename Indexes> struct aggregate_has_member_after;
+
+template <typename T, size_t... Is>
+struct aggregate_has_member_after<T, std::index_sequence<Is...>>
+    : aggregate_has_more_members<
+          T, void,
+          repeated_type<constructor_argument<T, constructor_shape>, Is>...> {};
+
+// An aggregate detected with fewer arguments than it has members, below the
+// largest arity searched, was detected at an arity whose next member a
+// dependency cannot initialize, such as a value that converts from anything
+// its element can be made of; constructing it would leave that member
+// default-initialized.
+template <typename T, size_t Arity, bool Aggregate = std::is_aggregate_v<T>>
+struct is_partial_aggregate : std::false_type {};
+
+template <typename T, size_t Arity>
+struct is_partial_aggregate<T, Arity, true>
+    : aggregate_has_member_after<T, std::make_index_sequence<Arity>> {};
 
 template <template <typename, typename, template <class, class> class,
                     template <typename...> typename,
@@ -363,7 +407,17 @@ struct constructor_detection_policy {
   // Search from high to low so the first match is the winning constructor
   // arity without materializing the full `[0, N]` probe set up front.
   static constexpr size_t detected_arity = ArityDetection::value;
-  static constexpr bool detected = detected_arity != invalid_arity;
+  // An aggregate detected at the largest arity searched is initialized as far
+  // as constructor_detection_traits allows.
+  static constexpr bool detected = [] {
+    if constexpr (detected_arity == invalid_arity) {
+      return false;
+    } else if constexpr (detected_arity == N) {
+      return true;
+    } else {
+      return !is_partial_aggregate<T, detected_arity>::value;
+    }
+  }();
   static constexpr bool requires_explicit_factory = [] {
     if constexpr (!detected || detected_arity == 0) {
       return false;
@@ -399,49 +453,6 @@ struct DINGO_EMPTY_BASES constructor_detection_impl
                                    DetectionMode, IsConstructible,
                                    N>::dispatch {};
 
-template <typename T, typename Sequence> struct constructor_array_arguments;
-
-template <typename T, size_t... Is>
-struct constructor_array_arguments<T, std::index_sequence<Is...>> {
-  using type = type_list<repeated_type<T, Is>...>;
-};
-
-// std::array has a fixed element signature, so it does not need the generic
-// high-to-low constructor search.
-template <typename T, size_t N, typename DetectionMode>
-struct constructor_array_detection
-    : constructor_detection_dispatch<std::array<T, N>, DetectionMode, N,
-                                     constructor_kind::concrete> {
-  static constexpr constructor_kind kind = constructor_kind::concrete;
-  static constexpr size_t arity = N;
-  using arguments =
-      std::conditional_t<std::is_same_v<DetectionMode, constructor_signature>,
-                         typename constructor_array_arguments<
-                             T, std::make_index_sequence<N>>::type,
-                         std::conditional_t<N == 0, type_list<>, void>>;
-};
-
-template <typename T, typename Arguments> struct constructor_from_arguments;
-
-template <typename T, typename... Args>
-struct constructor_from_arguments<T, type_list<Args...>> {
-  // Reuse the recovered list as the construction signature. This keeps
-  // reflection and construction on the same types instead of detecting twice.
-  template <typename Type, typename Context, typename Container>
-  static auto construct(construction_scope scope, Context &ctx,
-                        Container &container) {
-    return ::dingo::constructor<T(Args...)>::template construct<Type>(
-        scope, ctx, container);
-  }
-
-  template <typename Type, typename Context, typename Container>
-  static auto construct(void *ptr, construction_scope scope, Context &ctx,
-                        Container &container) {
-    ::dingo::constructor<T(Args...)>::template construct<Type>(ptr, scope, ctx,
-                                                               container);
-  }
-};
-
 template <template <typename, typename, template <typename...> typename,
                     size_t> typename Detection,
           template <typename, typename, template <typename...> typename, size_t,
@@ -463,9 +474,8 @@ public:
                 "constructor-signature detection must cover every constructor "
                 "selected by constructor-shape detection");
 
-  template <typename Type, typename Context, typename Container>
-  static auto construct(construction_scope scope, Context &ctx,
-                        Container &container) {
+  template <typename Type, typename Context, typename Container, typename Scope>
+  static auto construct(Scope scope, Context &ctx, Container &container) {
     if constexpr (base_type::kind == constructor_kind::concrete) {
       return constructor_from_arguments<T, arguments>::template construct<Type>(
           scope, ctx, container);
@@ -474,8 +484,8 @@ public:
     }
   }
 
-  template <typename Type, typename Context, typename Container>
-  static auto construct(void *ptr, construction_scope scope, Context &ctx,
+  template <typename Type, typename Context, typename Container, typename Scope>
+  static auto construct(void *ptr, Scope scope, Context &ctx,
                         Container &container) {
     if constexpr (base_type::kind == constructor_kind::concrete) {
       constructor_from_arguments<T, arguments>::template construct<Type>(
@@ -491,6 +501,19 @@ public:
 
 namespace dingo {
 namespace detail {
+
+// A type with one signature declared needs no constructor search.
+template <typename T, typename DetectionMode>
+struct constructor_declared_detection
+    : constructor_detection_dispatch<T, DetectionMode, declared_arity<T>,
+                                     constructor_kind::concrete> {
+  static constexpr constructor_kind kind = constructor_kind::concrete;
+  static constexpr size_t arity = declared_arity<T>;
+  using arguments =
+      std::conditional_t<std::is_same_v<DetectionMode, constructor_signature>,
+                         typename constructor_traits<T>::arguments,
+                         std::conditional_t<arity == 0, type_list<>, void>>;
+};
 
 #if !defined(_MSC_VER)
 template <typename T, typename DetectionMode,
@@ -526,39 +549,22 @@ struct constructor_detection;
 template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible, size_t N>
 struct constructor_detection
-    : constructor_detection_impl<
-          constructor_probe,
-          constructor_arity<T, DetectionMode, IsConstructible, N>, T,
-          DetectionMode, IsConstructible, N> {};
+    : std::conditional_t<
+          declared_arity<T> <= N,
+          constructor_declared_detection<T, DetectionMode>,
+          constructor_detection_impl<
+              constructor_probe,
+              constructor_arity<T, DetectionMode, IsConstructible, N>, T,
+              DetectionMode, IsConstructible, N>> {};
 
 template <typename T, template <typename...> typename IsConstructible, size_t N>
 struct constructor_detection<T, constructor_signature, IsConstructible, N>
-    : constructor_detection_signature_impl<constructor_detection,
-                                           constructor_signature_recovery, T,
-                                           IsConstructible, N> {};
-
-template <typename T, size_t Size,
-          template <typename...> typename IsConstructible, size_t N>
-struct constructor_detection<std::array<T, Size>, constructor_shape,
-                             IsConstructible, N>
     : std::conditional_t<
-          (Size <= N), constructor_array_detection<T, Size, constructor_shape>,
-          constructor_detection_impl<
-              constructor_probe,
-              constructor_arity<std::array<T, Size>, constructor_shape,
-                                IsConstructible, N>,
-              std::array<T, Size>, constructor_shape, IsConstructible, N>> {};
-
-template <typename T, size_t Size,
-          template <typename...> typename IsConstructible, size_t N>
-struct constructor_detection<std::array<T, Size>, constructor_signature,
-                             IsConstructible, N>
-    : std::conditional_t<
-          (Size <= N),
-          constructor_array_detection<T, Size, constructor_signature>,
-          constructor_detection_signature_impl<
-              constructor_detection, constructor_signature_recovery,
-              std::array<T, Size>, IsConstructible, N>> {};
+          declared_arity<T> <= N,
+          constructor_declared_detection<T, constructor_signature>,
+          constructor_detection_signature_impl<constructor_detection,
+                                               constructor_signature_recovery,
+                                               T, IsConstructible, N>> {};
 #endif
 
 } // namespace detail

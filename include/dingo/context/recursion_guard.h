@@ -7,14 +7,14 @@
 
 #pragma once
 
-#include <dingo/context/context_base.h>
+#include <dingo/context/resolution.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/factory/factory_traits.h>
 #include <dingo/memory/aligned_storage.h>
 
 namespace dingo {
 
-template <typename StaticRegistry> class static_context;
+template <typename Backend> class resolution_context;
 
 namespace detail {
 
@@ -34,9 +34,9 @@ inline constexpr bool is_constructor_v<constructor<Ts...>> = true;
 template <typename Context>
 inline constexpr bool checks_declared_cycles_v = false;
 
-template <typename StaticRegistry>
-inline constexpr bool checks_declared_cycles_v<static_context<StaticRegistry>> =
-    true;
+template <typename Backend>
+inline constexpr bool checks_declared_cycles_v<resolution_context<Backend>> =
+    !Backend::is_transactional;
 
 template <>
 inline constexpr bool checks_declared_cycles_v<no_dependency_context> = true;
@@ -63,7 +63,7 @@ template <typename T> struct recursion_guard {
     for (const recursion_guard *guard = prev_; guard != nullptr;
          guard = guard->prev_) {
       if (guard->binding_ == binding_) {
-        throw detail::make_type_recursion_exception<T>(context);
+        detail::throw_type_recursion(detail::described_type_v<T>, context);
       }
     }
     // The destructor unlinks the guard, which GCC does not see when it warns

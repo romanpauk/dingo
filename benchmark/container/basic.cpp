@@ -301,7 +301,7 @@ BENCHMARK_TEMPLATE(basic_shared_resolve4, int)->UseRealTime();
 BENCHMARK_TEMPLATE(basic_shared_resolve4, std::string)->UseRealTime();
 
 template <bool Cache>
-struct container_traits : dingo::dynamic_container_traits {
+struct container_traits : dingo::runtime_container_traits {
   static constexpr bool cache_enabled = Cache;
 };
 

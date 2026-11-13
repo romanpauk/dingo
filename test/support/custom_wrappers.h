@@ -8,8 +8,8 @@
 #pragma once
 
 #include <dingo/base/exceptions.h>
-#include <dingo/storage/type_storage_traits.h>
-#include <dingo/type/type_conversion_traits.h>
+#include <dingo/conversion/paths.h>
+#include <dingo/storage/scope_traits.h>
 #include <dingo/type/type_traits.h>
 
 #include <memory>
@@ -35,6 +35,17 @@ template <typename T> class test_shared {
 public:
   test_shared() = default;
   explicit test_shared(std::shared_ptr<T> ptr) : ptr_(std::move(ptr)) {}
+  // Takes over what a raw pointer points to.
+  explicit test_shared(T *ptr) : ptr_(ptr) {}
+
+  // Converts to the handle of a base, as std::shared_ptr does.
+  template <typename U,
+            typename = std::enable_if_t<std::is_convertible_v<U *, T *>>>
+  test_shared(const test_shared<U> &other) : ptr_(other.ptr_) {}
+
+  template <typename U,
+            typename = std::enable_if_t<std::is_convertible_v<U *, T *>>>
+  test_shared(test_shared<U> &&other) : ptr_(std::move(other.ptr_)) {}
 
   template <typename U,
             typename = std::enable_if_t<std::is_convertible_v<U *, T *>>>
@@ -47,7 +58,6 @@ public:
 private:
   template <typename> friend class test_shared;
   template <typename> friend class test_unique;
-  template <typename, typename, typename> friend struct type_conversion_traits;
 
   std::shared_ptr<T> ptr_;
 };
@@ -56,6 +66,8 @@ template <typename T> class test_unique {
 public:
   test_unique() = default;
   explicit test_unique(std::unique_ptr<T> ptr) : ptr_(std::move(ptr)) {}
+  // Takes over what a raw pointer points to.
+  explicit test_unique(T *ptr) : ptr_(ptr) {}
 
   template <typename U,
             typename = std::enable_if_t<std::is_convertible_v<U *, T *>>>
@@ -108,107 +120,45 @@ private:
   std::optional<T> value_;
 };
 
-template <typename T> struct type_traits<test_shared<T>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = true;
-  static constexpr bool is_owning_handle = true;
-
-  template <typename> static constexpr bool is_handle_rebindable = true;
-
+// The test wrappers are described as the standard wrappers are: one
+// type_traits specialization with their semantics and their operations. Their
+// storage request lists follow from the semantics, and a handle converts to
+// the handle of a base by its converting constructor.
+template <typename T>
+struct type_traits<test_shared<T>> : semantics::shared_owner {
   using value_type = T;
-
   template <typename U> using rebind_t = test_shared<U>;
 
-  template <typename Target>
-  static constexpr bool is_rebindable =
-      test_detail::is_instance<std::remove_cv_t<Target>, test_shared>::value;
-
-  static T *get(test_shared<T> &wrapper) { return wrapper.get(); }
-  static const T *get(const test_shared<T> &wrapper) { return wrapper.get(); }
-  static T &borrow(test_shared<T> &wrapper) { return *wrapper.get(); }
-  static const T &borrow(const test_shared<T> &wrapper) {
-    return *wrapper.get();
-  }
+  static T *get(const test_shared<T> &wrapper) { return wrapper.get(); }
+  static T &borrow(const test_shared<T> &wrapper) { return *wrapper.get(); }
   static bool empty(const test_shared<T> &wrapper) { return !wrapper.get(); }
-  static void reset(test_shared<T> &wrapper) { wrapper.reset(); }
 
-  template <typename... Args> static test_shared<T> make(Args &&...args) {
+  template <typename... Args> static test_shared<T> emplace(Args &&...args) {
     return test_shared<T>(
         std::shared_ptr<T>(new T{std::forward<Args>(args)...}));
   }
-
-  static test_shared<T> from_pointer(T *ptr) {
-    return test_shared<T>(std::shared_ptr<T>(ptr));
-  }
-
-  template <typename TargetWrapper, typename Factory, typename Context>
-  static TargetWrapper &resolve_type(Factory &factory, Context &context,
-                                     type_descriptor, type_descriptor) {
-    return factory.template resolve<TargetWrapper>(context);
-  }
 };
 
-template <typename T> struct type_traits<test_unique<T>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = true;
-  static constexpr bool is_owning_handle = true;
-
-  template <typename> static constexpr bool is_handle_rebindable = true;
-
+template <typename T>
+struct type_traits<test_unique<T>> : semantics::sole_owner {
   using value_type = T;
-
   template <typename U> using rebind_t = test_unique<U>;
+  template <typename U> using share_t = test_shared<U>;
 
-  template <typename Target>
-  static constexpr bool is_rebindable = std::is_same_v<Target, rebind_t<T>>;
-
-  static T *get(test_unique<T> &wrapper) { return wrapper.get(); }
-  static const T *get(const test_unique<T> &wrapper) { return wrapper.get(); }
-  static T &borrow(test_unique<T> &wrapper) { return *wrapper.get(); }
-  static const T &borrow(const test_unique<T> &wrapper) {
-    return *wrapper.get();
-  }
+  static T *get(const test_unique<T> &wrapper) { return wrapper.get(); }
+  static T &borrow(const test_unique<T> &wrapper) { return *wrapper.get(); }
   static bool empty(const test_unique<T> &wrapper) { return !wrapper.get(); }
-  static void reset(test_unique<T> &wrapper) { wrapper.reset(); }
 
-  template <typename... Args> static test_unique<T> make(Args &&...args) {
+  template <typename... Args> static test_unique<T> emplace(Args &&...args) {
     return test_unique<T>(
         std::unique_ptr<T>(new T{std::forward<Args>(args)...}));
   }
-
-  static test_unique<T> from_pointer(T *ptr) {
-    return test_unique<T>(std::unique_ptr<T>(ptr));
-  }
-
-  template <typename TargetWrapper, typename Factory, typename Context>
-  static TargetWrapper &resolve_type(Factory &factory, Context &context,
-                                     type_descriptor requested_type,
-                                     type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetWrapper, rebind_t<T>>) {
-      return factory.resolve(context);
-    } else {
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
-    }
-  }
 };
 
-template <typename T> struct type_traits<test_optional<T>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = false;
-  static constexpr bool is_value_borrowable = true;
-  static constexpr bool is_owning_handle = false;
-
-  template <typename> static constexpr bool is_handle_rebindable = false;
-
+template <typename T>
+struct type_traits<test_optional<T>> : semantics::optional_value {
   using value_type = T;
-
   template <typename U> using rebind_t = test_optional<U>;
-
-  template <typename Target>
-  static constexpr bool is_rebindable = std::is_same_v<Target, rebind_t<T>>;
 
   static T *get(test_optional<T> &wrapper) { return wrapper.get(); }
   static const T *get(const test_optional<T> &wrapper) { return wrapper.get(); }
@@ -219,151 +169,19 @@ template <typename T> struct type_traits<test_optional<T>> {
   static bool empty(const test_optional<T> &wrapper) {
     return !wrapper.has_value();
   }
-  static void reset(test_optional<T> &wrapper) { wrapper.reset(); }
 
   template <typename Value> static test_optional<T> wrap(Value &&value) {
     return test_optional<T>(T(std::forward<Value>(value)));
   }
 
-  static test_optional<T> make_empty() { return {}; }
+  static test_optional<T> empty_value() { return {}; }
 
-  template <typename... Args> static test_optional<T> make(Args &&...args) {
+  template <typename... Args> static test_optional<T> emplace(Args &&...args) {
     if constexpr (std::is_constructible_v<T, Args...>) {
       return test_optional<T>(T(std::forward<Args>(args)...));
     } else {
       return test_optional<T>(T{std::forward<Args>(args)...});
     }
-  }
-
-  template <typename TargetWrapper, typename Factory, typename Context>
-  static TargetWrapper &resolve_type(Factory &factory, Context &context,
-                                     type_descriptor requested_type,
-                                     type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetWrapper, rebind_t<T>>) {
-      return factory.resolve(context);
-    } else {
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
-    }
-  }
-};
-
-template <typename T, typename U>
-struct storage_traits<unique, test_shared<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = false;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<>;
-  using rvalue_reference_types = type_list<test_shared<U> &&>;
-  using pointer_types = type_list<>;
-};
-
-template <typename T, typename U>
-struct storage_traits<shared, test_shared<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using value_types = type_list<U, test_shared<U>>;
-  using lvalue_reference_types = type_list<U &, test_shared<U> &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *, test_shared<U> *>;
-};
-
-template <typename T, typename U>
-struct storage_traits<external, test_shared<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using value_types = type_list<test_shared<U>>;
-  using lvalue_reference_types = type_list<U &, test_shared<U> &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *, test_shared<U> *>;
-};
-
-template <typename T, typename U>
-struct storage_traits<unique, test_unique<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = false;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<>;
-  using rvalue_reference_types =
-      type_list<test_unique<U> &&, test_shared<U> &&>;
-  using pointer_types = type_list<>;
-};
-
-template <typename T, typename U>
-struct storage_traits<shared, test_unique<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using value_types = type_list<U>;
-  using lvalue_reference_types = type_list<U &, test_unique<U> &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *, test_unique<U> *>;
-};
-
-template <typename T, typename U>
-struct storage_traits<external, test_unique<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<U &, test_unique<U> &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *, test_unique<U> *>;
-};
-
-template <typename T, typename U>
-struct storage_traits<unique, test_optional<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = false;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<>;
-  using rvalue_reference_types = type_list<test_optional<U> &&>;
-  using pointer_types = type_list<>;
-};
-
-template <typename T, typename U>
-struct storage_traits<shared, test_optional<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using value_types = type_list<U>;
-  using lvalue_reference_types =
-      type_list<U &, exact_lookup<test_optional<T>> &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *, exact_lookup<test_optional<T>> *>;
-};
-
-template <typename T, typename U>
-struct storage_traits<external, test_optional<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using value_types = type_list<U>;
-  using lvalue_reference_types =
-      type_list<U &, exact_lookup<test_optional<T>> &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *, exact_lookup<test_optional<T>> *>;
-};
-
-template <typename T, typename U>
-struct type_conversion_traits<
-    test_shared<U>, test_shared<T>,
-    std::enable_if_t<std::is_convertible_v<T *, U *>>> {
-  template <typename Source>
-  using required_access =
-      std::conditional_t<std::is_rvalue_reference_v<Source>, consume, borrow>;
-
-  static test_shared<U> convert(const test_shared<T> &source) {
-    return test_shared<U>(std::static_pointer_cast<U>(source.ptr_));
-  }
-
-  static test_shared<U> convert(test_shared<T> &&source) {
-    return test_shared<U>(std::static_pointer_cast<U>(std::move(source.ptr_)));
   }
 };
 

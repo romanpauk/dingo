@@ -87,7 +87,7 @@ struct system_configuration {
   std::size_t channel_id;
 };
 
-struct system_container_traits : dynamic_container_traits {
+struct system_container_traits : runtime_container_traits {
   using lookup_definition_type = dingo::lookups<
       dingo::associative<std::size_t, channel, dingo::one, dingo::array<2>>>;
 };

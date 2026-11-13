@@ -163,7 +163,7 @@ TEST(associative_backend_test, unordered_one_uses_key_value_lookup) {
     int id() const override { return 2; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<std::size_t, processor, one, unordered>>;
   };
@@ -203,7 +203,7 @@ TEST(associative_backend_test, unordered_many_resolves_duplicate_key_entries) {
     int id() const override { return 2; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<std::size_t, processor, many, unordered>>;
   };
@@ -242,7 +242,7 @@ TEST(associative_backend_test, array_one_uses_dense_key_lookup) {
     int id() const override { return 2; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<std::size_t, processor, one, array<4>>>;
   };
@@ -275,7 +275,7 @@ TEST(associative_backend_test,
     int id() const override { return 2; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<std::size_t, processor, one, array<1>>>;
   };
@@ -311,7 +311,7 @@ TEST(associative_backend_test, array_many_uses_dense_key_rows) {
     int id() const override { return 3; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<std::size_t, processor, many, array<4>>>;
   };
@@ -371,7 +371,7 @@ TEST(associative_backend_test,
     int id() const override { return 2; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<std::size_t, processor, many, array<1>>>;
   };
@@ -406,7 +406,7 @@ TEST(associative_backend_test, custom_backend_uses_stl_like_try_emplace) {
     int id() const override { return 1; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<int, processor, one, custom_lookup_backend>>;
   };
@@ -433,7 +433,7 @@ TEST(associative_backend_test, parent_fallback_searches_each_container_once) {
   };
   struct processor_impl : processor {};
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<int, processor, one, custom_lookup_backend>>;
   };
@@ -515,7 +515,7 @@ TEST(associative_backend_test,
     int id() const override { return 1; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<int, processor, one, operator_lookup_backend>>;
   };

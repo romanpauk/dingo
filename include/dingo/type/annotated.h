@@ -26,7 +26,18 @@ struct annotated : detail::selected<T, detail::type_selector<Tag>> {
   template <typename U = T,
             std::enable_if_t<std::is_constructible_v<base_type, U &&>, int> = 0>
   annotated(T &&value) : base_type(std::move(value)) {}
+  // The value the call returns, emplaced.
+  template <
+      typename Call,
+      std::enable_if_t<detail::is_in_place_call_v<std::decay_t<Call>>, int> = 0>
+  explicit annotated(Call &&call) : base_type(std::forward<Call>(call)) {}
 };
+
+namespace detail {
+template <typename T, typename Tag> struct selection_value<annotated<T, Tag>> {
+  using type = T;
+};
+} // namespace detail
 
 template <typename T, typename Tag>
 struct annotated<T &, Tag> : detail::selected<T &, detail::type_selector<Tag>> {
@@ -34,27 +45,30 @@ struct annotated<T &, Tag> : detail::selected<T &, detail::type_selector<Tag>> {
       : detail::selected<T &, detail::type_selector<Tag>>(value) {}
 };
 
-template <typename T> struct annotated_traits {
+// A request or an interface without its annotation and its key selection,
+// also behind a reference or a pointer.
+template <typename T> struct unannotated {
   using type = T;
 };
 
-template <typename T, typename Tag> struct annotated_traits<annotated<T, Tag>> {
-  using type = T;
+template <typename T> struct unannotated<T &> {
+  using type = typename unannotated<T>::type &;
+};
+
+template <typename T> struct unannotated<T &&> {
+  using type = typename unannotated<T>::type &&;
+};
+
+template <typename T> struct unannotated<T *> {
+  using type = typename unannotated<T>::type *;
 };
 
 template <typename T, typename Tag>
-struct annotated_traits<annotated<T, Tag> &> {
-  using type = T &;
-};
+struct unannotated<annotated<T, Tag>> : unannotated<T> {};
 
-template <typename T, typename Tag>
-struct annotated_traits<annotated<T, Tag> &&> {
-  using type = T &&;
-};
+template <typename T, typename Selector>
+struct unannotated<detail::selected<T, Selector>> : unannotated<T> {};
 
-template <typename T, typename Tag>
-struct annotated_traits<annotated<T, Tag> *> {
-  using type = T *;
-};
+template <typename T> using unannotated_t = typename unannotated<T>::type;
 
 } // namespace dingo

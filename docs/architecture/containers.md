@@ -1,137 +1,127 @@
 # Containers
 
-This page documents the current public container model.
+This page documents the public container model.
 
 ## Public Entry Points
 
-The top-level include set is intentionally small:
+The top-level include set is small:
 
-- [include/dingo/container.h](../../include/dingo/container.h): combined public
-  container
 - [include/dingo/runtime_container.h](../../include/dingo/runtime_container.h):
-  runtime-only facade
+  the runtime container, `runtime_container<>`, also named `container<>`
 - [include/dingo/static_container.h](../../include/dingo/static_container.h):
-  static-only facade
+  the static container, `static_container<bindings<...>>`
+- [include/dingo/container.h](../../include/dingo/container.h): both
 
-Everything else is either runtime/static implementation detail or shared core.
+Each container keeps its implementation in its own directory. Both directories
+use the same file names:
+
+| File                 | Contents               |
+| -------------------- | ---------------------- |
+| `container.h`        | the container          |
+| `registry.h`         | its bindings           |
+| `binding.h`          | one binding            |
+| `context.h`          | its resolution context |
+| `container_traits.h` | its traits             |
+
+All other headers are implementation detail or shared core.
 
 ## Internal Layout
 
-The container stack is split into three groups:
+The container code has three groups:
 
-- `include/dingo/binding/`: shared runtime/static substrate
-- `include/dingo/runtime/`: runtime registry internals
-- `include/dingo/static/`: static registry and graph internals
+- `include/dingo/binding/`: code that both containers share
+- `include/dingo/runtime/`: the runtime registry
+- `include/dingo/static/`: the static registry and the static graph
 
-The split keeps public headers small while leaving runtime and static
-implementation details in their own directories. The full header hierarchy is
-described in [Header Layers](overview.md#header-layers).
+This split keeps the public headers small. The runtime and static details stay
+in their own directories. [Header Layers](overview.md#header-layers) describes
+the full header hierarchy.
 
-## Unified Container
+## Two Containers
 
-`container` is the primary public entry point.
-
-It supports two main forms:
+Dingo has two containers, one for each registration mode:
 
 ```c++
-dingo::container<> runtime_only;
+dingo::container<> runtime;
+runtime.register_type<dingo::scope<dingo::shared>, dingo::storage<Config>>();
 
 using app_bindings = dingo::bindings<
     dingo::bind<dingo::scope<dingo::shared>, dingo::storage<Config>>,
     dingo::bind<dingo::scope<dingo::unique>, dingo::storage<Service>>
 >;
 
-dingo::container<app_bindings> app_container;
+dingo::static_container<app_bindings> app_container;
 ```
 
-The runtime-only form owns mutable runtime registrations.
+- `container<>`, also named `runtime_container<>`, owns mutable runtime
+  registrations. `register_type<...>()` adds them.
+- `static_container<bindings<...>>` carries its bindings in the container type.
+  It has no runtime registration API.
 
-The `bindings<...>` form hosts both:
-
-- compile-time bindings from the `bindings<...>` source
-- runtime registrations added later through `register_type<...>()`
-
-`container<bindings<...>>` is the container form for mixed graphs: static
-bindings are known when the container type is named, and runtime registrations
-can still be added afterward.
-
-## Static And Runtime Facades
-
-The split container facades remain available when the narrower shape is useful:
-
-- `runtime_container` for explicitly runtime-only code
-- `static_container` for explicitly static-only code
-
-Those headers expose only one registration mode. `container` is the public
-container that can represent runtime-only or mixed registration.
+The modes do not mix. A runtime container does not hold compile-time bindings. A
+runtime registration cannot declare local `bindings<...>`. The registration
+container that `register_type<...>()` returns accepts only runtime
+registrations.
 
 ## Binding Semantics
 
-`container<bindings<...>>` can have two binding sources: the static bindings in
-the container type and the runtime registrations added to the object.
+A request for one object must select one binding. If several bindings match, the
+request is ambiguous. The runtime container throws `type_ambiguous_exception`.
+The static container rejects the request at compile time.
 
-A request for one object must have one source. If only the runtime source
-matches, Dingo uses it. If only the static source matches, Dingo uses it. If
-both sources provide the same singular binding, the request is ambiguous because
-neither source is an override of the other.
+A request for a collection collects every matching binding.
 
-A request for a collection can use both sources. Runtime and static matches are
-merged into the returned collection.
+A parent container is a fallback source. The declarations
+`container<> child(&parent)` and `static_container<bindings<...>, Parent>` both
+search the child graph first:
 
-Parent containers are another fallback source.
-`container<bindings<...>, Parent>` and `static_container<bindings<...>, Parent>`
-keep the child graph local first: a child static or runtime binding wins for
-singular requests, and a missing child dependency can be resolved from the
-parent graph.
+- A child binding wins for singular requests.
+- The parent graph resolves a dependency that the child does not bind.
 
-Local `bindings<...>` on a registration declare the static part of that
-registration's child container. Runtime bindings added through the returned
-proxy live in the same child. Singular resolution checks that child before the
-root container, while collection resolution merges the child's static and
-runtime matches with root matches.
+The parent of a static container is a static container.
+
+A static binding can carry local `bindings<...>`. They declare a child graph for
+the dependencies of that binding. The local bindings shadow the host bindings.
+If the local bindings answer a request, singular or collection, the request does
+not reach the host.
 
 ## Direct Construction
 
-`construct<T>()` reuses a registered binding for direct object construction when
-that binding exists for `T`.
+`construct<T>()` uses the registered binding of `T` when one exists.
 
-Wrapper construction such as `construct<std::shared_ptr<T>>()` also reuses the
-registered/local-binding path when Dingo can resolve the normalized object and
-wrap the result. If no suitable registered path exists, construction falls back
-to the normal constructor-based path.
+A wrapper request such as `construct<std::shared_ptr<T>>()` also uses the
+registered binding. Dingo resolves the normalized object and wraps the result.
+If no binding exists, `construct` uses the constructor of the type.
 
 ## Cycle Rules
 
-Purely static cycles are rejected at compile time unless every binding in the
-cycle uses `scope<shared_cyclical>`. A supported static cycle uses the same
-two-phase storage model as runtime `shared_cyclical` registration, so each
-participating slot can be published before its dependencies finish resolving.
+The static container rejects a cycle at compile time. The exception is a cycle
+in which every binding uses a scope that declares `allows_cycles`, such as
+`scope<shared_cyclical>`. A supported static cycle uses the same two-phase
+storage as a runtime `shared_cyclical` registration. Each binding in the cycle
+publishes its instance before its dependencies finish resolving.
 
-`container<bindings<...>>` applies the same rule to statically known static
-cycles: ordinary static cycles are rejected, while all-`shared_cyclical` static
-cycles can resolve through the static binding path.
+Compile-time validation sees the dependencies that a binding declares:
 
-In static bindings, cycles through declared dependencies (`dependencies<...>`,
-an explicit `constructor<T(Args...)>` or a function factory) are visible to
-compile-time validation and are rejected at compile time. Cycles through
-auto-detected constructors are not: detected constructors do not expose their
-dependencies, so they are detected at runtime and reported with
-`type_recursion_exception`. This applies to `static_container`,
-`container<bindings<...>>` and runtime containers alike. A binding skips the
-runtime check only when its factory provably has no dependencies, such as a
-detected zero-argument constructor.
+- `dependencies<...>`
+- an explicit `constructor<T(Args...)>`
+- a function factory
 
-Mixed runtime/static recursion that only becomes visible during actual runtime
-resolution is rejected at runtime through the normal recursion exception path.
+It rejects cycles through these dependencies at compile time. A detected
+constructor does not expose its dependencies. A cycle through it is detected at
+run time and reported with `type_recursion_exception`. Runtime containers detect
+every cycle this way. A binding skips the runtime check only when its factory
+has no dependencies, for example a detected zero-argument constructor.
 
 ## Related Headers
 
-The key implementation headers behind this model are:
+The main implementation headers of this model are:
 
 - [include/dingo/container.h](../../include/dingo/container.h)
 - [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
-- [include/dingo/binding/binding_selection.h](../../include/dingo/binding/binding_selection.h)
-- [include/dingo/binding/binding_resolution.h](../../include/dingo/binding/binding_resolution.h)
-- [include/dingo/binding/binding_resolution_policy.h](../../include/dingo/binding/binding_resolution_policy.h)
+- [include/dingo/binding/selection.h](../../include/dingo/binding/selection.h)
+- [include/dingo/binding/resolution.h](../../include/dingo/binding/resolution.h)
+- [include/dingo/resolution/algorithm.h](../../include/dingo/resolution/algorithm.h)
+- [include/dingo/resolution/entry_points.h](../../include/dingo/resolution/entry_points.h)

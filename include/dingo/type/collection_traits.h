@@ -9,7 +9,7 @@
 
 #include <dingo/base/config.h>
 
-#include <dingo/type/normalized_type.h>
+#include <dingo/type/shape.h>
 
 #include <list>
 #include <map>
@@ -21,6 +21,14 @@ namespace detail {
 template <class T> struct collection_traits {
   static const bool is_collection = false;
   static const bool has_fixed_size_construct = false;
+};
+
+// A collection that grows by add and reserves nothing.
+template <class Collection, class Element> struct growing_collection_traits {
+  static const bool is_collection = true;
+  static const bool has_fixed_size_construct = false;
+  using resolve_type = Element;
+  static void reserve(Collection &, size_t) {}
 };
 
 template <class T, class Allocator>
@@ -46,11 +54,8 @@ struct collection_traits<std::vector<T, Allocator>> {
 };
 
 template <class T, class Allocator>
-struct collection_traits<std::list<T, Allocator>> {
-  static const bool is_collection = true;
-  static const bool has_fixed_size_construct = false;
-  using resolve_type = T;
-  static void reserve(std::list<T, Allocator> &, size_t) {}
+struct collection_traits<std::list<T, Allocator>>
+    : growing_collection_traits<std::list<T, Allocator>, T> {
   template <typename U>
   static void add(std::list<T, Allocator> &collection, U &&value) {
     collection.emplace_back(std::forward<U>(value));
@@ -58,11 +63,8 @@ struct collection_traits<std::list<T, Allocator>> {
 };
 
 template <class T, class Compare, class Allocator>
-struct collection_traits<std::set<T, Compare, Allocator>> {
-  static const bool is_collection = true;
-  static const bool has_fixed_size_construct = false;
-  using resolve_type = T;
-  static void reserve(std::set<T, Compare, Allocator> &, size_t) {}
+struct collection_traits<std::set<T, Compare, Allocator>>
+    : growing_collection_traits<std::set<T, Compare, Allocator>, T> {
   template <typename U>
   static void add(std::set<T, Compare, Allocator> &collection, U &&value) {
     collection.emplace(std::forward<U>(value));
@@ -70,11 +72,9 @@ struct collection_traits<std::set<T, Compare, Allocator>> {
 };
 
 template <class Key, class Value, class Compare, class Allocator>
-struct collection_traits<std::map<Key, Value, Compare, Allocator>> {
-  static const bool is_collection = true;
-  static const bool has_fixed_size_construct = false;
-  using resolve_type = Value;
-  static void reserve(std::map<Key, Value, Compare, Allocator> &, size_t) {}
+struct collection_traits<std::map<Key, Value, Compare, Allocator>>
+    : growing_collection_traits<std::map<Key, Value, Compare, Allocator>,
+                                Value> {
   template <typename U>
   static void add(std::map<Key, Value, Compare, Allocator> &collection,
                   U &&value) {

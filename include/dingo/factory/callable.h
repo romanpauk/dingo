@@ -9,8 +9,8 @@
 
 #include <dingo/base/config.h>
 #include <dingo/base/construction_scope.h>
-#include <dingo/type/dependency_traits.h>
-#include <dingo/type/normalized_type.h>
+#include <dingo/request/decomposition.h>
+#include <dingo/type/shape.h>
 
 #include <functional>
 #include <type_traits>
@@ -19,27 +19,47 @@
 namespace dingo {
 
 namespace detail {
-template <typename T>
-using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
-
 template <typename Signature> struct callable_invoke;
 
 template <typename R, typename... Args> struct callable_invoke<R(Args...)> {
-  template <typename Fn, typename Context, typename Container>
-  static decltype(auto) construct(Fn &&fn, construction_scope scope,
-                                  Context &ctx, Container &container) {
+  // A callable is called directly, so that a value its parameter takes
+  // initializes it in place: a type that can be neither copied nor moved can
+  // be passed by value. std::invoke would take it as a reference and have to
+  // move it. A member pointer is invoked.
+  template <typename Fn, typename Context, typename Container, typename Scope>
+  static decltype(auto) construct(Fn &&fn, Scope scope, Context &ctx,
+                                  Container &container) {
     (void)scope;
-    return std::invoke(
-        std::forward<Fn>(fn),
-        ctx.template resolve<Args>(detail::dependency_scope<Args>(scope),
-                                   container)...);
+    if constexpr (std::is_member_pointer_v<std::decay_t<Fn>>) {
+      return std::invoke(
+          std::forward<Fn>(fn),
+          ctx.template resolve<Args>(detail::dependency_scope<Args>(scope),
+                                     container)...);
+    } else {
+      return std::forward<Fn>(fn)(ctx.template resolve<Args>(
+          detail::dependency_scope<Args>(scope), container)...);
+    }
   }
 
-  template <typename Type, typename Fn, typename Context, typename Container>
-  static auto construct(void *ptr, Fn &&fn, construction_scope scope,
-                        Context &ctx, Container &container) {
-    new (ptr) normalized_type_t<Type>(
-        construct(std::forward<Fn>(fn), scope, ctx, container));
+  // An object constructed in place, as a cyclical scope constructs it, is
+  // initialized with what the callable returns, so the callable returns the
+  // object: a handle it returns owns an object of its own.
+  template <typename Type, typename Fn, typename Context, typename Container,
+            typename Scope>
+  static auto construct(void *ptr, Fn &&fn, Scope scope, Context &ctx,
+                        Container &container) {
+    using result_type =
+        decltype(construct(std::forward<Fn>(fn), scope, ctx, container));
+    if constexpr (!std::is_constructible_v<normalized_type_t<Type>,
+                                           result_type>) {
+      static_assert(
+          std::is_constructible_v<normalized_type_t<Type>, result_type>,
+          "a factory of an object constructed in place, as a cyclical "
+          "scope constructs it, returns the object, not a handle of it");
+    } else {
+      new (ptr) normalized_type_t<Type>(
+          construct(std::forward<Fn>(fn), scope, ctx, container));
+    }
   }
 };
 
@@ -98,22 +118,6 @@ DINGO_CALLABLE_SIGNATURE_VARIANTS(DINGO_DEFINE_CALLABLE_SIGNATURE)
 template <typename T>
 struct callable_signature<T *, std::enable_if_t<std::is_function_v<T>>>
     : callable_signature<T> {};
-
-template <typename Signature>
-struct callable_signature<std::function<Signature>, void>
-    : callable_signature<Signature> {};
-
-#if defined(__cpp_lib_move_only_function)
-template <typename Signature>
-struct callable_signature<std::move_only_function<Signature>, void>
-    : callable_signature<Signature> {};
-#endif
-
-#if defined(__cpp_lib_copyable_function)
-template <typename Signature>
-struct callable_signature<std::copyable_function<Signature>, void>
-    : callable_signature<Signature> {};
-#endif
 
 template <typename Class, typename R, typename... Args>
 struct callable_signature<R (Class::*)(Args...), void>
@@ -210,14 +214,13 @@ using callable_dispatch_signature_t =
 template <typename Signature, typename T> struct callable_factory {
   explicit callable_factory(T fn) : fn_(std::move(fn)) {}
 
-  template <typename Type, typename Context, typename Container>
-  auto construct(construction_scope scope, Context &ctx, Container &container) {
+  template <typename Type, typename Context, typename Container, typename Scope>
+  auto construct(Scope scope, Context &ctx, Container &container) {
     return callable_invoke<Signature>::construct(fn_, scope, ctx, container);
   }
 
-  template <typename Type, typename Context, typename Container>
-  auto construct(void *ptr, construction_scope scope, Context &ctx,
-                 Container &container) {
+  template <typename Type, typename Context, typename Container, typename Scope>
+  auto construct(void *ptr, Scope scope, Context &ctx, Container &container) {
     callable_invoke<Signature>::template construct<Type>(ptr, fn_, scope, ctx,
                                                          container);
   }

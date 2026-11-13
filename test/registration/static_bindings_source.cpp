@@ -8,6 +8,7 @@
 #include <dingo/container.h>
 #include <dingo/factory/function.h>
 #include <dingo/registration/constructor.h>
+#include <dingo/static/diagnostics.h>
 #include <dingo/static/registry.h>
 #include <dingo/static_container.h>
 #include <dingo/storage/shared.h>
@@ -40,6 +41,22 @@ struct unkeyed_binding_uniqueness_probe {
 
 static_assert(detail::key_value_bindings_are_unique<
               type_list<unkeyed_binding_uniqueness_probe>, type_list<>>::value);
+} // namespace
+
+namespace {
+// The binding model, declared dependencies and dependency bindings the static
+// registry resolves for an interface.
+template <typename Registry, typename Interface>
+using model_of = typename Registry::template binding<
+    Interface, detail::no_lookup_key_t>::binding_model_type;
+
+template <typename Registry, typename Interface>
+using dependencies_of =
+    typename model_of<Registry, Interface>::dependencies_type::type;
+
+template <typename Registry, typename Interface>
+using dependency_bindings_of = detail::resolved_dependency_bindings_t<
+    model_of<Registry, Interface>, typename Registry::interface_bindings>;
 } // namespace
 
 TEST(static_bindings_source_test,
@@ -89,23 +106,19 @@ TEST(static_bindings_source_test, exposes_models_and_dependency_bindings) {
 
   static_assert(registry_type::valid);
   static_assert(std::is_same_v<dependency<config &>, config &>);
-  static_assert(std::is_same_v<typename registry_type::registration_types,
-                               type_list<config_binding, service_binding>>);
   static_assert(
-      std::is_same_v<typename registry_type::model<config>::registration_type,
+      std::is_same_v<model_of<registry_type, config>::registration_type,
                      config_binding>);
+  static_assert(std::is_same_v<
+                model_of<registry_type, service_interface>::registration_type,
+                service_binding>);
   static_assert(
-      std::is_same_v<
-          typename registry_type::model<service_interface>::registration_type,
-          service_binding>);
-  static_assert(
-      std::is_same_v<typename registry_type::dependencies<service_interface>,
+      std::is_same_v<dependencies_of<registry_type, service_interface>,
                      type_list<config &>>);
   static_assert(
-      std::is_same_v<
-          typename registry_type::dependency_bindings<service_interface>,
-          type_list<typename registry_type::binding<config,
-                                                    detail::no_lookup_key_t>>>);
+      std::is_same_v<dependency_bindings_of<registry_type, service_interface>,
+                     type_list<typename registry_type::binding<
+                         config, detail::no_lookup_key_t>>>);
 }
 
 TEST(static_bindings_source_test, zero_argument_detected_constructor_is_known) {
@@ -115,11 +128,10 @@ TEST(static_bindings_source_test, zero_argument_detected_constructor_is_known) {
   using registry_type = typename source::type;
 
   static_assert(registry_type::valid);
-  static_assert(std::is_same_v<typename registry_type::dependencies<config>,
-                               type_list<>>);
   static_assert(
-      std::is_same_v<typename registry_type::dependency_bindings<config>,
-                     type_list<>>);
+      std::is_same_v<dependencies_of<registry_type, config>, type_list<>>);
+  static_assert(std::is_same_v<dependency_bindings_of<registry_type, config>,
+                               type_list<>>);
 }
 
 TEST(static_bindings_source_test,
@@ -135,12 +147,11 @@ TEST(static_bindings_source_test,
   using registry_type = typename source::type;
 
   static_assert(registry_type::valid);
-  static_assert(std::is_same_v<typename registry_type::dependencies<service>,
+  static_assert(std::is_same_v<dependencies_of<registry_type, service>,
                                type_list<config &>>);
-  static_assert(
-      std::is_same_v<typename registry_type::dependency_bindings<service>,
-                     type_list<typename registry_type::binding<
-                         config, detail::no_lookup_key_t>>>);
+  static_assert(std::is_same_v<dependency_bindings_of<registry_type, service>,
+                               type_list<typename registry_type::binding<
+                                   config, detail::no_lookup_key_t>>>);
 }
 
 TEST(static_bindings_source_test,
@@ -163,11 +174,10 @@ TEST(static_bindings_source_test,
           typename registry_type::binding<logger, detail::no_lookup_key_t>>>;
 
   static_assert(registry_type::valid);
-  static_assert(std::is_same_v<typename registry_type::dependencies<service>,
-                               dependencies>);
   static_assert(
-      std::is_same_v<typename registry_type::dependency_bindings<service>,
-                     expected_dependency_bindings>);
+      std::is_same_v<dependencies_of<registry_type, service>, dependencies>);
+  static_assert(std::is_same_v<dependency_bindings_of<registry_type, service>,
+                               expected_dependency_bindings>);
 }
 
 TEST(static_bindings_source_test,
@@ -188,11 +198,10 @@ TEST(static_bindings_source_test,
                              config, detail::no_lookup_key_t>>>;
 
   static_assert(registry_type::valid);
-  static_assert(std::is_same_v<typename registry_type::dependencies<service>,
-                               dependencies>);
   static_assert(
-      std::is_same_v<typename registry_type::dependency_bindings<service>,
-                     expected_dependency_bindings>);
+      std::is_same_v<dependencies_of<registry_type, service>, dependencies>);
+  static_assert(std::is_same_v<dependency_bindings_of<registry_type, service>,
+                               expected_dependency_bindings>);
 
   dingo::static_container<source> container;
   auto instance = container.resolve<service>();
@@ -219,13 +228,12 @@ TEST(static_bindings_source_test,
   using registry_type = typename source::type;
 
   static_assert(registry_type::valid);
-  static_assert(
-      std::is_same_v<
-          typename registry_type::dependencies<annotated<service, service_tag>>,
-          type_list<annotated<config &, config_tag>>>);
   static_assert(std::is_same_v<
-                typename registry_type::dependency_bindings<
-                    annotated<service &, service_tag>>,
+                dependencies_of<registry_type, annotated<service, service_tag>>,
+                type_list<annotated<config &, config_tag>>>);
+  static_assert(std::is_same_v<
+                dependency_bindings_of<registry_type,
+                                       annotated<service &, service_tag>>,
                 type_list<typename registry_type::binding<
                     annotated<config, config_tag>, detail::no_lookup_key_t>>>);
 }
@@ -251,7 +259,7 @@ TEST(static_bindings_source_test,
       dingo::bind<scope<shared>, storage<std::shared_ptr<second_service>>,
                   interfaces<annotated<service_interface, second_tag>>>>;
 
-  dingo::container<source> container;
+  dingo::static_container<source> container;
   const auto values = container.invoke(
       [](annotated<std::shared_ptr<service_interface>, first_tag> first,
          annotated<std::shared_ptr<service_interface>, second_tag> second) {
@@ -359,10 +367,10 @@ TEST(static_bindings_source_test,
 
   static_assert(registry_type::valid);
   static_assert(
-      std::is_same_v<typename registry_type::dependencies<service>,
+      std::is_same_v<dependencies_of<registry_type, service>,
                      type_list<dependency<config &, key_type<first_key>>>>);
   static_assert(
-      std::is_same_v<typename registry_type::dependency_bindings<service>,
+      std::is_same_v<dependency_bindings_of<registry_type, service>,
                      type_list<typename registry_type::template binding<
                          dependency<config, key_type<first_key>>,
                          detail::no_lookup_key_t>>>);
@@ -418,7 +426,7 @@ TEST(static_bindings_source_test,
       dingo::bind<scope<shared_cyclical>, storage<std::shared_ptr<b>>,
                   interfaces<b_interface>, dependencies<a &>>>;
 
-  dingo::container<source> container;
+  dingo::static_container<source> container;
   auto &instance = container.resolve<a &>();
   auto &b_view = container.resolve<b_interface &>();
   auto &b_instance = static_cast<b &>(b_view);
@@ -476,7 +484,43 @@ TEST(static_bindings_source_test,
       dingo::bind<scope<unique>, storage<consumer>,
                   dependencies<std::vector<collection_interface *>>>>;
 
-  dingo::container<source> container;
+  dingo::static_container<source> container;
 
   EXPECT_EQ(container.resolve<consumer>().values.size(), 2u);
+}
+
+namespace {
+struct auto_config {};
+
+// Unbound and auto-constructible: an aggregate of a bound dependency.
+struct auto_consumer {
+  auto_config &config;
+};
+
+struct auto_service {
+  explicit auto_service(auto_consumer consumer) : config(&consumer.config) {}
+
+  auto_config *config;
+};
+} // namespace
+
+TEST(static_bindings_source_test,
+     container_auto_constructs_unbound_auto_constructible_type) {
+  dingo::static_container<
+      dingo::bindings<dingo::bind<scope<shared>, storage<auto_config>>>>
+      container;
+
+  auto consumer = container.resolve<auto_consumer>();
+  EXPECT_EQ(&consumer.config, &container.resolve<auto_config &>());
+}
+
+TEST(static_bindings_source_test,
+     container_auto_constructs_unbound_dependency) {
+  dingo::static_container<
+      dingo::bindings<dingo::bind<scope<shared>, storage<auto_config>>,
+                      dingo::bind<scope<unique>, storage<auto_service>>>>
+      container;
+
+  EXPECT_EQ(container.resolve<auto_service>().config,
+            &container.resolve<auto_config &>());
 }

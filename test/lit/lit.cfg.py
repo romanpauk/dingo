@@ -86,9 +86,17 @@ if platform.system() == 'Windows':
     config.substitutions.append(
         ('%dingo_cxx', f'"{cxx}" /std:c++20 /I"{os.path.join(project_root, "include")}"')
     )
+    config.substitutions.append(('%dingo_codegen_flags', ''))
 else:
     config.substitutions.append(
         ('%dingo_cxx', f'{cxx} -std=c++20 -I"{os.path.join(project_root, "include")}"')
+    )
+    # The code the library compiles to, without the hardening a distribution
+    # turns on by default, which adds checks that the probes do not measure.
+    config.substitutions.append(
+        ('%dingo_codegen_flags',
+         '-fno-stack-protector -fcf-protection=none -fno-stack-clash-protection '
+         '-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -U_GLIBCXX_ASSERTIONS')
     )
 config.substitutions.append(('%dingo_project_root', project_root))
 config.substitutions.append(('%dingo_lit_root', config.test_source_root))

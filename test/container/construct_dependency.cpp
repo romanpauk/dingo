@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 //
 
-#include <dingo/type/auto_constructible.h>
+#include <dingo/factory/auto_constructible.h>
 
 #include <gtest/gtest.h>
 
