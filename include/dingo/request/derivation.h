@@ -17,6 +17,7 @@
 #include <dingo/request/decomposition.h>
 #include <dingo/type/type_traits.h>
 
+#include <array>
 #include <cstddef>
 #include <memory>
 #include <type_traits>
@@ -223,62 +224,60 @@ public:
   using type = typename of<>::type;
 };
 
-template <derivation Derivation, typename Request>
-constexpr bool derivation_shape() {
-  if constexpr (Derivation == derivation::adopt) {
-    if constexpr (std::is_lvalue_reference_v<Request> &&
-                  std::is_object_v<std::remove_reference_t<Request>>) {
-      return is_complete<
-          std::remove_cv_t<std::remove_reference_t<Request>>>::value;
-    } else {
-      return false;
-    }
-  } else if constexpr (Derivation == derivation::keep) {
-    return refers_to_sharing_v<Request>;
-  } else if constexpr (Derivation == derivation::place) {
-    return places_shape<Request>();
-  } else if constexpr (Derivation == derivation::take) {
-    return takes_shape<Request>();
-  } else if constexpr (Derivation == derivation::refer) {
-    return refers_object_shape<Request>();
-  } else if constexpr (Derivation == derivation::address) {
-    // The address of a pointer is not taken as a pointer to a pointer of
-    // another qualification, which would let it point to what it must not.
-    if constexpr (std::is_pointer_v<Request> &&
-                  refers_object_shape<Request>()) {
-      return !std::is_pointer_v<referred_value_t<Request>>;
-    } else {
-      return false;
-    }
-  } else if constexpr (Derivation == derivation::move) {
-    if constexpr (value_shape<Request>()) {
-      return std::is_move_constructible_v<remove_cvref_t<Request>>;
-    } else {
-      return false;
-    }
-  } else if constexpr (Derivation == derivation::copy) {
-    if constexpr (value_shape<Request>()) {
-      return is_copy_constructible_v<remove_cvref_t<Request>>;
-    } else {
-      return false;
-    }
-  } else if constexpr (Derivation == derivation::convert) {
-    if constexpr (!std::is_lvalue_reference_v<Request> &&
-                  !std::is_pointer_v<Request>) {
-      return !std::is_void_v<typename converted_from<Request>::type>;
-    } else {
-      return false;
-    }
-  } else if constexpr (Derivation == derivation::compose) {
-    return !refers_request_v<Request> && composes_v<Request>;
-  } else {
-    return false;
+// The derivations whose shape a request has, told of the request at once.
+template <typename Request> constexpr flags<derivation> derivation_shapes() {
+  flags<derivation> shapes;
+  if constexpr (std::is_lvalue_reference_v<Request> &&
+                std::is_object_v<std::remove_reference_t<Request>>) {
+    shapes.set(
+        derivation::adopt,
+        is_complete<std::remove_cv_t<std::remove_reference_t<Request>>>::value);
   }
+  shapes.set(derivation::keep, refers_to_sharing_v<Request>);
+  shapes.set(derivation::place, places_shape<Request>());
+  shapes.set(derivation::take, takes_shape<Request>());
+  shapes.set(derivation::refer, refers_object_shape<Request>());
+  // The address of a pointer is not taken as a pointer to a pointer of
+  // another qualification, which would let it point to what it must not.
+  if constexpr (std::is_pointer_v<Request> && refers_object_shape<Request>()) {
+    shapes.set(derivation::address,
+               !std::is_pointer_v<referred_value_t<Request>>);
+  }
+  if constexpr (value_shape<Request>()) {
+    shapes.set(derivation::move,
+               std::is_move_constructible_v<remove_cvref_t<Request>>);
+    shapes.set(derivation::copy,
+               is_copy_constructible_v<remove_cvref_t<Request>>);
+  }
+  if constexpr (!std::is_lvalue_reference_v<Request> &&
+                !std::is_pointer_v<Request>) {
+    shapes.set(derivation::convert,
+               !std::is_void_v<typename converted_from<Request>::type>);
+  }
+  shapes.set(derivation::compose,
+             !refers_request_v<Request> && composes_v<Request>);
+  return shapes;
 }
+
+// What a request is, which the derivation that applies to it depends on: the
+// derivations whose shape it has, whether it is a wrapper a binding composes,
+// and whether it refers to a wrapper that shares what a binding keeps. A
+// derivation is chosen of these values, so that requests of one shape share
+// the code that chooses it.
+struct request_facts {
+  flags<derivation> shapes;
+  bool composes;
+  bool refers_to_sharing;
+};
+
+template <typename Request>
+inline constexpr request_facts request_facts_v{derivation_shapes<Request>(),
+                                               composes_v<Request>,
+                                               refers_to_sharing_v<Request>};
 
 template <derivation Derivation, typename Request>
 inline constexpr bool derivation_shape_v =
-    derivation_shape<Derivation, Request>();
+    request_facts_v<Request>.shapes.has(Derivation);
 
 // The request a derivation resolves through the binding.
 template <derivation Derivation, typename Request> struct derived_request {
@@ -377,21 +376,24 @@ constexpr bool copies_nothing(derivation_facts facts) {
 // binding makes it, or it is a wrapper made of what the binding resolves or
 // sharing it; a value is moved or copied only of what may be; anything else
 // is composed.
-template <derivation How, typename Request>
-constexpr bool applies(derivation_facts facts) {
-  if constexpr (!derivation_shape_v<How, Request>) {
+constexpr bool applies(derivation how, request_facts request,
+                       derivation_facts facts) {
+  if (!request.shapes.has(how)) {
     return false;
-  } else if constexpr (How == derivation::keep) {
+  }
+  switch (how) {
+  case derivation::keep:
     return facts.traits.has(binding_trait::keeps);
-  } else if constexpr (How == derivation::place) {
-    return facts.traits.has(binding_trait::places) || composes_v<Request> ||
-           refers_to_sharing_v<Request>;
-  } else if constexpr (How == derivation::move || How == derivation::copy) {
-    return !copies_nothing(facts) && facts.sources.has(How);
-  } else if constexpr (How == derivation::compose) {
+  case derivation::place:
+    return facts.traits.has(binding_trait::places) || request.composes ||
+           request.refers_to_sharing;
+  case derivation::move:
+  case derivation::copy:
+    return !copies_nothing(facts) && facts.sources.has(how);
+  case derivation::compose:
     return true;
-  } else {
-    return facts.sources.has(How);
+  default:
+    return facts.sources.has(how);
   }
 }
 
@@ -402,26 +404,54 @@ constexpr bool applies(derivation_facts facts) {
 // placed. A value is taken out of a pointer the binding makes, moved out of a
 // value it makes, copied of one it keeps, converted of a sole owner it makes,
 // or composed.
-using derivation_order =
-    derivations<derivation::adopt, derivation::refer, derivation::address,
-                derivation::keep, derivation::place, derivation::take,
-                derivation::move, derivation::copy, derivation::convert,
-                derivation::compose>;
-
-template <typename Request, derivation... Hows>
-constexpr derivation first_applying(derivation_facts facts,
-                                    derivations<Hows...>) {
-  derivation found = derivation::none;
-  (void)((applies<Hows, Request>(facts) ? (found = Hows, true) : false) || ...);
-  return found;
-}
+inline constexpr derivation derivation_order[] = {
+    derivation::adopt,  derivation::refer, derivation::address,
+    derivation::keep,   derivation::place, derivation::take,
+    derivation::move,   derivation::copy,  derivation::convert,
+    derivation::compose};
 
 // The derivation of a request a binding does not publish: the first that
 // applies to it.
+constexpr derivation derive_request(request_facts request,
+                                    derivation_facts facts) {
+  for (derivation how : derivation_order) {
+    if (applies(how, request, facts)) {
+      return how;
+    }
+  }
+  return derivation::none;
+}
+
 template <typename Request>
 constexpr derivation derive_request(derivation_facts facts) {
-  return first_applying<Request>(facts, derivation_order{});
+  return derive_request(request_facts_v<Request>, facts);
 }
+
+// The derivations whose shape a request has, in the order they are tried: the
+// only ones a request may be derived by.
+template <typename Request> constexpr std::size_t shaped_derivation_count() {
+  std::size_t count = 0;
+  for (derivation how : derivation_order) {
+    count += request_facts_v<Request>.shapes.has(how) ? 1 : 0;
+  }
+  return count;
+}
+
+template <typename Request>
+constexpr std::array<derivation, shaped_derivation_count<Request>()>
+shaped_derivations() {
+  std::array<derivation, shaped_derivation_count<Request>()> shaped{};
+  std::size_t index = 0;
+  for (derivation how : derivation_order) {
+    if (request_facts_v<Request>.shapes.has(how)) {
+      shaped[index++] = how;
+    }
+  }
+  return shaped;
+}
+
+template <typename Request>
+inline constexpr auto shaped_derivations_v = shaped_derivations<Request>();
 
 // Whether a request may be derived at all, by any binding: by one that keeps
 // its instance and places what it makes, whose values do not slice what it

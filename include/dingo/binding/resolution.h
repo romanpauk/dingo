@@ -24,6 +24,7 @@
 #include <dingo/type/type_traits.h>
 
 #include <cassert>
+#include <cstddef>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -246,6 +247,7 @@ template <derivation How, typename T, typename RTTI, typename Binding,
 resolved_address derive_as(const derivation_site &site,
                            construction_scope scope, Binding &binding,
                            Context &context) {
+  static_assert(derivation_shape_v<How, T>);
   // Whether the binding composes a request.
   [[maybe_unused]] auto composes = [&](auto tag) -> bool {
     using candidate = typename decltype(tag)::type;
@@ -254,7 +256,7 @@ resolved_address derive_as(const derivation_site &site,
            derive_request<candidate>(runtime_facts<candidate>(
                site, requested)) == derivation::compose;
   };
-  if constexpr (How == derivation::compose && derivation_shape_v<How, T>) {
+  if constexpr (How == derivation::compose) {
     // The wrapper is placed in the context, where the binding hands it over.
     using wrapper = composed_type_t<T>;
     auto with = [&](auto tag, auto &emplace) -> wrapper {
@@ -268,7 +270,7 @@ resolved_address derive_as(const derivation_site &site,
                                                                      with);
         });
     return {std::addressof(value), resolved_address::access_kind::consume};
-  } else if constexpr (derivation_shape_v<How, T>) {
+  } else {
     return apply_derivation<How, T>(
         scope, context, site.registered,
         [&](auto tag) -> typename decltype(tag)::type {
@@ -281,9 +283,28 @@ resolved_address derive_as(const derivation_site &site,
             binding.publish_cache(context, site.cache_key, address);
           }
         });
-  } else {
+  }
+}
+
+// Derives a request by the derivation chosen for it, which is one whose shape
+// it has: only those are made for it.
+template <typename T, typename RTTI, typename Binding, typename Context,
+          std::size_t... Index>
+resolved_address derive_shaped(derivation how, const derivation_site &site,
+                               construction_scope scope, Binding &binding,
+                               Context &context,
+                               std::index_sequence<Index...>) {
+  resolved_address result{};
+  const bool derived =
+      ((how == shaped_derivations_v<T>[Index] &&
+        (result = derive_as<shaped_derivations_v<T>[Index], T, RTTI>(
+             site, scope, binding, context),
+         true)) ||
+       ...);
+  if (!derived) {
     throw_type_not_convertible(described_type_v<T>, site.registered, context);
   }
+  return result;
 }
 
 // Derives a request the binding does not publish from one it resolves.
@@ -294,34 +315,10 @@ derive_binding_request(void *erased, const derivation_site &site,
   auto &binding = *static_cast<Binding *>(erased);
   auto &context = *static_cast<Context *>(erased_context);
   // The request is derived of the descriptor it was dispatched with.
-  switch (derive_request<T>(runtime_facts<T>(site, site.requested))) {
-  case derivation::adopt:
-    return derive_as<derivation::adopt, T, RTTI>(site, scope, binding, context);
-  case derivation::keep:
-    return derive_as<derivation::keep, T, RTTI>(site, scope, binding, context);
-  case derivation::place:
-    return derive_as<derivation::place, T, RTTI>(site, scope, binding, context);
-  case derivation::take:
-    return derive_as<derivation::take, T, RTTI>(site, scope, binding, context);
-  case derivation::refer:
-    return derive_as<derivation::refer, T, RTTI>(site, scope, binding, context);
-  case derivation::address:
-    return derive_as<derivation::address, T, RTTI>(site, scope, binding,
-                                                   context);
-  case derivation::move:
-    return derive_as<derivation::move, T, RTTI>(site, scope, binding, context);
-  case derivation::copy:
-    return derive_as<derivation::copy, T, RTTI>(site, scope, binding, context);
-  case derivation::convert:
-    return derive_as<derivation::convert, T, RTTI>(site, scope, binding,
-                                                   context);
-  case derivation::compose:
-    return derive_as<derivation::compose, T, RTTI>(site, scope, binding,
-                                                   context);
-  case derivation::none:
-    break;
-  }
-  throw_type_not_convertible(described_type_v<T>, site.registered, context);
+  return derive_shaped<T, RTTI>(
+      derive_request<T>(runtime_facts<T>(site, site.requested)), site, scope,
+      binding, context,
+      std::make_index_sequence<shaped_derivations_v<T>.size()>{});
 }
 
 template <typename T, typename RTTI, typename Binding, typename Context>
