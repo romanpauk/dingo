@@ -177,11 +177,12 @@ class Registration:
             return Keeps.ADDRESSES
         return Keeps.INSTANCE
 
-    def render(self, probes, checks=False):
+    def render(self, probes, checks=False, registers=False):
         """The program of probes, with the checks of what the registration
-        publishes where checks says so."""
+        publishes where checks says so, and the registration alone where
+        registers says so."""
         return driver.render("probe.cpp.j2", r=self, probes=probes,
-                             checks=checks)
+                             checks=checks, registers=registers)
 
     def check_failure(self, outcome, error):
         """The record of a program of the checks that did not compile or
@@ -257,6 +258,33 @@ def check_registration(compiler, flags, directory, registration):
     return records
 
 
+def registration_outcome(compiler, flags, directory, registration, name,
+                         probes, expected):
+    """The records of probes the specification expects all to answer as their
+    registration does, of one program, or None where the program does not
+    answer so: a registration that is not registrable answers each probe so,
+    and one the library rejects as it registers it rejects each probe, with
+    its error. One program tells it, rather than one for each probe, which
+    could not tell the error of the registration they share apart."""
+    if expected is Answer.NOT_REGISTRABLE:
+        records, stderr, crash = driver.build_and_run(
+            compiler, flags, directory, f"{name}__registrable",
+            registration.render(probes[:1]))
+        if (stderr is None and crash is None and len(records) == 1 and
+                records[0]["outcome"] == Outcome.NOT_REGISTRABLE.value):
+            return [{"cell": registration.cell(probe),
+                     "outcome": Outcome.NOT_REGISTRABLE.value}
+                    for probe in probes]
+        return None
+    _, stderr, _ = driver.build_and_run(
+        compiler, flags + [driver.COMPILE_ONLY], directory,
+        f"{name}__registers", registration.render([], registers=True))
+    if stderr is None or stderr == driver.OUT_OF_MEMORY:
+        return None
+    error = driver.first_error(stderr)
+    return [driver.failure(registration, probe, error) for probe in probes]
+
+
 def probe_registration(compiler, flags, directory, registration, position,
                        selected=None):
     """Makes the probes of a registration in a position, those selected
@@ -281,6 +309,15 @@ def probe_registration(compiler, flags, directory, registration, position,
         else:
             probes.append(probe)
     name = f"{registration.name}__{position.value}"
+    expected = {registration.expectation(probe)[0]
+                for probe in probes + rejected}
+    if len(expected) == 1 and next(iter(expected)) in (
+            Answer.NOT_REGISTRABLE, Answer.REJECTED):
+        found = registration_outcome(compiler, flags, directory, registration,
+                                     name, probes + rejected,
+                                     next(iter(expected)))
+        if found is not None:
+            return outcomes + found
     for found in driver.concurrently([
             lambda: driver.probe_shared(compiler, flags, directory,
                                         registration, name, probes),

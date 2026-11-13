@@ -58,6 +58,10 @@ using I{{ loop.index0 }} = {{ bound.spelled }};
 // dependent and the branch not taken is discarded.
 template <typename Container> void run() {
   if constexpr (registrable<{{ reg.registration(r) }}, {{ "true" if r.container.value == "static" else "false" }}>()) {
+{% if registers %}
+    // The registration alone, which every probe of it makes.
+    { Container c; {{ reg.registered(r) }} (void)c; }
+{% endif %}
 {% if checks %}
 {% for index, bound, requests in r.checks() %}
     check_probed<{{ reg.registration(r) }}, I{{ index }}{% for request in requests %}, {{ cpp.request(request) }}{% endfor %}>("{{ r.published_prefix(bound) }}");
