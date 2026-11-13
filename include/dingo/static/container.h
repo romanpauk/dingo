@@ -307,7 +307,7 @@ public:
       operation_guard guard{*this, resolved_count_};
       result_type result = std::forward<Fn>(fn)();
       guard.release();
-      return static_cast<result_type>(result);
+      return std::forward<result_type>(result);
     } else {
       const std::size_t mark = resolved_count_;
       try {
