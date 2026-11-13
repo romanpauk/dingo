@@ -61,6 +61,15 @@ EXHAUSTED = re.compile(r"out of memory|memory exhausted|"
                        r"Cannot allocate memory|bad_alloc")
 OUT_OF_MEMORY = f"error: the compiler ran out of its {MEMORY_LIMIT} MiB"
 
+# The flag that compiles a program without making code of it: the probes a
+# compile rejects need nothing more, and it takes less time and memory.
+COMPILE_ONLY = "-fsyntax-only"
+
+
+def compiles_only(flags):
+    """Whether a program is compiled without code, and so not run."""
+    return COMPILE_ONLY in flags
+
 
 def default_jobs():
     """How many compilers run at once unless told: one per processor, as
@@ -121,7 +130,13 @@ class Budget:
         return max(1, int(available / per_probe))
 
 
-BUDGET = Budget()
+# The budgets of the programs that are run and of those only compiled, which
+# take less memory.
+BUDGETS = {False: Budget(), True: Budget()}
+
+
+def budget_of(flags):
+    return BUDGETS[compiles_only(flags)]
 
 
 def memory_class(unit, probes):
@@ -210,9 +225,10 @@ def build_and_run(compiler, flags, directory, name, source, compiled=None):
     cpp = directory / f"{name}.cpp"
     exe = directory / name
     cpp.write_text(source)
+    output = [] if compiles_only(flags) else ["-o", str(exe)]
     with COMPILES:
         returncode, stderr, peak = run_compiler(
-            compiler_command(compiler, *flags, str(cpp), "-o", str(exe)))
+            compiler_command(compiler, *flags, str(cpp), *output))
     exhausted = returncode != 0 and EXHAUSTED.search(stderr)
     if compiled is not None and (peak is not None or exhausted):
         compiled(MEMORY_LIMIT if exhausted else peak)
@@ -221,6 +237,8 @@ def build_and_run(compiler, flags, directory, name, source, compiled=None):
             # What it reported before is not all it would, and names no probe.
             return None, OUT_OF_MEMORY, None
         return None, stderr, None
+    if compiles_only(flags):
+        return [], None, None
     run = subprocess.run([str(exe)], capture_output=True, text=True)
     exe.unlink()
     try:
@@ -300,17 +318,18 @@ def compile_probes(compiler, flags, directory, unit, name, probes):
     recorded for the class of the probes."""
     source = unit.render(probes)
     key = memory_class(unit, probes)
+    budget = budget_of(flags)
     records, stderr, crash = build_and_run(
         compiler, flags, directory, name, source,
-        lambda peak: BUDGET.record(key, len(probes), peak))
+        lambda peak: budget.record(key, len(probes), peak))
     return records, stderr, crash, owners_of(source, probes)
 
 
-def fitting(probes, unit, exhausted=False):
+def fitting(probes, unit, flags, exhausted=False):
     """The parts of probes that fit in a program each, by what the probes of
     their class take; fewer of them in each than in one that ran out of
     memory."""
-    size = BUDGET.probes(memory_class(unit, probes))
+    size = budget_of(flags).probes(memory_class(unit, probes))
     if exhausted:
         size = min(size, len(probes) // 2)
     return split(probes, max(size, 1))
@@ -343,7 +362,7 @@ def probe_group(compiler, flags, directory, unit, name, probes):
     one at a time, concurrently, and so are the rest when a compile tells
     apart few of them: a failure they share is reported for one at a time.
     Probes that do not fit in one program are made in parts that do."""
-    parts = fitting(probes, unit)
+    parts = fitting(probes, unit, flags)
     if len(parts) > 1:
         return in_parts(probe_group, compiler, flags, directory, unit, name,
                         parts)
@@ -356,7 +375,7 @@ def probe_group(compiler, flags, directory, unit, name, probes):
         if stderr == OUT_OF_MEMORY and len(probes) > 1:
             return outcomes + in_parts(
                 probe_group, compiler, flags, directory, unit, name,
-                fitting(probes, unit, exhausted=True))
+                fitting(probes, unit, flags, exhausted=True))
         failed = failed_probes(stderr, name, owners) if stderr else None
         if failed is None:
             break
@@ -392,7 +411,7 @@ def probe_shared(compiler, flags, directory, unit, name, probes):
     parts that do."""
     if not probes:
         return []
-    parts = fitting(probes, unit)
+    parts = fitting(probes, unit, flags)
     if len(parts) > 1:
         return in_parts(probe_shared, compiler, flags, directory, unit, name,
                         parts)
@@ -402,7 +421,7 @@ def probe_shared(compiler, flags, directory, unit, name, probes):
         return records
     if stderr == OUT_OF_MEMORY and len(probes) > 1:
         return in_parts(probe_shared, compiler, flags, directory, unit, name,
-                        fitting(probes, unit, exhausted=True))
+                        fitting(probes, unit, flags, exhausted=True))
     failed = (failed_probes(stderr, name, owners) if stderr else None) or {}
     outcomes = [failure(unit, probe, error)
                 for probe, error in failed.items()]
@@ -429,6 +448,23 @@ def probe_shared(compiler, flags, directory, unit, name, probes):
     for found in concurrently(calls):
         outcomes += found
     return outcomes
+
+
+def probe_expecting_rejection(compiler, flags, directory, unit, name,
+                              probes):
+    """Makes probes the specification expects the library to reject as they
+    compile, as probe_shared makes them, in programs that are only compiled:
+    each probe a compile rejects is recorded with its first error. A probe no
+    compile rejects is made again in programs that are run, so that what it
+    does is recorded."""
+    if not probes:
+        return []
+    outcomes = probe_shared(compiler, flags + [COMPILE_ONLY], directory, unit,
+                            name, probes)
+    recorded = {outcome["cell"] for outcome in outcomes}
+    rest = [probe for probe in probes if unit.cell(probe) not in recorded]
+    return outcomes + probe_shared(compiler, flags, directory, unit,
+                                   f"{name}_run", rest)
 
 
 def error_limit_flags(compiler):

@@ -233,20 +233,31 @@ def covering(strength):
 def probe_registration(compiler, flags, directory, registration, position,
                        selected=None):
     """Makes the probes of a registration in a position, those selected
-    when told which, the invalid ones aside, in a program of their own,
-    which bounds the memory of a compile."""
+    when told which, the invalid ones aside, in programs of their own,
+    which bounds the memory of a compile. The probes the specification
+    expects the library to reject as they compile are made apart, so that a
+    program of the others compiles at once."""
     outcomes = []
     probes = []
+    rejected = []
     for probe, invalid in registration.probes(position):
         if selected is not None and not selected(registration, probe):
             continue
         if invalid:
             outcomes.append(driver.invalid(registration, probe, invalid))
+        elif registration.expectation(probe)[0] is Answer.REJECTED:
+            rejected.append(probe)
         else:
             probes.append(probe)
-    return outcomes + driver.probe_shared(
-        compiler, flags, directory, registration,
-        f"{registration.name}__{position.value}", probes)
+    name = f"{registration.name}__{position.value}"
+    for found in driver.concurrently([
+            lambda: driver.probe_shared(compiler, flags, directory,
+                                        registration, name, probes),
+            lambda: driver.probe_expecting_rejection(
+                compiler, flags, directory, registration, f"{name}__rejected",
+                rejected)]):
+        outcomes += found
+    return outcomes
 
 
 def apply_semantics(cells, units):
