@@ -58,9 +58,11 @@ using I{{ loop.index0 }} = {{ bound.spelled }};
 // dependent and the branch not taken is discarded.
 template <typename Container> void run() {
   if constexpr (registrable<{{ reg.registration(r) }}, {{ "true" if r.container.value == "static" else "false" }}>()) {
+{% if checks %}
 {% for index, bound, requests in r.checks() %}
     check_probed<{{ reg.registration(r) }}, I{{ index }}{% for request in requests %}, {{ cpp.request(request) }}{% endfor %}>("{{ r.published_prefix(bound) }}");
 {% endfor %}
+{% endif %}
 {% if r.scope.value == "external" %}
     // What the scope is given outlives the probes; make it first, so that
     // they do not count it as leaked.

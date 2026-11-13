@@ -177,8 +177,17 @@ class Registration:
             return Keeps.ADDRESSES
         return Keeps.INSTANCE
 
-    def render(self, probes):
-        return driver.render("probe.cpp.j2", r=self, probes=probes)
+    def render(self, probes, checks=False):
+        """The program of probes, with the checks of what the registration
+        publishes where checks says so."""
+        return driver.render("probe.cpp.j2", r=self, probes=probes,
+                             checks=checks)
+
+    def check_failure(self, outcome, error):
+        """The record of a program of the checks that did not compile or
+        crashed: a defect of every interface the registration binds."""
+        return {"cell": self.published_prefix(self.interfaces()[0]),
+                "outcome": outcome.value, "error": error.strip()}
 
     def stores(self, probe):
         """Whether a probe requests what the registration stores, as it is:
@@ -230,14 +239,36 @@ def covering(strength):
             Container.RUNTIME, *registration[:4]))
 
 
+def check_registration(compiler, flags, directory, registration):
+    """Checks what a registration publishes, in a program of its own: every
+    request it publishes has to select the interface, and a probe has to ask
+    for it. The checks hold for the registration, not for a probe, so they
+    are made once rather than in every program of its probes."""
+    if not registration.checks():
+        return []
+    records, stderr, crash = driver.build_and_run(
+        compiler, flags, directory, f"{registration.name}__checks",
+        registration.render([], checks=True))
+    if stderr is not None:
+        return [registration.check_failure(Outcome.DOES_NOT_COMPILE,
+                                           driver.first_error(stderr))]
+    if crash is not None:
+        return [registration.check_failure(Outcome.CRASHED, crash)]
+    return records
+
+
 def probe_registration(compiler, flags, directory, registration, position,
                        selected=None):
     """Makes the probes of a registration in a position, those selected
     when told which, the invalid ones aside, in programs of their own,
     which bounds the memory of a compile. The probes the specification
     expects the library to reject as they compile are made apart, so that a
-    program of the others compiles at once."""
+    program of the others compiles at once. The program of the direct
+    position also checks what the registration publishes."""
     outcomes = []
+    if position is Position.DIRECT:
+        outcomes += check_registration(compiler, flags, directory,
+                                       registration)
     probes = []
     rejected = []
     for probe, invalid in registration.probes(position):
