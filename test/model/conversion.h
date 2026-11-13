@@ -61,9 +61,9 @@ constexpr detail::derivation runtime_derivation() {
   if constexpr (!detail::derivable_v<Request>) {
     return detail::derivation::none;
   } else {
-    detail::derivation_facts facts =
-        detail::runtime_derivation_facts<Interface, Storage, Resolutions>(
-            detail::described_type_v<Request>);
+    detail::derivation_facts facts = detail::runtime_derivation_facts(
+        detail::runtime_binding_facts<Interface, Storage, Resolutions>::value,
+        detail::described_type_v<Request>);
     // The binding tells what it publishes of the descriptor of the request,
     // but of the sole owner a sharing handle converts of, which only the
     // request names.

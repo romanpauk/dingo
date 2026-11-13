@@ -82,18 +82,136 @@ struct derivation_facts {
 
 class retention;
 
+// A resolution a runtime binding publishes: the type it resolves to, and,
+// when it resolves to a pointer the storage hands over, the reference to what
+// the pointer points to, which a reference request adopts the pointer for,
+// and whether a value request takes the value out of it.
+struct published_resolution {
+  type_descriptor target;
+  type_descriptor adopted;
+  bool adopts;
+  bool takes;
+};
+
+// What a runtime binding tells of itself, as constant data: the resolutions
+// it publishes, what it is, whether a value of its interface slices what it
+// stores, and its interface.
+struct binding_facts {
+  const published_resolution *published;
+  std::size_t published_count;
+  flags<binding_trait> traits;
+  bool slices;
+  type_descriptor interface;
+};
+
+// The index of the resolution a binding publishes for a request, or the
+// number of its resolutions when it publishes none.
+constexpr std::size_t published_index(const binding_facts &binding,
+                                      type_descriptor requested) {
+  for (std::size_t i = 0; i < binding.published_count; ++i) {
+    if (matches_qualification_conversion(binding.published[i].target,
+                                         requested)) {
+      return i;
+    }
+  }
+  return binding.published_count;
+}
+
+constexpr bool publishes(const binding_facts &binding,
+                         type_descriptor requested) {
+  return published_index(binding, requested) != binding.published_count;
+}
+
+// Whether a binding resolves a reference request as a pointer it hands over,
+// which an owner placed in the context adopts; or, with take, a value request
+// as the value moved out of what the pointer points to.
+constexpr bool hands_over_request(const binding_facts &binding,
+                                  type_descriptor requested, bool take) {
+  for (std::size_t i = 0; i < binding.published_count; ++i) {
+    const auto &resolution = binding.published[i];
+    if ((take ? resolution.takes : resolution.adopts) &&
+        matches_qualification_conversion(resolution.adopted, requested)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// What a runtime binding publishes of what the derivations of a request
+// resolve through, of the descriptor of the request: a value is moved out of
+// an rvalue reference to it or copied of a const reference to it, and a
+// reference or a pointer refers to what an rvalue reference refers to; a
+// pointer is the address of what an lvalue reference refers to. A sole owner
+// a sharing handle converts of is known only to the request.
+constexpr flags<derivation> runtime_published(const binding_facts &binding,
+                                              type_descriptor requested) {
+  flags<derivation> sources;
+  auto publish = [&](derivation how, type_descriptor source,
+                     type_reference_kind reference, type_cv_flags cv) {
+    source.reference = reference;
+    source.cv = cv;
+    sources.set(how, publishes(binding, source));
+  };
+  if (requested.pointee != nullptr &&
+      requested.reference == type_reference_kind::none) {
+    const type_descriptor pointee = *requested.pointee;
+    publish(derivation::refer, pointee, type_reference_kind::rvalue,
+            type_cv_flags::none);
+    publish(derivation::address, pointee, type_reference_kind::lvalue,
+            pointee.cv);
+  } else if (requested.reference == type_reference_kind::lvalue) {
+    publish(derivation::refer, requested, type_reference_kind::rvalue,
+            type_cv_flags::none);
+  } else if (requested.reference == type_reference_kind::none) {
+    publish(derivation::move, requested, type_reference_kind::rvalue,
+            type_cv_flags::none);
+    publish(derivation::copy, requested, type_reference_kind::lvalue,
+            requested.cv | type_cv_flags::is_const);
+  }
+  return sources;
+}
+
+// What a runtime binding tells the derivation of a request it does not
+// publish: whether it keeps its instance, places what it makes, whether a
+// value of its interface would slice what it stores, and whether it publishes
+// before it constructs; and the derivations whose source it publishes, among
+// them the pointer it makes that a reference request refers into, or that a
+// value request is taken out of, as the value can be moved.
+constexpr derivation_facts
+runtime_derivation_facts(const binding_facts &binding,
+                         type_descriptor requested) {
+  derivation_facts facts{binding.traits, runtime_published(binding, requested)};
+  facts.traits.set(binding_trait::slices,
+                   binding.slices &&
+                       requested.reference != type_reference_kind::lvalue &&
+                       requested.pointee == nullptr &&
+                       requested.tag == binding.interface.tag);
+  if (requested.reference == type_reference_kind::lvalue &&
+      hands_over_request(binding, requested, false)) {
+    facts.sources.set(derivation::adopt);
+  }
+  if (requested.reference != type_reference_kind::lvalue &&
+      requested.pointee == nullptr) {
+    type_descriptor pointee = requested;
+    pointee.reference = type_reference_kind::lvalue;
+    pointee.cv = type_cv_flags::none;
+    if (hands_over_request(binding, pointee, true)) {
+      facts.sources.set(derivation::take);
+    }
+  }
+  return facts;
+}
+
 // What a runtime binding hands the derivation of a request it does not
 // publish: what it keeps of its instance, the type it registers, the
 // descriptor the request was dispatched with, the key the request is cached
-// under, if it caches it, and, of a request, whether it publishes it and its
-// facts.
+// under, if it caches it, and what it tells of itself.
 struct derivation_site {
   retention *kept;
   type_descriptor registered;
   type_descriptor requested;
   const void *cache_key;
-  bool (*publishes)(type_descriptor);
-  derivation_facts (*facts_of)(type_descriptor);
+  const binding_facts *binding;
 };
 
 // The owner of a pointer handed over to a request, which a reference to what

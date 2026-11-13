@@ -244,11 +244,11 @@ resolved_address apply_derivation(Scope scope, Context &context,
 template <typename T>
 derivation_facts runtime_facts(const derivation_site &site,
                                type_descriptor requested) {
-  derivation_facts facts = site.facts_of(requested);
+  derivation_facts facts = runtime_derivation_facts(*site.binding, requested);
   if constexpr (derivation_shape_v<derivation::convert, T>) {
     const type_descriptor owner =
         described_type_v<derived_request_t<derivation::convert, T>>;
-    facts.sources.set(derivation::convert, site.publishes(owner));
+    facts.sources.set(derivation::convert, publishes(*site.binding, owner));
   }
   return facts;
 }
@@ -263,7 +263,7 @@ resolved_address derive_as(const derivation_site &site,
   [[maybe_unused]] auto composes = [&](auto tag) -> bool {
     using candidate = typename decltype(tag)::type;
     const type_descriptor requested = described_type_v<candidate>;
-    return !site.publishes(requested) &&
+    return !publishes(*site.binding, requested) &&
            derive_request<candidate>(runtime_facts<candidate>(
                site, requested)) == derivation::compose;
   };
@@ -517,9 +517,10 @@ const request_node request_node_of<T, RTTI, Binding, Context>::value{
 inline derivation_facts node_facts(const derivation_site &site,
                                    const request_node &request,
                                    type_descriptor requested) {
-  derivation_facts facts = site.facts_of(requested);
+  derivation_facts facts = runtime_derivation_facts(*site.binding, requested);
   if (request.facts.shapes.has(derivation::convert)) {
-    facts.sources.set(derivation::convert, site.publishes(request.owner));
+    facts.sources.set(derivation::convert,
+                      publishes(*site.binding, request.owner));
   }
   return facts;
 }
@@ -635,7 +636,8 @@ resolved_address derive_erased(void *erased, const derivation_site &site,
     const request_node &value = *request.through[static_cast<std::size_t>(how)];
     // A value the binding composes is composed in the context, and referred
     // to there.
-    if (request.referred != nullptr && !site.publishes(value.requested) &&
+    if (request.referred != nullptr &&
+        !publishes(*site.binding, value.requested) &&
         derive_request(value.facts, node_facts(site, value, value.requested)) ==
             derivation::compose) {
       return {resolve_node<RTTI>(scope, binding, context, *request.referred)
