@@ -11,6 +11,7 @@
 #include <dingo/memory/object_store.h>
 #include <dingo/runtime/transaction.h>
 
+#include <cassert>
 #include <cstddef>
 #include <exception>
 #include <memory>
@@ -141,15 +142,66 @@ private:
 
 } // namespace detail
 
-template <typename Runtime, typename Fn>
-DINGO_NOINLINE decltype(auto) execute_transaction(Runtime &runtime, Fn &&fn) {
+namespace detail {
+// The frame of a transaction a request opens: its scratch memory, the
+// transaction, the context of the request, and the guard that commits the
+// transaction unless an exception leaves the request. It is made and
+// destroyed out of line, once for a runtime, not for every request.
+template <typename Runtime> class transaction_frame {
+public:
   using allocator_type = typename Runtime::allocator_type;
   using context_type = runtime_context<allocator_type>;
-  inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
-  runtime_transaction<allocator_type> transaction(runtime, scratch);
-  context_type context(scratch, transaction);
-  detail::transaction_commit_guard commit(transaction, runtime);
-  return std::forward<Fn>(fn)(context);
+  using transaction_type = runtime_transaction<allocator_type>;
+
+  DINGO_NOINLINE explicit transaction_frame(Runtime &runtime)
+      : transaction_(runtime, scratch_), context_(scratch_, transaction_),
+        commit_(transaction_, runtime) {}
+
+  DINGO_NOINLINE ~transaction_frame() = default;
+
+  transaction_frame(const transaction_frame &) = delete;
+  transaction_frame &operator=(const transaction_frame &) = delete;
+
+  context_type &context() noexcept { return context_; }
+
+private:
+  inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch_;
+  transaction_type transaction_;
+  context_type context_;
+  transaction_commit_guard<transaction_type, Runtime> commit_;
+};
+
+// The frame of a transaction a request opens in the context of a request of
+// another runtime: the context uses the transaction while the frame lives.
+template <typename Runtime, typename Allocator> class nested_transaction_frame {
+public:
+  using context_type = runtime_context<Allocator>;
+  using transaction_type = runtime_transaction<Allocator>;
+
+  DINGO_NOINLINE nested_transaction_frame(Runtime &runtime,
+                                          context_type &context)
+      : transaction_(runtime, scratch_),
+        scope_(context.use_transaction(transaction_)),
+        commit_(transaction_, runtime) {}
+
+  DINGO_NOINLINE ~nested_transaction_frame() = default;
+
+  nested_transaction_frame(const nested_transaction_frame &) = delete;
+  nested_transaction_frame &
+  operator=(const nested_transaction_frame &) = delete;
+
+private:
+  inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch_;
+  transaction_type transaction_;
+  typename runtime_context_backend<Allocator>::transaction_scope scope_;
+  transaction_commit_guard<transaction_type, Runtime> commit_;
+};
+} // namespace detail
+
+template <typename Runtime, typename Fn>
+DINGO_NOINLINE decltype(auto) execute_transaction(Runtime &runtime, Fn &&fn) {
+  detail::transaction_frame<Runtime> frame(runtime);
+  return std::forward<Fn>(fn)(frame.context());
 }
 
 template <typename Runtime, typename Allocator, typename Fn>
@@ -157,11 +209,7 @@ auto execute_transaction(Runtime &runtime, runtime_context<Allocator> &context,
                          Fn &&fn)
     -> std::invoke_result_t<Fn, runtime_context<Allocator> &> {
   assert(!context.owns(runtime));
-
-  inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
-  runtime_transaction<Allocator> transaction(runtime, scratch);
-  auto scope = context.use_transaction(transaction);
-  detail::transaction_commit_guard commit(transaction, runtime);
+  detail::nested_transaction_frame<Runtime, Allocator> frame(runtime, context);
   return std::forward<Fn>(fn)(context);
 }
 
