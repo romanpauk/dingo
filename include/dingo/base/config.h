@@ -7,6 +7,10 @@
 
 #pragma once
 
+// Every header includes the configuration, so that a definition a user makes
+// before it applies to all of them.
+// IWYU pragma: always_keep
+
 #if !defined(DINGO_CONSTRUCTOR_DETECTION_ARGS)
 #define DINGO_CONSTRUCTOR_DETECTION_ARGS 32
 #endif
