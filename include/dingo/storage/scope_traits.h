@@ -509,10 +509,11 @@ public:
       return no_materialization_scope();
     } else if constexpr (policy::guard ==
                          materialization_guard::while_unresolved) {
-      return recursion_guard_wrapper<Leaf>(context, &storage,
-                                           !storage.is_resolved());
+      return recursion_guard_wrapper(context, &storage,
+                                     detail::described_type_v<Leaf>,
+                                     !storage.is_resolved());
     } else {
-      return recursion_guard<Leaf>(context, &storage);
+      return recursion_guard(context, &storage, detail::described_type_v<Leaf>);
     }
   }
 
