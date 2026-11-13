@@ -422,10 +422,11 @@ struct stored_layers<Type, Interface,
 };
 
 // The value and rvalue reference resolutions of a storage that makes a value
-// for each request but those of a wrapper a request derives from what the
-// storage makes: one composed of an object it publishes an rvalue reference
-// to, or a sharing handle converted of the sole owner of one. A layer of
-// what the storage stores is handed over as it is, not derived.
+// for each request but those of a sharing handle a request converts of the
+// sole owner of an object the storage publishes an rvalue reference to. A
+// layer of what the storage stores is handed over as it is. An owning handle
+// of what the storage makes stays published: the static container makes it
+// where it is requested, which the compiler folds as a composed one is not.
 template <typename Resolutions, typename Rvalues, typename Layers>
 struct without_derived_resolutions;
 
@@ -454,24 +455,12 @@ private:
     }
   }
 
-  // Whether a request composes a wrapper of an object the storage publishes
-  // an rvalue reference to.
-  template <typename Wrapper> static constexpr bool composed() {
-    if constexpr (composes_v<Wrapper>) {
-      return type_list_contains_v<
-          std::remove_cv_t<typename type_traits<Wrapper>::value_type>,
-          referred>;
-    } else {
-      return false;
-    }
-  }
-
   template <typename Target> static constexpr bool derived() {
     using wrapper = remove_cvref_t<Target>;
     if constexpr (is_base<Target>()) {
       return false;
     } else {
-      return converted<wrapper>() || composed<wrapper>();
+      return converted<wrapper>();
     }
   }
 

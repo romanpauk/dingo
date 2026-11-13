@@ -366,6 +366,13 @@ private:
           context.template construct_from<wrapper>(scope, [&]() -> wrapper {
             return compose<InterfaceBinding, Request>(scope, host, context);
           }));
+    } else if constexpr (How == derivation::move || How == derivation::copy) {
+      // A value is made of what the binding publishes where it is
+      // requested, while its source exists, as a value it publishes is.
+      return consume<InterfaceBinding, derived_request_t<How, Request>>(
+          scope, host, context, [](auto &&instance) -> Request {
+            return Request(std::forward<decltype(instance)>(instance));
+          });
     } else {
       auto composes = composes_request<InterfaceBinding>();
       return convert_resolved_binding<Request>(apply_derivation<How, Request>(
