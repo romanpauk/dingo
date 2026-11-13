@@ -416,8 +416,10 @@ private:
         cell_reset_guard guard{cell};
         return invoke_then(
             [&]() -> decltype(auto) {
-              return with_runtime_source(persistent_scope, context,
-                                         std::forward<Fn>(fn));
+              // The scope is a run-time value, as that of a request is:
+              // the source is materialized by one function for both.
+              return with_runtime_source(construction_scope(persistent_scope),
+                                         context, std::forward<Fn>(fn));
             },
             [&] {
               context.on_rollback(&reset_cell, std::addressof(cell));
