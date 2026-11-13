@@ -59,7 +59,7 @@ template <typename Registration, typename... LocalRegistrations>
 struct local_binding_scope_slot<Registration,
                                 static_registry<LocalRegistrations...>> {
   static constexpr bool has_local_bindings = true;
-  static_bindings_state<LocalRegistrations...> scope;
+  static_bindings_state<LocalRegistrations...> local_bindings;
 };
 
 // What a resolution of a binding that keeps nothing, or in a runtime
@@ -299,7 +299,7 @@ public:
       }
     }
     if constexpr (local_binding_scope_slot<Registration>::has_local_bindings) {
-      this->scope.reset_resolved(order);
+      this->local_bindings.reset_resolved(order);
     }
   }
 
@@ -472,7 +472,7 @@ private:
           cell_, host, scope};
     } else {
       return binding_activation<binding_cell_t<model>, dependencies, Scope>{
-          cell_, {this->scope, host}, scope};
+          cell_, {this->local_bindings, host}, scope};
     }
   }
 
