@@ -23,6 +23,7 @@
 #include <dingo/type/shape.h>
 #include <dingo/type/type_traits.h>
 
+#include <array>
 #include <cassert>
 #include <cstddef>
 #include <memory>
@@ -90,13 +91,23 @@ T resolve_binding_request(construction_scope scope, Binding &binding,
 
 namespace detail {
 template <typename T, typename RTTI, typename Binding, typename Context>
-constexpr typename instance_request<RTTI>::derive_function deriver();
+struct request_node_of;
 
-// The erased request of T.
+template <typename RTTI, typename Binding, typename Context>
+resolved_address derive_erased(void *erased, const derivation_site &site,
+                               construction_scope scope, void *erased_context,
+                               const request_node &request);
+
+// The erased request of T: its descriptor, and the node a binding that does
+// not publish it derives it of.
 template <typename T, typename RTTI, typename Binding, typename Context>
 instance_request<RTTI> erased_request() {
-  return {RTTI::template get_type_index<request_lookup_type_t<T>>(),
-          described_type_v<T>, deriver<T, RTTI, Binding, Context>()};
+  if constexpr (derivable_v<T>) {
+    return {described_type_v<T>, &derive_erased<RTTI, Binding, Context>,
+            &request_node_of<T, RTTI, Binding, Context>::value};
+  } else {
+    return {described_type_v<T>};
+  }
 }
 
 // A reference into the context ends before the caller uses what a resolution
@@ -286,48 +297,363 @@ resolved_address derive_as(const derivation_site &site,
   }
 }
 
-// Derives a request by the derivation chosen for it, which is one whose shape
-// it has: only those are made for it.
-template <typename T, typename RTTI, typename Binding, typename Context,
-          std::size_t... Index>
-resolved_address derive_shaped(derivation how, const derivation_site &site,
-                               construction_scope scope, Binding &binding,
-                               Context &context,
-                               std::index_sequence<Index...>) {
-  resolved_address result{};
-  const bool derived =
-      ((how == shaped_derivations_v<T>[Index] &&
-        (result = derive_as<shaped_derivations_v<T>[Index], T, RTTI>(
-             site, scope, binding, context),
-         true)) ||
-       ...);
-  if (!derived) {
-    throw_type_not_convertible(described_type_v<T>, site.registered, context);
-  }
-  return result;
-}
-
-// Derives a request the binding does not publish from one it resolves.
+// Derives a request of a wrapper: one a binding keeps with it, converts of
+// the sole owner it makes, or composes of what it holds. These derivations
+// are made of the type of the request.
 template <typename T, typename RTTI, typename Binding, typename Context>
-resolved_address
-derive_binding_request(void *erased, const derivation_site &site,
-                       construction_scope scope, void *erased_context) {
+resolved_address derive_wrapper(void *erased, const derivation_site &site,
+                                construction_scope scope, void *erased_context,
+                                derivation how) {
   auto &binding = *static_cast<Binding *>(erased);
   auto &context = *static_cast<Context *>(erased_context);
-  // The request is derived of the descriptor it was dispatched with.
-  return derive_shaped<T, RTTI>(
-      derive_request<T>(runtime_facts<T>(site, site.requested)), site, scope,
-      binding, context,
-      std::make_index_sequence<shaped_derivations_v<T>.size()>{});
+  if constexpr (derivation_shape_v<derivation::keep, T>) {
+    if (how == derivation::keep) {
+      return derive_as<derivation::keep, T, RTTI>(site, scope, binding,
+                                                  context);
+    }
+  }
+  if constexpr (derivation_shape_v<derivation::convert, T>) {
+    if (how == derivation::convert) {
+      return derive_as<derivation::convert, T, RTTI>(site, scope, binding,
+                                                     context);
+    }
+  }
+  if constexpr (derivation_shape_v<derivation::compose, T>) {
+    if (how == derivation::compose) {
+      return derive_as<derivation::compose, T, RTTI>(site, scope, binding,
+                                                     context);
+    }
+  }
+  throw_type_not_convertible(described_type_v<T>, site.registered, context);
 }
 
+// The operations of the object a request is or refers to, erased of its
+// type: its size and its alignment; how a value placed for the request is
+// copied or moved into memory, as a value is returned of what a binding
+// resolves, and destroyed; and how what a pointer the binding hands over
+// points to is released. One the request does not need, or the type does not
+// have, is null.
+struct object_operations {
+  using copy_function = void (*)(void *to, void *from);
+
+  std::size_t size;
+  std::size_t alignment;
+  copy_function copy;
+  copy_function move;
+  void (*destroy)(void *instance) noexcept;
+  // Releases what the pointer kept at owner points to.
+  void (*release)(void *owner) noexcept;
+};
+
+template <typename T> T copied_object(T &from) { return from; }
+template <typename T> T moved_object(T &from) { return std::move(from); }
+
+template <typename T> void copy_object(void *to, void *from) {
+  new (to) T(copied_object(*static_cast<T *>(from)));
+}
+
+template <typename T> void move_object(void *to, void *from) {
+  new (to) T(moved_object(*static_cast<T *>(from)));
+}
+
+template <typename T> void destroy_object(void *instance) noexcept {
+  static_cast<T *>(instance)->~T();
+}
+
+template <typename T> void release_object(void *owner) noexcept {
+  (void)adopt_pointer(static_cast<T *>(*static_cast<void **>(owner)));
+}
+
+// The operations of T a request needs: Places where a value of T may be
+// placed for it, Owns where a pointer to T may be handed over to it.
+template <typename T, bool Places, bool Owns>
+constexpr object_operations make_object_operations() {
+  object_operations operations{sizeof(T), alignof(T), nullptr,
+                               nullptr,   nullptr,    nullptr};
+  if constexpr (Places) {
+    if constexpr (is_copy_constructible_v<T>) {
+      operations.copy = &copy_object<T>;
+    }
+    if constexpr (std::is_move_constructible_v<T>) {
+      operations.move = &move_object<T>;
+    }
+    if constexpr (!std::is_trivially_destructible_v<T>) {
+      operations.destroy = &destroy_object<T>;
+    }
+  }
+  if constexpr (Owns) {
+    operations.release = &release_object<T>;
+  }
+  return operations;
+}
+
+template <typename T, bool Places, bool Owns>
+inline constexpr object_operations object_operations_v =
+    make_object_operations<T, Places, Owns>();
+
+inline constexpr std::size_t derivation_count =
+    static_cast<std::size_t>(derivation::compose) + 1;
+
+// A request a runtime binding derives, erased of its type, so that the
+// requests of a shape share the code that derives them: its descriptor, what
+// it is, whether a binding derives it at all, the sole owner a sharing handle
+// it asks for converts of, the object it is or refers to, and, for each
+// derivation of a value, a reference or a pointer, the request it resolves
+// through. A value placed for it that a binding composes is referred to as an
+// rvalue reference to it. A derivation of a wrapper is made of the type of
+// the request, by wrap.
+struct request_node {
+  using wrap_function = resolved_address (*)(void *binding,
+                                             const derivation_site &site,
+                                             construction_scope scope,
+                                             void *context, derivation how);
+
+  type_descriptor requested;
+  request_facts facts;
+  bool derivable;
+  type_descriptor owner;
+  const object_operations *object;
+  std::array<const request_node *, derivation_count> through;
+  const request_node *referred;
+  wrap_function wrap;
+};
+
 template <typename T, typename RTTI, typename Binding, typename Context>
-constexpr typename instance_request<RTTI>::derive_function deriver() {
-  if constexpr (derivable_v<T>) {
-    return &derive_binding_request<T, RTTI, Binding, Context>;
+struct request_node_of {
+  static const request_node value;
+};
+
+// Whether a derivation is of a wrapper, which is made of the type of the
+// request.
+constexpr bool derives_wrapper(derivation how) {
+  return how == derivation::keep || how == derivation::convert ||
+         how == derivation::compose;
+}
+
+template <derivation How, typename T, typename RTTI, typename Binding,
+          typename Context>
+constexpr const request_node *through_node() {
+  if constexpr (derivation_shape_v<How, T> && !derives_wrapper(How)) {
+    return &request_node_of<derived_request_t<How, T>, RTTI, Binding,
+                            Context>::value;
   } else {
     return nullptr;
   }
+}
+
+template <typename T, typename RTTI, typename Binding, typename Context>
+constexpr std::array<const request_node *, derivation_count> through_nodes() {
+  return {through_node<derivation::none, T, RTTI, Binding, Context>(),
+          through_node<derivation::adopt, T, RTTI, Binding, Context>(),
+          through_node<derivation::keep, T, RTTI, Binding, Context>(),
+          through_node<derivation::refer, T, RTTI, Binding, Context>(),
+          through_node<derivation::address, T, RTTI, Binding, Context>(),
+          through_node<derivation::place, T, RTTI, Binding, Context>(),
+          through_node<derivation::take, T, RTTI, Binding, Context>(),
+          through_node<derivation::move, T, RTTI, Binding, Context>(),
+          through_node<derivation::copy, T, RTTI, Binding, Context>(),
+          through_node<derivation::convert, T, RTTI, Binding, Context>(),
+          through_node<derivation::compose, T, RTTI, Binding, Context>()};
+}
+
+template <typename T> constexpr type_descriptor converted_owner() {
+  if constexpr (derivation_shape_v<derivation::convert, T>) {
+    return described_type_v<derived_request_t<derivation::convert, T>>;
+  } else {
+    return {};
+  }
+}
+
+template <typename T> constexpr const object_operations *object_of() {
+  constexpr bool places = derivation_shape_v<derivation::place, T>;
+  constexpr bool owns = derivation_shape_v<derivation::adopt, T> ||
+                        derivation_shape_v<derivation::take, T>;
+  if constexpr (places || owns) {
+    return &object_operations_v<referred_value_t<T>, places, owns>;
+  } else {
+    return nullptr;
+  }
+}
+
+template <typename T, typename RTTI, typename Binding, typename Context>
+constexpr const request_node *referred_node() {
+  if constexpr (derivation_shape_v<derivation::place, T>) {
+    if constexpr (composes_v<referred_value_t<T>>) {
+      return &request_node_of<referred_value_t<T> &&, RTTI, Binding,
+                              Context>::value;
+    } else {
+      return nullptr;
+    }
+  } else {
+    return nullptr;
+  }
+}
+
+template <typename T, typename RTTI, typename Binding, typename Context>
+constexpr request_node::wrap_function wrapper_of() {
+  if constexpr (derivation_shape_v<derivation::keep, T> ||
+                derivation_shape_v<derivation::convert, T> ||
+                derivation_shape_v<derivation::compose, T>) {
+    return &derive_wrapper<T, RTTI, Binding, Context>;
+  } else {
+    return nullptr;
+  }
+}
+
+template <typename T, typename RTTI, typename Binding, typename Context>
+const request_node request_node_of<T, RTTI, Binding, Context>::value{
+    described_type_v<T>,
+    request_facts_v<T>,
+    derivable_v<T>,
+    converted_owner<T>(),
+    object_of<T>(),
+    through_nodes<T, RTTI, Binding, Context>(),
+    referred_node<T, RTTI, Binding, Context>(),
+    wrapper_of<T, RTTI, Binding, Context>()};
+
+// What a runtime binding tells of itself for a request, of the descriptor it
+// was dispatched with, with whether it publishes the sole owner a sharing
+// handle the request asks for converts of, which only the request names.
+inline derivation_facts node_facts(const derivation_site &site,
+                                   const request_node &request,
+                                   type_descriptor requested) {
+  derivation_facts facts = site.facts_of(requested);
+  if (request.facts.shapes.has(derivation::convert)) {
+    facts.sources.set(derivation::convert, site.publishes(request.owner));
+  }
+  return facts;
+}
+
+// Resolves the request of a node through a binding.
+template <typename RTTI, typename Binding, typename Context>
+resolved_address resolve_node(construction_scope scope, Binding &binding,
+                              Context &context, const request_node &request) {
+  return binding.resolve_request(
+      scope, context,
+      instance_request<RTTI>{
+          request.requested,
+          request.derivable ? &derive_erased<RTTI, Binding, Context> : nullptr,
+          &request},
+      nullptr);
+}
+
+// Places a pointer a binding hands over in the context, which releases what
+// it points to as it ends.
+template <typename Context>
+void own_pointer(construction_scope scope, Context &context,
+                 const object_operations &object, void *pointer) {
+  bool owned = false;
+  try {
+    context.construct_erased(scope, sizeof(void *), alignof(void *),
+                             object.release, [&](void *owner) {
+                               new (owner) void *(pointer);
+                               owned = true;
+                             });
+  } catch (...) {
+    if (!owned) {
+      object.release(&pointer);
+    }
+    throw;
+  }
+}
+
+// Places a value made of what a binding resolves in the context: moved out of
+// what is handed over, copied of anything else, as a value is returned of
+// what the binding resolves.
+template <typename Context>
+void *place_value(construction_scope scope, Context &context,
+                  const request_node &value, const object_operations &object,
+                  resolved_address resolved) {
+  object_operations::copy_function make = nullptr;
+  if (resolved.access == resolved_address::access_kind::consume &&
+      object.move != nullptr) {
+    make = object.move;
+  } else if (object.copy != nullptr) {
+    make = object.copy;
+  } else if (object.move != nullptr) {
+    assert(resolved.access == resolved_address::access_kind::consume);
+    make = object.move;
+  } else {
+    throw_type_not_convertible(value.requested, value.requested);
+  }
+  return context.construct_erased(
+      scope, object.size, object.alignment, object.destroy,
+      [&](void *at) { make(at, resolved.address); });
+}
+
+// Derives a request the binding does not publish, of its node, from one it
+// resolves. A value, a reference or a pointer is derived here, of the
+// descriptors of the requests and the operations of their object, so that
+// the code is shared by every request; a wrapper by its type.
+template <typename RTTI, typename Binding, typename Context>
+resolved_address derive_erased(void *erased, const derivation_site &site,
+                               construction_scope scope, void *erased_context,
+                               const request_node &request) {
+  using access = resolved_address::access_kind;
+  auto &binding = *static_cast<Binding *>(erased);
+  auto &context = *static_cast<Context *>(erased_context);
+  auto through = [&](derivation how) -> resolved_address {
+    return resolve_node<RTTI>(scope, binding, context,
+                              *request.through[static_cast<std::size_t>(how)]);
+  };
+  // A reference into the context ends before the caller uses what a
+  // resolution returns: the caller is refused it.
+  auto refuse_caller = [&] {
+    if (scope.is_caller()) {
+      throw_type_not_convertible(request.requested, site.registered, context);
+    }
+  };
+  // The request is derived of the descriptor it was dispatched with.
+  const derivation how =
+      derive_request(request.facts, node_facts(site, request, site.requested));
+  switch (how) {
+  case derivation::adopt: {
+    refuse_caller();
+    void *pointer = through(how).address;
+    own_pointer(scope, context, *request.object, pointer);
+    return {pointer, access::borrow};
+  }
+  case derivation::take: {
+    void *pointer = through(how).address;
+    own_pointer(scope, context, *request.object, pointer);
+    return {pointer, access::consume};
+  }
+  case derivation::refer: {
+    // The value is resolved first, as a published reference to it is: what
+    // fails as it is made fails before the caller is refused it.
+    void *address = through(how).address;
+    refuse_caller();
+    return {address, access::borrow};
+  }
+  case derivation::address:
+  case derivation::copy:
+    return {through(how).address, access::borrow};
+  case derivation::move:
+    return {through(how).address, access::consume};
+  case derivation::place: {
+    refuse_caller();
+    const request_node &value = *request.through[static_cast<std::size_t>(how)];
+    // A value the binding composes is composed in the context, and referred
+    // to there.
+    if (request.referred != nullptr && !site.publishes(value.requested) &&
+        derive_request(value.facts, node_facts(site, value, value.requested)) ==
+            derivation::compose) {
+      return {resolve_node<RTTI>(scope, binding, context, *request.referred)
+                  .address,
+              access::borrow};
+    }
+    return {place_value(scope, context, value, *request.object,
+                        resolve_node<RTTI>(scope, binding, context, value)),
+            access::borrow};
+  }
+  case derivation::keep:
+  case derivation::convert:
+  case derivation::compose:
+    return request.wrap(erased, site, scope, erased_context, how);
+  case derivation::none:
+    break;
+  }
+  throw_type_not_convertible(request.requested, site.registered, context);
 }
 } // namespace detail
 

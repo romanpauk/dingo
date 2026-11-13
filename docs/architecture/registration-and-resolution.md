@@ -126,10 +126,23 @@ cannot get a reference into the context.
 defines `instance_request`. The runtime container passes this object to a
 binding. The object stores:
 
-- the lookup type index
 - the requested type descriptor
 - the derivation of the request; the binding calls it only for a request that it
   does not publish, and passes facts about itself (see `derivation_site`)
+- the node of the request, which the derivation uses
+
+The node of a request (`request_node` in
+[include/dingo/binding/resolution.h](../../include/dingo/binding/resolution.h))
+is constant data. It holds the descriptor of the request, the derivations whose
+shape it has, the operations of the object that it is or refers to, and the
+nodes of the requests that each derivation resolves through. One function
+derives a value, a reference or a pointer of the node: it chooses the rule,
+resolves the node of the derived request through the binding, and places a value
+or an owner in the context with the operations of the object. A request type
+adds only its node and the operations of its object to a program, not a function
+for each of its derivations. A derivation of a wrapper (keep, convert, compose)
+is still a function of the type of the request. The static container applies the
+rules of the type, as it compiles.
 
 The containers differ in their binding table and their selection, not in the
 algorithm. Registration child containers and both containers give the algorithm

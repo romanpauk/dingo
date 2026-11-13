@@ -86,6 +86,25 @@ public:
 #pragma warning(pop)
 #endif
 
+  // Constructs an object of a type known only by its size and its alignment,
+  // which dtor destroys; none where it has no destructor.
+  template <typename ConstructFn>
+  void *construct_erased(Arena &arena, std::size_t size, std::size_t alignment,
+                         void (*dtor)(void *) noexcept,
+                         ConstructFn &&construct) {
+    void *instance = allocate(arena, size, alignment);
+    std::forward<ConstructFn>(construct)(instance);
+    if (dtor != nullptr) {
+      try {
+        add_destructor(arena, instance, dtor);
+      } catch (...) {
+        dtor(instance);
+        throw;
+      }
+    }
+    return instance;
+  }
+
   void add_destructor(Arena &arena, void *instance,
                       void (*dtor)(void *) noexcept) {
     tail_ =

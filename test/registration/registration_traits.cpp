@@ -810,15 +810,6 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
       std::shared_ptr<std::unique_ptr<A[], std::default_delete<A[]>>>;
   static_assert(
       detail::is_type_conversion_available_v<A *, nested_array_handle &>);
-  static_assert(
-      std::is_same_v<request_lookup_type_t<const A *>, runtime_type *>);
-  static_assert(
-      std::is_same_v<request_lookup_type_t<const volatile A *const volatile>,
-                     runtime_type *>);
-  static_assert(
-      std::is_same_v<request_lookup_type_t<const A *const *>, runtime_type **>);
-  static_assert(std::is_same_v<request_lookup_type_t<std::optional<const A *>>,
-                               std::optional<const runtime_type *>>);
   using exact_const_optional_pointer = exact_lookup<const std::optional<A>> *;
   static_assert(std::is_same_v<resolved_type_t<exact_const_optional_pointer,
                                                const std::optional<A> *>,

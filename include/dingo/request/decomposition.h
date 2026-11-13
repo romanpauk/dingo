@@ -100,38 +100,6 @@ template <typename Request>
 using referred_value_t =
     std::remove_cv_t<std::remove_pointer_t<std::remove_reference_t<Request>>>;
 
-// The type a runtime lookup of a request is keyed by: its leaf, erased, with
-// the references and pointers around it, and no qualifier.
-template <typename T> struct request_lookup_type {
-  using type = rebind_leaf_t<T, runtime_type>;
-};
-
-template <typename T>
-struct request_lookup_type<const T> : request_lookup_type<T> {};
-
-template <typename T>
-struct request_lookup_type<volatile T> : request_lookup_type<T> {};
-
-template <typename T>
-struct request_lookup_type<const volatile T> : request_lookup_type<T> {};
-
-template <typename T> struct request_lookup_type<T *> {
-  using type = std::add_pointer_t<typename request_lookup_type<T>::type>;
-};
-
-template <typename T> struct request_lookup_type<T &> {
-  using type =
-      std::add_lvalue_reference_t<typename request_lookup_type<T>::type>;
-};
-
-template <typename T> struct request_lookup_type<T &&> {
-  using type =
-      std::add_rvalue_reference_t<typename request_lookup_type<T>::type>;
-};
-
-template <typename T>
-using request_lookup_type_t = typename request_lookup_type<T>::type;
-
 // Whether what a request resolves may outlive the resolution: a reference or
 // a pointer.
 template <typename Request>

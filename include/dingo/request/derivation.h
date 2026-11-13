@@ -17,7 +17,6 @@
 #include <dingo/request/decomposition.h>
 #include <dingo/type/type_traits.h>
 
-#include <array>
 #include <cstddef>
 #include <memory>
 #include <type_traits>
@@ -426,32 +425,6 @@ template <typename Request>
 constexpr derivation derive_request(derivation_facts facts) {
   return derive_request(request_facts_v<Request>, facts);
 }
-
-// The derivations whose shape a request has, in the order they are tried: the
-// only ones a request may be derived by.
-template <typename Request> constexpr std::size_t shaped_derivation_count() {
-  std::size_t count = 0;
-  for (derivation how : derivation_order) {
-    count += request_facts_v<Request>.shapes.has(how) ? 1 : 0;
-  }
-  return count;
-}
-
-template <typename Request>
-constexpr std::array<derivation, shaped_derivation_count<Request>()>
-shaped_derivations() {
-  std::array<derivation, shaped_derivation_count<Request>()> shaped{};
-  std::size_t index = 0;
-  for (derivation how : derivation_order) {
-    if (request_facts_v<Request>.shapes.has(how)) {
-      shaped[index++] = how;
-    }
-  }
-  return shaped;
-}
-
-template <typename Request>
-inline constexpr auto shaped_derivations_v = shaped_derivations<Request>();
 
 // Whether a request may be derived at all, by any binding: by one that keeps
 // its instance and places what it makes, whose values do not slice what it

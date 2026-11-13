@@ -11,6 +11,7 @@
 #include <dingo/memory/object_store.h>
 #include <dingo/runtime/transaction.h>
 
+#include <cstddef>
 #include <exception>
 #include <memory>
 #include <type_traits>
@@ -80,6 +81,20 @@ protected:
 
     return ephemeral_store_.template construct_at<T>(
         *scratch_, std::forward<ConstructFn>(construct_fn));
+  }
+
+  template <typename ConstructFn>
+  void *construct_erased_storage(construction_scope scope, std::size_t size,
+                                 std::size_t alignment,
+                                 void (*dtor)(void *) noexcept,
+                                 ConstructFn &&construct_fn) {
+    if (scope.is_persistent()) {
+      return transaction_->construct_persistent_erased(
+          size, alignment, dtor, std::forward<ConstructFn>(construct_fn));
+    }
+    return ephemeral_store_.construct_erased(
+        *scratch_, size, alignment, dtor,
+        std::forward<ConstructFn>(construct_fn));
   }
 
 private:

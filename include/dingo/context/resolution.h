@@ -16,6 +16,7 @@
 
 #include <array>
 #include <cassert>
+#include <cstddef>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -165,6 +166,17 @@ public:
   T &construct_in_place(Scope scope, ConstructFn &&construct_fn) {
     return Backend::template construct_storage<T>(
         scope, std::forward<ConstructFn>(construct_fn));
+  }
+
+  // Constructs an object of a type known only by its size and its alignment
+  // at the address construct_fn is given, which dtor destroys; none where
+  // it has no destructor. Only a backend that places such objects has it.
+  template <typename Scope, typename ConstructFn>
+  void *construct_erased(Scope scope, std::size_t size, std::size_t alignment,
+                         void (*dtor)(void *) noexcept,
+                         ConstructFn &&construct_fn) {
+    return Backend::construct_erased_storage(
+        scope, size, alignment, dtor, std::forward<ConstructFn>(construct_fn));
   }
 
   // Constructs the T that make returns in place, so that a T that can be

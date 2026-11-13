@@ -379,7 +379,7 @@ private:
         cached(cache_key),
         &publishes,
         &detail::runtime_derivation_facts<Type, Storage, request_resolutions>};
-    return request.derive(&erased, site, scope, &context);
+    return request.derive(&erased, site, scope, &context, *request.node);
   }
 
   // Whether the binding publishes a request.

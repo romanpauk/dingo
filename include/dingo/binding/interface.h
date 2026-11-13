@@ -18,6 +18,7 @@
 namespace dingo {
 namespace detail {
 struct derivation_site;
+struct request_node;
 } // namespace detail
 
 struct resolved_address {
@@ -29,17 +30,18 @@ struct resolved_address {
 };
 
 template <typename RTTI> struct instance_request {
-  using type_index = typename RTTI::type_index;
-  // Derives a request the binding does not publish from one it resolves
-  // through the binding.
+  // Derives a request the binding does not publish, of its node, from one it
+  // resolves through the binding.
   using derive_function =
       resolved_address (*)(void *binding, const detail::derivation_site &site,
-                           construction_scope scope, void *context);
+                           construction_scope scope, void *context,
+                           const detail::request_node &request);
 
-  type_index lookup_type;
   type_descriptor requested_type;
-  // Called only when the binding does not publish the request.
+  // Called only when the binding does not publish the request; none where
+  // no binding derives it.
   derive_function derive = nullptr;
+  const detail::request_node *node = nullptr;
 };
 
 template <typename RTTI, typename Context> class runtime_binding_interface {

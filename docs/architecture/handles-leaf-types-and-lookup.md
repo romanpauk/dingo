@@ -45,23 +45,7 @@ reference and pointer around it.
 So Dingo can express "the same handle shape over another leaf type" without a
 rule for each wrapper combination.
 
-## Lookup Type
-
-A runtime request is keyed by its shape, not by the exact type of the request.
-`request_lookup_type_t<T>` in
-[include/dingo/request/decomposition.h](../../include/dingo/request/decomposition.h)
-gives this key. It replaces the leaf with `runtime_type`, keeps the references,
-pointers and wrappers, and removes the qualifiers:
-
-- `A&` -> `runtime_type&`
-- `A*` -> `runtime_type*`
-- `std::shared_ptr<A>` -> `std::shared_ptr<runtime_type>`
-- `test_unique<A>` -> `test_unique<runtime_type>`
-
-The erased request of a runtime binding,
-[`instance_request`](../../include/dingo/binding/interface.h), holds this key as
-`lookup_type`. The key tells whether a request asks for a value, a borrowed
-reference, a pointer or a wrapper, independently of its leaf.
+## Binding Lookup
 
 A request selects a binding by its normalized type or by its exact type. The
 binding then matches the type descriptor of the request against its resolutions

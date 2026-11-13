@@ -14,9 +14,9 @@ The conversion rules are in these parts of the library:
 - `type_conversion_traits` checks and performs custom type conversions.
 - `resolution` records the operation of an allowed route from a source to a
   result.
-- `instance_request` carries a runtime request: its lookup type, its type
-  descriptor, and a function that derives a request the binding does not
-  publish.
+- `instance_request` carries a runtime request: its type descriptor, the
+  function that derives a request the binding does not publish, and the node of
+  the request that the function derives it of.
 - Each conversion of `conversion/paths.h` applies itself.
 
 The main source files are:
@@ -171,7 +171,7 @@ Both containers match a request against the resolution list of the binding,
   applies the resolution at the matched index.
 - If no resolution matches, the binding derives the request from one that it
   resolves. In the runtime container, the `derive` function of the
-  `instance_request` does this.
+  `instance_request` does this, of the node of the request.
 
 Leaf normalization applies only to the selection of the binding. Dingo does not
 repeat it to choose a conversion route.

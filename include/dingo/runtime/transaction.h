@@ -143,6 +143,20 @@ public:
     return instance;
   }
 
+  // Constructs an object of a type known only by its size and its alignment,
+  // which dtor destroys; none where it has no destructor.
+  template <typename ConstructFn>
+  void *construct_persistent_erased(std::size_t size, std::size_t alignment,
+                                    void (*dtor)(void *) noexcept,
+                                    ConstructFn &&construct_fn) {
+    void *instance = allocate_persistent(size, alignment);
+    std::forward<ConstructFn>(construct_fn)(instance);
+    if (dtor != nullptr) {
+      add_persistent_destructor(instance, dtor);
+    }
+    return instance;
+  }
+
   void on_rollback(void (*fn)(void *, void *) noexcept, void *first,
                    void *second = nullptr) {
     auto &actions = shared_actions();

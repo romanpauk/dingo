@@ -12,7 +12,7 @@ Read these pages in this order:
 - [Registration And Resolution](registration-and-resolution.md): runtime and
   compile-time registration, and the shared path to `resolve<T>()`.
 - [Handles, Leaf Types, And Lookup](handles-leaf-types-and-lookup.md): wrapper
-  algebra, `leaf_type_t`, `rebind_leaf_t`, `lookup_type_t`, and
+  algebra, `leaf_type_t`, `rebind_leaf_t`, binding lookup, and
   `exact_lookup<T>`.
 - [Extending Dingo](extending-dingo.md): which trait to specialize for a new
   wrapper, storage scope, or conversion.
