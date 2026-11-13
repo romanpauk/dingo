@@ -772,32 +772,39 @@ protected:
     }
   }
 
-  template <typename TypeInterface, typename TypeStorage, typename LookupKey,
-            typename LookupEntry, typename ValueFactory, typename KeyArg>
-  void insert_lookup(runtime_bindings_state &state, ValueFactory &value_factory,
+  // What a registration commits to a lookup: its value, and the
+  // descriptors that name the registration if the lookup rejects it.
+  struct lookup_registration {
+    type_descriptor interface_type;
+    type_descriptor storage;
+    type_descriptor key_type;
+  };
+
+  // Inserts a binding into a lookup. It is of the lookup and its key, not of
+  // the binding: the value of the binding is made by the caller.
+  template <typename LookupEntry, typename KeyArg>
+  void insert_lookup(runtime_bindings_state &state,
                      runtime_transaction_type &transaction,
-                     const LookupKey &lookup_key, const KeyArg &key_arg) {
+                     runtime_lookup_value value, const KeyArg &key_arg,
+                     const lookup_registration &registration) {
     auto &index = state.lookup_indexes.template get<LookupEntry>();
 
     if constexpr (std::is_same_v<
                       typename lookup_entry_cardinality<LookupEntry>::type,
                       ::dingo::one>) {
-      auto value = value_factory.template make<TypeInterface>();
       auto [handle, inserted] = index.try_emplace(key_arg, std::move(value));
       if (inserted) {
         record_lookup_rollback<LookupEntry>(transaction, state, handle,
                                             key_arg);
       } else {
-        check_lookup_commit(
-            replace_lookup<LookupEntry>(transaction, state, handle, key_arg,
-                                        std::move(value)),
-            detail::described_type_v<TypeInterface>,
-            detail::described_type_v<typename TypeStorage::type>,
-            detail::registration_key_type<KeyArg>(lookup_key));
+        check_lookup_commit(replace_lookup<LookupEntry>(transaction, state,
+                                                        handle, key_arg,
+                                                        std::move(value)),
+                            registration.interface_type, registration.storage,
+                            registration.key_type);
       }
     } else {
-      auto handle =
-          index.emplace(key_arg, value_factory.template make<TypeInterface>());
+      auto handle = index.emplace(key_arg, std::move(value));
       record_lookup_rollback<LookupEntry>(transaction, state, handle, key_arg);
     }
   }
@@ -811,9 +818,18 @@ protected:
     static_assert(ValueFactory::shared_owner || sizeof...(Entries) <= 1,
                   "unique runtime binding owner can only be inserted into one "
                   "lookup");
-    (insert_lookup<TypeInterface, TypeStorage, LookupKey, Entries>(
-         state, value_factory, transaction, lookup_key,
-         key_resolver(type_list_iterator<Entries>{})),
+    auto insert = [&](auto entry, const auto &key_arg) {
+      using entry_type = typename decltype(entry)::type;
+      insert_lookup<entry_type>(
+          state, transaction, value_factory.template make<TypeInterface>(),
+          key_arg,
+          {detail::described_type_v<TypeInterface>,
+           detail::described_type_v<typename TypeStorage::type>,
+           detail::registration_key_type<std::decay_t<decltype(key_arg)>>(
+               lookup_key)});
+    };
+    (insert(type_list_iterator<Entries>{},
+            key_resolver(type_list_iterator<Entries>{})),
      ...);
   }
 
