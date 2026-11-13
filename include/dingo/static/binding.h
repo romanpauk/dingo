@@ -62,8 +62,7 @@ struct local_binding_scope_slot<Registration,
   static_bindings_state<LocalRegistrations...> local_bindings;
 };
 
-// What a resolution of a binding that keeps nothing, or in a runtime
-// transaction, orders: nothing.
+// What a resolution of a binding that keeps nothing orders: nothing.
 struct no_resolution_order {};
 
 // The order in which a binding that keeps what it resolves was first
@@ -260,7 +259,7 @@ struct static_request_resolution
     : binding_supports_request<Request, InterfaceBinding> {
 private:
   static constexpr bool resolves =
-      is_runtime_context_v<Context> ||
+      rejects_at_run_time_v<Context> ||
       resolves_request_v<Request, InterfaceBinding>;
   // A request that does not resolve because it would slice the registered
   // type is told so.
@@ -431,8 +430,7 @@ private:
 
   // A resolution of the cell, which takes the next order of the static
   // container when it resolves the cell first, once the cell is resolved:
-  // after what the cell depends on. A runtime transaction resets what it
-  // resolves itself.
+  // after what the cell depends on.
   template <typename Host> class resolution_order {
   public:
     resolution_order(static_binding &binding, Host &host)
@@ -454,9 +452,12 @@ private:
     bool first_;
   };
 
+  // A static container resolves its bindings in a static context, also
+  // what a runtime child asks it for, so that it resets them itself.
   template <typename Host, typename Context>
   auto ordered(Host &host, Context &) {
-    if constexpr (keeps && !is_runtime_context_v<Context>) {
+    static_assert(!is_runtime_context_v<Context>);
+    if constexpr (keeps) {
       return resolution_order<Host>(*this, host);
     } else {
       return no_resolution_order{};

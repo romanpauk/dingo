@@ -34,6 +34,16 @@ template <typename T>
 inline constexpr bool is_runtime_context_v =
     is_runtime_context<std::remove_cv_t<std::remove_reference_t<T>>>::value;
 
+// Whether a request that a static binding cannot resolve is rejected as it
+// runs, as a runtime container rejects it, rather than as it compiles: in a
+// runtime context, and in one a backend that resolves for a runtime container
+// declares with rejects_at_run_time.
+template <typename T> struct rejects_at_run_time : std::false_type {};
+
+template <typename T>
+inline constexpr bool rejects_at_run_time_v =
+    rejects_at_run_time<std::remove_cv_t<std::remove_reference_t<T>>>::value;
+
 class context_path_state;
 
 // A frame of the resolution path: the type being constructed, linked to the
@@ -150,6 +160,13 @@ public:
         scope, [&](void *ptr) { new (ptr) T(std::forward<Args>(args)...); });
   }
 
+  // Constructs a T at the address construct_fn is given.
+  template <typename T, typename Scope, typename ConstructFn>
+  T &construct_in_place(Scope scope, ConstructFn &&construct_fn) {
+    return Backend::template construct_storage<T>(
+        scope, std::forward<ConstructFn>(construct_fn));
+  }
+
   // Constructs the T that make returns in place, so that a T that can be
   // neither copied nor moved is placed too.
   template <typename T, typename Scope, typename Make>
@@ -218,6 +235,19 @@ namespace detail {
 template <typename Backend>
 struct is_runtime_context<resolution_context<Backend>>
     : std::bool_constant<Backend::is_transactional> {};
+
+template <typename Backend, typename = void>
+struct backend_rejects_at_run_time
+    : std::bool_constant<Backend::is_transactional> {};
+
+template <typename Backend>
+struct backend_rejects_at_run_time<
+    Backend, std::void_t<decltype(Backend::rejects_at_run_time)>>
+    : std::bool_constant<Backend::rejects_at_run_time> {};
+
+template <typename Backend>
+struct rejects_at_run_time<resolution_context<Backend>>
+    : backend_rejects_at_run_time<Backend> {};
 
 } // namespace detail
 

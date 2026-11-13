@@ -150,17 +150,74 @@ private:
   static_persistent_memory *persistent_;
 };
 
+// The memory of a request a runtime child forwards to a static container,
+// which resolves it in a context of its own. The persistent instances live in
+// the memory of the container, as what it keeps refers to them. The others,
+// and the persistent ones of a container without the memory, which keeps
+// nothing that refers to them, are the request's: they live in the context of
+// the child, as long as the child needs them.
+template <typename Requester> class forwarded_context_backend {
+public:
+  static constexpr bool is_transactional = false;
+  // The runtime child rejects what it cannot resolve as it runs.
+  static constexpr bool rejects_at_run_time = true;
+
+  forwarded_context_backend(Requester &requester,
+                            static_persistent_memory *persistent)
+      : requester_(std::addressof(requester)), persistent_(persistent) {}
+
+  forwarded_context_backend(const forwarded_context_backend &) = delete;
+  forwarded_context_backend &
+  operator=(const forwarded_context_backend &) = delete;
+
+  void on_rollback(void (*)(void *, void *) noexcept, void *,
+                   void * = nullptr) noexcept {}
+
+  static_persistent_memory *persistent_memory() const { return persistent_; }
+  void persistent_memory(static_persistent_memory *persistent) {
+    persistent_ = persistent;
+  }
+
+protected:
+  template <typename T, typename ConstructFn>
+  T &construct_storage(construction_scope scope, ConstructFn &&construct_fn) {
+    if (scope.is_persistent() && persistent_ != nullptr) {
+      return persistent_->template construct<T>(
+          std::forward<ConstructFn>(construct_fn));
+    }
+    return requester_->template construct_in_place<T>(
+        scope, std::forward<ConstructFn>(construct_fn));
+  }
+
+private:
+  Requester *requester_;
+  static_persistent_memory *persistent_;
+};
+
 using static_context = resolution_context<static_context_backend>;
 using static_persistent_context =
     resolution_context<static_persistent_context_backend>;
+template <typename Requester>
+using forwarded_context =
+    resolution_context<forwarded_context_backend<Requester>>;
 
 namespace detail {
+// Whether a context places its persistent instances in a memory that a
+// container replaces with its own while it resolves its bindings.
+template <typename Context, typename = void>
+struct has_persistent_memory_slot : std::false_type {};
+
+template <typename Context>
+struct has_persistent_memory_slot<
+    Context, std::void_t<decltype(std::declval<Context &>().persistent_memory(
+                 std::declval<static_persistent_memory *>()))>>
+    : std::true_type {};
+
 // Places the persistent instances of a static context in memory while it
 // lives, and restores the memory the context had after.
-class persistent_memory_scope {
+template <typename Context> class persistent_memory_scope {
 public:
-  persistent_memory_scope(static_persistent_context &context,
-                          static_persistent_memory *memory)
+  persistent_memory_scope(Context &context, static_persistent_memory *memory)
       : context_(context), previous_(context.persistent_memory()) {
     context.persistent_memory(memory);
   }
@@ -170,7 +227,7 @@ public:
   persistent_memory_scope &operator=(const persistent_memory_scope &) = delete;
 
 private:
-  static_persistent_context &context_;
+  Context &context_;
   static_persistent_memory *previous_;
 };
 } // namespace detail

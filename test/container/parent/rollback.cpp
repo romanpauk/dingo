@@ -20,8 +20,7 @@
 // Rollback of a container alone and across a parent and a child of each
 // kind. The parent binds a shared Q and a shared P made of Q; the child binds
 // a shared C made of P. Each container is an atomic unit: a resolution that
-// falls back to the parent is an operation of the parent, but a static
-// parent's of a runtime child, which joins the child's transaction.
+// falls back to the parent is an operation of the parent.
 
 namespace dingo::scenarios {
 namespace {
@@ -158,23 +157,22 @@ template <typename Container> void expect_container_rolls_back() {
   EXPECT_EQ(rollback_p::made, 1);
 }
 
-// A static parent of a runtime child resolves in the child's transaction: a
-// child construction that fails undoes what the parent made for it too.
-template <typename Parent, typename Child>
-void expect_parent_joins_child_transaction() {
+// What a parent made for a child stays the parent's once the child is gone:
+// the parent does not reset it, nor make it again.
+template <typename Parent, typename Child> void expect_parent_outlives_child() {
   reset_rollback();
   typename Parent::type parent;
   Parent::prepare(parent);
-  typename Child::template type<typename Parent::type> child(&parent);
-  Child::prepare(child);
+  {
+    typename Child::template type<typename Parent::type> child(&parent);
+    Child::prepare(child);
+    child.template resolve<rollback_c &>();
+  }
+  EXPECT_EQ(rollback_q::destroyed, 0);
 
-  rollback_c::fail = true;
-  EXPECT_THROW(child.template resolve<rollback_c &>(), std::runtime_error);
+  parent.template resolve<rollback_p &>();
+  EXPECT_EQ(rollback_q::made, 1);
   EXPECT_EQ(rollback_p::made, 1);
-
-  child.template resolve<rollback_c &>();
-  EXPECT_EQ(rollback_p::made, 2);
-  EXPECT_EQ(rollback_c::made, 1);
 }
 
 // A shared class whose destructor reads the shared class it refers to: a
@@ -230,21 +228,25 @@ TEST(parent_rollback, static_container) {
 TEST(parent_rollback, runtime_parent_runtime_child) {
   expect_parent_keeps_result<runtime_parent, runtime_child>();
   expect_parent_rolls_back<runtime_parent, runtime_child>();
+  expect_parent_outlives_child<runtime_parent, runtime_child>();
 }
 
 TEST(parent_rollback, runtime_parent_static_child) {
   expect_parent_keeps_result<runtime_parent, static_child>();
   expect_parent_rolls_back<runtime_parent, static_child>();
+  expect_parent_outlives_child<runtime_parent, static_child>();
 }
 
 TEST(parent_rollback, static_parent_runtime_child) {
-  expect_parent_joins_child_transaction<static_parent, runtime_child>();
+  expect_parent_keeps_result<static_parent, runtime_child>();
   expect_parent_rolls_back<static_parent, runtime_child>();
+  expect_parent_outlives_child<static_parent, runtime_child>();
 }
 
 TEST(parent_rollback, static_parent_static_child) {
   expect_parent_keeps_result<static_parent, static_child>();
   expect_parent_rolls_back<static_parent, static_child>();
+  expect_parent_outlives_child<static_parent, static_child>();
 }
 
 } // namespace dingo::scenarios

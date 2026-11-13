@@ -32,6 +32,13 @@ struct child_config : parent_config {
   child_config() { value = 2; }
 };
 
+// A shared instance of the parent that keeps the unique config it is made of.
+struct parent_holder {
+  explicit parent_holder(parent_config &held) : config(held) {}
+
+  parent_config &config;
+};
+
 // A parent made of Bindings: a static container binds them in its type, and
 // a runtime container registers them once it is made.
 struct static_parent_shape {
@@ -185,12 +192,39 @@ inline void exercise_runtime_child_static_parent() {
   ASSERT_EQ(local[0]->value, 2);
 }
 
+// A static parent resolves what a runtime child asks for in a context of its
+// own. A value it makes for the request alone lives in the context of the
+// child, as long as the child needs it; one it keeps a reference to lives in
+// its own memory, after the child is gone.
+inline void exercise_runtime_child_static_parent_placement() {
+  using parent_bindings = dingo::bindings<
+      dingo::bind<dingo::scope<dingo::unique>, dingo::storage<parent_config>>,
+      dingo::bind<dingo::scope<dingo::shared>, dingo::storage<parent_holder>>>;
+  dingo::static_container<parent_bindings> parent;
+  using child_type =
+      dingo::runtime_container<dingo::runtime_container_traits,
+                               dingo::runtime_container_traits::allocator_type,
+                               decltype(parent)>;
+  {
+    child_type child(&parent);
+    child.template register_type<dingo::scope<dingo::shared>,
+                                 dingo::storage<child_service>>();
+    ASSERT_EQ(child.template resolve<child_service &>().value, 1);
+    ASSERT_EQ(child.template resolve<parent_holder &>().config.value, 1);
+  }
+  ASSERT_EQ(parent.template resolve<parent_holder &>().config.value, 1);
+}
+
 } // namespace dingo::scenarios
 
 namespace dingo::scenarios {
 
 TEST(static_parent_container, runtime_child) {
   exercise_runtime_child_static_parent();
+}
+
+TEST(static_parent_container, runtime_child_placement) {
+  exercise_runtime_child_static_parent_placement();
 }
 
 TEST(static_parent_container, static_child) {

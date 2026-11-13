@@ -834,9 +834,9 @@ operation of the parent:
 - If the parent operation fails, the parent rolls back before the exception
   propagates.
 
-A static parent of a runtime child is the exception. It resolves in the
-transaction of the child. If a later child construction fails, the child also
-undoes what the parent made for that construction.
+What a parent keeps lives in the parent. A child that fails or is destroyed does
+not reset it. A value that the parent makes only for the request of a child
+lives as long as the child needs it.
 
 This guarantee covers the state that the container manages. Dingo cannot undo
 side effects of user constructors, factories, callbacks or destructors that

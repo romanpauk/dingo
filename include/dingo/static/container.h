@@ -66,6 +66,21 @@ class static_container_impl;
 
 // Whether the resolutions of a container carry persistent memory: those of a
 // static container that has some, or whose static parent's resolutions do.
+// The origin of a request a runtime child forwards to a static container,
+// with the context of the child: the origin answers what no container of the
+// chain binds, which a runtime container does in its own context.
+template <typename Origin, typename Context> struct origin_in_context {
+  Origin &origin;
+  Context &context;
+
+  template <typename Request, bool MayAutoConstruct, typename LookupKey,
+            typename R, typename Scope, typename OtherContext>
+  R unresolved(Scope scope, OtherContext &, LookupKey key) {
+    return origin.template unresolved<Request, MayAutoConstruct, LookupKey, R>(
+        scope, context, std::move(key));
+  }
+};
+
 template <typename Container, typename = void>
 struct uses_persistent_memory : std::false_type {};
 
@@ -218,17 +233,28 @@ public:
 
   using container_requests<static_container_impl>::resolve;
 
-  // A request a static child forwards here is an operation of this container,
-  // which constructs what it keeps in its own memory, as that outlives the
-  // child. A runtime child resolves it in its own transaction.
+  // A request a child forwards here is an operation of this container, which
+  // constructs what it keeps in its own memory, as that outlives the child.
+  // That of a runtime child is resolved in a static context of this
+  // container, as a runtime context would make what this container keeps in
+  // the memory of the child, and reset it with the child. What only the
+  // request refers to is placed in the context of the child, which also
+  // answers what no container of the chain binds.
   template <typename Request, typename R, typename Context, typename Origin,
             typename LookupKey, typename Scope>
   R resolve_request(Scope scope, Context &context, Origin &origin,
                     LookupKey key) {
-    if constexpr (!is_runtime_context_v<Context>) {
+    if constexpr (is_runtime_context_v<Context>) {
+      origin_in_context<Origin, Context> child{origin, context};
+      forwarded_context<Context> own(context, persistent_memory());
+      return as_operation([&]() -> R {
+        return request_resolution::resolve<Request, R>(*this, scope, own, child,
+                                                       std::move(key));
+      });
+    } else {
       if (forwarded_by(origin)) {
         return as_operation([&]() -> R {
-          if constexpr (std::is_same_v<Context, static_persistent_context> &&
+          if constexpr (has_persistent_memory_slot<Context>::value &&
                         has_persistent_memory_v) {
             persistent_memory_scope memory(context, persistent_memory());
             return request_resolution::resolve<Request, R>(
@@ -239,9 +265,9 @@ public:
           }
         });
       }
+      return request_resolution::resolve<Request, R>(*this, scope, context,
+                                                     origin, std::move(key));
     }
-    return request_resolution::resolve<Request, R>(*this, scope, context,
-                                                   origin, std::move(key));
   }
 
   // Whether a request comes from another container. An origin of an
