@@ -36,7 +36,10 @@ namespace dingo {
 // call, so the construction of a dependency does not add template depth levels
 // to the dependency chain it is part of (see docs/advanced-topics.md).
 template <typename T, typename = void> struct constructor_traits {
-  template <typename... Args> static T construct(Args &&...args) {
+  // A volatile value is returned without the qualifier, which C++20 does
+  // not take on a return type.
+  template <typename... Args>
+  static std::remove_volatile_t<T> construct(Args &&...args) {
     return T{std::forward<Args>(args)...};
   }
 
