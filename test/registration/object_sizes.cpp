@@ -86,10 +86,7 @@ using size_registration =
                       interfaces<size_interface>>;
 using size_model = detail::binding_model<size_registration>;
 using size_storage = typename size_model::storage_type;
-using size_instance_container =
-    runtime_registry<runtime_container_traits,
-                     typename runtime_container_traits::allocator_type,
-                     container<>, container<>>;
+using size_instance_container = detail::container_implementation_t<container<>>;
 using size_binding_state =
     runtime_binding_state<size_registry_type, size_instance_container,
                           detail::binding_cell_t<size_model>>;
@@ -144,19 +141,13 @@ using size_lookup_index =
                          size_type_map_value,
                          typename size_registry_type::allocator_type>;
 
-template <typename Registration,
-          typename RegistrationParent =
-              typename size_registry_type::parent_container_type>
+template <typename Registration>
 using size_runtime_state_for = runtime_binding_state<
     size_registry_type, size_instance_container,
-    detail::binding_cell_t<detail::binding_model<Registration>>,
-    RegistrationParent>;
+    detail::binding_cell_t<detail::binding_model<Registration>>>;
 
 using size_unique_state = size_runtime_state_for<
     type_registration<scope<unique>, storage<size_implementation>>>;
-using size_scoped_parent_unique_state = size_runtime_state_for<
-    type_registration<scope<unique>, storage<size_implementation>>,
-    size_instance_container>;
 using size_external_state = size_runtime_state_for<
     type_registration<scope<external>, storage<size_implementation &>>>;
 using size_shared_ptr_state = size_runtime_state_for<type_registration<
@@ -175,11 +166,11 @@ void expect_size_at_most(const char *name, std::size_t expected) {
 TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
   if constexpr (sizeof(void *) == 8) {
     // Root owners carry the dense table of lazily allocated child lookup
-    // states; registration-created children remain two machine words below.
+    // states. A level of the local bindings of a registration is a container
+    // of the same type, which borrows the runtime data of its root.
     expect_size_at_most<container<>>("container<>", 120);
     expect_size_at_most<size_registry_type>("runtime registry", 112);
-    expect_size_at_most<size_instance_container>(
-        "registration container registry", 16);
+    expect_size_at_most<size_instance_container>("registration container", 120);
     expect_size_at_most<size_probe_registry::runtime_bindings_state>(
         "runtime bindings state", 48);
     expect_size_at_most<size_probe_registry::runtime_scope_state>(
@@ -200,8 +191,6 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
     // and composed of it too, behind one pointer.
     expect_size_at_most<size_binding_state>("runtime binding state", 56);
     expect_size_at_most<size_unique_state>("unique runtime binding state", 24);
-    EXPECT_EQ(sizeof(size_scoped_parent_unique_state),
-              sizeof(size_unique_state));
     expect_size_at_most<size_external_state>("external runtime binding state",
                                              48);
     expect_size_at_most<size_shared_ptr_state>(
@@ -242,7 +231,6 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
   static_assert(std::is_same_v<size_single_owner, size_binding>);
   static_assert(sizeof(size_probe_registry::runtime_lookup_value) ==
                 sizeof(void *));
-  static_assert(sizeof(size_instance_container) <= sizeof(void *) * 2);
 }
 
 } // namespace dingo

@@ -58,6 +58,12 @@ struct counting_runtime_binding_container {
     ++constructions;
   }
 
+  // A level of the local bindings of a registration.
+  counting_runtime_binding_container(detail::local_level_t,
+                                     counting_runtime_binding_container *owner,
+                                     allocator_type allocator)
+      : counting_runtime_binding_container(owner, allocator) {}
+
   allocator_type &get_allocator() { return allocator_; }
 
   static int constructions;

@@ -134,6 +134,11 @@ struct default_factory_constructs<Request, R, true> {
 // The selection a resolution makes in its host.
 struct select_in_host {};
 
+// Whether a host may be a level of the local bindings of a registration,
+// which answers a miss through the container the registration is made in,
+// before any parent: owner_level() is that container, or none.
+template <typename Host> struct has_owner_level : std::false_type {};
+
 struct request_resolution {
   // The selection of a request: the one given, or the one the host makes.
   template <typename Request, typename Host, typename Selection,
@@ -365,6 +370,13 @@ private:
             typename LookupKey, typename Scope>
   static R resolve_missing(Host &host, Scope scope, Context &context,
                            Origin &origin, LookupKey &key) {
+    if constexpr (has_owner_level<Host>::value) {
+      if (auto *owner = host.owner_level()) {
+        return owner->template resolve<typename Request::user_type,
+                                       Request::removes_rvalue_references>(
+            scope, context, origin, key);
+      }
+    }
     if constexpr (Host::template parent_serves<Lookup, LookupKey>()) {
       if (auto *parent = host.parent()) {
         return parent->template resolve<typename Request::user_type,

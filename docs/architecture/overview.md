@@ -62,11 +62,13 @@ The runtime registration path owns:
 - the parent lookup for nested containers
 - the public registration and resolution entry points
 
-The root container owns one runtime domain. This domain also serves the internal
-child containers that runtime bindings create. Each child container borrows the
-root arena. A child container has its own lookup state. The child allocates it
-when it registers its first local binding. The root keeps these states in a
-dense scope table. Public parent and child containers are independent owners.
+The root container owns one runtime domain. This domain also serves the
+registration containers that runtime registrations create for their local
+bindings. A registration container has the type of the container the
+registration is made in, and borrows the runtime data of its root. It has its
+own lookup state, which it allocates when it registers its first local binding.
+The root keeps these states in a dense scope table. Public parent and child
+containers are independent owners.
 
 The compile-time binding path owns:
 
@@ -104,7 +106,7 @@ The cell holds the storage object and its retention: what it keeps of the
 instance for its interfaces. A static container holds one cell per registration
 inline. A runtime binding holds its cell in `runtime_binding_state` from
 [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h), with
-the child container that resolves constructor dependencies.
+the registration container of its local bindings, when it has one.
 
 The storage classes under [include/dingo/storage/](../../include/dingo/storage)
 own the lifetime policy:

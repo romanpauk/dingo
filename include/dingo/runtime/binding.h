@@ -21,11 +21,18 @@
 #include <type_traits>
 
 namespace dingo {
+namespace detail {
+// Selects the constructor of a level of the local bindings of a registration.
+struct local_level_t {};
+inline constexpr local_level_t local_level{};
+} // namespace detail
+
 // The state of a runtime registration: its binding cell, the request cache of
-// its interfaces and the child container its factory resolves through once
-// the registration creates one.
-template <typename Owner, typename InstanceContainer, typename Cell,
-          typename RegistrationParent = typename Owner::parent_container_type>
+// its interfaces and the level of local bindings its factory resolves through
+// once the registration creates one. The level is a container of the type of
+// the container the registration is made in, so the factory is instantiated
+// once, whichever of the two it resolves through.
+template <typename Owner, typename InstanceContainer, typename Cell>
 class runtime_binding_state
     : private detail::cache::state<
           detail::cache::is_stable_storage_v<typename Cell::storage_type>> {
@@ -45,7 +52,7 @@ public:
     if (!instance_container_) {
       instance_container_ = std::addressof(
           owner_->runtime().template construct<InstanceContainer>(
-              parent(), owner_->get_allocator()));
+              detail::local_level, parent(), owner_->get_allocator()));
     }
     return *instance_container_;
   }
@@ -58,13 +65,13 @@ public:
   }
 
 private:
-  RegistrationParent *parent() {
-    if constexpr (std::is_same_v<RegistrationParent,
-                                 typename Owner::parent_container_type>) {
-      return owner_->parent();
-    } else {
-      return owner_->template runtime_registration_parent<RegistrationParent>();
-    }
+  // The container the registration is made in.
+  InstanceContainer *parent() {
+    static_assert(
+        std::is_same_v<
+            InstanceContainer,
+            std::remove_reference_t<decltype(owner_->registration_owner())>>);
+    return std::addressof(owner_->registration_owner());
   }
 
   Owner *owner_ = nullptr;

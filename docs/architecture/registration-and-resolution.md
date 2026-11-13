@@ -145,8 +145,9 @@ is still a function of the type of the request. The static container applies the
 rules of the type, as it compiles.
 
 The containers differ in their binding table and their selection, not in the
-algorithm. Registration child containers and both containers give the algorithm
-the same hooks.
+algorithm. Both containers give the algorithm the same hooks. A registration
+container of local bindings is a runtime container, and gives it one more: the
+container it falls back to before any parent.
 
 ### Atomic Container Changes
 
@@ -176,17 +177,23 @@ The binding state in
 [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h) owns:
 
 - a binding cell with the storage object and its retained conversions
-- a small child container for constructor injection
+- the registration container of its local bindings, created when the first local
+  binding is registered
 
 The runtime binding materializes its instance through the same binding
-activation as the static container.
+activation as the static container. Its factory resolves its dependencies
+through the registration container, when there is one, and else through the
+container the registration is made in. Both have the same type, so the factory
+and the activation are instantiated once for a registration.
 
 The root container owns the runtime arena and a dense table of lookup states for
-these child containers. A child stores only its root pointer and its scope ID.
-Resolution uses the ID to find the state of the child in constant time, then
-uses the original lookup backend and logical key. A child allocates its lookup
-state only when it registers its first local binding. Thus a child container
-needs no runtime arena and lookup set of its own.
+the registration containers. A registration container is a runtime container
+that does not own runtime data. In place of the data, it stores its scope ID and
+the container it falls back to, and it reaches the data through its root.
+Resolution uses the ID to find the state of the registration container in
+constant time, then uses the original lookup backend and logical key. A
+registration container allocates its lookup state only when it registers its
+first local binding. Thus it needs no runtime arena and lookup set of its own.
 
 The runtime binding has a list of resolutions, derived from
 `Storage::conversions`. It matches the requested type descriptor against this
@@ -200,9 +207,11 @@ state.
 
 ## Registration Child Bindings
 
-`register_type<...>()` returns a proxy to the child container of the
-registration, which accepts more runtime registrations. Local `bindings<...>` on
-a static `bind<...>` have the same role for compile-time bindings.
+`register_type<...>()` returns a proxy to the registration container of the
+registration, which accepts more runtime registrations. A request it binds no
+binding for falls back to the container the registration is made in, and then to
+the parent of that container. Local `bindings<...>` on a static `bind<...>` have
+the same role for compile-time bindings.
 
 Dependencies are selected by these rules:
 

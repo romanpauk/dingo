@@ -21,24 +21,18 @@
 
 namespace dingo {
 
-template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
-          typename ResolveRoot>
+template <typename ContainerTraits, typename Allocator, typename ResolveRoot>
 class DINGO_EMPTY_BASES runtime_registry
     : public allocator_base<Allocator>,
       protected detail::registry_store<ContainerTraits, Allocator> {
   template <typename> friend class ::dingo::resolution_context;
-  template <typename, typename, typename, typename>
-  friend class runtime_binding_state;
+  template <typename, typename, typename> friend class runtime_binding_state;
   template <typename, typename, typename>
   friend class detail::runtime_container_impl;
-  template <typename, typename, typename, typename>
-  friend class runtime_registry;
+  template <typename, typename, typename> friend class runtime_registry;
   using store_type = detail::registry_store<ContainerTraits, Allocator>;
   using registry_type =
-      runtime_registry<ContainerTraits, Allocator, ParentRegistry, ResolveRoot>;
-  // The root registry owns the runtime data; a registration container borrows
-  // that of its root.
-  static constexpr bool OwnsRuntimeData = std::is_void_v<ParentRegistry>;
+      runtime_registry<ContainerTraits, Allocator, ResolveRoot>;
   using resolve_root_type = ResolveRoot;
   using container_type = resolve_root_type;
   using runtime_type = runtime_memory<Allocator>;
@@ -46,16 +40,10 @@ class DINGO_EMPTY_BASES runtime_registry
   using typename store_type::runtime_context_type;
   using typename store_type::runtime_selection;
   using typename store_type::runtime_transaction_type;
-  template <typename Parent>
-  using registration_container_type =
-      runtime_registry<ContainerTraits, Allocator, Parent, resolve_root_type>;
 
 public:
   using container_traits_type = ContainerTraits;
   using allocator_type = Allocator;
-  using parent_container_type =
-      std::conditional_t<std::is_same_v<void, ParentRegistry>,
-                         resolve_root_type, ParentRegistry>;
   using rtti_type = typename ContainerTraits::rtti_type;
   using lookup_definition_type =
       detail::container_lookup_definition_type_t<ContainerTraits>;
@@ -94,23 +82,32 @@ private:
   }
 
 public:
-  runtime_registry(parent_container_type *parent,
+  // The registry of a container, which owns the runtime data.
+  runtime_registry(resolve_root_type *root,
                    const allocator_type &alloc = allocator_type())
-      : allocator_base<allocator_type>(alloc), parent_(parent),
+      : allocator_base<allocator_type>(alloc), root_(root),
         runtime_data_(get_allocator()) {}
+
+  // The registry of a level of the local bindings of a registration made in
+  // owner. It borrows the runtime data of the root of owner.
+  runtime_registry(detail::local_level_t, resolve_root_type *owner,
+                   const allocator_type &alloc = allocator_type())
+      : allocator_base<allocator_type>(alloc),
+        root_(owner->binding_store().resolve_root()), runtime_data_(owner) {}
 
 private:
   registry_type &binding_store() { return *this; }
 
-  // What a registration resolves through and constructs its collections with:
-  // the container of the root registry, which derives from it, or the
-  // registration container itself.
-  auto &registration_owner() {
-    if constexpr (OwnsRuntimeData) {
-      return static_cast<resolve_root_type &>(*this);
-    } else {
-      return *this;
-    }
+  // A container is its own root; a level of local bindings is not.
+  bool owns_runtime_data() const noexcept {
+    return root_ == static_cast<const resolve_root_type *>(this);
+  }
+
+  // The container a registration is made in, which its factory resolves
+  // through and constructs its collections with: a container, or a level of
+  // local bindings, which is a container of the same type.
+  resolve_root_type &registration_owner() {
+    return static_cast<resolve_root_type &>(*this);
   }
 
 public:
@@ -119,6 +116,14 @@ public:
 
   ~runtime_registry() = default;
 
+protected:
+  // Destroys the runtime data the registry owns. Its container calls it as it
+  // is destroyed, while it can still tell whether it is its own root.
+  void destroy_runtime_data() noexcept {
+    runtime_data_.destroy(owns_runtime_data());
+  }
+
+public:
   allocator_type &get_allocator() {
     return allocator_base<allocator_type>::get_allocator();
   }
@@ -129,7 +134,7 @@ public:
   auto register_type(Args &&...args) {
     if constexpr (detail::are_runtime_registration_key_args_v<Args...>) {
       return this->template prepare_binding<TypeArgs...>(
-          &registration_owner(), none_t{}, std::forward<Args>(args)...);
+          none_t{}, std::forward<Args>(args)...);
     } else {
       return register_with_argument<TypeArgs...>(std::forward<Args>(args)...);
     }
@@ -158,8 +163,7 @@ private:
                   "register_type takes a factory argument followed by "
                   "runtime key values");
     return this->template prepare_binding<TypeArgs...>(
-        &registration_owner(), std::forward<Arg>(arg),
-        std::forward<KeyArgs>(keys)...);
+        std::forward<Arg>(arg), std::forward<KeyArgs>(keys)...);
   }
 
 public:
@@ -169,24 +173,22 @@ protected:
   }
 
   runtime_data_type &shared_runtime_data() {
-    if constexpr (OwnsRuntimeData) {
+    if (owns_runtime_data()) {
       return runtime_data_.get();
-    } else {
-      return borrow_runtime_data(resolve_root());
     }
+    return borrow_runtime_data(resolve_root());
   }
 
   runtime_bindings_state *runtime_bindings() {
-    if constexpr (OwnsRuntimeData) {
+    if (owns_runtime_data()) {
       return std::addressof(shared_runtime_data().bindings);
-    } else {
-      auto *scope = runtime_scope();
-      return scope != nullptr ? std::addressof(scope->bindings) : nullptr;
     }
+    auto *scope = runtime_scope();
+    return scope != nullptr ? std::addressof(scope->bindings) : nullptr;
   }
 
   runtime_scope_state *runtime_scope() {
-    static_assert(!OwnsRuntimeData);
+    assert(!owns_runtime_data());
     const auto scope = runtime_data_.scope_id();
     if (scope == decltype(runtime_data_)::invalid_scope) {
       return nullptr;
@@ -199,76 +201,51 @@ protected:
     runtime_data_.scope_id(decltype(runtime_data_)::invalid_scope);
   }
 
-  template <typename Parent>
   runtime_bindings_state &
-  ensure_runtime_bindings(runtime_transaction_type &transaction,
-                          Parent *registration_parent) {
-    if constexpr (OwnsRuntimeData) {
+  ensure_runtime_bindings(runtime_transaction_type &transaction) {
+    if (owns_runtime_data()) {
       return *runtime_bindings();
-    } else {
-      if (auto *scope = runtime_scope()) {
-        assert(scope->registration_parent == registration_parent);
-        return scope->bindings;
-      }
-
-      auto &data = shared_runtime_data();
-      auto *state =
-          transaction.template construct_persistent<runtime_scope_state>(
-              get_allocator(), registration_parent);
-      runtime_data_.scope_id(data.create_scope(state));
-      try {
-        transaction.on_rollback(
-            +[](void *self, void *scope) noexcept {
-              static_cast<registry_type *>(self)->release_runtime_scope(
-                  static_cast<runtime_scope_state *>(scope));
-            },
-            this, state);
-      } catch (...) {
-        release_runtime_scope(state);
-        throw;
-      }
-      return state->bindings;
     }
+    if (auto *scope = runtime_scope()) {
+      return scope->bindings;
+    }
+
+    auto &data = shared_runtime_data();
+    auto *state =
+        transaction.template construct_persistent<runtime_scope_state>(
+            get_allocator(), static_cast<void *>(&registration_owner()));
+    runtime_data_.scope_id(data.create_scope(state));
+    try {
+      transaction.on_rollback(
+          +[](void *self, void *scope) noexcept {
+            static_cast<registry_type *>(self)->release_runtime_scope(
+                static_cast<runtime_scope_state *>(scope));
+          },
+          this, state);
+    } catch (...) {
+      release_runtime_scope(state);
+      throw;
+    }
+    return state->bindings;
   }
 
-  template <typename Parent> Parent *runtime_registration_parent() {
-    if constexpr (std::is_same_v<Parent, parent_container_type>) {
-      return parent();
-    } else {
-      static_assert(!OwnsRuntimeData);
-      auto *scope = runtime_scope();
-      assert(scope != nullptr && scope->registration_parent != nullptr);
-      return static_cast<Parent *>(scope->registration_parent);
-    }
+  // The container a level of local bindings falls back to: the container,
+  // or the level, the registration it belongs to is made in. None for a
+  // container.
+  resolve_root_type *owner_level() const noexcept {
+    return owns_runtime_data() ? nullptr : runtime_data_.owner();
   }
 
-  parent_container_type *parent() { return parent_; }
-
-  // The root registry is the base of its container; a registration container
-  // reaches the root through its parents.
-  resolve_root_type *resolve_root() {
-    if constexpr (std::is_base_of_v<registry_type, resolve_root_type>) {
-      return static_cast<resolve_root_type *>(this);
-    } else if constexpr (std::is_same_v<parent_container_type,
-                                        resolve_root_type>) {
-      return parent_;
-    } else {
-      assert(parent_ != nullptr);
-      return parent_->binding_store().resolve_root();
-    }
-  }
+  // The container that owns the runtime data.
+  resolve_root_type *resolve_root() { return root_; }
 
 protected:
-  // Lookup misses are answered by the parent chain instead of failing at
-  // compile time when the registry is not the resolve root.
-  static constexpr bool lookup_may_miss() {
-    return !std::is_void_v<ParentRegistry>;
-  }
-
+  // A lookup the traits do not declare fails as it compiles, in a level of
+  // local bindings as in its container: they have the same traits.
   template <typename Value, typename Exact, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   runtime_selection select_binding(LookupKey key) {
-    return store_type::template select_binding<Value, Exact, lookup_may_miss()>(
+    return store_type::template select_binding<Value, Exact, false>(
         runtime_bindings(), std::move(key));
   }
 
@@ -326,16 +303,6 @@ protected:
     Source *source_;
   };
 
-protected:
-  template <typename Request, bool MayAutoConstruct, typename LookupKey,
-            typename R = typename Request::lookup_type,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R unresolved(construction_scope scope, runtime_context_type &context,
-               const LookupKey &key) {
-    return detail::request_resolution::unresolved<Request, MayAutoConstruct, R>(
-        *this, *resolve_root(), scope, context, key);
-  }
-
 public:
   template <typename TypeInterface, typename TypeStorage, typename BindingState>
   using runtime_registration_binding_t =
@@ -366,12 +333,10 @@ public:
                                            BindingState>::type;
 
 private:
-  template <typename... TypeArgs, typename Parent, typename Arg,
-            typename... KeyValueArgs>
+  template <typename... TypeArgs, typename Arg, typename... KeyValueArgs>
   // Registration is cold; keep its type-specific setup out of callers.
   // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
-  DINGO_NOINLINE auto prepare_binding(Parent *parent, Arg &&arg,
-                                      KeyValueArgs &&...key_values) {
+  DINGO_NOINLINE auto prepare_binding(Arg &&arg, KeyValueArgs &&...key_values) {
     static_assert(!detail::has_explicit_void_interface_v<TypeArgs...>,
                   "interfaces<void> is not a valid registration target");
     using registration =
@@ -387,7 +352,7 @@ private:
     static_assert(std::is_void_v<bindings_type>,
                   "runtime registrations cannot declare compile-time "
                   "bindings<...>; use static_container");
-    using instance_container_type = registration_container_type<Parent>;
+    using instance_container_type = resolve_root_type;
     (void)std::addressof(arg);
     using interface_types = typename binding_model::interface_types;
     static_assert(binding_model::storage_tag_is_complete,
@@ -409,7 +374,7 @@ private:
 
       using runtime_binding_state_type =
           runtime_binding_state<registry_type, instance_container_type,
-                                detail::binding_cell_t<binding_model>, Parent>;
+                                detail::binding_cell_t<binding_model>>;
 
       if constexpr (!binding_model::valid) {
         return store_type::template invalid_registration_return<
@@ -433,7 +398,7 @@ private:
                      type_list_head_t<interface_types>, interface_types>> > 1);
         return commit_binding<shared_owner, interface_types, storage_type,
                               owner_type, runtime_binding_state_type>(
-            parent, registration_key{}, std::forward<Arg>(arg),
+            registration_key{}, std::forward<Arg>(arg),
             std::forward<KeyValueArgs>(key_values)...);
       }
     }
@@ -455,14 +420,14 @@ private:
   // Constructs the owner of a registration and commits it to the lookups of
   // its interfaces in one transaction.
   template <bool SharedOwner, typename Interfaces, typename TypeStorage,
-            typename Owner, typename State, typename Parent, typename LookupKey,
-            typename Arg, typename... KeyValueArgs>
+            typename Owner, typename State, typename LookupKey, typename Arg,
+            typename... KeyValueArgs>
   DINGO_NOINLINE container_proxy<Owner>
-  commit_binding(Parent *parent, LookupKey lookup_key, Arg &&arg,
+  commit_binding(LookupKey lookup_key, Arg &&arg,
                  KeyValueArgs &&...key_values) {
     inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
     runtime_transaction_type transaction(runtime(), scratch);
-    auto &state = ensure_runtime_bindings(transaction, parent);
+    auto &state = ensure_runtime_bindings(transaction);
     auto commit = [&](auto &value_factory) {
       for_each(Interfaces{}, [&](auto element) {
         using interface_type = typename decltype(element)::type;
@@ -513,13 +478,6 @@ private:
         detail::described_type_v<typename Request::lookup_type>, context);
   }
 
-  // A registration container answers its misses through its parent; the
-  // root registry has none.
-  template <typename Lookup, typename LookupKey>
-  static constexpr bool parent_serves() {
-    return lookup_may_miss();
-  }
-
   template <typename R, typename LookupKey>
   R construct_request_collection(construction_scope scope,
                                  runtime_context_type &context, LookupKey key) {
@@ -527,33 +485,14 @@ private:
         scope, context, detail::binding_collection_append{}, std::move(key));
   }
 
-  template <typename T, bool RemoveRvalueReferences, typename LookupKey,
-            typename R = request_result_t<T, RemoveRvalueReferences>,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(construction_scope scope, runtime_context_type &context,
-            LookupKey key) {
-    return resolve<T, RemoveRvalueReferences>(scope, context, *this,
-                                              std::move(key));
-  }
-
-  template <typename T, bool RemoveRvalueReferences, typename Origin,
-            typename LookupKey,
-            typename R = request_result_t<T, RemoveRvalueReferences>,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(construction_scope scope, runtime_context_type &context,
-            Origin &origin, LookupKey key) {
-    return detail::request_resolution::resolve<
-        request_type<T, RemoveRvalueReferences>, R>(*this, scope, context,
-                                                    origin, std::move(key));
-  }
-
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
 
-  parent_container_type *parent_ = nullptr;
+  resolve_root_type *root_ = nullptr;
 
-  detail::runtime_data_holder<runtime_data_type, OwnsRuntimeData> runtime_data_;
+  detail::runtime_data_holder<runtime_data_type, resolve_root_type>
+      runtime_data_;
 };
 
 } // namespace dingo

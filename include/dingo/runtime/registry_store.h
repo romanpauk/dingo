@@ -41,6 +41,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <new>
 #include <tuple>
 #include <type_traits>
 #include <typeindex>
@@ -126,34 +127,53 @@ struct runtime_registry_data {
   std::vector<scope_state_type *, scope_pointer_allocator> scope_states;
 };
 
-template <typename Data, bool OwnsData> class runtime_data_holder;
-
-template <typename Data> class runtime_data_holder<Data, true> {
-public:
-  template <typename Allocator>
-  explicit runtime_data_holder(Allocator &allocator) : data_(allocator) {}
-
-  Data &get() noexcept { return data_; }
-
-  static constexpr std::size_t scope_id() noexcept { return 0; }
-
-private:
-  Data data_;
-};
-
-template <typename Data> class runtime_data_holder<Data, false> {
+// The runtime data of a registry: the data a container owns, or, for a level
+// of the local bindings of a registration, which borrows the data of its
+// root, the scope of its bindings in that data and the level it falls back
+// to. A level holds only one of them, and its registry knows which: a
+// container is its own root.
+template <typename Data, typename Level> class runtime_data_holder {
 public:
   static constexpr std::size_t invalid_scope =
       std::numeric_limits<std::size_t>::max();
 
-  // A registration container borrows the data of its root.
-  template <typename Allocator> explicit runtime_data_holder(Allocator &) {}
+  template <typename Allocator> explicit runtime_data_holder(Allocator &alloc) {
+    ::new (static_cast<void *>(std::addressof(data_))) Data(alloc);
+  }
 
-  std::size_t scope_id() const noexcept { return scope_id_; }
-  void scope_id(std::size_t value) noexcept { scope_id_ = value; }
+  explicit runtime_data_holder(Level *owner) noexcept {
+    ::new (static_cast<void *>(std::addressof(local_))) local_state{owner};
+  }
+
+  runtime_data_holder(const runtime_data_holder &) = delete;
+  runtime_data_holder &operator=(const runtime_data_holder &) = delete;
+
+  // The union has no destructor of its own: the container destroys the data
+  // it owns, by destroy().
+  ~runtime_data_holder() {}
+
+  void destroy(bool owns) noexcept {
+    if (owns) {
+      data_.~Data();
+    }
+  }
+
+  Data &get() noexcept { return data_; }
+
+  Level *owner() const noexcept { return local_.owner; }
+  std::size_t scope_id() const noexcept { return local_.scope_id; }
+  void scope_id(std::size_t value) noexcept { local_.scope_id = value; }
 
 private:
-  std::size_t scope_id_ = invalid_scope;
+  struct local_state {
+    Level *owner;
+    std::size_t scope_id = invalid_scope;
+  };
+
+  union {
+    Data data_;
+    local_state local_;
+  };
 };
 
 template <typename Interface> struct key_value_interface {

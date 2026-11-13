@@ -51,7 +51,7 @@ namespace dingo {
 template <typename ContainerTraits, typename Allocator,
           typename ParentContainer>
 class detail::runtime_container_impl
-    : public runtime_registry<ContainerTraits, Allocator, void,
+    : public runtime_registry<ContainerTraits, Allocator,
                               detail::runtime_container_impl<
                                   ContainerTraits, Allocator, ParentContainer>>,
       public detail::container_requests<detail::runtime_container_impl<
@@ -60,12 +60,11 @@ class detail::runtime_container_impl
 
   using self_type = detail::runtime_container_impl<ContainerTraits, Allocator,
                                                    ParentContainer>;
-  using runtime_base =
-      runtime_registry<ContainerTraits, Allocator, void, self_type>;
+  using runtime_base = runtime_registry<ContainerTraits, Allocator, self_type>;
   using runtime_context_type =
       runtime_context<typename runtime_base::allocator_type>;
   friend runtime_base;
-  template <typename, typename, typename, typename>
+  template <typename, typename, typename>
   friend class ::dingo::runtime_registry;
 
 public:
@@ -101,11 +100,19 @@ public:
                          const allocator_type &alloc = allocator_type())
       : runtime_base(this, alloc), parent_(parent) {}
 
+  // A level of the local bindings of a registration made in owner. It borrows
+  // the runtime data of the root of owner, and a request it binds no binding
+  // for falls back to owner.
+  runtime_container_impl(detail::local_level_t, self_type *owner,
+                         const allocator_type &alloc = allocator_type())
+      : runtime_base(detail::local_level, owner, alloc) {}
+
   // Resolved instances reference each other by address and runtime bindings
   // point back at the container, so it cannot move. runtime_container moves by
   // owning it through a handle.
   runtime_container_impl(const self_type &) = delete;
   runtime_container_impl(self_type &&) = delete;
+  ~runtime_container_impl() { this->destroy_runtime_data(); }
   self_type &operator=(const self_type &) = delete;
   self_type &operator=(self_type &&) = delete;
 
@@ -178,6 +185,10 @@ public:
     using request = request_type<Request>;
     auto key = detail::make_lookup_key(std::forward<IdType>(id));
     auto status = this->template select_request<request>(key).status;
+    if (auto *owner = this->owner_level();
+        owner && status == detail::binding_status::not_found) {
+      return owner->template binding_status<Request>(key);
+    }
     if constexpr (parent_serves<typename request::lookup_type,
                                 decltype(key)>()) {
       if (parent_ && status == detail::binding_status::not_found) {
@@ -254,7 +265,7 @@ public:
   R unresolved(construction_scope scope, runtime_context_type &context,
                LookupKey key) {
     return detail::request_resolution::unresolved<Request, MayAutoConstruct, R>(
-        *this, *this, scope, context, key);
+        *this, *this->resolve_root(), scope, context, key);
   }
 
 private:
@@ -262,6 +273,12 @@ private:
 
   parent_container_type *parent_ = nullptr;
 };
+
+template <typename ContainerTraits, typename Allocator,
+          typename ParentContainer>
+struct detail::has_owner_level<
+    detail::runtime_container_impl<ContainerTraits, Allocator, ParentContainer>>
+    : std::true_type {};
 
 } // namespace dingo
 

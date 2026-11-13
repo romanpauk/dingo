@@ -83,12 +83,13 @@ interface:
 The backend defines the iteration order of a collection. A `many` backend does
 not have to keep the registration order.
 
-The registration containers that `register_type<...>()` returns keep their
-lookups in a dense table of lookup scopes. The root container owns this table. A
-registration container uses its scope ID as the index into the table. Then it
-does the lookup in its own state, with the declared backend, cardinality and
-logical key. The container allocates this state when the registration container
-registers its first local binding.
+The registration containers that `register_type<...>()` returns have the type of
+the container they are made in. They keep their lookups in a dense table of
+lookup scopes. The root container owns this table. A registration container uses
+its scope ID as the index into the table. Then it does the lookup in its own
+state, with the declared backend, cardinality and logical key. The container
+allocates this state when the registration container registers its first local
+binding.
 
 Typed-key registrations can also use explicit lookups:
 

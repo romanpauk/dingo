@@ -757,7 +757,7 @@ TEST(type_registration_test,
           runtime_storage(parent->get_allocator()), parent_storage(parent) {}
 
     runtime_memory<allocator_type> &runtime() { return runtime_storage; }
-    parent_container_type *parent() { return parent_storage; }
+    parent_container_type &registration_owner() { return *parent_storage; }
     allocator_type &get_allocator() { return allocator; }
 
     allocator_type allocator;
