@@ -521,16 +521,26 @@ protected:
         "definition for the registered interface");
   }
 
+  // Whether a key value of a registration supplies the key of a lookup entry.
+  template <typename Entry, typename... KeyValueArgs>
+  static constexpr bool has_registration_key() {
+    return (runtime_registration_arg_matches_entry_v<Entry, KeyValueArgs> ||
+            ...);
+  }
+
+  template <typename... KeyValueArgs, typename... Entries>
+  static constexpr bool has_registration_keys(type_list<Entries...>) {
+    return (has_registration_key<Entries, KeyValueArgs...>() && ...);
+  }
+
+  // A registration supplies the key of every runtime-key lookup it is
+  // registered in. It is asserted here, not in a lambda, whose body MSVC
+  // does not instantiate before the error it would explain.
   template <typename Entries, typename... KeyValueArgs>
   static constexpr void validate_required_runtime_registration_keys() {
-    for_each(Entries{}, [](auto element) {
-      using entry_type = typename decltype(element)::type;
-      static_assert(
-          (runtime_registration_arg_matches_entry_v<entry_type, KeyValueArgs> ||
-           ...),
-          "runtime-key lookup registration requires a runtime key value for "
-          "each declared runtime-key lookup");
-    });
+    static_assert(has_registration_keys<KeyValueArgs...>(Entries{}),
+                  "runtime-key lookup registration requires a runtime key "
+                  "value for each declared runtime-key lookup");
   }
 
   // The index a lookup of an interface by a key goes to: the definition of the
