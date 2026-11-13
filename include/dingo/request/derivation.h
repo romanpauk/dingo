@@ -101,7 +101,7 @@ struct binding_facts {
   std::size_t published_count;
   flags<binding_trait> traits;
   bool slices;
-  type_descriptor interface;
+  type_descriptor exposed;
 };
 
 // The index of the resolution a binding publishes for a request, or the
@@ -181,11 +181,10 @@ constexpr derivation_facts
 runtime_derivation_facts(const binding_facts &binding,
                          type_descriptor requested) {
   derivation_facts facts{binding.traits, runtime_published(binding, requested)};
-  facts.traits.set(binding_trait::slices,
-                   binding.slices &&
-                       requested.reference != type_reference_kind::lvalue &&
-                       requested.pointee == nullptr &&
-                       requested.tag == binding.interface.tag);
+  facts.traits.set(
+      binding_trait::slices,
+      binding.slices && requested.reference != type_reference_kind::lvalue &&
+          requested.pointee == nullptr && requested.tag == binding.exposed.tag);
   if (requested.reference == type_reference_kind::lvalue &&
       hands_over_request(binding, requested, false)) {
     facts.sources.set(derivation::adopt);
