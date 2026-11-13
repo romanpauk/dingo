@@ -125,6 +125,15 @@ PROBE_LIMITS = {
     },
 }
 
+# The bytes a static probe may exceed its runtime probe by. The static
+# interface handle rolls the container back when the operation fails: a
+# cleanup that resets what it resolved, which keeps clang from folding the
+# kept wrappers it destroys. Clang 18 compiles the runtime probe smaller than
+# the static one by up to 0x3c bytes on arm64.
+RUNTIME_PATH_MARGIN = {
+    "probe_static_resolution_interface_handle": 0x40,
+}
+
 EXPECTED_FASTER_THAN_RUNTIME = (
     ("probe_static_resolution_consumer_read", "probe_runtime_resolution_consumer_read"),
     ("probe_static_resolution_shared_value_config", "probe_runtime_resolution_shared_value_config"),
@@ -310,10 +319,12 @@ def main() -> int:
             failed = True
 
     for faster_symbol, slower_symbol in EXPECTED_FASTER_THAN_RUNTIME:
-        if sizes[faster_symbol] > sizes[slower_symbol]:
+        margin = RUNTIME_PATH_MARGIN.get(faster_symbol, 0)
+        if sizes[faster_symbol] > sizes[slower_symbol] + margin:
             print(
                 f"{faster_symbol} regressed past runtime path: "
-                f"0x{sizes[faster_symbol]:x} > 0x{sizes[slower_symbol]:x}",
+                f"0x{sizes[faster_symbol]:x} > 0x{sizes[slower_symbol]:x}"
+                + (f" + 0x{margin:x}" if margin else ""),
                 file=sys.stderr,
             )
             failed = True
