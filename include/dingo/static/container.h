@@ -226,7 +226,7 @@ public:
   R resolve_request(Scope scope, Context &context, Origin &origin,
                     LookupKey key) {
     if constexpr (!is_runtime_context_v<Context>) {
-      if (static_cast<void *>(std::addressof(origin)) != this) {
+      if (forwarded_by(origin)) {
         return as_operation([&]() -> R {
           if constexpr (std::is_same_v<Context, static_persistent_context> &&
                         has_persistent_memory_v) {
@@ -242,6 +242,20 @@ public:
     }
     return request_resolution::resolve<Request, R>(*this, scope, context,
                                                    origin, std::move(key));
+  }
+
+  // Whether a request comes from another container. An origin of an
+  // unrelated type is another object, which is known while it compiles: GCC
+  // would otherwise take the addresses as equal on the path where they compare
+  // so, and warn of accesses out of the bounds of the origin.
+  template <typename Origin> bool forwarded_by(Origin &origin) const noexcept {
+    if constexpr (std::is_base_of_v<static_container_impl, Origin> ||
+                  std::is_base_of_v<Origin, static_container_impl>) {
+      return static_cast<const void *>(std::addressof(origin)) != this;
+    } else {
+      (void)origin;
+      return true;
+    }
   }
 
   // The order of the next binding this container resolves first.
