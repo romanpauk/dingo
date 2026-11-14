@@ -49,7 +49,7 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 from spec import semantics  # noqa: E402
 from spec.generator import driver, report  # noqa: E402
 from spec.generator.registrations import (  # noqa: E402
-    Registration, apply_semantics, covering, probe_registration,
+    Registration, apply_semantics, covering, probe_registrations,
     registrations)
 from spec.generator.survey import survey  # noqa: E402
 from spec.vocabulary import (Category, Container,  # noqa: E402
@@ -169,14 +169,11 @@ def main():
                     for position in Position),
                    key=lambda task: (task[0].container is not Container.RUNTIME,
                                      task[1].kept_by is None))
-    cells = []
     driver.set_jobs(options.jobs)
     with concurrent.futures.ThreadPoolExecutor(options.jobs) as executor:
-        for outcomes in executor.map(
-                lambda task: probe_registration(options.compiler, flags,
-                                                options.work, *task,
-                                                selected), tasks):
-            cells += outcomes
+        cells = probe_registrations(
+            options.compiler, flags, options.work, tasks, selected,
+            lambda function, items: list(executor.map(function, items)))
     cells = report.write(options.output, apply_semantics(cells, units))
     write_report(options.output.with_suffix(".md"), cells, mismatches)
     return report.summarize(cells, mismatches,

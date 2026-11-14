@@ -176,15 +176,18 @@ An operation is an entry point and a position. The entry points are `resolve`,
 - `shared` and `cyclical`: a dependency of a class that the `shared` or
   `shared_cyclical` scope keeps, together with what the class receives.
 
-The probe compiles a program for each registration and position, with
-[`test/model/probe.h`](../test/model/probe.h). Each probe resolves its request
-twice and records the outcome. A request that the library rejects at compile
-time is `rejected`, with the message of its `static_assert`. The compiler names
-the program lines of each failed request. The driver records those requests and
-compiles the others again. Probes share template instantiations, and the
-compiler reports a shared error only once. So the driver compiles the probes of
-a failed operation or request in a program for each operation. The driver
-precompiles the header once and turns off the error limit of clang.
+The probe compiles the probes of several registrations in one program, with
+[`test/model/probe.h`](../test/model/probe.h): up to 64 probes of up to 8
+registrations, each registration in a part of its own. The container and the
+probe machinery are then compiled once for all of them. Each probe resolves its
+request twice and records the outcome. A request that the library rejects at
+compile time is `rejected`, with the message of its `static_assert`. The
+compiler names the program lines of each failed request. The driver records
+those requests and compiles the others again. Probes share template
+instantiations, and the compiler reports a shared error only once. So the driver
+compiles the probes of a failed operation or request in a program for each
+operation. The driver precompiles the header once and turns off the error limit
+of clang.
 
 A resolved request is `violated` if one of these checks fails:
 
@@ -213,9 +216,11 @@ needs:
 
 A resolution with more copies or more moves than the fewest is `excess`.
 
-Each program also checks every request that its registration publishes. A
-published request that selects the binding of another interface is
-`unreachable`. A published request that no probe makes is `unprobed`.
+Programs of up to 8 registrations also check every request that each
+registration publishes. A published request that selects the binding of another
+interface is `unreachable`. A published request that no probe makes is
+`unprobed`. If such a program fails, the driver checks its registrations in
+halves, down to the one that fails.
 
 The copies and the moves of a resolution come from three layers: the storage,
 the conversion and passing the result on. A check counts each layer alone, for

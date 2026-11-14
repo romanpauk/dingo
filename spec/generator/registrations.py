@@ -177,12 +177,14 @@ class Registration:
             return Keeps.ADDRESSES
         return Keeps.INSTANCE
 
-    def render(self, probes, checks=False, registers=False):
-        """The program of probes, with the checks of what the registration
-        publishes where checks says so, and the registration alone where
-        registers says so."""
-        return driver.render("probe.cpp.j2", r=self, probes=probes,
-                             checks=checks, registers=registers)
+    def render_part(self, part, probes, first, checks=False,
+                    registers=False):
+        """The part of a program of the registration: its probes, numbered
+        from first, with the checks of what it publishes where checks says
+        so, and the registration alone where registers says so."""
+        return driver.render("probe_part.cpp.j2", r=self, part=part,
+                             probes=probes, first=first, checks=checks,
+                             registers=registers)
 
     def check_failure(self, outcome, error):
         """The record of a program of the checks that did not compile or
@@ -235,22 +237,79 @@ def covering(strength):
             Container.RUNTIME, *registration[:4]))
 
 
-def check_registration(compiler, flags, directory, registration):
-    """Checks what a registration publishes, in a program of its own: every
-    request it publishes has to select the interface, and a probe has to ask
-    for it. The checks hold for the registration, not for a probe, so they
-    are made once rather than in every program of its probes."""
-    if not registration.checks():
-        return []
+@dataclass(frozen=True)
+class Member:
+    """A probe of a registration, in a program of several registrations."""
+    registration: Registration
+    probe: Probe
+
+    @property
+    def operation(self):
+        return self.probe.operation
+
+    @property
+    def request_key(self):
+        return self.probe.request_key
+
+
+@dataclass(frozen=True)
+class Group:
+    """The unit of a program of several registrations, each of which makes a
+    part of it. Its probes are the members of the registrations; compiling
+    the container and the probe machinery once for all of them is what makes
+    the program cheaper than one for each."""
+    registrations: tuple
+
+    def cell(self, member):
+        return member.registration.cell(member.probe)
+
+    def render(self, members, checks=False, registers=False):
+        """The program of members, in their order: a part for each run of
+        them of one registration, a part for each registration when the
+        checks or the registration alone are made. The probes are numbered
+        across the program, as the driver tells them apart by number."""
+        runs = []
+        for member in members:
+            if runs and runs[-1][0] == member.registration:
+                runs[-1][1].append(member.probe)
+            else:
+                runs.append((member.registration, [member.probe]))
+        if checks or registers:
+            runs = [(registration, []) for registration in self.registrations]
+        parts = []
+        first = 0
+        for registration, probes in runs:
+            parts.append(registration.render_part(len(parts), probes, first,
+                                                  checks, registers))
+            first += len(probes)
+        return driver.render("probe.cpp.j2", parts=parts)
+
+
+def check_registrations(compiler, flags, directory, name, group):
+    """Checks what registrations publish, in a program of their own: every
+    request one publishes has to select the interface, and a probe has to
+    ask for it. The checks hold for a registration, not for a probe, so they
+    are made once rather than in every program of its probes. Registrations
+    whose program fails are checked in halves, down to one, which records
+    the failure for each interface it binds."""
     records, stderr, crash = driver.build_and_run(
-        compiler, flags, directory, f"{registration.name}__checks",
-        registration.render([], checks=True))
+        compiler, flags, directory, name, group.render([], checks=True))
+    if stderr is None and crash is None:
+        return records
+    registrations = group.registrations
+    if len(registrations) > 1:
+        half = -(-len(registrations) // 2)
+        found = driver.concurrently([
+            lambda index=index, part=part: check_registrations(
+                compiler, flags, directory, f"{name}_{index}", Group(part))
+            for index, part in enumerate(
+                (registrations[:half], registrations[half:]))])
+        return [record for records in found for record in records]
+    registration = registrations[0]
     if stderr is not None:
         return [registration.check_failure(Outcome.DOES_NOT_COMPILE,
                                            driver.first_error(stderr))]
-    if crash is not None:
-        return [registration.check_failure(Outcome.CRASHED, crash)]
-    return records
+    return [registration.check_failure(Outcome.CRASHED, crash)]
 
 
 def registration_outcome(compiler, flags, directory, registration, name,
@@ -261,10 +320,11 @@ def registration_outcome(compiler, flags, directory, registration, name,
     and one the library rejects as it registers it rejects each probe, with
     its error. One program tells it, rather than one for each probe, which
     could not tell the error of the registration they share apart."""
+    group = Group((registration,))
     if expected is Answer.NOT_REGISTRABLE:
         records, stderr, crash = driver.build_and_run(
             compiler, flags, directory, f"{name}__registrable",
-            registration.render(probes[:1]))
+            group.render([Member(registration, probes[0])]))
         if (stderr is None and crash is None and len(records) == 1 and
                 records[0]["outcome"] == Outcome.NOT_REGISTRABLE.value):
             return [{"cell": registration.cell(probe),
@@ -273,25 +333,23 @@ def registration_outcome(compiler, flags, directory, registration, name,
         return None
     _, stderr, _ = driver.build_and_run(
         compiler, flags + [driver.COMPILE_ONLY], directory,
-        f"{name}__registers", registration.render([], registers=True))
+        f"{name}__registers", group.render([], registers=True))
     if stderr is None or stderr == driver.OUT_OF_MEMORY:
         return None
     error = driver.first_error(stderr)
     return [driver.failure(registration, probe, error) for probe in probes]
 
 
-def probe_registration(compiler, flags, directory, registration, position,
-                       selected=None):
-    """Makes the probes of a registration in a position, those selected
-    when told which, the invalid ones aside, in programs of their own,
-    which bounds the memory of a compile. The probes the specification
-    expects the library to reject as they compile are made apart, so that a
-    program of the others compiles at once. The program of the direct
-    position also checks what the registration publishes."""
+def plan_registration(compiler, flags, directory, registration, position,
+                      selected=None):
+    """The probes of a registration in a position, those selected when told
+    which: (outcomes, members, rejected). Outcomes are those of the invalid
+    probes, and of all of them when the specification expects each to answer
+    as the registration does and one program tells it. The members are to be
+    made in programs of several registrations; the rejected ones, which the
+    specification expects the library to reject as they compile, apart from
+    the others, so that a program of those compiles at once."""
     outcomes = []
-    if position is Position.DIRECT:
-        outcomes += check_registration(compiler, flags, directory,
-                                       registration)
     probes = []
     rejected = []
     for probe, invalid in registration.probes(position):
@@ -303,22 +361,65 @@ def probe_registration(compiler, flags, directory, registration, position,
             rejected.append(probe)
         else:
             probes.append(probe)
-    name = f"{registration.name}__{position.value}"
     expected = {registration.expectation(probe)[0]
                 for probe in probes + rejected}
     if len(expected) == 1 and next(iter(expected)) in (
             Answer.NOT_REGISTRABLE, Answer.REJECTED):
-        found = registration_outcome(compiler, flags, directory, registration,
-                                     name, probes + rejected,
-                                     next(iter(expected)))
+        found = registration_outcome(
+            compiler, flags, directory, registration,
+            f"{registration.name}__{position.value}", probes + rejected,
+            next(iter(expected)))
         if found is not None:
-            return outcomes + found
-    for found in driver.concurrently([
-            lambda: driver.probe_shared(compiler, flags, directory,
-                                        registration, name, probes),
-            lambda: driver.probe_expecting_rejection(
-                compiler, flags, directory, registration, f"{name}__rejected",
-                rejected)]):
+            return outcomes + found, [], []
+    return (outcomes, [Member(registration, probe) for probe in probes],
+            [Member(registration, probe) for probe in rejected])
+
+
+def packed(members):
+    """Members in programs of at most GROUP_PROBES probes of at most
+    GROUP_REGISTRATIONS registrations, in their order."""
+    programs = []
+    for member in members:
+        if programs:
+            current = programs[-1]
+            registrations = {other.registration for other in current}
+            if len(current) < driver.GROUP_PROBES and (
+                    member.registration in registrations or
+                    len(registrations) < driver.GROUP_REGISTRATIONS):
+                current.append(member)
+                continue
+        programs.append([member])
+    return programs
+
+
+def probe_registrations(compiler, flags, directory, tasks, selected, map):
+    """Makes the probes of registrations in positions, (registration,
+    position) tasks, by map, which runs a function over a list. The probes
+    of several registrations are made in one program, as the program of the
+    direct position checks what each registration publishes."""
+    planned = list(map(lambda task: plan_registration(
+        compiler, flags, directory, *task, selected), tasks))
+    outcomes = [outcome for found, _, _ in planned for outcome in found]
+    members = [member for _, found, _ in planned for member in found]
+    rejected = [member for _, _, found in planned for member in found]
+    checked = [registration for registration, position in tasks
+               if position is Position.DIRECT and registration.checks()]
+
+    def group_of(part):
+        return Group(tuple(dict.fromkeys(
+            member.registration for member in part)))
+
+    calls = [lambda index=index, part=part: driver.probe_shared(
+        compiler, flags, directory, group_of(part), f"probes_{index}", part)
+        for index, part in enumerate(packed(members))]
+    calls += [lambda index=index, part=part: driver.probe_expecting_rejection(
+        compiler, flags, directory, group_of(part), f"rejected_{index}", part)
+        for index, part in enumerate(packed(rejected))]
+    calls += [lambda index=index, part=part: check_registrations(
+        compiler, flags, directory, f"checks_{index}", Group(tuple(part)))
+        for index, part in enumerate(driver.split(
+            checked, driver.GROUP_REGISTRATIONS))]
+    for found in map(lambda call: call(), calls):
         outcomes += found
     return outcomes
 

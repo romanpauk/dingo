@@ -1,7 +1,7 @@
 """Compiles and runs probe programs, and reads the library's answers.
 
-A unit is a program of probes. It has a name, the cell of each probe, and
-renders the program of a list of its probes from a template. The template
+A unit is a program of probes. It names the cell of each probe, and renders
+the program of a list of its probes from a template. The template
 marks the lines of each probe, `// probe N` before them and `// probes end`
 after the last, so that a compile error is told apart by probe: the
 compiler names the lines of the program an error was instantiated from.
@@ -49,8 +49,9 @@ CRASH = "exited with"
 # a guide: a program the compiler runs out of memory on is not split, its
 # probes fail, and the size of programs or the library is to be changed.
 MEMORY_LIMIT = 1024
-# The probes a program holds.
+# The probes a program holds, and the registrations they may be of.
 GROUP_PROBES = 64
+GROUP_REGISTRATIONS = 8
 EXHAUSTED = re.compile(r"out of memory|memory exhausted|"
                        r"Cannot allocate memory|bad_alloc")
 OUT_OF_MEMORY = f"error: the compiler ran out of its {MEMORY_LIMIT} MiB"
