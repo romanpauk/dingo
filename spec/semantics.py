@@ -115,7 +115,27 @@ LAYERS = {layer.name: layer for layer in (
 
 # The layer a pointer to an object is.
 POINTER = "pointer"
-ADOPTERS = tuple(name for name, layer in LAYERS.items() if layer.adopts)
+
+
+def possible(layer):
+    """Whether a type can be a layer of these properties. A layer that owns
+    nothing, or shares what it owns, holds an element that lives apart from
+    it: a copy of it holds the same one. A layer that owns its element alone
+    and shares it with a copy cannot be copied: the copy would share what one
+    of them owns. A layer that owns nothing is not made of a value and takes
+    over no pointer. A layer that takes over a pointer holds the element
+    apart from it. An empty value is a value only of a layer that may be
+    empty."""
+    if layer.owner is not Owner.SOLE and not layer.shares_element:
+        return False
+    if (layer.owner is Owner.SOLE and layer.shares_element and
+            layer.copyable):
+        return False
+    if layer.owner is Owner.NONE and (layer.made_from_value or layer.adopts):
+        return False
+    if layer.adopts and not layer.shares_element:
+        return False
+    return layer.may_be_empty or not layer.has_empty_value
 
 
 @dataclass(frozen=True)
@@ -266,6 +286,10 @@ class Context:
     abstract: bool
     # The limitations the derivation applies.
     limits: frozenset = frozenset()
+    # The names of the layers a derivation may make: a handle that adopts a
+    # pointer, or a layer it wraps a value in. The rules name none of them;
+    # a program has these and any other its types define.
+    universe: tuple = tuple(LAYERS)
 
 
 # How a scope comes to its source.
@@ -386,7 +410,8 @@ def transitions(thing, context):
             # A raw pointer the request owns, not a copy of one the scope
             # keeps, owns its element: it is handed over as a pointer, or
             # taken over by a handle, of an array when it points to one.
-            for handle in ADOPTERS:
+            for handle in (name for name in context.universe
+                           if LAYERS[name].adopts):
                 yield "adopt", replace(
                     thing, layers=(handle,) + layer.adopted_with + below,
                     lifetimes=(Lifetime.REQUEST,) *
@@ -469,7 +494,7 @@ def transitions(thing, context):
                          thing.lifetimes[depth:])
         else:
             lifetimes = (Lifetime.REQUEST,) + thing.lifetimes
-        for made in LAYERS.values():
+        for made in (LAYERS[name] for name in context.universe):
             if made.made_from_value and not (made.holds_element_only and
                                              layers) and not (
                     slices(thing) and not made.shares_element):
