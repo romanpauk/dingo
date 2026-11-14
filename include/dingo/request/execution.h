@@ -191,14 +191,21 @@ template <> struct step<semantics::step::element_or_empty_copy> {
             typename Keeper>
   static auto apply(carrier<T, Owned> from, Keeper &keeper) {
     using element = element_of_t<T, Leaf>;
+    auto &made = keeper.template keep<element>(defer<Leaf, Interface>(from));
+    return carrier<element, true>{std::addressof(made)};
+  }
+
+  // What makes the copy.
+  template <typename Leaf, typename Interface, typename T, bool Owned>
+  static auto defer(carrier<T, Owned> from) {
+    using element = element_of_t<T, Leaf>;
     auto *held = element_address<T, Leaf>(*from.object);
-    auto &made = keeper.template keep<element>([&]() -> element {
+    return [held]() -> element {
       if (held) {
         return *held;
       }
       return type_traits<element>::empty_value();
-    });
-    return carrier<element, true>{std::addressof(made)};
+    };
   }
 };
 
@@ -276,8 +283,14 @@ template <> struct step<semantics::step::copy> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Keeper>
   static auto apply(carrier<T, Owned> from, Keeper &keeper) {
-    auto &made = keeper.template keep<T>([&] { return T(*from.object); });
+    auto &made = keeper.template keep<T>(defer<Leaf, Interface>(from));
     return carrier<T, true>{std::addressof(made)};
+  }
+
+  // What makes the copy.
+  template <typename Leaf, typename Interface, typename T, bool Owned>
+  static auto defer(carrier<T, Owned> from) {
+    return [object = from.object]() -> T { return T(*object); };
   }
 };
 
@@ -366,11 +379,31 @@ template <typename Target, bool Array> struct adopt_step {
   }
 };
 
-// What the last steps of a plan make, a run of wraps of what Source carries,
-// not yet made.
-template <typename Made, typename Source, bool Stable = false> struct pending {
-  Source source;
+// What the last steps of a plan make, not yet made: a run of wraps, or a
+// copy. It is made where the request takes it, so that a value the request
+// takes is made there at once; make returns it.
+template <typename Made, typename Make, bool Stable = false> struct pending {
+  using made_type = Made;
+  static constexpr bool stable = Stable;
+  Make make;
 };
+
+template <bool Stable, typename Make> auto pending_of(Make make) {
+  return pending<decltype(make()), Make, Stable>{make};
+}
+
+template <typename T> inline constexpr bool is_pending_v = false;
+
+template <typename Made, typename Make, bool Stable>
+inline constexpr bool is_pending_v<pending<Made, Make, Stable>> = true;
+
+// Whether a step makes a copy, which the last step of a plan makes where the
+// request takes it.
+template <typename Step> inline constexpr bool copies_v = false;
+template <> inline constexpr bool copies_v<step<semantics::step::copy>> = true;
+template <>
+inline constexpr bool copies_v<step<semantics::step::element_or_empty_copy>> =
+    true;
 
 // A step of a plan, with whether what it makes lives as long as the
 // container.
@@ -479,6 +512,12 @@ template <typename Leaf, typename Interface> struct interpreter {
   static auto run(Carrier from, Keeper &keeper) {
     if constexpr (is_wrap_v<Step>) {
       return wrap_run<type_list<Step>, Steps...>(from, keeper);
+    } else if constexpr (sizeof...(Steps) == 0 &&
+                         copies_v<typename step_of_plan<Step>::type>) {
+      // The last step copies: the copy is made where the request takes it.
+      using of = step_of_plan<Step>;
+      return pending_of<of::stable>(
+          of::type::template defer<Leaf, Interface>(from));
     } else {
       using of = step_of_plan<Step>;
       return run<Steps...>(of::type::template apply<Leaf, Interface>(
@@ -498,7 +537,9 @@ template <typename Leaf, typename Interface> struct interpreter {
       constexpr bool stable = step_of_plan<last_of_t<Wraps>>::stable;
       if constexpr (sizeof...(Steps) == 0) {
         // The last steps: what they make is made where the request needs it.
-        return pending<made_type, Carrier, stable>{from};
+        return pending_of<stable>([from]() -> made_type {
+          return made_of<Leaf, Interface, made_type>(std::move(*from.object));
+        });
       } else {
         auto &made = keeper_of<stable>(keeper).template keep<made_type>([&] {
           return made_of<Leaf, Interface, made_type>(std::move(*from.object));
@@ -565,16 +606,14 @@ Request satisfy(carrier<T, Owned> reached, Keeper &) {
 }
 // The request satisfied of what the last steps of a plan make.
 template <semantics::satisfaction How, typename Request, typename Leaf,
-          typename Interface, typename Made, typename Source, bool Stable,
+          typename Interface, typename Made, typename Make, bool Stable,
           typename Keeper>
-Request satisfy(pending<Made, Source, Stable> reached, Keeper &keeper) {
+Request satisfy(pending<Made, Make, Stable> reached, Keeper &keeper) {
   if constexpr (How == semantics::satisfaction::move) {
-    // A value is made of what the wraps are made of, where it is returned.
-    return made_of<Leaf, Interface, Made>(std::move(*reached.source.object));
+    // A value is made where it is returned.
+    return Request(reached.make());
   } else {
-    auto &made = keeper_of<Stable>(keeper).template keep<Made>([&] {
-      return made_of<Leaf, Interface, Made>(std::move(*reached.source.object));
-    });
+    auto &made = keeper_of<Stable>(keeper).template keep<Made>(reached.make);
     return satisfy<How, Request, Leaf, Interface>(
         carrier<Made, true>{std::addressof(made)}, keeper);
   }
@@ -761,4 +800,14 @@ template <const semantics::plan &Plan, typename Identities>
 using plan_steps_t =
     typename typed_steps<Plan, Identities,
                          std::make_index_sequence<Plan.count>>::type;
+
+// The C++ steps of the plan of a request_plan for a lifetime: as long as the
+// container (Stable), or as long as the request. Only that plan is made.
+template <typename Plan, bool Stable> struct plan_steps_of {
+  using type = plan_steps_t<Plan::transient, typename Plan::identities>;
+};
+
+template <typename Plan> struct plan_steps_of<Plan, true> {
+  using type = plan_steps_t<Plan::stable, typename Plan::identities>;
+};
 } // namespace dingo::detail::execution

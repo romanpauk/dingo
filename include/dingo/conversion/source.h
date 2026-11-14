@@ -83,6 +83,11 @@ private:
   Source *value_;
 };
 
+template <typename Source> inline constexpr bool is_pointer_source_v = false;
+
+template <typename Source>
+inline constexpr bool is_pointer_source_v<pointer_source<Source>> = true;
+
 template <typename Source, typename Builder>
 rvalue_source<Source> make_rvalue_source(std::in_place_t, Builder &&builder) {
   return rvalue_source<Source>(std::in_place, std::forward<Builder>(builder));

@@ -20,6 +20,7 @@
 #include <dingo/request/collection.h>
 #include <dingo/request/composition.h>
 #include <dingo/request/derivation.h>
+#include <dingo/request/execution.h>
 #include <dingo/static/graph.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/collection_traits.h>
@@ -217,26 +218,178 @@ template <typename Request, typename InterfaceBinding>
 inline constexpr derivation static_request_derivation_v =
     static_plan<Request, InterfaceBinding>::derived;
 
-// The resolution of a request selected at compile time.
-template <typename Request, typename InterfaceBinding, typename Context>
-struct static_request_resolution : static_plan<Request, InterfaceBinding> {
-private:
-  static constexpr bool resolves =
-      rejects_late_v<Context> ||
-      static_plan<Request, InterfaceBinding>::resolves;
-  // A request that does not resolve because it would slice the registered
-  // type is told so.
-  static constexpr bool slices =
-      slices_v<Request,
-               leaf_type_t<typename InterfaceBinding::storage_type::type>>;
-
-  static_assert(resolves || !slices,
-                "a value of a base of the registered type would slice it; "
-                "request the base by reference, by pointer or by a handle");
-  static_assert(resolves || slices,
-                "static resolution cannot satisfy a request the storage "
-                "does not publish");
+// The plan of a request of a static binding, as the code compiles: of the
+// stored object its storage gives, borrowed or made for the request, and
+// of the request. A request needs what it refers to to live as long as the
+// container when it is passed to the caller.
+// The leaf a binding of an interface stores: the leaf of its stored type, or,
+// when that is an alternative type, the leaf of the alternative of it whose
+// leaf the interface's is.
+template <typename Leaf, typename Interface, typename = void>
+struct bound_leaf {
+  using type = Leaf;
 };
+
+template <typename Leaf, typename Interface>
+struct bound_leaf<Leaf, Interface,
+                  std::enable_if_t<is_alternative_type_v<Leaf>>> {
+  template <typename... Alternatives>
+  static constexpr bool holds(type_list<Alternatives...>) {
+    return (std::is_same_v<leaf_type_t<Interface>, leaf_type_t<Alternatives>> ||
+            ...);
+  }
+  using type =
+      std::conditional_t<holds(alternative_type_alternatives_t<Leaf>{}),
+                         leaf_type_t<Interface>, Leaf>;
+};
+
+template <typename Request, typename InterfaceBinding> struct static_execution {
+  using storage_type = typename InterfaceBinding::storage_type;
+  using leaf_type = typename bound_leaf<
+      leaf_type_t<typename storage_type::type>,
+      unannotated_t<typename InterfaceBinding::interface_type>>::type;
+  static constexpr semantics::scope_traits scope =
+      scope_semantics_v<typename storage_type::tag_type>;
+  using stored_type = std::conditional_t<
+      scope.makes,
+      remove_cvref_t<
+          typename storage_source_traits<storage_type>::consumed_type>,
+      remove_cvref_t<
+          typename storage_source_traits<storage_type>::borrowed_type>>;
+  using plan = execution::request_plan<stored_type, Request, leaf_type,
+                                       scope.makes, scope.publishes_early>;
+  using interface_type = typename plan::interface_type;
+
+  template <bool Stable> static constexpr const semantics::plan &planned() {
+    if constexpr (Stable) {
+      return plan::stable;
+    } else {
+      return plan::transient;
+    }
+  }
+
+  template <bool Stable>
+  using steps = typename execution::plan_steps_of<plan, Stable>::type;
+
+  // Whether the binding resolves the request at all, for some lifetime.
+  static constexpr bool resolves = plan::transient.found || plan::stable.found;
+};
+
+// Whether a request of a binding refers to the stored object itself, as
+// the code compiles: no step makes anything of it.
+template <typename Request, typename InterfaceBinding>
+constexpr bool refers_stored() {
+  constexpr const semantics::plan &plan =
+      static_execution<Request, InterfaceBinding>::plan::stable;
+  return plan.found && plan.count == 0 &&
+         plan.how == semantics::satisfaction::refer;
+}
+
+// Whether an rvalue request of a binding is of a value the binding makes
+// for the request, which the value request moves out of where it returns
+// it.
+template <typename Request, typename InterfaceBinding>
+constexpr bool returns_made_value() {
+  using value_plan = typename static_execution<std::remove_reference_t<Request>,
+                                               InterfaceBinding>::plan;
+  return static_execution<Request, InterfaceBinding>::resolves &&
+         value_plan::stable.found &&
+         value_plan::stable.how == semantics::satisfaction::move;
+}
+
+// What a static resolution makes for a request: kept with the binding when
+// it lives as long as the container, in the context in the scope of the
+// request otherwise.
+template <typename T> inline constexpr char retained_key = 0;
+
+template <typename Context, typename Scope, typename Retained>
+class static_keeper {
+public:
+  static_keeper(Context &context, Scope scope, Retained &retained)
+      : transient_{context, scope}, stable_{context, retained} {}
+
+  template <bool Stable> auto &at() {
+    if constexpr (Stable) {
+      return stable_;
+    } else {
+      return transient_;
+    }
+  }
+
+  template <typename T, typename Make> T &keep(Make &&make) {
+    return transient_.template keep<T>(std::forward<Make>(make));
+  }
+
+private:
+  struct transient {
+    Context &context;
+    Scope scope;
+    template <typename T, typename Make> T &keep(Make &&make) {
+      return context.template construct_made<T>(scope,
+                                                std::forward<Make>(make));
+    }
+  };
+  struct stable {
+    Context &context;
+    Retained &retained;
+    template <typename T, typename Make> T &keep(Make &&make) {
+      if constexpr (std::is_same_v<Retained, no_retention>) {
+        static_assert(!std::is_same_v<Retained, no_retention>,
+                      "a binding that keeps no instance keeps nothing made of "
+                      "it");
+        return context.template construct_made<T>(caller_scope,
+                                                  std::forward<Make>(make));
+      } else {
+        return retained.template keep<T>(&retained_key<T>, context,
+                                         std::forward<Make>(make));
+      }
+    }
+  };
+  transient transient_;
+  stable stable_;
+};
+
+// The stored object a source gives, where a plan starts: a value made for
+// the request, which it owns, or the object or the pointer the storage
+// keeps, which it borrows.
+template <typename Stored, bool Makes, typename Source, typename Keeper>
+auto plan_start(Source &&source, Keeper &keeper) {
+  using source_type = remove_cvref_t<Source>;
+  if constexpr (is_pointer_source_v<source_type> && std::is_pointer_v<Stored>) {
+    // The pointer the storage keeps, as an object of its own.
+    auto &kept = keeper.template keep<Stored>([&] { return source.get(); });
+    return execution::carry<Makes>(kept);
+  } else if constexpr (is_pointer_source_v<source_type>) {
+    return execution::carry<Makes>(*source.get());
+  } else {
+    return execution::carry<Makes>(*source);
+  }
+}
+
+// Passes fn the instance a request is satisfied with: moved or copied of
+// what a plan reaches, or referred to.
+template <semantics::satisfaction How, typename Request, typename Leaf,
+          typename Interface, typename Reached, typename Keeper, typename Fn>
+decltype(auto) hand_reached(Reached reached, Keeper &keeper, Fn &&fn) {
+  if constexpr (execution::is_pending_v<Reached> &&
+                How == semantics::satisfaction::move) {
+    return std::forward<Fn>(fn)(reached.make());
+  } else if constexpr (execution::is_pending_v<Reached>) {
+    auto &made = execution::keeper_of<Reached::stable>(keeper)
+                     .template keep<typename Reached::made_type>(reached.make);
+    return hand_reached<How, Request, Leaf, Interface>(
+        execution::carrier<typename Reached::made_type, true>{
+            std::addressof(made)},
+        keeper, std::forward<Fn>(fn));
+  } else if constexpr (How == semantics::satisfaction::move) {
+    return std::forward<Fn>(fn)(std::move(*reached.object));
+  } else if constexpr (How == semantics::satisfaction::copy) {
+    return std::forward<Fn>(fn)(*reached.object);
+  } else {
+    return std::forward<Fn>(fn)(
+        execution::satisfy<How, Request, Leaf, Interface>(reached, keeper));
+  }
+}
 
 // One binding of a static container: the cell of its registration, the state
 // of the local bindings the registration declares, and the resolution of a
@@ -265,129 +418,118 @@ public:
     }
   }
 
-  // Selects the resolution of a request at compile time and applies it
-  // through a binding activation.
+  // Resolves a request by its plan, from the stored object the activation
+  // of the binding materializes.
   template <typename InterfaceBinding, typename Request, typename Host,
             typename Context, typename Scope>
   Request resolve(Scope scope, Host &host, Context &context) {
-    using resolution =
-        typename static_request_resolution<Request, InterfaceBinding,
-                                           Context>::type;
-    constexpr derivation how = static_plan<Request, InterfaceBinding>::derived;
-    if constexpr (how != derivation::none) {
-      return derive<InterfaceBinding, Request, how>(scope, host, context);
-    } else if constexpr (std::is_void_v<resolution>) {
-      not_convertible<Request, InterfaceBinding>(context);
-    } else if constexpr (!std::is_reference_v<Request> &&
-                         !std::is_pointer_v<Request>) {
-      [[maybe_unused]] auto order = ordered(host, context);
-      return activation(scope, host)
-          .template make_value<Request, resolution>(context);
-    } else {
-      [[maybe_unused]] auto order = ordered(host, context);
-      return resolved_value<Request>(
-          activation(scope, host)
-              .template resolve_request_address<Request, resolution>(context));
-    }
+    return consume<InterfaceBinding, Request>(
+        scope, host, context, [](auto &&instance) -> Request {
+          return static_cast<Request>(
+              std::forward<decltype(instance)>(instance));
+        });
   }
 
+  // Passes fn the instance a request is satisfied with, while what it is
+  // made of exists. A request the binding does not resolve for the
+  // lifetime it needs is rejected: as the code compiles where the lifetime
+  // is known then.
   template <typename InterfaceBinding, typename Request, typename Host,
             typename Context, typename Fn, typename Scope>
   decltype(auto) consume(Scope scope, Host &host, Context &context, Fn &&fn) {
-    using resolution =
-        typename static_request_resolution<Request, InterfaceBinding,
-                                           Context>::type;
-    if constexpr (static_plan<Request, InterfaceBinding>::derived !=
-                  derivation::none) {
-      // A request the binding derives is handed over as it is derived.
-      return std::forward<Fn>(fn)(
-          resolve<InterfaceBinding, Request>(scope, host, context));
-    } else if constexpr (std::is_void_v<resolution>) {
-      not_convertible<Request, InterfaceBinding>(context);
+    using planning = static_execution<Request, InterfaceBinding>;
+    using result_type = decltype(std::forward<Fn>(fn)(std::declval<Request>()));
+    if constexpr (is_fixed_construction_scope<Scope>::value) {
+      constexpr bool stable =
+          Scope::lifetime_value == construction_lifetime::caller;
+      if constexpr (planning::template planned<stable>().found) {
+        return run<InterfaceBinding, Request, stable>(scope, host, context,
+                                                      std::forward<Fn>(fn));
+      } else {
+        check_planned<Request, InterfaceBinding, Context, Scope, stable>();
+        return not_convertible<Request, InterfaceBinding, result_type>(context);
+      }
+    } else if constexpr (!planning::resolves) {
+      check_planned<Request, InterfaceBinding, Context, Scope, false>();
+      return not_convertible<Request, InterfaceBinding, result_type>(context);
     } else {
-      [[maybe_unused]] auto order = ordered(host, context);
-      return activation(scope, host)
-          .template consume_request<Request, resolution>(context,
-                                                         std::forward<Fn>(fn));
+      // The lifetime a request needs is known as it runs.
+      if constexpr (planning::template planned<true>().found) {
+        if (scope.is_caller()) {
+          return run<InterfaceBinding, Request, true>(scope, host, context,
+                                                      std::forward<Fn>(fn));
+        }
+      } else {
+        if (scope.is_caller()) {
+          not_convertible<Request, InterfaceBinding>(context);
+        }
+      }
+      if constexpr (planning::template planned<false>().found) {
+        return run<InterfaceBinding, Request, false>(scope, host, context,
+                                                     std::forward<Fn>(fn));
+      } else {
+        return not_convertible<Request, InterfaceBinding, result_type>(context);
+      }
     }
   }
 
 private:
-  // Derives a request the binding does not publish from the request it
-  // resolves through the binding, as the runtime container does.
-  template <typename InterfaceBinding, typename Request, derivation How,
-            typename Host, typename Context, typename Scope>
-  Request derive(Scope scope, Host &host, Context &context) {
-    if constexpr (How == derivation::compose && !std::is_reference_v<Request>) {
-      return Request(compose<InterfaceBinding, Request>(scope, host, context));
-    } else if constexpr (How == derivation::compose) {
-      // What an rvalue request refers to is placed in the context.
-      using wrapper = composed_type_t<Request>;
-      return static_cast<Request>(
-          context.template construct_made<wrapper>(scope, [&]() -> wrapper {
-            return compose<InterfaceBinding, Request>(scope, host, context);
-          }));
-    } else if constexpr (How == derivation::move || How == derivation::copy) {
-      // A value is made of what the binding publishes where it is
-      // requested, while its source exists, as a value it publishes is.
-      return consume<InterfaceBinding, derived_request_t<How, Request>>(
-          scope, host, context, [](auto &&instance) -> Request {
-            return Request(std::forward<decltype(instance)>(instance));
-          });
-    } else {
-      auto composes = composes_request<InterfaceBinding>();
-      return resolved_value<Request>(apply_derivation<How, Request>(
-          scope, context,
-          described_type_v<typename InterfaceBinding::storage_type::type>,
-          [&](auto tag) -> typename decltype(tag)::type {
-            return resolve<InterfaceBinding, typename decltype(tag)::type>(
-                scope, host, context);
-          },
-          composes, [&]() -> auto & { return cell_.retained(); },
-          [](void *) {}));
+  // Rejects, as the code compiles, a request a static binding cannot
+  // resolve for the lifetime it needs: a reference into what the
+  // resolution makes, which the caller would outlive; a value of a base,
+  // which would slice the registered type; or another. A context that
+  // rejects late rejects it as it runs.
+  template <typename Request, typename InterfaceBinding, typename Context,
+            typename Scope, bool Stable>
+  static constexpr void check_planned() {
+    using planning = static_execution<Request, InterfaceBinding>;
+    if constexpr (!rejects_late_v<Context> &&
+                  !planning::template planned<Stable>().found) {
+      if constexpr (Stable && planning::plan::transient.found) {
+        static_assert(!is_fixed_caller_scope_v<Scope>,
+                      "a reference or a pointer to an instance the resolution "
+                      "makes would dangle in what is returned to the caller; "
+                      "take it by value, or let a shared scope keep what "
+                      "refers to it");
+      } else {
+        constexpr bool slices = slices_v<
+            Request,
+            leaf_type_t<typename InterfaceBinding::storage_type::type>>;
+        static_assert(!slices,
+                      "a value of a base of the registered type would slice "
+                      "it; request the base by reference, by pointer or by a "
+                      "handle");
+        static_assert(slices,
+                      "static resolution cannot satisfy a request the storage "
+                      "does not publish");
+      }
     }
   }
 
-  // Whether the binding composes a request, known as the code compiles.
-  template <typename InterfaceBinding> static auto composes_request() {
-    return [](auto tag) {
-      return std::bool_constant<static_plan<typename decltype(tag)::type,
-                                            InterfaceBinding>::derived ==
-                                derivation::compose>{};
-    };
-  }
-
-  // Composes a wrapper of what the binding resolves, as the runtime
-  // container does, returned where it is requested: a value the binding
-  // publishes is made into it while its source exists.
-  template <typename InterfaceBinding, typename Request, typename Host,
-            typename Context, typename Scope>
-  composed_type_t<Request> compose(Scope scope, Host &host, Context &context) {
-    using wrapper = composed_type_t<Request>;
-    auto composes = composes_request<InterfaceBinding>();
-    auto with = [&](auto tag, auto &emplace) -> wrapper {
-      using candidate = typename decltype(tag)::type;
-      if constexpr (static_plan<candidate, InterfaceBinding>::derived ==
-                    derivation::none) {
-        return consume<InterfaceBinding, candidate>(
-            scope, host, context, [&](auto &&instance) -> wrapper {
-              using instance_type = decltype(instance);
-              if constexpr (std::is_same_v<remove_cvref_t<instance_type>,
-                                           remove_cvref_t<candidate>>) {
-                return emplace(std::forward<instance_type>(instance));
-              } else {
-                return emplace(static_cast<candidate>(
-                    std::forward<instance_type>(instance)));
-              }
+  // Applies the plan of a request to the stored object.
+  template <typename InterfaceBinding, typename Request, bool Stable,
+            typename Host, typename Context, typename Fn, typename Scope>
+  decltype(auto) run(Scope scope, Host &host, Context &context, Fn &&fn) {
+    using planning = static_execution<Request, InterfaceBinding>;
+    using leaf = typename planning::leaf_type;
+    using interface = typename planning::interface_type;
+    constexpr const semantics::plan &plan =
+        planning::template planned<Stable>();
+    [[maybe_unused]] auto order = ordered(host, context);
+    static_keeper<Context, Scope,
+                  std::remove_reference_t<decltype(cell_.retained())>>
+        keeper(context, scope, cell_.retained());
+    return activation(scope, host)
+        .template use_source<Request>(
+            context, [&](auto &&source) -> decltype(auto) {
+              auto start = plan_start<typename planning::stored_type,
+                                      planning::scope.makes>(
+                  std::forward<decltype(source)>(source), keeper);
+              auto reached = execution::interpreter<leaf, interface>::run_list(
+                  typename planning::template steps<Stable>{}, start, keeper);
+              return hand_reached<plan.how, Request, leaf, interface>(
+                  reached, keeper, std::forward<Fn>(fn));
             });
-      } else {
-        return emplace(
-            resolve<InterfaceBinding, candidate>(scope, host, context));
-      }
-    };
-    return compose_wrapper<wrapper,
-                           derived_request_t<derivation::compose, Request>>(
-        composes, with);
   }
 
   // A resolution of the cell, which takes the next order of the static
@@ -439,8 +581,11 @@ private:
     }
   }
 
-  template <typename Request, typename InterfaceBinding, typename Context>
-  [[noreturn]] static void not_convertible(Context &context) {
+  // Rejects a request as it runs; T is the type of what the branch that
+  // rejects it does not return.
+  template <typename Request, typename InterfaceBinding, typename T = void,
+            typename Context>
+  [[noreturn]] static T not_convertible(Context &context) {
     throw_type_not_convertible(
         detail::described_type_v<Request>,
         detail::described_type_v<typename InterfaceBinding::storage_type::type>,

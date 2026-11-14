@@ -169,7 +169,7 @@ private:
       using model = typename binding::binding_model_type;
       using interface_type = typename Request::interface_type;
       return (std::is_reference_v<Result> || std::is_pointer_v<Result>) &&
-             static_plan<interface_type, binding>::value &&
+             refers_stored<interface_type, binding>() &&
              stored_request_identity_v<interface_type,
                                        typename model::storage_type> &&
              factory_without_dependencies_v<typename model::factory_type> &&
@@ -448,8 +448,8 @@ private:
   R resolve_normalizing(Selection, Scope scope, Context &context) {
     constexpr bool exact = [] {
       if constexpr (Selection::status == binding_status::found) {
-        return static_plan<typename Request::user_type,
-                           typename Selection::binding_type>::resolves;
+        return static_execution<unannotated_t<typename Request::user_type>,
+                                typename Selection::binding_type>::resolves;
       } else {
         return false;
       }
@@ -475,10 +475,9 @@ private:
     using requested = typename Request::interface_type;
     if constexpr (std::is_rvalue_reference_v<requested> &&
                   std::is_same_v<R, std::remove_reference_t<requested>> &&
-                  detail::static_plan<requested, binding>::derived ==
-                      detail::derivation::compose) {
-      // The value an rvalue request of a wrapper the binding composes returns
-      // is composed where it is returned.
+                  returns_made_value<requested, binding>()) {
+      // The value an rvalue request returns is made where it is returned,
+      // when the binding makes it for the request.
       return storage_.template resolve<binding, R>(scope, *this, context);
     } else {
       return storage_.template resolve<binding, requested>(scope, *this,
