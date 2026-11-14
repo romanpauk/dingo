@@ -578,11 +578,16 @@ constexpr bool may_become(const thing &of, const request &goal,
           (std::uint32_t{1} << goal.layers[offset])) != 0;
 }
 
+inline constexpr std::uint16_t no_state = 0xFFFF;
+
 // A thing a derivation reaches, with the copies and the moves of the leaf of
-// one derivation that reaches it.
+// one derivation that reaches it, and the state and the step it reached the
+// thing from first.
 struct state {
   thing reached;
   cost made;
+  std::uint16_t parent = no_state;
+  step via = step::decay;
 };
 
 inline constexpr std::size_t max_states = 512;
@@ -614,7 +619,7 @@ struct search {
 constexpr search reach(const thing &start, const context &with,
                        const request &goal) {
   search found;
-  found.add({start, {}});
+  found.add({start, {}, no_state, step::decay});
   for (std::size_t next = 0; next < found.count; ++next) {
     const state from = found.states[next];
     const transitions_list taken = steps(from.reached, with);
@@ -625,9 +630,9 @@ constexpr search reach(const thing &start, const context &with,
             may_become(from.reached, goal, with))) {
         continue;
       }
-      found.add(
-          {each.reached,
-           affected(from.made, effect_of(each.kind, from.reached, with))});
+      found.add({each.reached,
+                 affected(from.made, effect_of(each.kind, from.reached, with)),
+                 static_cast<std::uint16_t>(next), each.kind});
     }
   }
   return found;
@@ -683,18 +688,29 @@ constexpr bool points_to(const thing &of, const request &goal, lifetime needed,
   return static_cast<int>(of.lifetimes[1]) >= static_cast<int>(needed);
 }
 
+// How a thing satisfies a request: a reference or a pointer refers to it, a
+// pointer request takes it as the pointer value it is, an rvalue reference
+// takes what is made for the request, or a value is moved or copied of it.
+enum class satisfaction : std::uint8_t { refer, point, take, move, copy };
+
 // The fewest copies and moves of the leaf of what satisfies a request, as the
-// specification's satisfactions give it, or none.
+// specification's satisfactions give it, or none; the state of the search
+// that satisfies it at that cost, the first one found, and how.
 struct answer {
   bool found = false;
   cost fewest;
   bool overflow = false;
+  std::uint16_t state = no_state;
+  satisfaction how = satisfaction::refer;
 };
 
-constexpr void consider(answer &result, cost made) {
+constexpr void consider(answer &result, cost made, std::size_t index,
+                        satisfaction how) {
   if (!result.found || made < result.fewest) {
     result.found = true;
     result.fewest = made;
+    result.state = static_cast<std::uint16_t>(index);
+    result.how = how;
   }
 }
 
@@ -708,7 +724,7 @@ constexpr answer satisfy(const search &found, const request &goal,
       const thing &of = each.reached;
       if (of.of == goal.of && has_layers(of, goal) && of.instance &&
           static_cast<int>(of.life()) >= static_cast<int>(needed)) {
-        consider(result, each.made);
+        consider(result, each.made, index, satisfaction::refer);
       }
     }
     if (result.found || !points(taken)) {
@@ -718,7 +734,7 @@ constexpr answer satisfy(const search &found, const request &goal,
       const state &each = found.states[index];
       if (each.reached.of == goal.of &&
           points_to(each.reached, goal, needed, with)) {
-        consider(result, each.made);
+        consider(result, each.made, index, satisfaction::point);
       }
     }
     return result;
@@ -731,7 +747,7 @@ constexpr answer satisfy(const search &found, const request &goal,
     }
     if (taken == category::rvalue_reference) {
       if (of.from == origin::made && can_move(of, with)) {
-        consider(result, each.made);
+        consider(result, each.made, index, satisfaction::take);
       }
       continue;
     }
@@ -740,10 +756,12 @@ constexpr answer satisfy(const search &found, const request &goal,
     }
     const bool anew = makes_leaf_anew(of, with);
     if (owned(of.from) && can_move(of, with)) {
-      consider(result, affected(each.made, anew ? effect::move : effect::none));
+      consider(result, affected(each.made, anew ? effect::move : effect::none),
+               index, satisfaction::move);
     }
     if (can_copy(of, with)) {
-      consider(result, affected(each.made, anew ? effect::copy : effect::none));
+      consider(result, affected(each.made, anew ? effect::copy : effect::none),
+               index, satisfaction::copy);
     }
   }
   return result;
@@ -752,5 +770,47 @@ constexpr answer satisfy(const search &found, const request &goal,
 constexpr answer fewest(const thing &start, const context &with,
                         const request &goal, category taken, lifetime needed) {
   return satisfy(reach(start, with, goal), goal, taken, needed, with);
+}
+
+inline constexpr std::size_t max_plan = 16;
+
+// The steps from a stored object to what satisfies a request, and the things
+// they reach, the first the stored object; and how the last satisfies it.
+struct plan {
+  bool found = false;
+  step steps[max_plan] = {};
+  thing things[max_plan + 1] = {};
+  std::size_t count = 0;
+  satisfaction how = satisfaction::refer;
+  cost fewest;
+};
+
+constexpr plan plan_of(const search &found, const answer &result) {
+  plan made;
+  if (!result.found) {
+    return made;
+  }
+  std::size_t path[max_plan + 1] = {};
+  std::size_t length = 0;
+  for (std::uint16_t at = result.state; at != no_state;
+       at = found.states[at].parent) {
+    if (length == max_plan + 1) {
+      // A plan longer than a plan holds is none.
+      return made;
+    }
+    path[length++] = at;
+  }
+  made.found = true;
+  made.count = length - 1;
+  for (std::size_t index = 0; index < length; ++index) {
+    const state &each = found.states[path[length - 1 - index]];
+    made.things[index] = each.reached;
+    if (index) {
+      made.steps[index - 1] = each.via;
+    }
+  }
+  made.how = result.how;
+  made.fewest = result.fewest;
+  return made;
 }
 } // namespace dingo::semantics

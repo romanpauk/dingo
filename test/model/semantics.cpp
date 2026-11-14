@@ -72,6 +72,38 @@ bool same(const layer_kind &a, const layer_kind &b) {
          a.adopted_array == b.adopted_array && a.converts == b.converts;
 }
 
+// Whether a plan replays: each of its steps is a step the semantics take
+// from the thing before it, to the thing after it, and the copies and the
+// moves of the leaf of the steps and of how the last thing satisfies the
+// request are those of the answer.
+bool replays(const plan &made, const context &with, const answer &result) {
+  if (!made.found) {
+    return false;
+  }
+  cost so_far;
+  for (std::size_t index = 0; index < made.count; ++index) {
+    const thing &from = made.things[index];
+    const transitions_list taken = steps(from, with);
+    bool found = false;
+    for (std::size_t each = 0; each < taken.count && !found; ++each) {
+      found = taken.items[each].kind == made.steps[index] &&
+              taken.items[each].reached == made.things[index + 1];
+    }
+    if (!found) {
+      return false;
+    }
+    so_far = affected(so_far, effect_of(made.steps[index], from, with));
+  }
+  const thing &last = made.things[made.count];
+  const bool anew = makes_leaf_anew(last, with);
+  if (made.how == satisfaction::move) {
+    so_far = affected(so_far, anew ? effect::move : effect::none);
+  } else if (made.how == satisfaction::copy) {
+    so_far = affected(so_far, anew ? effect::copy : effect::none);
+  }
+  return so_far == result.fewest;
+}
+
 bool read_layers(layer *layers, std::uint8_t &depth) {
   unsigned count = 0;
   if (!read(count) || count > max_layers) {
@@ -170,7 +202,9 @@ int main() {
       for (lifetime needed : {lifetime::request, lifetime::stable}) {
         const answer result =
             satisfy(found, goal, static_cast<category>(taken), needed, with);
-        if (result.found) {
+        if (result.found && !replays(plan_of(found, result), with, result)) {
+          std::printf("replay ");
+        } else if (result.found) {
           std::printf("%u,%u ", result.fewest.copies, result.fewest.moves);
         } else {
           std::printf("- ");
