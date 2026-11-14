@@ -479,9 +479,9 @@ def encode(context, start, layers, element):
     return " ".join(map(str, numbers))
 
 
-def compare(program, domain):
-    """The requests of a domain, how many of their answers resolve, and those
-    whose answers differ."""
+def header():
+    """The first lines the program reads: the layers of C++ itself, and the
+    standard layers, as the specification describes them."""
     language = [str(len(LANGUAGE))]
     for name in LANGUAGE:
         language += map(str, properties(semantics.LAYERS[name], LANGUAGE))
@@ -490,8 +490,14 @@ def compare(program, domain):
     for name in universe[len(LANGUAGE):]:
         standard_layers += map(str, properties(semantics.LAYERS[name],
                                                universe))
+    return [" ".join(language), " ".join(standard_layers)]
+
+
+def compare(program, domain):
+    """The requests of a domain, how many of their answers resolve, and those
+    whose answers differ."""
     cases = []
-    lines = [" ".join(language), " ".join(standard_layers)]
+    lines = header()
     for name, context, start, goals in domain:
         reached = semantics.reachable(start, context)
         for layers, element, goal in goals:

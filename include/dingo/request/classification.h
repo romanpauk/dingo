@@ -79,8 +79,17 @@ using layer_identity_t = typename layer_identity<Wrapper>::type;
 
 // What identifies the layer of an alternative type, which cannot rebind its
 // element: the type, and the alternative that holds the element.
+template <typename Wrapper, typename Alternative> struct alternative_identity {
+  using type = Wrapper;
+  using alternative = Alternative;
+};
+
+template <typename Identity>
+inline constexpr bool is_alternative_layer_v = false;
+
 template <typename Wrapper, typename Alternative>
-struct alternative_identity {};
+inline constexpr bool
+    is_alternative_layer_v<alternative_identity<Wrapper, Alternative>> = true;
 
 template <typename Wrapper> struct wrapper_layer_tag {
   using type = Wrapper;

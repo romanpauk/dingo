@@ -121,7 +121,12 @@ bool read_layers(layer *layers, std::uint8_t &depth) {
 }
 } // namespace
 
-int main() {
+int main(int count, char **arguments) {
+  // With "plans", a line of plans for each request instead of its answers:
+  // for each category, of the lifetime of the request, how it is satisfied
+  // and each step with the layer it makes, or "-".
+  const bool plans =
+      count > 1 && arguments[1][0] == 'p' && arguments[1][1] == 'l';
   const universe language;
   unsigned language_count = 0;
   if (!read(language_count) || language_count != language.count) {
@@ -196,6 +201,29 @@ int main() {
     const search found = reach(start, with, goal);
     if (found.overflow) {
       std::printf("overflow\n");
+      continue;
+    }
+    if (plans) {
+      for (unsigned taken = 0; taken < 7; ++taken) {
+        const answer result = satisfy(found, goal, static_cast<category>(taken),
+                                      lifetime::request, with);
+        const plan made = plan_of(found, result);
+        if (!made.found) {
+          std::printf("- ");
+          continue;
+        }
+        std::printf("%u:%u,%u", static_cast<unsigned>(made.how),
+                    made.fewest.copies, made.fewest.moves);
+        for (std::size_t index = 0; index < made.count; ++index) {
+          const thing &next = made.things[index + 1];
+          std::printf(":%u/%u/%u", static_cast<unsigned>(made.steps[index]),
+                      next.depth ? static_cast<unsigned>(next.layers[0]) : 255u,
+                      next.depth > 1 ? static_cast<unsigned>(next.layers[1])
+                                     : 255u);
+        }
+        std::printf(" ");
+      }
+      std::printf("\n");
       continue;
     }
     for (unsigned taken = 0; taken < 7; ++taken) {
