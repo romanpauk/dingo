@@ -141,8 +141,18 @@ resolves the node of the derived request through the binding, and places a value
 or an owner in the context with the operations of the object. A request type
 adds only its node and the operations of its object to a program, not a function
 for each of its derivations. A derivation of a wrapper (keep, convert, compose)
-is still a function of the type of the request. The static container applies the
-rules of the type, as it compiles.
+is still a function of the type of the request.
+
+The static container decides a request by the same data and the same functions,
+as it compiles. A static binding has the facts of its interface and storage
+(`binding_facts_of` in
+[include/dingo/binding/facts.h](../../include/dingo/binding/facts.h)), which a
+runtime binding of them has too. The plan of a request (`static_plan` in
+[include/dingo/static/binding.h](../../include/dingo/static/binding.h)) is the
+resolution the binding publishes for it, of `published_index`, or else the
+derivation it makes of it, of `derivation_facts_of` and `derive_request`. Both
+containers thus decide by one implementation. The static container applies the
+plan through typed steps, which the compiler inlines.
 
 The containers differ in their binding table and their selection, not in the
 algorithm. Both containers give the algorithm the same hooks. A registration
@@ -243,9 +253,9 @@ matches, the edge of the binding produces the source object, and
 [include/dingo/conversion/apply.h](../../include/dingo/conversion/apply.h)
 converts it to the requested shape.
 
-The static path uses the same binding model and conversion rules. It selects
-from a validated compile-time binding source, not from mutable runtime binding
-state.
+The static path uses the same binding model, conversion rules and binding facts.
+It selects from a validated compile-time binding source, not from mutable
+runtime binding state.
 
 ## Registration Child Bindings
 

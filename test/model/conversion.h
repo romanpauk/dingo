@@ -46,14 +46,6 @@ constexpr std::size_t runtime_index(type_list<Resolutions...>) {
   return index;
 }
 
-// Whether the runtime container dispatches a request to a resolution.
-template <typename Resolutions> struct runtime_publishes {
-  template <typename T>
-  constexpr bool operator()(detail::request_tag<T>) const {
-    return runtime_index<T>(Resolutions{}) < type_list_size_v<Resolutions>;
-  }
-};
-
 // The derivation the runtime container selects for a request its binding
 // does not publish, from the facts the binding tells of itself and from what
 // it publishes.
@@ -63,17 +55,9 @@ constexpr detail::derivation runtime_derivation() {
   if constexpr (!detail::derivable_v<Request>) {
     return detail::derivation::none;
   } else {
-    detail::derivation_facts facts = detail::runtime_derivation_facts(
-        detail::runtime_binding_facts<Interface, Storage, Resolutions>::value,
-        detail::described_type_v<Request>);
-    // The binding tells what it publishes of the descriptor of the request,
-    // but of the sole owner a sharing handle converts of, which only the
-    // request names.
-    facts.sources =
-        facts.sources | detail::published_sources<Request>(
-                            runtime_publishes<Resolutions>{},
-                            detail::derivations<detail::derivation::convert>{});
-    return detail::derive_request<Request>(facts);
+    return detail::derive_request<Request>(detail::derivation_facts_of<Request>(
+        detail::binding_facts_of<Interface, Storage, Resolutions>::value,
+        detail::described_type_v<Request>));
   }
 }
 
@@ -272,9 +256,9 @@ void publication(const std::string &prefix, const char *name) {
   using Storage = typename Model::storage_type;
   using type = unannotated_t<Interface>;
   using resolutions = typename detail::binding_resolutions<type, Storage>::type;
-  using selected = typename detail::matching_binding_resolution<
-      Request, typename detail::request_binding_resolutions<
-                   Request, type, Storage>::type>::type;
+  using binding = detail::binding<type, Model>;
+  using selected =
+      typename detail::binding_supports_request<Request, binding>::type;
   constexpr std::size_t index = runtime_index<Request>(resolutions{});
   constexpr bool listed = !std::is_void_v<selected>;
   constexpr bool matched = index < type_list_size_v<resolutions>;
@@ -291,7 +275,6 @@ void publication(const std::string &prefix, const char *name) {
     // How the static container derives a request it does not publish: kept
     // with the instance or composed, taken out of a pointer, or into the
     // context of the resolution.
-    using binding = detail::binding<type, Model>;
     constexpr detail::derivation how =
         detail::static_request_derivation_v<Request, binding>;
     if constexpr (!derives_alike<Request, type, binding, Storage,

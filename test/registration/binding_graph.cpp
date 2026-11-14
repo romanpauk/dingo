@@ -103,6 +103,35 @@ TEST(static_graph_test,
   static_assert(!detail::graph_model<typename source::type>::resolvable);
 }
 
+// The resolution of a request by the type-level match of its category, which
+// the plan the containers decide by from the descriptors has to agree with.
+template <typename RequestType>
+inline constexpr detail::request_category category_of_v =
+    std::is_lvalue_reference_v<RequestType>
+        ? detail::request_category::lvalue_reference
+    : std::is_rvalue_reference_v<RequestType>
+        ? detail::request_category::rvalue_reference
+    : std::is_pointer_v<RequestType> ? detail::request_category::pointer
+                                     : detail::request_category::value;
+
+template <typename Request, typename Interface, typename Storage>
+struct request_binding_resolutions {
+  using type =
+      detail::category_resolutions_t<category_of_v<std::remove_cv_t<Request>>,
+                                     Interface,
+                                     detail::storage_shape_t<Storage>>;
+};
+
+template <typename Request, typename Resolutions>
+struct matching_binding_resolution;
+
+template <typename Request, typename... Resolutions>
+struct matching_binding_resolution<Request, type_list<Resolutions...>> {
+  using type = type_list_find_t<
+      void, type_list<Resolutions...>,
+      detail::is_resolution_request_for_v<Resolutions, Request>...>;
+};
+
 TEST(static_execution_traits_test,
      default_stable_leaf_requests_select_their_category_route) {
   struct payload {};
@@ -115,43 +144,42 @@ TEST(static_execution_traits_test,
       dingo::bind<scope<shared>, storage<std::shared_ptr<payload>>>;
   using wrapped_model = detail::binding_model<wrapped_registration>;
   using wrapped_binding = detail::binding<payload, wrapped_model>;
-  using wrapped_resolutions = typename detail::request_binding_resolutions<
+  using wrapped_resolutions = typename request_binding_resolutions<
       payload &, payload, typename wrapped_model::storage_type>::type;
   using wrapped_match =
-      typename detail::matching_binding_resolution<payload &,
-                                                   wrapped_resolutions>::type;
-  using const_wrapped_resolutions =
-      typename detail::request_binding_resolutions<
-          const payload &, payload, typename wrapped_model::storage_type>::type;
-  using const_wrapped_match = typename detail::matching_binding_resolution<
-      const payload &, const_wrapped_resolutions>::type;
+      typename matching_binding_resolution<payload &,
+                                           wrapped_resolutions>::type;
+  using const_wrapped_resolutions = typename request_binding_resolutions<
+      const payload &, payload, typename wrapped_model::storage_type>::type;
+  using const_wrapped_match =
+      typename matching_binding_resolution<const payload &,
+                                           const_wrapped_resolutions>::type;
   using const_pointer_wrapped_resolutions =
-      typename detail::request_binding_resolutions<
+      typename request_binding_resolutions<
           const payload *, payload, typename wrapped_model::storage_type>::type;
-  using const_pointer_wrapped_match =
-      typename detail::matching_binding_resolution<
-          const payload *, const_pointer_wrapped_resolutions>::type;
+  using const_pointer_wrapped_match = typename matching_binding_resolution<
+      const payload *, const_pointer_wrapped_resolutions>::type;
 
   using converted_registration =
       dingo::bind<scope<shared>, storage<std::shared_ptr<service>>,
                   interfaces<service_interface>>;
   using converted_model = detail::binding_model<converted_registration>;
   using converted_binding = detail::binding<service_interface, converted_model>;
-  using converted_resolutions = typename detail::request_binding_resolutions<
+  using converted_resolutions = typename request_binding_resolutions<
       service_interface *, service_interface,
       typename converted_model::storage_type>::type;
   using converted_match =
-      typename detail::matching_binding_resolution<service_interface *,
-                                                   converted_resolutions>::type;
+      typename matching_binding_resolution<service_interface *,
+                                           converted_resolutions>::type;
 
   using array_registration = dingo::bind<scope<shared>, storage<payload[2]>>;
   using array_model = detail::binding_model<array_registration>;
   using array_binding = detail::binding<payload, array_model>;
-  using array_pointer_resolutions =
-      typename detail::request_binding_resolutions<
-          payload *, payload, typename array_model::storage_type>::type;
-  using array_pointer_match = typename detail::matching_binding_resolution<
-      payload *, array_pointer_resolutions>::type;
+  using array_pointer_resolutions = typename request_binding_resolutions<
+      payload *, payload, typename array_model::storage_type>::type;
+  using array_pointer_match =
+      typename matching_binding_resolution<payload *,
+                                           array_pointer_resolutions>::type;
 
   static_assert(std::is_same_v<typename detail::binding_supports_request<
                                    payload &, wrapped_binding>::type,

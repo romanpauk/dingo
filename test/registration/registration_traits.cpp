@@ -875,17 +875,15 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
       describe_type<A **>(), describe_type<const A *const *>()));
   EXPECT_FALSE(detail::matches_qualification_conversion(
       describe_type<A **>(), describe_type<const A **>()));
-  using optional_pointer_routes = type_list<optional_pointer_resolution>;
-  static_assert(
-      std::is_same_v<typename detail::matching_binding_resolution<
-                         std::optional<A> *, optional_pointer_routes>::type,
-                     optional_pointer_resolution>);
-  static_assert(std::is_same_v<
-                typename detail::matching_binding_resolution<
-                    const std::optional<A> *, optional_pointer_routes>::type,
-                optional_pointer_resolution>);
-  static_assert(std::is_void_v<typename detail::matching_binding_resolution<
-                    std::optional<I> *, optional_pointer_routes>::type>);
+  constexpr type_descriptor optional_pointer_target = detail::described_type_v<
+      typename optional_pointer_resolution::target_type>;
+  static_assert(detail::matches_qualification_conversion(
+      optional_pointer_target, detail::described_type_v<std::optional<A> *>));
+  static_assert(detail::matches_qualification_conversion(
+      optional_pointer_target,
+      detail::described_type_v<const std::optional<A> *>));
+  static_assert(!detail::matches_qualification_conversion(
+      optional_pointer_target, detail::described_type_v<std::optional<I> *>));
 
   using plain_pointer_model =
       detail::binding_model<type_registration<scope<external>, storage<A *>>>;

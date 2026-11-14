@@ -237,13 +237,7 @@ resolved_address apply_derivation(Scope scope, Context &context,
 template <typename T>
 derivation_facts runtime_facts(const derivation_site &site,
                                type_descriptor requested) {
-  derivation_facts facts = runtime_derivation_facts(*site.binding, requested);
-  if constexpr (derivation_shape_v<derivation::convert, T>) {
-    const type_descriptor owner =
-        described_type_v<derived_request_t<derivation::convert, T>>;
-    facts.sources.set(derivation::convert, publishes(*site.binding, owner));
-  }
-  return facts;
+  return derivation_facts_of<T>(*site.binding, requested);
 }
 
 template <derivation How, typename T, typename RTTI, typename Binding,
@@ -456,14 +450,6 @@ constexpr std::array<const request_node *, derivation_count> through_nodes() {
           through_node<derivation::compose, T, RTTI, Binding, Context>()};
 }
 
-template <typename T> constexpr type_descriptor converted_owner() {
-  if constexpr (derivation_shape_v<derivation::convert, T>) {
-    return described_type_v<derived_request_t<derivation::convert, T>>;
-  } else {
-    return {};
-  }
-}
-
 template <typename T> constexpr const object_operations *object_of() {
   constexpr bool places = derivation_shape_v<derivation::place, T>;
   constexpr bool owns = derivation_shape_v<derivation::adopt, T> ||
@@ -517,12 +503,9 @@ const request_node request_node_of<T, RTTI, Binding, Context>::value{
 inline derivation_facts node_facts(const derivation_site &site,
                                    const request_node &request,
                                    type_descriptor requested) {
-  derivation_facts facts = runtime_derivation_facts(*site.binding, requested);
-  if (request.facts.shapes.has(derivation::convert)) {
-    facts.sources.set(derivation::convert,
-                      publishes(*site.binding, request.owner));
-  }
-  return facts;
+  return derivation_facts_of(*site.binding, requested,
+                             request.facts.shapes.has(derivation::convert),
+                             request.owner);
 }
 
 // Resolves the request of a node through a binding.

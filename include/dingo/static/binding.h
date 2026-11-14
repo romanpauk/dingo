@@ -11,6 +11,7 @@
 #include <dingo/base/type_descriptor.h>
 #include <dingo/binding/activation.h>
 #include <dingo/binding/cache.h>
+#include <dingo/binding/facts.h>
 #include <dingo/binding/model.h>
 #include <dingo/binding/resolution.h>
 #include <dingo/context/resolution.h>
@@ -79,48 +80,51 @@ template <> struct resolved_order<true> {
   std::size_t resolved_order_ = 0;
 };
 
-template <typename Request, typename Resolutions>
-struct matching_binding_resolution;
+// What a static binding of an interface tells of itself: the facts of its
+// interface and its storage, which the runtime binding of them tells too.
+template <typename InterfaceBinding>
+using static_binding_facts = binding_facts_of<
+    unannotated_t<typename InterfaceBinding::interface_type>,
+    typename InterfaceBinding::binding_model_type::storage_type>;
 
-template <typename Request, typename... Resolutions>
-struct matching_binding_resolution<Request, type_list<Resolutions...>> {
-  using type = type_list_find_t<
-      void, type_list<Resolutions...>,
-      is_resolution_request_for_v<Resolutions, unannotated_t<Request>>...>;
+// The plan of a request of a static binding, decided as the code compiles by
+// the functions the runtime container decides by as it resolves: the
+// resolution the binding publishes for the request, if it publishes one, and
+// the derivation it makes of a request it does not.
+template <typename Request, typename InterfaceBinding> struct static_plan {
+  static constexpr const binding_facts &facts =
+      static_binding_facts<InterfaceBinding>::value;
+  static constexpr type_descriptor requested =
+      described_type_v<unannotated_t<Request>>;
+  static constexpr std::size_t index = published_index(facts, requested);
+  static constexpr bool published = index != facts.published_count;
+  static constexpr derivation how =
+      derive_request<Request>(derivation_facts_of<Request>(facts, requested));
 };
 
-// Resolution target shapes are disjoint, so static lookup only needs to form
-// the category that can match the request.
-template <typename RequestType>
-inline constexpr request_category static_request_category_v =
-    std::is_lvalue_reference_v<RequestType> ? request_category::lvalue_reference
-    : std::is_rvalue_reference_v<RequestType>
-        ? request_category::rvalue_reference
-    : std::is_pointer_v<RequestType> ? request_category::pointer
-                                     : request_category::value;
-
-template <typename Request, typename Interface, typename Storage>
-struct request_binding_resolutions {
-  using type = category_resolutions_t<
-      static_request_category_v<std::remove_cv_t<unannotated_t<Request>>>,
-      Interface, storage_shape_t<Storage>>;
+template <typename Request, typename InterfaceBinding, bool Published>
+struct published_resolution_type {
+  using type = void;
 };
 
 template <typename Request, typename InterfaceBinding>
+struct published_resolution_type<Request, InterfaceBinding, true> {
+  using type = typename type_list_at<
+      static_plan<Request, InterfaceBinding>::index,
+      typename binding_resolutions<
+          unannotated_t<typename InterfaceBinding::interface_type>,
+          typename InterfaceBinding::binding_model_type::storage_type>::type>::
+      type;
+};
+
+// Whether a static binding publishes a request, and the resolution it
+// publishes for it.
+template <typename Request, typename InterfaceBinding>
 struct binding_supports_request {
-private:
-  using binding_model_type = typename InterfaceBinding::binding_model_type;
-  using interface_type = typename InterfaceBinding::interface_type;
-  using raw_interface_type = unannotated_t<interface_type>;
-  using storage_type = typename binding_model_type::storage_type;
-  using resolutions =
-      typename request_binding_resolutions<Request, raw_interface_type,
-                                           storage_type>::type;
-
-public:
-  using type = typename matching_binding_resolution<Request, resolutions>::type;
-
-  static constexpr bool value = !std::is_void_v<type>;
+  static constexpr bool value =
+      static_plan<Request, InterfaceBinding>::published;
+  using type = typename published_resolution_type<Request, InterfaceBinding,
+                                                  value>::type;
 };
 
 template <typename Request, typename InterfaceBinding>
@@ -178,51 +182,10 @@ struct static_dependencies<Host, static_registry<LocalRegistrations...>> {
 };
 
 // Whether a static binding publishes a request.
-template <typename InterfaceBinding> struct static_publishes {
-  template <typename T> constexpr bool operator()(request_tag<T>) const {
-    return binding_supports_request_v<T, InterfaceBinding>;
-  }
-};
-
-// What a static binding tells the derivation of a request it does not
-// publish: whether it keeps its instance, whether a reference may refer to a
-// value it makes, whether it publishes the pointer it makes that the request
-// refers into or takes a value out of, and what it publishes of what each
-// derivation resolves through.
-template <typename Request, typename InterfaceBinding>
-constexpr derivation_facts static_derivation_facts() {
-  using storage = typename InterfaceBinding::binding_model_type::storage_type;
-  derivation_facts facts{
-      {},
-      published_sources<Request>(static_publishes<InterfaceBinding>{},
-                                 request_sources{})};
-  facts.traits
-      .set(binding_trait::keeps, binding_cell<storage>::keeps_conversions)
-      .set(binding_trait::places, places_made_values_v<storage>)
-      .set(binding_trait::slices, slices_v<remove_cvref_t<Request>,
-                                           leaf_type_t<typename storage::type>>)
-      .set(binding_trait::publishes_early,
-           scope_allows_cycles_v<typename storage::tag_type>);
-  if constexpr (std::is_lvalue_reference_v<Request> &&
-                adopts_made_pointer_v<storage,
-                                      std::remove_reference_t<Request>>) {
-    facts.sources.set(derivation::adopt,
-                      binding_supports_request_v<
-                          std::add_pointer_t<std::remove_reference_t<Request>>,
-                          InterfaceBinding>);
-  }
-  if constexpr (takes_shape<Request>() && takes_made_pointee_v<storage>) {
-    facts.sources.set(derivation::take,
-                      binding_supports_request_v<remove_cvref_t<Request> *,
-                                                 InterfaceBinding>);
-  }
-  return facts;
-}
-
 // The derivation of a request a static binding does not publish.
 template <typename Request, typename InterfaceBinding>
-inline constexpr derivation static_derivation_v = derive_request<Request>(
-    static_derivation_facts<Request, InterfaceBinding>());
+inline constexpr derivation static_derivation_v =
+    static_plan<Request, InterfaceBinding>::how;
 
 // Whether a binding resolves a request: one it publishes, or one it derives
 // from a request it resolves.

@@ -10,6 +10,7 @@
 #include <dingo/base/config.h>
 
 #include <dingo/binding/activation.h>
+#include <dingo/binding/facts.h>
 #include <dingo/binding/interface.h>
 #include <dingo/binding/resolution.h>
 #include <dingo/runtime/context.h>
@@ -92,54 +93,6 @@ template <typename T> struct runtime_binding_state_traits<T *> {
 
 namespace detail {
 template <typename Storage> using registered_type_t = typename Storage::type;
-
-// The resolution a runtime binding of a storage publishes, as data.
-template <typename Storage, typename Resolution>
-constexpr published_resolution published_resolution_of() {
-  using target = typename Resolution::target_type;
-  published_resolution resolution{described_type_v<target>, {}, false, false};
-  if constexpr (std::is_pointer_v<target>) {
-    using pointee = std::remove_pointer_t<target>;
-    if constexpr (adopts_made_pointer_v<Storage, pointee>) {
-      resolution.adopted = described_type_v<pointee &>;
-      resolution.adopts = true;
-      using value = std::remove_cv_t<pointee>;
-      resolution.takes = takes_made_pointee_v<Storage> &&
-                         std::is_constructible_v<value, value &&>;
-    }
-  }
-  return resolution;
-}
-
-template <typename Storage, typename Resolutions>
-struct published_resolution_table;
-
-template <typename Storage, typename... Resolutions>
-struct published_resolution_table<Storage, type_list<Resolutions...>> {
-  static constexpr published_resolution value[] = {
-      published_resolution_of<Storage, Resolutions>()...};
-};
-
-template <typename Storage>
-struct published_resolution_table<Storage, type_list<>> {
-  static constexpr const published_resolution *value = nullptr;
-};
-
-// What a runtime binding of an interface and a storage tells of itself.
-template <typename Interface, typename Storage, typename Resolutions>
-struct runtime_binding_facts {
-  using interface_type = std::remove_cv_t<Interface>;
-  static constexpr binding_facts value{
-      published_resolution_table<Storage, Resolutions>::value,
-      type_list_size_v<Resolutions>,
-      flags<binding_trait>{}
-          .set(binding_trait::keeps, binding_cell<Storage>::keeps_conversions)
-          .set(binding_trait::places, places_made_values_v<Storage>)
-          .set(binding_trait::publishes_early,
-               scope_allows_cycles_v<typename Storage::tag_type>),
-      slices_v<interface_type, leaf_type_t<typename Storage::type>>,
-      described_type_v<interface_type>};
-};
 
 // Resets the cell of a binding whose resolution failed, unless it succeeded.
 class node_reset_guard {
@@ -357,7 +310,7 @@ private:
   }
 
   static constexpr const detail::binding_facts &facts =
-      detail::runtime_binding_facts<Type, Storage, request_resolutions>::value;
+      detail::binding_facts_of<Type, Storage>::value;
 
   // A storage that makes a value for the request places it in the context,
   // which ends before the caller of the container uses an address into it,

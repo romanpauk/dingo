@@ -160,18 +160,18 @@ For a default conversion, Dingo infers the access:
 ## Factory Dispatch
 
 Both containers match a request against the resolution list of the binding,
-`detail::binding_resolutions`, and take the first resolution that matches:
+`detail::binding_resolutions`, and take the first resolution that matches. They
+match by one function, `published_index`, which compares the type descriptor of
+the request with the descriptor of each target in the facts of the binding:
 
-- The static container matches at compile time (`matching_binding_resolution`).
-  It forms only the resolutions of the request category, because the target
-  shapes of the categories are disjoint.
-- The runtime container matches the type descriptor of the request,
-  `instance_request::requested_type`, against the descriptor of each target in
-  the facts of the node of the binding (`published_index`). The engine of the
-  container then applies the resolution at the matched index through the edge of
-  the binding.
+- The static container matches as it compiles, in the plan of the request, and
+  applies the resolution at the matched index as a typed step.
+- The runtime container matches `instance_request::requested_type` as it
+  resolves. The engine of the container then applies the resolution at the
+  matched index through the edge of the binding.
 - If no resolution matches, the binding derives the request from one that it
-  resolves. In the runtime container, the `derive` function of the
+  resolves, by the derivation `derive_request` chooses of the facts of the
+  binding. In the runtime container, the `derive` function of the
   `instance_request` does this, of the node of the request.
 
 Leaf normalization applies only to the selection of the binding. Dingo does not

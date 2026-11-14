@@ -201,6 +201,22 @@ runtime_derivation_facts(const binding_facts &binding,
   return facts;
 }
 
+// The derivation a binding of its facts makes of a request: of the descriptor
+// of the request and, when the request converts the sole owner a sharing
+// handle is made of, of the descriptor of that owner, which only the request
+// names. Both containers decide by it: the runtime one as it resolves, the
+// static one as it compiles.
+constexpr derivation_facts derivation_facts_of(const binding_facts &binding,
+                                               type_descriptor requested,
+                                               bool converts,
+                                               type_descriptor owner) {
+  derivation_facts facts = runtime_derivation_facts(binding, requested);
+  if (converts) {
+    facts.sources.set(derivation::convert, publishes(binding, owner));
+  }
+  return facts;
+}
+
 // What a runtime binding hands the derivation of a request it does not
 // publish: what it keeps of its instance, the type it registers, the
 // descriptor the request was dispatched with, the key the request is cached
@@ -446,35 +462,21 @@ struct derived_request<derivation::compose, Request> {
 template <derivation Derivation, typename Request>
 using derived_request_t = typename derived_request<Derivation, Request>::type;
 
-// Derivations, as a list of them.
-template <derivation... Hows> struct derivations {};
-
-// The derivations whose source a binding knows of the request alone, as it
-// knows of a pointer it makes whether it publishes it.
-using request_sources =
-    derivations<derivation::refer, derivation::address, derivation::move,
-                derivation::copy, derivation::convert>;
-
-// Whether a binding publishes the source of a derivation of Request, as
-// published(tag) says of the request of a tag; none where the derivation does
-// not apply to the request.
-template <derivation How, typename Request, typename Published>
-constexpr flags<derivation> source_of(Published published) {
-  flags<derivation> sources;
-  if constexpr (derivation_shape_v<How, Request>) {
-    sources.set(How, published(request_tag<derived_request_t<How, Request>>{}));
+template <typename T> constexpr type_descriptor converted_owner() {
+  if constexpr (derivation_shape_v<derivation::convert, T>) {
+    return described_type_v<derived_request_t<derivation::convert, T>>;
+  } else {
+    return {};
   }
-  return sources;
 }
 
-// The derivations of Request whose source a binding publishes, as
-// published(tag) says: a static binding knows it as the code compiles. A
-// runtime binding finds the sources of the descriptor of the request in its
-// own resolutions.
-template <typename Request, typename Published, derivation... Hows>
-constexpr flags<derivation> published_sources(Published published,
-                                              derivations<Hows...>) {
-  return (source_of<Hows, Request>(published) | ...);
+// The derivation facts of a request of T.
+template <typename T>
+constexpr derivation_facts derivation_facts_of(const binding_facts &binding,
+                                               type_descriptor requested) {
+  return derivation_facts_of(binding, requested,
+                             derivation_shape_v<derivation::convert, T>,
+                             converted_owner<T>());
 }
 
 // Whether a request copies or moves nothing of what a binding publishes: a
