@@ -237,9 +237,9 @@ runtime binding is a typed edge and constant data:
   [include/dingo/binding/facts.h](../../include/dingo/binding/facts.h)). For
   example, a `unique` binding of `T` publishes `T&&`, and a request of
   `std::shared_ptr<T>` composes the wrapper of it. The code of the wrapper is
-  then instantiated only where it is requested. The static container keeps
-  such wrappers published, because it instantiates only what is requested and
-  the compiler folds a published wrapper better.
+  then instantiated only where it is requested. The static container keeps such
+  wrappers published, because it instantiates only what is requested and the
+  compiler folds a published wrapper better.
 
 The engine (`runtime_binding_engine` in
 [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)) is one
