@@ -206,38 +206,6 @@ TEST(type_registration_test, registration_specialization) {
     virtual ~I() = default;
   };
   struct A : I {};
-  struct test_container {
-    using rtti_type = rtti<typeid_provider>;
-    using allocator_type = std::allocator<char>;
-
-    explicit test_container(test_container *,
-                            allocator_type allocator = allocator_type())
-        : allocator_(allocator) {}
-
-    allocator_type &get_allocator() { return allocator_; }
-
-  private:
-    allocator_type allocator_;
-  };
-
-  struct test_state_owner {
-    using allocator_type = test_container::allocator_type;
-    using parent_container_type = test_container;
-
-    explicit test_state_owner(test_container *parent)
-        : allocator_(parent->get_allocator()), runtime_(allocator_),
-          parent_(parent) {}
-
-    runtime_memory<allocator_type> &runtime() { return runtime_; }
-    parent_container_type &registration_owner() { return *parent_; }
-    allocator_type &get_allocator() { return allocator_; }
-
-  private:
-    allocator_type allocator_;
-    runtime_memory<allocator_type> runtime_;
-    parent_container_type *parent_;
-  };
-
   using shared_registration = type_registration<scope<shared>, storage<A>>;
   using shared_storage =
       detail::storage<typename shared_registration::scope_type::type,
@@ -245,11 +213,7 @@ TEST(type_registration_test, registration_specialization) {
                       typename shared_registration::storage_type::type,
                       typename shared_registration::factory_type::type,
                       typename shared_registration::conversions_type::type>;
-  using shared_binding_data =
-      runtime_binding_state<test_state_owner, test_container,
-                            test_binding_cell<A, shared_storage>>;
-  using shared_binding =
-      runtime_binding<test_container, A, shared_storage, shared_binding_data>;
+  using shared_cell = detail::binding_cell<shared_storage>;
 
   using shared_ptr_registration =
       type_registration<scope<shared>, storage<std::shared_ptr<A>>>;
@@ -259,12 +223,7 @@ TEST(type_registration_test, registration_specialization) {
                       typename shared_ptr_registration::storage_type::type,
                       typename shared_ptr_registration::factory_type::type,
                       typename shared_ptr_registration::conversions_type::type>;
-  using shared_ptr_binding_data =
-      runtime_binding_state<test_state_owner, test_container,
-                            test_binding_cell<A, shared_ptr_storage>>;
-  using shared_ptr_binding =
-      runtime_binding<test_container, A, shared_ptr_storage,
-                      shared_ptr_binding_data>;
+  using shared_ptr_cell = detail::binding_cell<shared_ptr_storage>;
 
   using external_registration =
       type_registration<scope<external>, storage<A &>>;
@@ -274,11 +233,7 @@ TEST(type_registration_test, registration_specialization) {
                       typename external_registration::storage_type::type,
                       typename external_registration::factory_type::type,
                       typename external_registration::conversions_type::type>;
-  using external_binding_data =
-      runtime_binding_state<test_state_owner, test_container,
-                            test_binding_cell<A, external_storage>>;
-  using external_binding = runtime_binding<test_container, A, external_storage,
-                                           external_binding_data>;
+  using external_cell = detail::binding_cell<external_storage>;
 
   using external_shared_registration =
       type_registration<scope<external>, storage<std::shared_ptr<A>>>;
@@ -288,12 +243,7 @@ TEST(type_registration_test, registration_specialization) {
       typename external_shared_registration::storage_type::type,
       typename external_shared_registration::factory_type::type,
       typename external_shared_registration::conversions_type::type>;
-  using external_shared_binding_data =
-      runtime_binding_state<test_state_owner, test_container,
-                            test_binding_cell<A, external_shared_storage>>;
-  using external_shared_binding =
-      runtime_binding<test_container, A, external_shared_storage,
-                      external_shared_binding_data>;
+  using external_shared_cell = detail::binding_cell<external_shared_storage>;
 
   using nested_registration =
       type_registration<scope<shared>,
@@ -329,6 +279,6 @@ TEST(type_registration_test, registration_specialization) {
   static_assert(
       std::is_same_v<nested_stored_type, std::shared_ptr<std::unique_ptr<A>>>);
 
-  static_assert(sizeof(shared_binding) <= sizeof(shared_ptr_binding));
-  static_assert(sizeof(external_binding) <= sizeof(external_shared_binding));
+  static_assert(sizeof(shared_cell) <= sizeof(shared_ptr_cell));
+  static_assert(sizeof(external_cell) <= sizeof(external_shared_cell));
 }

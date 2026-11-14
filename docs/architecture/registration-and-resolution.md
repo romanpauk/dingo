@@ -183,12 +183,17 @@ outside the container.
 
 ## Factory Path
 
-The binding state in
-[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h) owns:
+The record of a registration (`runtime_binding_record` in
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)) is one
+allocation of the transaction of the registration. It holds:
 
+- the header the bindings of its interfaces share (`runtime_binding_header` in
+  [include/dingo/binding/interface.h](../../include/dingo/binding/interface.h)):
+  the request cache of the interfaces, the container the registration is made
+  in, and the registration container of its local bindings, created when it is
+  first asked for
 - a binding cell with the storage object and its retained conversions
-- the registration container of its local bindings, created when the first local
-  binding is registered
+- the binding of each interface: the node of the interface and the header
 
 The runtime binding materializes its instance through the same binding
 activation as the static container. Its factory resolves its dependencies
@@ -232,10 +237,16 @@ which falls back to the parent or constructs the type, are functions of the
 request type. A keyed request with a lookup of its own, and a collection, take
 the typed path of the resolution algorithm.
 
-A registration commits its binding to the lookup of each interface it binds,
-with the value of the binding and its key. The insertion is of the lookup and
-its key, not of the binding. The transaction of a registration, and that of a
-request, live in a frame made out of line, once for a container.
+A registration whose interfaces are found through the base lookup is committed
+by the engine too. Its typed part is constant data, the layout of its record and
+the node and the descriptor of each interface, a function that constructs its
+cell from the registered factory argument, and the type indexes of the keys of
+its interfaces. One function of the container places and constructs the record
+and inserts each binding into the base lookup under its key. A registration with
+key values or a lookup of its own is committed by a function of its type, by the
+same insertion, which is of the lookup and its key, not of the binding. The
+transaction of a registration, and that of a request, live in a frame made out
+of line, once for a container.
 
 The root container owns the runtime arena and a dense table of lookup states for
 the registration containers. A registration container is a runtime container

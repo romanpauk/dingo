@@ -41,39 +41,6 @@ namespace {
   return 0;
 }
 
-struct counting_runtime_binding_storage {};
-
-// The cell of a runtime binding of one interface over a storage.
-template <typename Interface, typename Storage>
-using test_binding_cell = detail::binding_cell<Storage>;
-
-struct counting_runtime_binding_container {
-  using allocator_type = std::allocator<char>;
-  using parent_container_type = counting_runtime_binding_container;
-
-  explicit counting_runtime_binding_container(
-      counting_runtime_binding_container *,
-      allocator_type allocator = allocator_type())
-      : allocator_(allocator) {
-    ++constructions;
-  }
-
-  // A level of the local bindings of a registration.
-  counting_runtime_binding_container(detail::local_level_t,
-                                     counting_runtime_binding_container *owner,
-                                     allocator_type allocator)
-      : counting_runtime_binding_container(owner, allocator) {}
-
-  allocator_type &get_allocator() { return allocator_; }
-
-  static int constructions;
-
-private:
-  allocator_type allocator_;
-};
-
-int counting_runtime_binding_container::constructions = 0;
-
 struct runtime_arena_tracker {
   explicit runtime_arena_tracker(std::vector<int> *events, int value)
       : events_(events), value_(value) {}

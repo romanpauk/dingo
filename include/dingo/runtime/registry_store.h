@@ -328,73 +328,6 @@ protected:
 
   template <typename T> static T invalid_registration_return();
 
-  struct runtime_binding_value {
-    runtime_binding_value(const runtime_binding_value &) = delete;
-    runtime_binding_value &operator=(const runtime_binding_value &) = delete;
-    runtime_binding_value(runtime_binding_value &&) = delete;
-    runtime_binding_value &operator=(runtime_binding_value &&) = delete;
-
-  protected:
-    runtime_binding_value() = default;
-    ~runtime_binding_value() = default;
-  };
-
-  template <std::size_t Index, typename Binding>
-  struct runtime_binding_member : Binding {
-    template <typename... Args>
-    explicit runtime_binding_member(Args &&...args)
-        : Binding(std::forward<Args>(args)...) {}
-  };
-
-  template <typename Indexes, typename... Bindings>
-  struct runtime_binding_value_impl_base;
-
-  // The bindings of one registration with several interfaces, one per
-  // interface, sharing the state of the registration.
-  template <std::size_t... Indexes, typename... Bindings>
-  struct runtime_binding_value_impl_base<std::index_sequence<Indexes...>,
-                                         Bindings...>
-      : runtime_binding_value, runtime_binding_member<Indexes, Bindings>... {
-    using container_type =
-        typename type_list_head_t<type_list<Bindings...>>::container_type;
-
-    // NOLINTBEGIN(bugprone-use-after-move)
-    template <typename... Args>
-    explicit runtime_binding_value_impl_base(Args &&...args)
-        : runtime_binding_member<Indexes, Bindings>(
-              std::forward<Args>(args)...)... {}
-    // NOLINTEND(bugprone-use-after-move)
-
-    // The binding of an interface.
-    template <typename Interface> runtime_binding_interface_type *view() {
-      using interface_type = unannotated_t<Interface>;
-      static_assert(
-          (std::is_same_v<typename Bindings::interface_type, interface_type> ||
-           ...),
-          "lookup interface is not present in runtime binding value");
-      runtime_binding_interface_type *binding = nullptr;
-      ((binding =
-            binding == nullptr &&
-                    std::is_same_v<typename Bindings::interface_type,
-                                   interface_type>
-                ? static_cast<runtime_binding_member<Indexes, Bindings> *>(this)
-                : binding),
-       ...);
-      return binding;
-    }
-
-    container_type &get_container() {
-      return static_cast<runtime_binding_member<
-          0, type_list_head_t<type_list<Bindings...>>> &>(*this)
-          .get_container();
-    }
-  };
-
-  template <typename... Bindings>
-  using runtime_binding_value_impl =
-      runtime_binding_value_impl_base<std::index_sequence_for<Bindings...>,
-                                      Bindings...>;
-
   template <typename LookupKeyDefinition> struct base_lookup_key_type;
 
   template <typename T>
@@ -920,27 +853,6 @@ protected:
     (void)replacement;
     value = runtime_lookup_value(previous);
   }
-
-  template <typename Owner> struct shared_lookup_value_factory {
-    static constexpr bool shared_owner = true;
-    Owner *owner;
-
-    template <typename TypeInterface> runtime_lookup_value make() {
-      return runtime_lookup_value(owner->template view<TypeInterface>());
-    }
-  };
-
-  template <bool SharedOwner, typename Binding>
-  struct direct_lookup_value_factory {
-    static constexpr bool shared_owner = SharedOwner;
-    Binding *binding;
-
-    template <typename TypeInterface> runtime_lookup_value make() {
-      static_assert(std::is_same_v<typename Binding::interface_type,
-                                   unannotated_t<TypeInterface>>);
-      return runtime_lookup_value(binding);
-    }
-  };
 
   // Commits a binding to the lookups of its interface: to each key-value
   // lookup with its supplied key value, or else to the routed lookup of its

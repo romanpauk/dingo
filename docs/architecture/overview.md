@@ -54,9 +54,12 @@ holds compile-time bindings. A container uses one registration mode.
 
 The runtime registration path owns:
 
-- `runtime_binding_state`: the binding cell, the request cache and the child
-  container of one registration
-- one `runtime_binding` for each exposed interface
+- the record of each registration, in one allocation: the header its bindings
+  share (the request cache, the container it is made in and the registration
+  container of its local bindings), its binding cell, and one binding for each
+  exposed interface
+- the edge of each binding (`runtime_binding_edge`): its constant node and the
+  functions of its type
 - the lookup index (`lookup_indexes`), which does lookup, collection
   enumeration, counting, and duplicate checks
 - the parent lookup for nested containers
@@ -104,9 +107,11 @@ Both containers keep the state of a registration in a binding cell, defined in
 [include/dingo/binding/activation.h](../../include/dingo/binding/activation.h).
 The cell holds the storage object and its retention: what it keeps of the
 instance for its interfaces. A static container holds one cell per registration
-inline. A runtime binding holds its cell in `runtime_binding_state` from
-[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h), with
-the registration container of its local bindings, when it has one.
+inline. A runtime registration holds its cell in its record
+(`runtime_binding_record` in
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)), after
+the header that points to the registration container of its local bindings, when
+it has one.
 
 The storage classes under [include/dingo/storage/](../../include/dingo/storage)
 own the lifetime policy:

@@ -67,18 +67,12 @@ struct size_probe_registry : size_registry_type {
 
   using typename base_type::base_lookup_entry;
   using typename base_type::lookup_index_entries;
-  using typename base_type::runtime_binding_value;
   using typename base_type::runtime_bindings_state;
   using typename base_type::runtime_lookup_value;
   using typename base_type::runtime_scope_state;
-
-  template <typename Interface, typename Storage, typename BindingState>
-  using binding = typename base_type::template runtime_registration_binding_t<
-      Interface, Storage, BindingState>;
-
-  template <typename Interfaces, typename Storage, typename BindingState>
-  using owner = typename base_type::template runtime_binding_value_owner_t<
-      Interfaces, Storage, BindingState>;
+  using runtime_binding_interface_type = runtime_binding_interface<
+      typename size_registry_type::rtti_type,
+      runtime_context<typename size_registry_type::allocator_type>>;
 };
 
 using size_registration =
@@ -87,28 +81,23 @@ using size_registration =
 using size_model = detail::binding_model<size_registration>;
 using size_storage = typename size_model::storage_type;
 using size_instance_container = detail::container_implementation_t<container<>>;
-using size_binding_state =
-    runtime_binding_state<size_registry_type, size_instance_container,
-                          detail::binding_cell_t<size_model>>;
-using size_binding = size_probe_registry::binding<size_interface, size_storage,
-                                                  size_binding_state>;
-using size_single_owner =
-    size_probe_registry::owner<type_list<size_interface>, size_storage,
-                               size_binding_state>;
+
+// The record of a registration: its header, the cell of its storage, and the
+// binding of each of its interfaces.
+template <typename Registration>
+using size_record_for = detail::runtime_binding_record<
+    detail::binding_cell_t<detail::binding_model<Registration>>,
+    size_probe_registry::runtime_binding_interface_type,
+    type_list_size_v<
+        typename detail::binding_model<Registration>::interface_types>>;
+
+using size_record = size_record_for<size_registration>;
 using size_multi_interface_registration =
     type_registration<scope<shared>,
                       storage<std::shared_ptr<size_multi_implementation>>,
                       interfaces<size_interface, size_second_interface>>;
-using size_multi_interface_model =
-    detail::binding_model<size_multi_interface_registration>;
-using size_multi_interface_storage =
-    typename size_multi_interface_model::storage_type;
-using size_multi_interface_state =
-    runtime_binding_state<size_registry_type, size_instance_container,
-                          detail::binding_cell_t<size_multi_interface_model>>;
-using size_multi_interface_pointer_state_owner = size_probe_registry::owner<
-    typename size_multi_interface_model::interface_types,
-    size_multi_interface_storage, size_multi_interface_state *>;
+using size_multi_interface_record =
+    size_record_for<size_multi_interface_registration>;
 
 using size_type_index = typename size_registry_type::rtti_type::type_index;
 using size_type_map_value = size_probe_registry::runtime_lookup_value;
@@ -141,18 +130,13 @@ using size_lookup_index =
                          size_type_map_value,
                          typename size_registry_type::allocator_type>;
 
-template <typename Registration>
-using size_runtime_state_for = runtime_binding_state<
-    size_registry_type, size_instance_container,
-    detail::binding_cell_t<detail::binding_model<Registration>>>;
-
-using size_unique_state = size_runtime_state_for<
+using size_unique_record = size_record_for<
     type_registration<scope<unique>, storage<size_implementation>>>;
-using size_external_state = size_runtime_state_for<
+using size_external_record = size_record_for<
     type_registration<scope<external>, storage<size_implementation &>>>;
-using size_shared_ptr_state = size_runtime_state_for<type_registration<
+using size_shared_ptr_record = size_record_for<type_registration<
     scope<shared>, storage<std::shared_ptr<size_implementation>>>>;
-using size_shared_cyclical_state = size_runtime_state_for<type_registration<
+using size_shared_cyclical_record = size_record_for<type_registration<
     scope<shared_cyclical>, storage<std::shared_ptr<size_implementation>>>>;
 
 template <typename T>
@@ -185,31 +169,22 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
     expect_size_at_most<runtime_context<std::allocator<char>>>(
         "runtime context", 40);
     expect_size_at_most<size_storage>("shared registration storage", 16);
-    // Stable runtime state keeps its request cache inline; retained source
-    // data lives in the runtime transaction journal instead of a binding-owned
-    // lifetime frame. A state that keeps its instance keeps what is converted
-    // and composed of it too, behind one pointer.
-    expect_size_at_most<size_binding_state>("runtime binding state", 56);
-    expect_size_at_most<size_unique_state>("unique runtime binding state", 24);
-    expect_size_at_most<size_external_state>("external runtime binding state",
-                                             48);
-    expect_size_at_most<size_shared_ptr_state>(
-        "shared_ptr runtime binding state", 64);
-    expect_size_at_most<size_shared_cyclical_state>(
-        "shared_cyclical runtime binding state", 64);
-    // The state holds what its interfaces keep of the instance.
-    expect_size_at_most<size_multi_interface_state>(
-        "multi-interface runtime binding state", 72);
-    // Runtime bindings keep a direct cache-slot pointer beside the vptr so
-    // cache access does not require another virtual dispatch.
-    expect_size_at_most<size_binding>("runtime binding", 72);
-    expect_size_at_most<size_single_owner>("single-interface binding owner",
-                                           72);
-    expect_size_at_most<size_multi_interface_pointer_state_owner>(
-        "multi-interface pointer-state binding owner", 80);
+    // The record of a registration holds, in one allocation, the request
+    // cache its interfaces share, the container it is made in and the level
+    // of its local bindings, the cell of its storage, and the node and the
+    // header of the binding of each interface. A storage that keeps its
+    // instance keeps what is converted and composed of it too, behind one
+    // pointer.
+    expect_size_at_most<runtime_binding_header>("runtime binding header", 32);
+    expect_size_at_most<size_probe_registry::runtime_binding_interface_type>(
+        "runtime binding of an interface", 16);
+    EXPECT_LE(size_record::size, 72u);
+    EXPECT_LE(size_unique_record::size, 56u);
+    EXPECT_LE(size_external_record::size, 64u);
+    EXPECT_LE(size_shared_ptr_record::size, 80u);
+    EXPECT_LE(size_shared_cyclical_record::size, 80u);
+    EXPECT_LE(size_multi_interface_record::size, 96u);
 
-    expect_size_at_most<size_probe_registry::runtime_binding_value>(
-        "runtime binding value base", 1);
     expect_size_at_most<size_probe_registry::runtime_lookup_value>(
         "runtime lookup value", 8);
     expect_size_at_most<size_type_index>("type index", 8);
@@ -227,8 +202,6 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
 
   static_assert(!std::is_polymorphic_v<size_storage>);
   static_assert(sizeof(size_base_lookup_key) == sizeof(size_type_index) * 2);
-  static_assert(std::is_empty_v<size_probe_registry::runtime_binding_value>);
-  static_assert(std::is_same_v<size_single_owner, size_binding>);
   static_assert(sizeof(size_probe_registry::runtime_lookup_value) ==
                 sizeof(void *));
 }

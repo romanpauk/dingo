@@ -52,6 +52,16 @@ class retention;
 
 template <typename RTTI, typename Context> class runtime_binding_interface;
 
+// What the bindings of the interfaces of one registration share: the request
+// cache of their interfaces, the container the registration is made in, and
+// the level of its local bindings once there is one. The cell of the storage
+// of the registration follows it.
+struct runtime_binding_header {
+  detail::cache::entry cache;
+  void *container;
+  void *level;
+};
+
 // A runtime binding as the runtime container resolves it: what it is, as
 // constant data, and the functions of its type. Everything else is the engine
 // of the container, which dispatches every binding by its node.
@@ -100,7 +110,15 @@ public:
   using request_type = instance_request<RTTI>;
   using node_type = runtime_binding_node<RTTI, Context>;
 
-  detail::cache::entry *cache_slot() noexcept { return cache_slot_; }
+  // The binding of an interface of a registration, of its node, in the
+  // record of the registration.
+  runtime_binding_interface(const node_type *node,
+                            runtime_binding_header *header) noexcept
+      : node_(node), header_(header) {}
+
+  runtime_binding_header &header() noexcept { return *header_; }
+
+  detail::cache::entry *cache_slot() noexcept { return &header_->cache; }
 
   // A null cache_key means the request is not cached.
   resolved_address resolve_request(construction_scope scope, Context &context,
@@ -112,25 +130,17 @@ public:
   // Publishes a stable address for the request key until the transaction
   // that resolved it is rolled back.
   void publish_cache(Context &context, const void *key, void *address) {
-    assert(cache_slot_ != nullptr);
+    auto *slot = cache_slot();
     context.on_rollback(
-        +[](void *slot, void *) noexcept {
-          *static_cast<detail::cache::entry *>(slot) = {};
+        +[](void *published, void *) noexcept {
+          *static_cast<detail::cache::entry *>(published) = {};
         },
-        cache_slot_);
-    *cache_slot_ = {key, address};
+        slot);
+    *slot = {key, address};
   }
-
-protected:
-  // Runtime lookup is non-owning; transaction storage destroys concrete
-  // bindings, so dispatch does not need a distinct virtual base per container.
-  explicit runtime_binding_interface(const node_type *node) : node_(node) {}
-  ~runtime_binding_interface() = default;
-
-  void cache_slot(detail::cache::entry *slot) noexcept { cache_slot_ = slot; }
 
 private:
   const node_type *node_;
-  detail::cache::entry *cache_slot_ = nullptr;
+  runtime_binding_header *header_;
 };
 } // namespace dingo

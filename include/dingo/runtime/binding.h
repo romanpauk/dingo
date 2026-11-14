@@ -17,6 +17,7 @@
 #include <dingo/runtime/memory.h>
 #include <dingo/type/shape.h>
 
+#include <algorithm>
 #include <cassert>
 #include <memory>
 #include <type_traits>
@@ -28,68 +29,48 @@ struct local_level_t {};
 inline constexpr local_level_t local_level{};
 } // namespace detail
 
-// The state of a runtime registration: its binding cell, the request cache of
-// its interfaces and the level of local bindings its factory resolves through
-// once the registration creates one. The level is a container of the type of
-// the container the registration is made in, so the factory is instantiated
-// once, whichever of the two it resolves through.
-template <typename Owner, typename InstanceContainer, typename Cell>
-class runtime_binding_state
-    : private detail::cache::state<
-          detail::cache::is_stable_storage_v<typename Cell::storage_type>> {
-public:
-  using cell_type = Cell;
-  using container_type = InstanceContainer;
+namespace detail {
+constexpr std::size_t aligned_to(std::size_t size,
+                                 std::size_t alignment) noexcept {
+  return (size + alignment - 1) / alignment * alignment;
+}
 
-  template <typename... Args>
-  explicit runtime_binding_state(Owner *owner, Args &&...args)
-      : owner_(owner), cell_(std::forward<Args>(args)...) {}
+// Where the cell of a registration lies in its record: after its header.
+template <typename Cell>
+inline constexpr std::size_t runtime_cell_offset_v =
+    aligned_to(sizeof(runtime_binding_header), alignof(Cell));
 
-  cell_type &cell() { return cell_; }
-  typename Cell::storage_type &storage() { return cell_.storage(); }
-  detail::cache::entry *cache_slot() noexcept { return this->slot(); }
+template <typename Cell>
+Cell &runtime_cell(runtime_binding_header &header) noexcept {
+  return *reinterpret_cast<Cell *>(reinterpret_cast<unsigned char *>(&header) +
+                                   runtime_cell_offset_v<Cell>);
+}
 
-  InstanceContainer &container() {
-    if (!instance_container_) {
-      instance_container_ = std::addressof(
-          owner_->runtime().template construct<InstanceContainer>(
-              detail::local_level, parent(), owner_->get_allocator()));
-    }
-    return *instance_container_;
+// The record of a registration, in one allocation: the header the bindings
+// of its interfaces share, the cell of its storage, and the binding of each
+// of its interfaces. Only the edge of a binding knows the type of the cell.
+template <typename Cell, typename Binding, std::size_t Interfaces>
+struct runtime_binding_record {
+  static constexpr std::size_t bindings_offset =
+      aligned_to(runtime_cell_offset_v<Cell> + sizeof(Cell), alignof(Binding));
+  static constexpr std::size_t size =
+      bindings_offset + Interfaces * sizeof(Binding);
+  static constexpr std::size_t alignment = std::max(
+      {alignof(runtime_binding_header), alignof(Cell), alignof(Binding)});
+
+  static Binding *binding(runtime_binding_header &header,
+                          std::size_t index) noexcept {
+    return reinterpret_cast<Binding *>(
+               reinterpret_cast<unsigned char *>(&header) + bindings_offset) +
+           index;
   }
 
-  // The container the factory resolves through: the level of local bindings
-  // once there is one, and else the container the registration is made in.
-  InstanceContainer &resolution_container() {
-    return instance_container_ != nullptr ? *instance_container_ : *parent();
+  // Destroys the cell, the only part of the record that is not trivial.
+  static void destroy(void *record) noexcept {
+    runtime_cell<Cell>(*static_cast<runtime_binding_header *>(record)).~Cell();
   }
-
-private:
-  // The container the registration is made in.
-  InstanceContainer *parent() {
-    static_assert(
-        std::is_same_v<
-            InstanceContainer,
-            std::remove_reference_t<decltype(owner_->registration_owner())>>);
-    return std::addressof(owner_->registration_owner());
-  }
-
-  Owner *owner_ = nullptr;
-  cell_type cell_;
-  InstanceContainer *instance_container_ = nullptr;
 };
-
-template <typename T> struct runtime_binding_state_traits {
-  using state_type = T;
-
-  static T &ref(T &state) { return state; }
-};
-
-template <typename T> struct runtime_binding_state_traits<T *> {
-  using state_type = T;
-
-  static T &ref(T *state) { return *state; }
-};
+} // namespace detail
 
 namespace detail {
 template <typename Storage> using registered_type_t = typename Storage::type;
@@ -277,34 +258,22 @@ resolve_indexed_address(Application &application, Context &context,
 
 } // namespace detail
 
-// The erased binding of one interface. It selects the resolution of a request
-// at run time and applies it through a binding activation of its cell.
-template <typename Container, typename Type, typename Storage, typename State>
-class runtime_binding
-    : public runtime_binding_interface<
-          typename Container::rtti_type,
-          runtime_context<typename Container::allocator_type>> {
-public:
-  using storage_type = Storage;
+// The edge of the runtime binding of an interface and a storage: its node,
+// and the functions of its type the node points to, of the record of the
+// registration. Everything else is the engine of the container.
+template <typename Container, typename Type, typename Storage>
+struct runtime_binding_edge {
   using runtime_context_type =
       runtime_context<typename Container::allocator_type>;
-  using state_traits = runtime_binding_state_traits<State>;
-  using state_type = typename state_traits::state_type;
-  using container_type = typename state_type::container_type;
-  using interface_type = Type;
   using rtti_type = typename Container::rtti_type;
-  using request_type = instance_request<rtti_type>;
   using interface_base =
       runtime_binding_interface<rtti_type, runtime_context_type>;
   using node_type = runtime_binding_node<rtti_type, runtime_context_type>;
+  using cell_type = detail::binding_cell<Storage>;
   using request_resolutions =
       typename detail::binding_resolutions<Type, Storage>::type;
 
 private:
-  State state_;
-
-  state_type &state() { return state_traits::ref(state_); }
-
   static constexpr type_descriptor registered_type() {
     return detail::described_type_v<detail::registered_type_t<Storage>>;
   }
@@ -316,33 +285,35 @@ private:
   // which ends before the caller of the container uses an address into it,
   // or into what it owns, as the static container knows as it compiles. A
   // pointer the storage makes hands over what it points to.
-  template <typename Resolver>
-  struct places_value : std::bool_constant<detail::materializes_value_source_v<
-                            Storage, runtime_context_type, Resolver>> {};
+  static constexpr bool places =
+      detail::materializes_value_source_v<Storage, runtime_context_type,
+                                          Container>;
 
-  static runtime_binding &of(interface_base &erased) noexcept {
-    return static_cast<runtime_binding &>(erased);
+  static cell_type &cell(interface_base &binding) noexcept {
+    return detail::runtime_cell<cell_type>(binding.header());
   }
 
-  // The functions of the type of the binding, which its node gives the
-  // engine of the container.
+  // The container the factory resolves through: the level of local bindings
+  // once there is one, and else the container the registration is made in.
+  static Container &resolution_container(interface_base &binding) noexcept {
+    auto &header = binding.header();
+    return *static_cast<Container *>(
+        header.level != nullptr ? header.level : header.container);
+  }
+
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-
   // Materializes the source of the binding in a construction scope, through
   // the container its factory resolves in, and applies to it the resolution
   // at a run-time index, in the scope of the request.
   static resolved_address
-  resolve_source(interface_base &erased, construction_scope scope,
+  resolve_source(interface_base &binding, construction_scope scope,
                  construction_scope construction, runtime_context_type &context,
                  std::size_t resolution_index, type_descriptor requested) {
-    auto &state = of(erased).state();
-    using activation_type =
-        detail::binding_activation<typename state_type::cell_type,
-                                   container_type &>;
-    activation_type activation{state.cell(), state.resolution_container(),
+    using activation_type = detail::binding_activation<cell_type, Container &>;
+    activation_type activation{cell(binding), resolution_container(binding),
                                scope};
     auto application = activation.application();
     return activation.with_runtime_source(
@@ -353,21 +324,21 @@ private:
         });
   }
 
-  static void *storage_of(interface_base &erased) noexcept {
-    return std::addressof(of(erased).state().storage());
+  static void *storage_of(interface_base &binding) noexcept {
+    return std::addressof(cell(binding).storage());
   }
 
-  static void *cell_of(interface_base &erased) noexcept {
-    return std::addressof(of(erased).state().cell());
+  static void *cell_of(interface_base &binding) noexcept {
+    return std::addressof(cell(binding));
   }
 
   // What the binding keeps of its instance, which a reference composed of it
   // may refer to; none when it keeps no instance.
-  static detail::retention *retained(interface_base &erased) noexcept {
-    if constexpr (state_type::cell_type::keeps_conversions) {
-      return std::addressof(of(erased).state().cell().retained());
+  static detail::retention *retained(interface_base &binding) noexcept {
+    if constexpr (cell_type::keeps_conversions) {
+      return std::addressof(cell(binding).retained());
     } else {
-      (void)erased;
+      (void)binding;
       return nullptr;
     }
   }
@@ -381,7 +352,7 @@ private:
   }
 
   static void reset_cell(void *cell) noexcept {
-    static_cast<typename state_type::cell_type *>(cell)->reset();
+    static_cast<cell_type *>(cell)->reset();
   }
 #ifdef _MSC_VER
 #pragma warning(pop)
@@ -402,6 +373,7 @@ private:
       detail::materialization_guard_enabled_v<scope_policy::guard, Storage,
                                               runtime_context_type>;
 
+public:
   static constexpr node_type node{
       &detail::runtime_binding_engine<rtti_type,
                                       runtime_context_type>::dispatch,
@@ -412,7 +384,7 @@ private:
       guarded &&scope_policy::guard == materialization_guard::while_unresolved,
       detail::scope_materialization<
           typename Storage::tag_type>::retains_unresolved_source,
-      places_value<container_type>::value,
+      places,
       Storage::conversions::is_stable,
       resolver(),
       &storage_of,
@@ -420,15 +392,6 @@ private:
       &retained,
       &is_resolved,
       &reset_cell};
-
-public:
-  template <typename... Args>
-  runtime_binding(Args &&...args)
-      : interface_base(&node), state_(std::forward<Args>(args)...) {
-    this->cache_slot(state().cache_slot());
-  }
-
-  auto &get_container() { return state().container(); }
 };
 
 } // namespace dingo

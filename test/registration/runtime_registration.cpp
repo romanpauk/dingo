@@ -743,40 +743,18 @@ TEST(type_registration_test,
   EXPECT_EQ(duplicate_factory_destructions, 1);
 }
 
-TEST(type_registration_test,
-     runtime_binding_state_constructs_child_container_on_demand) {
-  counting_runtime_binding_container parent(nullptr);
-  counting_runtime_binding_container::constructions = 0;
+TEST(type_registration_test, registration_constructs_its_container_on_demand) {
+  struct service {};
+  dingo::container<> container;
+  auto registration =
+      container.register_type<scope<unique>, storage<service>>();
 
-  struct owner {
-    using allocator_type = counting_runtime_binding_container::allocator_type;
-    using parent_container_type = counting_runtime_binding_container;
-
-    explicit owner(parent_container_type *parent)
-        : allocator(parent->get_allocator()),
-          runtime_storage(parent->get_allocator()), parent_storage(parent) {}
-
-    runtime_memory<allocator_type> &runtime() { return runtime_storage; }
-    parent_container_type &registration_owner() { return *parent_storage; }
-    allocator_type &get_allocator() { return allocator; }
-
-    allocator_type allocator;
-    runtime_memory<allocator_type> runtime_storage;
-    parent_container_type *parent_storage;
-  } state_owner(&parent);
-
-  runtime_binding_state<owner, counting_runtime_binding_container,
-                        detail::binding_cell<counting_runtime_binding_storage>>
-      state(&state_owner);
-
-  EXPECT_EQ(counting_runtime_binding_container::constructions, 0);
-  (void)state.storage();
-  EXPECT_EQ(counting_runtime_binding_container::constructions, 0);
-
-  auto &container = state.container();
-  EXPECT_EQ(counting_runtime_binding_container::constructions, 1);
-  EXPECT_EQ(std::addressof(state.container()), std::addressof(container));
-  EXPECT_EQ(counting_runtime_binding_container::constructions, 1);
+  // The level of the local bindings of the registration is made as it is
+  // first asked for, and is the same one afterwards.
+  auto &level = registration.get();
+  EXPECT_EQ(std::addressof(level), std::addressof(registration.get()));
+  EXPECT_NE(static_cast<void *>(std::addressof(level)),
+            static_cast<void *>(std::addressof(container)));
 }
 
 TEST(type_registration_test,
