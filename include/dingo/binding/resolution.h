@@ -286,7 +286,7 @@ resolved_address derive_as(const derivation_site &site,
 
 // Derives a request of a wrapper: one a binding keeps with it, converts of
 // the sole owner it makes, or composes of what it holds. These derivations
-// are made of the type of the request.
+// are made of the type of the request, which wrapper_request_t gives.
 template <typename T, typename RTTI, typename Binding, typename Context>
 resolved_address derive_wrapper(void *erased, const derivation_site &site,
                                 construction_scope scope, void *erased_context,
@@ -311,8 +311,29 @@ resolved_address derive_wrapper(void *erased, const derivation_site &site,
                                                      context);
     }
   }
-  throw_type_not_convertible(described_type_v<T>, site.registered, context);
+  throw_type_not_convertible(site.requested, site.registered, context);
 }
+
+// The request whose wrapper derivations a request of T shares, so that the
+// requests of one wrapper share their code: a reference or a pointer keeps
+// the wrapper, as each of them does; a value converts or composes it, as a
+// value of any qualification does, and as an rvalue reference does unless it
+// composes of another request than the value does.
+template <typename T> constexpr auto wrapper_request() {
+  using wrapper = composed_type_t<T>;
+  if constexpr (refers_request_v<T>) {
+    return request_tag<wrapper &>{};
+  } else if constexpr (!derivation_shape_v<derivation::compose, T> ||
+                       std::is_same_v<composed_inner_t<T>,
+                                      composed_inner_t<wrapper>>) {
+    return request_tag<wrapper>{};
+  } else {
+    return request_tag<wrapper &&>{};
+  }
+}
+
+template <typename T>
+using wrapper_request_t = typename decltype(wrapper_request<T>())::type;
 
 // The operations of the object a request is or refers to, erased of its
 // type: its size and its alignment; how a value placed for the request is
@@ -480,7 +501,7 @@ constexpr request_node::wrap_function wrapper_of() {
   if constexpr (derivation_shape_v<derivation::keep, T> ||
                 derivation_shape_v<derivation::convert, T> ||
                 derivation_shape_v<derivation::compose, T>) {
-    return &derive_wrapper<T, RTTI, Binding, Context>;
+    return &derive_wrapper<wrapper_request_t<T>, RTTI, Binding, Context>;
   } else {
     return nullptr;
   }

@@ -17,9 +17,10 @@ PROBE_LIMITS = {
         "default": None,
     },
     # The resolution can throw, from make_shared: the static container keeps
-    # what rolls back the shared cell it resolves first.
+    # what rolls back the shared cell it resolves first. GCC inlines the release
+    # of the shared_ptr into it unless other code in the file calls it often.
     "probe_static_resolution_shared_config": {
-        "default": 0xA8,
+        "default": 0x150,
         "clang": 0x190,
         "clang_arm64": 0x1A0,
         "gcc14": 0xC8,
