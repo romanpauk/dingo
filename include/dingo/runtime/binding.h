@@ -234,8 +234,7 @@ struct runtime_binding_edge {
       runtime_binding_interface<rtti_type, runtime_context_type>;
   using node_type = runtime_binding_node<rtti_type, runtime_context_type>;
   using cell_type = detail::binding_cell<Storage>;
-  using request_resolutions =
-      typename detail::binding_resolutions<Type, Storage>::type;
+  using request_resolutions = detail::runtime_resolutions_t<Type, Storage>;
 
 private:
   static constexpr type_descriptor registered_type() {
@@ -243,7 +242,7 @@ private:
   }
 
   static constexpr const detail::binding_facts &facts =
-      detail::binding_facts_of<Type, Storage>::value;
+      detail::binding_facts_of<Type, Storage, request_resolutions>::value;
 
   static cell_type &cell(interface_base &binding) noexcept {
     return detail::runtime_cell<cell_type>(binding.header());

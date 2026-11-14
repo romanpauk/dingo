@@ -231,6 +231,15 @@ runtime binding is a typed edge and constant data:
   the resolution it publishes at an index, the storage and the cell of the
   binding, what it keeps of its instance, whether its storage is resolved, and
   the reset of its cell.
+- A runtime binding does not publish an owning wrapper of its registered type,
+  as a value or an rvalue, that a request can compose of an rvalue the binding
+  publishes (`runtime_resolutions` in
+  [include/dingo/binding/facts.h](../../include/dingo/binding/facts.h)). For
+  example, a `unique` binding of `T` publishes `T&&`, and a request of
+  `std::shared_ptr<T>` composes the wrapper of it. The code of the wrapper is
+  then instantiated only where it is requested. The static container keeps
+  such wrappers published, because it instantiates only what is requested and
+  the compiler folds a published wrapper better.
 
 The engine (`runtime_binding_engine` in
 [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)) is one
