@@ -7,8 +7,9 @@ selection and resolution model.
 ## Runtime Registration
 
 The public API starts at `container::register_type<...>()`. It is a member of
-the runtime registry in
-[include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h).
+the runtime container in
+[include/dingo/runtime/container.h](../../include/dingo/runtime/container.h),
+which holds its registrations, its lookups and its runtime data in one class.
 
 `prepare_binding(...)` does three things:
 
@@ -242,7 +243,7 @@ request that the binding does not publish.
 
 Each lookup the container declares, and its base lookup, have a table of
 operations of no binding or request type (`lookup_operations` in
-[include/dingo/runtime/registry_store.h](../../include/dingo/runtime/registry_store.h)):
+[include/dingo/runtime/container.h](../../include/dingo/runtime/container.h)):
 find the bindings of a key, insert a binding under a key, and enumerate the
 bindings of a key. The engine selects, commits and enumerates by them.
 
@@ -336,7 +337,6 @@ These files are useful while you read this flow:
 
 - [include/dingo/runtime/container.h](../../include/dingo/runtime/container.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
-- [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
 - [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)

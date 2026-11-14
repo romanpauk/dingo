@@ -39,8 +39,8 @@ struct size_multi_implementation : size_interface, size_second_interface {};
 
 struct size_dependency {};
 
-using size_registry_type = typename detail::container_implementation_t<
-    container<>>::runtime_registry_type;
+// The runtime container holds its registry: its lookups and its runtime data.
+using size_registry_type = detail::container_implementation_t<container<>>;
 
 using size_service_proxy =
     decltype(std::declval<container<> &>()
@@ -153,7 +153,6 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
     // states. A level of the local bindings of a registration is a container
     // of the same type, which borrows the runtime data of its root.
     expect_size_at_most<container<>>("container<>", 120);
-    expect_size_at_most<size_registry_type>("runtime registry", 112);
     expect_size_at_most<size_instance_container>("registration container", 120);
     expect_size_at_most<size_probe_registry::runtime_bindings_state>(
         "runtime bindings state", 48);

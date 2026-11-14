@@ -194,7 +194,7 @@ To read the core path in source order, start here:
 - [include/dingo/runtime_container.h](../../include/dingo/runtime_container.h)
 - [include/dingo/static_container.h](../../include/dingo/static_container.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
-- [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
+- [include/dingo/runtime/container.h](../../include/dingo/runtime/container.h)
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
 - [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)

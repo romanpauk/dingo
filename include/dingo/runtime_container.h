@@ -12,7 +12,7 @@
 #include <dingo/registration/type_registration.h>
 #include <dingo/runtime/container.h>
 #include <dingo/runtime/container_traits.h>
-#include <dingo/runtime/registry.h>
+#include <dingo/runtime/registry_store.h>
 
 #include <cassert>
 #include <memory>

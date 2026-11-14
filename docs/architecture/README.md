@@ -39,7 +39,7 @@ The shared binding and resolution code for this flow is in
 
 The code of each container is in its own directory:
 
-- `include/dingo/runtime/`: the runtime registry
+- `include/dingo/runtime/`: the runtime container, its lookups and its engine
 - `include/dingo/static/`: the static registry and the static graph
 
 The main owners are:
@@ -50,7 +50,7 @@ The main owners are:
 - [include/dingo/binding/model.h](../../include/dingo/binding/model.h)
 - [include/dingo/binding/resolution.h](../../include/dingo/binding/resolution.h)
 - [include/dingo/factory/factory_traits.h](../../include/dingo/factory/factory_traits.h)
-- [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
+- [include/dingo/runtime/container.h](../../include/dingo/runtime/container.h)
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)

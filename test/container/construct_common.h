@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/runtime/registry.h>
+#include <dingo/runtime/registry_store.h>
 #include <dingo/runtime_container.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
