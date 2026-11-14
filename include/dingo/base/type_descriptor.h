@@ -127,11 +127,20 @@ static_assert(wrapped_type_name_suffix_pos != std::string_view::npos,
 constexpr auto wrapped_type_name_trailer_size =
     wrapped_type_name_sample.size() - wrapped_type_name_suffix_pos;
 
+// The name of a type in a compiler's signature, without the text around it:
+// a function of no type, so that a type instantiates only its signature.
+constexpr std::string_view unwrapped_type_name(std::string_view wrapped) {
+  return wrapped.substr(wrapped_type_name_start,
+                        wrapped.size() - wrapped_type_name_trailer_size -
+                            wrapped_type_name_start);
+}
+
+template <typename T>
+inline constexpr std::string_view raw_type_name_v =
+    unwrapped_type_name(wrapped_type_name<T>());
+
 template <typename T> constexpr std::string_view raw_type_name() {
-  constexpr auto wrapped = wrapped_type_name<T>();
-  constexpr auto end = wrapped.size() - wrapped_type_name_trailer_size;
-  return std::string_view(wrapped.data() + wrapped_type_name_start,
-                          end - wrapped_type_name_start);
+  return raw_type_name_v<T>;
 }
 
 constexpr type_cv_flags operator|(type_cv_flags lhs, type_cv_flags rhs) {
@@ -193,50 +202,43 @@ constexpr bool qualifies_as(type_descriptor source, type_descriptor target) {
   return is_qualification_conversion(source, target, 0, true);
 }
 
-template <typename T> constexpr type_cv_flags make_type_cv_flags() {
+constexpr type_cv_flags make_type_cv_flags(bool is_const, bool is_volatile) {
   type_cv_flags flags = type_cv_flags::none;
-
-  if constexpr (std::is_const_v<T>) {
+  if (is_const) {
     flags = flags | type_cv_flags::is_const;
   }
-
-  if constexpr (std::is_volatile_v<T>) {
+  if (is_volatile) {
     flags = flags | type_cv_flags::is_volatile;
   }
-
   return flags;
 }
 
-template <typename T> constexpr type_reference_kind make_type_reference_kind() {
-  if constexpr (std::is_lvalue_reference_v<T>) {
-    return type_reference_kind::lvalue;
-  } else if constexpr (std::is_rvalue_reference_v<T>) {
-    return type_reference_kind::rvalue;
-  } else {
-    return type_reference_kind::none;
-  }
-}
-
-template <typename T> constexpr type_descriptor make_type_descriptor();
-
-// Pointer levels refer to the descriptor of their pointee as data, so
-// comparing descriptors at runtime never calls through a function pointer.
 template <typename T>
-inline constexpr type_descriptor type_descriptor_v = make_type_descriptor<T>();
+inline constexpr type_cv_flags type_cv_flags_v =
+    make_type_cv_flags(std::is_const_v<T>, std::is_volatile_v<T>);
 
-template <typename T> constexpr type_descriptor make_type_descriptor() {
-  if constexpr (std::is_pointer_v<T>) {
-    return {{},
-            nullptr,
-            make_type_cv_flags<T>(),
-            type_reference_kind::none,
-            &type_descriptor_v<std::remove_pointer_t<T>>};
-  } else {
-    return {raw_type_name<std::remove_cv_t<T>>(),
-            &type_tag<std::remove_cv_t<T>>, make_type_cv_flags<T>(),
-            type_reference_kind::none, nullptr};
-  }
-}
+// The descriptor of a type that is not a reference, as constant data of one
+// class for the type. A pointer level refers to the descriptor of its
+// pointee as data, so comparing descriptors at runtime never calls through a
+// function pointer.
+template <typename T, bool = std::is_pointer_v<T>> struct type_descriptor_of {
+  static constexpr type_descriptor value{
+      raw_type_name_v<std::remove_cv_t<T>>, &type_tag<std::remove_cv_t<T>>,
+      type_cv_flags_v<T>, type_reference_kind::none, nullptr};
+};
+
+template <typename T> struct type_descriptor_of<T, true> {
+  static constexpr type_descriptor value{
+      {},
+      nullptr,
+      type_cv_flags_v<T>,
+      type_reference_kind::none,
+      &type_descriptor_of<std::remove_pointer_t<T>>::value};
+};
+
+template <typename T>
+inline constexpr type_descriptor type_descriptor_v =
+    type_descriptor_of<T>::value;
 
 inline void append_type_cv(std::string &name, type_cv_flags flags,
                            std::string_view separator = " ") {
@@ -280,19 +282,22 @@ inline void append_described_type_name(std::string &name,
 } // namespace detail
 
 namespace detail {
-// The descriptor of a type with its reference kind.
-template <typename T> constexpr type_descriptor make_described_type() {
-  auto descriptor = make_type_descriptor<std::remove_reference_t<T>>();
-  descriptor.reference = make_type_reference_kind<T>();
+constexpr type_descriptor with_reference_kind(type_descriptor descriptor,
+                                              bool lvalue, bool rvalue) {
+  descriptor.reference = lvalue   ? type_reference_kind::lvalue
+                         : rvalue ? type_reference_kind::rvalue
+                                  : type_reference_kind::none;
   return descriptor;
 }
 
-// The descriptor of a type, made once at compile time: a function computing
-// it would be emitted for every type a message names. It is made by a
-// function, not by a lambda: MSVC leaves a variable a lambda initializes
-// zero where it is only read at run time.
+// The descriptor of a type with its reference kind, made once at compile
+// time, of the descriptor of the type it refers to: a function computing it
+// would be emitted for every type a message names.
 template <typename T>
-inline constexpr type_descriptor described_type_v = make_described_type<T>();
+inline constexpr type_descriptor described_type_v =
+    with_reference_kind(type_descriptor_of<std::remove_reference_t<T>>::value,
+                        std::is_lvalue_reference_v<T>,
+                        std::is_rvalue_reference_v<T>);
 } // namespace detail
 
 template <typename T> constexpr type_descriptor describe_type() {
