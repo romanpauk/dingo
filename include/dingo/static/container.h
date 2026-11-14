@@ -298,12 +298,10 @@ public:
       return with_context([&](context_type &context) -> T {
         if constexpr (std::is_same_v<std::decay_t<Fn>,
                                      binding_collection_append>) {
-          return storage_.template construct_collection<T, LookupKey,
-                                                        static_bindings_type>(
+          return storage_.template construct_collection<T, LookupKey>(
               caller_scope, *this, context);
         } else {
-          return storage_.template construct_collection<T, LookupKey,
-                                                        static_bindings_type>(
+          return storage_.template construct_collection<T, LookupKey>(
               caller_scope, *this, context, std::forward<Fn>(fn));
         }
       });
@@ -507,9 +505,8 @@ private:
 
   template <typename R, typename Context, typename LookupKey, typename Scope>
   R construct_request_collection(Scope scope, Context &context, LookupKey) {
-    return storage_
-        .template construct_collection<R, LookupKey, static_bindings_type>(
-            scope, *this, context);
+    return storage_.template construct_collection<R, LookupKey>(scope, *this,
+                                                                context);
   }
 
 private:
