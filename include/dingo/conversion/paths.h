@@ -980,9 +980,93 @@ constexpr auto path() {
   }
 }
 
+constexpr unsigned op_bit(op operation) {
+  return 1u << static_cast<unsigned>(operation);
+}
+
+// The operations whose path may be available for the target and the source.
+// It asks only what each path asks of them first, so a path it leaves out is
+// unavailable, and is not instantiated.
+template <typename Target, typename Source, typename Access>
+constexpr unsigned candidate_ops() {
+  using object = std::remove_reference_t<Source>;
+  using source_type = remove_cvref_t<Source>;
+  using made = std::remove_reference_t<Target>;
+  constexpr bool lvalue_target = std::is_lvalue_reference_v<Target>;
+  constexpr bool value_target = !std::is_reference_v<Target>;
+  constexpr bool pointer_target = std::is_pointer_v<Target>;
+  constexpr bool lvalue_source = std::is_lvalue_reference_v<Source>;
+  constexpr bool optional_target = is_optional_type_v<Target>;
+  constexpr bool alternative_target = is_alternative_type_v<Target>;
+
+  unsigned ops = op_bit(op::borrow_element);
+  if constexpr (lvalue_target ? lvalue_source
+                              : value_target && !pointer_target &&
+                                    std::is_same_v<std::remove_cv_t<Target>,
+                                                   std::remove_cv_t<object>>) {
+    ops |= op_bit(op::basic);
+  }
+  // The default type_conversion_traits binds a reference of the target to
+  // the source, or makes the target of it.
+  if constexpr (value_target && (alternative_target || optional_target)) {
+  } else if constexpr (lvalue_target) {
+    if constexpr (lvalue_source && std::is_convertible_v<object *, made *>) {
+      ops |= op_bit(op::direct);
+    }
+  } else if constexpr (!value_target &&
+                       std::is_convertible_v<object *, made *>) {
+    ops |= op_bit(op::direct);
+  } else if constexpr (!std::is_array_v<made>) {
+    if constexpr (std::is_constructible_v<made, Source> ||
+                  std::is_constructible_v<made, const object &>) {
+      ops |= op_bit(op::direct);
+    }
+  }
+  if constexpr (alternative_target) {
+    ops |= op_bit(op::wrap_alternative);
+  }
+  if constexpr (is_alternative_type_v<source_type>) {
+    ops |= op_bit(op::held_alternative);
+  }
+  if constexpr (optional_target && !lvalue_target) {
+    ops |= op_bit(op::element_or_empty);
+  }
+  if constexpr (optional_target && value_target) {
+    ops |= op_bit(op::wrap_optional);
+  }
+  if constexpr (pointer_target && std::is_pointer_v<object>) {
+    ops |= op_bit(op::array_view);
+  }
+  if constexpr (pointer_target && lvalue_source) {
+    ops |= op_bit(op::address) | op_bit(op::element_ptr);
+  }
+  if constexpr (std::is_same_v<Access, consume> && value_target &&
+                !lvalue_source && std::is_object_v<source_type> &&
+                !std::is_pointer_v<source_type> &&
+                !std::is_array_v<source_type>) {
+    ops |= op_bit(op::box);
+  }
+  return ops;
+}
+
+template <typename Target, typename Source, typename Access>
+inline constexpr unsigned candidate_ops_v =
+    candidate_ops<Target, Source, Access>();
+
+// The first operation, from From on, that may apply.
+constexpr op next_candidate(unsigned ops, std::size_t from) {
+  while (from < static_cast<std::size_t>(op::none) &&
+         (ops & op_bit(static_cast<op>(from))) == 0) {
+    ++from;
+  }
+  return static_cast<op>(from);
+}
+
 // The first path, from Op on, available with the access. The paths of later
-// operations are not instantiated once one is.
-template <typename Target, typename Source, typename Access, op Op = op::basic>
+// operations are not instantiated once one is, nor those of operations that
+// do not apply.
+template <typename Target, typename Source, typename Access,
+          op Op = next_candidate(candidate_ops_v<Target, Source, Access>, 0)>
 constexpr auto select() {
   if constexpr (Op == op::none) {
     return unavailable_type_conversion{};
@@ -994,7 +1078,8 @@ constexpr auto select() {
       return conversion{};
     } else {
       return select<Target, Source, Access,
-                    static_cast<op>(static_cast<std::size_t>(Op) + 1)>();
+                    next_candidate(candidate_ops_v<Target, Source, Access>,
+                                   static_cast<std::size_t>(Op) + 1)>();
     }
   }
 }
