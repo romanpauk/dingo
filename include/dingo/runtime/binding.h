@@ -57,11 +57,10 @@ public:
     return *instance_container_;
   }
 
-  template <typename Fn> decltype(auto) with_resolution_container(Fn &&fn) {
-    if (instance_container_ != nullptr) {
-      return fn(*instance_container_);
-    }
-    return fn(*parent());
+  // The container the factory resolves through: the level of local bindings
+  // once there is one, and else the container the registration is made in.
+  InstanceContainer &resolution_container() {
+    return instance_container_ != nullptr ? *instance_container_ : *parent();
   }
 
 private:
@@ -142,23 +141,120 @@ struct runtime_binding_facts {
       described_type_v<interface_type>};
 };
 
-// Derives a request a binding does not publish, from what it tells of
-// itself, through the derivation the request carries. It is kept out of the
-// dispatch, where a request the binding publishes is resolved, and it is of
-// the context alone, not of the binding.
-template <typename Context, typename Request>
-DINGO_NOINLINE resolved_address derive_unpublished(
-    void *binding, retention *kept, const binding_facts &facts,
-    type_descriptor registered, construction_scope scope, Context &context,
-    const Request &request, const void *cache_key) {
-  if (request.derive == nullptr) {
-    throw make_type_not_convertible_exception(request.requested_type,
-                                              registered, context);
+// Resets the cell of a binding whose resolution failed, unless it succeeded.
+class node_reset_guard {
+public:
+  node_reset_guard(void (*reset)(void *) noexcept, void *cell) noexcept
+      : reset_(reset), cell_(cell) {}
+  node_reset_guard(const node_reset_guard &) = delete;
+  node_reset_guard &operator=(const node_reset_guard &) = delete;
+  ~node_reset_guard() {
+    if (cell_ != nullptr) {
+      reset_(cell_);
+    }
   }
-  const derivation_site site{kept, registered, request.requested_type,
-                             cache_key, &facts};
-  return request.derive(binding, site, scope, &context, *request.node);
-}
+  void release() noexcept { cell_ = nullptr; }
+
+private:
+  void (*reset_)(void *) noexcept;
+  void *cell_;
+};
+
+template <typename Context>
+void check_caller_address(bool places, construction_scope scope,
+                          const resolved_address &resolved,
+                          type_descriptor requested, type_descriptor registered,
+                          Context &context);
+
+// The engine of the runtime bindings of a container. It resolves the request
+// a binding publishes, or derives one it does not, of the node of the
+// binding: one function for every binding of the container.
+template <typename RTTI, typename Context> struct runtime_binding_engine {
+  using node_type = runtime_binding_node<RTTI, Context>;
+  using interface_type = typename node_type::interface_type;
+  using request_type = typename node_type::request_type;
+
+  static resolved_address dispatch(const node_type &node,
+                                   interface_type &binding,
+                                   construction_scope scope, Context &context,
+                                   const request_type &request,
+                                   const void *cache_key) {
+    const binding_facts &facts = *node.facts;
+    const void *key = node.caches ? cache_key : nullptr;
+    const std::size_t index = published_index(facts, request.requested_type);
+    if (index == facts.published_count) {
+      return derive(node, binding, scope, context, request, key);
+    }
+    return resolve(node, binding, scope, context, request, index, key);
+  }
+
+  // Derives a request the binding does not publish, from what it tells of
+  // itself, through the derivation the request carries.
+  DINGO_NOINLINE static resolved_address
+  derive(const node_type &node, interface_type &binding,
+         construction_scope scope, Context &context,
+         const request_type &request, const void *cache_key) {
+    if (request.derive == nullptr) {
+      throw make_type_not_convertible_exception(request.requested_type,
+                                                node.registered, context);
+    }
+    const derivation_site site{node.retained(binding), node.registered,
+                               request.requested_type, cache_key, node.facts};
+    return request.derive(std::addressof(binding), site, scope, &context,
+                          *request.node);
+  }
+
+  // Resolves the request a binding publishes at an index: guards the binding
+  // against recursion, retains the source an unresolved storage retains in
+  // the transaction, which resets the cell if it fails, refuses the caller an
+  // address into a value the storage places in the context, and publishes a
+  // borrowed address in the request cache under its key, if it has one.
+  static resolved_address resolve(const node_type &node,
+                                  interface_type &binding,
+                                  construction_scope scope, Context &context,
+                                  const request_type &request,
+                                  std::size_t index, const void *cache_key) {
+    void *storage = node.storage(binding);
+    recursion_guard_wrapper guard(
+        context, storage, node.leaf,
+        node.guards_always ||
+            (node.guards_unresolved && !node.resolved(storage)));
+    resolved_address result{};
+    if (node.retains_unresolved && !node.resolved(storage)) {
+      // A source is retained only while the storage is unresolved, so a
+      // failed transaction returns the storage to that state. The reset is
+      // registered once the cell is resolved, after what it depends on, so
+      // that a rollback, which runs the last registered first, resets the
+      // cell before what it refers to. A cell that fails as it resolves, or as
+      // its reset is registered, is reset at once.
+      void *cell = node.cell(binding);
+      node_reset_guard reset{node.reset, cell};
+      result =
+          node.resolve(binding, scope, construction_scope(persistent_scope),
+                       context, index, request.requested_type);
+      context.on_rollback(&reset_cell, cell,
+                          const_cast<void *>(static_cast<const void *>(&node)));
+      reset.release();
+      context.add_runtime_destructor(cell, node.reset);
+    } else {
+      result = node.resolve(binding, scope, scope, context, index,
+                            request.requested_type);
+    }
+    check_caller_address(node.places, scope, result, request.requested_type,
+                         node.registered, context);
+    // Request caching is intentionally stricter than conversion caching and
+    // is published with transaction rollback tracking.
+    if (cache_key != nullptr &&
+        result.access == resolved_address::access_kind::borrow) {
+      binding.publish_cache(context, cache_key, result.address);
+    }
+    return result;
+  }
+
+  static void reset_cell(void *cell, void *node) noexcept {
+    static_cast<const node_type *>(node)->reset(cell);
+  }
+};
 
 // Refuses the caller an address into a value a storage places in the
 // context, which ends before the caller uses it.
@@ -247,6 +343,7 @@ public:
   using request_type = instance_request<rtti_type>;
   using interface_base =
       runtime_binding_interface<rtti_type, runtime_context_type>;
+  using node_type = runtime_binding_node<rtti_type, runtime_context_type>;
   using request_resolutions =
       typename detail::binding_resolutions<Type, Storage>::type;
 
@@ -270,112 +367,111 @@ private:
   struct places_value : std::bool_constant<detail::materializes_value_source_v<
                             Storage, runtime_context_type, Resolver>> {};
 
-  // The key a composed reference is published in the request cache under;
-  // none when the binding has no cache.
-  static const void *cached(const void *cache_key) noexcept {
-    if constexpr (Storage::conversions::is_stable) {
-      return cache_key;
-    } else {
-      (void)cache_key;
-      return nullptr;
-    }
+  static runtime_binding &of(interface_base &erased) noexcept {
+    return static_cast<runtime_binding &>(erased);
   }
 
-  // What the binding keeps of its instance, which a reference composed of it
-  // may refer to; none when it keeps no instance.
-  static detail::retention *retained(runtime_binding &binding) noexcept {
-    if constexpr (state_type::cell_type::keeps_conversions) {
-      return std::addressof(binding.state().cell().retained());
-    } else {
-      (void)binding;
-      return nullptr;
-    }
-  }
-
+  // The functions of the type of the binding, which its node gives the
+  // engine of the container.
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-  // Derives a request the binding does not publish, from what it tells of
-  // itself, through the derivation the request carries.
-  static resolved_address derive(interface_base &erased,
-                                 construction_scope scope,
-                                 runtime_context_type &context,
-                                 const request_type &request,
-                                 const void *cache_key) {
-    return detail::derive_unpublished(
-        &erased, retained(static_cast<runtime_binding &>(erased)), facts,
-        registered_type(), scope, context, request, cached(cache_key));
-  }
 
-  // Applies the resolution at a run-time index through the container the
-  // binding resolves in, and tells whether its storage places a value, which
-  // the caller is refused an address into. It is a function of its own:
-  // MSVC's permissive mode loses the names a generic lambda in a generic
-  // lambda captures.
-  template <typename Resolver>
+  // Materializes the source of the binding in a construction scope, through
+  // the container its factory resolves in, and applies to it the resolution
+  // at a run-time index, in the scope of the request.
   static resolved_address
-  resolve_in(Resolver &container, state_type &state, construction_scope scope,
-             runtime_context_type &context, std::size_t resolution_index,
-             const request_type &request, bool &places) {
+  resolve_source(interface_base &erased, construction_scope scope,
+                 construction_scope construction, runtime_context_type &context,
+                 std::size_t resolution_index, type_descriptor requested) {
+    auto &state = of(erased).state();
     using activation_type =
-        detail::binding_activation<typename state_type::cell_type, Resolver &>;
-    places = places_value<Resolver>::value;
-    activation_type activation{state.cell(), container, scope};
+        detail::binding_activation<typename state_type::cell_type,
+                                   container_type &>;
+    activation_type activation{state.cell(), state.resolution_container(),
+                               scope};
     auto application = activation.application();
-    return activation.template with_source<void>(
-        context, [&](auto &&source) -> resolved_address {
+    return activation.with_runtime_source(
+        construction, context, [&](auto &&source) -> resolved_address {
           return detail::resolve_indexed_address(
               application, context, std::forward<decltype(source)>(source),
-              resolution_index, request_resolutions{}, request.requested_type);
+              resolution_index, request_resolutions{}, requested);
         });
   }
 
-  static resolved_address dispatch_request(interface_base &erased,
-                                           construction_scope scope,
-                                           runtime_context_type &context,
-                                           const request_type &request,
-                                           const void *cache_key) {
-    if constexpr (type_list_size_v<request_resolutions> == 0) {
-      return derive(erased, scope, context, request, cache_key);
-    } else {
-      const auto resolution_index =
-          detail::published_index(facts, request.requested_type);
-      if (resolution_index == type_list_size_v<request_resolutions>) {
-        return derive(erased, scope, context, request, cache_key);
-      }
+  static void *storage_of(interface_base &erased) noexcept {
+    return std::addressof(of(erased).state().storage());
+  }
 
-      auto &binding = static_cast<runtime_binding &>(erased);
-      auto &state = binding.state();
-      bool places = false;
-      auto result = state.with_resolution_container(
-          [&](auto &container) -> resolved_address {
-            return resolve_in(container, state, scope, context,
-                              resolution_index, request, places);
-          });
-      detail::check_caller_address(places, scope, result,
-                                   request.requested_type, registered_type(),
-                                   context);
-      // Request caching is intentionally stricter than conversion caching and
-      // is published with transaction rollback tracking.
-      if constexpr (Storage::conversions::is_stable) {
-        if (cache_key != nullptr &&
-            result.access == resolved_address::access_kind::borrow) {
-          binding.publish_cache(context, cache_key, result.address);
-        }
-      }
-      return result;
+  static void *cell_of(interface_base &erased) noexcept {
+    return std::addressof(of(erased).state().cell());
+  }
+
+  // What the binding keeps of its instance, which a reference composed of it
+  // may refer to; none when it keeps no instance.
+  static detail::retention *retained(interface_base &erased) noexcept {
+    if constexpr (state_type::cell_type::keeps_conversions) {
+      return std::addressof(of(erased).state().cell().retained());
+    } else {
+      (void)erased;
+      return nullptr;
     }
+  }
+
+  static bool is_resolved([[maybe_unused]] void *storage) noexcept {
+    if constexpr (detail::storage_can_reset<Storage>::value) {
+      return static_cast<Storage *>(storage)->is_resolved();
+    } else {
+      return true;
+    }
+  }
+
+  static void reset_cell(void *cell) noexcept {
+    static_cast<typename state_type::cell_type *>(cell)->reset();
   }
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
 
+  // A binding that publishes no resolution resolves nothing: the engine
+  // derives every request of it.
+  static constexpr auto resolver() {
+    if constexpr (type_list_size_v<request_resolutions> == 0) {
+      return static_cast<decltype(&resolve_source)>(nullptr);
+    } else {
+      return &resolve_source;
+    }
+  }
+
+  using scope_policy = scope_traits<typename Storage::tag_type>;
+  static constexpr bool guarded =
+      detail::materialization_guard_enabled_v<scope_policy::guard, Storage,
+                                              runtime_context_type>;
+
+  static constexpr node_type node{
+      &detail::runtime_binding_engine<rtti_type,
+                                      runtime_context_type>::dispatch,
+      &facts,
+      registered_type(),
+      detail::described_type_v<leaf_type_t<typename Storage::type>>,
+      guarded &&scope_policy::guard == materialization_guard::always,
+      guarded &&scope_policy::guard == materialization_guard::while_unresolved,
+      detail::scope_materialization<
+          typename Storage::tag_type>::retains_unresolved_source,
+      places_value<container_type>::value,
+      Storage::conversions::is_stable,
+      resolver(),
+      &storage_of,
+      &cell_of,
+      &retained,
+      &is_resolved,
+      &reset_cell};
+
 public:
   template <typename... Args>
   runtime_binding(Args &&...args)
-      : interface_base(&runtime_binding::dispatch_request),
-        state_(std::forward<Args>(args)...) {
+      : interface_base(&node), state_(std::forward<Args>(args)...) {
     this->cache_slot(state().cache_slot());
   }
 

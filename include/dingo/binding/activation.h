@@ -465,6 +465,7 @@ private:
     }
   }
 
+public:
   // A runtime context places a source it retains in the transaction, as it
   // does every source of a persistent request.
   template <typename Context, typename Fn, typename Construction>

@@ -229,7 +229,7 @@ TEST(type_registration_test, registration_specialization) {
           parent_(parent) {}
 
     runtime_memory<allocator_type> &runtime() { return runtime_; }
-    parent_container_type *parent() { return parent_; }
+    parent_container_type &registration_owner() { return *parent_; }
     allocator_type &get_allocator() { return allocator_; }
 
   private:

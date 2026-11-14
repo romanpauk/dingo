@@ -76,13 +76,6 @@ decltype(auto) consume_resolved_binding(Instance &&instance, Fn &&fn) {
   }
 }
 
-template <typename Resolution>
-constexpr bool matches_resolution_request(type_descriptor requested_type) {
-  return matches_qualification_conversion(
-      detail::described_type_v<typename Resolution::target_type>,
-      requested_type);
-}
-
 } // namespace detail
 
 template <typename T, typename RTTI, typename Binding, typename Context>

@@ -34,9 +34,11 @@ struct conversion_available<detail::type_resolution<Source, Conversion>>
 // or the number of resolutions when none matches.
 template <typename Request, typename... Resolutions>
 constexpr std::size_t runtime_index(type_list<Resolutions...>) {
-  constexpr bool matches[] = {detail::matches_resolution_request<Resolutions>(
-                                  detail::described_type_v<Request>)...,
-                              true};
+  constexpr bool matches[] = {
+      detail::matches_qualification_conversion(
+          detail::described_type_v<typename Resolutions::target_type>,
+          detail::described_type_v<Request>)...,
+      true};
   std::size_t index = 0;
   while (!matches[index]) {
     ++index;
