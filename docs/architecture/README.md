@@ -18,6 +18,8 @@ Read these pages in this order:
   wrapper, storage scope, or conversion.
 - [Conversion Model](conversion-model.md): how Dingo selects value, reference,
   pointer, and wrapper conversions at resolution time.
+- [Layered Semantics](layered-semantics.md): the design, in progress, that makes
+  resolution correct by construction.
 
 The public API has three container headers:
 
