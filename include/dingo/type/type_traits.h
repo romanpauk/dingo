@@ -96,6 +96,8 @@ struct alternative_value {
 //                  an emplace that cannot take any, such as that of a handle
 //                  of an array
 //   share_t<U>     for a sole owner: the sharing handle of the element U
+//   release(w)     optional, for a sole owner: gives up its element, which
+//                  the caller then owns, and returns its address
 //   extent         optional, 0 by default: for an owning handle of an array,
 //                  its bound, when the handle holds an array of a known one
 //   wrap(v), empty_value()
@@ -525,6 +527,9 @@ struct type_traits<
   using rebind_t = std::unique_ptr<U[], std::default_delete<U[]>>;
   template <typename U> using share_t = std::shared_ptr<U[]>;
 
+  static auto *release(std::unique_ptr<Array, Deleter> &wrapper) {
+    return wrapper.release();
+  }
   static auto *get(const std::unique_ptr<Array, Deleter> &wrapper) {
     return wrapper.get();
   }
@@ -555,6 +560,9 @@ struct type_traits<std::unique_ptr<T, Deleter>,
   template <typename U> using share_t = std::shared_ptr<U>;
   static constexpr bool emplaces_element = true;
 
+  static T *release(std::unique_ptr<T, Deleter> &wrapper) {
+    return wrapper.release();
+  }
   static T *get(const std::unique_ptr<T, Deleter> &wrapper) {
     return wrapper.get();
   }
