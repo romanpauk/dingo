@@ -131,13 +131,13 @@ public:
   void construct(Scope scope, Context &context, Container &container) {
     assert(resolved_);
     if constexpr (std::is_array_v<Type>) {
-      Factory::template construct<Type>(this->storage(), scope, context,
+      Factory::template construct<Type>(&this->buffer_, scope, context,
                                         container);
     } else {
-      Factory::template construct<Type *>(this->storage(), scope, context,
+      Factory::template construct<Type *>(&this->buffer_, scope, context,
                                           container);
     }
-    this->constructed();
+    this->initialized_ = true;
   }
 
   bool empty() const { return !resolved_; }

@@ -79,20 +79,19 @@ public:
     if constexpr (converts && std::is_same_v<Type, StoredType>) {
       // What the factory makes is constructed in place, as the leaf of an
       // optional that can be neither copied nor moved has to be.
-      new (this->storage()) StoredType(
+      new (&this->buffer_) StoredType(
           Factory::template construct<Type>(scope, context, container));
     } else if constexpr (converts) {
-      new (this->storage())
-          StoredType(detail::convert_type<StoredType, consume>(
-              Factory::template construct<Type>(scope, context, container)));
+      new (&this->buffer_) StoredType(detail::convert_type<StoredType, consume>(
+          Factory::template construct<Type>(scope, context, container)));
     } else if constexpr (std::is_array_v<Type>) {
-      Factory::template construct<Type>(this->storage(), scope, context,
+      Factory::template construct<Type>(&this->buffer_, scope, context,
                                         container);
     } else {
-      Factory::template construct<Type *>(this->storage(), scope, context,
+      Factory::template construct<Type *>(&this->buffer_, scope, context,
                                           container);
     }
-    this->constructed();
+    this->initialized_ = true;
   }
 #ifdef _MSC_VER
 #pragma warning(pop)

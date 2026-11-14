@@ -70,14 +70,23 @@ class storage_instance;
 #pragma warning(disable : 4324)
 #endif
 
-// The value of a storage instance, constructed in place once. A value that
-// needs destruction is destroyed with the instance; a trivially destructible
-// one keeps the instance trivially destructible.
-template <typename Value, bool = std::is_trivially_destructible_v<Value>>
-class shared_value {
+// Whether a storage instance holds its value. It is of no value type, so that
+// what only tests it is one function for every instance.
+class shared_value_state {
 public:
   bool empty() const { return !initialized_; }
 
+protected:
+  bool initialized_ = false;
+};
+
+// The value of a storage instance, constructed in place once, in buffer_; the
+// instance sets initialized_ once it is. A value that needs destruction is
+// destroyed with the instance; a trivially destructible one keeps the
+// instance trivially destructible.
+template <typename Value, bool = std::is_trivially_destructible_v<Value>>
+class shared_value : public shared_value_state {
+public:
   void reset() {
     if (initialized_) {
       initialized_ = false;
@@ -86,16 +95,11 @@ public:
   }
 
 protected:
-  void *storage() const { return &buffer_; }
-  void constructed() { initialized_ = true; }
-
   Value *pointer() const {
     return std::launder(reinterpret_cast<Value *>(&buffer_));
   }
 
-private:
   mutable aligned_storage_t<sizeof(Value), alignof(Value)> buffer_;
-  bool initialized_ = false;
 };
 
 template <typename Value>
