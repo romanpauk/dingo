@@ -99,6 +99,8 @@ if(DINGO_DEVELOPMENT_MODE)
         binding/resolution.h
         binding/selection.h
         binding/activation.h
+        binding/facts.h
+        binding/materialization.h
         request/composition.h
         request/derivation.h
         resolution/algorithm.h
@@ -137,7 +139,6 @@ if(DINGO_DEVELOPMENT_MODE)
         runtime/container_traits.h
         runtime/lookup_index.h
         runtime/memory.h
-        runtime/registry.h
         runtime/registry_store.h
         runtime/transaction.h
         static_container.h
