@@ -316,8 +316,6 @@ private:
   // Registration is cold; keep its type-specific setup out of callers.
   // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
   DINGO_NOINLINE auto prepare_binding(Arg &&arg, KeyValueArgs &&...key_values) {
-    static_assert(!detail::has_explicit_void_interface_v<TypeArgs...>,
-                  "interfaces<void> is not a valid registration target");
     using registration =
         std::conditional_t<!is_none_v<std::decay_t<Arg>>,
                            type_registration<TypeArgs..., factory<Arg>>,
@@ -333,24 +331,15 @@ private:
                   "bindings<...>; use static_container");
     (void)std::addressof(arg);
     using interface_types = typename binding_model::interface_types;
-    static_assert(binding_model::storage_tag_is_complete,
-                  "registered storage tag must be complete and specialize "
-                  "dingo::scope_traits; include the corresponding "
-                  "dingo/storage header");
-    static_assert(!binding_model::storage_tag_is_complete ||
-                      binding_model::stored,
-                  "the scope does not store this type");
+    constexpr bool valid = detail::registration_checked_v<registration>;
     if constexpr (!binding_model::stored) {
       return store_type::template invalid_registration_return<
           container_proxy>();
     } else {
       using storage_type = typename binding_model::storage_type;
-      using registration_requirements = typename binding_model::requirements;
       using registration_key = typename binding_model::key_type;
 
-      registration_requirements::assert_valid();
-
-      if constexpr (!binding_model::valid) {
+      if constexpr (!valid) {
         return store_type::template invalid_registration_return<
             container_proxy>();
       } else {

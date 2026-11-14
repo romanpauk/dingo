@@ -309,8 +309,9 @@ template <typename... Registrations> struct static_registry {
   using interface_bindings =
       detail::static_registry_bindings_t<Registrations...>;
 
+  // Each registration is checked as the runtime container checks it.
   static constexpr bool registrations_valid =
-      (detail::binding_model<Registrations>::valid && ...);
+      (detail::registration_checked_v<Registrations> && ...);
   static constexpr bool factories_are_compile_time_bindable =
       (detail::binding_factory_is_compile_time_bindable<
            detail::binding_model<Registrations>>::value &&

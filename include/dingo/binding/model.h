@@ -111,6 +111,31 @@ using binding_model = binding_model_impl<
     scope_tag_is_usable_v<typename Registration::scope_type::type>,
     binding_is_stored<Registration>()>;
 
+// Checks a registration as both containers do, with the same message for
+// the same mistake, and tells whether it is valid: an interface it declares,
+// its scope, whether the scope stores its type, and the requirements of its
+// storage and its interfaces.
+template <typename... TypeArgs>
+constexpr bool check_registration(type_registration<TypeArgs...> *) {
+  using model = binding_model<type_registration<TypeArgs...>>;
+  static_assert(!has_explicit_void_interface_v<TypeArgs...>,
+                "interfaces<void> is not a valid registration target");
+  static_assert(model::storage_tag_is_complete,
+                "registered storage tag must be complete and specialize "
+                "dingo::scope_traits; include the corresponding "
+                "dingo/storage header");
+  static_assert(!model::storage_tag_is_complete || model::stored,
+                "the scope does not store this type");
+  if constexpr (model::stored) {
+    model::requirements::assert_valid();
+  }
+  return model::valid;
+}
+
+template <typename Registration>
+inline constexpr bool registration_checked_v =
+    check_registration(static_cast<Registration *>(nullptr));
+
 template <typename BindingModel, typename InterfaceList>
 struct binding_expansion_impl;
 

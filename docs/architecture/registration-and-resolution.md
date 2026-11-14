@@ -13,10 +13,12 @@ the runtime registry in
 `prepare_binding(...)` does three things:
 
 1. It builds a complete `type_registration<...>` from the supplied policies.
-2. It computes the stored type through `binding_model`. This includes the
-   interface storage rewrite for one interface with a virtual destructor.
-3. It selects the binding owner and the lookup commit path for the normalized
-   registration.
+2. It computes the stored type through `binding_model`, and checks the
+   registration (`check_registration` in
+   [include/dingo/binding/model.h](../../include/dingo/binding/model.h)). This
+   includes the interface storage rewrite for one interface with a virtual
+   destructor.
+3. It commits the record of the registration to the lookups of its interfaces.
 
 `type_registration<...>` in
 [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
@@ -45,9 +47,10 @@ dingo::static_container<app_bindings> container;
 ```
 
 [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
-normalizes this source.
-[include/dingo/static/graph.h](../../include/dingo/static/graph.h) validates it.
-A container uses one registration mode. The modes do not mix.
+normalizes this source and checks each registration by `check_registration`, as
+the runtime container does, so a mistake is told by the same message in both.
+[include/dingo/static/graph.h](../../include/dingo/static/graph.h) validates its
+dependency graph. A container uses one registration mode. The modes do not mix.
 
 ## Stored Type Versus Exposed Interface
 
