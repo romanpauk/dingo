@@ -75,25 +75,6 @@ struct runtime_binding_record {
 namespace detail {
 template <typename Storage> using registered_type_t = typename Storage::type;
 
-// Resets the cell of a binding whose resolution failed, unless it succeeded.
-class node_reset_guard {
-public:
-  node_reset_guard(void (*reset)(void *) noexcept, void *cell) noexcept
-      : reset_(reset), cell_(cell) {}
-  node_reset_guard(const node_reset_guard &) = delete;
-  node_reset_guard &operator=(const node_reset_guard &) = delete;
-  ~node_reset_guard() {
-    if (cell_ != nullptr) {
-      reset_(cell_);
-    }
-  }
-  void release() noexcept { cell_ = nullptr; }
-
-private:
-  void (*reset_)(void *) noexcept;
-  void *cell_;
-};
-
 // The engine of the runtime bindings of a container. It resolves the request
 // a binding publishes, or derives one it does not, of the node of the
 // binding: one function for every binding of the container.
@@ -142,33 +123,13 @@ template <typename RTTI, typename Context> struct runtime_binding_engine {
                                   construction_scope scope, Context &context,
                                   const request_type &request,
                                   std::size_t index, const void *cache_key) {
-    void *storage = node.storage(binding);
     const materialization_facts &materialization = node.materialization;
-    const bool resolved = node.resolved(storage);
-    recursion_guard_wrapper guard(
-        context, storage, node.leaf,
-        materialization_guarded(materialization, resolved));
-    resolved_address result{};
-    if (materialization_retains(materialization, resolved, true)) {
-      // A source is retained only while the storage is unresolved, so a
-      // failed transaction returns the storage to that state. The reset is
-      // registered once the cell is resolved, after what it depends on, so
-      // that a rollback, which runs the last registered first, resets the
-      // cell before what it refers to. A cell that fails as it resolves, or as
-      // its reset is registered, is reset at once.
-      void *cell = node.cell(binding);
-      node_reset_guard reset{node.reset, cell};
-      result =
-          node.resolve(binding, scope, construction_scope(persistent_scope),
-                       context, index, request.requested_type);
-      context.on_rollback(&reset_cell, cell,
-                          const_cast<void *>(static_cast<const void *>(&node)));
-      reset.release();
-      context.add_runtime_destructor(cell, node.reset);
-    } else {
-      result = node.resolve(binding, scope, scope, context, index,
-                            request.requested_type);
-    }
+    const resolved_address result = drive_materialization<true, true>(
+        materialization, node_access{node, binding}, scope, context,
+        [&](construction_scope construction) {
+          return node.resolve(binding, scope, construction, context, index,
+                              request.requested_type);
+        });
     // An address into a value placed in the context is refused to the
     // caller, which uses it after the context ends.
     if (refuses_caller_address(
@@ -187,9 +148,25 @@ template <typename RTTI, typename Context> struct runtime_binding_engine {
     return result;
   }
 
-  static void reset_cell(void *cell, void *node) noexcept {
-    static_cast<const node_type *>(node)->reset(cell);
-  }
+  // The access of a binding to its materialization, through its node.
+  struct node_access {
+    const node_type &node;
+    interface_type &binding;
+
+    void *storage() const noexcept { return node.storage(binding); }
+    bool resolved() const noexcept { return node.resolved(storage()); }
+    type_descriptor leaf() const noexcept { return node.leaf; }
+    void *cell_address() const noexcept { return node.cell(binding); }
+    auto reset() const noexcept { return node.reset; }
+    auto rollback() const noexcept { return &rollback_cell; }
+    void *rollback_argument() const noexcept {
+      return const_cast<void *>(static_cast<const void *>(&node));
+    }
+
+    static void rollback_cell(void *cell, void *node) noexcept {
+      static_cast<const node_type *>(node)->reset(cell);
+    }
+  };
 };
 
 // Applies a resolution to a source. A source the transaction keeps is an

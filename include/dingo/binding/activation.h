@@ -216,21 +216,98 @@ template <> constexpr materialized_request materialized<void>() {
   return {false, false};
 }
 
-// Guards the materialization of a storage against recursion, as its facts
-// decide; nothing guards a storage they never guard.
-template <bool Guarded, typename Storage, typename Context>
-auto guard_materialization(
-    [[maybe_unused]] Context &context, [[maybe_unused]] const Storage &storage,
-    [[maybe_unused]] const materialization_facts &facts) {
-  if constexpr (!Guarded) {
-    return no_materialization_scope();
-  } else {
-    return recursion_guard_wrapper(
-        context, &storage,
-        described_type_v<leaf_type_t<typename Storage::type>>,
-        materialization_guarded(facts, storage_resolved(storage)));
+// The materialization of the source of a binding, which both containers run:
+// the static container through the typed access of its binding, the runtime
+// engine through the node of its binding. The access tells the storage of the
+// binding, whether it is resolved, the leaf it stores, its cell, and how the
+// cell is reset: when a transaction rolls back (rollback, of the cell and of
+// rollback_argument) and as the runtime is destroyed (reset). MayGuard and
+// MayRetain are what the facts may decide, as the code compiles: a static
+// binding that is never guarded or never retains has no code for it.
+//
+// It guards the binding against recursion, and an unresolved storage that
+// retains its source in a transaction materializes it persistently: a failed
+// transaction returns the storage to its unresolved state. The reset is
+// registered once the cell is resolved, after what it depends on, so that a
+// rollback, which runs the last registered first, resets the cell before
+// what it refers to. A cell that fails as it resolves, or as its reset is
+// registered, is reset at once. materialize materializes the source in a
+// construction scope and applies to it what the caller does with it.
+template <bool MayGuard, bool MayRetain, typename Access, typename Context,
+          typename Materialize>
+auto drive_materialization(const materialization_facts &facts,
+                           const Access &access, construction_scope scope,
+                           Context &context, Materialize &&materialize)
+    -> decltype(materialize(scope)) {
+  [[maybe_unused]] const bool resolved =
+      (MayGuard || MayRetain) && access.resolved();
+  [[maybe_unused]] auto guard = [&] {
+    if constexpr (MayGuard) {
+      return recursion_guard_wrapper(context, access.storage(), access.leaf(),
+                                     materialization_guarded(facts, resolved));
+    } else {
+      return no_materialization_scope();
+    }
+  }();
+  if constexpr (MayRetain) {
+    if (materialization_retains(facts, resolved, true)) {
+      struct reset_on_failure {
+        const Access &access;
+        bool armed = true;
+        ~reset_on_failure() {
+          if (armed) {
+            access.reset()(access.cell_address());
+          }
+        }
+      } reset{access};
+      using result_type =
+          decltype(materialize(construction_scope(persistent_scope)));
+      auto registered = [&] {
+        context.on_rollback(access.rollback(), access.cell_address(),
+                            access.rollback_argument());
+        reset.armed = false;
+        context.add_runtime_destructor(access.cell_address(), access.reset());
+      };
+      if constexpr (std::is_void_v<result_type>) {
+        materialize(construction_scope(persistent_scope));
+        registered();
+        return;
+      } else {
+        result_type result = materialize(construction_scope(persistent_scope));
+        registered();
+        if constexpr (std::is_reference_v<result_type>) {
+          return std::forward<result_type>(result);
+        } else {
+          return result;
+        }
+      }
+    }
   }
+  return materialize(scope);
 }
+
+// The typed access of a cell to its materialization, which the static
+// container drives its binding by.
+template <typename Cell> struct cell_access {
+  Cell &cell;
+
+  void *storage() const noexcept { return std::addressof(cell.storage()); }
+  bool resolved() const noexcept { return storage_resolved(cell.storage()); }
+  type_descriptor leaf() const noexcept {
+    return described_type_v<leaf_type_t<typename Cell::storage_type::type>>;
+  }
+  void *cell_address() const noexcept { return std::addressof(cell); }
+
+  static void reset_cell(void *self) noexcept {
+    static_cast<Cell *>(self)->reset();
+  }
+  static void rollback_cell(void *self, void *) noexcept {
+    static_cast<Cell *>(self)->reset();
+  }
+  auto reset() const noexcept { return &reset_cell; }
+  auto rollback() const noexcept { return &rollback_cell; }
+  void *rollback_argument() const noexcept { return nullptr; }
+};
 
 // The application of the resolutions of a binding to the source its storage
 // yields. It is apart from the activation, which also knows the container
@@ -363,17 +440,40 @@ struct binding_activation {
   // yields a value places the value in the context.
   template <typename Request, typename Context, typename Fn>
   decltype(auto) with_source(Context &context, Fn &&fn) {
+    constexpr materialization_facts materialization = facts<Context>();
+    constexpr bool may_guard =
+        materialization.guards_always || materialization.guards_unresolved;
+    if constexpr (is_runtime_context_v<Context>) {
+      return drive_materialization<may_guard,
+                                   materialization.retains_unresolved>(
+          materialization, cell_access<Cell>{cell}, construction_scope(scope),
+          context, [&](construction_scope construction) -> decltype(auto) {
+            return with_runtime_source(construction, context,
+                                       std::forward<Fn>(fn));
+          });
+    } else if constexpr (!may_guard) {
+      // A binding that is never guarded or retained materializes its source
+      // where its placement puts it.
+      return with_placed_source<Request>(context, std::forward<Fn>(fn));
+    } else {
+      // Without a transaction, the source is materialized in the scope of
+      // the request, known as the code compiles where it is.
+      return drive_materialization<may_guard, false>(
+          materialization, cell_access<Cell>{cell}, construction_scope(scope),
+          context, [&](construction_scope) -> decltype(auto) {
+            return with_placed_source<Request>(context, std::forward<Fn>(fn));
+          });
+    }
+  }
+
+  // Materializes the source of a request where its placement puts it.
+  template <typename Request, typename Context, typename Fn>
+  decltype(auto) with_placed_source(Context &context, Fn &&fn) {
     auto &storage = cell.storage();
     constexpr materialization_facts materialization = facts<Context>();
-    constexpr source_placement placement =
-        materialization_placement(materialization, materialized<Request>(),
-                                  is_runtime_context_v<Context>);
-    [[maybe_unused]] auto guard =
-        guard_materialization < materialization.guards_always ||
-        materialization.guards_unresolved > (context, storage, materialization);
-    if constexpr (is_runtime_context_v<Context>) {
-      return with_transaction_source(context, std::forward<Fn>(fn));
-    } else if constexpr (placement == source_placement::value_in_context) {
+    constexpr source_placement placement = materialization_placement(
+        materialization, materialized<Request>(), false);
+    if constexpr (placement == source_placement::value_in_context) {
       using source_type =
           std::remove_cv_t<std::remove_reference_t<decltype(storage.resolve(
               scope, context, dependencies))>>;
@@ -454,72 +554,6 @@ struct binding_activation {
   }
 
 private:
-  // A runtime context keeps a retained source in the transaction; the cell is
-  // reset when the transaction fails or, once sealed, when its runtime is
-  // destroyed.
-  template <typename Context, typename Fn>
-  decltype(auto) with_transaction_source(Context &context, Fn &&fn) {
-    if constexpr (facts<Context>().retains_unresolved) {
-      if (materialization_retains(facts<Context>(),
-                                  storage_resolved(cell.storage()), true)) {
-        // A source is retained only while the storage is unresolved, so a
-        // failed transaction returns the storage to that state. The reset
-        // is registered once the cell is resolved, after what it depends
-        // on, so that a rollback, which runs the last registered first,
-        // resets the cell before what it refers to. A cell that fails as it
-        // resolves, or as its reset is registered, is reset at once.
-        cell_reset_guard guard{cell};
-        return invoke_then(
-            [&]() -> decltype(auto) {
-              // The scope is a run-time value, as that of a request is:
-              // the source is materialized by one function for both.
-              return with_runtime_source(construction_scope(persistent_scope),
-                                         context, std::forward<Fn>(fn));
-            },
-            [&] {
-              context.on_rollback(&reset_cell, std::addressof(cell));
-              guard.release();
-              context.add_runtime_destructor(
-                  std::addressof(cell), +[](void *self) noexcept {
-                    static_cast<Cell *>(self)->reset();
-                  });
-            });
-      }
-    }
-    return with_runtime_source(scope, context, std::forward<Fn>(fn));
-  }
-
-  static void reset_cell(void *self, void *) noexcept {
-    static_cast<Cell *>(self)->reset();
-  }
-
-  // Resets a cell as it is destroyed, unless it is released.
-  struct cell_reset_guard {
-    Cell &cell;
-    bool armed = true;
-
-    void release() noexcept { armed = false; }
-    ~cell_reset_guard() {
-      if (armed) {
-        cell.reset();
-      }
-    }
-  };
-
-  // Runs after once fn has succeeded and returns what fn returned.
-  template <typename Fn, typename After>
-  static std::invoke_result_t<Fn &> invoke_then(Fn &&fn, After &&after) {
-    using result_type = std::invoke_result_t<Fn &>;
-    if constexpr (std::is_void_v<result_type>) {
-      fn();
-      after();
-    } else {
-      result_type result = fn();
-      after();
-      return std::forward<result_type>(result);
-    }
-  }
-
 public:
   // A runtime context places a source it retains in the transaction, as it
   // does every source of a persistent request.
