@@ -63,8 +63,9 @@ def main():
                         help="compiler flags, with include paths")
     parser.add_argument("--jobs", type=int,
                         default=driver.default_jobs())
-    parser.add_argument("--batch", type=int, default=8,
-                        help="the registrations compiled into one program")
+    parser.add_argument("--cells", type=int, default=1500,
+                        help="the cells a program holds at most, of whole "
+                        "registrations: what it compiles grows with them")
     parser.add_argument(
         "--only", default="",
         help="check only the registrations whose name matches this regular "
@@ -77,15 +78,27 @@ def main():
                                      "conversion.h") + flags
 
     checked = [unit for unit in units() if re.search(options.only, unit.name)]
-    batches = [checked[index:index + options.batch]
-               for index in range(0, len(checked), options.batch)]
+    batches = []
+    size = 0
+    for unit in checked:
+        count = len(unit.cells())
+        if not batches or size + count > options.cells:
+            batches.append([])
+            size = 0
+        batches[-1].append(unit)
+        size += count
+    # The largest first, so that none of them is left for the end.
+    order = sorted(range(len(batches)),
+                   key=lambda index: -sum(len(unit.cells())
+                                          for unit in batches[index]))
     cells = []
     driver.set_jobs(options.jobs)
     with concurrent.futures.ThreadPoolExecutor(options.jobs) as executor:
         for records in executor.map(
                 lambda item: compile_units(options.compiler, flags,
                                            options.work, batch_name(item[0]),
-                                           item[1]), enumerate(batches)):
+                                           item[1]),
+                [(index, batches[index]) for index in order]):
             cells += records
     cells = report.write(options.output, apply_semantics(cells, checked))
     write_report(options.output.with_suffix(".md"), cells)
