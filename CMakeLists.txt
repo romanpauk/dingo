@@ -101,6 +101,7 @@ if(DINGO_DEVELOPMENT_MODE)
         binding/activation.h
         binding/facts.h
         binding/materialization.h
+        request/classification.h
         request/composition.h
         request/derivation.h
         resolution/algorithm.h

@@ -72,6 +72,31 @@ struct layer_kind {
   std::uint32_t converts = 0;
 };
 
+// Whether a type can be a layer of these properties, as spec/semantics.py
+// says of a layer. A layer that owns nothing, or shares what it owns, holds
+// an element that lives apart from it: a copy of it holds the same one. A
+// layer that owns its element alone and shares it with a copy cannot be
+// copied: the copy would share what one of them owns. A layer that owns
+// nothing is not made of a value and takes over no pointer. A layer that
+// takes over a pointer holds the element apart from it. An empty value is a
+// value only of a layer that may be empty.
+constexpr bool possible(const layer_kind &kind) {
+  return (kind.owns == owner::sole || kind.shares_element) &&
+         !(kind.owns == owner::sole && kind.shares_element && kind.copyable) &&
+         !(kind.owns == owner::none && (kind.made_from_value || kind.adopts)) &&
+         (!kind.adopts || kind.shares_element) &&
+         (kind.may_be_empty || !kind.has_empty_value);
+}
+
+// Whether an owned value of a layer can convert to another, taking over or
+// sharing its element: only a layer that owns its element alone hands it
+// over, and only to a layer that owns an element apart from it.
+constexpr bool possible_conversion(const layer_kind &source,
+                                   const layer_kind &target) {
+  return source.owns == owner::sole && source.shares_element &&
+         target.owns != owner::none && target.shares_element;
+}
+
 inline constexpr std::size_t max_kinds = 32;
 
 // The layers a search may make: those of C++ itself, then those of the types

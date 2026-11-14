@@ -75,6 +75,7 @@ add_executable(dingo_unit_test
     support/containers.h
     support/test.h
     support/values.h
+    type/classification.cpp
     type/type_identity.cpp
     type/type_identity_fixture.cpp
     type/type_identity_shared.h

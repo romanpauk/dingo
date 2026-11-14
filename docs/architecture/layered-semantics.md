@@ -160,9 +160,28 @@ specification. It is also the largest part of the compile time that is left.
    around anything that may become the request. Three or more layers a type
    defines in one stack are not compared.
 
-3. **Classification.** One module maps a C++ type to its things, with an
-   exhaustive test over the wrapper kinds, the leaf kinds and the request
-   shapes.
+3. **Classification.** In progress.
+   [include/dingo/request/classification.h](../../include/dingo/request/classification.h)
+   maps a C++ type to what the semantics know of it, of its `type_traits` and of
+   what C++ says of it:
+
+   - The properties of the layer of a wrapper: what its semantics say it owns,
+     and whether the same wrapper of an element that can be copied, or of one
+     that can only be moved, can be copied, moved, or made of a raw pointer. The
+     type traits of a layer no type can be fail to compile.
+   - The identity of a layer: the same wrapper of a probe element. Two wrappers
+     of different elements are one layer.
+   - The stack of a type: its pointers, arrays and wrappers around the leaf, its
+     abstract interface or another type. A handle that holds an array has the
+     array as a layer of its own, bounded when its type traits give the
+     `extent`.
+   - The universe of the layers of stacks, with the layer a sole owner hands its
+     element over to among them.
+
+   `semantics-check` checks that the standard wrappers are classified as the
+   specification describes its standard layers. A test shows that a wrapper a
+   user defines is classified as the standard one of the same semantics. Left:
+   the leaf, the scope and the category of a request.
 
 4. **Steps.** One function template for each kind of step, with its contract as
    static assertions, and a test for each.

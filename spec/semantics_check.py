@@ -48,6 +48,8 @@ OWNERS = {semantics.Owner.NONE: 0, semantics.Owner.SOLE: 1,
           semantics.Owner.SHARED: 2}
 LIMITS = {frozenset(): 0, semantics.LIMITATIONS: 3}
 SOURCE = Path(__file__).parents[1] / "test" / "model" / "semantics.cpp"
+# The standard layers, which the program classifies the standard wrappers as.
+STANDARD = tuple(semantics.LAYERS)
 
 
 def properties(layer, universe):
@@ -299,8 +301,13 @@ def compare(program, domain):
     language = [str(len(LANGUAGE))]
     for name in LANGUAGE:
         language += map(str, properties(semantics.LAYERS[name], LANGUAGE))
+    universe = order(STANDARD)
+    standard_layers = [str(len(universe) - len(LANGUAGE))]
+    for name in universe[len(LANGUAGE):]:
+        standard_layers += map(str, properties(semantics.LAYERS[name],
+                                               universe))
     cases = []
-    lines = [" ".join(language)]
+    lines = [" ".join(language), " ".join(standard_layers)]
     for name, context, start, goals in domain:
         reached = semantics.reachable(start, context)
         for layers, element, goal in goals:

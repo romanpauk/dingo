@@ -4,7 +4,9 @@
 // of what satisfies the request, or "-" when nothing does.
 //
 // The first line is the layers of C++ itself as the specification describes
-// them, which have to be those of the library. A request is a line of
+// them, which have to be those of the library; the second the standard layers
+// it describes, which have to be those the library classifies the standard
+// wrappers as. A request is a line of
 // numbers: the limitations, the leaf (copyable, movable), the scope (makes,
 // publishes early), whether the abstract interface is requested, the layers
 // of the universe after those of C++ itself, the stored object (its depth,
@@ -12,14 +14,29 @@
 // depth, its layers, its element). A layer is its properties, as
 // layer_kind declares them.
 
+#include <dingo/request/classification.h>
 #include <dingo/semantics/model.h>
 
 #include <cstdio>
 #include <initializer_list>
+#include <memory>
+#include <optional>
+#include <variant>
 
 using namespace dingo::semantics;
 
 namespace {
+struct leaf {};
+struct other {};
+
+// The standard wrappers, as the specification names its standard layers
+// after those of C++ itself.
+using standard = dingo::detail::layer_universe<dingo::type_list<
+    dingo::detail::wrapper_layer_tag<std::shared_ptr<leaf>>,
+    dingo::detail::wrapper_layer_tag<std::unique_ptr<leaf>>,
+    dingo::detail::wrapper_layer_tag<std::optional<leaf>>,
+    dingo::detail::wrapper_layer_tag<std::variant<leaf, other>>>>;
+
 bool read(unsigned &value) { return std::scanf("%u", &value) == 1; }
 
 bool read_kind(layer_kind &kind) {
@@ -83,6 +100,23 @@ int main() {
     layer_kind kind;
     if (!read_kind(kind) || !same(kind, language.kinds[index])) {
       std::fprintf(stderr, "the layer %u of C++ itself differs\n", index);
+      return 1;
+    }
+  }
+  const universe &classified = standard::value;
+  unsigned standard_count = 0;
+  if (!read(standard_count) ||
+      standard_count != classified.count - language.count) {
+    std::fprintf(stderr, "the standard layers differ in number\n");
+    return 1;
+  }
+  for (unsigned index = 0; index < standard_count; ++index) {
+    layer_kind kind;
+    if (!read_kind(kind) ||
+        !same(kind, classified.kinds[language.count + index])) {
+      std::fprintf(stderr,
+                   "the standard layer %u differs from its classification\n",
+                   index);
       return 1;
     }
   }
