@@ -145,44 +145,19 @@ private:
     }
   }
 
-  // Resolves a request of its selection in the levels: the binding it
-  // selected, or the parent of the last level, or else the origin, which
-  // answers what no container of the chain binds.
-  template <typename Request, typename R, typename Origin, typename LookupKey>
-  R resolve_selected_in_levels(construction_scope scope,
-                               runtime_context_type &context, Origin &origin,
-                               LookupKey &key, const level_selection &found) {
-    using lookup_type = typename Request::lookup_type;
-    if (found.selection.status == detail::binding_status::found) {
-      return this->template resolve_selected<Request, R>(found.selection, scope,
-                                                         context);
-    }
-    if (found.selection.status == detail::binding_status::ambiguous) {
-      detail::throw_type_ambiguous(detail::described_type_v<lookup_type>,
-                                   context);
-    }
-    if constexpr (parent_serves<lookup_type, LookupKey>()) {
-      if (auto *parent = found.last->parent()) {
-        return parent->template resolve<typename Request::user_type,
-                                        Request::removes_rvalue_references>(
-            scope, context, origin, key);
-      }
-    }
-    return origin.template unresolved<
-        Request, detail::may_auto_construct_v<typename Request::user_type>,
-        LookupKey, R>(scope, context, key);
-  }
-
   // Resolves a request in the context of a request of this runtime.
   template <typename Request, typename R, typename Origin, typename LookupKey>
   R resolve_in_runtime(construction_scope scope, runtime_context_type &context,
                        Origin &origin, LookupKey key) {
     if constexpr (runtime_base::template selects_by_base_lookup<Request, R,
                                                                 LookupKey>()) {
-      return resolve_selected_in_levels<Request, R>(
-          scope, context, origin, key,
-          select_in_levels(
-              runtime_base::template base_request_of<Request, LookupKey>()));
+      // The algorithm resolves the request of its selection in the levels,
+      // in the last level it was selected in: the binding it found, or the
+      // parent of that level, or else the origin.
+      const level_selection found = select_in_levels(
+          runtime_base::template base_request_of<Request, LookupKey>());
+      return detail::request_resolution::resolve<Request, R>(
+          *found.last, scope, context, origin, std::move(key), found.selection);
     } else {
       return detail::request_resolution::resolve<Request, R>(
           *this, scope, context, origin, std::move(key));
@@ -206,8 +181,9 @@ private:
         }
       }
       return with_context([&](runtime_context_type &context) -> R {
-        return resolve_selected_in_levels<Request, R>(
-            entry_scope(caller_scope), context, *this, key, found);
+        return detail::request_resolution::resolve<Request, R>(
+            *found.last, entry_scope(caller_scope), context, *this,
+            std::move(key), found.selection);
       });
     } else if constexpr (is_cacheable<Request, R>()) {
       auto selected = this->template select_request<Request>(key);
