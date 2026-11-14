@@ -61,9 +61,11 @@ static_assert(
                  wrapper_layer_tag<std::shared_ptr<interface>>> &&
     element_of_v<std::optional<std::shared_ptr<interface>>> ==
         stack_element::interface);
-static_assert(layers_are_v<std::variant<leaf, other>,
-                           wrapper_layer_tag<std::variant<leaf, other>>> &&
-              element_of_v<std::variant<leaf, other>> == stack_element::leaf);
+static_assert(
+    layers_are_v<
+        std::variant<leaf, other>,
+        detail::alternative_layer_tag<std::variant<leaf, other>, leaf>> &&
+    element_of_v<std::variant<leaf, other>> == stack_element::leaf);
 
 // Two wrappers of different elements are one layer.
 static_assert(std::is_same_v<detail::layer_identity_t<std::shared_ptr<leaf>>,
@@ -83,8 +85,11 @@ constexpr bool same_kind(const semantics::layer_kind &a,
 }
 
 // The layers of the standard wrappers, by their type traits.
-using standard = universe_of<std::shared_ptr<leaf>, std::unique_ptr<leaf>,
-                             std::optional<leaf>, std::variant<leaf, other>>;
+using standard = detail::layer_universe<
+    type_list<wrapper_layer_tag<std::shared_ptr<leaf>>,
+              wrapper_layer_tag<std::unique_ptr<leaf>>,
+              wrapper_layer_tag<std::optional<leaf>>,
+              detail::alternative_layer_tag<std::variant<leaf, other>, leaf>>>;
 static_assert(standard::value.count == 8);
 static_assert(standard::value.kinds[4].owns == semantics::owner::shared &&
               standard::value.kinds[4].copyable &&

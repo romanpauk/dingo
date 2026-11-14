@@ -35,7 +35,7 @@ using standard = dingo::detail::layer_universe<dingo::type_list<
     dingo::detail::wrapper_layer_tag<std::shared_ptr<leaf>>,
     dingo::detail::wrapper_layer_tag<std::unique_ptr<leaf>>,
     dingo::detail::wrapper_layer_tag<std::optional<leaf>>,
-    dingo::detail::wrapper_layer_tag<std::variant<leaf, other>>>>;
+    dingo::detail::alternative_layer_tag<std::variant<leaf, other>, leaf>>>;
 
 bool read(unsigned &value) { return std::scanf("%u", &value) == 1; }
 

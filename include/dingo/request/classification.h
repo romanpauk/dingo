@@ -41,9 +41,8 @@ struct layer_probe {};
 struct pointer_layer_tag {};
 struct array_layer_tag {};
 struct bounded_array_layer_tag {};
-template <typename Wrapper> struct wrapper_layer_tag {
-  using type = Wrapper;
-};
+template <typename Wrapper> struct wrapper_layer_tag;
+template <typename Wrapper, typename Alternative> struct alternative_layer_tag;
 
 // The bound of the array an owning handle holds, or 0.
 template <typename Wrapper, typename = void>
@@ -78,6 +77,21 @@ template <typename Wrapper> struct layer_identity<Wrapper, true> {
 template <typename Wrapper>
 using layer_identity_t = typename layer_identity<Wrapper>::type;
 
+// What identifies the layer of an alternative type, which cannot rebind its
+// element: the type, and the alternative that holds the element.
+template <typename Wrapper, typename Alternative>
+struct alternative_identity {};
+
+template <typename Wrapper> struct wrapper_layer_tag {
+  using type = Wrapper;
+  using identity = layer_identity_t<Wrapper>;
+};
+
+template <typename Wrapper, typename Alternative> struct alternative_layer_tag {
+  using type = Wrapper;
+  using identity = alternative_identity<Wrapper, Alternative>;
+};
+
 template <typename Semantics, typename Of>
 inline constexpr bool is_semantics_v = std::is_same_v<Semantics, Of>;
 
@@ -97,16 +111,14 @@ template <typename Wrapper> constexpr semantics::layer_kind wrapper_kind() {
     kind.owns = semantics::owner::shared;
     kind.shares_element = true;
     kind.made_from_value = true;
-  } else if constexpr (is_semantics_v<of, ::dingo::semantics::optional_value>) {
+  } else {
+    static_assert(is_semantics_v<of, ::dingo::semantics::optional_value>,
+                  "a wrapper derives from one of the semantics of "
+                  "type_traits; an alternative type is a layer by the "
+                  "alternative that holds the element");
     kind.owns = semantics::owner::sole;
     kind.made_from_value = true;
     kind.has_empty_value = true;
-  } else {
-    static_assert(is_semantics_v<of, ::dingo::semantics::alternative_value>,
-                  "a wrapper derives from one of the semantics of type_traits");
-    kind.owns = semantics::owner::sole;
-    kind.made_from_value = true;
-    kind.holds_element_only = true;
   }
   kind.may_be_empty = true;
   if constexpr (rebinds_element<Wrapper>::value) {
@@ -123,8 +135,35 @@ template <typename Wrapper> constexpr semantics::layer_kind wrapper_kind() {
   return kind;
 }
 
+// The properties of the layer of an alternative type: it can be copied, or
+// moved, when every alternative but the one that holds the element can.
+template <typename Alternative, typename... Alternatives>
+constexpr semantics::layer_kind alternative_kind(type_list<Alternatives...>) {
+  semantics::layer_kind kind;
+  kind.made_from_value = true;
+  kind.holds_element_only = true;
+  kind.may_be_empty = true;
+  kind.copyable = ((std::is_same_v<Alternatives, Alternative> ||
+                    std::is_copy_constructible_v<Alternatives>) &&
+                   ...);
+  kind.relocatable = ((std::is_same_v<Alternatives, Alternative> ||
+                       std::is_move_constructible_v<Alternatives>) &&
+                      ...);
+  return kind;
+}
+
+template <typename Identity> struct identity_kind {
+  static constexpr semantics::layer_kind value = wrapper_kind<Identity>();
+};
+
+template <typename Wrapper, typename Alternative>
+struct identity_kind<alternative_identity<Wrapper, Alternative>> {
+  static constexpr semantics::layer_kind value =
+      alternative_kind<Alternative>(alternative_type_alternatives_t<Wrapper>{});
+};
+
 template <typename Wrapper> constexpr semantics::layer_kind possible_kind() {
-  constexpr semantics::layer_kind kind = wrapper_kind<Wrapper>();
+  constexpr semantics::layer_kind kind = identity_kind<Wrapper>::value;
   static_assert(semantics::possible(kind),
                 "the type_traits of a wrapper describe a layer no type can "
                 "be: see semantics::possible");
@@ -177,22 +216,24 @@ using stack_of_t = typename stack_of<std::remove_cv_t<T>, Leaf>::type;
 // leaf or its interface, or of none.
 template <typename Leaf, typename... Alternatives> struct alternative_stack {
   using type = type_stack<type_list<>, stack_element::other>;
+  using alternative = void;
 };
 
 template <typename Leaf, typename Alternative, typename... Alternatives>
 struct alternative_stack<Leaf, Alternative, Alternatives...> {
   using candidate = stack_of_t<Alternative, Leaf>;
-  using type = std::conditional_t<
-      candidate::element != stack_element::other, candidate,
-      typename alternative_stack<Leaf, Alternatives...>::type>;
+  using next = alternative_stack<Leaf, Alternatives...>;
+  static constexpr bool holds = candidate::element != stack_element::other;
+  using type = std::conditional_t<holds, candidate, typename next::type>;
+  using alternative =
+      std::conditional_t<holds, Alternative, typename next::alternative>;
 };
 
 template <typename Leaf, typename List> struct alternatives_stack;
 
 template <typename Leaf, typename... Alternatives>
-struct alternatives_stack<Leaf, type_list<Alternatives...>> {
-  using type = typename alternative_stack<Leaf, Alternatives...>::type;
-};
+struct alternatives_stack<Leaf, type_list<Alternatives...>>
+    : alternative_stack<Leaf, Alternatives...> {};
 
 template <typename T, typename Leaf> struct stack_of {
   static auto make() {
@@ -210,7 +251,7 @@ template <typename T, typename Leaf> struct stack_of {
       using element = typename type_traits<T>::value_type;
       // An owning handle whose element cannot be borrowed as an object holds
       // an array of it, of the bound its type traits give, if any.
-      if constexpr (is_array_like_type_v<T> && !std::is_array_v<element>) {
+      if constexpr (is_array_like_type_v<T>) {
         return stacked_t<wrapper_layer_tag<T>,
                          stacked_t<std::conditional_t<handle_extent_v<T> == 0,
                                                       array_layer_tag,
@@ -220,9 +261,9 @@ template <typename T, typename Leaf> struct stack_of {
         return stacked_t<wrapper_layer_tag<T>, stack_of_t<element, Leaf>>{};
       }
     } else if constexpr (is_alternative_type_v<T>) {
-      return stacked_t<wrapper_layer_tag<T>,
-                       typename alternatives_stack<
-                           Leaf, alternative_type_alternatives_t<T>>::type>{};
+      using held = alternatives_stack<Leaf, alternative_type_alternatives_t<T>>;
+      return stacked_t<alternative_layer_tag<T, typename held::alternative>,
+                       typename held::type>{};
     } else if constexpr (std::is_base_of_v<T, Leaf>) {
       return type_stack<type_list<>, stack_element::interface>{};
     } else {
@@ -232,26 +273,32 @@ template <typename T, typename Leaf> struct stack_of {
   using type = decltype(make());
 };
 
-// The distinct wrappers of tags, by identity.
+// Whether a tag is a layer of C++ itself.
+template <typename Tag>
+inline constexpr bool is_language_tag_v =
+    std::is_same_v<Tag, pointer_layer_tag> ||
+    std::is_same_v<Tag, array_layer_tag> ||
+    std::is_same_v<Tag, bounded_array_layer_tag>;
+
+// The distinct identities of the tags of wrappers.
 template <typename Identities, typename... Tags> struct wrapper_identities {
   using type = Identities;
 };
 
 template <typename... Identities, typename Tag, typename... Tags>
 struct wrapper_identities<type_list<Identities...>, Tag, Tags...> {
+  template <typename Of> static auto next() {
+    if constexpr (is_language_tag_v<Of>) {
+      return type_list<Identities...>{};
+    } else if constexpr ((std::is_same_v<typename Of::identity, Identities> ||
+                          ...)) {
+      return type_list<Identities...>{};
+    } else {
+      return type_list<Identities..., typename Of::identity>{};
+    }
+  }
   using type =
-      typename wrapper_identities<type_list<Identities...>, Tags...>::type;
-};
-
-template <typename... Identities, typename Wrapper, typename... Tags>
-struct wrapper_identities<type_list<Identities...>, wrapper_layer_tag<Wrapper>,
-                          Tags...> {
-  using identity = layer_identity_t<Wrapper>;
-  using type = typename wrapper_identities<
-      std::conditional_t<(std::is_same_v<identity, Identities> || ...),
-                         type_list<Identities...>,
-                         type_list<Identities..., identity>>,
-      Tags...>::type;
+      typename wrapper_identities<decltype(next<Tag>()), Tags...>::type;
 };
 
 template <typename Identity, typename... Identities>
@@ -264,6 +311,20 @@ constexpr semantics::layer index_of(type_list<Identities...>) {
   return index == sizeof...(Identities)
              ? semantics::no_layer
              : static_cast<semantics::layer>(4 + index);
+}
+
+// The properties of the layer of a tag.
+template <typename Tag> constexpr semantics::layer_kind tag_kind() {
+  constexpr semantics::universe language;
+  if constexpr (std::is_same_v<Tag, pointer_layer_tag>) {
+    return language.kinds[semantics::pointer_layer];
+  } else if constexpr (std::is_same_v<Tag, array_layer_tag>) {
+    return language.kinds[semantics::array_layer];
+  } else if constexpr (std::is_same_v<Tag, bounded_array_layer_tag>) {
+    return language.kinds[semantics::bounded_array_layer];
+  } else {
+    return wrapper_kind_v<typename Tag::identity>;
+  }
 }
 
 // The universe of the layers of stacks: those of C++ itself, then each
@@ -282,7 +343,7 @@ template <typename... Tags> struct layer_universe<type_list<Tags...>> {
     } else if constexpr (std::is_same_v<Tag, bounded_array_layer_tag>) {
       return semantics::bounded_array_layer;
     } else {
-      return index_of<layer_identity_t<typename Tag::type>>(identities{});
+      return index_of<typename Tag::identity>(identities{});
     }
   }
 
@@ -311,4 +372,12 @@ template <typename... Tags> struct layer_universe<type_list<Tags...>> {
   static constexpr semantics::universe value = make(identities{});
 };
 
+// What the leaf can do, as C++ says of it. A leaf that cannot be constructed
+// of nothing is made by the factory its registration names.
+template <typename Leaf> constexpr semantics::leaf_traits leaf_traits_of() {
+  return {std::is_copy_constructible_v<Leaf>,
+          std::is_move_constructible_v<Leaf>,
+          std::is_default_constructible_v<Leaf>,
+          !std::is_default_constructible_v<Leaf>};
+}
 } // namespace dingo::detail
