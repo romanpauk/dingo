@@ -218,12 +218,13 @@ template <> constexpr materialized_request materialized<void>() {
 
 // The materialization of the source of a binding, which both containers run:
 // the static container through the typed access of its binding, the runtime
-// engine through the node of its binding. The access tells the storage of the
-// binding, whether it is resolved, the leaf it stores, its cell, and how the
-// cell is reset: when a transaction rolls back (rollback, of the cell and of
-// rollback_argument) and as the runtime is destroyed (reset). MayGuard and
-// MayRetain are what the facts may decide, as the code compiles: a static
-// binding that is never guarded or never retains has no code for it.
+// engine through the node of its binding. The access tells whether the
+// binding is resolved, the leaf it stores, its cell, which the recursion guard
+// names the binding by, and how the cell is reset: when a transaction rolls
+// back (rollback, of the cell and of rollback_argument) and as the runtime is
+// destroyed (reset). MayGuard and MayRetain are what the facts may decide, as
+// the code compiles: a static binding that is never guarded or never retains
+// has no code for it.
 //
 // It guards the binding against recursion, and an unresolved storage that
 // retains its source in a transaction materializes it persistently: a failed
@@ -243,7 +244,7 @@ auto run_materialization(const materialization_facts &facts,
       (MayGuard || MayRetain) && access.resolved();
   [[maybe_unused]] auto guard = [&] {
     if constexpr (MayGuard) {
-      return guard_wrapper(context, access.storage(), access.leaf(),
+      return guard_wrapper(context, access.cell_address(), access.leaf(),
                            materialization_guarded(facts, resolved));
     } else {
       return no_scope();
@@ -291,7 +292,6 @@ auto run_materialization(const materialization_facts &facts,
 template <typename Cell> struct cell_access {
   Cell &cell;
 
-  void *storage() const noexcept { return std::addressof(cell.storage()); }
   bool resolved() const noexcept { return storage_resolved(cell.storage()); }
   type_descriptor leaf() const noexcept {
     return described_type_v<leaf_type_t<typename Cell::storage_type::type>>;

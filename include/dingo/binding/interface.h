@@ -93,11 +93,11 @@ template <typename RTTI, typename Context> struct runtime_binding_node {
   resolved_address (*resolve)(interface_type &binding, construction_scope scope,
                               construction_scope construction, Context &context,
                               std::size_t index, type_descriptor requested);
-  void *(*storage)(interface_type &binding) noexcept;
-  void *(*cell)(interface_type &binding) noexcept;
+  // Where the cell of the binding lies in its record, after its header.
+  std::size_t cell_offset;
   // What the binding keeps of its instance, or none.
   detail::retention *(*retained)(interface_type &binding) noexcept;
-  bool (*resolved)(void *storage) noexcept;
+  bool (*resolved)(void *cell) noexcept;
   void (*reset)(void *cell) noexcept;
 };
 

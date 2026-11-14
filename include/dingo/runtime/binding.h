@@ -46,6 +46,15 @@ Cell &runtime_cell(runtime_binding_header &header) noexcept {
                                    runtime_cell_offset_v<Cell>);
 }
 
+// The container the factory of a binding resolves through: the level of local
+// bindings once there is one, and else the container the registration is made
+// in.
+template <typename Container>
+Container &resolution_container(runtime_binding_header &header) noexcept {
+  return *static_cast<Container *>(header.level != nullptr ? header.level
+                                                           : header.container);
+}
+
 // The record of a registration, in one allocation: the header the bindings
 // of its interfaces share, the cell of its storage, and the binding of each
 // of its interfaces. Only the edge of a binding knows the type of the cell.
@@ -153,10 +162,12 @@ template <typename RTTI, typename Context> struct runtime_binding_engine {
     const node_type &node;
     interface_type &binding;
 
-    void *storage() const noexcept { return node.storage(binding); }
-    bool resolved() const noexcept { return node.resolved(storage()); }
+    bool resolved() const noexcept { return node.resolved(cell_address()); }
     type_descriptor leaf() const noexcept { return node.leaf; }
-    void *cell_address() const noexcept { return node.cell(binding); }
+    void *cell_address() const noexcept {
+      return reinterpret_cast<unsigned char *>(&binding.header()) +
+             node.cell_offset;
+    }
     auto reset() const noexcept { return node.reset; }
     auto rollback() const noexcept { return &rollback_cell; }
     void *rollback_argument() const noexcept {
@@ -243,18 +254,6 @@ private:
   static constexpr const detail::binding_facts &facts =
       detail::binding_facts_v<Type, Storage, request_resolutions>::value;
 
-  static cell_type &cell(interface_base &binding) noexcept {
-    return detail::runtime_cell<cell_type>(binding.header());
-  }
-
-  // The container the factory resolves through: the level of local bindings
-  // once there is one, and else the container the registration is made in.
-  static Container &resolution_container(interface_base &binding) noexcept {
-    auto &header = binding.header();
-    return *static_cast<Container *>(
-        header.level != nullptr ? header.level : header.container);
-  }
-
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4702)
@@ -267,8 +266,9 @@ private:
                  construction_scope construction, runtime_context_type &context,
                  std::size_t resolution_index, type_descriptor requested) {
     using activation_type = detail::binding_activation<cell_type, Container &>;
-    activation_type activation{cell(binding), resolution_container(binding),
-                               scope};
+    activation_type activation{
+        detail::runtime_cell<cell_type>(binding.header()),
+        detail::resolution_container<Container>(binding.header()), scope};
     auto application = activation.application();
     return activation.use_runtime_source(
         construction, context, [&](auto &&source) -> resolved_address {
@@ -278,28 +278,21 @@ private:
         });
   }
 
-  static void *storage_address(interface_base &binding) noexcept {
-    return std::addressof(cell(binding).storage());
-  }
-
-  static void *cell_address(interface_base &binding) noexcept {
-    return std::addressof(cell(binding));
-  }
-
   // What the binding keeps of its instance, which a reference composed of it
   // may refer to; none when it keeps no instance.
   static detail::retention *retained(interface_base &binding) noexcept {
     if constexpr (cell_type::keeps_conversions) {
-      return std::addressof(cell(binding).retained());
+      return std::addressof(
+          detail::runtime_cell<cell_type>(binding.header()).retained());
     } else {
       (void)binding;
       return nullptr;
     }
   }
 
-  static bool is_resolved([[maybe_unused]] void *storage) noexcept {
+  static bool is_resolved([[maybe_unused]] void *cell) noexcept {
     if constexpr (detail::storage_can_reset<Storage>::value) {
-      return static_cast<Storage *>(storage)->is_resolved();
+      return static_cast<cell_type *>(cell)->storage().is_resolved();
     } else {
       return true;
     }
@@ -333,8 +326,7 @@ public:
                                       Container>(),
       Storage::conversions::is_stable,
       resolver(),
-      &storage_address,
-      &cell_address,
+      detail::runtime_cell_offset_v<cell_type>,
       &retained,
       &is_resolved,
       &reset_cell};
