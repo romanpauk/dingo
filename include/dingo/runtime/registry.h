@@ -458,6 +458,63 @@ private:
 #endif
   friend struct detail::request_resolution;
 
+  using base_lookup_key_type = detail::base_lookup_key<rtti_type>;
+
+  // A request a container selects through the base lookup: the key of its
+  // interface, and of its normalized interface, which selects it when its
+  // interface is not bound.
+  struct base_request {
+    base_lookup_key_type exact;
+    base_lookup_key_type value;
+    bool normalizes;
+  };
+
+  // Whether a request is selected through the base lookup: one of a type
+  // with a static key and no lookup of its own, which is not a collection.
+  template <typename Request, typename R, typename LookupKey>
+  static constexpr bool selects_by_base_lookup() {
+    using base_entry = typename store_type::base_lookup_entry;
+    using key_type = std::decay_t<LookupKey>;
+    if constexpr (collection_traits<R>::is_collection ||
+                  !detail::is_static_lookup_key_definition_v<key_type>) {
+      return false;
+    } else {
+      return std::is_same_v<typename store_type::template lookup_index_route<
+                                typename Request::exact_type, key_type>::entry,
+                            base_entry> &&
+             std::is_same_v<typename store_type::template lookup_index_route<
+                                typename Request::value_type, key_type>::entry,
+                            base_entry>;
+    }
+  }
+
+  template <typename Request, typename LookupKey>
+  static base_request base_request_of() {
+    using exact = typename Request::exact_type;
+    using value = typename Request::value_type;
+    return {store_type::template base_typed_key_lookup_key<exact, LookupKey>(),
+            store_type::template base_typed_key_lookup_key<value, LookupKey>(),
+            !std::is_same_v<value, exact>};
+  }
+
+  // Selects the binding of a request through the base lookup. It is of no
+  // request type.
+  runtime_selection select_base(const base_request &request) {
+    auto *state = runtime_bindings();
+    if (state == nullptr) {
+      return runtime_selection::miss();
+    }
+    using base_entry = typename store_type::base_lookup_entry;
+    auto selection =
+        this->template select_lookup<base_entry>(*state, request.exact);
+    if (request.normalizes &&
+        detail::selects_normalized_interface(selection.status)) {
+      selection =
+          this->template select_lookup<base_entry>(*state, request.value);
+    }
+    return selection;
+  }
+
   template <typename Request, typename LookupKey>
   runtime_selection select_request(const LookupKey &key) {
     static_assert(!std::is_const_v<typename Request::value_type>);

@@ -122,12 +122,95 @@ private:
            !collection_traits<R>::is_collection;
   }
 
+  // The selection of a request in the container and in the levels it falls
+  // back to before any parent, and the last level it was selected in.
+  struct level_selection {
+    typename runtime_base::runtime_selection selection;
+    self_type *last;
+  };
+
+  // Selects a request through the base lookup of the container, and of the
+  // levels of local bindings it falls back to: the first level that binds
+  // it, ambiguously or not, or else the last one. It is of no request type.
+  DINGO_NOINLINE level_selection
+  select_in_levels(const typename runtime_base::base_request &request) {
+    self_type *level = this;
+    for (;;) {
+      auto selection = level->select_base(request);
+      self_type *owner = level->owner_level();
+      if (selection.status != detail::binding_status::not_found ||
+          owner == nullptr) {
+        return {selection, level};
+      }
+      level = owner;
+    }
+  }
+
+  // Resolves a request of its selection in the levels: the binding it
+  // selected, or the parent of the last level, or else the origin, which
+  // answers what no container of the chain binds.
+  template <typename Request, typename R, typename Origin, typename LookupKey>
+  R resolve_selected_in_levels(construction_scope scope,
+                               runtime_context_type &context, Origin &origin,
+                               LookupKey &key, const level_selection &found) {
+    using lookup_type = typename Request::lookup_type;
+    if (found.selection.status == detail::binding_status::found) {
+      return this->template resolve_selected<Request, R>(found.selection, scope,
+                                                         context);
+    }
+    if (found.selection.status == detail::binding_status::ambiguous) {
+      detail::throw_type_ambiguous(detail::described_type_v<lookup_type>,
+                                   context);
+    }
+    if constexpr (parent_serves<lookup_type, LookupKey>()) {
+      if (auto *parent = found.last->parent()) {
+        return parent->template resolve<typename Request::user_type,
+                                        Request::removes_rvalue_references>(
+            scope, context, origin, key);
+      }
+    }
+    return origin.template unresolved<
+        Request, detail::may_auto_construct_v<typename Request::user_type>,
+        LookupKey, R>(scope, context, key);
+  }
+
+  // Resolves a request in the context of a request of this runtime.
+  template <typename Request, typename R, typename Origin, typename LookupKey>
+  R resolve_in_runtime(construction_scope scope, runtime_context_type &context,
+                       Origin &origin, LookupKey key) {
+    if constexpr (runtime_base::template selects_by_base_lookup<Request, R,
+                                                                LookupKey>()) {
+      return resolve_selected_in_levels<Request, R>(
+          scope, context, origin, key,
+          select_in_levels(
+              runtime_base::template base_request_of<Request, LookupKey>()));
+    } else {
+      return detail::request_resolution::resolve<Request, R>(
+          *this, scope, context, origin, std::move(key));
+    }
+  }
+
   // A request that may be cached reads the cache of its selected binding
   // before it enters a transaction.
   template <typename Request, typename R, typename LookupKey>
   R resolve_entry(LookupKey key) {
     using interface_type = typename Request::interface_type;
-    if constexpr (is_cacheable<Request, R>()) {
+    if constexpr (runtime_base::template selects_by_base_lookup<Request, R,
+                                                                LookupKey>()) {
+      const level_selection found = select_in_levels(
+          runtime_base::template base_request_of<Request, LookupKey>());
+      if constexpr (is_cacheable<Request, R>()) {
+        auto result = this->lookup_cache(found.selection,
+                                         detail::cache::key<interface_type>());
+        if (result.hit) {
+          return this->template resolve_cached<interface_type, R>(result);
+        }
+      }
+      return with_context([&](runtime_context_type &context) -> R {
+        return resolve_selected_in_levels<Request, R>(
+            entry_scope(caller_scope), context, *this, key, found);
+      });
+    } else if constexpr (is_cacheable<Request, R>()) {
       auto selected = this->template select_request<Request>(key);
       auto result =
           this->lookup_cache(selected, detail::cache::key<interface_type>());
@@ -226,8 +309,8 @@ private:
                                         runtime_context_type &context,
                                         Origin &origin, LookupKey key) {
     if (context.owns(this->runtime())) {
-      return detail::request_resolution::resolve<Request, R>(
-          *this, scope, context, origin, std::move(key));
+      return resolve_in_runtime<Request, R>(scope, context, origin,
+                                            std::move(key));
     }
     return resolve_nested<Request, R>(scope, context, origin, std::move(key));
   }
@@ -250,12 +333,12 @@ private:
   DINGO_NOINLINE R resolve_nested(construction_scope scope,
                                   runtime_context_type &context, Origin &origin,
                                   LookupKey key) {
-    return execute_transaction(
-        this->runtime(), context,
-        [&](runtime_context_type &local_context) -> R {
-          return detail::request_resolution::resolve<Request, R>(
-              *this, scope, local_context, origin, std::move(key));
-        });
+    return execute_transaction(this->runtime(), context,
+                               [&](runtime_context_type &local_context) -> R {
+                                 return resolve_in_runtime<Request, R>(
+                                     scope, local_context, origin,
+                                     std::move(key));
+                               });
   }
 
 public:
