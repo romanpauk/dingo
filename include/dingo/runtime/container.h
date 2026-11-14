@@ -127,19 +127,6 @@ protected:
                   "domain");
   }
 
-  template <typename Request, typename Result = Request>
-  Result resolve_binding(runtime_selection selection, construction_scope scope,
-                         runtime_context_type &context) {
-    auto &binding = *selection.binding;
-    if constexpr (detail::cache::supports_v<Request>) {
-      return ::dingo::resolve_binding_request<Request, rtti_type>(
-          scope, binding, context, detail::cache::key<Request>());
-    } else {
-      return ::dingo::resolve_binding_request<Request, rtti_type>(
-          scope, binding, context);
-    }
-  }
-
   struct cache_result {
     bool hit = false;
     void *address = nullptr;
@@ -155,13 +142,6 @@ protected:
       }
     }
     return {};
-  }
-
-  template <typename Request, typename Result>
-  static Result resolve_cached(cache_result result) {
-    assert(result.hit);
-    return detail::convert_resolved_binding<Request>(
-        {result.address, resolved_address::access_kind::borrow});
   }
 
   template <typename T> static T invalid_registration_return();
@@ -1231,17 +1211,20 @@ private:
     return with_lookup_request<Request>(key, &self_type::select_record);
   }
 
+  // The binding of a selection resolves the request, through the cache of
+  // the binding where the request may be cached.
   template <typename Request, typename R>
   R resolve_selected(runtime_selection selection, construction_scope scope,
                      runtime_context_type &context) {
-    return resolve_binding<typename Request::interface_type, R>(selection,
-                                                                scope, context);
-  }
-
-  template <typename Request>
-  [[noreturn]] void ambiguous(runtime_context_type &context) {
-    detail::throw_type_ambiguous(
-        detail::described_type_v<typename Request::lookup_type>, context);
+    using interface_type = typename Request::interface_type;
+    auto &binding = *selection.binding;
+    if constexpr (detail::cache::supports_v<interface_type>) {
+      return ::dingo::resolve_binding_request<interface_type, rtti_type>(
+          scope, binding, context, detail::cache::key<interface_type>());
+    } else {
+      return ::dingo::resolve_binding_request<interface_type, rtti_type>(
+          scope, binding, context);
+    }
   }
 
   template <typename R, typename LookupKey>
@@ -1345,14 +1328,32 @@ private:
   R resolve_in_runtime(construction_scope scope, runtime_context_type &context,
                        Origin &origin, LookupKey key) {
     if constexpr (!collection_traits<R>::is_collection) {
-      const level_selection found =
-          with_lookup_request<Request>(key, &self_type::select_in_levels);
-      return detail::request_resolution::resolve<Request, R>(
-          *found.last, scope, context, origin, std::move(key), found.selection);
+      return resolve_level<Request, R>(
+          with_lookup_request<Request>(key, &self_type::select_in_levels),
+          scope, context, origin, key);
     } else {
       return detail::request_resolution::resolve<Request, R>(
           *this, scope, context, origin, std::move(key));
     }
+  }
+
+  // Resolves a request of its selection in the levels: the binding found in
+  // the last level it was selected in, or else what the algorithm answers a
+  // miss of that level with.
+  template <typename Request, typename R, typename Origin, typename LookupKey>
+  R resolve_level(const level_selection &found, construction_scope scope,
+                  runtime_context_type &context, Origin &origin,
+                  LookupKey &key) {
+    if (found.selection.status == detail::binding_status::found) {
+      return found.last->template resolve_selected<Request, R>(found.selection,
+                                                               scope, context);
+    }
+    if (found.selection.status == detail::binding_status::ambiguous) {
+      detail::throw_type_ambiguous(
+          detail::described_type_v<typename Request::lookup_type>, context);
+    }
+    return detail::request_resolution::resolve_unbound<Request, R, false>(
+        *found.last, scope, context, origin, key);
   }
 
   // A request that may be cached reads the cache of its selected binding
@@ -1367,13 +1368,13 @@ private:
         auto result = this->lookup_cache(found.selection,
                                          detail::cache::key<interface_type>());
         if (result.hit) {
-          return this->template resolve_cached<interface_type, R>(result);
+          return detail::convert_resolved_binding<interface_type>(
+              {result.address, resolved_address::access_kind::borrow});
         }
       }
       return with_context([&](runtime_context_type &context) -> R {
-        return detail::request_resolution::resolve<Request, R>(
-            *found.last, entry_scope(caller_scope), context, *this,
-            std::move(key), found.selection);
+        return resolve_level<Request, R>(found, entry_scope(caller_scope),
+                                         context, *this, key);
       });
     } else {
       return with_context([&](runtime_context_type &context) -> R {

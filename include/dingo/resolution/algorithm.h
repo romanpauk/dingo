@@ -115,7 +115,8 @@ struct default_factory_constructs<Request, R, true> {
 //
 // - select_request<Request>(key): a selection of its bindings
 // - resolve_selected<Request, R>(selection, scope, context)
-// - ambiguous<Request>(context): rejects an ambiguous selection
+// - ambiguous<Request>(context): rejects an ambiguous selection the host
+//   makes as it compiles; one it makes as it runs is rejected here
 // - parent_serves<Lookup, LookupKey>() and parent(): the parent that answers
 //   requests the host does not bind
 // - count_collection<R>(key) and construct_request_collection<R>(scope,
@@ -131,54 +132,37 @@ struct default_factory_constructs<Request, R, true> {
 // only the branch they select. Every branch calls the host directly: a static
 // dependency chain instantiates the algorithm once per link, and each call
 // level counts against the template depth of the chain.
-// The selection a resolution makes in its host.
-struct select_in_host {};
-
 // Whether a host may be a level of the local bindings of a registration,
 // which answers a miss through the container the registration is made in,
 // before any parent: owner_level() is that container, or none.
 template <typename Host> struct has_owner_level : std::false_type {};
 
 struct request_resolution {
-  // The selection of a request: the one given, or the one the host makes.
-  template <typename Request, typename Host, typename Selection,
-            typename LookupKey>
-  static auto selected(Host &host, Selection given, LookupKey &key) {
-    if constexpr (std::is_same_v<Selection, select_in_host>) {
-      return host.template select_request<Request>(key);
-    } else {
-      (void)host, (void)key;
-      return given;
-    }
-  }
-
   // A no-key collection that is bound as a type resolves as that binding.
   // Otherwise the collection is constructed from the bindings of its element,
   // and a host without any is answered by the parent or the origin. Any other
-  // request resolves the binding the host selects, or the selection given,
-  // as one the cache of a runtime host was looked up in: one function, as a
-  // static dependency chain instantiates it once per link. A miss of a
-  // collection request constructs the collection when the host constructs
-  // collections.
+  // request resolves the binding the host selects: one function, as a static
+  // dependency chain instantiates it once per link. A miss of a collection
+  // request constructs the collection when the host constructs collections.
   template <typename Request, typename R, typename Host, typename Context,
-            typename Origin, typename LookupKey, typename Scope,
-            typename Selection = select_in_host>
+            typename Origin, typename LookupKey, typename Scope>
   static R resolve(Host &host, Scope scope, Context &context, Origin &origin,
-                   LookupKey key, Selection given = {}) {
+                   LookupKey key) {
     constexpr bool collection = collection_traits<R>::is_collection;
     if constexpr (collection && !is_no_lookup_key_v<LookupKey>) {
       return construct_collection<Request, R>(host, scope, context, origin,
                                               key);
     } else {
-      auto selection = selected<Request>(host, given, key);
+      auto selection = host.template select_request<Request>(key);
       using selection_type = decltype(selection);
       if constexpr (is_runtime_binding_selection<selection_type>::value) {
-        if (selection.status == binding_status::ambiguous) {
-          host.template ambiguous<Request>(context);
-        }
         if (selection.status == binding_status::found) {
           return host.template resolve_selected<Request, R>(selection, scope,
                                                             context);
+        }
+        if (selection.status == binding_status::ambiguous) {
+          throw_type_ambiguous(described_type_v<typename Request::lookup_type>,
+                               context);
         }
         return resolve_unbound<Request, R, collection>(host, scope, context,
                                                        origin, key);
@@ -282,6 +266,24 @@ struct request_resolution {
         lookup_key_index_type(key));
   }
 
+  // A request no binding of the host answers: a collection is constructed
+  // of what the host binds, anything else is missing.
+  template <typename Request, typename R, bool Collection, typename Host,
+            typename Context, typename Origin, typename LookupKey,
+            typename Scope>
+  static R resolve_unbound(Host &host, Scope scope, Context &context,
+                           Origin &origin, LookupKey &key) {
+    if constexpr (Collection) {
+      return construct_collection<Request, R>(host, scope, context, origin,
+                                              key);
+    } else {
+      return resolve_missing<Request, R,
+                             may_auto_construct_v<typename Request::user_type>,
+                             typename Request::lookup_type>(
+          host, scope, context, origin, key);
+    }
+  }
+
 private:
   template <typename Request, typename R, typename Host, typename Selection,
             typename Context, typename Scope>
@@ -307,22 +309,6 @@ private:
       return factory.template construct<R>(scope, context, host);
     } else {
       return resolve<Request, R>(host, scope, context, host, no_lookup_key());
-    }
-  }
-
-  template <typename Request, typename R, bool Collection, typename Host,
-            typename Context, typename Origin, typename LookupKey,
-            typename Scope>
-  static R resolve_unbound(Host &host, Scope scope, Context &context,
-                           Origin &origin, LookupKey &key) {
-    if constexpr (Collection) {
-      return construct_collection<Request, R>(host, scope, context, origin,
-                                              key);
-    } else {
-      return resolve_missing<Request, R,
-                             may_auto_construct_v<typename Request::user_type>,
-                             typename Request::lookup_type>(
-          host, scope, context, origin, key);
     }
   }
 
