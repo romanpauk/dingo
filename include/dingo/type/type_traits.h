@@ -96,6 +96,8 @@ struct alternative_value {
 //                  an emplace that cannot take any, such as that of a handle
 //                  of an array
 //   share_t<U>     for a sole owner: the sharing handle of the element U
+//   extent         optional, 0 by default: for an owning handle of an array,
+//                  its bound, when the handle holds an array of a known one
 //   wrap(v), empty_value()
 //                  for an optional value: a wrapper of v, and an empty one
 //
@@ -621,6 +623,7 @@ struct type_traits<
     std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> != 0)>>
     : semantics::shared_owner {
   using value_type = std::remove_extent_t<Array>;
+  static constexpr std::size_t extent = std::extent_v<Array, 0>;
   template <typename U>
   using rebind_t = std::shared_ptr<U[std::extent_v<Array, 0>]>;
 

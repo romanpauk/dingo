@@ -56,11 +56,12 @@ They also select the storage form, which decides the requests that each scope
 publishes for the wrapper.
 
 A wrapper declares `borrow` when its element can be borrowed as an object. An
-owning handle without `borrow` holds an array. A default conversion does not
-create an owning handle from a borrowed non-owning source. This rule applies to
-the leaf handle conversion. Alternative and optional conversions first select or
-unwrap their contained conversion. They then take its `borrow` or `consume`
-requirement.
+owning handle without `borrow` holds an array. Such a handle declares `extent`,
+the bound of the array, when it holds an array of a known bound. A default
+conversion does not create an owning handle from a borrowed non-owning source.
+This rule applies to the leaf handle conversion. Alternative and optional
+conversions first select or unwrap their contained conversion. They then take
+its `borrow` or `consume` requirement.
 
 An optional wrapper provides `value_type`, `get`, `empty`, `wrap`, and
 `empty_value`. Dingo uses them to keep an empty source empty and to wrap the
