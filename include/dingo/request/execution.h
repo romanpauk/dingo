@@ -138,6 +138,36 @@ struct has_keeper_at<
 template <semantics::step Kind, typename Target = void> struct step;
 
 // The element of a layer.
+// What a pointer the request owns points to, released: the request owns it,
+// and what keeps it deletes it as the request ends, as an array when the
+// pointer is to the first element of one.
+template <typename T, bool Array> struct released_pointer {
+  T *pointer;
+  released_pointer(const released_pointer &) = delete;
+  released_pointer &operator=(const released_pointer &) = delete;
+  ~released_pointer() {
+    if constexpr (Array) {
+      delete[] pointer;
+    } else {
+      delete pointer;
+    }
+  }
+};
+
+template <bool Array> struct release_step {
+  template <typename Leaf, typename Interface, typename T, bool Owned,
+            typename Keeper>
+  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+    static_assert(Owned && std::is_pointer_v<T>,
+                  "only a pointer the request owns is released");
+    using pointee = std::remove_pointer_t<T>;
+    T pointer = *from.object;
+    keeper.template keep<released_pointer<pointee, Array>>(
+        [&] { return released_pointer<pointee, Array>{pointer}; });
+    return carrier<pointee, true>{pointer};
+  }
+};
+
 template <> struct step<semantics::step::element> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Keeper>
@@ -678,36 +708,24 @@ constexpr semantics::element element_of_stack(stack_element of) {
   return of == stack_element::interface ? semantics::element::interface : semantics::element::leaf;
 }
 
-// A request of a stored object, planned as the code compiles: what C++ says
-// of the stored type Stored, of the request type Request and of the leaf
-// Leaf, classified as the semantics know them, and the plan of the request
-// for each lifetime it may need: as long as the container, when what it
-// refers to is passed to the caller, or as long as the request. The stored
-// object is made for the request by a scope that makes its instance
-// (Makes), or kept, and it is published early by a scope that does
-// (Early).
-template <typename Stored, typename Request, typename Leaf, bool Makes,
-          bool Early>
-struct request_plan {
-  using category = requested_category<Request>;
-  using shape = typename category::shape;
+// What a binding of a stored object publishes, planned as the code compiles,
+// of no request: the layer sources of its stored object, in a universe of the
+// layers it takes steps into, those it stores and those of the handles a
+// pointer it makes may be taken over by. The stored object is made for the
+// request by a scope that makes its instance (Makes), or kept, and it is
+// published early by a scope that does (Early).
+template <typename Stored, typename Leaf, bool Makes, bool Early>
+struct binding_plan {
   using stored_stack = stack_of_t<Stored, Leaf>;
-  using request_stack = stack_of_t<shape, Leaf>;
-  using universe_type = layer_universe<typename joined<
-      typename joined<typename stored_stack::layers,
-                      typename request_stack::layers>::type,
-      typename owning_layers<typename owning_handles<>::type>::type>::type>;
-  using identities = typename universe_type::identities;
-  using interface_type = innermost_t<shape, Leaf>;
+  using layers = typename joined<
+      typename stored_stack::layers,
+      typename owning_layers<typename owning_handles<>::type>::type>::type;
+  using universe_type = layer_universe<layers>;
 
-  static constexpr bool modeled =
-      category::modeled && stored_stack::element != stack_element::other &&
-      request_stack::element != stack_element::other;
-
-  static constexpr semantics::context context() {
+  static constexpr semantics::context context(bool abstract) {
     return {leaf_traits_of<Leaf>(),
             {Makes, false, Early},
-            request_stack::element == stack_element::interface,
+            abstract,
             static_cast<std::uint8_t>(
                 static_cast<unsigned>(
                     semantics::limitation::pointer_out_of_made_holder) |
@@ -731,6 +749,47 @@ struct request_plan {
     return made;
   }
 
+  // What the binding publishes for a request of the leaf, and for one of its
+  // abstract interface. Each is made once.
+  template <bool Abstract>
+  static constexpr semantics::search sources =
+      semantics::layer_sources(start(), context(Abstract));
+};
+
+// A request of a stored object, planned as the code compiles: what C++ says
+// of the stored type Stored, of the request type Request and of the leaf
+// Leaf, classified as the semantics know them, and the plan of the request
+// for each lifetime it may need: as long as the container, when what it
+// refers to is passed to the caller, or as long as the request. The request
+// is planned from what the binding publishes, in a universe of the layers of
+// the binding, which those of the request follow.
+template <typename Stored, typename Request, typename Leaf, bool Makes,
+          bool Early>
+struct request_plan {
+  using binding = binding_plan<Stored, Leaf, Makes, Early>;
+  using category = requested_category<Request>;
+  using shape = typename category::shape;
+  using stored_stack = typename binding::stored_stack;
+  using request_stack = stack_of_t<shape, Leaf>;
+  using universe_type =
+      layer_universe<typename joined<typename binding::layers,
+                                     typename request_stack::layers>::type>;
+  using identities = typename universe_type::identities;
+  using interface_type = innermost_t<shape, Leaf>;
+
+  static constexpr bool abstract =
+      request_stack::element == stack_element::interface;
+
+  static constexpr bool modeled =
+      category::modeled && stored_stack::element != stack_element::other &&
+      request_stack::element != stack_element::other;
+
+  static constexpr semantics::context context() {
+    semantics::context with = binding::context(abstract);
+    with.layers = &universe_type::value;
+    return with;
+  }
+
   static constexpr semantics::request goal() {
     semantics::request made;
     place_layers<universe_type>(made.layers, typename request_stack::layers{});
@@ -746,7 +805,8 @@ struct request_plan {
       return {};
     } else {
       constexpr semantics::context with = context();
-      const semantics::search found = semantics::reach(start(), with, goal());
+      const semantics::search found = semantics::reach_from(
+          binding::template sources<abstract>, with, goal());
       return semantics::plan_of(
           found,
           semantics::satisfy(found, goal(), category::value, needed, with));
@@ -776,6 +836,13 @@ struct typed_step {
     if constexpr (kind == semantics::step::wrap) {
       return planned<step<semantics::step::wrap, layer_type<reached.layers[0]>>,
                      stable>{};
+    } else if constexpr (kind == semantics::step::release) {
+      // The pointer is to the first element of an array when the step
+      // before decayed or handed over an array.
+      constexpr semantics::thing from = Plan.things[Index];
+      return planned<
+          release_step<from.layers[0] == semantics::array_pointer_layer>,
+          stable>{};
     } else if constexpr (kind == semantics::step::adopt) {
       return planned<adopt_step<layer_type<reached.layers[0]>,
                                 reached.layers[1] == semantics::array_layer>,
