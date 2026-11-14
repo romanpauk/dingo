@@ -245,7 +245,7 @@ struct constructor_methods_impl<T, DetectionMode, std::index_sequence<Is...>> {
   template <typename Type, typename Context, typename Container, typename Scope>
   static auto construct(Scope scope, Context &ctx, Container &container) {
     (void)scope;
-    return detail::construction_dispatch<Type, T>::construct(
+    return detail::construction_t<Type, T>::construct(
         ((void)Is,
          constructor_argument_impl<T, Context, Container, DetectionMode, Scope>(
              scope, ctx, container))...);
@@ -255,7 +255,7 @@ struct constructor_methods_impl<T, DetectionMode, std::index_sequence<Is...>> {
   static auto construct(void *ptr, Scope scope, Context &ctx,
                         Container &container) {
     (void)scope;
-    detail::construction_dispatch<Type, T>::construct(
+    detail::construction_t<Type, T>::construct(
         ptr,
         ((void)Is,
          constructor_argument_impl<T, Context, Container, DetectionMode, Scope>(

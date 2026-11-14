@@ -89,7 +89,7 @@ template <typename T, typename... Args> struct constructor<T(Args...)> {
   template <typename Type, typename Context, typename Container, typename Scope>
   static auto construct(Scope scope, Context &ctx, Container &container) {
     (void)scope;
-    return detail::construction_dispatch<Type, T>::construct(
+    return detail::construction_t<Type, T>::construct(
         detail::resolve_constructor_dependency<Args>(scope, ctx, container)...);
   }
 
@@ -97,7 +97,7 @@ template <typename T, typename... Args> struct constructor<T(Args...)> {
   static auto construct(void *ptr, Scope scope, Context &ctx,
                         Container &container) {
     (void)scope;
-    detail::construction_dispatch<Type, T>::construct(
+    detail::construction_t<Type, T>::construct(
         ptr,
         detail::resolve_constructor_dependency<Args>(scope, ctx, container)...);
   }

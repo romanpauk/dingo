@@ -288,8 +288,9 @@ TEST(constructor_detection_test,
 
 TEST(constructor_detection_test,
      ordinary_wrapper_construction_remains_in_place) {
-  auto value = detail::construction_dispatch<std::optional<immovable>,
-                                             immovable>::construct(11);
+  auto value =
+      detail::construction_t<std::optional<immovable>, immovable>::construct(
+          11);
   ASSERT_TRUE(value.has_value());
   EXPECT_EQ(value->value, 11);
 }
@@ -299,9 +300,7 @@ TEST(constructor_detection_test, selected_conversion_route_is_executed) {
   using conversion = detail::conversion_wrap<
       detail::wrap_alternative<long>, target,
       detail::type_conversion_path_t<long, int &&, consume>>;
-  using dispatch =
-      detail::construction_dispatch<target, int,
-                                    detail::converted_construction<conversion>>;
+  using dispatch = detail::converted_constructor<target, int, conversion>;
 
   auto value = dispatch::construct(7);
 

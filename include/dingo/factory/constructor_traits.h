@@ -144,21 +144,9 @@ template <typename Type, typename Selected>
 using construction_conversion_t =
     type_conversion_path_t<construction_result_t<Type>, Selected &&, consume>;
 
-template <typename Type, typename Selected,
-          typename Conversion = construction_conversion_t<Type, Selected>>
-struct construction_dispatch {
-  template <typename... Args> static auto construct(Args &&...args) {
-    return constructor_traits<Type>::construct(std::forward<Args>(args)...);
-  }
-
-  template <typename... Args> static auto construct(void *ptr, Args &&...args) {
-    constructor_traits<Type>::construct(ptr, std::forward<Args>(args)...);
-  }
-};
-
+// Type made of the Selected type a factory constructs, through Conversion.
 template <typename Type, typename Selected, typename Conversion>
-struct construction_dispatch<Type, Selected,
-                             converted_construction<Conversion>> {
+struct converted_constructor {
   using type = construction_result_t<Type>;
 
   template <typename... Args> static auto construct(Args &&...args) {
@@ -179,6 +167,22 @@ struct construction_dispatch<Type, Selected,
         Conversion{}));
   }
 };
+
+// What constructs Type of the Selected type a factory constructs: Type itself
+// when no conversion is needed, else the conversion of Selected to it.
+template <typename Type, typename Selected,
+          typename Conversion = construction_conversion_t<Type, Selected>>
+struct construction_select {
+  using type = constructor_traits<Type>;
+};
+
+template <typename Type, typename Selected, typename Conversion>
+struct construction_select<Type, Selected, converted_construction<Conversion>> {
+  using type = converted_constructor<Type, Selected, Conversion>;
+};
+
+template <typename Type, typename Selected>
+using construction_t = typename construction_select<Type, Selected>::type;
 } // namespace detail
 
 } // namespace dingo
