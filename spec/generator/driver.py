@@ -45,18 +45,12 @@ ASSERTION = re.compile(
 CRASH = "exited with"
 
 # The memory a compiler may take, in MiB, as the size of its address space:
-# the probes run as many compilers as there are processors, and a program of
-# many probes would otherwise take several GiB. A program holds as many
-# probes as fit in it, and one the compiler runs out of memory on anyway is
-# split into programs that do.
+# the probes run as many compilers as there are processors. It is a gate, not
+# a guide: a program the compiler runs out of memory on is not split, its
+# probes fail, and the size of programs or the library is to be changed.
 MEMORY_LIMIT = 1024
-# The share of the limit a program is sized to take, as the peak resident
-# memory of its compiler: its address space is larger.
-MEMORY_TARGET = 0.75
-# The probes of a class a program holds before a compile of them tells how
-# much memory they take, and the fewest a compile that tells it holds.
-INITIAL_PROBES = 32
-MEASURED_PROBES = 8
+# The probes a program holds.
+GROUP_PROBES = 64
 EXHAUSTED = re.compile(r"out of memory|memory exhausted|"
                        r"Cannot allocate memory|bad_alloc")
 OUT_OF_MEMORY = f"error: the compiler ran out of its {MEMORY_LIMIT} MiB"
@@ -98,52 +92,6 @@ def set_jobs(jobs):
     """Sets how many compilers run at once."""
     global COMPILES
     COMPILES = threading.BoundedSemaphore(jobs)
-
-
-class Budget:
-    """How many probes of a class fit in one program, learned from the peak
-    memory of its compiles: what a program takes without its probes, the
-    least any compile took, and the most a probe of the class took above
-    that. A compile that ran out of memory took at least the limit."""
-
-    def __init__(self):
-        self.lock = threading.Lock()
-        self.base = None
-        self.observed = {}
-
-    def record(self, key, probes, peak):
-        with self.lock:
-            self.base = peak if self.base is None else min(self.base, peak)
-            if probes >= MEASURED_PROBES or peak >= MEMORY_LIMIT:
-                self.observed.setdefault(key, []).append((probes, peak))
-
-    def probes(self, key):
-        with self.lock:
-            observed = self.observed.get(key)
-            if not observed:
-                return INITIAL_PROBES
-            per_probe = max((peak - self.base) / probes
-                            for probes, peak in observed)
-            available = MEMORY_LIMIT * MEMORY_TARGET - self.base
-        if per_probe <= 0:
-            return max(probes for probes, _ in observed)
-        return max(1, int(available / per_probe))
-
-
-# The budgets of the programs that are run and of those only compiled, which
-# take less memory.
-BUDGETS = {False: Budget(), True: Budget()}
-
-
-def budget_of(flags):
-    return BUDGETS[compiles_only(flags)]
-
-
-def memory_class(unit, probes):
-    """The class the memory of the probes is told by: a unit may name one,
-    otherwise it is the kind of unit."""
-    of = getattr(unit, "memory_class", None)
-    return of(probes[0]) if of else type(unit).__name__
 
 
 def split(probes, size):
@@ -198,40 +146,26 @@ def first_error(output):
 
 
 def run_compiler(command):
-    """Runs a compile; returns (returncode, stderr, peak): the peak resident
-    memory of the compiler in MiB, or None where it cannot be told."""
+    """Runs a compile; returns (returncode, stderr)."""
     with tempfile.TemporaryFile(mode="w+") as errors:
-        process = subprocess.Popen(command, stdout=subprocess.DEVNULL,
-                                   stderr=errors, text=True)
-        peak = None
-        if hasattr(os, "wait4"):
-            # The usage of a process holds the most that any process it
-            # waited for took: the compiler proper, which the driver waits
-            # for.
-            _, status, usage = os.wait4(process.pid, 0)
-            process.returncode = os.waitstatus_to_exitcode(status)
-            peak = usage.ru_maxrss / 1024
-        else:
-            process.wait()
+        process = subprocess.run(command, stdout=subprocess.DEVNULL,
+                                 stderr=errors, text=True)
         errors.seek(0)
-        return process.returncode, errors.read(), peak
+        return process.returncode, errors.read()
 
 
-def build_and_run(compiler, flags, directory, name, source, compiled=None):
+def build_and_run(compiler, flags, directory, name, source):
     """Compiles and runs one program; returns (records, stderr, crash): the
     records it printed, the compiler output when it did not compile, and how
-    it exited when it crashed. compiled is told the peak memory of the
-    compile, in MiB, when it can be told."""
+    it exited when it crashed."""
     cpp = directory / f"{name}.cpp"
     exe = directory / name
     cpp.write_text(source)
     output = [] if compiles_only(flags) else ["-o", str(exe)]
     with COMPILES:
-        returncode, stderr, peak = run_compiler(
+        returncode, stderr = run_compiler(
             compiler_command(compiler, *flags, str(cpp), *output))
     exhausted = returncode != 0 and EXHAUSTED.search(stderr)
-    if compiled is not None and (peak is not None or exhausted):
-        compiled(MEMORY_LIMIT if exhausted else peak)
     if returncode != 0:
         if exhausted:
             # What it reported before is not all it would, and names no probe.
@@ -314,25 +248,22 @@ def invalid(unit, probe, reason):
 
 def compile_probes(compiler, flags, directory, unit, name, probes):
     """Renders, compiles and runs probes in one program; returns
-    (records, stderr, crash, owners). The memory the compile takes is
-    recorded for the class of the probes."""
+    (records, stderr, crash, owners)."""
     source = unit.render(probes)
-    key = memory_class(unit, probes)
-    budget = budget_of(flags)
-    records, stderr, crash = build_and_run(
-        compiler, flags, directory, name, source,
-        lambda peak: budget.record(key, len(probes), peak))
+    records, stderr, crash = build_and_run(compiler, flags, directory, name,
+                                           source)
     return records, stderr, crash, owners_of(source, probes)
 
 
-def fitting(probes, unit, flags, exhausted=False):
-    """The parts of probes that fit in a program each, by what the probes of
-    their class take; fewer of them in each than in one that ran out of
-    memory."""
-    size = budget_of(flags).probes(memory_class(unit, probes))
-    if exhausted:
-        size = min(size, len(probes) // 2)
-    return split(probes, max(size, 1))
+def fitting(probes):
+    """The parts of probes a program holds each."""
+    return split(probes, GROUP_PROBES)
+
+
+def out_of_memory(unit, probes):
+    """The probes of a program the compiler ran out of memory on: each
+    fails, as the limit is not to be worked around."""
+    return [failure(unit, probe, OUT_OF_MEMORY) for probe in probes]
 
 
 def in_parts(make, compiler, flags, directory, unit, name, parts):
@@ -362,7 +293,7 @@ def probe_group(compiler, flags, directory, unit, name, probes):
     one at a time, concurrently, and so are the rest when a compile tells
     apart few of them: a failure they share is reported for one at a time.
     Probes that do not fit in one program are made in parts that do."""
-    parts = fitting(probes, unit, flags)
+    parts = fitting(probes)
     if len(parts) > 1:
         return in_parts(probe_group, compiler, flags, directory, unit, name,
                         parts)
@@ -372,10 +303,8 @@ def probe_group(compiler, flags, directory, unit, name, probes):
             compiler, flags, directory, unit, name, probes)
         if stderr is None and crash is None:
             return outcomes + records
-        if stderr == OUT_OF_MEMORY and len(probes) > 1:
-            return outcomes + in_parts(
-                probe_group, compiler, flags, directory, unit, name,
-                fitting(probes, unit, flags, exhausted=True))
+        if stderr == OUT_OF_MEMORY:
+            return outcomes + out_of_memory(unit, probes)
         failed = failed_probes(stderr, name, owners) if stderr else None
         if failed is None:
             break
@@ -411,7 +340,7 @@ def probe_shared(compiler, flags, directory, unit, name, probes):
     parts that do."""
     if not probes:
         return []
-    parts = fitting(probes, unit, flags)
+    parts = fitting(probes)
     if len(parts) > 1:
         return in_parts(probe_shared, compiler, flags, directory, unit, name,
                         parts)
@@ -419,9 +348,8 @@ def probe_shared(compiler, flags, directory, unit, name, probes):
         compiler, flags, directory, unit, name, probes)
     if stderr is None and crash is None:
         return records
-    if stderr == OUT_OF_MEMORY and len(probes) > 1:
-        return in_parts(probe_shared, compiler, flags, directory, unit, name,
-                        fitting(probes, unit, flags, exhausted=True))
+    if stderr == OUT_OF_MEMORY:
+        return out_of_memory(unit, probes)
     failed = (failed_probes(stderr, name, owners) if stderr else None) or {}
     outcomes = [failure(unit, probe, error)
                 for probe, error in failed.items()]

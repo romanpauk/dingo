@@ -136,11 +136,10 @@ The probes limit the memory of the compilers:
   available memory holds. `--jobs <n>` sets a different number.
 - Each compiler runs in an address space of 1 GiB (`MEMORY_LIMIT` in
   [`spec/generator/driver.py`](../spec/generator/driver.py)).
-- A program holds as many probes as fit in three quarters of that limit. The
-  peak memory of earlier compiles with the same container and position gives
-  this number.
-- When the compiler runs out of memory, the probes split the program into
-  smaller programs. A probe that does not fit in a program alone is a defect.
+- A program holds 64 probes (`GROUP_PROBES`).
+- The limit is a gate: the probes do not split a program the compiler runs out
+  of memory on. Its probes fail, which the check reports, and the size of the
+  programs or the library is then to be changed.
 
 ## Unit Tests
 
