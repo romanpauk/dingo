@@ -498,35 +498,6 @@ private:
 public:
   // A scope that consumes its instances produces a value for every request.
   static constexpr bool consumes = policy::consumes;
-  static constexpr bool retains_unresolved_source =
-      policy::retains_unresolved_source;
-
-  template <typename Leaf, typename Context, typename Storage>
-  static auto make_guard([[maybe_unused]] Context &context,
-                         [[maybe_unused]] const Storage &storage) {
-    if constexpr (!materialization_guard_enabled_v<policy::guard, Storage,
-                                                   Context>) {
-      return no_materialization_scope();
-    } else if constexpr (policy::guard ==
-                         materialization_guard::while_unresolved) {
-      return recursion_guard_wrapper(context, &storage,
-                                     detail::described_type_v<Leaf>,
-                                     !storage.is_resolved());
-    } else {
-      return recursion_guard(context, &storage, detail::described_type_v<Leaf>);
-    }
-  }
-
-  // Only unresolved storage can retain source or dependency state; once
-  // resolved, materialization reads from stable storage.
-  template <typename Storage>
-  static bool retains_source([[maybe_unused]] const Storage &storage) {
-    if constexpr (policy::retains_unresolved_source) {
-      return !storage.is_resolved();
-    } else {
-      return false;
-    }
-  }
 
   template <typename Context, typename Storage, typename Container,
             typename Scope>

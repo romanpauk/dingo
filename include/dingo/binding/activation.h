@@ -9,6 +9,7 @@
 
 #include <dingo/base/type_list.h>
 #include <dingo/binding/cache.h>
+#include <dingo/binding/materialization.h>
 #include <dingo/binding/model.h>
 #include <dingo/binding/resolution.h>
 #include <dingo/context/resolution.h>
@@ -176,6 +177,61 @@ inline constexpr bool takes_made_pointee_v =
     hands_over_made_pointers_v<Storage> &&
     storage_form_traits<typename Storage::type>::form == storage_form::pointer;
 
+// Whether a storage is resolved: one that keeps no instance always is.
+template <typename Storage>
+bool storage_resolved([[maybe_unused]] const Storage &storage) noexcept {
+  if constexpr (storage_can_reset<Storage>::value) {
+    return storage.is_resolved();
+  } else {
+    return true;
+  }
+}
+
+// The materialization facts of a storage, in a context, through the
+// container its factory resolves in; what it yields is known only of that.
+template <typename Storage, typename Context, typename Owner = void>
+constexpr materialization_facts materialization_facts_of() {
+  using policy = scope_traits<typename Storage::tag_type>;
+  constexpr bool guarded =
+      materialization_guard_enabled_v<policy::guard, Storage, Context>;
+  bool yields_value = false;
+  if constexpr (!std::is_void_v<Owner>) {
+    yields_value = materializes_value_source_v<Storage, Context, Owner>;
+  }
+  return {guarded && policy::guard == materialization_guard::always,
+          guarded && policy::guard == materialization_guard::while_unresolved,
+          policy::retains_unresolved_source,
+          policy::consumes,
+          yields_value,
+          std::is_trivially_move_constructible_v<typename Storage::type>};
+}
+
+// The shape of a request of a type a source is materialized for.
+template <typename Request> constexpr materialized_request materialized() {
+  return {std::is_lvalue_reference_v<Request> || std::is_pointer_v<Request>,
+          std::is_rvalue_reference_v<Request>};
+}
+
+template <> constexpr materialized_request materialized<void>() {
+  return {false, false};
+}
+
+// Guards the materialization of a storage against recursion, as its facts
+// decide; nothing guards a storage they never guard.
+template <bool Guarded, typename Storage, typename Context>
+auto guard_materialization(
+    [[maybe_unused]] Context &context, [[maybe_unused]] const Storage &storage,
+    [[maybe_unused]] const materialization_facts &facts) {
+  if constexpr (!Guarded) {
+    return no_materialization_scope();
+  } else {
+    return recursion_guard_wrapper(
+        context, &storage,
+        described_type_v<leaf_type_t<typename Storage::type>>,
+        materialization_guarded(facts, storage_resolved(storage)));
+  }
+}
+
 // The application of the resolutions of a binding to the source its storage
 // yields. It is apart from the activation, which also knows the container
 // the factory resolves its dependencies through, so that a resolution is
@@ -184,20 +240,15 @@ inline constexpr bool takes_made_pointee_v =
 template <typename Storage, typename Scope = construction_scope>
 struct binding_application {
   using storage_type = Storage;
-  using materialization_traits =
-      scope_materialization<typename storage_type::tag_type>;
 
-  // Whether the source of a consuming scope is placed in the context: a
-  // runtime context places every one, and a static one that of an rvalue
-  // request, which refers to what it is converted to, unless it is moved
-  // trivially, which costs nothing.
+  // Whether the source of a request is placed in the context, as the
+  // materialization of the storage places it.
   template <typename Request, typename Context>
   static constexpr bool places_source() {
-    return materialization_traits::consumes &&
-           (is_runtime_context_v<Context> ||
-            (std::is_rvalue_reference_v<Request> &&
-             !std::is_trivially_move_constructible_v<
-                 typename storage_type::type>));
+    return materialization_placement(
+               materialization_facts_of<storage_type, Context>(),
+               materialized<Request>(),
+               is_runtime_context_v<Context>) == source_placement::in_context;
   }
 
   Scope scope;
@@ -288,17 +339,17 @@ struct binding_activation {
       scope_materialization<typename storage_type::tag_type>;
   using application_type = binding_application<storage_type, Scope>;
 
-  template <typename Request, typename Context>
-  static constexpr bool places_source() {
-    return application_type::template places_source<Request, Context>();
-  }
+  template <typename Context>
+  static constexpr materialization_facts facts =
+      materialization_facts_of<storage_type, Context, owner_type>();
 
   // Whether an address request is served from a value the storage yields,
   // which is placed in the context and lives only as long as the context.
   template <typename Request, typename Context>
   static constexpr bool places_value_in_context =
-      (std::is_lvalue_reference_v<Request> || std::is_pointer_v<Request>) &&
-      materializes_value_source_v<storage_type, Context, owner_type>;
+      materialization_placement(facts<Context>, materialized<Request>(),
+                                is_runtime_context_v<Context>) ==
+      source_placement::value_in_context;
 
   Cell &cell;
   Dependencies dependencies;
@@ -313,28 +364,31 @@ struct binding_activation {
   template <typename Request, typename Context, typename Fn>
   decltype(auto) with_source(Context &context, Fn &&fn) {
     auto &storage = cell.storage();
-    [[maybe_unused]] auto guard = materialization_traits::template make_guard<
-        leaf_type_t<typename storage_type::type>>(context, storage);
+    constexpr const materialization_facts &materialization = facts<Context>;
+    constexpr source_placement placement =
+        materialization_placement(materialization, materialized<Request>(),
+                                  is_runtime_context_v<Context>);
+    [[maybe_unused]] auto guard =
+        guard_materialization < materialization.guards_always ||
+        materialization.guards_unresolved > (context, storage, materialization);
     if constexpr (is_runtime_context_v<Context>) {
       return with_transaction_source(context, std::forward<Fn>(fn));
-    } else if constexpr ((std::is_lvalue_reference_v<Request> ||
-                          std::is_pointer_v<Request>) &&
-                         materializes_value_source_v<storage_type, Context,
-                                                     owner_type>) {
-      // places_value_in_context, spelled out: a dependency chain resolves
-      // through here, and every template level it adds is paid per link.
+    } else if constexpr (placement == source_placement::value_in_context) {
       using source_type =
           std::remove_cv_t<std::remove_reference_t<decltype(storage.resolve(
               scope, context, dependencies))>>;
-      refuse_caller_reference<Request>(
-          scope, detail::described_type_v<source_type>, context);
+      if constexpr (refuses_caller_address(materialization,
+                                           materialized<Request>())) {
+        refuse_caller_reference<Request>(
+            scope, detail::described_type_v<source_type>, context);
+      }
       auto &value = context.template construct_from<source_type>(
           scope, [&]() -> decltype(auto) {
             return storage.resolve(scope, context, dependencies);
           });
       auto source = lvalue_source<source_type>(value);
       return std::forward<Fn>(fn)(source);
-    } else if constexpr (places_source<Request, Context>()) {
+    } else if constexpr (placement == source_placement::in_context) {
       // What an rvalue request refers to lives in the context: so does the
       // source it is converted from.
       auto &source = materialization_traits::materialize_source_in_context(
@@ -405,8 +459,9 @@ private:
   // destroyed.
   template <typename Context, typename Fn>
   decltype(auto) with_transaction_source(Context &context, Fn &&fn) {
-    if constexpr (materialization_traits::retains_unresolved_source) {
-      if (materialization_traits::retains_source(cell.storage())) {
+    if constexpr (facts<Context>.retains_unresolved) {
+      if (materialization_retains(facts<Context>,
+                                  storage_resolved(cell.storage()), true)) {
         // A source is retained only while the storage is unresolved, so a
         // failed transaction returns the storage to that state. The reset
         // is registered once the cell is resolved, after what it depends

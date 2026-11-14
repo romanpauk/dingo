@@ -94,12 +94,6 @@ private:
   void *cell_;
 };
 
-template <typename Context>
-void check_caller_address(bool places, construction_scope scope,
-                          const resolved_address &resolved,
-                          type_descriptor requested, type_descriptor registered,
-                          Context &context);
-
 // The engine of the runtime bindings of a container. It resolves the request
 // a binding publishes, or derives one it does not, of the node of the
 // binding: one function for every binding of the container.
@@ -149,12 +143,13 @@ template <typename RTTI, typename Context> struct runtime_binding_engine {
                                   const request_type &request,
                                   std::size_t index, const void *cache_key) {
     void *storage = node.storage(binding);
+    const materialization_facts &materialization = node.materialization;
+    const bool resolved = node.resolved(storage);
     recursion_guard_wrapper guard(
         context, storage, node.leaf,
-        node.guards_always ||
-            (node.guards_unresolved && !node.resolved(storage)));
+        materialization_guarded(materialization, resolved));
     resolved_address result{};
-    if (node.retains_unresolved && !node.resolved(storage)) {
+    if (materialization_retains(materialization, resolved, true)) {
       // A source is retained only while the storage is unresolved, so a
       // failed transaction returns the storage to that state. The reset is
       // registered once the cell is resolved, after what it depends on, so
@@ -174,8 +169,15 @@ template <typename RTTI, typename Context> struct runtime_binding_engine {
       result = node.resolve(binding, scope, scope, context, index,
                             request.requested_type);
     }
-    check_caller_address(node.places, scope, result, request.requested_type,
-                         node.registered, context);
+    // An address into a value placed in the context is refused to the
+    // caller, which uses it after the context ends.
+    if (refuses_caller_address(
+            materialization, materialized_request_of(request.requested_type)) &&
+        scope.is_caller() &&
+        result.access == resolved_address::access_kind::borrow) {
+      throw make_type_not_convertible_exception(request.requested_type,
+                                                node.registered, context);
+    }
     // Request caching is intentionally stricter than conversion caching and
     // is published with transaction rollback tracking.
     if (cache_key != nullptr &&
@@ -189,21 +191,6 @@ template <typename RTTI, typename Context> struct runtime_binding_engine {
     static_cast<const node_type *>(node)->reset(cell);
   }
 };
-
-// Refuses the caller an address into a value a storage places in the
-// context, which ends before the caller uses it.
-template <typename Context>
-void check_caller_address(bool places, construction_scope scope,
-                          const resolved_address &resolved,
-                          type_descriptor requested, type_descriptor registered,
-                          Context &context) {
-  if (places && scope.is_caller() &&
-      (requested.reference == type_reference_kind::lvalue ||
-       requested.pointee != nullptr) &&
-      resolved.access == resolved_address::access_kind::borrow) {
-    throw make_type_not_convertible_exception(requested, registered, context);
-  }
-}
 
 // Applies a resolution to a source. A source the transaction keeps is an
 // lvalue, so that a reference or a pointer can refer to it; a value is moved
@@ -280,14 +267,6 @@ private:
 
   static constexpr const detail::binding_facts &facts =
       detail::binding_facts_of<Type, Storage>::value;
-
-  // A storage that makes a value for the request places it in the context,
-  // which ends before the caller of the container uses an address into it,
-  // or into what it owns, as the static container knows as it compiles. A
-  // pointer the storage makes hands over what it points to.
-  static constexpr bool places =
-      detail::materializes_value_source_v<Storage, runtime_context_type,
-                                          Container>;
 
   static cell_type &cell(interface_base &binding) noexcept {
     return detail::runtime_cell<cell_type>(binding.header());
@@ -368,11 +347,6 @@ private:
     }
   }
 
-  using scope_policy = scope_traits<typename Storage::tag_type>;
-  static constexpr bool guarded =
-      detail::materialization_guard_enabled_v<scope_policy::guard, Storage,
-                                              runtime_context_type>;
-
 public:
   static constexpr node_type node{
       &detail::runtime_binding_engine<rtti_type,
@@ -380,11 +354,8 @@ public:
       &facts,
       registered_type(),
       detail::described_type_v<leaf_type_t<typename Storage::type>>,
-      guarded &&scope_policy::guard == materialization_guard::always,
-      guarded &&scope_policy::guard == materialization_guard::while_unresolved,
-      detail::scope_materialization<
-          typename Storage::tag_type>::retains_unresolved_source,
-      places,
+      detail::materialization_facts_of<Storage, runtime_context_type,
+                                       Container>(),
       Storage::conversions::is_stable,
       resolver(),
       &storage_of,

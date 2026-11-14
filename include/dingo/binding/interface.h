@@ -11,6 +11,7 @@
 #include <dingo/base/construction_scope.h>
 #include <dingo/base/type_descriptor.h>
 #include <dingo/binding/cache.h>
+#include <dingo/binding/materialization.h>
 #include <dingo/request/decomposition.h>
 
 #include <cassert>
@@ -81,14 +82,9 @@ template <typename RTTI, typename Context> struct runtime_binding_node {
   type_descriptor registered;
   // The leaf of what the binding stores, which its recursion guard names.
   type_descriptor leaf;
-  // Whether the binding is guarded against recursion on every resolution,
-  // or while its storage is unresolved.
-  bool guards_always;
-  bool guards_unresolved;
-  // Whether an unresolved storage retains the source it materializes.
-  bool retains_unresolved;
-  // Whether the storage places a value in the context.
-  bool places;
+  // How the source of the binding is materialized, which the static
+  // container decides by too.
+  detail::materialization_facts materialization;
   // Whether the binding caches the addresses it resolves.
   bool caches;
   // Materializes the source of the binding, in the construction scope, and
