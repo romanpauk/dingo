@@ -85,6 +85,28 @@ function(configure_quality_targets out_check_targets)
   )
   add_custom_target(conversion-check DEPENDS ${conversion_dir}/checked)
 
+  # The semantics check: semantics_check.py compares the semantics of the
+  # library, of no C++ type, with the specification, for every stored object
+  # and every request.
+  set(semantics_dir ${PROJECT_BINARY_DIR}/semantics)
+  set(semantics_configuration ${semantics_dir}/configuration.txt)
+  file(CONFIGURE OUTPUT ${semantics_configuration} CONTENT
+    "${CMAKE_CXX_COMPILER} ${CMAKE_CXX_COMPILER_VERSION}\n")
+  add_custom_command(
+    OUTPUT ${semantics_dir}/checked
+    COMMENT "Comparing the semantics with the specification"
+    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/spec/semantics_check.py
+      --work ${semantics_dir} --compiler ${CMAKE_CXX_COMPILER}
+      "--flags=-std=c++17 -O2 -I${PROJECT_SOURCE_DIR}/include"
+    COMMAND ${CMAKE_COMMAND} -E touch ${semantics_dir}/checked
+    DEPENDS ${model_inputs} ${semantics_configuration}
+      ${PROJECT_SOURCE_DIR}/test/model/semantics.cpp
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    USES_TERMINAL
+    VERBATIM
+  )
+  add_custom_target(semantics-check DEPENDS ${semantics_dir}/checked)
+
   # The emptiness check: emptiness.py registers a stored object that holds
   # no leaf, a null handle, an empty optional or an alternative type that
   # holds the other alternative, and resolves every request the
@@ -135,8 +157,8 @@ function(configure_quality_targets out_check_targets)
     add_custom_target(${layer}-check DEPENDS ${layer_dir}/checked)
   endforeach()
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    list(APPEND check_targets conversion-check emptiness-check storage-check
-      resolution-check model-check-small)
+    list(APPEND check_targets semantics-check conversion-check emptiness-check
+      storage-check resolution-check model-check-small)
   endif()
 
   # A report, not a check: it ranks the headers and never fails.

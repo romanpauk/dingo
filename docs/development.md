@@ -43,6 +43,9 @@ environment provides the development tools.
 - `check`: runs all verification targets that are available on the platform.
 - `complexity-report`: prints where the complexity of the headers is. It is a
   report, not part of `check`. See [Complexity Report](#complexity-report).
+- `semantics-check`: compares the semantics of the library, of no C++ type, with
+  the specification, for every stored object and every request. See
+  [Layered Semantics](architecture/layered-semantics.md).
 - `conversion-check`: checks what the conversion layer of each registration
   publishes, and the copies and the moves of its conversions, against the
   [Specification](specification.md#conversion-check).
@@ -57,11 +60,11 @@ environment provides the development tools.
   probes of the [Specification](specification.md). See
   [Model Checks](#model-checks).
 
-With GCC and clang, `check` includes `conversion-check`, `emptiness-check`,
-`storage-check`, `resolution-check` and `model-check-small`. `includes-tidy` and
-`includes-check` are not available on Windows. The `sources-format*`,
-`includes-tidy` and `includes-check` targets need `DINGO_CLANG_TOOLS_ENABLED=ON`
-(the default).
+With GCC and clang, `check` includes `semantics-check`, `conversion-check`,
+`emptiness-check`, `storage-check`, `resolution-check` and `model-check-small`.
+`includes-tidy` and `includes-check` are not available on Windows. The
+`sources-format*`, `includes-tidy` and `includes-check` targets need
+`DINGO_CLANG_TOOLS_ENABLED=ON` (the default).
 
 ## Complexity Report
 
