@@ -905,6 +905,7 @@ private:
         }
         return commit_registration<storage_type>(
             registration_key{}, std::forward<Arg>(arg), interface_types{},
+            std::make_index_sequence<type_list_size_v<interface_types>>{},
             key_values...);
       }
     }
@@ -1045,9 +1046,11 @@ private:
   // function of the container. Arg is the type of the factory argument as it
   // was passed.
   template <typename TypeStorage, typename LookupKey, typename Arg,
-            typename... TypeInterfaces, typename... KeyValueArgs>
+            typename... TypeInterfaces, std::size_t... Indexes,
+            typename... KeyValueArgs>
   container_proxy commit_registration(LookupKey lookup_key, Arg &&arg,
                                       type_list<TypeInterfaces...>,
+                                      std::index_sequence<Indexes...>,
                                       KeyValueArgs &...key_values) {
     using interfaces = type_list<TypeInterfaces...>;
     using cell_type = detail::binding_cell<TypeStorage>;
@@ -1067,25 +1070,15 @@ private:
         (insert_count<TypeInterfaces, interfaces, KeyValueArgs...>() + ... + 0);
     lookup_insert inserts[count + 1] = {};
     lookup_insert *out = inserts;
-    insert_all<TypeInterfaces...>(out, lookup_key, static_keys, keys,
-                                  std::index_sequence_for<TypeInterfaces...>{});
+    (lookup_inserts<Indexes, TypeInterfaces, interfaces>(
+         out, lookup_key, std::addressof(std::get<Indexes>(static_keys)), keys),
+     ...);
     return commit_record(
         registration_node_v<TypeStorage, record, TypeInterfaces...>::value,
         inserts, static_cast<std::size_t>(out - inserts),
         &construct_cell<cell_type, Arg>,
         const_cast<void *>(
             static_cast<const volatile void *>(std::addressof(arg))));
-  }
-
-  template <typename... TypeInterfaces, typename LookupKey, typename StaticKeys,
-            typename KeyValues, std::size_t... Indexes>
-  static void insert_all(lookup_insert *&out, const LookupKey &lookup_key,
-                         const StaticKeys &static_keys, KeyValues &key_values,
-                         std::index_sequence<Indexes...>) {
-    (lookup_inserts<Indexes, TypeInterfaces, type_list<TypeInterfaces...>>(
-         out, lookup_key, std::addressof(std::get<Indexes>(static_keys)),
-         key_values),
-     ...);
   }
 
   // Commits a registration of its node, in one transaction: constructs its
