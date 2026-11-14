@@ -138,6 +138,14 @@ def possible(layer):
     return layer.may_be_empty or not layer.has_empty_value
 
 
+def possible_conversion(source, target):
+    """Whether an owned value of a layer can convert to another, taking over
+    or sharing its element: only a layer that owns its element alone hands
+    it over, and only to a layer that owns an element apart from it."""
+    return (source.owner is Owner.SOLE and source.shares_element and
+            target.owner is not Owner.NONE and target.shares_element)
+
+
 @dataclass(frozen=True)
 class LeafTraits:
     copyable: bool

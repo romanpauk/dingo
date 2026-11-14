@@ -46,6 +46,8 @@ environment provides the development tools.
 - `semantics-check`: compares the semantics of the library, of no C++ type, with
   the specification, for every stored object and every request. See
   [Layered Semantics](architecture/layered-semantics.md).
+- `semantics-check-pairs`: the same, and for every pair of layers a type could
+  define. It takes minutes and is not part of `check`.
 - `conversion-check`: checks what the conversion layer of each registration
   publishes, and the copies and the moves of its conversions, against the
   [Specification](specification.md#conversion-check).

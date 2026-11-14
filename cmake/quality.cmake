@@ -106,6 +106,17 @@ function(configure_quality_targets out_check_targets)
     VERBATIM
   )
   add_custom_target(semantics-check DEPENDS ${semantics_dir}/checked)
+  # Every pair of layers a type could define too, which takes minutes: not
+  # part of check.
+  add_custom_target(semantics-check-pairs
+    COMMENT "Comparing the semantics with the specification, every pair of layers"
+    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/spec/semantics_check.py
+      --work ${semantics_dir}/pairs --compiler ${CMAKE_CXX_COMPILER}
+      "--flags=-std=c++17 -O2 -I${PROJECT_SOURCE_DIR}/include" --pairs
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    USES_TERMINAL
+    VERBATIM
+  )
 
   # The emptiness check: emptiness.py registers a stored object that holds
   # no leaf, a null handle, an empty optional or an alternative type that

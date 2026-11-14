@@ -14,10 +14,16 @@ does. Both domains are finite, so the comparison is complete.
 - Every layer a type could define: each combination of the properties of a
   layer, beside the layers of C++ itself, stored and requested in every
   stack of it and of a pointer, of every scope and leaf.
+- Every pair of layers a type could define, with each conversion between
+  them that is possible: stored and requested in every stack of both of them
+  and of a pointer, of every scope and leaf. With --pairs only: it takes
+  longer.
 """
 
 import argparse
+import dataclasses
 import itertools
+import multiprocessing
 import os
 from pathlib import Path
 import shlex
@@ -173,6 +179,86 @@ def swept():
                                context, start, goals)
 
 
+def pairs():
+    """Every pair of layers a type could define, each with the conversions
+    between them that are possible: none, either or both."""
+    made = list(made_layers())
+    for first, second in itertools.combinations(made, 2):
+        ways = [(first, second), (second, first)]
+        ways = [way for way in ways if semantics.possible_conversion(*way)]
+        for count in range(len(ways) + 1):
+            for converting in itertools.combinations(ways, count):
+                yield tuple(dataclasses.replace(
+                    layer, converts_to=tuple(
+                        target.name for source, target in converting
+                        if source is layer))
+                    for layer in (first, second))
+
+
+def paired(universes):
+    """The stored objects and the requests of pairs of layers: those that
+    hold both layers, requested in every stack of them, of a pointer and of
+    an array; and those that hold either or none, requested in the stacks of
+    both, which the domain of every single layer has not."""
+    for first, second in universes:
+        semantics.LAYERS[first.name] = first
+        semantics.LAYERS[second.name] = second
+        semantics.reachable.cache_clear()
+        names = (first.name, second.name)
+        universe = LANGUAGE + names
+        stacks = [stack for depth in range(4)
+                  for stack in itertools.product(names + ("pointer",),
+                                                 repeat=depth)]
+        stacks += [(name, array) for name in names
+                   for array in ("array", "array2")]
+        every = [(stack, element, f"{list(stack)}/{element}")
+                 for stack in stacks for element in ELEMENTS]
+        both = [goal for goal in every if set(names) <= set(goal[0])]
+        stored = [((first.name, second.name), every),
+                  ((second.name, first.name), every),
+                  ((), both), ((first.name,), both), ((second.name,), both)]
+        for scope, scope_traits in semantics.SCOPES.items():
+            for leaf, traits in semantics.LEAVES.items():
+                for abstract in (False, True):
+                    context = semantics.Context(
+                        traits, scope_traits, abstract, semantics.LIMITATIONS,
+                        universe)
+                    for layers, goals in stored:
+                        if not makes(layers, context):
+                            continue
+                        start = semantics.Thing(
+                            layers, "leaf",
+                            (lifetime(scope_traits),) * (len(layers) + 1),
+                            (semantics.Origin.MADE if scope_traits.makes
+                             else semantics.Origin.BORROWED),
+                            instance=True)
+                        yield (f"{list(layers)}/{scope.value}/{leaf.value}/"
+                               f"{'interface' if abstract else 'leaf'}/"
+                               f"{[(layer.name, layer.converts_to) for layer in (first, second)]}",
+                               context, start, goals)
+
+
+def compare_part(arguments):
+    """compare of a part of the pairs, in a process of its own."""
+    program, universes = arguments
+    return compare(program, paired(universes))
+
+
+def compare_pairs(program, jobs):
+    """compare of every pair, in parts compared in processes at once."""
+    universes = list(pairs())
+    size = 64
+    parts = [(program, universes[index:index + size])
+             for index in range(0, len(universes), size)]
+    count, resolved, differ = 0, 0, []
+    with multiprocessing.Pool(jobs) as pool:
+        for found in pool.imap_unordered(compare_part, parts):
+            count += found[0]
+            resolved += found[1]
+            differ += found[2][:20]
+    return count, resolved, differ
+
+
 def expected(reached, context, layers, element):
     """The answers of the specification for a request, by its search of
     every thing the stored object reaches."""
@@ -231,7 +317,8 @@ def compare(program, domain):
                    for answer in want.split())
     return len(cases), resolved, [
         (name, want, got.strip())
-        for (name, want), got in zip(cases, answers) if want != got.strip()]
+        for (name, want), got in zip(cases, answers)
+        if want != got.strip()][:20]
 
 
 def main():
@@ -240,6 +327,10 @@ def main():
     parser.add_argument("--compiler", default=os.environ.get("CXX", "c++"))
     parser.add_argument("--flags", default="-std=c++17 -O2 -Iinclude",
                         help="compiler flags, with include paths")
+    parser.add_argument("--pairs", action="store_true",
+                        help="compare every pair of layers a type could "
+                        "define too")
+    parser.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     options = parser.parse_args()
     options.work.mkdir(parents=True, exist_ok=True)
     program = options.work / "semantics"
@@ -247,9 +338,14 @@ def main():
         options.compiler, *shlex.split(options.flags), str(SOURCE), "-o",
         str(program)), check=True)
     failed = False
-    for title, domain in (("standard layers", standard()),
-                          ("every layer a type could define", swept())):
-        count, resolved, differ = compare(program, domain)
+    domains = [("standard layers", lambda: compare(program, standard())),
+               ("every layer a type could define",
+                lambda: compare(program, swept()))]
+    if options.pairs:
+        domains.append(("every pair of layers a type could define",
+                        lambda: compare_pairs(program, options.jobs)))
+    for title, run in domains:
+        count, resolved, differ = run()
         print(f"{title}: {count} requests, {count * 14} answers, {resolved} "
               f"of them resolved, {len(differ)} requests differ")
         for name, want, got in differ[:20]:

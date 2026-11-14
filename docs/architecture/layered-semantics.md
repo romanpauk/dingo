@@ -140,13 +140,25 @@ specification. It is also the largest part of the compile time that is left.
    - The standard layers: every stored object the specification makes, with and
      without the known limitations, and every request of every shape of every
      bound interface. 629,520 requests, 8,813,280 answers.
+
    - Every possible layer a type could define: each of the 216, beside the
      layers of C++ itself, stored and requested in every stack of it, of a
      pointer and of an array, of every scope and leaf. 1,129,344 requests,
      15,810,816 answers.
 
+   - With `semantics-check-pairs`, every pair of possible layers, with each
+     conversion between them that `semantics.possible_conversion` allows: an
+     owned value of a layer that owns its element alone converts to a layer that
+     owns an element apart from it. Each pair is stored and requested in every
+     stack that holds both of them, of a pointer and of an array, of every scope
+     and leaf: 31,212 universes, 247,595,712 requests, 3,466,339,968 answers.
+
    All answers are equal. A rule of the port changed on purpose makes 216
-   requests differ.
+   requests differ. The pairs found a defect the single layers did not: the
+   search directed by the request left out a layer the binding keeps with a
+   copy, whose element lives as long as the binding. It now keeps that wrap
+   around anything that may become the request. Three or more layers a type
+   defines in one stack are not compared.
 
 3. **Classification.** One module maps a C++ type to its things, with an
    exhaustive test over the wrapper kinds, the leaf kinds and the request

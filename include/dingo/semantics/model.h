@@ -531,9 +531,12 @@ struct request {
 
 // Whether the layers of a thing may still become the layers of a request: a
 // layer is wrapped around a thing only on the way to the request, as its
-// layers are, or as a layer that converts to its outermost one. The search
-// it directs reaches what satisfies a request at the same cost as the search
-// of every thing; the test of the semantics checks it for every request.
+// layers are, or as a layer that converts to its outermost one. A layer the
+// binding keeps with a copy that shares what it keeps is wrapped around
+// anything that may become the request too: its element lives as long as
+// the binding. The search it directs reaches what satisfies a request at the
+// same cost as the search of every thing; the test of the semantics checks
+// it for every request.
 constexpr bool may_become(const thing &of, const request &goal,
                           const context &with) {
   if (of.depth > goal.depth) {
@@ -592,7 +595,9 @@ constexpr search reach(const thing &start, const context &with,
     const transitions_list taken = steps(from.reached, with);
     for (std::size_t index = 0; index < taken.count; ++index) {
       const transition &each = taken.items[index];
-      if (each.kind == step::wrap && !may_become(each.reached, goal, with)) {
+      if (each.kind == step::wrap && !may_become(each.reached, goal, with) &&
+          !(each.reached.lifetimes[0] == lifetime::stable &&
+            may_become(from.reached, goal, with))) {
         continue;
       }
       found.add(
