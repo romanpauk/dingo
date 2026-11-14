@@ -38,7 +38,7 @@ IDENTITIES = {
     "unique_ptr": "std::unique_ptr<dingo::detail::layer_probe>",
     "optional": "std::optional<dingo::detail::layer_probe>",
 }
-CELLS = 400
+CELLS = 100
 
 
 def cases():
@@ -155,13 +155,7 @@ def cell(name, scope, form, leaf, layers, element, category, planned):
     how, cost, *steps = planned.split(":")
     shape = spell_request(layers, element, leaf_type, interface)
     request = f"{check.CATEGORY_TYPES[category]}<{shape}>"
-    step_types = []
-    for each in steps:
-        kind, outer, second = map(int, each.replace("/", " ").split())
-        text = step_type(kind, outer, leaf_type)
-        step_types.append(text.replace(
-            "ARRAY", "true" if second == semantics_array_layer() else "false"))
-    owned = "true" if semantics.SCOPES[scope].makes else "false"
+    makes = "true" if semantics.SCOPES[scope].makes else "false"
     if stored.endswith("]"):
         source = f"external_object<{stored}>()"
         make = None
@@ -169,14 +163,22 @@ def cell(name, scope, form, leaf, layers, element, category, planned):
         make = f"fresh<{stored}>::make()"
     else:
         make = f"instance<{stored}>::make()"
+    # The library classifies the types and plans the request as the code
+    # compiles; the plan has to be found, and to satisfy the request as the
+    # semantics program's does.
+    plan = (f"dingo::detail::execution::request_plan<{stored}, {request}, "
+            f"{leaf_type}, {makes}, false>")
     code = f"""  {{
     // {name}
+    using plan = {plan};
+    static_assert(plan::transient.found);
+    static_assert(static_cast<int>(plan::transient.how) == {how});
     keeper kept;
     auto &stored = {"kept.keep<" + stored + ">([] { return " + make + "; })" if make else source};
     counting_on();
     {{
-      auto reached = dingo::detail::execution::interpreter<{leaf_type}, dingo::model::leaf_interface>::run<{", ".join(step_types)}>(dingo::detail::execution::carry<{owned}>(stored), kept);
-      {request} result = dingo::detail::execution::satisfy<dingo::semantics::satisfaction::{SATISFACTIONS[int(how)]}, {request}, {leaf_type}, dingo::model::leaf_interface>(reached, kept);
+      auto reached = dingo::detail::execution::interpreter<{leaf_type}, plan::interface_type>::run_list(dingo::detail::execution::plan_steps_t<plan::transient, plan::identities>{{}}, dingo::detail::execution::carry<{makes}>(stored), kept);
+      {request} result = dingo::detail::execution::satisfy<plan::transient.how, {request}, {leaf_type}, plan::interface_type>(reached, kept);
       (void)result;
     }}
     counted();
@@ -279,6 +281,14 @@ def run_part(options, flags, index, part):
             options.compiler, *flags, "-I" + test, str(source), "-o",
             str(program)), capture_output=True, text=True)
     if result.returncode != 0:
+        if driver.EXHAUSTED.search(result.stderr) and len(part) > 1:
+            # Fewer cells take less memory: the halves are compiled apart.
+            half = len(part) // 2
+            found = [run_part(options, flags, f"{index}_{side}", cells)
+                     for side, cells in enumerate((part[:half],
+                                                   part[half:]))]
+            return ([item for each in found for item in each[0]],
+                    [item for each in found for item in each[1]])
         return [], [(f"execution_{index}", driver.first_error(result.stderr))]
     run = subprocess.run([str(program)], capture_output=True, text=True)
     counts = run.stdout.splitlines()
