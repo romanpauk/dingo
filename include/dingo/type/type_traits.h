@@ -286,6 +286,12 @@ inline constexpr bool is_alternative_type_interface_compatible_v =
 namespace detail {
 template <typename T, typename... Args> T emplace_element(Args &&...args);
 
+// Whether the arguments of an emplace are an element itself, which a wrapper
+// of it is made of by constructing the element of it, moved or copied once.
+template <typename T, typename... Args>
+inline constexpr bool is_element_argument_v =
+    sizeof...(Args) == 1 && (std::is_same_v<remove_cvref_t<Args>, T> && ...);
+
 // Whether T[N]{args...} is well-formed: its first elements are copy-initialized
 // from the arguments, and the rest value-initialized.
 template <typename T, size_t N, typename, typename... Args>
@@ -574,7 +580,8 @@ struct type_traits<std::unique_ptr<T, Deleter>,
                   std::is_constructible_v<T, std::in_place_t, Args...>)
       return std::unique_ptr<T, Deleter>(
           new T(std::in_place, std::forward<Args>(args)...));
-    else if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
+    else if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T> &&
+                       !detail::is_element_argument_v<T, Args...>)
       return std::unique_ptr<T, Deleter>(
           new T(detail::emplace_element<T>(std::forward<Args>(args)...)));
     // Work around direct-initialization in smart-pointer-backed factories.
@@ -668,7 +675,8 @@ struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>>
     if constexpr (is_optional_type_v<T> &&
                   std::is_constructible_v<T, std::in_place_t, Args...>)
       return std::make_shared<T>(std::in_place, std::forward<Args>(args)...);
-    else if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
+    else if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T> &&
+                       !detail::is_element_argument_v<T, Args...>)
       return std::make_shared<T>(
           detail::emplace_element<T>(std::forward<Args>(args)...));
     // Work around direct-initialization in std::make_shared().
@@ -715,7 +723,8 @@ struct type_traits<std::optional<T>> : semantics::optional_value {
                   std::is_constructible_v<T, std::in_place_t, Args...>)
       return std::optional<T>{std::in_place, std::in_place,
                               std::forward<Args>(args)...};
-    else if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
+    else if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T> &&
+                       !detail::is_element_argument_v<T, Args...>)
       return std::optional<T>{std::in_place, detail::emplace_element<T>(
                                                  std::forward<Args>(args)...)};
     else if constexpr (std::is_constructible_v<T, Args...>)
