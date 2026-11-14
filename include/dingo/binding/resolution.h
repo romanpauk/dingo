@@ -353,8 +353,15 @@ template <typename T> void destroy_object(void *instance) noexcept {
   static_cast<T *>(instance)->~T();
 }
 
+// Deletes the pointer handed over to a request, as the owner a reference
+// request adopts it into would: an array as an array.
 template <typename T> void release_object(void *owner) noexcept {
-  (void)adopt_pointer(static_cast<T *>(*static_cast<void **>(owner)));
+  T *pointer = static_cast<T *>(*static_cast<void **>(owner));
+  if constexpr (std::is_array_v<T>) {
+    std::default_delete<std::remove_extent_t<T>[]>()(*pointer);
+  } else {
+    std::default_delete<T>()(pointer);
+  }
 }
 
 // The operations of T a request needs: Places where a value of T may be
