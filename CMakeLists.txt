@@ -141,6 +141,7 @@ if(DINGO_DEVELOPMENT_MODE)
         runtime/memory.h
         runtime/registry_store.h
         runtime/transaction.h
+        semantics/model.h
         static_container.h
         lookup/array.h
         lookup/base.h
