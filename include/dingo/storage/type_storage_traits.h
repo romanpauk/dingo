@@ -24,7 +24,7 @@
 
 namespace dingo {
 namespace detail {
-struct no_materialization_scope {};
+struct no_scope {};
 } // namespace detail
 
 namespace detail {
@@ -183,12 +183,12 @@ inline constexpr bool selects_interface_v =
 // conversion is not probed for a storage category that is empty, nor for a
 // request a binding of another interface serves.
 template <bool Enabled, typename Target, typename Source, typename Access>
-struct interface_resolution_if {
+struct interface_resolution {
   using type = type_list<>;
 };
 
 template <typename Target, typename Source, typename Access>
-struct interface_resolution_if<true, Target, Source, Access>
+struct interface_resolution<true, Target, Source, Access>
     : available_resolution<Target, Source, Access> {};
 
 // The resolution of a request the storage publishes, as a value when
@@ -200,7 +200,7 @@ template <
         PublishValue,
         remove_cvref_t<storage_published_type_t<Request, Interface, Storage>>,
         storage_published_type_t<Request, Interface, Storage>>>
-using storage_resolution_t = typename interface_resolution_if<
+using storage_resolution_t = typename interface_resolution<
     selects_interface_v<Target, std::remove_cv_t<Interface>>, Target,
     storage_resolution_source_t<Storage, Access>, Access>::type;
 
@@ -242,12 +242,12 @@ using storage_resolutions_t =
                                  PublishValue>::type;
 
 template <bool Enabled, typename Source, typename Interface, typename Access>
-struct wrapper_resolution_if {
+struct wrapper_resolution {
   using type = type_list<>;
 };
 
 template <typename Source, typename Interface, typename Access>
-struct wrapper_resolution_if<true, Source, Interface, Access>
+struct wrapper_resolution<true, Source, Interface, Access>
     : wrapper_resolution_traits<Source, Interface, Access> {};
 
 // The categories of requests a storage publishes resolutions for.
@@ -307,7 +307,7 @@ private:
 
 public:
   using type = type_list_merge_t<
-      typename interface_resolution_if<
+      typename interface_resolution<
           interface_target<Interface, Storage>::resolvable &&
               type_list_size_v<requests> != 0,
           typename category::target, typename category::source,
@@ -352,17 +352,17 @@ private:
       type_list_size_v<typename conversions::rvalue_reference_types> != 0;
 
   using interface_values =
-      type_list_cat_t<typename interface_resolution_if<
+      type_list_cat_t<typename interface_resolution<
                           target::resolvable && borrows, typename target::type,
                           typename source::borrowed_type, borrow>::type,
-                      typename interface_resolution_if<
+                      typename interface_resolution<
                           target::resolvable && consumes, typename target::type,
                           typename source::consumed_type, consume>::type>;
   using wrapper_values = type_list_cat_t<
-      typename wrapper_resolution_if<borrows, typename source::borrowed_type,
-                                     Interface, borrow>::type,
-      typename wrapper_resolution_if<consumes, typename source::consumed_type,
-                                     Interface, consume>::type>;
+      typename wrapper_resolution<borrows, typename source::borrowed_type,
+                                  Interface, borrow>::type,
+      typename wrapper_resolution<consumes, typename source::consumed_type,
+                                  Interface, consume>::type>;
   using stored_values = storage_resolutions_t<typename conversions::value_types,
                                               Interface, Storage, borrow>;
   using consumed_values =
@@ -453,7 +453,7 @@ private:
   // Whether a request converts a wrapper of the sole owner of an object
   // the storage publishes an rvalue reference to.
   template <typename Wrapper> static constexpr bool converted() {
-    using sole_owner = typename converted_from<Wrapper>::type;
+    using sole_owner = typename converted_owner<Wrapper>::type;
     if constexpr (std::is_void_v<sole_owner>) {
       return false;
     } else {

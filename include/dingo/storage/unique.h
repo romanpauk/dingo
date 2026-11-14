@@ -102,7 +102,7 @@ template <> struct scope_traits<unique> {
             type_list_cat_t<type_list<U &&>,
                             typename detail::nested_element<Type, U>::type>,
             type_list<>>,
-        std::conditional_t<into_handles, detail::owning_handles_of_t<U>,
+        std::conditional_t<into_handles, detail::owning_handle_list_t<U>,
                            type_list<>>>;
 
   public:

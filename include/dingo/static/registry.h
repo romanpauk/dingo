@@ -110,7 +110,7 @@ constexpr static_binding_selection select_matching(const bool *matches,
       index = i;
     }
   }
-  return {status_of_count(found), index};
+  return {count_status(found), index};
 }
 
 template <size_t Index, typename InterfaceBinding>
@@ -182,11 +182,11 @@ struct listed_binding_selection<Interface, LookupKey,
 
 template <typename Interface, typename LookupKey, typename InterfaceBindings,
           bool UseIndex = is_no_lookup_key_v<LookupKey>>
-struct binding_selection_of
+struct matched_binding
     : listed_binding_selection<Interface, LookupKey, InterfaceBindings> {};
 
 template <typename Interface, typename LookupKey, typename InterfaceBindings>
-struct binding_selection_of<Interface, LookupKey, InterfaceBindings, true>
+struct matched_binding<Interface, LookupKey, InterfaceBindings, true>
     : indexed_binding_selection<Interface, LookupKey, InterfaceBindings> {};
 
 // The choice of a selection, which the static container resolves by: the
@@ -199,13 +199,13 @@ struct selected_choice {
 template <typename InterfaceBindings, std::size_t Index>
 struct selected_choice<InterfaceBindings, binding_status::found, Index> {
   using type = found_binding_choice_t<
-      typename type_list_at<Index, InterfaceBindings>::type>;
+      typename type_list_element<Index, InterfaceBindings>::type>;
 };
 
 template <typename Interface, typename LookupKey, typename InterfaceBindings>
 struct binding_selection {
   static constexpr const static_binding_selection &selected =
-      binding_selection_of<Interface, LookupKey, InterfaceBindings>::value;
+      matched_binding<Interface, LookupKey, InterfaceBindings>::value;
   using type = typename selected_choice<InterfaceBindings, selected.status,
                                         selected.index>::type;
 };
@@ -349,7 +349,7 @@ private:
   template <typename Interface, typename LookupKey,
             typename Exact = exact_bindings_t<Interface, LookupKey>,
             bool HasExact = !detail::selects_normalized_interface(
-                detail::status_of_count(type_list_size_v<Exact>))>
+                detail::count_status(type_list_size_v<Exact>))>
   struct selected_bindings {
     using type = Exact;
   };
@@ -364,8 +364,8 @@ private:
     template <typename Interface>
     constexpr detail::static_binding_selection
     operator()(type_list_iterator<Interface>) const {
-      return detail::binding_selection_of<Interface, LookupKey,
-                                          interface_bindings>::value;
+      return detail::matched_binding<Interface, LookupKey,
+                                     interface_bindings>::value;
     }
   };
 
@@ -375,7 +375,7 @@ private:
     using exact = detail::binding_exact_dependency_interface_t<Interface>;
     using normalized = detail::binding_dependency_interface_t<Interface>;
     static constexpr detail::static_binding_selection selected =
-        detail::select_exact_or_normalized(
+        detail::select_exact_first(
             find_bindings<binding_lookup_key_t<Interface, LookupKey>>{},
             type_list_iterator<exact>{}, type_list_iterator<normalized>{},
             !std::is_same_v<exact, normalized>);

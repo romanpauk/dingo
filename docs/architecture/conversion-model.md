@@ -178,11 +178,11 @@ Leaf normalization applies only to the selection of the binding. Dingo does not
 repeat it to choose a conversion route.
 
 A runtime resolution returns a `resolved_address`. It holds the erased address
-and the access of the conversion result. The typed caller
-(`convert_resolved_binding`) moves a consumed value and copies a borrowed one.
-Unique storage materializes an rvalue source. Shared and external storage
-usually give an lvalue or a pointer source. A reference or a pointer request
-uses only the address, because it borrows.
+and the access of the conversion result. The typed caller (`resolved_value`)
+moves a consumed value and copies a borrowed one. Unique storage materializes an
+rvalue source. Shared and external storage usually give an lvalue or a pointer
+source. A reference or a pointer request uses only the address, because it
+borrows.
 
 ## Runtime Conversion
 

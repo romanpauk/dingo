@@ -128,12 +128,12 @@ public:
 
   template <typename T, typename... Args>
   T *construct_persistent(Args &&...args) {
-    return construct_persistent_with<T>(
+    return construct_persistent_made<T>(
         [&](void *instance) { new (instance) T(std::forward<Args>(args)...); });
   }
 
   template <typename T, typename ConstructFn>
-  T *construct_persistent_with(ConstructFn &&construct_fn) {
+  T *construct_persistent_made(ConstructFn &&construct_fn) {
     auto *instance =
         static_cast<T *>(allocate_persistent(sizeof(T), alignof(T)));
     std::forward<ConstructFn>(construct_fn)(instance);
@@ -157,14 +157,14 @@ public:
     return instance;
   }
 
-  void on_rollback(void (*fn)(void *, void *) noexcept, void *first,
-                   void *second = nullptr) {
+  void defer_rollback(void (*fn)(void *, void *) noexcept, void *first,
+                      void *second = nullptr) {
     auto &actions = shared_actions();
     add_action(actions, actions.rollback_tail,
                [fn, first, second]() noexcept { fn(first, second); });
   }
 
-  template <typename Fn> void on_rollback(Fn &&fn) {
+  template <typename Fn> void defer_rollback(Fn &&fn) {
     static_assert(std::is_nothrow_invocable_v<std::decay_t<Fn> &>);
     static_assert(std::is_nothrow_destructible_v<std::decay_t<Fn>>);
     auto &actions = shared_actions();

@@ -239,7 +239,7 @@ using alternative_source_t =
                        qualified_alternative_t<Alternative, Source> &&>;
 
 template <typename Conversion, typename Access>
-using conversion_for_access_t = std::conditional_t<
+using accessed_conversion_t = std::conditional_t<
     Conversion::available &&
         access_satisfies<Access, typename Conversion::required_access>::value,
     Conversion, unavailable_type_conversion>;
@@ -435,7 +435,7 @@ struct wrap_optional {
 // given an empty element first, and another wrapper gives the one empty
 // value, which stays empty as it is moved from. The element is not made anew
 // of what it holds.
-struct element_or_empty {
+struct optional_element {
   template <typename Target, typename Source>
   static std::conditional_t<std::is_lvalue_reference_v<Source>,
                             const remove_cvref_t<Target> &,
@@ -742,7 +742,7 @@ inline constexpr bool holds_exactly_v = [] {
 // or an rvalue reference to one, given as it is: copied from a borrowed
 // source, moved out of a consumed one.
 template <typename Target, typename Source, typename Access>
-constexpr auto element_or_empty_path() {
+constexpr auto optional_element_path() {
   using target_type = remove_cvref_t<Target>;
   if constexpr (!std::is_lvalue_reference_v<Target> &&
                 is_optional_type_v<Target> && holds_exactly_v<Source, Target>) {
@@ -758,7 +758,7 @@ constexpr auto element_or_empty_path() {
              : std::is_base_of_v<semantics::sole_owner,
                                  type_traits<source_type>>);
     if constexpr (borrows || consumes) {
-      return conversion_leaf<element_or_empty, Target,
+      return conversion_leaf<optional_element, Target,
                              std::conditional_t<borrows, borrow, consume>>{};
     } else {
       return unavailable_type_conversion{};
@@ -943,7 +943,7 @@ enum class op : std::size_t {
   direct,
   wrap_alternative,
   held_alternative,
-  element_or_empty,
+  optional_element,
   wrap_optional,
   array_view,
   address,
@@ -963,8 +963,8 @@ constexpr auto path() {
     return wrap_alternative_path<Target, Source, Access>();
   } else if constexpr (Op == op::held_alternative) {
     return held_alternative_path<Target, Source, Access>();
-  } else if constexpr (Op == op::element_or_empty) {
-    return element_or_empty_path<Target, Source, Access>();
+  } else if constexpr (Op == op::optional_element) {
+    return optional_element_path<Target, Source, Access>();
   } else if constexpr (Op == op::wrap_optional) {
     return wrap_optional_path<Target, Source, Access>();
   } else if constexpr (Op == op::array_view) {
@@ -1029,7 +1029,7 @@ constexpr unsigned candidate_ops() {
     ops |= op_bit(op::held_alternative);
   }
   if constexpr (optional_target && !lvalue_target) {
-    ops |= op_bit(op::element_or_empty);
+    ops |= op_bit(op::optional_element);
   }
   if constexpr (optional_target && value_target) {
     ops |= op_bit(op::wrap_optional);
@@ -1072,8 +1072,8 @@ constexpr auto select() {
     return unavailable_type_conversion{};
   } else {
     using conversion =
-        conversion_for_access_t<decltype(path<Op, Target, Source, Access>()),
-                                Access>;
+        accessed_conversion_t<decltype(path<Op, Target, Source, Access>()),
+                              Access>;
     if constexpr (conversion::available) {
       return conversion{};
     } else {
@@ -1106,7 +1106,7 @@ private:
                 "required_access<Source> as borrow or consume");
 
 public:
-  using type = conversion_for_access_t<
+  using type = accessed_conversion_t<
       std::conditional_t<converts,
                          convert_t<Target, Source, required_access, Source>,
                          unavailable_type_conversion>,

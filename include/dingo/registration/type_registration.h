@@ -288,12 +288,12 @@ struct deduced_interface_type<
 };
 
 template <typename ParsedArgs>
-using registration_interface_from_storage_t = typename deduced_interface_type<
+using storage_interface_t = typename deduced_interface_type<
     typename registration_storage_t<ParsedArgs>::type,
     registration_scope_t<ParsedArgs>>::type;
 
 template <typename ParsedArgs>
-using registration_interface_from_factory_t = ::dingo::interfaces<
+using factory_interface_t = ::dingo::interfaces<
     leaf_type_t<typename registration_factory_t<ParsedArgs>::type>>;
 
 template <typename ParsedArgs> struct selected_registration_interface {
@@ -365,11 +365,10 @@ using registration_interface_t = std::conditional_t<
     !std::is_same_v<typename ParsedArgs::interface_type,
                     ::dingo::interfaces<void>>,
     registration_explicit_interface_t<ParsedArgs>,
-    std::conditional_t<
-        !std::is_same_v<registration_interface_from_storage_t<ParsedArgs>,
-                        ::dingo::interfaces<void>>,
-        registration_interface_from_storage_t<ParsedArgs>,
-        registration_interface_from_factory_t<ParsedArgs>>>;
+    std::conditional_t<!std::is_same_v<storage_interface_t<ParsedArgs>,
+                                       ::dingo::interfaces<void>>,
+                       storage_interface_t<ParsedArgs>,
+                       factory_interface_t<ParsedArgs>>>;
 
 template <typename ParsedArgs>
 using registration_conversions_t = std::conditional_t<

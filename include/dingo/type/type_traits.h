@@ -759,10 +759,10 @@ template <typename Element> struct owning_handles_key {
 template <typename Element,
           typename Families = typename owning_handles<
               typename owning_handles_key<Element>::type>::type>
-struct owning_handles_of;
+struct owning_handle_list;
 
 template <typename Element, typename... Families>
-struct owning_handles_of<Element, type_list<Families...>> {
+struct owning_handle_list<Element, type_list<Families...>> {
   using type = type_list_cat_t<std::conditional_t<
       type_traits<
           typename type_traits<Families>::template rebind_t<Element>>::enabled,
@@ -771,7 +771,7 @@ struct owning_handles_of<Element, type_list<Families...>> {
 };
 
 template <typename Element>
-using owning_handles_of_t = typename owning_handles_of<Element>::type;
+using owning_handle_list_t = typename owning_handle_list<Element>::type;
 } // namespace detail
 
 } // namespace dingo

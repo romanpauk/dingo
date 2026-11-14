@@ -43,8 +43,8 @@ public:
     if (arena_ == nullptr) {
       arena_ = std::make_unique<arena<>>(DINGO_RUNTIME_ARENA_BLOCK_SIZE);
     }
-    return store_.template construct_at<T>(
-        *arena_, std::forward<ConstructFn>(construct_fn));
+    return store_.template place<T>(*arena_,
+                                    std::forward<ConstructFn>(construct_fn));
   }
 
 private:
@@ -76,8 +76,8 @@ public:
   static_context_backend(const static_context_backend &) = delete;
   static_context_backend &operator=(const static_context_backend &) = delete;
 
-  void on_rollback(void (*)(void *, void *) noexcept, void *,
-                   void * = nullptr) noexcept {}
+  void defer_rollback(void (*)(void *, void *) noexcept, void *,
+                      void * = nullptr) noexcept {}
 
 protected:
   template <typename T, typename ConstructFn>
@@ -93,17 +93,17 @@ protected:
         return *std::launder(static_cast<T *>(ptr));
       }
     }
-    return construct_in_arena<T>(std::forward<ConstructFn>(construct_fn));
+    return arena_construct<T>(std::forward<ConstructFn>(construct_fn));
   }
 
 private:
   template <typename T, typename ConstructFn>
-  DINGO_NOINLINE T &construct_in_arena(ConstructFn &&construct_fn) {
+  DINGO_NOINLINE T &arena_construct(ConstructFn &&construct_fn) {
     if (arena_ == nullptr) {
       arena_ = new (&arena_storage_) arena_type();
     }
-    return store_.template construct_at<T>(
-        *arena_, std::forward<ConstructFn>(construct_fn));
+    return store_.template place<T>(*arena_,
+                                    std::forward<ConstructFn>(construct_fn));
   }
 
   DINGO_NOINLINE void release() noexcept {
@@ -160,7 +160,7 @@ template <typename Requester> class forwarded_context_backend {
 public:
   static constexpr bool is_transactional = false;
   // The runtime child rejects what it cannot resolve as it runs.
-  static constexpr bool rejects_at_run_time = true;
+  static constexpr bool rejects_late = true;
 
   forwarded_context_backend(Requester &requester,
                             static_persistent_memory *persistent)
@@ -170,8 +170,8 @@ public:
   forwarded_context_backend &
   operator=(const forwarded_context_backend &) = delete;
 
-  void on_rollback(void (*)(void *, void *) noexcept, void *,
-                   void * = nullptr) noexcept {}
+  void defer_rollback(void (*)(void *, void *) noexcept, void *,
+                      void * = nullptr) noexcept {}
 
   static_persistent_memory *persistent_memory() const { return persistent_; }
   void persistent_memory(static_persistent_memory *persistent) {
@@ -185,7 +185,7 @@ protected:
       return persistent_->template construct<T>(
           std::forward<ConstructFn>(construct_fn));
     }
-    return requester_->template construct_in_place<T>(
+    return requester_->template construct_placed<T>(
         scope, std::forward<ConstructFn>(construct_fn));
   }
 

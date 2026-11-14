@@ -126,8 +126,8 @@ struct cache_owner {
 };
 
 struct tracked_cache_context : cache_owner {
-  void on_rollback(void (*fn)(void *, void *) noexcept, void *first,
-                   void *second = nullptr) {
+  void defer_rollback(void (*fn)(void *, void *) noexcept, void *first,
+                      void *second = nullptr) {
     rollback_actions.emplace_back([fn, first, second] { fn(first, second); });
   }
 

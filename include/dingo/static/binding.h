@@ -80,7 +80,7 @@ template <> struct resolved_order<true> {
 // What a static binding of an interface tells of itself: the facts of its
 // interface and its storage, which the runtime binding of them tells too.
 template <typename InterfaceBinding>
-using static_binding_facts = binding_facts_of<
+using static_binding_facts = binding_facts_v<
     unannotated_t<typename InterfaceBinding::interface_type>,
     typename InterfaceBinding::binding_model_type::storage_type>;
 
@@ -96,7 +96,7 @@ template <typename Request, typename InterfaceBinding> struct static_plan {
   static constexpr std::size_t index = published_index(facts, requested);
   static constexpr bool published = index != facts.published_count;
   static constexpr derivation how =
-      derive_request<Request>(derivation_facts_of<Request>(facts, requested));
+      derive_request<Request>(binding_derivations<Request>(facts, requested));
 };
 
 template <typename Request, typename InterfaceBinding, bool Published>
@@ -106,7 +106,7 @@ struct published_resolution_type {
 
 template <typename Request, typename InterfaceBinding>
 struct published_resolution_type<Request, InterfaceBinding, true> {
-  using type = typename type_list_at<
+  using type = typename type_list_element<
       static_plan<Request, InterfaceBinding>::index,
       typename binding_resolutions<
           unannotated_t<typename InterfaceBinding::interface_type>,
@@ -220,8 +220,7 @@ struct static_request_resolution
     : binding_supports_request<Request, InterfaceBinding> {
 private:
   static constexpr bool resolves =
-      rejects_at_run_time_v<Context> ||
-      resolves_request_v<Request, InterfaceBinding>;
+      rejects_late_v<Context> || resolves_request_v<Request, InterfaceBinding>;
   // A request that does not resolve because it would slice the registered
   // type is told so.
   static constexpr bool slices =
@@ -281,10 +280,10 @@ public:
                          !std::is_pointer_v<Request>) {
       [[maybe_unused]] auto order = ordered(host, context);
       return activation(scope, host)
-          .template resolve_request_value<Request, resolution>(context);
+          .template make_value<Request, resolution>(context);
     } else {
       [[maybe_unused]] auto order = ordered(host, context);
-      return convert_resolved_binding<Request>(
+      return resolved_value<Request>(
           activation(scope, host)
               .template resolve_request_address<Request, resolution>(context));
     }
@@ -323,7 +322,7 @@ private:
       // What an rvalue request refers to is placed in the context.
       using wrapper = composed_type_t<Request>;
       return static_cast<Request>(
-          context.template construct_from<wrapper>(scope, [&]() -> wrapper {
+          context.template construct_made<wrapper>(scope, [&]() -> wrapper {
             return compose<InterfaceBinding, Request>(scope, host, context);
           }));
     } else if constexpr (How == derivation::move || How == derivation::copy) {
@@ -335,7 +334,7 @@ private:
           });
     } else {
       auto composes = composes_request<InterfaceBinding>();
-      return convert_resolved_binding<Request>(apply_derivation<How, Request>(
+      return resolved_value<Request>(apply_derivation<How, Request>(
           scope, context,
           described_type_v<typename InterfaceBinding::storage_type::type>,
           [&](auto tag) -> typename decltype(tag)::type {

@@ -137,7 +137,7 @@ TEST(resolution_operation_test,
   immovable value;
   resolved_address result{&value, resolved_address::access_kind::borrow};
 
-  EXPECT_THROW((void)detail::convert_resolved_binding<immovable>(result),
+  EXPECT_THROW((void)detail::resolved_value<immovable>(result),
                type_not_convertible_exception);
 }
 

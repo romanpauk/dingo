@@ -392,8 +392,8 @@ void check_probed(const std::string &prefix) {
   const auto name = type_name<Target>();
   if (!selects_v<Target, Interface>) {
     record((prefix + std::string(name)).c_str(), "unreachable", nullptr);
-  } else if (!(detail::matches_qualification_conversion(
-                   describe_type<Target>(), describe_type<Requests>()) ||
+  } else if (!(detail::qualifies_as(describe_type<Target>(),
+                                    describe_type<Requests>()) ||
                ...)) {
     record((prefix + std::string(name)).c_str(), "unprobed", nullptr);
   }

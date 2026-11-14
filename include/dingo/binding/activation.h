@@ -190,7 +190,7 @@ bool storage_resolved([[maybe_unused]] const Storage &storage) noexcept {
 // The materialization facts of a storage, in a context, through the
 // container its factory resolves in; what it yields is known only of that.
 template <typename Storage, typename Context, typename Owner = void>
-constexpr materialization_facts materialization_facts_of() {
+constexpr materialization_facts materialization_facts_v() {
   using policy = scope_traits<typename Storage::tag_type>;
   constexpr bool guarded =
       materialization_guard_enabled_v<policy::guard, Storage, Context>;
@@ -235,26 +235,26 @@ template <> constexpr materialized_request materialized<void>() {
 // construction scope and applies to it what the caller does with it.
 template <bool MayGuard, bool MayRetain, typename Access, typename Context,
           typename Materialize>
-auto drive_materialization(const materialization_facts &facts,
-                           const Access &access, construction_scope scope,
-                           Context &context, Materialize &&materialize)
+auto run_materialization(const materialization_facts &facts,
+                         const Access &access, construction_scope scope,
+                         Context &context, Materialize &&materialize)
     -> decltype(materialize(scope)) {
   [[maybe_unused]] const bool resolved =
       (MayGuard || MayRetain) && access.resolved();
   [[maybe_unused]] auto guard = [&] {
     if constexpr (MayGuard) {
-      return recursion_guard_wrapper(context, access.storage(), access.leaf(),
-                                     materialization_guarded(facts, resolved));
+      return guard_wrapper(context, access.storage(), access.leaf(),
+                           materialization_guarded(facts, resolved));
     } else {
-      return no_materialization_scope();
+      return no_scope();
     }
   }();
   if constexpr (MayRetain) {
     if (materialization_retains(facts, resolved, true)) {
-      struct reset_on_failure {
+      struct failure_reset {
         const Access &access;
         bool armed = true;
-        ~reset_on_failure() {
+        ~failure_reset() {
           if (armed) {
             access.reset()(access.cell_address());
           }
@@ -263,8 +263,8 @@ auto drive_materialization(const materialization_facts &facts,
       using result_type =
           decltype(materialize(construction_scope(persistent_scope)));
       auto registered = [&] {
-        context.on_rollback(access.rollback(), access.cell_address(),
-                            access.rollback_argument());
+        context.defer_rollback(access.rollback(), access.cell_address(),
+                               access.rollback_argument());
         reset.armed = false;
         context.add_runtime_destructor(access.cell_address(), access.reset());
       };
@@ -323,7 +323,7 @@ struct binding_application {
   template <typename Request, typename Context>
   static constexpr bool places_source() {
     return materialization_placement(
-               materialization_facts_of<storage_type, Context>(),
+               materialization_facts_v<storage_type, Context>(),
                materialized<Request>(),
                is_runtime_context_v<Context>) == source_placement::in_context;
   }
@@ -352,7 +352,7 @@ struct binding_application {
                   !std::is_pointer_v<applied_type> &&
                   std::is_constructible_v<target_type, applied_type>) {
       // A value the resolution makes is made in the context.
-      auto &value = context.template construct_from<target_type>(
+      auto &value = context.template construct_made<target_type>(
           scope, [&]() -> target_type {
             return apply<Resolution>(context, std::forward<Source>(source),
                                      requested_type);
@@ -417,16 +417,16 @@ struct binding_activation {
   using application_type = binding_application<storage_type, Scope>;
 
   template <typename Context> static constexpr materialization_facts facts() {
-    return materialization_facts_of<storage_type, Context, owner_type>();
+    return materialization_facts_v<storage_type, Context, owner_type>();
   }
 
   // Whether an address request is served from a value the storage yields,
   // which is placed in the context and lives only as long as the context.
   template <typename Request, typename Context>
-  static constexpr bool places_value_in_context =
+  static constexpr bool places_value =
       materialization_placement(facts<Context>(), materialized<Request>(),
                                 is_runtime_context_v<Context>) ==
-      source_placement::value_in_context;
+      source_placement::context_value;
 
   Cell &cell;
   Dependencies dependencies;
@@ -439,50 +439,49 @@ struct binding_activation {
   // An address request (an lvalue reference or a pointer) of a storage that
   // yields a value places the value in the context.
   template <typename Request, typename Context, typename Fn>
-  decltype(auto) with_source(Context &context, Fn &&fn) {
+  decltype(auto) use_source(Context &context, Fn &&fn) {
     constexpr materialization_facts materialization = facts<Context>();
     constexpr bool may_guard =
         materialization.guards_always || materialization.guards_unresolved;
     if constexpr (is_runtime_context_v<Context>) {
-      return drive_materialization<may_guard,
-                                   materialization.retains_unresolved>(
+      return run_materialization<may_guard, materialization.retains_unresolved>(
           materialization, cell_access<Cell>{cell}, construction_scope(scope),
           context, [&](construction_scope construction) -> decltype(auto) {
-            return with_runtime_source(construction, context,
-                                       std::forward<Fn>(fn));
+            return use_runtime_source(construction, context,
+                                      std::forward<Fn>(fn));
           });
     } else if constexpr (!may_guard) {
       // A binding that is never guarded or retained materializes its source
       // where its placement puts it.
-      return with_placed_source<Request>(context, std::forward<Fn>(fn));
+      return use_placed_source<Request>(context, std::forward<Fn>(fn));
     } else {
       // Without a transaction, the source is materialized in the scope of
       // the request, known as the code compiles where it is.
-      return drive_materialization<may_guard, false>(
+      return run_materialization<may_guard, false>(
           materialization, cell_access<Cell>{cell}, construction_scope(scope),
           context, [&](construction_scope) -> decltype(auto) {
-            return with_placed_source<Request>(context, std::forward<Fn>(fn));
+            return use_placed_source<Request>(context, std::forward<Fn>(fn));
           });
     }
   }
 
   // Materializes the source of a request where its placement puts it.
   template <typename Request, typename Context, typename Fn>
-  decltype(auto) with_placed_source(Context &context, Fn &&fn) {
+  decltype(auto) use_placed_source(Context &context, Fn &&fn) {
     auto &storage = cell.storage();
     constexpr materialization_facts materialization = facts<Context>();
     constexpr source_placement placement = materialization_placement(
         materialization, materialized<Request>(), false);
-    if constexpr (placement == source_placement::value_in_context) {
+    if constexpr (placement == source_placement::context_value) {
       using source_type =
           std::remove_cv_t<std::remove_reference_t<decltype(storage.resolve(
               scope, context, dependencies))>>;
       if constexpr (refuses_caller_address(materialization,
                                            materialized<Request>())) {
-        refuse_caller_reference<Request>(
-            scope, detail::described_type_v<source_type>, context);
+        reject_escape<Request>(scope, detail::described_type_v<source_type>,
+                               context);
       }
-      auto &value = context.template construct_from<source_type>(
+      auto &value = context.template construct_made<source_type>(
           scope, [&]() -> decltype(auto) {
             return storage.resolve(scope, context, dependencies);
           });
@@ -491,7 +490,7 @@ struct binding_activation {
     } else if constexpr (placement == source_placement::in_context) {
       // What an rvalue request refers to lives in the context: so does the
       // source it is converted from.
-      auto &source = materialization_traits::materialize_source_in_context(
+      auto &source = materialization_traits::materialize_context_source(
           scope, context, storage, dependencies);
       return std::forward<Fn>(fn)(std::move(source));
     } else {
@@ -506,7 +505,7 @@ struct binding_activation {
   // chain.
   template <typename Request, typename Resolution, typename Context>
   decltype(auto) resolve_request_address(Context &context) {
-    return with_source<Request>(context, [&](auto &&source) {
+    return use_source<Request>(context, [&](auto &&source) {
       return application().template resolve_address<Resolution, Request>(
           context, std::forward<decltype(source)>(source),
           detail::described_type_v<Request>);
@@ -516,8 +515,8 @@ struct binding_activation {
   // The value of a resolution selected at compile time, made where it is
   // requested: a value the resolution makes initializes it.
   template <typename Request, typename Resolution, typename Context>
-  Request resolve_request_value(Context &context) {
-    return with_source<Request>(context, [&](auto &&source) -> Request {
+  Request make_value(Context &context) {
+    return use_source<Request>(context, [&](auto &&source) -> Request {
       using applied_type = decltype(application().template apply<Resolution>(
           context, std::forward<decltype(source)>(source),
           detail::described_type_v<Request>));
@@ -530,7 +529,7 @@ struct binding_activation {
         auto &&instance = applied.template apply<Resolution>(
             context, std::forward<decltype(source)>(source),
             detail::described_type_v<Request>);
-        return consume_resolved_binding<Request>(
+        return consume_resolved<Request>(
             std::forward<decltype(instance)>(instance),
             [](auto &&value) -> Request {
               return Request(std::forward<decltype(value)>(value));
@@ -543,12 +542,12 @@ struct binding_activation {
   template <typename Request, typename Resolution, typename Context,
             typename Fn>
   decltype(auto) consume_request(Context &context, Fn &&fn) {
-    return with_source<Request>(context, [&](auto &&source) -> decltype(auto) {
+    return use_source<Request>(context, [&](auto &&source) -> decltype(auto) {
       auto applied = application();
       auto &&instance = applied.template apply<Resolution>(
           context, std::forward<decltype(source)>(source),
           detail::described_type_v<Request>);
-      return consume_resolved_binding<Request>(
+      return consume_resolved<Request>(
           std::forward<decltype(instance)>(instance), std::forward<Fn>(fn));
     });
   }
@@ -558,12 +557,12 @@ public:
   // A runtime context places a source it retains in the transaction, as it
   // does every source of a persistent request.
   template <typename Context, typename Fn, typename Construction>
-  decltype(auto) with_runtime_source(Construction construction,
-                                     Context &context, Fn &&fn) {
+  decltype(auto) use_runtime_source(Construction construction, Context &context,
+                                    Fn &&fn) {
     auto &storage = cell.storage();
     if constexpr (materialization_traits::consumes) {
       const bool persistent = construction.is_persistent();
-      auto &source = materialization_traits::materialize_source_in_context(
+      auto &source = materialization_traits::materialize_context_source(
           construction, context, storage, dependencies);
       if (persistent) {
         return std::forward<Fn>(fn)(source);

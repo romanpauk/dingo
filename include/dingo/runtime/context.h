@@ -55,9 +55,9 @@ public:
   runtime_context_backend(const runtime_context_backend &) = delete;
   runtime_context_backend &operator=(const runtime_context_backend &) = delete;
 
-  void on_rollback(void (*fn)(void *, void *) noexcept, void *first,
-                   void *second = nullptr) {
-    transaction_->on_rollback(fn, first, second);
+  void defer_rollback(void (*fn)(void *, void *) noexcept, void *first,
+                      void *second = nullptr) {
+    transaction_->defer_rollback(fn, first, second);
   }
 
   template <typename Runtime> bool owns(const Runtime &runtime) const noexcept {
@@ -76,11 +76,11 @@ protected:
   template <typename T, typename ConstructFn>
   T &construct_storage(construction_scope scope, ConstructFn &&construct_fn) {
     if (scope.is_persistent()) {
-      return *transaction_->template construct_persistent_with<T>(
+      return *transaction_->template construct_persistent_made<T>(
           std::forward<ConstructFn>(construct_fn));
     }
 
-    return ephemeral_store_.template construct_at<T>(
+    return ephemeral_store_.template place<T>(
         *scratch_, std::forward<ConstructFn>(construct_fn));
   }
 

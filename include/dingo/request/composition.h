@@ -121,7 +121,7 @@ inline constexpr bool emplaces_element_v<
 
 // Whether a wrapper is emplaced at once of Value, its innermost value, down
 // layers that each emplace their element.
-template <typename Wrapper, typename Value> constexpr bool emplaces_from() {
+template <typename Wrapper, typename Value> constexpr bool emplaces() {
   if constexpr (!emplaces_element_v<Wrapper>) {
     return false;
   } else {
@@ -129,19 +129,19 @@ template <typename Wrapper, typename Value> constexpr bool emplaces_from() {
     if constexpr (std::is_same_v<std::remove_cv_t<value_type>, Value>) {
       return true;
     } else {
-      return emplaces_from<std::remove_cv_t<value_type>, Value>();
+      return emplaces<std::remove_cv_t<value_type>, Value>();
     }
   }
 }
 
 template <typename Wrapper, typename Value>
-inline constexpr bool emplaces_from_v = emplaces_from<Wrapper, Value>();
+inline constexpr bool emplaces_v = emplaces<Wrapper, Value>();
 
 // Whether a reference or a pointer refers to a wrapper that holds a copy
 // sharing what it was copied of, such as a std::shared_ptr<I> of a kept
 // std::shared_ptr<T>, or a wrapper composed of one: a binding that keeps its
 // instance keeps the wrapper with it, so it lives as long as the instance.
-template <typename Request> constexpr bool refers_to_sharing() {
+template <typename Request> constexpr bool refers_sharing() {
   if constexpr (std::is_lvalue_reference_v<Request> ||
                 std::is_pointer_v<Request>) {
     using wrapper = composed_type_t<Request>;
@@ -157,7 +157,7 @@ template <typename Request> constexpr bool refers_to_sharing() {
 }
 
 template <typename Request>
-inline constexpr bool refers_to_sharing_v = refers_to_sharing<Request>();
+inline constexpr bool refers_sharing_v = refers_sharing<Request>();
 
 } // namespace detail
 } // namespace dingo

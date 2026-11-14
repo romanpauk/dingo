@@ -597,7 +597,7 @@ TEST(type_registration_test,
       runtime_context<std::allocator<char>> context(scratch, transaction);
       (void)context.construct<runtime_arena_tracker>(ephemeral_scope, &events,
                                                      1);
-      context.on_rollback(
+      context.defer_rollback(
           +[](void *list, void *) noexcept {
             static_cast<std::vector<int> *>(list)->push_back(2);
           },

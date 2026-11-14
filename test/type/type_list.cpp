@@ -58,17 +58,17 @@ TEST(type_list_test, meta_utilities) {
 TEST(type_list_test, indexed_access) {
   using list = type_list<type_list_a, type_list_b, type_list_a>;
 
-  static_assert(std::is_same_v<type_list_at_t<0, list>, type_list_a>);
-  static_assert(std::is_same_v<type_list_at_t<1, list>, type_list_b>);
-  static_assert(std::is_same_v<type_list_at_t<2, list>, type_list_a>);
+  static_assert(std::is_same_v<type_list_element_t<0, list>, type_list_a>);
+  static_assert(std::is_same_v<type_list_element_t<1, list>, type_list_b>);
+  static_assert(std::is_same_v<type_list_element_t<2, list>, type_list_a>);
   static_assert(
-      std::is_same_v<
-          detail::pack_at_portable_t<1, type_list_a, type_list_b, type_list_a>,
-          type_list_b>);
+      std::is_same_v<detail::pack_element_portable_t<1, type_list_a,
+                                                     type_list_b, type_list_a>,
+                     type_list_b>);
   static_assert(
-      std::is_same_v<
-          detail::pack_at_portable_t<2, type_list_a, type_list_b, type_list_a>,
-          type_list_a>);
+      std::is_same_v<detail::pack_element_portable_t<2, type_list_a,
+                                                     type_list_b, type_list_a>,
+                     type_list_a>);
 
   static_assert(pack_find<>() == 0);
   static_assert(pack_find<false, true, true>() == 1);

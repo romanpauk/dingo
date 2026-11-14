@@ -35,7 +35,7 @@ struct conversion_available<detail::type_resolution<Source, Conversion>>
 template <typename Request, typename... Resolutions>
 constexpr std::size_t runtime_index(type_list<Resolutions...>) {
   constexpr bool matches[] = {
-      detail::matches_qualification_conversion(
+      detail::qualifies_as(
           detail::described_type_v<typename Resolutions::target_type>,
           detail::described_type_v<Request>)...,
       true};
@@ -55,8 +55,8 @@ constexpr detail::derivation runtime_derivation() {
   if constexpr (!detail::derivable_v<Request>) {
     return detail::derivation::none;
   } else {
-    return detail::derive_request<Request>(detail::derivation_facts_of<Request>(
-        detail::binding_facts_of<Interface, Storage, Resolutions>::value,
+    return detail::derive_request<Request>(detail::binding_derivations<Request>(
+        detail::binding_facts_v<Interface, Storage, Resolutions>::value,
         detail::described_type_v<Request>));
   }
 }
@@ -191,7 +191,7 @@ template <typename Request, typename Apply> void make_request(Apply &&apply) {
     static_cast<void>(result);
   } else {
     auto &&instance = apply();
-    Request result = detail::consume_resolved_binding<Request>(
+    Request result = detail::consume_resolved<Request>(
         std::forward<decltype(instance)>(instance),
         [](auto &&value) -> Request {
           return Request(std::forward<decltype(value)>(value));

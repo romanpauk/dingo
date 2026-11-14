@@ -38,7 +38,7 @@
 namespace dingo {
 namespace detail {
 
-template <typename T> T convert_resolved_binding(resolved_address result) {
+template <typename T> T resolved_value(resolved_address result) {
   using result_type = std::remove_reference_t<T>;
   using value_type = std::remove_cv_t<result_type>;
 
@@ -66,7 +66,7 @@ template <typename T> T convert_resolved_binding(resolved_address result) {
 }
 
 template <typename T, typename Instance, typename Fn>
-decltype(auto) consume_resolved_binding(Instance &&instance, Fn &&fn) {
+decltype(auto) consume_resolved(Instance &&instance, Fn &&fn) {
   if constexpr (std::is_lvalue_reference_v<T> || std::is_pointer_v<T> ||
                 (!std::is_rvalue_reference_v<T> &&
                  !std::is_constructible_v<T, Instance &&>)) {
@@ -79,12 +79,12 @@ decltype(auto) consume_resolved_binding(Instance &&instance, Fn &&fn) {
 } // namespace detail
 
 template <typename T, typename RTTI, typename Binding, typename Context>
-T resolve_binding_request(construction_scope scope, Binding &binding,
-                          Context &context, const void *cache_key = nullptr);
+T resolve_binding(construction_scope scope, Binding &binding, Context &context,
+                  const void *cache_key = nullptr);
 
 namespace detail {
 template <typename T, typename RTTI, typename Binding, typename Context>
-constexpr const request_node *request_node_for();
+constexpr const request_node *request_node_v();
 
 template <typename RTTI, typename Binding, typename Context>
 resolved_address derive_erased(void *erased, const derivation_site &site,
@@ -97,7 +97,7 @@ template <typename T, typename RTTI, typename Binding, typename Context>
 instance_request<RTTI> erased_request() {
   if constexpr (derivable_v<T>) {
     return {described_type_v<T>, &derive_erased<RTTI, Binding, Context>,
-            request_node_for<T, RTTI, Binding, Context>()};
+            request_node_v<T, RTTI, Binding, Context>()};
   } else {
     return {described_type_v<T>};
   }
@@ -106,8 +106,7 @@ instance_request<RTTI> erased_request() {
 // A reference into the context ends before the caller uses what a resolution
 // returns: the caller is refused it, as a static container's compiles.
 template <typename Request, typename Scope, typename Context>
-void refuse_caller_reference(Scope scope, type_descriptor registered,
-                             Context &context) {
+void reject_escape(Scope scope, type_descriptor registered, Context &context) {
   if constexpr (is_fixed_caller_scope_v<Scope>) {
     static_assert(!is_fixed_caller_scope_v<Scope>,
                   "a reference or a pointer to an instance the resolution "
@@ -168,17 +167,17 @@ resolved_address apply_derivation(Scope scope, Context &context,
   auto resolve = [&]() -> derived { return inner(request_tag<derived>{}); };
   if constexpr (How == derivation::adopt || How == derivation::take) {
     if constexpr (How == derivation::adopt) {
-      refuse_caller_reference<Request>(scope, registered, context);
+      reject_escape<Request>(scope, registered, context);
     }
     derived pointer = resolve();
-    place_adopted_pointer(scope, context, pointer);
+    own_pointer(scope, context, pointer);
     return {
         const_cast<std::remove_cv_t<std::remove_pointer_t<derived>> *>(pointer),
         How == derivation::adopt ? access::borrow : access::consume};
   } else if constexpr (How == derivation::place) {
-    refuse_caller_reference<Request>(scope, registered, context);
+    reject_escape<Request>(scope, registered, context);
     auto placed = [&]() -> resolved_address {
-      auto &value = context.template construct_from<derived>(scope, resolve);
+      auto &value = context.template construct_made<derived>(scope, resolve);
       return {std::addressof(value), access::borrow};
     };
     if constexpr (composes_v<derived>) {
@@ -203,7 +202,7 @@ resolved_address apply_derivation(Scope scope, Context &context,
     // The value is resolved first, as a published reference to it is: what
     // fails as it is made fails before the caller is refused it.
     derived value = resolve();
-    refuse_caller_reference<Request>(scope, registered, context);
+    reject_escape<Request>(scope, registered, context);
     return {std::addressof(value), access::borrow};
   } else if constexpr (How == derivation::address) {
     derived value = resolve();
@@ -219,7 +218,7 @@ resolved_address apply_derivation(Scope scope, Context &context,
             access::borrow};
   } else if constexpr (How == derivation::convert) {
     using shared = remove_cvref_t<Request>;
-    auto &value = context.template construct_from<shared>(
+    auto &value = context.template construct_made<shared>(
         scope, [&]() -> shared { return shared(resolve()); });
     return {std::addressof(value), access::consume};
   } else {
@@ -237,14 +236,13 @@ resolved_address apply_derivation(Scope scope, Context &context,
 template <typename T>
 derivation_facts runtime_facts(const derivation_site &site,
                                type_descriptor requested) {
-  return derivation_facts_of<T>(*site.binding, requested);
+  return binding_derivations<T>(*site.binding, requested);
 }
 
 template <derivation How, typename T, typename RTTI, typename Binding,
           typename Context>
-resolved_address derive_as(const derivation_site &site,
-                           construction_scope scope, Binding &binding,
-                           Context &context) {
+resolved_address derive(const derivation_site &site, construction_scope scope,
+                        Binding &binding, Context &context) {
   static_assert(derivation_shape_v<How, T>);
   // Whether the binding composes a request.
   [[maybe_unused]] auto composes = [&](auto tag) -> bool {
@@ -258,12 +256,11 @@ resolved_address derive_as(const derivation_site &site,
     // The wrapper is placed in the context, where the binding hands it over.
     using wrapper = composed_type_t<T>;
     auto with = [&](auto tag, auto &emplace) -> wrapper {
-      return emplace(
-          resolve_binding_request<typename decltype(tag)::type, RTTI>(
-              scope, binding, context));
+      return emplace(resolve_binding<typename decltype(tag)::type, RTTI>(
+          scope, binding, context));
     };
     auto &value =
-        context.template construct_from<wrapper>(scope, [&]() -> wrapper {
+        context.template construct_made<wrapper>(scope, [&]() -> wrapper {
           return compose_wrapper<wrapper, derived_request_t<How, T>>(composes,
                                                                      with);
         });
@@ -272,7 +269,7 @@ resolved_address derive_as(const derivation_site &site,
     return apply_derivation<How, T>(
         scope, context, site.registered,
         [&](auto tag) -> typename decltype(tag)::type {
-          return resolve_binding_request<typename decltype(tag)::type, RTTI>(
+          return resolve_binding<typename decltype(tag)::type, RTTI>(
               scope, binding, context);
         },
         composes, [&]() -> retention & { return *site.kept; },
@@ -295,20 +292,19 @@ resolved_address derive_wrapper(void *erased, const derivation_site &site,
   auto &context = *static_cast<Context *>(erased_context);
   if constexpr (derivation_shape_v<derivation::keep, T>) {
     if (how == derivation::keep) {
-      return derive_as<derivation::keep, T, RTTI>(site, scope, binding,
-                                                  context);
+      return derive<derivation::keep, T, RTTI>(site, scope, binding, context);
     }
   }
   if constexpr (derivation_shape_v<derivation::convert, T>) {
     if (how == derivation::convert) {
-      return derive_as<derivation::convert, T, RTTI>(site, scope, binding,
-                                                     context);
+      return derive<derivation::convert, T, RTTI>(site, scope, binding,
+                                                  context);
     }
   }
   if constexpr (derivation_shape_v<derivation::compose, T>) {
     if (how == derivation::compose) {
-      return derive_as<derivation::compose, T, RTTI>(site, scope, binding,
-                                                     context);
+      return derive<derivation::compose, T, RTTI>(site, scope, binding,
+                                                  context);
     }
   }
   throw_type_not_convertible(site.requested, site.registered, context);
@@ -446,8 +442,8 @@ struct table_parts {
   const request_node *placed;
 };
 
-constexpr type_descriptor with_reference(type_descriptor descriptor,
-                                         type_reference_kind reference) {
+constexpr type_descriptor referenced(type_descriptor descriptor,
+                                     type_reference_kind reference) {
   descriptor.reference = reference;
   return descriptor;
 }
@@ -459,10 +455,10 @@ constexpr type_descriptor shape_descriptor(const table_parts &parts,
   switch (shape) {
   case request_shape::lvalue:
   case request_shape::const_lvalue:
-    return with_reference(*object, type_reference_kind::lvalue);
+    return referenced(*object, type_reference_kind::lvalue);
   case request_shape::rvalue:
   case request_shape::const_rvalue:
-    return with_reference(*object, type_reference_kind::rvalue);
+    return referenced(*object, type_reference_kind::rvalue);
   case request_shape::pointer:
   case request_shape::const_pointer:
     return {
@@ -552,13 +548,13 @@ constexpr table_parts make_table_parts() {
                     request_table<Object, false, RTTI, Binding, Context>::nodes,
                     nullptr};
   if constexpr (traits.converts) {
-    parts.owner = described_type_v<typename converted_from<Object>::type>;
+    parts.owner = described_type_v<typename converted_owner<Object>::type>;
   }
   if constexpr (traits.complete) {
     parts.operations = &object_operations_v<Object, traits.places>;
   }
   if constexpr (traits.places && std::is_pointer_v<Object>) {
-    parts.placed = request_node_for<Object, RTTI, Binding, Context>();
+    parts.placed = request_node_v<Object, RTTI, Binding, Context>();
   } else if constexpr (traits.places) {
     parts.placed = shape_row(parts.plain, request_shape::value);
   }
@@ -610,7 +606,7 @@ const request_node request_table<Object, Volatile, RTTI, Binding,
 
 // The node of a request: of its shape, in the table of its object.
 template <typename T, typename RTTI, typename Binding, typename Context>
-constexpr const request_node *request_node_for() {
+constexpr const request_node *request_node_v() {
   using object = request_object<T>;
   return request_table<typename object::type, object::is_volatile, RTTI,
                        Binding, Context>::nodes +
@@ -623,7 +619,7 @@ constexpr const request_node *request_node_for() {
 inline derivation_facts node_facts(const derivation_site &site,
                                    const request_node &request,
                                    type_descriptor requested) {
-  return derivation_facts_of(*site.binding, requested,
+  return binding_derivations(*site.binding, requested,
                              request.facts.shapes.has(derivation::convert),
                              request.owner);
 }
@@ -765,9 +761,9 @@ resolved_address derive_erased(void *erased, const derivation_site &site,
 // Resolves a request through a binding. A request the binding does not
 // publish is derived from one it resolves.
 template <typename T, typename RTTI, typename Binding, typename Context>
-T resolve_binding_request(construction_scope scope, Binding &binding,
-                          Context &context, const void *cache_key) {
-  return detail::convert_resolved_binding<T>(binding.resolve_request(
+T resolve_binding(construction_scope scope, Binding &binding, Context &context,
+                  const void *cache_key) {
+  return detail::resolved_value<T>(binding.resolve_request(
       scope, context, detail::erased_request<T, RTTI, Binding, Context>(),
       cache_key));
 }
@@ -775,7 +771,7 @@ T resolve_binding_request(construction_scope scope, Binding &binding,
 // A wrapper made of the normalized value is a new object, so a reference
 // request is not made of it.
 template <typename Request>
-inline constexpr bool can_construct_from_normalized_request_v =
+inline constexpr bool constructs_normalized_v =
     !std::is_reference_v<Request> &&
     type_traits<std::decay_t<Request>>::enabled &&
     !std::is_pointer_v<std::decay_t<Request>> &&
@@ -797,7 +793,7 @@ inline constexpr bool constructible_normalized_v =
 // copies or moves, by the conversion from that value.
 template <typename Request>
 inline constexpr bool construct_normalized_request_v = [] {
-  if constexpr (can_construct_from_normalized_request_v<Request> &&
+  if constexpr (constructs_normalized_v<Request> &&
                 constructible_normalized_v<Request>) {
     using value = request_constructed_t<Request>;
     return (std::is_move_constructible_v<value> ||

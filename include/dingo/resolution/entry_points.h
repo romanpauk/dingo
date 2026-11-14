@@ -31,7 +31,7 @@ namespace dingo::detail {
 
 // Whether a request without a runtime key carries a key in its type.
 template <typename T, typename IdType>
-inline constexpr bool keyed_by_type_v = [] {
+inline constexpr bool type_keyed_v = [] {
   if constexpr (is_none_v<std::decay_t<IdType>> && is_selected_v<T>) {
     return is_value_selector_v<selected_selector_t<T>>;
   } else {
@@ -42,7 +42,7 @@ inline constexpr bool keyed_by_type_v = [] {
 // The requests a container answers: resolve, construct, invoke and the
 // collections. A container derives from it and provides
 // resolve_entry<Request, R>(lookup_key), construct_collection<T>(fn,
-// lookup_key), count_collection<T>(lookup_key) and with_context(fn), which
+// lookup_key), count_collection<T>(lookup_key) and transact(fn), which
 // runs fn with a fresh resolution context, and is the host of
 // request_resolution.
 // resolve<T &&>() returns the T it moves out of the object the request refers
@@ -69,7 +69,7 @@ public:
             typename R = request_result_t<T, true>,
             std::enable_if_t<!is_lookup_key_v<std::decay_t<IdType>>, int> = 0>
   DINGO_ALWAYS_INLINE R resolve(IdType &&id = IdType()) {
-    if constexpr (keyed_by_type_v<T, IdType>) {
+    if constexpr (type_keyed_v<T, IdType>) {
       (void)id;
       return resolve<selected_type_t<T>>(
           make_lookup_key(selected_selector_t<T>{}));
@@ -140,7 +140,7 @@ public:
     constexpr bool default_factory =
         std::is_same_v<Factory, constructor<normalized_type_t<T>>>;
     if constexpr ((std::is_lvalue_reference_v<R> || rvalue ||
-                   keyed_by_type_v<T, none_t>) &&
+                   type_keyed_v<T, none_t>) &&
                   default_factory) {
       (void)factory;
       return resolve<T>();
@@ -148,7 +148,7 @@ public:
       static_assert(!rvalue, "construct<T &&>(factory) cannot take what the "
                              "factory makes; construct<T>(factory) does");
     } else {
-      return self().with_context([&](auto &context) -> R {
+      return self().transact([&](auto &context) -> R {
         // What construct makes is returned to the caller, as are the
         // references it holds.
         return request_resolution::construct<request_type<T>, R>(
@@ -195,7 +195,7 @@ public:
     using callable_type = std::remove_cv_t<std::remove_reference_t<Callable>>;
     using dispatch_signature =
         callable_dispatch_signature_t<Signature, callable_type>;
-    return self().with_context([&](auto &context) -> decltype(auto) {
+    return self().transact([&](auto &context) -> decltype(auto) {
       auto type_guard = context.template track_type<callable_type>();
       return callable_invoke<dispatch_signature>::construct(
           std::forward<Callable>(callable), self().entry_scope(ephemeral_scope),

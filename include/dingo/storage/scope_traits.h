@@ -157,13 +157,13 @@ template <typename T> struct storage_form_traits<T *> {
 
   // A pointer it makes is taken over by an owning handle.
   template <typename U> struct consumed {
-    using rvalue_reference_types = owning_handles_of_t<U>;
+    using rvalue_reference_types = owning_handle_list_t<U>;
   };
 };
 
 // An array is consumed as an owning handle to its rows.
 template <typename T, typename U> struct array_row_handle_promotions {
-  using type = owning_handles_of_t<wrapper_rebind_leaf_t<T, U>[]>;
+  using type = owning_handle_list_t<wrapper_rebind_leaf_t<T, U>[]>;
 };
 
 template <typename T> struct storage_form_traits<T[]> {
@@ -199,7 +199,7 @@ template <typename T, size_t N> struct storage_form_traits<T[N]> {
   template <typename U> struct consumed {
     using rvalue_reference_types =
         type_list_cat_t<typename array_row_handle_promotions<T, U>::type,
-                        owning_handles_of_t<wrapper_rebind_leaf_t<T[N], U>>>;
+                        owning_handle_list_t<wrapper_rebind_leaf_t<T[N], U>>>;
   };
 };
 
@@ -248,14 +248,14 @@ template <typename U> struct element_storage_types {
 
 // Whether a wrapper of the leaf U can exist, every layer of it.
 template <typename Wrapper, typename U>
-inline constexpr bool rebinds_to_v =
+inline constexpr bool rebindable_v =
     is_wrapper_formable_v<wrapper_rebind_leaf_t<Wrapper, U>>;
 
 template <typename Wrapper, bool Array> struct owner_storage_form_base {
   template <typename U> struct borrowed {
   private:
     using handle = wrapper_rebind_leaf_t<Wrapper, U>;
-    using types = std::conditional_t<rebinds_to_v<Wrapper, U>,
+    using types = std::conditional_t<rebindable_v<Wrapper, U>,
                                      wrapper_storage_types<handle>,
                                      element_storage_types<U>>;
 
@@ -296,7 +296,7 @@ struct wrapper_storage_form<Wrapper, semantics::sole_owner, Borrowable> {
 
   template <typename U> struct consumed {
     using rvalue_reference_types =
-        std::conditional_t<rebinds_to_v<Wrapper, U>,
+        std::conditional_t<rebindable_v<Wrapper, U>,
                            type_list<wrapper_rebind_leaf_t<Wrapper, U> &&,
                                      shared_handle_t<Wrapper, U> &&>,
                            type_list<>>;
@@ -321,7 +321,7 @@ struct wrapper_storage_form<Wrapper, semantics::shared_owner, Borrowable> {
 
   template <typename U> struct consumed {
     using rvalue_reference_types =
-        std::conditional_t<rebinds_to_v<Wrapper, U>,
+        std::conditional_t<rebindable_v<Wrapper, U>,
                            type_list<wrapper_rebind_leaf_t<Wrapper, U> &&>,
                            type_list<>>;
   };
@@ -514,9 +514,9 @@ public:
   // The source of a consuming scope, placed in the context.
   template <typename Context, typename Storage, typename Container,
             typename Scope>
-  static auto &materialize_source_in_context(Scope scope, Context &context,
-                                             Storage &storage,
-                                             Container &container) {
+  static auto &materialize_context_source(Scope scope, Context &context,
+                                          Storage &storage,
+                                          Container &container) {
     static_assert(policy::consumes);
     return context.template construct<
         rvalue_source<source_t<Storage, Context, Container>>>(

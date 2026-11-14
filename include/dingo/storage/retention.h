@@ -39,11 +39,11 @@ public:
       }
     }
     if constexpr (is_runtime_context_v<Context>) {
-      auto &object = context.template construct_from<T>(
+      auto &object = context.template construct_made<T>(
           persistent_scope, std::forward<Make>(make));
       head_ = std::addressof(context.template construct<node>(
           persistent_scope, node{key, std::addressof(object), head_, nullptr}));
-      context.on_rollback(
+      context.defer_rollback(
           +[](void *self, void *) noexcept {
             auto &kept = *static_cast<retention *>(self);
             kept.head_ = kept.head_->next;

@@ -34,7 +34,7 @@ constexpr bool selects_normalized_interface(binding_status exact) {
 
 // The status of a selection of the bindings that answer a request: one is
 // found, none is not found, and more are ambiguous.
-constexpr binding_status status_of_count(std::size_t count) {
+constexpr binding_status count_status(std::size_t count) {
   return count == 0   ? binding_status::not_found
          : count == 1 ? binding_status::found
                       : binding_status::ambiguous;
@@ -45,9 +45,8 @@ constexpr binding_status status_of_count(std::size_t count) {
 // find selects the bindings of an interface; normalizes tells whether the
 // normalized interface is another one.
 template <typename Find, typename Exact, typename Normalized>
-constexpr auto select_exact_or_normalized(Find &&find, Exact exact,
-                                          Normalized normalized,
-                                          bool normalizes) {
+constexpr auto select_exact_first(Find &&find, Exact exact,
+                                  Normalized normalized, bool normalizes) {
   auto selection = find(exact);
   if (normalizes && selects_normalized_interface(selection.status)) {
     selection = find(normalized);

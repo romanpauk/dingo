@@ -81,7 +81,7 @@ void append_text(std::string &message, Parts &&...parts) {
 
 // The resolution path that led to the failing request.
 template <typename Context>
-void append_type_path_text(std::string &message, const Context &context) {
+void append_path(std::string &message, const Context &context) {
   if (context.has_type_path()) {
     message += " (required by ";
     context.append_type_path(message);
@@ -91,7 +91,7 @@ void append_type_path_text(std::string &message, const Context &context) {
 
 // The type whose construction made the failing request.
 template <typename Context>
-void append_active_type_text(std::string &message, const Context &context) {
+void append_active_type(std::string &message, const Context &context) {
   if (auto *active_type = context.active_type()) {
     append_text(message, " (required by ", *active_type, ")");
   }
@@ -102,8 +102,7 @@ void append_active_type_text(std::string &message, const Context &context) {
 
 // The index type of a lookup key, or null for a key without one.
 template <typename Selector>
-constexpr const type_descriptor *
-lookup_key_index_type(const lookup_key<Selector> &) {
+constexpr const type_descriptor *key_index(const lookup_key<Selector> &) {
   if constexpr (std::is_same_v<Selector, key_type<none_t>>) {
     return nullptr;
   } else {
@@ -120,7 +119,7 @@ make_type_not_found_exception(type_descriptor request, const Context &context,
   if (index_type != nullptr) {
     append_text(message, " (index type: ", *index_type, ")");
   }
-  append_type_path_text(message, context);
+  append_path(message, context);
   return type_not_found_exception(std::move(message));
 }
 
@@ -137,7 +136,7 @@ type_ambiguous_exception make_type_ambiguous_exception(type_descriptor request,
                                                        const Context &context) {
   std::string message = "type resolution is ambiguous: ";
   append_type_name(message, request);
-  append_active_type_text(message, context);
+  append_active_type(message, context);
   return type_ambiguous_exception(std::move(message));
 }
 
@@ -156,7 +155,7 @@ make_type_not_convertible_exception(type_descriptor target_type,
                                     const Context &context) {
   std::string message = "type is not convertible to ";
   append_text(message, target_type, " from ", source_type);
-  append_active_type_text(message, context);
+  append_active_type(message, context);
   return type_not_convertible_exception(std::move(message));
 }
 
@@ -224,9 +223,10 @@ constexpr type_descriptor registration_key_type(const lookup_key<Selector> &) {
   }
 }
 
-inline std::string make_lookup_registration_message(
-    const char *prefix, type_descriptor interface_type, type_descriptor storage,
-    type_descriptor key_type) {
+inline std::string registration_message(const char *prefix,
+                                        type_descriptor interface_type,
+                                        type_descriptor storage,
+                                        type_descriptor key_type) {
   std::string message = prefix;
   append_text(message, interface_type, ", storage ", storage, ", key type ",
               key_type);
@@ -238,15 +238,15 @@ make_lookup_already_registered_exception(type_descriptor interface_type,
                                          type_descriptor storage,
                                          type_descriptor key_type) {
   return lookup_already_registered_exception(
-      make_lookup_registration_message("lookup already registered: interface ",
-                                       interface_type, storage, key_type));
+      registration_message("lookup already registered: interface ",
+                           interface_type, storage, key_type));
 }
 
 inline container_sealed_exception
 make_container_sealed_exception(type_descriptor interface_type,
                                 type_descriptor storage,
                                 type_descriptor key_type) {
-  return container_sealed_exception(make_lookup_registration_message(
+  return container_sealed_exception(registration_message(
       "container sealed by resolve, lookup can not be replaced: interface ",
       interface_type, storage, key_type));
 }

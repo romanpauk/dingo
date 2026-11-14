@@ -69,7 +69,7 @@ class static_container_impl;
 // The origin of a request a runtime child forwards to a static container,
 // with the context of the child: the origin answers what no container of the
 // chain binds, which a runtime container does in its own context.
-template <typename Origin, typename Context> struct origin_in_context {
+template <typename Origin, typename Context> struct context_origin {
   Origin &origin;
   Context &context;
 
@@ -149,8 +149,7 @@ private:
             binding_cell_t<model>,
             typename static_dependencies<static_container_impl,
                                          typename model::bindings_type>::type>;
-        return activation::template places_value_in_context<Result,
-                                                            context_type>;
+        return activation::template places_value<Result, context_type>;
       }
     }
   }
@@ -160,7 +159,7 @@ private:
   // static codegen contract; any temporary, collection, conversion, or parent
   // path must use the real context instead.
   template <typename Request, typename Result, typename LookupKey>
-  static constexpr bool uses_static_minimal_context() {
+  static constexpr bool minimal_context() {
     using selection = selection_t<typename Request::lookup_type, LookupKey>;
     if constexpr (collection_traits<Result>::is_collection ||
                   selection::status != binding_status::found) {
@@ -229,7 +228,7 @@ public:
   template <typename Parent = ParentContainer,
             std::enable_if_t<!std::is_void_v<Parent>, int> = 0>
   explicit static_container_impl(Parent *parent)
-      : parent_(container_implementation_of(parent)) {}
+      : parent_(unwrap_container(parent)) {}
 
   using container_requests<static_container_impl>::resolve;
 
@@ -245,14 +244,14 @@ public:
   R resolve_request(Scope scope, Context &context, Origin &origin,
                     LookupKey key) {
     if constexpr (is_runtime_context_v<Context>) {
-      origin_in_context<Origin, Context> child{origin, context};
+      context_origin<Origin, Context> child{origin, context};
       forwarded_context<Context> own(context, persistent_memory());
       return as_operation([&]() -> R {
         return request_resolution::resolve<Request, R>(*this, scope, own, child,
                                                        std::move(key));
       });
     } else {
-      if (forwarded_by(origin)) {
+      if (is_forwarded(origin)) {
         return as_operation([&]() -> R {
           if constexpr (has_persistent_memory_slot<Context>::value &&
                         has_persistent_memory_v) {
@@ -274,7 +273,7 @@ public:
   // unrelated type is another object, which is known while it compiles: GCC
   // would otherwise take the addresses as equal on the path where they compare
   // so, and warn of accesses out of the bounds of the origin.
-  template <typename Origin> bool forwarded_by(Origin &origin) const noexcept {
+  template <typename Origin> bool is_forwarded(Origin &origin) const noexcept {
     if constexpr (std::is_base_of_v<static_container_impl, Origin> ||
                   std::is_base_of_v<Origin, static_container_impl>) {
       return static_cast<const void *>(std::addressof(origin)) != this;
@@ -295,7 +294,7 @@ public:
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   T construct_collection(Fn &&fn, LookupKey) {
     if constexpr (detail::is_static_lookup_key_v<LookupKey>) {
-      return with_context([&](context_type &context) -> T {
+      return transact([&](context_type &context) -> T {
         if constexpr (std::is_same_v<std::decay_t<Fn>,
                                      binding_collection_append>) {
           return storage_.template construct_collection<T, LookupKey>(
@@ -312,8 +311,7 @@ public:
     }
   }
 
-  template <typename Fn>
-  DINGO_ALWAYS_INLINE decltype(auto) with_context(Fn &&fn) {
+  template <typename Fn> DINGO_ALWAYS_INLINE decltype(auto) transact(Fn &&fn) {
     context_type context(persistent_memory());
     return as_operation(
         [&]() -> decltype(auto) { return std::forward<Fn>(fn)(context); });
@@ -337,7 +335,7 @@ public:
       try {
         return std::forward<Fn>(fn)();
       } catch (...) {
-        rollback_to(mark);
+        rollback(mark);
         throw;
       }
     }
@@ -353,12 +351,12 @@ public:
 
     ~operation_guard() {
       if (!released) {
-        container.rollback_to(mark);
+        container.rollback(mark);
       }
     }
   };
 
-  DINGO_NOINLINE void rollback_to(std::size_t mark) noexcept {
+  DINGO_NOINLINE void rollback(std::size_t mark) noexcept {
     for (; resolved_count_ > mark; --resolved_count_) {
       storage_.reset_resolved(resolved_count_);
     }
@@ -427,7 +425,7 @@ private:
                   "static_container cannot return a reference or a pointer to "
                   "an instance the resolution constructs and does not keep; "
                   "request it by value, or as a dependency");
-    if constexpr (uses_static_minimal_context<Request, R, LookupKey>()) {
+    if constexpr (minimal_context<Request, R, LookupKey>()) {
       no_dependency_context context;
       return as_operation([&]() -> R {
         return resolve_bound<typename request_type<typename Request::user_type,
@@ -447,7 +445,7 @@ private:
   // composing it, otherwise its normalized value.
   template <typename Request, typename R, typename Selection, typename Context,
             typename Scope>
-  R resolve_exact_or_normalized(Selection, Scope scope, Context &context) {
+  R resolve_normalizing(Selection, Scope scope, Context &context) {
     constexpr bool exact = [] {
       if constexpr (Selection::status == binding_status::found) {
         return resolves_request_v<typename Request::user_type,

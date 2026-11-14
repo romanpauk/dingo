@@ -243,7 +243,7 @@ static void finish_runtime_transaction(benchmark::State &state) {
     std::array<transaction_fixture, batch_size> transactions;
     for (auto &fixture : transactions) {
       for (int64_t action = 0; action != state.range(0); ++action) {
-        fixture.transaction.on_rollback(
+        fixture.transaction.defer_rollback(
             []() noexcept { benchmark::ClobberMemory(); });
       }
     }
@@ -276,7 +276,7 @@ static void commit_runtime_transaction(benchmark::State &state) {
     dingo::inline_arena<512> scratch;
     dingo::runtime_transaction transaction(runtime, scratch);
     for (int64_t action = 0; action != state.range(0); ++action) {
-      transaction.on_rollback([]() noexcept { benchmark::ClobberMemory(); });
+      transaction.defer_rollback([]() noexcept { benchmark::ClobberMemory(); });
     }
     transaction.commit();
   }

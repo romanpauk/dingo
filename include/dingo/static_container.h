@@ -23,7 +23,7 @@ template <typename StaticSource, typename ParentContainer,
 struct static_container_base {
   using type = static_container_impl<static_bindings_source_t<StaticSource>,
                                      ParentContainer,
-                                     container_traits_of_t<ParentContainer>>;
+                                     inherited_traits_t<ParentContainer>>;
 };
 
 template <typename StaticSource, typename ContainerTraits>

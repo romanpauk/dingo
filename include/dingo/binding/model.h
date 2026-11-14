@@ -51,7 +51,7 @@ template <typename Registration, bool StorageTagIsComplete, bool Stored>
 struct binding_model_impl : binding_model_base<Registration> {
   static constexpr bool storage_tag_is_complete = StorageTagIsComplete;
   static constexpr bool stored = false;
-  static constexpr bool use_interface_as_stored_leaf = false;
+  static constexpr bool stores_interface_leaf = false;
   using stored_leaf_type = leaf_type_t<
       typename binding_model_base<Registration>::registered_storage_type>;
   using stored_type = rebind_leaf_t<
@@ -71,11 +71,11 @@ struct binding_model_impl<Registration, true, true>
 
   static constexpr bool storage_tag_is_complete = true;
   static constexpr bool stored = true;
-  static constexpr bool use_interface_as_stored_leaf =
-      use_interface_as_stored_leaf_v<registered_storage_type, interface_types>;
+  static constexpr bool stores_interface_leaf =
+      stores_interface_leaf_v<registered_storage_type, interface_types>;
 
   using stored_leaf_type =
-      std::conditional_t<use_interface_as_stored_leaf,
+      std::conditional_t<stores_interface_leaf,
                          unannotated_t<type_list_head_t<interface_types>>,
                          leaf_type_t<registered_storage_type>>;
   using stored_type = rebind_leaf_t<registered_storage_type, stored_leaf_type>;

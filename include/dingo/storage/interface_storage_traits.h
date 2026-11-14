@@ -42,11 +42,11 @@ namespace detail {
 // Whether a registration of one interface stores its handle as one of the
 // interface: a class with a virtual destructor the handle rebinds to.
 template <typename Storage, typename InterfaceList>
-inline constexpr bool use_interface_as_stored_leaf_v = false;
+inline constexpr bool stores_interface_leaf_v = false;
 
 template <typename Storage, typename Interface>
-inline constexpr bool
-    use_interface_as_stored_leaf_v<Storage, type_list<Interface>> = [] {
+inline constexpr bool stores_interface_leaf_v<Storage, type_list<Interface>> =
+    [] {
       using interface_type = unannotated_t<Interface>;
       if constexpr (!requires_complete_type_v<interface_type> ||
                     !is_complete_v<interface_type> ||

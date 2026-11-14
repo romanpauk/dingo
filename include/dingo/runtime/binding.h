@@ -30,15 +30,15 @@ inline constexpr local_level_t local_level{};
 } // namespace detail
 
 namespace detail {
-constexpr std::size_t aligned_to(std::size_t size,
-                                 std::size_t alignment) noexcept {
+constexpr std::size_t align_up(std::size_t size,
+                               std::size_t alignment) noexcept {
   return (size + alignment - 1) / alignment * alignment;
 }
 
 // Where the cell of a registration lies in its record: after its header.
 template <typename Cell>
 inline constexpr std::size_t runtime_cell_offset_v =
-    aligned_to(sizeof(runtime_binding_header), alignof(Cell));
+    align_up(sizeof(runtime_binding_header), alignof(Cell));
 
 template <typename Cell>
 Cell &runtime_cell(runtime_binding_header &header) noexcept {
@@ -52,7 +52,7 @@ Cell &runtime_cell(runtime_binding_header &header) noexcept {
 template <typename Cell, typename Binding, std::size_t Interfaces>
 struct runtime_binding_record {
   static constexpr std::size_t bindings_offset =
-      aligned_to(runtime_cell_offset_v<Cell> + sizeof(Cell), alignof(Binding));
+      align_up(runtime_cell_offset_v<Cell> + sizeof(Cell), alignof(Binding));
   static constexpr std::size_t size =
       bindings_offset + Interfaces * sizeof(Binding);
   static constexpr std::size_t alignment = std::max(
@@ -124,7 +124,7 @@ template <typename RTTI, typename Context> struct runtime_binding_engine {
                                   const request_type &request,
                                   std::size_t index, const void *cache_key) {
     const materialization_facts &materialization = node.materialization;
-    const resolved_address result = drive_materialization<true, true>(
+    const resolved_address result = run_materialization<true, true>(
         materialization, node_access{node, binding}, scope, context,
         [&](construction_scope construction) {
           return node.resolve(binding, scope, construction, context, index,
@@ -133,7 +133,7 @@ template <typename RTTI, typename Context> struct runtime_binding_engine {
     // An address into a value placed in the context is refused to the
     // caller, which uses it after the context ends.
     if (refuses_caller_address(
-            materialization, materialized_request_of(request.requested_type)) &&
+            materialization, materialized_request_v(request.requested_type)) &&
         scope.is_caller() &&
         result.access == resolved_address::access_kind::borrow) {
       throw make_type_not_convertible_exception(request.requested_type,
@@ -175,7 +175,7 @@ template <typename RTTI, typename Context> struct runtime_binding_engine {
 // then made for an lvalue source as well.
 template <typename Resolution, typename Application, typename Context,
           typename MaterializedSource>
-DINGO_ALWAYS_INLINE resolved_address resolve_address_from(
+DINGO_ALWAYS_INLINE resolved_address resolve_source_address(
     Application &application, Context &context, MaterializedSource &&source,
     type_descriptor requested_type) {
   if constexpr (std::is_lvalue_reference_v<MaterializedSource> &&
@@ -197,16 +197,15 @@ DINGO_ALWAYS_INLINE resolved_address resolve_address_from(
 template <typename Application, typename Context, typename MaterializedSource,
           typename... Resolutions>
 resolved_address
-resolve_indexed_address(Application &application, Context &context,
-                        MaterializedSource &&source,
-                        std::size_t resolution_index, type_list<Resolutions...>,
-                        type_descriptor requested_type) {
+resolve_published(Application &application, Context &context,
+                  MaterializedSource &&source, std::size_t resolution_index,
+                  type_list<Resolutions...>, type_descriptor requested_type) {
   resolved_address result{};
   std::size_t index = 0;
   // Short-circuiting guarantees that exactly one arm forwards the source.
   const bool matched =
       (((resolution_index == index++)
-            ? (result = resolve_address_from<Resolutions>(
+            ? (result = resolve_source_address<Resolutions>(
                    application, context,
                    std::forward<MaterializedSource>(
                        source), // NOLINT(bugprone-use-after-move)
@@ -242,7 +241,7 @@ private:
   }
 
   static constexpr const detail::binding_facts &facts =
-      detail::binding_facts_of<Type, Storage, request_resolutions>::value;
+      detail::binding_facts_v<Type, Storage, request_resolutions>::value;
 
   static cell_type &cell(interface_base &binding) noexcept {
     return detail::runtime_cell<cell_type>(binding.header());
@@ -271,19 +270,19 @@ private:
     activation_type activation{cell(binding), resolution_container(binding),
                                scope};
     auto application = activation.application();
-    return activation.with_runtime_source(
+    return activation.use_runtime_source(
         construction, context, [&](auto &&source) -> resolved_address {
-          return detail::resolve_indexed_address(
+          return detail::resolve_published(
               application, context, std::forward<decltype(source)>(source),
               resolution_index, request_resolutions{}, requested);
         });
   }
 
-  static void *storage_of(interface_base &binding) noexcept {
+  static void *storage_address(interface_base &binding) noexcept {
     return std::addressof(cell(binding).storage());
   }
 
-  static void *cell_of(interface_base &binding) noexcept {
+  static void *cell_address(interface_base &binding) noexcept {
     return std::addressof(cell(binding));
   }
 
@@ -330,12 +329,12 @@ public:
       &facts,
       registered_type(),
       detail::described_type_v<leaf_type_t<typename Storage::type>>,
-      detail::materialization_facts_of<Storage, runtime_context_type,
-                                       Container>(),
+      detail::materialization_facts_v<Storage, runtime_context_type,
+                                      Container>(),
       Storage::conversions::is_stable,
       resolver(),
-      &storage_of,
-      &cell_of,
+      &storage_address,
+      &cell_address,
       &retained,
       &is_resolved,
       &reset_cell};

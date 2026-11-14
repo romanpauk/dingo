@@ -76,7 +76,7 @@ of it, fails when the layer is empty. Two steps from such a layer do not fail:
 
 - `element_pointer` gives a pointer to the element, which is null when the layer
   is empty.
-- `element_or_empty` gives the optional that the layer holds, which is empty
+- `optional_element` gives the optional that the layer holds, which is empty
   when the layer is empty.
 
 Empty layers do not change whether a request resolves, or its cost. The
@@ -90,7 +90,7 @@ A binding knows the type that it stores. A request knows only the interface that
 it asks for. So the steps of a derivation divide between them:
 
 - The binding takes the steps that need the stored type or that only go into the
-  stored object: `element`, `element_pointer`, `element_or_empty`, `upcast`, and
+  stored object: `element`, `element_pointer`, `optional_element`, `upcast`, and
   the release of what a pointer that it made points to. A request of the
   abstract interface cannot name the leaf, so the binding also takes the steps
   from an object that holds the leaf that the upcast needs: it wraps the leaf
@@ -287,7 +287,7 @@ the library:
 - A storage that cannot be made is not compared.
 - The alternative type of a probe never holds its other alternative, so the
   check compares the other alternative as a copyable type of its own.
-- What a binding reaches through `element_pointer` or `element_or_empty` must be
+- What a binding reaches through `element_pointer` or `optional_element` must be
   `published` in one of the categories that take it. A request that derives it
   goes through an element that may be absent, and fails where the layer is
   empty.

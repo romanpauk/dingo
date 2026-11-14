@@ -99,11 +99,11 @@ private:
 };
 
 // A recursion guard that is entered only when it is enabled.
-class recursion_guard_wrapper {
+class guard_wrapper {
 public:
   template <typename Context>
-  recursion_guard_wrapper(Context &context, const void *binding,
-                          type_descriptor type, bool enabled) {
+  guard_wrapper(Context &context, const void *binding, type_descriptor type,
+                bool enabled) {
     if (enabled) {
       // The wrapped recursion_guard owns a self-linking resolving_frame and
       // links itself into the guard stack, so it must stay at a fixed address
@@ -113,12 +113,12 @@ public:
     }
   }
 
-  recursion_guard_wrapper(const recursion_guard_wrapper &) = delete;
-  recursion_guard_wrapper &operator=(const recursion_guard_wrapper &) = delete;
-  recursion_guard_wrapper(recursion_guard_wrapper &&) = delete;
-  recursion_guard_wrapper &operator=(recursion_guard_wrapper &&) = delete;
+  guard_wrapper(const guard_wrapper &) = delete;
+  guard_wrapper &operator=(const guard_wrapper &) = delete;
+  guard_wrapper(guard_wrapper &&) = delete;
+  guard_wrapper &operator=(guard_wrapper &&) = delete;
 
-  ~recursion_guard_wrapper() {
+  ~guard_wrapper() {
     if (active_) {
       get()->~recursion_guard();
     }

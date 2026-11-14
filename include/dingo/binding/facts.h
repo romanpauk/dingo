@@ -25,7 +25,7 @@ namespace detail {
 
 // The resolution a binding of a storage publishes, as data.
 template <typename Storage, typename Resolution>
-constexpr published_resolution published_resolution_of() {
+constexpr published_resolution published_resolution_v() {
   using target = typename Resolution::target_type;
   published_resolution resolution{described_type_v<target>, {}, false, false};
   if constexpr (std::is_pointer_v<target>) {
@@ -47,7 +47,7 @@ struct published_resolution_table;
 template <typename Storage, typename... Resolutions>
 struct published_resolution_table<Storage, type_list<Resolutions...>> {
   static constexpr published_resolution value[] = {
-      published_resolution_of<Storage, Resolutions>()...};
+      published_resolution_v<Storage, Resolutions>()...};
 };
 
 template <typename Storage>
@@ -61,7 +61,7 @@ struct published_resolution_table<Storage, type_list<>> {
 template <typename Interface, typename Storage,
           typename Resolutions =
               typename binding_resolutions<Interface, Storage>::type>
-struct binding_facts_of {
+struct binding_facts_v {
   using interface_type = std::remove_cv_t<Interface>;
   static constexpr binding_facts value{
       published_resolution_table<Storage, Resolutions>::value,

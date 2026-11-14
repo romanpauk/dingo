@@ -38,12 +38,12 @@ inline constexpr bool is_runtime_context_v =
 // Whether a request that a static binding cannot resolve is rejected as it
 // runs, as a runtime container rejects it, rather than as it compiles: in a
 // runtime context, and in one a backend that resolves for a runtime container
-// declares with rejects_at_run_time.
-template <typename T> struct rejects_at_run_time : std::false_type {};
+// declares with rejects_late.
+template <typename T> struct rejects_late : std::false_type {};
 
 template <typename T>
-inline constexpr bool rejects_at_run_time_v =
-    rejects_at_run_time<std::remove_cv_t<std::remove_reference_t<T>>>::value;
+inline constexpr bool rejects_late_v =
+    rejects_late<std::remove_cv_t<std::remove_reference_t<T>>>::value;
 
 class context_path_state;
 
@@ -143,7 +143,7 @@ template <typename T> detail::resolving_frame context_path_state::track_type() {
 
 // The resolution context of both containers. The backend provides the memory
 // of the instances a resolution constructs, construct_storage<T>(scope, fn),
-// and on_rollback, the hook a transactional resolution reports to; a backend
+// and defer_rollback, the hook a transactional resolution reports to; a backend
 // without a transaction ignores it. A runtime backend also keeps the
 // destructors a resolution adds with add_runtime_destructor.
 template <typename Backend>
@@ -163,7 +163,7 @@ public:
 
   // Constructs a T at the address construct_fn is given.
   template <typename T, typename Scope, typename ConstructFn>
-  T &construct_in_place(Scope scope, ConstructFn &&construct_fn) {
+  T &construct_placed(Scope scope, ConstructFn &&construct_fn) {
     return Backend::template construct_storage<T>(
         scope, std::forward<ConstructFn>(construct_fn));
   }
@@ -182,7 +182,7 @@ public:
   // Constructs the T that make returns in place, so that a T that can be
   // neither copied nor moved is placed too.
   template <typename T, typename Scope, typename Make>
-  T &construct_from(Scope scope, Make &&make) {
+  T &construct_made(Scope scope, Make &&make) {
     return Backend::template construct_storage<T>(
         scope, [&](void *ptr) { new (ptr) T(std::forward<Make>(make)()); });
   }
@@ -249,17 +249,16 @@ struct is_runtime_context<resolution_context<Backend>>
     : std::bool_constant<Backend::is_transactional> {};
 
 template <typename Backend, typename = void>
-struct backend_rejects_at_run_time
-    : std::bool_constant<Backend::is_transactional> {};
+struct backend_rejects_late : std::bool_constant<Backend::is_transactional> {};
 
 template <typename Backend>
-struct backend_rejects_at_run_time<
-    Backend, std::void_t<decltype(Backend::rejects_at_run_time)>>
-    : std::bool_constant<Backend::rejects_at_run_time> {};
+struct backend_rejects_late<Backend,
+                            std::void_t<decltype(Backend::rejects_late)>>
+    : std::bool_constant<Backend::rejects_late> {};
 
 template <typename Backend>
-struct rejects_at_run_time<resolution_context<Backend>>
-    : backend_rejects_at_run_time<Backend> {};
+struct rejects_late<resolution_context<Backend>>
+    : backend_rejects_late<Backend> {};
 
 } // namespace detail
 

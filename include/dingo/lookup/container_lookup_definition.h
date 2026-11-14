@@ -40,7 +40,7 @@ template <typename T>
 using container_implementation_t = typename container_implementation<T>::type;
 
 template <typename T>
-container_implementation_t<T> *container_implementation_of(T *container) {
+container_implementation_t<T> *unwrap_container(T *container) {
   return container_implementation<T>::get(container);
 }
 

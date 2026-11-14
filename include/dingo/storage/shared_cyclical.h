@@ -101,11 +101,11 @@ template <> struct scope_traits<shared_cyclical> {
 
 namespace detail {
 template <typename Context, typename = void>
-struct has_on_rollback : std::false_type {};
+struct has_rollback_hook : std::false_type {};
 
 template <typename Context>
-struct has_on_rollback<
-    Context, std::void_t<decltype(std::declval<Context &>().on_rollback(
+struct has_rollback_hook<
+    Context, std::void_t<decltype(std::declval<Context &>().defer_rollback(
                  std::declval<void (*)(void *, void *) noexcept>(),
                  std::declval<void *>()))>> : std::true_type {};
 
@@ -256,8 +256,8 @@ public:
       // transaction also undoes the publication when it rolls back later.
       // One without, as the static container resolves a binding without
       // dependencies through, relies on the local guard alone.
-      if constexpr (has_on_rollback<Context>::value) {
-        context.on_rollback(
+      if constexpr (has_rollback_hook<Context>::value) {
+        context.defer_rollback(
             +[](void *self, void *) noexcept {
               static_cast<shared_cyclical_storage *>(self)->reset();
             },

@@ -154,7 +154,7 @@ TEST(runtime_transaction_test,
   runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
   {
     runtime_transaction transaction(runtime, scratch);
-    transaction.on_rollback([&events]() noexcept { events.push_back(1); });
+    transaction.defer_rollback([&events]() noexcept { events.push_back(1); });
 
     auto *remaining = scratch.allocate(208, alignof(void *));
     EXPECT_TRUE(address_is_within(scratch, remaining));
@@ -170,7 +170,8 @@ TEST(runtime_transaction_test,
   runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
   {
     runtime_transaction transaction(runtime, scratch);
-    transaction.on_rollback(runtime_transaction_tracked_action(&events, 1, 10));
+    transaction.defer_rollback(
+        runtime_transaction_tracked_action(&events, 1, 10));
 
     auto *remaining = scratch.allocate(48, alignof(std::max_align_t));
     EXPECT_TRUE(address_is_within(scratch, remaining));
@@ -186,8 +187,10 @@ TEST(runtime_transaction_test,
   runtime_memory<std::allocator<char>> runtime(std::allocator<char>{});
   {
     runtime_transaction transaction(runtime, scratch);
-    transaction.on_rollback(runtime_transaction_tracked_action(&events, 1, 10));
-    transaction.on_rollback(runtime_transaction_tracked_action(&events, 2, 20));
+    transaction.defer_rollback(
+        runtime_transaction_tracked_action(&events, 1, 10));
+    transaction.defer_rollback(
+        runtime_transaction_tracked_action(&events, 2, 20));
   }
 
   EXPECT_EQ(events, (std::vector<int>{2, 1, 20, 10}));
@@ -203,10 +206,10 @@ TEST(runtime_transaction_test,
 
   {
     runtime_transaction outer(outer_runtime, outer_scratch);
-    outer.on_rollback([&events]() noexcept { events.push_back(1); });
+    outer.defer_rollback([&events]() noexcept { events.push_back(1); });
 
     runtime_transaction inner(inner_runtime, inner_scratch);
-    inner.on_rollback([&events]() noexcept { events.push_back(2); });
+    inner.defer_rollback([&events]() noexcept { events.push_back(2); });
     inner.commit();
 
     EXPECT_TRUE(events.empty());
@@ -225,11 +228,11 @@ TEST(runtime_transaction_test,
   {
     runtime_transaction outer(runtime, outer_scratch);
     outer.construct_persistent<runtime_arena_tracker>(&events, 1);
-    outer.on_rollback([&events]() noexcept { events.push_back(10); });
+    outer.defer_rollback([&events]() noexcept { events.push_back(10); });
     {
       runtime_transaction inner(runtime, inner_scratch);
       inner.construct_persistent<runtime_arena_tracker>(&events, 2);
-      inner.on_rollback([&events]() noexcept { events.push_back(20); });
+      inner.defer_rollback([&events]() noexcept { events.push_back(20); });
       inner.commit();
     }
   }
@@ -264,7 +267,7 @@ TEST(runtime_transaction_test,
   {
     runtime_transaction transaction(runtime, scratch);
     for (int value = 1; value != 40; ++value) {
-      transaction.on_rollback(
+      transaction.defer_rollback(
           [&events, value]() noexcept { events.push_back(value); });
     }
   }
@@ -283,7 +286,7 @@ TEST(runtime_transaction_test,
   {
     runtime_transaction transaction(runtime, scratch);
     auto value = std::make_unique<int>(42);
-    transaction.on_rollback([&events, value = std::move(value)]() noexcept {
+    transaction.defer_rollback([&events, value = std::move(value)]() noexcept {
       events.push_back(*value);
     });
   }
@@ -303,7 +306,7 @@ TEST(runtime_transaction_test,
       auto *created =
           transaction.construct_persistent<runtime_arena_tracker>(&events, 2);
       ASSERT_EQ(slot, nullptr);
-      transaction.on_rollback([&slot]() noexcept { slot = nullptr; });
+      transaction.defer_rollback([&slot]() noexcept { slot = nullptr; });
       slot = created;
     }
 
@@ -328,7 +331,7 @@ TEST(runtime_transaction_test,
           transaction.construct_persistent<runtime_ordered_persistent>(
               &events, 2, &installed_alive);
       ASSERT_EQ(slot, nullptr);
-      transaction.on_rollback([&slot]() noexcept { slot = nullptr; });
+      transaction.defer_rollback([&slot]() noexcept { slot = nullptr; });
       slot = installed;
     }
 
@@ -350,7 +353,7 @@ TEST(runtime_transaction_test,
       auto *created =
           transaction.construct_persistent<runtime_arena_tracker>(&events, 2);
       ASSERT_EQ(slot, nullptr);
-      transaction.on_rollback([&slot]() noexcept { slot = nullptr; });
+      transaction.defer_rollback([&slot]() noexcept { slot = nullptr; });
       slot = created;
       transaction.commit();
     }
@@ -380,7 +383,7 @@ TEST(runtime_transaction_test,
       auto destroy_observer = [observer]() noexcept {
         observer->~runtime_scratch_observer();
       };
-      transaction.on_rollback(destroy_observer);
+      transaction.defer_rollback(destroy_observer);
     }
 
     EXPECT_EQ(events, (std::vector<int>{7, 70}));
@@ -396,14 +399,14 @@ TEST(runtime_transaction_test, rollback_actions_run_only_on_rollback) {
 
   {
     runtime_transaction transaction(runtime, scratch);
-    transaction.on_rollback([&events]() noexcept { events.push_back(1); });
+    transaction.defer_rollback([&events]() noexcept { events.push_back(1); });
     transaction.commit();
   }
   EXPECT_TRUE(events.empty());
 
   {
     runtime_transaction transaction(runtime, scratch);
-    transaction.on_rollback([&events]() noexcept { events.push_back(2); });
+    transaction.defer_rollback([&events]() noexcept { events.push_back(2); });
   }
   EXPECT_EQ(events, (std::vector<int>{2}));
 }
@@ -416,9 +419,9 @@ TEST(runtime_transaction_test,
 
   {
     runtime_transaction transaction(runtime, scratch);
-    transaction.on_rollback([&transaction, &events]() noexcept {
+    transaction.defer_rollback([&transaction, &events]() noexcept {
       events.push_back(1);
-      transaction.on_rollback([&events]() noexcept { events.push_back(2); });
+      transaction.defer_rollback([&events]() noexcept { events.push_back(2); });
     });
   }
 
@@ -434,10 +437,10 @@ TEST(runtime_transaction_test,
 
   {
     runtime_transaction outer(runtime, outer_scratch);
-    outer.on_rollback([&events]() noexcept { events.push_back(1); });
+    outer.defer_rollback([&events]() noexcept { events.push_back(1); });
     {
       runtime_transaction inner(runtime, inner_scratch);
-      inner.on_rollback([&events]() noexcept { events.push_back(2); });
+      inner.defer_rollback([&events]() noexcept { events.push_back(2); });
     }
 
     EXPECT_EQ(events, (std::vector<int>{2}));
@@ -453,7 +456,7 @@ TEST(runtime_transaction_test, repeated_finish_calls_are_harmless) {
 
   {
     runtime_transaction transaction(runtime, scratch);
-    transaction.on_rollback(
+    transaction.defer_rollback(
         [&committed_rollbacks]() noexcept { ++committed_rollbacks; });
     transaction.commit();
     transaction.commit();
@@ -461,7 +464,7 @@ TEST(runtime_transaction_test, repeated_finish_calls_are_harmless) {
   }
   {
     runtime_transaction transaction(runtime, scratch);
-    transaction.on_rollback([&rollbacks]() noexcept { ++rollbacks; });
+    transaction.defer_rollback([&rollbacks]() noexcept { ++rollbacks; });
     transaction.rollback();
     transaction.rollback();
     transaction.commit();
@@ -479,7 +482,7 @@ TEST(runtime_transaction_test,
 
   {
     runtime_transaction transaction(runtime, scratch);
-    auto *value = transaction.construct_persistent_with<runtime_arena_tracker>(
+    auto *value = transaction.construct_persistent_made<runtime_arena_tracker>(
         [&events](void *storage) {
           new (storage) runtime_arena_tracker(&events, 9);
         });

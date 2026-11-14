@@ -61,8 +61,7 @@ public:
 
   runtime_container(parent_container_type *parent,
                     const allocator_type &alloc = allocator_type())
-      : impl_(create(alloc, detail::container_implementation_of(parent),
-                     alloc)) {}
+      : impl_(create(alloc, detail::unwrap_container(parent), alloc)) {}
 
   // Moving transfers the container state, so registrations and resolved
   // instances keep their addresses. The moved-from container can only be

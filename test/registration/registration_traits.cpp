@@ -713,7 +713,7 @@ TEST(type_registration_test,
   using model = detail::binding_model<registration>;
 
   static_assert(model::storage_tag_is_complete);
-  static_assert(model::use_interface_as_stored_leaf);
+  static_assert(model::stores_interface_leaf);
   static_assert(std::is_same_v<typename model::stored_leaf_type, I>);
   static_assert(
       std::is_same_v<typename model::stored_type, std::shared_ptr<I>>);
@@ -739,7 +739,7 @@ TEST(type_registration_test,
   using expansion = detail::binding_expansion<model>;
 
   static_assert(model::storage_tag_is_complete);
-  static_assert(!model::use_interface_as_stored_leaf);
+  static_assert(!model::stores_interface_leaf);
   static_assert(std::is_same_v<typename model::stored_leaf_type, A>);
   static_assert(
       std::is_same_v<typename model::stored_type, std::shared_ptr<A>>);
@@ -871,18 +871,18 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   static_assert(detail::is_resolution_request_v<A **, const A *const *>);
   static_assert(!detail::is_resolution_request_v<A **, const A **>);
 
-  EXPECT_TRUE(detail::matches_qualification_conversion(
-      describe_type<A **>(), describe_type<const A *const *>()));
-  EXPECT_FALSE(detail::matches_qualification_conversion(
-      describe_type<A **>(), describe_type<const A **>()));
+  EXPECT_TRUE(detail::qualifies_as(describe_type<A **>(),
+                                   describe_type<const A *const *>()));
+  EXPECT_FALSE(
+      detail::qualifies_as(describe_type<A **>(), describe_type<const A **>()));
   constexpr type_descriptor optional_pointer_target = detail::described_type_v<
       typename optional_pointer_resolution::target_type>;
-  static_assert(detail::matches_qualification_conversion(
+  static_assert(detail::qualifies_as(
       optional_pointer_target, detail::described_type_v<std::optional<A> *>));
-  static_assert(detail::matches_qualification_conversion(
-      optional_pointer_target,
-      detail::described_type_v<const std::optional<A> *>));
-  static_assert(!detail::matches_qualification_conversion(
+  static_assert(
+      detail::qualifies_as(optional_pointer_target,
+                           detail::described_type_v<const std::optional<A> *>));
+  static_assert(!detail::qualifies_as(
       optional_pointer_target, detail::described_type_v<std::optional<I> *>));
 
   using plain_pointer_model =

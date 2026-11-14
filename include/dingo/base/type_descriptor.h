@@ -179,8 +179,7 @@ constexpr bool is_qualification_conversion(type_descriptor source,
                                      depth + 1, next_intermediate_const);
 }
 
-constexpr bool matches_qualification_conversion(type_descriptor source,
-                                                type_descriptor target) {
+constexpr bool qualifies_as(type_descriptor source, type_descriptor target) {
   if (!same_type_shape(source, target)) {
     return false;
   }

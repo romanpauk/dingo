@@ -82,17 +82,17 @@ pack_indexed<Index, Type> pack_select(const pack_indexed<Index, Type> &);
 // the base of the index, so a pack takes one instantiation, not one for each
 // type.
 template <std::size_t Index, typename... Types>
-using pack_at_portable_t = typename decltype(pack_select<Index>(
+using pack_element_portable_t = typename decltype(pack_select<Index>(
     pack_indexer<std::index_sequence_for<Types...>, Types...>{}))::type;
 } // namespace detail
 
 // The type at Index of Types.
 #if DINGO_HAS_TYPE_PACK_ELEMENT
 template <std::size_t Index, typename... Types>
-using pack_at_t = __type_pack_element<Index, Types...>;
+using pack_element_t = __type_pack_element<Index, Types...>;
 #else
 template <std::size_t Index, typename... Types>
-using pack_at_t = detail::pack_at_portable_t<Index, Types...>;
+using pack_element_t = detail::pack_element_portable_t<Index, Types...>;
 #endif
 
 // The position of the first true of Matches, or the count of Matches.
@@ -105,15 +105,15 @@ template <bool... Matches> constexpr std::size_t pack_find() {
   return index;
 }
 
-template <std::size_t Index, typename List> struct type_list_at;
+template <std::size_t Index, typename List> struct type_list_element;
 
 template <std::size_t Index, typename... Types>
-struct type_list_at<Index, type_list<Types...>> {
-  using type = pack_at_t<Index, Types...>;
+struct type_list_element<Index, type_list<Types...>> {
+  using type = pack_element_t<Index, Types...>;
 };
 
 template <std::size_t Index, typename List>
-using type_list_at_t = typename type_list_at<Index, List>::type;
+using type_list_element_t = typename type_list_element<Index, List>::type;
 
 // The first type of List whose match is true, or Default. Default is the type
 // after the last, at the position pack_find gives when nothing matches.
@@ -123,7 +123,7 @@ struct type_list_find;
 template <typename Default, typename... Types, bool... Matches>
 struct type_list_find<Default, type_list<Types...>, Matches...> {
   static_assert(sizeof...(Types) == sizeof...(Matches));
-  using type = pack_at_t<pack_find<Matches...>(), Types..., Default>;
+  using type = pack_element_t<pack_find<Matches...>(), Types..., Default>;
 };
 
 template <typename Default, typename List, bool... Matches>

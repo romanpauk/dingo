@@ -30,17 +30,17 @@ namespace detail {
 
 // The traits a static container takes from its parent: those of a parent
 // container, or the default static traits.
-template <typename T, typename = void> struct container_traits_of {
+template <typename T, typename = void> struct inherited_traits {
   using type = ::dingo::static_container_traits;
 };
 
 template <typename T>
-struct container_traits_of<T, std::void_t<typename T::container_traits_type>> {
+struct inherited_traits<T, std::void_t<typename T::container_traits_type>> {
   using type = typename T::container_traits_type;
 };
 
 template <typename T>
-using container_traits_of_t = typename container_traits_of<T>::type;
+using inherited_traits_t = typename inherited_traits<T>::type;
 
 } // namespace detail
 } // namespace dingo

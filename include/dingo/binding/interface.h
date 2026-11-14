@@ -127,7 +127,7 @@ public:
   // that resolved it is rolled back.
   void publish_cache(Context &context, const void *key, void *address) {
     auto *slot = cache_slot();
-    context.on_rollback(
+    context.defer_rollback(
         +[](void *published, void *) noexcept {
           *static_cast<detail::cache::entry *>(published) = {};
         },

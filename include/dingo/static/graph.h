@@ -47,7 +47,7 @@ struct graph_local_bindings<static_registry<LocalRegistrations...>> {
 };
 
 template <typename... Bindings>
-constexpr bool graph_any_local_bindings(type_list<Bindings...>) {
+constexpr bool any_local_bindings(type_list<Bindings...>) {
   return (
       !std::is_void_v<typename Bindings::binding_model_type::bindings_type> ||
       ...);
@@ -57,7 +57,7 @@ constexpr bool graph_any_local_bindings(type_list<Bindings...>) {
 // local bindings declared by its registrations, transitively. A local binding
 // is only a node when some registration declares it.
 template <typename Bindings,
-          bool HasLocalBindings = graph_any_local_bindings(Bindings{})>
+          bool HasLocalBindings = any_local_bindings(Bindings{})>
 struct graph_universe {
   using type = Bindings;
 };
@@ -80,10 +80,10 @@ constexpr std::size_t graph_type_index() {
   return index < sizeof...(Universe) ? index : graph_npos;
 }
 
-template <typename Binding, typename Universe> struct graph_type_index_in;
+template <typename Binding, typename Universe> struct graph_type_position;
 
 template <typename Binding, typename... Universe>
-struct graph_type_index_in<Binding, type_list<Universe...>>
+struct graph_type_position<Binding, type_list<Universe...>>
     : std::integral_constant<std::size_t,
                              graph_type_index<Binding, Universe...>()> {};
 
@@ -128,7 +128,7 @@ template <typename Universe, typename... Dependencies, std::size_t Edges>
 constexpr void graph_write_bindings(type_list<Dependencies...> *,
                                     std::array<std::size_t, Edges> &edges,
                                     std::size_t at) {
-  ((edges[at++] = graph_type_index_in<Dependencies, Universe>::value), ...);
+  ((edges[at++] = graph_type_position<Dependencies, Universe>::value), ...);
   (void)edges;
   (void)at;
 }
@@ -176,10 +176,9 @@ constexpr unsigned char graph_visited = 2;
 // the nodes visited since; it is legal only when the scopes of all of them
 // allow cycles.
 template <std::size_t Vertices, std::size_t Edges>
-constexpr bool
-graph_cycle_is_legal(const graph_structure<Vertices, Edges> &structure,
-                     const std::array<std::size_t, Vertices> &stack,
-                     std::size_t depth, std::size_t node) {
+constexpr bool cycle_allowed(const graph_structure<Vertices, Edges> &structure,
+                             const std::array<std::size_t, Vertices> &stack,
+                             std::size_t depth, std::size_t node) {
   std::size_t first = depth - 1;
   while (stack[first] != node) {
     --first;
@@ -222,7 +221,7 @@ graph_resolvable(const graph_structure<Vertices, Edges> &structure,
         continue;
       }
       if (state[next] == graph_visiting) {
-        if (!graph_cycle_is_legal(structure, stack, depth, next)) {
+        if (!cycle_allowed(structure, stack, depth, next)) {
           return false;
         }
         continue;
@@ -249,7 +248,7 @@ graph_resolvable(const graph_structure<Vertices, Edges> &structure,
 // reference or a pointer to a binding that does not keep its instance, or to
 // one that is not known here.
 template <typename Dependency, typename InterfaceBindings>
-constexpr bool graph_may_refer_to_constructed() {
+constexpr bool may_refer_made() {
   if constexpr (!request_may_escape_v<Dependency>) {
     return false;
   } else {
@@ -265,33 +264,29 @@ constexpr bool graph_may_refer_to_constructed() {
 }
 
 template <typename List, typename InterfaceBindings>
-struct graph_refers_to_constructed : std::true_type {};
+struct refers_made : std::true_type {};
 
 template <typename... Dependencies, typename InterfaceBindings>
-struct graph_refers_to_constructed<type_list<Dependencies...>,
-                                   InterfaceBindings>
-    : std::bool_constant<(
-          graph_may_refer_to_constructed<Dependencies, InterfaceBindings>() ||
-          ...)> {};
+struct refers_made<type_list<Dependencies...>, InterfaceBindings>
+    : std::bool_constant<(may_refer_made<Dependencies, InterfaceBindings>() ||
+                          ...)> {};
 
 // Whether a binding keeps an instance that may refer to one constructed for
 // it, which then has to live as long as the container. Dependencies that are
 // not known may.
-template <typename Host, typename Binding>
-constexpr bool graph_keeps_constructed_dependency() {
+template <typename Host, typename Binding> constexpr bool keeps_made() {
   using model = typename Binding::binding_model_type;
   if constexpr (scope_traits<typename model::storage_tag>::consumes) {
     return false;
   } else {
-    return graph_refers_to_constructed<
-        typename binding_dependency_list<model>::type,
-        effective_interface_bindings_t<model, Host>>::value;
+    return refers_made<typename binding_dependency_list<model>::type,
+                       effective_interface_bindings_t<model, Host>>::value;
   }
 }
 
 template <typename Host, typename... Bindings>
-constexpr bool graph_keeps_constructed_dependencies(type_list<Bindings...>) {
-  return (graph_keeps_constructed_dependency<Host, Bindings>() || ...);
+constexpr bool keeps_made_all(type_list<Bindings...>) {
+  return (keeps_made<Host, Bindings>() || ...);
 }
 
 template <typename StaticRegistry> struct graph_model {
@@ -304,7 +299,7 @@ template <typename StaticRegistry> struct graph_model {
   // Whether a resolution may construct an instance for the lifetime of the
   // container.
   static constexpr bool keeps_constructed_dependencies =
-      graph_keeps_constructed_dependencies<host_bindings>(universe{});
+      keeps_made_all<host_bindings>(universe{});
 };
 } // namespace detail
 } // namespace dingo

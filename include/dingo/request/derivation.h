@@ -109,8 +109,7 @@ struct binding_facts {
 constexpr std::size_t published_index(const binding_facts &binding,
                                       type_descriptor requested) {
   for (std::size_t i = 0; i < binding.published_count; ++i) {
-    if (matches_qualification_conversion(binding.published[i].target,
-                                         requested)) {
+    if (qualifies_as(binding.published[i].target, requested)) {
       return i;
     }
   }
@@ -125,12 +124,12 @@ constexpr bool publishes(const binding_facts &binding,
 // Whether a binding resolves a reference request as a pointer it hands over,
 // which an owner placed in the context adopts; or, with take, a value request
 // as the value moved out of what the pointer points to.
-constexpr bool hands_over_request(const binding_facts &binding,
-                                  type_descriptor requested, bool take) {
+constexpr bool hands_over(const binding_facts &binding,
+                          type_descriptor requested, bool take) {
   for (std::size_t i = 0; i < binding.published_count; ++i) {
     const auto &resolution = binding.published[i];
     if ((take ? resolution.takes : resolution.adopts) &&
-        matches_qualification_conversion(resolution.adopted, requested)) {
+        qualifies_as(resolution.adopted, requested)) {
       return true;
     }
   }
@@ -186,7 +185,7 @@ runtime_derivation_facts(const binding_facts &binding,
       binding.slices && requested.reference != type_reference_kind::lvalue &&
           requested.pointee == nullptr && requested.tag == binding.exposed.tag);
   if (requested.reference == type_reference_kind::lvalue &&
-      hands_over_request(binding, requested, false)) {
+      hands_over(binding, requested, false)) {
     facts.sources.set(derivation::adopt);
   }
   if (requested.reference != type_reference_kind::lvalue &&
@@ -194,7 +193,7 @@ runtime_derivation_facts(const binding_facts &binding,
     type_descriptor pointee = requested;
     pointee.reference = type_reference_kind::lvalue;
     pointee.cv = type_cv_flags::none;
-    if (hands_over_request(binding, pointee, true)) {
+    if (hands_over(binding, pointee, true)) {
       facts.sources.set(derivation::take);
     }
   }
@@ -206,7 +205,7 @@ runtime_derivation_facts(const binding_facts &binding,
 // handle is made of, of the descriptor of that owner, which only the request
 // names. Both containers decide by it: the runtime one as it resolves, the
 // static one as it compiles.
-constexpr derivation_facts derivation_facts_of(const binding_facts &binding,
+constexpr derivation_facts binding_derivations(const binding_facts &binding,
                                                type_descriptor requested,
                                                bool converts,
                                                type_descriptor owner) {
@@ -241,20 +240,20 @@ std::unique_ptr<T[]> adopt_pointer(T (*array)[N]) {
 }
 
 template <typename Pointer, typename Context, typename Scope>
-void place_adopted_pointer(Scope scope, Context &context, Pointer pointer) {
+void own_pointer(Scope scope, Context &context, Pointer pointer) {
   auto owner = adopt_pointer(pointer);
   context.template construct<decltype(owner)>(scope, std::move(owner));
 }
 
 // The sole owner a sharing handle a request asks for converts from: the
 // owning handle of its element whose sharing handle it is, or void.
-template <typename Shared, typename Handles> struct sole_owner_of {
+template <typename Shared, typename Handles> struct matching_sole_owner {
   using type = void;
 };
 
 template <typename Shared, typename... Handles>
-struct sole_owner_of<Shared, type_list<Handles...>> {
-  template <typename Handle> static constexpr bool shares_as() {
+struct matching_sole_owner<Shared, type_list<Handles...>> {
+  template <typename Handle> static constexpr bool shares_handle() {
     using handle = std::remove_reference_t<Handle>;
     if constexpr (std::is_base_of_v<semantics::sole_owner,
                                     type_traits<handle>>) {
@@ -266,11 +265,11 @@ struct sole_owner_of<Shared, type_list<Handles...>> {
     }
   }
 
-  using type =
-      type_list_find_t<void, type_list<Handles...>, shares_as<Handles>()...>;
+  using type = type_list_find_t<void, type_list<Handles...>,
+                                shares_handle<Handles>()...>;
 };
 
-template <typename Request> struct converted_from {
+template <typename Request> struct converted_owner {
 private:
   using shared = remove_cvref_t<Request>;
 
@@ -284,8 +283,9 @@ private:
         std::is_base_of_v<semantics::shared_owner, type_traits<Shared>> &&
             !is_array_like_type_v<Shared> &&
             is_complete<typename type_traits<Shared>::value_type>::value,
-        typename sole_owner_of<Shared, owning_handles_of_t<typename type_traits<
-                                           Shared>::value_type>>::type,
+        typename matching_sole_owner<
+            Shared, owning_handle_list_t<
+                        typename type_traits<Shared>::value_type>>::type,
         void>;
   };
 
@@ -389,7 +389,7 @@ template <typename Object> constexpr object_traits make_object_traits() {
       }
       traits.composes = composes_v<Object>;
     }
-    traits.converts = !std::is_void_v<typename converted_from<Object>::type>;
+    traits.converts = !std::is_void_v<typename converted_owner<Object>::type>;
   }
   return traits;
 }
@@ -405,7 +405,7 @@ inline constexpr object_traits object_traits_v = make_object_traits<Object>();
 struct request_facts {
   flags<derivation> shapes;
   bool composes;
-  bool refers_to_sharing;
+  bool refers_sharing;
 };
 
 // The facts of a request of a shape of an object. The address of a pointer
@@ -480,7 +480,7 @@ template <typename Request> struct derived_request<derivation::copy, Request> {
 
 template <typename Request>
 struct derived_request<derivation::convert, Request> {
-  using type = typename converted_from<Request>::type;
+  using type = typename converted_owner<Request>::type;
 };
 
 template <typename Request>
@@ -491,7 +491,7 @@ struct derived_request<derivation::compose, Request> {
 template <derivation Derivation, typename Request>
 using derived_request_t = typename derived_request<Derivation, Request>::type;
 
-template <typename T> constexpr type_descriptor converted_owner() {
+template <typename T> constexpr type_descriptor owner_descriptor() {
   if constexpr (derivation_shape_v<derivation::convert, T>) {
     return described_type_v<derived_request_t<derivation::convert, T>>;
   } else {
@@ -501,11 +501,11 @@ template <typename T> constexpr type_descriptor converted_owner() {
 
 // The derivation facts of a request of T.
 template <typename T>
-constexpr derivation_facts derivation_facts_of(const binding_facts &binding,
+constexpr derivation_facts binding_derivations(const binding_facts &binding,
                                                type_descriptor requested) {
-  return derivation_facts_of(binding, requested,
+  return binding_derivations(binding, requested,
                              derivation_shape_v<derivation::convert, T>,
-                             converted_owner<T>());
+                             owner_descriptor<T>());
 }
 
 // Whether a request copies or moves nothing of what a binding publishes: a
@@ -533,7 +533,7 @@ constexpr bool applies(derivation how, request_facts request,
     return facts.traits.has(binding_trait::keeps);
   case derivation::place:
     return facts.traits.has(binding_trait::places) || request.composes ||
-           request.refers_to_sharing;
+           request.refers_sharing;
   case derivation::move:
   case derivation::copy:
     return !copies_nothing(facts) && facts.sources.has(how);

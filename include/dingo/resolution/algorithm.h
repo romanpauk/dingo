@@ -121,7 +121,7 @@ struct default_factory_constructs<Request, R, true> {
 //   requests the host does not bind
 // - count_collection<R>(key) and construct_request_collection<R>(scope,
 //   context, key), for hosts that construct collections
-// - resolve_exact_or_normalized<Request, R>(selection, scope, context): the
+// - resolve_normalizing<Request, R>(selection, scope, context): the
 //   request itself if its binding publishes it, otherwise resolve_normalized
 //
 // The origin of a request is the container it entered through; it answers the
@@ -164,8 +164,8 @@ struct request_resolution {
           throw_type_ambiguous(described_type_v<typename Request::lookup_type>,
                                context);
         }
-        return resolve_unbound<Request, R, collection>(host, scope, context,
-                                                       origin, key);
+        return resolve_miss<Request, R, collection>(host, scope, context,
+                                                    origin, key);
       } else if constexpr (selection_type::status == binding_status::found) {
         return host.template resolve_selected<Request, R>(selection, scope,
                                                           context);
@@ -173,8 +173,8 @@ struct request_resolution {
                            binding_status::ambiguous) {
         host.template ambiguous<Request>(context);
       } else {
-        return resolve_unbound<Request, R, collection>(host, scope, context,
-                                                       origin, key);
+        return resolve_miss<Request, R, collection>(host, scope, context,
+                                                    origin, key);
       }
     }
   }
@@ -206,7 +206,7 @@ struct request_resolution {
         } else {
           throw_type_not_found(
               detail::described_type_v<typename Request::lookup_type>, context,
-              lookup_key_index_type(key));
+              key_index(key));
         }
       } else if constexpr (decltype(is_bound(exact))::value ||
                            decltype(is_bound(value))::value) {
@@ -225,8 +225,8 @@ struct request_resolution {
     using made = std::decay_t<typename Request::user_type>;
     auto &&instance = resolve<normalized, typename normalized::lookup_type>(
         host, scope, context, host, no_lookup_key());
-    if constexpr (detail::emplaces_from_v<made,
-                                          remove_cvref_t<decltype(instance)>>) {
+    if constexpr (detail::emplaces_v<made,
+                                     remove_cvref_t<decltype(instance)>>) {
       // A wrapper of wrappers is made at once of the value.
       return type_traits<made>::emplace(
           std::forward<decltype(instance)>(instance));
@@ -263,7 +263,7 @@ struct request_resolution {
     }
     throw_type_not_found(
         detail::described_type_v<typename Request::lookup_type>, context,
-        lookup_key_index_type(key));
+        key_index(key));
   }
 
   // A request no binding of the host answers: a collection is constructed
@@ -271,16 +271,16 @@ struct request_resolution {
   template <typename Request, typename R, bool Collection, typename Host,
             typename Context, typename Origin, typename LookupKey,
             typename Scope>
-  static R resolve_unbound(Host &host, Scope scope, Context &context,
-                           Origin &origin, LookupKey &key) {
+  static R resolve_miss(Host &host, Scope scope, Context &context,
+                        Origin &origin, LookupKey &key) {
     if constexpr (Collection) {
       return construct_collection<Request, R>(host, scope, context, origin,
                                               key);
     } else {
-      return resolve_missing<Request, R,
-                             may_auto_construct_v<typename Request::user_type>,
-                             typename Request::lookup_type>(
-          host, scope, context, origin, key);
+      return fall_back<Request, R,
+                       may_auto_construct_v<typename Request::user_type>,
+                       typename Request::lookup_type>(host, scope, context,
+                                                      origin, key);
     }
   }
 
@@ -291,8 +291,8 @@ private:
                            Context &context) {
     using user_type = typename Request::user_type;
     if constexpr (construct_normalized_request_v<user_type>) {
-      return host.template resolve_exact_or_normalized<Request, R>(exact, scope,
-                                                                   context);
+      return host.template resolve_normalizing<Request, R>(exact, scope,
+                                                           context);
     } else {
       return resolve<Request, R>(host, scope, context, host, no_lookup_key());
     }
@@ -319,28 +319,26 @@ private:
     auto count = host.template count_collection<R>(key);
     if constexpr (is_constant_count<decltype(count)>::value) {
       if constexpr (decltype(count)::value == 0) {
-        return resolve_missing<Request, R, false,
-                               typename collection_traits<R>::resolve_type>(
+        return fall_back<Request, R, false,
+                         typename collection_traits<R>::resolve_type>(
             host, scope, context, origin, key);
       } else {
-        return construct_bound_collection<Request, R>(host, scope, context,
-                                                      origin, key);
+        return collect_bound<Request, R>(host, scope, context, origin, key);
       }
     } else {
       if (count == 0) {
-        return resolve_missing<Request, R, false,
-                               typename collection_traits<R>::resolve_type>(
+        return fall_back<Request, R, false,
+                         typename collection_traits<R>::resolve_type>(
             host, scope, context, origin, key);
       }
-      return construct_bound_collection<Request, R>(host, scope, context,
-                                                    origin, key);
+      return collect_bound<Request, R>(host, scope, context, origin, key);
     }
   }
 
   template <typename Request, typename R, typename Host, typename Context,
             typename Origin, typename LookupKey, typename Scope>
-  static R construct_bound_collection(Host &host, Scope scope, Context &context,
-                                      Origin &origin, LookupKey &key) {
+  static R collect_bound(Host &host, Scope scope, Context &context,
+                         Origin &origin, LookupKey &key) {
     if constexpr (default_collection_append_v<R>) {
       return host.template construct_request_collection<R>(scope, context, key);
     } else {
@@ -354,8 +352,8 @@ private:
   template <typename Request, typename R, bool MayAutoConstruct,
             typename Lookup, typename Host, typename Context, typename Origin,
             typename LookupKey, typename Scope>
-  static R resolve_missing(Host &host, Scope scope, Context &context,
-                           Origin &origin, LookupKey &key) {
+  static R fall_back(Host &host, Scope scope, Context &context, Origin &origin,
+                     LookupKey &key) {
     if constexpr (has_owner_level<Host>::value) {
       if (auto *owner = host.owner_level()) {
         return owner->template resolve<typename Request::user_type,

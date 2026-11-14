@@ -66,9 +66,9 @@ true:
 - the interface is a class with a virtual destructor
 - the storage is a pointer-like handle that can be rebound to the interface
 
-The rule is `use_interface_as_stored_leaf_v` in
-`storage/interface_storage_traits.h`. The rewrite keeps the stored object close
-to the interface shape and avoids temporary conversions.
+The rule is `stores_interface_leaf_v` in `storage/interface_storage_traits.h`.
+The rewrite keeps the stored object close to the interface shape and avoids
+temporary conversions.
 
 ## Resolution
 
@@ -96,10 +96,10 @@ The sequence is:
    [include/dingo/binding/selection.h](../../include/dingo/binding/selection.h),
    which both containers share: the bindings of the exact interface of the
    request, or, when it has none, those of its normalized interface
-   (`select_exact_or_normalized`); one binding is found, none is not found, and
-   more are ambiguous (`status_of_count`); and a level of local bindings answers
-   what it binds, also ambiguously, and falls back to the next level only when
-   it binds nothing (`falls_back`). The static container applies the rules as it
+   (`select_exact_first`); one binding is found, none is not found, and more are
+   ambiguous (`count_status`); and a level of local bindings answers what it
+   binds, also ambiguously, and falls back to the next level only when it binds
+   nothing (`falls_back`). The static container applies the rules as it
    compiles, over its bindings, and its selection is a type, so its status is
    known at compile time. The runtime container applies them as it resolves,
    over its lookups, and its selection is a value.
@@ -181,12 +181,12 @@ rvalue reference composes it the same way as the value.
 
 The static container decides a request by the same data and the same functions,
 as it compiles. A static binding has the facts of its interface and storage
-(`binding_facts_of` in
+(`binding_facts_v` in
 [include/dingo/binding/facts.h](../../include/dingo/binding/facts.h)), which a
 runtime binding of them has too. The plan of a request (`static_plan` in
 [include/dingo/static/binding.h](../../include/dingo/static/binding.h)) is the
 resolution the binding publishes for it, of `published_index`, or else the
-derivation it makes of it, of `derivation_facts_of` and `derive_request`. Both
+derivation it makes of it, of `binding_derivations` and `derive_request`. Both
 containers thus decide by one implementation. The static container applies the
 plan through typed steps, which the compiler inlines.
 

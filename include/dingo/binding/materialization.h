@@ -39,7 +39,7 @@ struct materialized_request {
 };
 
 constexpr materialized_request
-materialized_request_of(type_descriptor requested) {
+materialized_request_v(type_descriptor requested) {
   return {requested.reference == type_reference_kind::lvalue ||
               (requested.reference == type_reference_kind::none &&
                requested.pointee != nullptr),
@@ -52,7 +52,7 @@ materialized_request_of(type_descriptor requested) {
 enum class source_placement {
   yielded,
   in_context,
-  value_in_context,
+  context_value,
 };
 
 // Whether the materialization of a source is guarded against recursion.
@@ -82,7 +82,7 @@ materialization_placement(const materialization_facts &facts,
                           : source_placement::yielded;
   }
   if (request.refers && facts.yields_value) {
-    return source_placement::value_in_context;
+    return source_placement::context_value;
   }
   if (facts.consumes && request.rvalue && !facts.moves_trivially) {
     return source_placement::in_context;

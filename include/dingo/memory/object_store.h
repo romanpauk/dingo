@@ -55,7 +55,7 @@ public:
 
   template <typename T, typename... Args>
   T &construct(Arena &arena, Args &&...args) {
-    return construct_at<T>(arena, [&](T *instance) {
+    return place<T>(arena, [&](T *instance) {
       new (instance) T(std::forward<Args>(args)...);
     });
   }
@@ -68,7 +68,7 @@ public:
 #pragma warning(disable : 4702)
 #endif
   template <typename T, typename ConstructFn>
-  T &construct_at(Arena &arena, ConstructFn &&construct) {
+  T &place(Arena &arena, ConstructFn &&construct) {
     auto *instance =
         reinterpret_cast<T *>(allocate(arena, sizeof(T), alignof(T)));
     std::forward<ConstructFn>(construct)(instance);
