@@ -127,6 +127,11 @@ int main(int count, char **arguments) {
   // and each step with the layer it makes, or "-".
   const bool plans =
       count > 1 && arguments[1][0] == 'p' && arguments[1][1] == 'l';
+  // With "rules", for each category, position, entry point, whether the
+  // request is selected and whether the runtime container resolves it, the
+  // fewest copies and moves of resolve, or "-".
+  const bool rules =
+      count > 1 && arguments[1][0] == 'r' && arguments[1][1] == 'u';
   const universe language;
   unsigned language_count = 0;
   if (!read(language_count) || language_count != language.count) {
@@ -158,17 +163,19 @@ int main(int count, char **arguments) {
     }
   }
   for (;;) {
-    unsigned limits = 0, copyable = 0, movable = 0, makes = 0, early = 0,
-             abstract = 0, made = 0, start_element = 0, start_lifetime = 0,
-             start_origin = 0, goal_element = 0;
+    unsigned limits = 0, copyable = 0, movable = 0, constructible = 0,
+             makes = 0, early = 0, abstract = 0, made = 0, start_element = 0,
+             start_lifetime = 0, start_origin = 0, goal_element = 0,
+             shape_depth = 0;
     if (!read(limits)) {
       return 0;
     }
     universe layers;
     thing start;
     request goal;
-    if (!read(copyable) || !read(movable) || !read(makes) || !read(early) ||
-        !read(abstract) || !read(made) || made > max_kinds - layers.count) {
+    if (!read(copyable) || !read(movable) || !read(constructible) ||
+        !read(makes) || !read(early) || !read(abstract) || !read(made) ||
+        made > max_kinds - layers.count) {
       std::fprintf(stderr, "malformed request\n");
       return 1;
     }
@@ -182,7 +189,8 @@ int main(int count, char **arguments) {
     }
     if (!read_layers(start.layers, start.depth) || !read(start_element) ||
         !read(start_lifetime) || !read(start_origin) ||
-        !read_layers(goal.layers, goal.depth) || !read(goal_element)) {
+        !read_layers(goal.layers, goal.depth) || !read(goal_element) ||
+        !read(shape_depth)) {
       std::fprintf(stderr, "malformed request\n");
       return 1;
     }
@@ -193,11 +201,40 @@ int main(int count, char **arguments) {
     start.from = static_cast<origin>(start_origin);
     start.instance = true;
     goal.of = static_cast<element>(goal_element);
-    const context with{{copyable != 0, movable != 0},
+    goal.shape_depth = static_cast<std::uint8_t>(shape_depth);
+    const context with{{copyable != 0, movable != 0, constructible != 0},
                        {makes != 0, false, early != 0},
                        abstract != 0,
                        static_cast<std::uint8_t>(limits),
                        &layers};
+    if (rules) {
+      const search searched = reach(start, with, goal);
+      for (unsigned taken = 0; taken < 7; ++taken) {
+        for (unsigned at = 0; at < 4; ++at) {
+          for (unsigned through = 0; through < 3; ++through) {
+            for (bool selected : {false, true}) {
+              for (bool runtime : {false, true}) {
+                const answer result =
+                    resolve(start, with, goal, static_cast<category>(taken),
+                            {static_cast<position>(at),
+                             static_cast<entry>(through), selected, runtime},
+                            &searched);
+                if (result.overflow) {
+                  std::printf("overflow ");
+                } else if (result.found) {
+                  std::printf("%u,%u ", result.fewest.copies,
+                              result.fewest.moves);
+                } else {
+                  std::printf("- ");
+                }
+              }
+            }
+          }
+        }
+      }
+      std::printf("\n");
+      continue;
+    }
     const search found = reach(start, with, goal);
     if (found.overflow) {
       std::printf("overflow\n");

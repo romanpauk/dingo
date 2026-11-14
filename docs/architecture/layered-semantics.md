@@ -235,7 +235,19 @@ specification. It is also the largest part of the compile time that is left.
    interface, which the specification and the semantics then both allowed the
    request to take over.
 
-6. **Execution.** The containers apply plans by the interpreter, in place of the
+6. **Request rules.** Done. `resolve` in
+   [include/dingo/semantics/model.h](../../include/dingo/semantics/model.h)
+   applies the rules of a request on top of the conversion, as `fewest` of the
+   specification does: how long what a request refers to has to live, by its
+   position and entry point; `construct<T>()` resolving what it cannot
+   construct; what a key or an annotation can hold by value; the move of a value
+   the runtime container hands over from its context; and `construct<T>()`
+   making a wrapper of the leaf the container resolves by value.
+   `semantics-check` compares it with `fewest` for every stored object, request,
+   category, position, entry point, selection and container: 105,759,360
+   answers, all equal.
+
+7. **Execution.** The containers apply plans by the interpreter, in place of the
    conversion paths and the derivations. The steps split as the specification
    splits them. A binding takes the steps that need the type it stores: the
    element of a layer, a pointer to it, the optional it holds, and the upcast to
@@ -248,7 +260,7 @@ specification. It is also the largest part of the compile time that is left.
    container plans a request of a binding as it resolves, by one function of no
    type, and keeps the plan in the binding.
 
-7. **Tests.** The model checks become a cover of the composition, and the full
+8. **Tests.** The model checks become a cover of the composition, and the full
    model run a regression.
 
 ## The Cost

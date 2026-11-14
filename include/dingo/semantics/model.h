@@ -556,11 +556,14 @@ constexpr cost affected(cost before, effect made) {
   return before;
 }
 
-// What a request asks for: the layers around its element.
+// What a request asks for: the layers around its element, of which the
+// outer shape_depth are of the shape of the request and the rest of the
+// interface it is of.
 struct request {
   layer layers[max_layers] = {};
   std::uint8_t depth = 0;
   semantics::element of = semantics::element::leaf;
+  std::uint8_t shape_depth = 0;
 };
 
 // Whether the layers of a thing may still become the layers of a request: a
@@ -723,8 +726,18 @@ constexpr void consider(answer &result, cost made, std::size_t index,
   }
 }
 
-constexpr answer satisfy(const search &found, const request &goal,
-                         category taken, lifetime needed, const context &with) {
+// What satisfying a request does to the leaf, of the copies and the moves
+// that reach what satisfies it and the effect of satisfying it of that.
+struct affected_cost {
+  constexpr cost operator()(cost made, effect of, const thing &) const {
+    return affected(made, of);
+  }
+};
+
+template <typename Finish>
+constexpr answer satisfy_by(const search &found, const request &goal,
+                            category taken, lifetime needed,
+                            const context &with, Finish finish) {
   answer result;
   result.overflow = found.overflow;
   if (refers(taken)) {
@@ -733,7 +746,8 @@ constexpr answer satisfy(const search &found, const request &goal,
       const thing &of = each.reached;
       if (of.of == goal.of && has_layers(of, goal) && of.instance &&
           static_cast<int>(of.life()) >= static_cast<int>(needed)) {
-        consider(result, each.made, index, satisfaction::refer);
+        consider(result, finish(each.made, effect::none, of), index,
+                 satisfaction::refer);
       }
     }
     if (result.found || !points(taken)) {
@@ -743,7 +757,8 @@ constexpr answer satisfy(const search &found, const request &goal,
       const state &each = found.states[index];
       if (each.reached.of == goal.of &&
           points_to(each.reached, goal, needed, with)) {
-        consider(result, each.made, index, satisfaction::point);
+        consider(result, finish(each.made, effect::none, each.reached), index,
+                 satisfaction::point);
       }
     }
     return result;
@@ -756,7 +771,8 @@ constexpr answer satisfy(const search &found, const request &goal,
     }
     if (taken == category::rvalue_reference) {
       if (of.from == origin::made && can_move(of, with)) {
-        consider(result, each.made, index, satisfaction::take);
+        consider(result, finish(each.made, effect::none, of), index,
+                 satisfaction::take);
       }
       continue;
     }
@@ -765,15 +781,22 @@ constexpr answer satisfy(const search &found, const request &goal,
     }
     const bool anew = makes_leaf_anew(of, with);
     if (owned(of.from) && can_move(of, with)) {
-      consider(result, affected(each.made, anew ? effect::move : effect::none),
-               index, satisfaction::move);
+      consider(result,
+               finish(each.made, anew ? effect::move : effect::none, of), index,
+               satisfaction::move);
     }
     if (can_copy(of, with)) {
-      consider(result, affected(each.made, anew ? effect::copy : effect::none),
-               index, satisfaction::copy);
+      consider(result,
+               finish(each.made, anew ? effect::copy : effect::none, of), index,
+               satisfaction::copy);
     }
   }
   return result;
+}
+
+constexpr answer satisfy(const search &found, const request &goal,
+                         category taken, lifetime needed, const context &with) {
+  return satisfy_by(found, goal, taken, needed, with, affected_cost{});
 }
 
 constexpr answer fewest(const thing &start, const context &with,
@@ -821,5 +844,189 @@ constexpr plan plan_of(const search &found, const answer &result) {
   made.how = result.how;
   made.fewest = result.fewest;
   return made;
+}
+
+// Where a request stands: itself, the dependency of an unregistered class,
+// or the dependency of a class a shared or a cyclical scope keeps.
+enum class position : std::uint8_t { direct, consumer, shared, cyclical };
+
+// The entry point a request is made through.
+enum class entry : std::uint8_t { resolve, invoke, construct };
+
+// What a request is, beside what it asks for: where it stands, the entry
+// point it is made through, whether a key or an annotation selects it, and
+// whether the runtime container resolves it.
+struct request_rules {
+  position at;
+  entry through;
+  bool selected;
+  bool runtime;
+};
+
+// Whether a request in a category holds the shape by value: a resolved
+// rvalue reference is returned by value.
+constexpr bool by_value(category of) {
+  return of == category::value || of == category::const_value ||
+         of == category::rvalue_reference;
+}
+
+// How long an object a request refers to has to live: a reference that is
+// passed away, returned by a resolve or a construct or held by a class one of
+// them returns, as long as the container; one a callable takes, or a class
+// a shared or a cyclical scope keeps, while the request does.
+constexpr lifetime required_lifetime(position at, entry through) {
+  if (at == position::shared || at == position::cyclical ||
+      through == entry::invoke) {
+    return lifetime::request;
+  }
+  return lifetime::stable;
+}
+
+// The entry a request is resolved through: construct<T>() of a reference, of
+// an rvalue reference, or of a request a key or an annotation selects,
+// resolves it.
+constexpr entry entry_of(entry through, position at, bool selected,
+                         category of) {
+  if (at == position::direct && through == entry::construct &&
+      (selected || !by_value(of) || of == category::rvalue_reference)) {
+    return entry::resolve;
+  }
+  return through;
+}
+
+// The layers of a request as a thing, to ask what its stack can do.
+constexpr thing stack_of(const request &goal) {
+  thing of;
+  for (std::size_t index = 0; index < goal.depth; ++index) {
+    of.layers[index] = goal.layers[index];
+  }
+  of.depth = goal.depth;
+  of.of = goal.of;
+  return of;
+}
+
+// Whether what a copy or a move of a stack makes anew can be: each layer
+// down to the first that shares its element, and the element when none does.
+template <typename Can>
+constexpr bool stack_can(const thing &of, const context &with, Can layer_can,
+                         bool element_can) {
+  const std::size_t depth = copied_layers(of, with);
+  for (std::size_t index = 0; index < depth && index < of.depth; ++index) {
+    if (!layer_can(with.kind(of.layers[index]))) {
+      return false;
+    }
+  }
+  return depth <= of.depth || element_can;
+}
+
+struct copyable_layer {
+  constexpr bool operator()(const layer_kind &kind) const {
+    return kind.copyable;
+  }
+};
+
+struct relocatable_layer {
+  constexpr bool operator()(const layer_kind &kind) const {
+    return kind.relocatable;
+  }
+};
+
+// Whether a value of the stack of a request can be copied.
+constexpr bool copyable_shape(const request &goal, const context &with) {
+  return stack_can(stack_of(goal), with, copyable_layer{}, with.leaf.copyable);
+}
+
+// Whether a value of the stack of a request can be moved or copied.
+constexpr bool stack_relocatable(const request &goal, const context &with) {
+  return stack_can(stack_of(goal), with, relocatable_layer{},
+                   with.leaf.movable) ||
+         copyable_shape(goal, with);
+}
+
+// Whether a request a key or an annotation selects cannot be held by value
+// in its selector, which it is passed in: a const value is copied into it,
+// another one moved or copied. A direct resolve returns the value instead.
+constexpr bool selector_rejects(const request &goal, category of, position at,
+                                entry through, bool selected,
+                                const context &with) {
+  if (!selected || (of != category::value && of != category::const_value) ||
+      (at == position::direct && through == entry::resolve)) {
+    return false;
+  }
+  if (of == category::const_value) {
+    return !copyable_shape(goal, with);
+  }
+  return !stack_relocatable(goal, with);
+}
+
+// The copies and the moves after a request is handed what satisfies it: a
+// runtime container hands a value over from its context, and one that holds
+// a leaf moved for the request is moved once more.
+constexpr cost handed_over(cost before, effect made, bool runtime) {
+  if (runtime && made == effect::move && !before.copies) {
+    return {before.copies, static_cast<std::uint8_t>(before.moves + 1)};
+  }
+  return affected(before, made);
+}
+
+// The cost of satisfying a request as a container hands it over:
+// resolve<T &&>() and construct<T &&>() return the value moved out of what
+// the request refers to.
+struct handed_cost {
+  bool returned;
+  bool runtime;
+  const context *with;
+
+  constexpr cost operator()(cost made, effect of, const thing &reached) const {
+    return handed_over(
+        made, returned && makes_leaf_anew(reached, *with) ? effect::move : of,
+        runtime);
+  }
+};
+
+// The fewest copies and moves of the leaf a request resolves with, as
+// spec/semantics.py's fewest gives it, and the plan of it; none when it does
+// not resolve. construct<T>() of a value it cannot resolve makes T of the
+// leaf the container resolves by value: a new handle, optional or array of
+// it, the rest of a bounded array value-initialized. The value is moved into
+// it once it is resolved.
+// The search of the request may be given, made once for several rules.
+constexpr answer resolve(const thing &start, const context &with,
+                         const request &goal, category taken,
+                         const request_rules &rules,
+                         const search *searched = nullptr) {
+  const entry through =
+      entry_of(rules.through, rules.at, rules.selected, taken);
+  if (selector_rejects(goal, taken, rules.at, through, rules.selected, with)) {
+    return {};
+  }
+  const bool returned =
+      rules.at == position::direct &&
+      (through == entry::resolve || through == entry::construct) &&
+      taken == category::rvalue_reference;
+  const search found = searched ? *searched : reach(start, with, goal);
+  answer result =
+      satisfy_by(found, goal, taken, required_lifetime(rules.at, through), with,
+                 handed_cost{returned, rules.runtime, &with});
+  if (result.found || found.overflow) {
+    return result;
+  }
+  bool bounded = false;
+  for (std::size_t index = 0; index < goal.shape_depth; ++index) {
+    bounded = bounded || with.kind(goal.layers[index]).bounded;
+  }
+  if (rules.at == position::direct && through == entry::construct &&
+      goal.of == element::leaf && goal.shape_depth != 0 &&
+      (with.leaf.default_constructible || !bounded)) {
+    request leaf;
+    answer value = resolve(
+        start, with, leaf, category::value,
+        {position::direct, entry::resolve, rules.selected, rules.runtime});
+    if (value.found) {
+      value.fewest.moves = static_cast<std::uint8_t>(value.fewest.moves + 1);
+    }
+    return value;
+  }
+  return result;
 }
 } // namespace dingo::semantics

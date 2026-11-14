@@ -37,8 +37,9 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from spec import semantics  # noqa: E402
 from spec.generator import driver  # noqa: E402
-from spec.vocabulary import (Category, InterfaceSet, Scope,  # noqa: E402
-                             Selection, StoredForm)
+from spec.vocabulary import (Category, Container, Entry,  # noqa: E402
+                             InterfaceSet, Position, Scope, Selection,
+                             StoredForm)
 
 # The layers of C++ itself, at their indices in every universe of the
 # library.
@@ -424,6 +425,87 @@ def paired(universes):
                                context, start, goals)
 
 
+POSITIONS = list(Position)
+ENTRIES = list(Entry)
+
+
+def rules_cases(starts):
+    """The requests of the rules domain of some stored objects, each with the
+    answers of the specification's fewest for every category, position,
+    entry point, selection and container."""
+    for scope, form, leaf, interfaces, limits in starts:
+        traits = semantics.LEAVES[leaf]
+        for abstract in (False, True):
+            context = semantics.Context(traits, semantics.SCOPES[scope],
+                                        abstract, limits)
+            if not semantics.makes_storage(form, context):
+                continue
+            start = semantics.source(scope, form, interfaces)
+            for bound in bounds():
+                if (bound.element == "interface") != abstract:
+                    continue
+                for shape, shaped in semantics.SHAPES.items():
+                    layers = shaped + bound.layers
+                    answers = []
+                    for category in Category:
+                        for position in POSITIONS:
+                            for entry in ENTRIES:
+                                for selection in (Selection.PLAIN,
+                                                  Selection.ANNOTATED):
+                                    for container in (Container.STATIC,
+                                                      Container.RUNTIME):
+                                        cost = semantics.fewest(
+                                            scope, form, leaf, bound, shape,
+                                            category, position, entry, limits,
+                                            selection, interfaces, container)
+                                        answers.append(
+                                            "%d,%d" % cost if cost else "-")
+                    yield (f"{scope.value}/{form.value}/{leaf.value}/"
+                           f"{interfaces.value}/{LIMITS[limits]}/"
+                           f"{shape.value}/{bound.element}"
+                           f"{list(bound.layers)}",
+                           " ".join(answers),
+                           encode(context, start, layers, bound.element,
+                                  len(shaped)))
+
+
+def compare_rules_part(arguments):
+    """The rules domain of some stored objects, in a process of its own."""
+    program, starts = arguments
+    cases = list(rules_cases(starts))
+    run = subprocess.run([str(program), "rules"],
+                         input="\n".join(header() + [line for _, _, line in
+                                                     cases]) + "\n",
+                         capture_output=True, text=True)
+    answers = run.stdout.splitlines()
+    if run.returncode != 0 or len(answers) != len(cases):
+        return len(cases), 0, [(name, want, "") for name, want, _ in cases]
+    resolved = sum(answer != "-" for _, want, _ in cases
+                   for answer in want.split())
+    return len(cases), resolved, [
+        (name, want, got.strip())
+        for (name, want, _), got in zip(cases, answers)
+        if want != got.strip()][:20]
+
+
+def compare_rules(program, jobs):
+    """The rules domain: every stored object of every scope, form, leaf,
+    interfaces and limitations, in parts compared in processes at once."""
+    starts = [(scope, form, leaf, interfaces, limits)
+              for scope in Scope for form in StoredForm
+              for leaf in semantics.LEAVES for interfaces in InterfaceSet
+              for limits in LIMITS]
+    parts = [(program, starts[index:index + 8])
+             for index in range(0, len(starts), 8)]
+    count, resolved, differ = 0, 0, []
+    with multiprocessing.Pool(jobs) as pool:
+        for found in pool.imap_unordered(compare_rules_part, parts):
+            count += found[0]
+            resolved += found[1]
+            differ += found[2]
+    return count, resolved, differ
+
+
 def compare_part(arguments):
     """compare of a part of the pairs, in a process of its own."""
     program, universes = arguments
@@ -460,12 +542,14 @@ def expected(reached, context, layers, element):
     return " ".join(answers)
 
 
-def encode(context, start, layers, element):
+def encode(context, start, layers, element, shape_depth=0):
     """A request as the program reads it."""
     universe = order(context.universe)
     made = universe[len(LANGUAGE):]
     numbers = [LIMITS[context.limits], int(context.leaf.copyable),
-               int(context.leaf.movable), int(context.scope.makes),
+               int(context.leaf.movable),
+               int(context.leaf.default_constructible),
+               int(context.scope.makes),
                int(context.scope.publishes_early), int(context.abstract),
                len(made)]
     for name in made:
@@ -475,7 +559,7 @@ def encode(context, start, layers, element):
                 ELEMENTS[start.element], start.lifetime.value,
                 ORIGINS[start.origin], len(layers),
                 *(universe.index(name) for name in layers),
-                ELEMENTS[element]]
+                ELEMENTS[element], shape_depth]
     return " ".join(map(str, numbers))
 
 
@@ -541,15 +625,19 @@ def main():
     for name, want, got in differ[:20]:
         print(f"  {name}\n    specification {want}\n    library       {got}")
     failed = bool(differ)
-    domains = [("standard layers", lambda: compare(program, standard())),
-               ("every layer a type could define",
+    # Each domain with the answers of a request: one for each category and
+    # lifetime, or for each category and rules of a request.
+    domains = [("standard layers", 14, lambda: compare(program, standard())),
+               ("every layer a type could define", 14,
                 lambda: compare(program, swept()))]
+    domains.append(("the rules of requests, every stored object", 336,
+                    lambda: compare_rules(program, options.jobs)))
     if options.pairs:
-        domains.append(("every pair of layers a type could define",
+        domains.append(("every pair of layers a type could define", 14,
                         lambda: compare_pairs(program, options.jobs)))
-    for title, run in domains:
+    for title, answers, run in domains:
         count, resolved, differ = run()
-        print(f"{title}: {count} requests, {count * 14} answers, {resolved} "
+        print(f"{title}: {count} requests, {count * answers} answers, {resolved} "
               f"of them resolved, {len(differ)} requests differ")
         for name, want, got in differ[:20]:
             print(f"  {name}\n    specification {want}\n    library       {got}")
