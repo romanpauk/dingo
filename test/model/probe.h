@@ -380,6 +380,8 @@ void survey(const char *registration) {
 }
 
 inline void record(const char *cell, const char *outcome, const char *error);
+inline void record(const char *prefix, std::string_view name,
+                   const char *outcome, const char *error);
 
 // A request selects the binding of its normalized type, or of its exact type.
 template <typename Request, typename Interface>
@@ -387,21 +389,24 @@ inline constexpr bool selects_v =
     std::is_same_v<typename request_type<Request>::value_type, Interface> ||
     std::is_same_v<typename request_type<Request>::exact_type, Interface>;
 
+// Records a request the binding publishes for Interface that does not select
+// it, or that none of Requests asks for. Both are known as the code compiles,
+// so that a probed request makes no code.
 template <typename Interface, typename Target, typename... Requests>
-void check_probed(const std::string &prefix) {
-  const auto name = type_name<Target>();
-  if (!selects_v<Target, Interface>) {
-    record((prefix + std::string(name)).c_str(), "unreachable", nullptr);
-  } else if (!(detail::qualifies_as(describe_type<Target>(),
-                                    describe_type<Requests>()) ||
-               ...)) {
-    record((prefix + std::string(name)).c_str(), "unprobed", nullptr);
+DINGO_ALWAYS_INLINE void record_unprobed(const char *prefix) {
+  if constexpr (!selects_v<Target, Interface>) {
+    record(prefix, type_name<Target>(), "unreachable", nullptr);
+  } else if constexpr (!(detail::qualifies_as(
+                             detail::described_type_v<Target>,
+                             detail::described_type_v<Requests>) ||
+                         ...)) {
+    record(prefix, type_name<Target>(), "unprobed", nullptr);
   }
 }
 
 template <typename Interface, typename... Requests, typename... Resolutions>
-void check_probed(const std::string &prefix, type_list<Resolutions...>) {
-  (check_probed<Interface, typename Resolutions::target_type, Requests...>(
+void check_probed(const char *prefix, type_list<Resolutions...>) {
+  (record_unprobed<Interface, typename Resolutions::target_type, Requests...>(
        prefix),
    ...);
 }
@@ -447,6 +452,15 @@ inline void record(const char *cell, const char *outcome, const char *error) {
     line += ", \"error\": " + json_string(error);
   }
   std::printf("%s}\n", line.c_str());
+}
+
+// The cell is the prefix and the name, as its outcome is recorded: the
+// callers pass them as they are compiled in.
+inline void record(const char *prefix, std::string_view name,
+                   const char *outcome, const char *error) {
+  std::string cell = prefix;
+  cell += name;
+  record(cell.c_str(), outcome, error);
 }
 
 inline void record(const char *cell, const char *outcome) {

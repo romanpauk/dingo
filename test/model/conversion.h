@@ -206,7 +206,8 @@ template <typename Request, typename Apply> void make_request(Apply &&apply) {
 // can be made and holds what the request converts: the alternative of a
 // variant that is not the leaf is not converted.
 template <typename Operation, typename Request, typename L, typename Stored>
-void record_published(const std::string &cell) {
+void record_published(const char *prefix, const char *name) {
+  const std::string cell = std::string(prefix) + name;
   using of = conversion_of<Operation>;
   if constexpr (!of::counted) {
     record(cell.c_str(), "published", nullptr);
@@ -245,14 +246,22 @@ void record_published(const std::string &cell) {
   }
 }
 
-// Records a request of Interface the binding of a registration answers:
-// published when its resolution is selected and its conversion available,
-// unconvertible when the conversion is not, composed when it is a wrapper the
-// binding makes of a value it resolves, unpublished when it is none of
-// these, and diverged when the two containers select differently. A request
-// the lookup sends to the binding of another interface is answered there.
-template <typename Model, typename Interface, typename Request, typename Leaf>
-void publication(const std::string &prefix, const char *name) {
+// The outcome of a cell, or that it is published.
+struct cell_outcome {
+  bool published;
+  const char *outcome;
+  const char *error;
+};
+
+// The outcome of a request of Interface the binding of a registration
+// answers, as the code compiles: published when its resolution is selected
+// and its conversion available, unconvertible when the conversion is not,
+// composed when it is a wrapper the binding makes of a value it resolves,
+// unpublished when it is none of these, and diverged when the two containers
+// select differently. A request the lookup sends to the binding of another
+// interface is answered there.
+template <typename Model, typename Interface, typename Request>
+constexpr cell_outcome classify() {
   using Storage = typename Model::storage_type;
   using type = unannotated_t<Interface>;
   using resolutions = typename detail::binding_resolutions<type, Storage>::type;
@@ -262,50 +271,63 @@ void publication(const std::string &prefix, const char *name) {
   constexpr std::size_t index = runtime_index<Request>(resolutions{});
   constexpr bool listed = !std::is_void_v<selected>;
   constexpr bool matched = index < type_list_size_v<resolutions>;
-  const std::string cell = prefix + name;
   if constexpr (!selects_v<Request, type>) {
-    record(cell.c_str(), "selects_another", nullptr);
+    return {false, "selects_another", nullptr};
   } else if constexpr (listed != matched) {
-    record(cell.c_str(), "diverged",
-           listed ? "the static container selects a resolution, the runtime "
-                    "container none"
-                  : "the runtime container selects a resolution, the static "
-                    "container none");
+    return {false, "diverged",
+            listed ? "the static container selects a resolution, the runtime "
+                     "container none"
+                   : "the runtime container selects a resolution, the static "
+                     "container none"};
   } else if constexpr (!listed) {
-    // How the static container derives a request it does not publish: kept
-    // with the instance or composed, taken out of a pointer, or into the
-    // context of the resolution.
     constexpr detail::derivation how =
         detail::static_request_derivation_v<Request, binding>;
     if constexpr (!derives_alike<Request, type, binding, Storage,
                                  resolutions>()) {
-      record(cell.c_str(), "diverged",
-             "the static and the runtime container derive the request "
-             "differently");
+      return {false, "diverged",
+              "the static and the runtime container derive the request "
+              "differently"};
     } else if constexpr (how == detail::derivation::keep ||
                          how == detail::derivation::compose) {
-      record(cell.c_str(), "composed", nullptr);
+      return {false, "composed", nullptr};
     } else if constexpr (how == detail::derivation::take) {
-      record(cell.c_str(), "adopted", nullptr);
+      return {false, "adopted", nullptr};
     } else if constexpr (how == detail::derivation::refer ||
                          how == detail::derivation::address ||
                          how == detail::derivation::move ||
                          how == detail::derivation::copy ||
                          how == detail::derivation::convert) {
-      record(cell.c_str(), "derived", nullptr);
+      return {false, "derived", nullptr};
     } else if constexpr (how == detail::derivation::adopt ||
                          how == detail::derivation::place) {
-      record(cell.c_str(), "placed", nullptr);
+      return {false, "placed", nullptr};
     } else {
-      record(cell.c_str(), "unpublished", nullptr);
+      return {false, "unpublished", nullptr};
     }
   } else if constexpr (!conversion_available<
                            typename selected::operation>::value ||
                        !resolution_at_available<index, resolutions>::value) {
-    record(cell.c_str(), "unconvertible", nullptr);
+    return {false, "unconvertible", nullptr};
   } else {
+    return {true, nullptr, nullptr};
+  }
+}
+
+// Records the outcome of a cell. Only a published cell makes code of its
+// types, which applies the conversion; any other records what was decided as
+// the code compiles.
+template <typename Model, typename Interface, typename Request, typename Leaf>
+DINGO_ALWAYS_INLINE void publication(const char *prefix, const char *name) {
+  constexpr cell_outcome result = classify<Model, Interface, Request>();
+  if constexpr (result.published) {
+    using type = unannotated_t<Interface>;
+    using binding = detail::binding<type, Model>;
+    using selected =
+        typename detail::binding_supports_request<Request, binding>::type;
     record_published<typename selected::operation, Request, Leaf,
-                     typename Storage::type>(cell);
+                     typename Model::storage_type::type>(prefix, name);
+  } else {
+    record(prefix, name, result.outcome, result.error);
   }
 }
 
