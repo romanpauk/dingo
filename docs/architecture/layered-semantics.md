@@ -260,6 +260,20 @@ specification. It is also the largest part of the compile time that is left.
    container plans a request of a binding as it resolves, by one function of no
    type, and keeps the plan in the binding.
 
+   The static container is done. A static binding plans a request
+   (`static_execution` in
+   [include/dingo/static/binding.h](../../include/dingo/static/binding.h)) from
+   the stored object its storage gives, borrowed or made for the request, for
+   the lifetime the request needs: as long as the container when it is passed to
+   the caller, as long as the request otherwise. It applies the plan through the
+   interpreter. What the plan makes lives in the context, in the scope of the
+   request, or with the binding when it lives as long as the container. What the
+   last steps make, wraps or a copy, is made where the request takes it. Every
+   baseline cell is the same. A plan takes about 2 MB of compiler memory and 12
+   ms with GCC, and a static type costs as much to compile as it did with the
+   derivations. The runtime container is left; then the conversion paths, the
+   published resolutions and the derivations go.
+
 8. **Tests.** The model checks become a cover of the composition, and the full
    model run a regression.
 
