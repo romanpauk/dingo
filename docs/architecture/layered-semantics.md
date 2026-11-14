@@ -59,6 +59,30 @@ reachable things and the satisfactions, as constant expressions over these
 values. Its results are then compared with the specification for every starting
 object and every request.
 
+## A Layer Is Its Properties
+
+The rules name no wrapper. A layer is what the rules ask of it: what it owns,
+whether a copy of it holds the same element, whether it can be copied, moved,
+made of a value or be empty, whether an empty one is a value, whether it holds
+only its element, and whether it takes over a raw pointer. Whether an owned
+value of one layer converts to another is a fact of the two, given for the
+layers in play.
+
+The layers of C++ itself are fixed: a pointer to an object, an array of unknown
+bound, a bounded array, and the pointer an array decays to. Every other layer is
+a type a request or a stored object is made of, whose `type_traits` give its
+properties. A search takes the universe of its layers: those of C++ itself, and
+those of the types it is of. A user's wrapper needs no change of the rules.
+
+Not every combination of properties is a layer a type can be.
+`semantics.possible` tells which are: a layer that owns nothing, or shares what
+it owns, holds an element that lives apart from it; a layer that owns its
+element alone and shares it with a copy cannot be copied; a layer that owns
+nothing is not made of a value and takes over no pointer; a layer that takes
+over a pointer holds its element apart from it; and an empty value is a value
+only of a layer that may be empty. Of the combinations, 216 are possible. The
+classification is to reject the type traits of any other.
+
 The steps of the specification and the code that takes them today:
 
 | Step                                             | Who takes it | Code today                                                                        |
@@ -107,21 +131,34 @@ specification. It is also the largest part of the compile time that is left.
    way to the request, which wraps a layer around a thing only as one of the
    layers of the request, or as a layer that converts to one of them: 145 states
    at most and 13 on average.
-2. **Exhaustive comparison.** Done. `semantics-check` gives the port every
-   stored object the specification makes, with and without the known
-   limitations, and every request of every shape of every bound interface:
-   629,520 requests. For each request it compares the fewest copies and moves of
-   what satisfies each of the 7 categories, for both lifetimes, with the search
-   of every thing by the specification: 8,813,280 answers. They are equal. A
-   rule of the port changed on purpose makes 216 requests differ.
+
+2. **Exhaustive comparison.** Done. `semantics-check` compares the port with the
+   specification in two domains. For each request it compares the fewest copies
+   and moves of what satisfies each of the 7 categories, for both lifetimes,
+   with the specification's search of every thing.
+
+   - The standard layers: every stored object the specification makes, with and
+     without the known limitations, and every request of every shape of every
+     bound interface. 629,520 requests, 8,813,280 answers.
+   - Every possible layer a type could define: each of the 216, beside the
+     layers of C++ itself, stored and requested in every stack of it, of a
+     pointer and of an array, of every scope and leaf. 1,129,344 requests,
+     15,810,816 answers.
+
+   All answers are equal. A rule of the port changed on purpose makes 216
+   requests differ.
+
 3. **Classification.** One module maps a C++ type to its things, with an
    exhaustive test over the wrapper kinds, the leaf kinds and the request
    shapes.
+
 4. **Steps.** One function template for each kind of step, with its contract as
    static assertions, and a test for each.
+
 5. **Execution.** A plan is the path to a satisfying thing in the search. The
    interpreter applies it in both containers, and replaces the conversion paths
    and the derivations.
+
 6. **Tests.** The model checks become a cover of the composition, and the full
    model run a regression.
 

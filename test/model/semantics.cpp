@@ -3,11 +3,14 @@
 // for every category and lifetime, the fewest copies and moves of the leaf
 // of what satisfies the request, or "-" when nothing does.
 //
-// A request is a line of numbers: the limitations, the leaf (copyable,
-// movable), the scope (makes, publishes early), whether the abstract
-// interface is requested, the stored object (its depth, its layers, its
-// element, its lifetime, its origin) and the request (its depth, its layers,
-// its element).
+// The first line is the layers of C++ itself as the specification describes
+// them, which have to be those of the library. A request is a line of
+// numbers: the limitations, the leaf (copyable, movable), the scope (makes,
+// publishes early), whether the abstract interface is requested, the layers
+// of the universe after those of C++ itself, the stored object (its depth,
+// its layers, its element, its lifetime, its origin) and the request (its
+// depth, its layers, its element). A layer is its properties, as
+// layer_kind declares them.
 
 #include <dingo/semantics/model.h>
 
@@ -18,6 +21,39 @@ using namespace dingo::semantics;
 
 namespace {
 bool read(unsigned &value) { return std::scanf("%u", &value) == 1; }
+
+bool read_kind(layer_kind &kind) {
+  unsigned values[15] = {};
+  for (unsigned &value : values) {
+    if (!read(value)) {
+      return false;
+    }
+  }
+  kind.owns = static_cast<owner>(values[0]);
+  bool *flags[] = {&kind.shares_element,  &kind.copyable,
+                   &kind.made_from_value, &kind.holds_element_only,
+                   &kind.relocatable,     &kind.gives_element,
+                   &kind.bounded,         &kind.may_be_empty,
+                   &kind.has_empty_value, &kind.adopts,
+                   &kind.decays,          &kind.adopted,
+                   &kind.adopted_array};
+  for (unsigned index = 0; index < 13; ++index) {
+    *flags[index] = values[index + 1] != 0;
+  }
+  kind.converts = values[14];
+  return true;
+}
+
+bool same(const layer_kind &a, const layer_kind &b) {
+  return a.owns == b.owns && a.shares_element == b.shares_element &&
+         a.copyable == b.copyable && a.made_from_value == b.made_from_value &&
+         a.holds_element_only == b.holds_element_only &&
+         a.relocatable == b.relocatable && a.gives_element == b.gives_element &&
+         a.bounded == b.bounded && a.may_be_empty == b.may_be_empty &&
+         a.has_empty_value == b.has_empty_value && a.adopts == b.adopts &&
+         a.decays == b.decays && a.adopted == b.adopted &&
+         a.adopted_array == b.adopted_array && a.converts == b.converts;
+}
 
 bool read_layers(layer *layers, std::uint8_t &depth) {
   unsigned count = 0;
@@ -37,18 +73,44 @@ bool read_layers(layer *layers, std::uint8_t &depth) {
 } // namespace
 
 int main() {
+  const universe language;
+  unsigned language_count = 0;
+  if (!read(language_count) || language_count != language.count) {
+    std::fprintf(stderr, "the layers of C++ itself differ in number\n");
+    return 1;
+  }
+  for (unsigned index = 0; index < language_count; ++index) {
+    layer_kind kind;
+    if (!read_kind(kind) || !same(kind, language.kinds[index])) {
+      std::fprintf(stderr, "the layer %u of C++ itself differs\n", index);
+      return 1;
+    }
+  }
   for (;;) {
     unsigned limits = 0, copyable = 0, movable = 0, makes = 0, early = 0,
-             abstract = 0, start_element = 0, start_lifetime = 0,
+             abstract = 0, made = 0, start_element = 0, start_lifetime = 0,
              start_origin = 0, goal_element = 0;
     if (!read(limits)) {
       return 0;
     }
+    universe layers;
     thing start;
     request goal;
     if (!read(copyable) || !read(movable) || !read(makes) || !read(early) ||
-        !read(abstract) || !read_layers(start.layers, start.depth) ||
-        !read(start_element) || !read(start_lifetime) || !read(start_origin) ||
+        !read(abstract) || !read(made) || made > max_kinds - layers.count) {
+      std::fprintf(stderr, "malformed request\n");
+      return 1;
+    }
+    for (unsigned index = 0; index < made; ++index) {
+      layer_kind kind;
+      if (!read_kind(kind)) {
+        std::fprintf(stderr, "malformed layer\n");
+        return 1;
+      }
+      layers.add(kind);
+    }
+    if (!read_layers(start.layers, start.depth) || !read(start_element) ||
+        !read(start_lifetime) || !read(start_origin) ||
         !read_layers(goal.layers, goal.depth) || !read(goal_element)) {
       std::fprintf(stderr, "malformed request\n");
       return 1;
@@ -63,7 +125,8 @@ int main() {
     const context with{{copyable != 0, movable != 0},
                        {makes != 0, false, early != 0},
                        abstract != 0,
-                       static_cast<std::uint8_t>(limits)};
+                       static_cast<std::uint8_t>(limits),
+                       &layers};
     const search found = reach(start, with, goal);
     if (found.overflow) {
       std::printf("overflow\n");

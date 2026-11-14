@@ -17,102 +17,86 @@
 // steps copy and move of the leaf. It is the model of spec/semantics.py, step
 // by step, of no C++ type: a test compares it with the specification for every
 // stored object and request. See docs/architecture/layered-semantics.md.
+//
+// The rules name no wrapper. A layer is its properties, in the universe of the
+// layers a search may make: the layers of C++ itself, a pointer and an array,
+// and those of the types a request and a stored object are made of, which
+// their type traits describe.
 
 namespace dingo::semantics {
 
-// A layer around an element.
-enum class layer : std::uint8_t {
-  pointer,
-  shared_ptr,
-  unique_ptr,
-  optional,
-  // An alternative type: its element is the alternative it holds.
-  variant,
-  // A bounded array of two elements, and an array of unknown bound inside a
-  // handle: their element is their first element, through the pointer they
-  // decay to.
-  array2,
-  array,
-  // The pointer an array decays to, to its first element.
-  array_pointer,
-  none,
-};
+// A layer: its index in the universe of a search.
+using layer = std::uint8_t;
 
-inline constexpr std::size_t layer_count =
-    static_cast<std::size_t>(layer::none);
+inline constexpr layer no_layer = 0xFF;
+
+// The layers of C++ itself, first in every universe: a pointer to an object,
+// the pointer an array decays to, to its first element, an array of unknown
+// bound inside a handle, and a bounded array. The element of an array is its
+// first element, through the pointer it decays to.
+inline constexpr layer pointer_layer = 0;
+inline constexpr layer array_pointer_layer = 1;
+inline constexpr layer array_layer = 2;
+inline constexpr layer bounded_array_layer = 3;
 
 // What a layer owns of what it holds.
 enum class owner : std::uint8_t { none, sole, shared };
 
-// A layer, by its properties: the rules name properties, never a layer.
-struct layer_traits {
-  owner owns;
+// A layer, by its properties.
+struct layer_kind {
+  owner owns = owner::sole;
   // Whether a copy of the layer holds the same element.
-  bool shares_element;
-  bool copyable;
+  bool shares_element = false;
+  bool copyable = false;
   // Whether a layer of an element can be made from a value of it.
-  bool made_from_value;
-  // The layer an owned value of this one converts to, or none.
-  layer converts_to = layer::none;
+  bool made_from_value = false;
   // Whether it is made only of a bare element, as an alternative type is.
   bool holds_element_only = false;
   bool relocatable = true;
   // Whether its element can be taken from it.
   bool gives_element = true;
-  // The layer an array decays to, or none.
-  layer decays_to = layer::none;
   // Whether it is an array of a known bound.
   bool bounded = false;
-  // For a raw pointer, whether a handle takes it over, and the layer the
-  // handle holds around its element: none, or an array.
-  bool adopted = false;
-  layer adopted_with = layer::none;
-  // Whether a handle of it takes over a raw pointer the request owns.
-  bool adopts = false;
-  // Whether a registration of the abstract interface stores a layer of the
-  // leaf as one of the interface.
-  bool rebinds = false;
   // Whether it may hold no element, and whether an empty one is a value.
   bool may_be_empty = false;
   bool has_empty_value = false;
+  // Whether a handle of it takes over a raw pointer the request owns.
+  bool adopts = false;
+  // Of C++ itself: whether it decays to the pointer to its first element;
+  // whether it is a raw pointer a handle takes over, and whether the handle
+  // holds an array around its element.
+  bool decays = false;
+  bool adopted = false;
+  bool adopted_array = false;
+  // The layers an owned value of it converts to, as a mask of their indices.
+  std::uint32_t converts = 0;
 };
 
-inline constexpr layer_traits layers_traits[layer_count] = {
-    // pointer
-    {owner::none, true, true, false, layer::none, false, true, true,
-     layer::none, false, true, layer::none, false, true, true, false},
-    // shared_ptr
-    {owner::shared, true, true, true, layer::none, false, true, true,
-     layer::none, false, false, layer::none, true, true, true, false},
-    // unique_ptr
-    {owner::sole, true, false, true, layer::shared_ptr, false, true, true,
-     layer::none, false, false, layer::none, true, true, true, false},
-    // optional
-    {owner::sole, false, true, true, layer::none, false, true, true,
-     layer::none, false, false, layer::none, false, false, true, true},
-    // variant
-    {owner::sole, false, true, true, layer::none, true, true, true, layer::none,
-     false, false, layer::none, false, false, true, false},
-    // array2
-    {owner::sole, false, false, false, layer::none, false, false, false,
-     layer::array_pointer, true, false, layer::none, false, false, false,
-     false},
-    // array
-    {owner::sole, false, false, false, layer::none, false, false, false,
-     layer::array_pointer, false, false, layer::none, false, false, false,
-     false},
-    // array_pointer
-    {owner::none, true, true, false, layer::none, false, true, false,
-     layer::none, false, true, layer::array, false, false, false, false},
+inline constexpr std::size_t max_kinds = 32;
+
+// The layers a search may make: those of C++ itself, then those of the types
+// it is of.
+struct universe {
+  layer_kind kinds[max_kinds] = {
+      // A pointer to an object.
+      {owner::none, true, true, false, false, true, true, false, true, false,
+       false, false, true, false},
+      // The pointer an array decays to.
+      {owner::none, true, true, false, false, true, false, false, false, false,
+       false, false, true, true},
+      // An array of unknown bound.
+      {owner::sole, false, false, false, false, false, false, false, false,
+       false, false, true, false, false},
+      // A bounded array.
+      {owner::sole, false, false, false, false, false, false, true, false,
+       false, false, true, false, false}};
+  std::size_t count = 4;
+
+  constexpr layer add(const layer_kind &kind) {
+    kinds[count] = kind;
+    return static_cast<layer>(count++);
+  }
 };
-
-constexpr const layer_traits &traits_of(layer name) {
-  return layers_traits[static_cast<std::size_t>(name)];
-}
-
-// The handles that take over a raw pointer, in the order the specification
-// declares them.
-inline constexpr layer adopters[] = {layer::shared_ptr, layer::unique_ptr};
 
 // What the leaf can do.
 struct leaf_traits {
@@ -150,7 +134,7 @@ enum class limitation : std::uint8_t {
   pointer_into_converted_copy = 1 << 1,
 };
 
-// What a derivation knows of its registration.
+// What a derivation knows of its registration, and the layers it may make.
 struct context {
   leaf_traits leaf;
   scope_traits scope;
@@ -158,10 +142,13 @@ struct context {
   bool abstract;
   // The limitations applied, as a mask of limitation.
   std::uint8_t limits = 0;
+  const universe *layers = nullptr;
 
   constexpr bool limited(limitation gap) const {
     return (limits & static_cast<std::uint8_t>(gap)) != 0;
   }
+
+  constexpr const layer_kind &kind(layer of) const { return layers->kinds[of]; }
 };
 
 // The most layers a thing has: a request has at most three wrappers around
@@ -179,7 +166,7 @@ struct thing {
   semantics::origin from = semantics::origin::borrowed;
   bool instance = false;
   // The holder made for the request it is the element of, or none.
-  layer contained = layer::none;
+  layer contained = no_layer;
   bool unconstructed = false;
   bool absent = false;
   std::uint8_t full = 0;
@@ -236,20 +223,27 @@ constexpr thing restacked(const thing &from, const layer *front,
   return made;
 }
 
-// How many of the layers a copy or a move of a stack makes anew: those down
-// to the first that shares its element; all of them and the element when
-// none does.
-constexpr std::size_t copied_layers(const thing &of) {
-  for (std::size_t depth = 1; depth <= of.depth; ++depth) {
-    if (traits_of(of.layers[depth - 1]).shares_element) {
+// A thing with one more layer around it, which lives as the given lifetime.
+constexpr thing wrapped(const thing &of, layer outer, lifetime life) {
+  return restacked(of, &outer, 1, 0, &life);
+}
+
+// How many of the layers from one of them on a copy or a move of a stack
+// makes anew: those down to the first that shares its element; all of them
+// and the element when none does.
+constexpr std::size_t copied_layers(const thing &of, const context &with,
+                                    std::size_t from = 0) {
+  for (std::size_t depth = 1; from + depth <= of.depth; ++depth) {
+    if (with.kind(of.layers[from + depth - 1]).shares_element) {
       return depth;
     }
   }
-  return of.depth + 1;
+  return of.depth - from + 1;
 }
 
-constexpr bool makes_leaf_anew(const thing &of) {
-  return copied_layers(of) > of.depth;
+constexpr bool makes_leaf_anew(const thing &of, const context &with,
+                               std::size_t from = 0) {
+  return copied_layers(of, with, from) > of.depth - from;
 }
 
 // Whether a new object of a thing would slice the leaf: the interface
@@ -269,9 +263,9 @@ constexpr bool can_copy(const thing &of, const context &with) {
   if (slices(of)) {
     return false;
   }
-  const std::size_t depth = copied_layers(of);
+  const std::size_t depth = copied_layers(of, with);
   for (std::size_t index = 0; index < depth && index < of.depth; ++index) {
-    if (!traits_of(of.layers[index]).copyable) {
+    if (!with.kind(of.layers[index]).copyable) {
       return false;
     }
   }
@@ -279,9 +273,9 @@ constexpr bool can_copy(const thing &of, const context &with) {
 }
 
 constexpr bool can_move(const thing &of, const context &with) {
-  const std::size_t depth = copied_layers(of);
+  const std::size_t depth = copied_layers(of, with);
   for (std::size_t index = 0; index < depth && index < of.depth; ++index) {
-    if (!traits_of(of.layers[index]).relocatable) {
+    if (!with.kind(of.layers[index]).relocatable) {
       return false;
     }
   }
@@ -309,7 +303,7 @@ struct transition {
 };
 
 // The most steps from one thing.
-inline constexpr std::size_t max_transitions = 16;
+inline constexpr std::size_t max_transitions = 2 * max_kinds + 8;
 
 struct transitions_list {
   transition items[max_transitions] = {};
@@ -325,8 +319,8 @@ inline constexpr std::size_t derivation_depth = 4;
 
 // The thing of a copy: a new object the request owns. What a layer that
 // shares its element holds is not copied.
-constexpr thing copied(const thing &of) {
-  const std::size_t depth = copied_layers(of);
+constexpr thing copied(const thing &of, const context &with) {
+  const std::size_t depth = copied_layers(of, with);
   thing made = of;
   for (std::size_t index = 0; index < depth && index <= of.depth; ++index) {
     made.lifetimes[index] = lifetime::request;
@@ -341,35 +335,26 @@ constexpr thing copied(const thing &of) {
 // holds.
 constexpr void empty_safe_steps(const thing &of, const thing &inner,
                                 const context &with, transitions_list &out) {
-  const layer below = inner.depth ? inner.layers[0] : layer::none;
-  const bool decays =
-      below != layer::none && traits_of(below).decays_to != layer::none;
-  thing pointer = inner;
-  if (decays) {
-    pointer.layers[0] = traits_of(below).decays_to;
+  const layer below = inner.depth ? inner.layers[0] : no_layer;
+  thing pointer;
+  if (below != no_layer && with.kind(below).decays) {
+    pointer = inner;
+    pointer.layers[0] = array_pointer_layer;
     pointer.lifetimes[0] = of.lifetimes[0];
   } else {
-    for (std::size_t index = inner.depth; index > 0; --index) {
-      pointer.layers[index] = inner.layers[index - 1];
-    }
-    for (std::size_t index = inner.depth + 1; index > 0; --index) {
-      pointer.lifetimes[index] = inner.lifetimes[index - 1];
-    }
-    pointer.layers[0] = layer::pointer;
-    pointer.lifetimes[0] = of.lifetimes[0];
-    pointer.depth = static_cast<std::uint8_t>(inner.depth + 1);
+    pointer = wrapped(inner, pointer_layer, of.lifetimes[0]);
   }
   pointer.from = origin::borrowed;
   pointer.absent = of.absent;
   out.add(step::element_pointer, pointer);
-  if (below != layer::none && traits_of(below).has_empty_value &&
+  if (below != no_layer && with.kind(below).has_empty_value &&
       !inner.unconstructed) {
     if (owned(inner.from)) {
       thing same = inner;
       same.absent = of.absent;
       out.add(step::element_or_empty, same);
-    } else if (!inner.unconstructed && can_copy(inner, with)) {
-      thing copy = copied(inner);
+    } else if (can_copy(inner, with)) {
+      thing copy = copied(inner, with);
       copy.absent = of.absent;
       out.add(step::element_or_empty_copy, copy);
     }
@@ -382,121 +367,100 @@ constexpr transitions_list transitions(const thing &of, const context &with) {
   if (of.unconstructed) {
     return out;
   }
+  const lifetime request = lifetime::request;
   if (of.depth) {
     const layer outer = of.layers[0];
-    const layer_traits &traits = traits_of(outer);
-    if (traits.decays_to != layer::none) {
-      const lifetime request = lifetime::request;
-      out.add(step::decay, restacked(of, &traits.decays_to, 1, 1, &request));
+    const layer_kind &kind = with.kind(outer);
+    if (kind.decays) {
+      out.add(step::decay, restacked(of, &array_pointer_layer, 1, 1, &request));
       if (of.from == origin::made) {
-        const layer pointer = layer::pointer;
-        thing handed = of;
-        for (std::size_t index = of.depth; index > 0; --index) {
-          handed.layers[index] = of.layers[index - 1];
-        }
-        for (std::size_t index = of.depth + 1; index > 0; --index) {
-          handed.lifetimes[index] = of.lifetimes[index - 1];
-        }
-        handed.layers[0] = pointer;
-        handed.lifetimes[0] = lifetime::request;
-        handed.depth = static_cast<std::uint8_t>(of.depth + 1);
-        out.add(step::hand_over, handed);
+        out.add(step::hand_over, wrapped(of, pointer_layer, request));
       }
-    } else if (traits.adopted && of.from == origin::made) {
-      for (layer handle : adopters) {
-        const layer front[] = {handle, traits.adopted_with};
-        const std::size_t count = traits.adopted_with == layer::none ? 1 : 2;
-        const lifetime lives[] = {lifetime::request, lifetime::request};
-        out.add(step::adopt, restacked(of, front, count, 1, lives));
+    } else if (kind.adopted && of.from == origin::made) {
+      for (std::size_t index = 0; index < with.layers->count; ++index) {
+        if (!with.layers->kinds[index].adopts) {
+          continue;
+        }
+        const layer front[] = {static_cast<layer>(index), array_layer};
+        const lifetime lives[] = {request, request};
+        out.add(step::adopt,
+                restacked(of, front, kind.adopted_array ? 2 : 1, 1, lives));
       }
-    } else if (traits.gives_element) {
+    } else if (kind.gives_element) {
       const bool made = of.lifetimes[1] == lifetime::request;
       thing inner = restacked(of, nullptr, 0, 1, nullptr);
-      inner.from = traits.owns == owner::sole ? of.from : origin::borrowed;
-      inner.contained = of.contained != layer::none ? of.contained
-                        : made                      ? outer
-                                                    : layer::none;
+      inner.from = kind.owns == owner::sole ? of.from : origin::borrowed;
+      inner.contained = of.contained != no_layer ? of.contained
+                        : made                   ? outer
+                                                 : no_layer;
       inner.unconstructed =
           with.scope.publishes_early && of.instance && of.depth > 1;
-      inner.absent = of.absent || (traits.may_be_empty && !of.full);
+      inner.absent = of.absent || (kind.may_be_empty && !of.full);
       inner.full = static_cast<std::uint8_t>(of.full ? of.full - 1 : 0);
       out.add(step::element, inner);
-      if (traits.may_be_empty && !of.full && !traits.adopted) {
+      if (kind.may_be_empty && !of.full && !kind.adopted) {
         empty_safe_steps(of, inner, with, out);
       }
     }
-    if (owned(of.from) && traits.converts_to != layer::none) {
-      const lifetime request = lifetime::request;
-      out.add(step::convert,
-              restacked(of, &traits.converts_to, 1, 1, &request));
+    if (owned(of.from)) {
+      for (std::size_t index = 0; index < with.layers->count; ++index) {
+        if (kind.converts & (std::uint32_t{1} << index)) {
+          const layer to = static_cast<layer>(index);
+          out.add(step::convert, restacked(of, &to, 1, 1, &request));
+        }
+      }
     }
   }
   if (of.of == element::leaf && with.abstract) {
-    const layer_traits *outer = of.depth ? &traits_of(of.layers[0]) : nullptr;
+    const layer_kind *outer = of.depth ? &with.kind(of.layers[0]) : nullptr;
     thing upcast = of;
     upcast.of = element::interface;
     if (outer == nullptr ||
         (of.depth == 1 && outer->shares_element && outer->copyable)) {
       out.add(step::upcast, upcast);
     } else if (of.depth == 1 && outer->shares_element && owned(of.from)) {
-      upcast.lifetimes[0] = lifetime::request;
+      upcast.lifetimes[0] = request;
       out.add(step::upcast, upcast);
     } else if (of.depth > 1) {
-      const std::size_t depth = copied_layers(of);
+      const std::size_t depth = copied_layers(of, with);
       bool copyable = true;
       for (std::size_t index = 0; index < of.depth; ++index) {
-        copyable = copyable && traits_of(of.layers[index]).copyable;
+        copyable = copyable && with.kind(of.layers[index]).copyable;
       }
       if (depth == of.depth && copyable) {
         upcast.from = origin::copied;
         upcast.instance = false;
         for (std::size_t index = 0; index < depth; ++index) {
-          upcast.lifetimes[index] = lifetime::request;
+          upcast.lifetimes[index] = request;
         }
         out.add(step::upcast, upcast);
       }
     }
   }
   if (can_copy(of, with)) {
-    out.add(step::copy, copied(of));
+    out.add(step::copy, copied(of, with));
   }
   const bool shares = of.from == origin::copied && of.instance;
   if ((of.from == origin::made || shares) && can_move(of, with) &&
       of.depth < derivation_depth) {
-    const std::size_t depth = copied_layers(of);
-    lifetime lives[max_layers + 1] = {};
-    std::size_t count = 0;
+    const std::size_t depth = copied_layers(of, with);
+    thing inner = of;
+    lifetime outer = request;
     if (shares && of.lifetimes[depth] == lifetime::stable) {
-      for (; count < depth + 1; ++count) {
-        lives[count] = lifetime::stable;
+      for (std::size_t index = 0; index < depth; ++index) {
+        inner.lifetimes[index] = lifetime::stable;
       }
-      for (std::size_t index = depth; index <= of.depth; ++index) {
-        lives[count++] = of.lifetimes[index];
-      }
-    } else {
-      lives[count++] = lifetime::request;
-      for (std::size_t index = 0; index <= of.depth; ++index) {
-        lives[count++] = of.lifetimes[index];
-      }
+      outer = lifetime::stable;
     }
-    for (std::size_t index = 0; index < layer_count; ++index) {
-      const layer made = static_cast<layer>(index);
-      const layer_traits &traits = traits_of(made);
-      if (!traits.made_from_value || (traits.holds_element_only && of.depth) ||
-          (slices(of) && !traits.shares_element)) {
+    for (std::size_t index = 0; index < with.layers->count; ++index) {
+      const layer_kind &kind = with.layers->kinds[index];
+      if (!kind.made_from_value || (kind.holds_element_only && of.depth) ||
+          (slices(of) && !kind.shares_element)) {
         continue;
       }
-      thing wrapped = of;
-      for (std::size_t layer_index = of.depth; layer_index > 0; --layer_index) {
-        wrapped.layers[layer_index] = of.layers[layer_index - 1];
-      }
-      wrapped.layers[0] = made;
-      wrapped.depth = static_cast<std::uint8_t>(of.depth + 1);
-      for (std::size_t life = 0; life < count && life <= max_layers; ++life) {
-        wrapped.lifetimes[life] = lives[life];
-      }
-      wrapped.full = static_cast<std::uint8_t>(of.full + 1);
-      out.add(step::wrap, wrapped);
+      thing made = wrapped(inner, static_cast<layer>(index), outer);
+      made.full = static_cast<std::uint8_t>(of.full + 1);
+      out.add(step::wrap, made);
     }
   }
   return out;
@@ -536,22 +500,11 @@ constexpr bool operator<(cost a, cost b) {
 // What a step does to the leaf.
 enum class effect : std::uint8_t { none, copy, move };
 
-// Whether a copy or a move of the layers of a thing from one of them on
-// makes the leaf anew: none of those layers shares its element.
-constexpr bool makes_leaf_anew(const thing &of, std::size_t from) {
-  for (std::size_t index = from; index < of.depth; ++index) {
-    if (traits_of(of.layers[index]).shares_element) {
-      return false;
-    }
-  }
-  return true;
-}
-
-constexpr effect effect_of(step kind, const thing &of) {
+constexpr effect effect_of(step kind, const thing &of, const context &with) {
   if (kind == step::element_or_empty_copy) {
-    return makes_leaf_anew(of, 1) ? effect::copy : effect::none;
+    return makes_leaf_anew(of, with, 1) ? effect::copy : effect::none;
   }
-  if ((kind == step::copy || kind == step::wrap) && makes_leaf_anew(of, 0)) {
+  if ((kind == step::copy || kind == step::wrap) && makes_leaf_anew(of, with)) {
     return kind == step::copy ? effect::copy : effect::move;
   }
   return effect::none;
@@ -581,7 +534,8 @@ struct request {
 // layers are, or as a layer that converts to its outermost one. The search
 // it directs reaches what satisfies a request at the same cost as the search
 // of every thing; the test of the semantics checks it for every request.
-constexpr bool may_become(const thing &of, const request &goal) {
+constexpr bool may_become(const thing &of, const request &goal,
+                          const context &with) {
   if (of.depth > goal.depth) {
     return false;
   }
@@ -592,7 +546,8 @@ constexpr bool may_become(const thing &of, const request &goal) {
     }
   }
   return of.depth == 0 || of.layers[0] == goal.layers[offset] ||
-         traits_of(of.layers[0]).converts_to == goal.layers[offset];
+         (with.kind(of.layers[0]).converts &
+          (std::uint32_t{1} << goal.layers[offset])) != 0;
 }
 
 // A thing a derivation reaches, with the copies and the moves of the leaf of
@@ -637,11 +592,12 @@ constexpr search reach(const thing &start, const context &with,
     const transitions_list taken = steps(from.reached, with);
     for (std::size_t index = 0; index < taken.count; ++index) {
       const transition &each = taken.items[index];
-      if (each.kind == step::wrap && !may_become(each.reached, goal)) {
+      if (each.kind == step::wrap && !may_become(each.reached, goal, with)) {
         continue;
       }
-      found.add({each.reached,
-                 affected(from.made, effect_of(each.kind, from.reached))});
+      found.add(
+          {each.reached,
+           affected(from.made, effect_of(each.kind, from.reached, with))});
     }
   }
   return found;
@@ -670,7 +626,7 @@ constexpr bool points(category of) {
 
 constexpr bool has_layers(const thing &of, const request &goal,
                           std::size_t from = 0) {
-  if (of.depth - from != goal.depth) {
+  if (of.depth != goal.depth + from) {
     return false;
   }
   for (std::size_t index = 0; index < goal.depth; ++index) {
@@ -685,13 +641,13 @@ constexpr bool has_layers(const thing &of, const request &goal,
 // owns, or one whose pointee lives long enough.
 constexpr bool points_to(const thing &of, const request &goal, lifetime needed,
                          const context &with) {
-  if (!of.depth || !traits_of(of.layers[0]).adopted ||
+  if (!of.depth || !with.kind(of.layers[0]).adopted ||
       !has_layers(of, goal, 1) || !of.instance) {
     return false;
   }
   if (of.from == origin::made &&
       !(with.limited(limitation::pointer_out_of_made_holder) &&
-        of.contained != layer::none)) {
+        of.contained != no_layer)) {
     return true;
   }
   return static_cast<int>(of.lifetimes[1]) >= static_cast<int>(needed);
@@ -752,7 +708,7 @@ constexpr answer satisfy(const search &found, const request &goal,
     if (slices(of) || of.unconstructed) {
       continue;
     }
-    const bool anew = makes_leaf_anew(of, 0);
+    const bool anew = makes_leaf_anew(of, with);
     if (owned(of.from) && can_move(of, with)) {
       consider(result, affected(each.made, anew ? effect::move : effect::none));
     }
