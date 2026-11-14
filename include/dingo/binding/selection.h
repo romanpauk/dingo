@@ -107,5 +107,12 @@ template <typename Binding> struct runtime_binding_selection {
   }
 };
 
+// A runtime selection in a host and the levels it falls back to before its
+// parent: the level it was made in, which resolves it or answers its miss.
+template <typename Binding, typename Level>
+struct runtime_level_selection : runtime_binding_selection<Binding> {
+  Level *level;
+};
+
 } // namespace detail
 } // namespace dingo

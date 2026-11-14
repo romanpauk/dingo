@@ -61,8 +61,8 @@ inline constexpr bool may_auto_construct_v = may_auto_construct<T>::value;
 template <typename Selection>
 struct is_runtime_binding_selection : std::false_type {};
 
-template <typename Binding>
-struct is_runtime_binding_selection<runtime_binding_selection<Binding>>
+template <typename Binding, typename Level>
+struct is_runtime_binding_selection<runtime_level_selection<Binding, Level>>
     : std::true_type {};
 
 // A static selection carries its status in its type.
@@ -113,7 +113,8 @@ struct default_factory_constructs<Request, R, true> {
 // The request algorithm of the containers. A container is the host of the
 // algorithm; it provides the binding table and the fallbacks:
 //
-// - select_request<Request>(key): a selection of its bindings
+// - select_request<Request>(key): a selection of its bindings; a runtime
+//   selection also names the level it was made in, which resolves it
 // - resolve_selected<Request, R>(selection, scope, context)
 // - ambiguous<Request>(context): rejects an ambiguous selection the host
 //   makes as it compiles; one it makes as it runs is rejected here
@@ -132,10 +133,6 @@ struct default_factory_constructs<Request, R, true> {
 // only the branch they select. Every branch calls the host directly: a static
 // dependency chain instantiates the algorithm once per link, and each call
 // level counts against the template depth of the chain.
-// Whether a host may be a level of the local bindings of a registration,
-// which answers a miss through the container the registration is made in,
-// before any parent: owner_level() is that container, or none.
-template <typename Host> struct has_owner_level : std::false_type {};
 
 struct request_resolution {
   // A no-key collection that is bound as a type resolves as that binding.
@@ -156,16 +153,8 @@ struct request_resolution {
       auto selection = host.template select_request<Request>(key);
       using selection_type = decltype(selection);
       if constexpr (is_runtime_binding_selection<selection_type>::value) {
-        if (selection.status == binding_status::found) {
-          return host.template resolve_selected<Request, R>(selection, scope,
-                                                            context);
-        }
-        if (selection.status == binding_status::ambiguous) {
-          throw_type_ambiguous(described_type_v<typename Request::lookup_type>,
-                               context);
-        }
-        return resolve_miss<Request, R, collection>(host, scope, context,
-                                                    origin, key);
+        return resolve_level<Request, R>(selection, scope, context, origin,
+                                         key);
       } else if constexpr (selection_type::status == binding_status::found) {
         return host.template resolve_selected<Request, R>(selection, scope,
                                                           context);
@@ -266,6 +255,25 @@ struct request_resolution {
         key_index(key));
   }
 
+  // Resolves a runtime selection in the level it was made in: the binding it
+  // found, or else what a miss of that level is answered with.
+  template <typename Request, typename R, typename Selection, typename Context,
+            typename Origin, typename LookupKey, typename Scope>
+  static R resolve_level(const Selection &selection, Scope scope,
+                         Context &context, Origin &origin, LookupKey &key) {
+    auto &level = *selection.level;
+    if (selection.status == binding_status::found) {
+      return level.template resolve_selected<Request, R>(selection, scope,
+                                                         context);
+    }
+    if (selection.status == binding_status::ambiguous) {
+      throw_type_ambiguous(described_type_v<typename Request::lookup_type>,
+                           context);
+    }
+    return resolve_miss<Request, R, collection_traits<R>::is_collection>(
+        level, scope, context, origin, key);
+  }
+
   // A request no binding of the host answers: a collection is constructed
   // of what the host binds, anything else is missing.
   template <typename Request, typename R, bool Collection, typename Host,
@@ -354,13 +362,6 @@ private:
             typename LookupKey, typename Scope>
   static R fall_back(Host &host, Scope scope, Context &context, Origin &origin,
                      LookupKey &key) {
-    if constexpr (has_owner_level<Host>::value) {
-      if (auto *owner = host.owner_level()) {
-        return owner->template resolve<typename Request::user_type,
-                                       Request::removes_rvalue_references>(
-            scope, context, origin, key);
-      }
-    }
     if constexpr (Host::template parent_serves<Lookup, LookupKey>()) {
       if (auto *parent = host.parent()) {
         return parent->template resolve<typename Request::user_type,

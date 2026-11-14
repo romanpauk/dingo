@@ -191,9 +191,10 @@ containers thus decide by one implementation. The static container applies the
 plan through typed steps, which the compiler inlines.
 
 The containers differ in their binding table and their selection, not in the
-algorithm. Both containers give the algorithm the same hooks. A registration
-container of local bindings is a runtime container, and gives it one more: the
-container it falls back to before any parent.
+algorithm. Both containers give the algorithm the same hooks. A runtime
+selection also names the level it was made in: a registration container of local
+bindings selects in itself and in the containers it falls back to, before any
+parent, and the algorithm resolves the selection, or its miss, in that level.
 
 ### Atomic Container Changes
 
@@ -287,7 +288,8 @@ containers it falls back to. The selection is of no request type. Only the keys
 of the request, the conversion of the resolved address to the requested type,
 and a miss, which falls back to the parent or constructs the type, are functions
 of the request type. A collection is enumerated through the lookup of its
-element, and only the append of each element is of its type.
+element, in the first of these containers that binds an element of it, and only
+the append of each element is of its type.
 
 A registration is committed by the engine too. Its typed part is constant data,
 the layout of its record and the node and the descriptor of each interface, a

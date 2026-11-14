@@ -81,6 +81,11 @@ protected:
                                 runtime_context_type>;
   using runtime_selection =
       detail::runtime_binding_selection<runtime_binding_interface_type>;
+  // The selection of a request in the container and in the levels it falls
+  // back to before any parent, and the last level it was selected in.
+  using level_selection =
+      detail::runtime_level_selection<runtime_binding_interface_type,
+                                      self_type>;
 
   using normalized_lookup_entries =
       detail::normalize_lookup_definitions_t<lookup_definition_type>;
@@ -789,34 +794,47 @@ protected:
     using collection_type = collection_traits<T>;
     static_assert(collection_type::is_collection,
                   "missing collection_traits specialization for type T");
-    const std::size_t count = count_collection<T>(key);
+    const collection_source source = collection_bindings<T>(key);
     // A declared collection lookup with no rows is a valid empty collection.
-    if (count == 0 &&
+    if (source.count == 0 &&
         !lookup_index_route<typename collection_type::resolve_type,
                             LookupKey>::has_explicit_collection_lookup) {
       throw detail::make_collection_type_not_found_exception<
           T, typename collection_type::resolve_type>();
     }
     T results;
-    collection_type::reserve(results, count);
-    append_collection(scope, results, context, std::forward<Fn>(fn),
-                      std::move(key));
+    collection_type::reserve(results, source.count);
+    append_bindings(source.state, results, scope, context, std::forward<Fn>(fn),
+                    std::move(key));
     return results;
   }
 
   template <typename T, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   std::size_t count_collection(LookupKey key) {
-    return count_collection<T>(runtime_bindings(), std::move(key));
+    return collection_bindings<T>(key).count;
   }
 
-  template <typename T, typename Fn, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t append_collection(construction_scope scope, T &results,
-                                runtime_context_type &context, Fn &&fn,
-                                LookupKey key) {
-    return append_bindings(runtime_bindings(), results, scope, context,
-                           std::forward<Fn>(fn), std::move(key));
+  // The bindings a collection is made of, and how many of them: those of the
+  // container, or of the first level it falls back to that binds an element
+  // of the collection, as a request selects a binding.
+  struct collection_source {
+    runtime_bindings_state *state;
+    std::size_t count;
+  };
+
+  template <typename T, typename LookupKey>
+  collection_source collection_bindings(const LookupKey &key) {
+    self_type *level = this;
+    for (;;) {
+      auto *state = level->runtime_bindings();
+      const std::size_t count = count_collection<T>(state, key);
+      self_type *owner = level->owner_level();
+      if (count != 0 || owner == nullptr) {
+        return {state, count};
+      }
+      level = owner;
+    }
   }
 
   // The level of the local bindings of a registration, made as it is first
@@ -1196,9 +1214,9 @@ private:
   }
 
   template <typename Request, typename LookupKey>
-  runtime_selection select_request(const LookupKey &key) {
+  level_selection select_request(const LookupKey &key) {
     static_assert(!std::is_const_v<typename Request::value_type>);
-    return select_key<Request>(key, &self_type::select_record);
+    return select_key<Request>(key, &self_type::select_levels);
   }
 
   // The binding of a selection resolves the request, through the cache of
@@ -1286,13 +1304,6 @@ private:
            !collection_traits<R>::is_collection;
   }
 
-  // The selection of a request in the container and in the levels it falls
-  // back to before any parent, and the last level it was selected in.
-  struct level_selection {
-    runtime_selection selection;
-    self_type *last;
-  };
-
   // Selects a request of its data in the container, and in the levels of
   // local bindings it falls back to: the first level that binds it,
   // ambiguously or not, or else the last one. It is of no request type.
@@ -1317,32 +1328,12 @@ private:
   R resolve_local(construction_scope scope, runtime_context_type &context,
                   Origin &origin, LookupKey key) {
     if constexpr (!collection_traits<R>::is_collection) {
-      return resolve_level<Request, R>(
-          select_key<Request>(key, &self_type::select_levels), scope, context,
-          origin, key);
+      return detail::request_resolution::resolve_level<Request, R>(
+          select_request<Request>(key), scope, context, origin, key);
     } else {
       return detail::request_resolution::resolve<Request, R>(
           *this, scope, context, origin, std::move(key));
     }
-  }
-
-  // Resolves a request of its selection in the levels: the binding found in
-  // the last level it was selected in, or else what the algorithm answers a
-  // miss of that level with.
-  template <typename Request, typename R, typename Origin, typename LookupKey>
-  R resolve_level(const level_selection &found, construction_scope scope,
-                  runtime_context_type &context, Origin &origin,
-                  LookupKey &key) {
-    if (found.selection.status == detail::binding_status::found) {
-      return found.last->template resolve_selected<Request, R>(found.selection,
-                                                               scope, context);
-    }
-    if (found.selection.status == detail::binding_status::ambiguous) {
-      detail::throw_type_ambiguous(
-          detail::described_type_v<typename Request::lookup_type>, context);
-    }
-    return detail::request_resolution::resolve_miss<Request, R, false>(
-        *found.last, scope, context, origin, key);
   }
 
   // A request that may be cached reads the cache of its selected binding
@@ -1351,19 +1342,18 @@ private:
   R resolve_entry(LookupKey key) {
     using interface_type = typename Request::interface_type;
     if constexpr (!collection_traits<R>::is_collection) {
-      const level_selection found =
-          select_key<Request>(key, &self_type::select_levels);
+      const level_selection found = select_request<Request>(key);
       if constexpr (is_cacheable<Request, R>()) {
-        auto result = this->lookup_cache(found.selection,
-                                         detail::cache::key<interface_type>());
+        auto result =
+            this->lookup_cache(found, detail::cache::key<interface_type>());
         if (result.hit) {
           return detail::resolved_value<interface_type>(
               {result.address, resolved_address::access_kind::borrow});
         }
       }
       return transact([&](runtime_context_type &context) -> R {
-        return resolve_level<Request, R>(found, entry_scope(caller_scope),
-                                         context, *this, key);
+        return detail::request_resolution::resolve_level<Request, R>(
+            found, entry_scope(caller_scope), context, *this, key);
       });
     } else {
       return transact([&](runtime_context_type &context) -> R {
@@ -1408,18 +1398,15 @@ public:
   detail::binding_status binding_status(IdType &&id) {
     using request = request_type<Request>;
     auto key = detail::make_lookup_key(std::forward<IdType>(id));
-    auto status = this->template select_request<request>(key).status;
-    if (auto *owner = this->owner_level();
-        owner && status == detail::binding_status::not_found) {
-      return owner->template binding_status<Request>(key);
-    }
+    const level_selection found = this->template select_request<request>(key);
     if constexpr (parent_serves<typename request::lookup_type,
                                 decltype(key)>()) {
-      if (parent_ && status == detail::binding_status::not_found) {
-        return parent_->template binding_status<Request>(key);
+      auto *parent = found.level->parent_;
+      if (parent && found.status == detail::binding_status::not_found) {
+        return parent->template binding_status<Request>(key);
       }
     }
-    return status;
+    return found.status;
   }
 
 private:
@@ -1492,12 +1479,6 @@ public:
 private:
   parent_container_type *parent_ = nullptr;
 };
-
-template <typename ContainerTraits, typename Allocator,
-          typename ParentContainer>
-struct detail::has_owner_level<
-    detail::runtime_container_impl<ContainerTraits, Allocator, ParentContainer>>
-    : std::true_type {};
 
 } // namespace dingo
 
