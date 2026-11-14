@@ -75,8 +75,12 @@ PROBE_LIMITS = {
     "probe_runtime_resolution_unique_wrapper_config": {
         "default": None,
     },
+    # GCC 16 inlines more into the static probes of this file when its
+    # runtime probes instantiate less: they then have the size they have
+    # compiled alone.
     "probe_static_resolution_interface_handle": {
         "default": 0x180,
+        "gcc16": 0x1B0,
         "clang": 0x1a0,
         "clang_arm64": 0x1d0,
     },
@@ -87,7 +91,7 @@ PROBE_LIMITS = {
     # what rolls back the shared cells it resolves first.
     "probe_static_resolution_collection_sum": {
         "default": 0x500,
-        "gcc16": 0x550,
+        "gcc16": 0x6D8,
     },
     "probe_runtime_resolution_collection_sum": {
         "default": None,

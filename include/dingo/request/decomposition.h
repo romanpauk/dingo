@@ -95,11 +95,6 @@ struct request_type {
   static constexpr bool removes_rvalue_references = RemoveRvalueReferences;
 };
 
-// The value a reference or a pointer request refers to.
-template <typename Request>
-using referred_value_t =
-    std::remove_cv_t<std::remove_pointer_t<std::remove_reference_t<Request>>>;
-
 // Whether what a request resolves may outlive the resolution: a reference or
 // a pointer.
 template <typename Request>

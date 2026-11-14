@@ -246,69 +246,6 @@ void place_adopted_pointer(Scope scope, Context &context, Pointer pointer) {
   context.template construct<decltype(owner)>(scope, std::move(owner));
 }
 
-// The shapes of request each derivation applies to.
-template <typename Request>
-inline constexpr bool refers_request_v =
-    std::is_lvalue_reference_v<Request> || std::is_pointer_v<Request>;
-
-template <typename Request> constexpr bool places_shape() {
-  if constexpr (refers_request_v<Request>) {
-    using value_type = referred_value_t<Request>;
-    if constexpr (std::is_object_v<value_type> &&
-                  is_complete<value_type>::value) {
-      return !std::is_abstract_v<value_type> && !std::is_array_v<value_type>;
-    } else {
-      return false;
-    }
-  } else {
-    return false;
-  }
-}
-
-template <typename Request> constexpr bool takes_shape() {
-  if constexpr (!std::is_lvalue_reference_v<Request> &&
-                !std::is_pointer_v<Request>) {
-    using value_type = remove_cvref_t<Request>;
-    if constexpr (std::is_object_v<value_type> &&
-                  is_complete<value_type>::value) {
-      return !std::is_array_v<value_type> &&
-             std::is_constructible_v<value_type, value_type &&>;
-    } else {
-      return false;
-    }
-  } else {
-    return false;
-  }
-}
-
-// A value a request asks for: an object, not a reference to one nor a
-// pointer.
-template <typename Request> constexpr bool value_shape() {
-  if constexpr (!std::is_reference_v<Request> &&
-                !std::is_pointer_v<remove_cvref_t<Request>>) {
-    using value_type = remove_cvref_t<Request>;
-    if constexpr (std::is_object_v<value_type> &&
-                  is_complete<value_type>::value) {
-      return !std::is_array_v<value_type> && !std::is_abstract_v<value_type>;
-    } else {
-      return false;
-    }
-  } else {
-    return false;
-  }
-}
-
-// What a reference or a pointer request refers to: an object, not an array.
-// It may be only declared: its address is taken, nothing more.
-template <typename Request> constexpr bool refers_object_shape() {
-  if constexpr (refers_request_v<Request>) {
-    using value_type = referred_value_t<Request>;
-    return std::is_object_v<value_type> && !std::is_array_v<value_type>;
-  } else {
-    return false;
-  }
-}
-
 // The sole owner a sharing handle a request asks for converts from: the
 // owning handle of its element whose sharing handle it is, or void.
 template <typename Shared, typename Handles> struct sole_owner_of {
@@ -356,40 +293,109 @@ public:
   using type = typename of<>::type;
 };
 
-// The derivations whose shape a request has, told of the request at once.
-template <typename Request> constexpr flags<derivation> derivation_shapes() {
-  flags<derivation> shapes;
-  if constexpr (std::is_lvalue_reference_v<Request> &&
-                std::is_object_v<std::remove_reference_t<Request>>) {
-    shapes.set(
-        derivation::adopt,
-        is_complete<std::remove_cv_t<std::remove_reference_t<Request>>>::value);
-  }
-  shapes.set(derivation::keep, refers_to_sharing_v<Request>);
-  shapes.set(derivation::place, places_shape<Request>());
-  shapes.set(derivation::take, takes_shape<Request>());
-  shapes.set(derivation::refer, refers_object_shape<Request>());
-  // The address of a pointer is not taken as a pointer to a pointer of
-  // another qualification, which would let it point to what it must not.
-  if constexpr (std::is_pointer_v<Request> && refers_object_shape<Request>()) {
-    shapes.set(derivation::address,
-               !std::is_pointer_v<referred_value_t<Request>>);
-  }
-  if constexpr (value_shape<Request>()) {
-    shapes.set(derivation::move,
-               std::is_move_constructible_v<remove_cvref_t<Request>>);
-    shapes.set(derivation::copy,
-               is_copy_constructible_v<remove_cvref_t<Request>>);
-  }
-  if constexpr (!std::is_lvalue_reference_v<Request> &&
-                !std::is_pointer_v<Request>) {
-    shapes.set(derivation::convert,
-               !std::is_void_v<typename converted_from<Request>::type>);
-  }
-  shapes.set(derivation::compose,
-             !refers_request_v<Request> && composes_v<Request>);
-  return shapes;
+// What a request is of, and its shape: the object a reference refers to,
+// the object a pointer points to, of any qualification of the pointer, or
+// the object a value is. A request of an object of any qualification is one
+// of the eight shapes of it, as const or not, of the object as volatile or
+// not.
+enum class request_shape : unsigned char {
+  value,
+  const_value,
+  lvalue,
+  const_lvalue,
+  rvalue,
+  const_rvalue,
+  pointer,
+  const_pointer
+};
+
+inline constexpr std::size_t request_shape_count = 8;
+
+template <typename Request> struct request_object {
+private:
+  using qualified = std::conditional_t<
+      std::is_reference_v<Request>, std::remove_reference_t<Request>,
+      std::conditional_t<std::is_pointer_v<Request>,
+                         std::remove_pointer_t<Request>, Request>>;
+  static constexpr unsigned kind = std::is_lvalue_reference_v<Request>   ? 2
+                                   : std::is_rvalue_reference_v<Request> ? 4
+                                   : std::is_pointer_v<Request>          ? 6
+                                                                         : 0;
+
+public:
+  using type = std::remove_cv_t<qualified>;
+  static constexpr bool is_volatile = std::is_volatile_v<qualified>;
+  static constexpr request_shape shape =
+      static_cast<request_shape>(kind + std::is_const_v<qualified>);
+};
+
+template <typename Request>
+using request_object_t = typename request_object<Request>::type;
+
+// Whether a request of a shape refers to the object: by a reference or by a
+// pointer.
+constexpr bool refers_shape(request_shape shape) {
+  return shape == request_shape::lvalue ||
+         shape == request_shape::const_lvalue ||
+         shape == request_shape::pointer ||
+         shape == request_shape::const_pointer;
 }
+
+constexpr bool value_shape(request_shape shape) {
+  return shape == request_shape::value || shape == request_shape::const_value;
+}
+
+// What an object is, which the derivations of the requests of it depend on:
+// whether it can exist, is complete, an array or a pointer; whether a value
+// of it can be placed, and, of a pointer, what it points to placed as one;
+// whether it is constructed of an rvalue of it, moved or copied; whether it
+// holds a copy that shares what it was copied of; whether a binding composes
+// it of what it holds, or converts it of a sole owner. It is told once of
+// each object, of which each shape of a request of it tells its derivations.
+struct object_traits {
+  bool object;
+  bool complete;
+  bool array;
+  bool pointer;
+  bool places;
+  bool takes;
+  bool moves;
+  bool copies;
+  bool shares;
+  bool composes;
+  bool converts;
+};
+
+template <typename Object> constexpr object_traits make_object_traits() {
+  object_traits traits{};
+  traits.object = std::is_object_v<Object>;
+  traits.array = std::is_array_v<Object>;
+  traits.pointer = std::is_pointer_v<Object>;
+  if constexpr (std::is_object_v<Object>) {
+    traits.complete = is_complete<Object>::value;
+    if constexpr (is_complete<Object>::value && !std::is_array_v<Object>) {
+      traits.places = !std::is_abstract_v<Object> &&
+                      (!std::is_pointer_v<Object> ||
+                       std::is_object_v<std::remove_pointer_t<Object>>);
+      traits.takes = std::is_constructible_v<Object, Object &&>;
+      if constexpr (!std::is_abstract_v<Object>) {
+        traits.moves = std::is_move_constructible_v<Object>;
+        traits.copies = is_copy_constructible_v<Object>;
+      }
+    }
+    if constexpr (!std::is_pointer_v<Object>) {
+      if constexpr (type_traits<Object>::enabled) {
+        traits.shares = holds_sharing_copy_v<Object>;
+      }
+      traits.composes = composes_v<Object>;
+    }
+    traits.converts = !std::is_void_v<typename converted_from<Object>::type>;
+  }
+  return traits;
+}
+
+template <typename Object>
+inline constexpr object_traits object_traits_v = make_object_traits<Object>();
 
 // What a request is, which the derivation that applies to it depends on: the
 // derivations whose shape it has, whether it is a wrapper a binding composes,
@@ -402,10 +408,33 @@ struct request_facts {
   bool refers_to_sharing;
 };
 
+// The facts of a request of a shape of an object. The address of a pointer
+// is not taken as a pointer to a pointer of another qualification, which
+// would let it point to what it must not.
+constexpr request_facts shape_facts(object_traits object, request_shape shape) {
+  const bool refers = refers_shape(shape);
+  const bool lvalue =
+      shape == request_shape::lvalue || shape == request_shape::const_lvalue;
+  const bool pointer =
+      shape == request_shape::pointer || shape == request_shape::const_pointer;
+  const bool refers_object = refers && object.object && !object.array;
+  flags<derivation> shapes;
+  shapes.set(derivation::adopt, lvalue && object.complete);
+  shapes.set(derivation::keep, refers && object.shares);
+  shapes.set(derivation::place, refers && object.places);
+  shapes.set(derivation::take, !refers && object.takes);
+  shapes.set(derivation::refer, refers_object);
+  shapes.set(derivation::address, pointer && refers_object && !object.pointer);
+  shapes.set(derivation::move, value_shape(shape) && object.moves);
+  shapes.set(derivation::copy, value_shape(shape) && object.copies);
+  shapes.set(derivation::convert, !refers && object.converts);
+  shapes.set(derivation::compose, !refers && object.composes);
+  return {shapes, object.composes, refers && object.shares};
+}
+
 template <typename Request>
-inline constexpr request_facts request_facts_v{derivation_shapes<Request>(),
-                                               composes_v<Request>,
-                                               refers_to_sharing_v<Request>};
+inline constexpr request_facts request_facts_v = shape_facts(
+    object_traits_v<request_object_t<Request>>, request_object<Request>::shape);
 
 template <derivation Derivation, typename Request>
 inline constexpr bool derivation_shape_v =
@@ -425,7 +454,7 @@ template <typename Request> struct derived_request<derivation::keep, Request> {
 };
 
 template <typename Request> struct derived_request<derivation::place, Request> {
-  using type = referred_value_t<Request>;
+  using type = request_object_t<Request>;
 };
 
 template <typename Request> struct derived_request<derivation::take, Request> {
@@ -433,7 +462,7 @@ template <typename Request> struct derived_request<derivation::take, Request> {
 };
 
 template <typename Request> struct derived_request<derivation::refer, Request> {
-  using type = std::remove_cv_t<referred_value_t<Request>> &&;
+  using type = request_object_t<Request> &&;
 };
 
 template <typename Request>
@@ -549,13 +578,18 @@ constexpr derivation derive_request(derivation_facts facts) {
 // its instance and places what it makes, whose values do not slice what it
 // stores, which constructs what it publishes first, and which publishes the
 // source of every derivation.
+constexpr bool derivable(request_facts request) {
+  return derive_request(
+             request,
+             {flags<binding_trait>::of(binding_trait::keeps,
+                                       binding_trait::places),
+              flags<derivation>::of(derivation::adopt, derivation::take,
+                                    derivation::refer, derivation::address,
+                                    derivation::move, derivation::copy,
+                                    derivation::convert)}) != derivation::none;
+}
+
 template <typename Request>
-inline constexpr bool derivable_v =
-    derive_request<Request>(
-        {flags<binding_trait>::of(binding_trait::keeps, binding_trait::places),
-         flags<derivation>::of(derivation::adopt, derivation::take,
-                               derivation::refer, derivation::address,
-                               derivation::move, derivation::copy,
-                               derivation::convert)}) != derivation::none;
+inline constexpr bool derivable_v = derivable(request_facts_v<Request>);
 } // namespace detail
 } // namespace dingo

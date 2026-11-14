@@ -84,7 +84,7 @@ T resolve_binding_request(construction_scope scope, Binding &binding,
 
 namespace detail {
 template <typename T, typename RTTI, typename Binding, typename Context>
-struct request_node_of;
+constexpr const request_node *request_node_for();
 
 template <typename RTTI, typename Binding, typename Context>
 resolved_address derive_erased(void *erased, const derivation_site &site,
@@ -97,7 +97,7 @@ template <typename T, typename RTTI, typename Binding, typename Context>
 instance_request<RTTI> erased_request() {
   if constexpr (derivable_v<T>) {
     return {described_type_v<T>, &derive_erased<RTTI, Binding, Context>,
-            &request_node_of<T, RTTI, Binding, Context>::value};
+            request_node_for<T, RTTI, Binding, Context>()};
   } else {
     return {described_type_v<T>};
   }
@@ -286,7 +286,7 @@ resolved_address derive_as(const derivation_site &site,
 
 // Derives a request of a wrapper: one a binding keeps with it, converts of
 // the sole owner it makes, or composes of what it holds. These derivations
-// are made of the type of the request, which wrapper_request_t gives.
+// are made of the type of the wrapper, as make_table_parts gives it.
 template <typename T, typename RTTI, typename Binding, typename Context>
 resolved_address derive_wrapper(void *erased, const derivation_site &site,
                                 construction_scope scope, void *erased_context,
@@ -314,26 +314,20 @@ resolved_address derive_wrapper(void *erased, const derivation_site &site,
   throw_type_not_convertible(site.requested, site.registered, context);
 }
 
-// The request whose wrapper derivations a request of T shares, so that the
-// requests of one wrapper share their code: a reference or a pointer keeps
-// the wrapper, as each of them does; a value converts or composes it, as a
-// value of any qualification does, and as an rvalue reference does unless it
-// composes of another request than the value does.
-template <typename T> constexpr auto wrapper_request() {
-  using wrapper = composed_type_t<T>;
-  if constexpr (refers_request_v<T>) {
-    return request_tag<wrapper &>{};
-  } else if constexpr (!derivation_shape_v<derivation::compose, T> ||
-                       std::is_same_v<composed_inner_t<T>,
-                                      composed_inner_t<wrapper>>) {
-    return request_tag<wrapper>{};
+// The request whose wrapper derivations an rvalue reference to a wrapper
+// shares: the value of it, unless it composes of another request than the
+// value does. A reference or a pointer to the wrapper shares those of an
+// lvalue reference to it, and a value of any qualification those of the
+// value.
+template <typename Wrapper> constexpr auto rvalue_wrapper_request() {
+  if constexpr (derivation_shape_v<derivation::compose, Wrapper> &&
+                !std::is_same_v<composed_inner_t<Wrapper &&>,
+                                composed_inner_t<Wrapper>>) {
+    return request_tag<Wrapper &&>{};
   } else {
-    return request_tag<wrapper &&>{};
+    return request_tag<Wrapper>{};
   }
 }
-
-template <typename T>
-using wrapper_request_t = typename decltype(wrapper_request<T>())::type;
 
 // The operations of the object a request is or refers to, erased of its
 // type: its size and its alignment; how a value placed for the request is
@@ -379,9 +373,9 @@ template <typename T> void release_object(void *owner) noexcept {
   }
 }
 
-// The operations of T a request needs: Places where a value of T may be
-// placed for it, Owns where a pointer to T may be handed over to it.
-template <typename T, bool Places, bool Owns>
+// The operations of T the requests of it need: Places where a value of T may
+// be placed for one; a pointer to T may be handed over to one.
+template <typename T, bool Places>
 constexpr object_operations make_object_operations() {
   object_operations operations{sizeof(T), alignof(T), nullptr,
                                nullptr,   nullptr,    nullptr};
@@ -396,15 +390,13 @@ constexpr object_operations make_object_operations() {
       operations.destroy = &destroy_object<T>;
     }
   }
-  if constexpr (Owns) {
-    operations.release = &release_object<T>;
-  }
+  operations.release = &release_object<T>;
   return operations;
 }
 
-template <typename T, bool Places, bool Owns>
+template <typename T, bool Places>
 inline constexpr object_operations object_operations_v =
-    make_object_operations<T, Places, Owns>();
+    make_object_operations<T, Places>();
 
 inline constexpr std::size_t derivation_count =
     static_cast<std::size_t>(derivation::compose) + 1;
@@ -433,90 +425,197 @@ struct request_node {
   wrap_function wrap;
 };
 
-template <typename T, typename RTTI, typename Binding, typename Context>
-struct request_node_of {
-  static const request_node value;
+// What the nodes of the requests of an object are made of, of its type: the
+// descriptors of the object as the table qualifies it, as is and const; the
+// sole owner a sharing handle of it converts of; its operations; the
+// derivations of it as a wrapper, kept for a reference or a pointer,
+// converted or composed for a value and for an rvalue reference; the table of
+// the object as not volatile, which a derivation other than adopting a
+// pointer or taking an address resolves through; and the node of a value of
+// it, which is a pointer of the table of what it points to when it is a
+// pointer.
+struct table_parts {
+  const type_descriptor *object;
+  const type_descriptor *const_object;
+  type_descriptor owner;
+  const object_operations *operations;
+  request_node::wrap_function keep;
+  request_node::wrap_function value;
+  request_node::wrap_function rvalue;
+  const request_node *plain;
+  const request_node *placed;
 };
 
-// Whether a derivation is of a wrapper, which is made of the type of the
-// request.
-constexpr bool derives_wrapper(derivation how) {
-  return how == derivation::keep || how == derivation::convert ||
-         how == derivation::compose;
+constexpr type_descriptor with_reference(type_descriptor descriptor,
+                                         type_reference_kind reference) {
+  descriptor.reference = reference;
+  return descriptor;
 }
 
-template <derivation How, typename T, typename RTTI, typename Binding,
-          typename Context>
-constexpr const request_node *through_node() {
-  if constexpr (derivation_shape_v<How, T> && !derives_wrapper(How)) {
-    return &request_node_of<derived_request_t<How, T>, RTTI, Binding,
-                            Context>::value;
-  } else {
-    return nullptr;
+constexpr type_descriptor shape_descriptor(const table_parts &parts,
+                                           request_shape shape) {
+  const bool is_const = static_cast<unsigned>(shape) % 2 != 0;
+  const type_descriptor *object = is_const ? parts.const_object : parts.object;
+  switch (shape) {
+  case request_shape::lvalue:
+  case request_shape::const_lvalue:
+    return with_reference(*object, type_reference_kind::lvalue);
+  case request_shape::rvalue:
+  case request_shape::const_rvalue:
+    return with_reference(*object, type_reference_kind::rvalue);
+  case request_shape::pointer:
+  case request_shape::const_pointer:
+    return {
+        {}, nullptr, type_cv_flags::none, type_reference_kind::none, object};
+  default:
+    return *object;
   }
 }
 
-template <typename T, typename RTTI, typename Binding, typename Context>
-constexpr std::array<const request_node *, derivation_count> through_nodes() {
-  return {through_node<derivation::none, T, RTTI, Binding, Context>(),
-          through_node<derivation::adopt, T, RTTI, Binding, Context>(),
-          through_node<derivation::keep, T, RTTI, Binding, Context>(),
-          through_node<derivation::refer, T, RTTI, Binding, Context>(),
-          through_node<derivation::address, T, RTTI, Binding, Context>(),
-          through_node<derivation::place, T, RTTI, Binding, Context>(),
-          through_node<derivation::take, T, RTTI, Binding, Context>(),
-          through_node<derivation::move, T, RTTI, Binding, Context>(),
-          through_node<derivation::copy, T, RTTI, Binding, Context>(),
-          through_node<derivation::convert, T, RTTI, Binding, Context>(),
-          through_node<derivation::compose, T, RTTI, Binding, Context>()};
+constexpr const request_node *shape_row(const request_node *table,
+                                        request_shape shape) {
+  return table + static_cast<std::size_t>(shape);
 }
 
-template <typename T> constexpr const object_operations *object_of() {
-  constexpr bool places = derivation_shape_v<derivation::place, T>;
-  constexpr bool owns = derivation_shape_v<derivation::adopt, T> ||
-                        derivation_shape_v<derivation::take, T>;
-  if constexpr (places || owns) {
-    return &object_operations_v<referred_value_t<T>, places, owns>;
-  } else {
-    return nullptr;
+// The node of a request of a shape of an object, in the table of its
+// qualification. A request that places a value or owns a pointer has the
+// operations of the object.
+constexpr request_node shape_node(object_traits object,
+                                  const table_parts &parts, request_shape shape,
+                                  const request_node *table) {
+  const request_facts facts = shape_facts(object, shape);
+  const flags<derivation> shapes = facts.shapes;
+  const bool is_const = static_cast<unsigned>(shape) % 2 != 0;
+  request_node node{shape_descriptor(parts, shape),
+                    facts,
+                    derivable(facts),
+                    shapes.has(derivation::convert) ? parts.owner
+                                                    : type_descriptor{},
+                    nullptr,
+                    {},
+                    nullptr,
+                    nullptr};
+  if (shapes.has(derivation::place) || shapes.has(derivation::adopt) ||
+      shapes.has(derivation::take)) {
+    node.object = parts.operations;
   }
-}
-
-template <typename T, typename RTTI, typename Binding, typename Context>
-constexpr const request_node *referred_node() {
-  if constexpr (derivation_shape_v<derivation::place, T>) {
-    if constexpr (composes_v<referred_value_t<T>>) {
-      return &request_node_of<referred_value_t<T> &&, RTTI, Binding,
-                              Context>::value;
-    } else {
-      return nullptr;
+  const request_node *through[derivation_count] = {
+      nullptr,
+      shape_row(table, is_const ? request_shape::const_pointer
+                                : request_shape::pointer),
+      nullptr,
+      shape_row(parts.plain, request_shape::rvalue),
+      shape_row(table,
+                is_const ? request_shape::const_lvalue : request_shape::lvalue),
+      parts.placed,
+      shape_row(parts.plain, request_shape::pointer),
+      shape_row(parts.plain, request_shape::rvalue),
+      shape_row(parts.plain, request_shape::const_lvalue),
+      nullptr,
+      nullptr};
+  for (std::size_t how = 0; how < derivation_count; ++how) {
+    if (shapes.has(static_cast<derivation>(how))) {
+      node.through[how] = through[how];
     }
-  } else {
-    return nullptr;
   }
+  if (shapes.has(derivation::place) && object.composes) {
+    node.referred = shape_row(parts.plain, request_shape::rvalue);
+  }
+  if (shapes.has(derivation::keep)) {
+    node.wrap = parts.keep;
+  } else if (shapes.has(derivation::convert) ||
+             shapes.has(derivation::compose)) {
+    node.wrap = value_shape(shape) ? parts.value : parts.rvalue;
+  }
+  return node;
 }
 
-template <typename T, typename RTTI, typename Binding, typename Context>
-constexpr request_node::wrap_function wrapper_of() {
-  if constexpr (derivation_shape_v<derivation::keep, T> ||
-                derivation_shape_v<derivation::convert, T> ||
-                derivation_shape_v<derivation::compose, T>) {
-    return &derive_wrapper<wrapper_request_t<T>, RTTI, Binding, Context>;
-  } else {
-    return nullptr;
+// The nodes of the requests of the shapes of an object, as volatile or not.
+template <typename Object, bool Volatile, typename RTTI, typename Binding,
+          typename Context>
+struct request_table {
+  static const request_node nodes[request_shape_count];
+};
+
+template <typename Object, bool Volatile, typename RTTI, typename Binding,
+          typename Context>
+constexpr table_parts make_table_parts() {
+  using qualified = std::conditional_t<Volatile, volatile Object, Object>;
+  constexpr object_traits traits = object_traits_v<Object>;
+  table_parts parts{&type_descriptor_v<qualified>,
+                    &type_descriptor_v<const qualified>,
+                    {},
+                    nullptr,
+                    nullptr,
+                    nullptr,
+                    nullptr,
+                    request_table<Object, false, RTTI, Binding, Context>::nodes,
+                    nullptr};
+  if constexpr (traits.converts) {
+    parts.owner = described_type_v<typename converted_from<Object>::type>;
   }
+  if constexpr (traits.complete) {
+    parts.operations = &object_operations_v<Object, traits.places>;
+  }
+  if constexpr (traits.places && std::is_pointer_v<Object>) {
+    parts.placed = request_node_for<Object, RTTI, Binding, Context>();
+  } else if constexpr (traits.places) {
+    parts.placed = shape_row(parts.plain, request_shape::value);
+  }
+  if constexpr (traits.shares) {
+    parts.keep = &derive_wrapper<Object &, RTTI, Binding, Context>;
+  }
+  if constexpr (traits.converts || traits.composes) {
+    parts.value = &derive_wrapper<Object, RTTI, Binding, Context>;
+    parts.rvalue = &derive_wrapper<
+        typename decltype(rvalue_wrapper_request<Object>())::type, RTTI,
+        Binding, Context>;
+  }
+  return parts;
 }
 
+template <typename Object, bool Volatile, typename RTTI, typename Binding,
+          typename Context>
+inline constexpr table_parts table_parts_v =
+    make_table_parts<Object, Volatile, RTTI, Binding, Context>();
+
+template <typename Object, bool Volatile, typename RTTI, typename Binding,
+          typename Context>
+const request_node request_table<Object, Volatile, RTTI, Binding,
+                                 Context>::nodes[request_shape_count] = {
+    shape_node(object_traits_v<Object>,
+               table_parts_v<Object, Volatile, RTTI, Binding, Context>,
+               request_shape::value, nodes),
+    shape_node(object_traits_v<Object>,
+               table_parts_v<Object, Volatile, RTTI, Binding, Context>,
+               request_shape::const_value, nodes),
+    shape_node(object_traits_v<Object>,
+               table_parts_v<Object, Volatile, RTTI, Binding, Context>,
+               request_shape::lvalue, nodes),
+    shape_node(object_traits_v<Object>,
+               table_parts_v<Object, Volatile, RTTI, Binding, Context>,
+               request_shape::const_lvalue, nodes),
+    shape_node(object_traits_v<Object>,
+               table_parts_v<Object, Volatile, RTTI, Binding, Context>,
+               request_shape::rvalue, nodes),
+    shape_node(object_traits_v<Object>,
+               table_parts_v<Object, Volatile, RTTI, Binding, Context>,
+               request_shape::const_rvalue, nodes),
+    shape_node(object_traits_v<Object>,
+               table_parts_v<Object, Volatile, RTTI, Binding, Context>,
+               request_shape::pointer, nodes),
+    shape_node(object_traits_v<Object>,
+               table_parts_v<Object, Volatile, RTTI, Binding, Context>,
+               request_shape::const_pointer, nodes)};
+
+// The node of a request: of its shape, in the table of its object.
 template <typename T, typename RTTI, typename Binding, typename Context>
-const request_node request_node_of<T, RTTI, Binding, Context>::value{
-    described_type_v<T>,
-    request_facts_v<T>,
-    derivable_v<T>,
-    converted_owner<T>(),
-    object_of<T>(),
-    through_nodes<T, RTTI, Binding, Context>(),
-    referred_node<T, RTTI, Binding, Context>(),
-    wrapper_of<T, RTTI, Binding, Context>()};
+constexpr const request_node *request_node_for() {
+  using object = request_object<T>;
+  return request_table<typename object::type, object::is_volatile, RTTI,
+                       Binding, Context>::nodes +
+         static_cast<std::size_t>(object::shape);
+}
 
 // What a runtime binding tells of itself for a request, of the descriptor it
 // was dispatched with, with whether it publishes the sole owner a sharing

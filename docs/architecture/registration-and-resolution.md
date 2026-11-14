@@ -151,10 +151,33 @@ shape it has, the operations of the object that it is or refers to, and the
 nodes of the requests that each derivation resolves through. One function
 derives a value, a reference or a pointer of the node: it chooses the rule,
 resolves the node of the derived request through the binding, and places a value
-or an owner in the context with the operations of the object. A request type
-adds only its node and the operations of its object to a program, not a function
-for each of its derivations. A derivation of a wrapper (keep, convert, compose)
-is still a function of the type of the request.
+or an owner in the context with the operations of the object.
+
+A request is of an object and has a shape (`request_object` in
+[include/dingo/request/derivation.h](../../include/dingo/request/derivation.h)):
+
+- a reference is of the object that it names, so `Y*&` is of the pointer `Y*`;
+- a pointer is of the object that it points to, whatever the qualification of
+  the pointer;
+- a value is of its object.
+
+The derivations of a request follow from what its object is (`object_traits`)
+and from its shape (`shape_facts`). Both containers use these.
+
+The nodes of the requests of one object are one table (`request_table`). A table
+has the eight shapes `O`, `const O`, `O&`, `const O&`, `O&&`, `const O&&`, `O*`
+and `const O*`. An object has one table as it is, and one as `volatile` when a
+request of it is volatile. One constexpr function makes each node of the table,
+so an object adds one table to a program, not a node and its functions for each
+request of it. Adopting a pointer and taking an address resolve through a node
+of the same table. The other derivations resolve through the table of the object
+as not volatile. A value of a pointer is the pointer node of the table of the
+object that it points to.
+
+A derivation of a wrapper (keep, convert, compose) is a function of the type of
+the wrapper: one keeps the wrapper for each reference and pointer to it, one
+converts or composes it for a value, and one for an rvalue reference, unless the
+rvalue reference composes it the same way as the value.
 
 The static container decides a request by the same data and the same functions,
 as it compiles. A static binding has the facts of its interface and storage
