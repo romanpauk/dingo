@@ -208,14 +208,43 @@ specification. It is also the largest part of the compile time that is left.
    specification. A test shows that a wrapper a user defines is classified as
    the standard one of the same semantics.
 
-4. **Steps.** One function template for each kind of step, with its contract as
-   static assertions, and a test for each.
+4. **Plans.** Done. A state of the search keeps the state and the step it
+   reached its thing from first. The answer to a request is the state that
+   satisfies it at the fewest copies and moves, and how: a reference or a
+   pointer refers to it, a pointer request takes it as a pointer value, an
+   rvalue reference takes what is made for the request, or a value is moved or
+   copied of it. `plan_of` gives the steps from the stored object to it.
+   `semantics-check` replays the plan of every answer through the steps of the
+   semantics, with its copies and moves.
 
-5. **Execution.** A plan is the path to a satisfying thing in the search. The
-   interpreter applies it in both containers, and replaces the conversion paths
-   and the derivations.
+5. **Steps.** One function template for each kind of step, which applies it to a
+   C++ object: `element`, `element_pointer` and `element_or_empty` by the `get`,
+   `borrow` and `empty_value` of the type traits of the layer, `wrap` by its
+   `emplace` or `wrap`, `convert` by the `share_t` of a sole owner, `adopt` by
+   the handle constructed of a pointer, `decay` and `hand_over` by C++ itself,
+   `copy` by the copy constructor and `upcast` by the conversion to the base.
+   The C++ type a step makes is that of its thing: a wrapper of the universe is
+   its identity rebound to the element. Each step states its contract as static
+   assertions. An interpreter applies a plan to a stored object, keeping what it
+   makes for the request where the request lives. A check applies the plan of
+   every cell of the model to the leaf types of the model, which count their
+   copies and moves, and compares the result and the counts with the
+   specification, without a container.
 
-6. **Tests.** The model checks become a cover of the composition, and the full
+6. **Execution.** The containers apply plans by the interpreter, in place of the
+   conversion paths and the derivations. The steps split as the specification
+   splits them. A binding takes the steps that need the type it stores: the
+   element of a layer, a pointer to it, the optional it holds, and the upcast to
+   the interface. What they reach are the sources the binding publishes, which
+   it makes by functions of its type. A request takes every other step: each
+   wraps, converts, copies, adopts, decays or hands over toward the layers of
+   the request, so its C++ types are those of the suffixes of the request type,
+   and the request has a function of its type for each step from each suffix.
+   The static container plans each request as the code compiles. The runtime
+   container plans a request of a binding as it resolves, by one function of no
+   type, and keeps the plan in the binding.
+
+7. **Tests.** The model checks become a cover of the composition, and the full
    model run a regression.
 
 ## The Cost
