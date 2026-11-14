@@ -339,15 +339,15 @@ struct binding_activation {
       scope_materialization<typename storage_type::tag_type>;
   using application_type = binding_application<storage_type, Scope>;
 
-  template <typename Context>
-  static constexpr materialization_facts facts =
-      materialization_facts_of<storage_type, Context, owner_type>();
+  template <typename Context> static constexpr materialization_facts facts() {
+    return materialization_facts_of<storage_type, Context, owner_type>();
+  }
 
   // Whether an address request is served from a value the storage yields,
   // which is placed in the context and lives only as long as the context.
   template <typename Request, typename Context>
   static constexpr bool places_value_in_context =
-      materialization_placement(facts<Context>, materialized<Request>(),
+      materialization_placement(facts<Context>(), materialized<Request>(),
                                 is_runtime_context_v<Context>) ==
       source_placement::value_in_context;
 
@@ -364,7 +364,7 @@ struct binding_activation {
   template <typename Request, typename Context, typename Fn>
   decltype(auto) with_source(Context &context, Fn &&fn) {
     auto &storage = cell.storage();
-    constexpr const materialization_facts &materialization = facts<Context>;
+    constexpr materialization_facts materialization = facts<Context>();
     constexpr source_placement placement =
         materialization_placement(materialization, materialized<Request>(),
                                   is_runtime_context_v<Context>);
@@ -459,8 +459,8 @@ private:
   // destroyed.
   template <typename Context, typename Fn>
   decltype(auto) with_transaction_source(Context &context, Fn &&fn) {
-    if constexpr (facts<Context>.retains_unresolved) {
-      if (materialization_retains(facts<Context>,
+    if constexpr (facts<Context>().retains_unresolved) {
+      if (materialization_retains(facts<Context>(),
                                   storage_resolved(cell.storage()), true)) {
         // A source is retained only while the storage is unresolved, so a
         // failed transaction returns the storage to that state. The reset

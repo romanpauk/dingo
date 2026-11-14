@@ -240,25 +240,30 @@ transaction fails, refuses the caller an address into a value placed in the
 context, publishes a borrowed address in the request cache, and derives a
 request that the binding does not publish.
 
-On the side of a request, the container selects a request that has a static key
-and no lookup of its own through the base lookup, by the type indexes of its
-interface and of its normalized interface, in the container and in the
-registration containers it falls back to. The selection is of no request type.
-Only the conversion of the resolved address to the requested type, and a miss,
-which falls back to the parent or constructs the type, are functions of the
-request type. A keyed request with a lookup of its own, and a collection, take
-the typed path of the resolution algorithm.
+Each lookup the container declares, and its base lookup, have a table of
+operations of no binding or request type (`lookup_operations` in
+[include/dingo/runtime/registry_store.h](../../include/dingo/runtime/registry_store.h)):
+find the bindings of a key, insert a binding under a key, and enumerate the
+bindings of a key. The engine selects, commits and enumerates by them.
 
-A registration whose interfaces are found through the base lookup is committed
-by the engine too. Its typed part is constant data, the layout of its record and
-the node and the descriptor of each interface, a function that constructs its
-cell from the registered factory argument, and the type indexes of the keys of
-its interfaces. One function of the container places and constructs the record
-and inserts each binding into the base lookup under its key. A registration with
-key values or a lookup of its own is committed by a function of its type, by the
-same insertion, which is of the lookup and its key, not of the binding. The
-transaction of a registration, and that of a request, live in a frame made out
-of line, once for a container.
+On the side of a request, the container makes the request data: the lookup and
+the key of its exact interface and of its normalized interface, and how it is
+selected by them (`lookup_request`). One function selects the request of its
+data, by the selection rules, in the container and in the registration
+containers it falls back to. The selection is of no request type. Only the keys
+of the request, the conversion of the resolved address to the requested type,
+and a miss, which falls back to the parent or constructs the type, are functions
+of the request type. A collection is enumerated through the lookup of its
+element, and only the append of each element is of its type.
+
+A registration is committed by the engine too. Its typed part is constant data,
+the layout of its record and the node and the descriptor of each interface, a
+function that constructs its cell from the registered factory argument, and the
+lookups of its interfaces with their keys: the static key of the registration,
+as the container routes it, or each key value it is registered with. One
+function of the container places and constructs the record and inserts each
+binding into its lookups. The transaction of a registration, and that of a
+request, live in a frame made out of line, once for a container.
 
 The root container owns the runtime arena and a dense table of lookup states for
 the registration containers. A registration container is a runtime container

@@ -129,14 +129,14 @@ private:
     self_type *last;
   };
 
-  // Selects a request through the base lookup of the container, and of the
-  // levels of local bindings it falls back to: the first level that binds
-  // it, ambiguously or not, or else the last one. It is of no request type.
+  // Selects a request of its data in the container, and in the levels of
+  // local bindings it falls back to: the first level that binds it,
+  // ambiguously or not, or else the last one. It is of no request type.
   DINGO_NOINLINE level_selection
-  select_in_levels(const typename runtime_base::base_request &request) {
+  select_in_levels(const typename runtime_base::lookup_request &request) {
     self_type *level = this;
     for (;;) {
-      auto selection = level->select_base(request);
+      auto selection = level->select_record(request);
       self_type *owner = level->owner_level();
       if (!detail::falls_back(selection.status) || owner == nullptr) {
         return {selection, level};
@@ -145,17 +145,25 @@ private:
     }
   }
 
-  // Resolves a request in the context of a request of this runtime.
+  // Selects a request through the levels while the keys of its data exist.
+  template <typename Request, typename LookupKey>
+  level_selection select_request_in_levels(const LookupKey &key) {
+    return runtime_base::template with_lookup_request<Request>(
+        key, [this](const typename runtime_base::lookup_request &request) {
+          return select_in_levels(request);
+        });
+  }
+
+  // Resolves a request in the context of a request of this runtime. The
+  // algorithm resolves the request of its selection in the levels, in the
+  // last level it was selected in: the binding it found, or the parent of
+  // that level, or else the origin. A collection is constructed by the
+  // algorithm.
   template <typename Request, typename R, typename Origin, typename LookupKey>
   R resolve_in_runtime(construction_scope scope, runtime_context_type &context,
                        Origin &origin, LookupKey key) {
-    if constexpr (runtime_base::template selects_by_base_lookup<Request, R,
-                                                                LookupKey>()) {
-      // The algorithm resolves the request of its selection in the levels,
-      // in the last level it was selected in: the binding it found, or the
-      // parent of that level, or else the origin.
-      const level_selection found = select_in_levels(
-          runtime_base::template base_request_of<Request, LookupKey>());
+    if constexpr (!collection_traits<R>::is_collection) {
+      const level_selection found = select_request_in_levels<Request>(key);
       return detail::request_resolution::resolve<Request, R>(
           *found.last, scope, context, origin, std::move(key), found.selection);
     } else {
@@ -169,10 +177,8 @@ private:
   template <typename Request, typename R, typename LookupKey>
   R resolve_entry(LookupKey key) {
     using interface_type = typename Request::interface_type;
-    if constexpr (runtime_base::template selects_by_base_lookup<Request, R,
-                                                                LookupKey>()) {
-      const level_selection found = select_in_levels(
-          runtime_base::template base_request_of<Request, LookupKey>());
+    if constexpr (!collection_traits<R>::is_collection) {
+      const level_selection found = select_request_in_levels<Request>(key);
       if constexpr (is_cacheable<Request, R>()) {
         auto result = this->lookup_cache(found.selection,
                                          detail::cache::key<interface_type>());
@@ -184,17 +190,6 @@ private:
         return detail::request_resolution::resolve<Request, R>(
             *found.last, entry_scope(caller_scope), context, *this,
             std::move(key), found.selection);
-      });
-    } else if constexpr (is_cacheable<Request, R>()) {
-      auto selected = this->template select_request<Request>(key);
-      auto result =
-          this->lookup_cache(selected, detail::cache::key<interface_type>());
-      if (result.hit) {
-        return this->template resolve_cached<interface_type, R>(result);
-      }
-      return with_context([&](runtime_context_type &context) -> R {
-        return detail::request_resolution::resolve<Request, R>(
-            *this, entry_scope(caller_scope), context, *this, key, selected);
       });
     } else {
       return with_context([&](runtime_context_type &context) -> R {

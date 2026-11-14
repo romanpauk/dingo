@@ -231,12 +231,6 @@ protected:
 protected:
   // A lookup the traits do not declare fails as it compiles, in a level of
   // local bindings as in its container: they have the same traits.
-  template <typename Value, typename Exact, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  runtime_selection select_binding(LookupKey key) {
-    return store_type::template select_binding<Value, Exact, false>(
-        runtime_bindings(), std::move(key));
-  }
 
   template <typename T, typename Fn, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
@@ -347,16 +341,9 @@ private:
           store_type::template validate_supplied_runtime_registration_keys<
               interface_types, KeyValueArgs...>();
         }
-        if constexpr (sizeof...(KeyValueArgs) == 0 &&
-                      commits_by_base_lookup<interface_types,
-                                             registration_key>()) {
-          return commit_by_base_lookup<interface_types, storage_type>(
-              registration_key{}, std::forward<Arg>(arg));
-        } else {
-          return commit_binding<interface_types, storage_type>(
-              registration_key{}, std::forward<Arg>(arg),
-              std::forward<KeyValueArgs>(key_values)...);
-        }
+        return commit_registration<storage_type>(
+            registration_key{}, std::forward<Arg>(arg), interface_types{},
+            key_values...);
       }
     }
   }
@@ -378,34 +365,6 @@ private:
     runtime_transaction_type transaction_;
   };
 
-  // The bindings of the interfaces of a registration, in its record, which
-  // the lookups of the interfaces point to.
-  template <typename Interfaces, typename Record> struct record_bindings {
-    static constexpr bool shared_owner = true;
-    runtime_binding_header *header;
-
-    template <typename TypeInterface>
-    static constexpr std::size_t index_of(type_list<>) {
-      return 0;
-    }
-
-    template <typename TypeInterface, typename Head, typename... Tail>
-    static constexpr std::size_t index_of(type_list<Head, Tail...>) {
-      if constexpr (std::is_same_v<unannotated_t<Head>,
-                                   unannotated_t<TypeInterface>>) {
-        return 0;
-      } else {
-        return 1 + index_of<TypeInterface>(type_list<Tail...>{});
-      }
-    }
-
-    template <typename TypeInterface>
-    typename store_type::runtime_lookup_value make() {
-      return typename store_type::runtime_lookup_value(
-          Record::binding(*header, index_of<TypeInterface>(Interfaces{})));
-    }
-  };
-
   using runtime_binding_node_type =
       typename runtime_binding_interface_type::node_type;
 
@@ -423,22 +382,6 @@ private:
     std::size_t count;
     type_descriptor storage;
   };
-
-  // Whether every interface of a registration is committed to the base
-  // lookup, by its type and the type of its static key.
-  template <typename Interfaces, typename LookupKey>
-  static constexpr bool commits_by_base_lookup() {
-    return commits_by_base_lookup<LookupKey>(Interfaces{});
-  }
-
-  template <typename LookupKey, typename... TypeInterfaces>
-  static constexpr bool commits_by_base_lookup(type_list<TypeInterfaces...>) {
-    using base_entry = typename store_type::base_lookup_entry;
-    return (std::is_same_v<typename store_type::template lookup_index_route<
-                               TypeInterfaces, LookupKey>::entry,
-                           base_entry> &&
-            ...);
-  }
 
   // Constructs the cell of a registration in its record, from the registered
   // factory argument when there is one.
@@ -471,23 +414,94 @@ private:
         detail::described_type_v<typename TypeStorage::type>};
   };
 
-  // Registers through the base lookup: the typed part of the registration is
-  // its node, the construction of its cell and the keys of its interfaces,
-  // and the commit is of the node.
-  template <typename Interfaces, typename TypeStorage, typename LookupKey,
-            typename Arg>
-  container_proxy commit_by_base_lookup(LookupKey lookup_key, Arg &&arg) {
-    return commit_interfaces_by_base_lookup<TypeStorage, LookupKey, Arg>(
-        lookup_key, arg, Interfaces{});
+  using lookup_operations = typename store_type::lookup_operations;
+
+  // A lookup a registration commits the binding of one of its interfaces to:
+  // the index of the binding of the interface, the lookup, the key, and the
+  // descriptor of the type of the key, which names the registration if the
+  // lookup rejects it.
+  struct lookup_insert {
+    std::size_t binding;
+    const lookup_operations *lookup;
+    const void *key;
+    type_descriptor key_type;
+  };
+
+  // The lookups of an interface of a registration: of the static key of the
+  // registration, as the container routes it, or of each key value it is
+  // registered with, to each lookup of the interface that is keyed by it.
+  template <std::size_t Index, typename TypeInterface, typename Interfaces,
+            typename LookupKey, typename... KeyValueArgs>
+  static void lookup_inserts_of(lookup_insert *&out,
+                                const LookupKey &lookup_key,
+                                const void *static_key,
+                                std::tuple<KeyValueArgs &...> &key_values) {
+    using key_type = std::decay_t<LookupKey>;
+    using entries =
+        typename store_type::template runtime_lookup_entries_for_interface_t<
+            TypeInterface, Interfaces>;
+    if constexpr (sizeof...(KeyValueArgs) > 0 &&
+                  store_type::template runtime_lookup_entries_for_interface<
+                      TypeInterface, Interfaces,
+                      typename store_type::normalized_lookup_entries>::
+                      defers_to_normalized) {
+      // A keyed request of an interface that defers to its normalized
+      // interface selects the lookup of that one, which commits it.
+      (void)out, (void)lookup_key, (void)static_key, (void)key_values;
+    } else if constexpr (sizeof...(KeyValueArgs) == 0 ||
+                         type_list_size_v<entries> == 0) {
+      // The lookup of the static key of the registration, as the container
+      // routes it, also of an interface that no key value keys.
+      (void)key_values;
+      using route =
+          typename store_type::template lookup_index_route<TypeInterface,
+                                                           key_type>;
+      using route_key = std::decay_t<decltype(route::key(lookup_key))>;
+      *out++ = {
+          Index,
+          &store_type::template route_operations<TypeInterface, key_type>(),
+          static_key, detail::registration_key_type<route_key>(lookup_key)};
+    } else {
+      (void)static_key;
+      store_type::template validate_required_runtime_registration_keys<
+          entries, std::decay_t<KeyValueArgs>...>();
+      for_each(entries{}, [&](auto element) {
+        using entry = typename decltype(element)::type;
+        const auto &key =
+            store_type::template registration_key_value<entry>(key_values);
+        using key_arg = std::decay_t<decltype(key)>;
+        *out++ = {
+            Index,
+            &store_type::template lookup_operations_of<entry, key_arg>::value,
+            std::addressof(key),
+            detail::registration_key_type<key_arg>(lookup_key)};
+      });
+    }
   }
 
-  // Arg is the type of the registered factory argument, as it was passed.
+  template <typename TypeInterface, typename Interfaces, typename... Args>
+  static constexpr std::size_t lookup_insert_count() {
+    using entries =
+        typename store_type::template runtime_lookup_entries_for_interface_t<
+            TypeInterface, Interfaces>;
+    if constexpr (sizeof...(Args) == 0 || type_list_size_v<entries> == 0) {
+      return 1;
+    } else {
+      return type_list_size_v<entries>;
+    }
+  }
+
+  // Registers a type: the typed part of a registration is its node, the
+  // construction of its cell from the registered factory argument, and the
+  // keys of the lookups of its interfaces; the commit is of the node, by one
+  // function of the container. Arg is the type of the factory argument as it
+  // was passed.
   template <typename TypeStorage, typename LookupKey, typename Arg,
-            typename... TypeInterfaces>
-  container_proxy
-  commit_interfaces_by_base_lookup(LookupKey lookup_key,
-                                   std::remove_reference_t<Arg> &arg,
-                                   type_list<TypeInterfaces...>) {
+            typename... TypeInterfaces, typename... KeyValueArgs>
+  container_proxy commit_registration(LookupKey lookup_key, Arg &&arg,
+                                      type_list<TypeInterfaces...>,
+                                      KeyValueArgs &...key_values) {
+    using interfaces = type_list<TypeInterfaces...>;
     using cell_type = detail::binding_cell<TypeStorage>;
     using record = detail::runtime_binding_record<
         cell_type, runtime_binding_interface_type, sizeof...(TypeInterfaces)>;
@@ -495,26 +509,45 @@ private:
          TypeStorage, unannotated_t<TypeInterfaces>,
          typename TypeStorage::type>::assert_valid(),
      ...);
-    using base_key = detail::base_lookup_key<rtti_type>;
-    const base_key keys[] = {
-        store_type::template base_typed_key_lookup_key<TypeInterfaces,
-                                                       LookupKey>()...};
+    // The keys of a static key, which a lookup is routed to by the type of
+    // each interface: they live as long as the commit.
+    const auto static_keys = std::make_tuple(
+        store_type::template lookup_index_route<
+            TypeInterfaces, std::decay_t<LookupKey>>::key(lookup_key)...);
+    std::tuple<KeyValueArgs &...> keys(key_values...);
+    constexpr std::size_t count =
+        (lookup_insert_count<TypeInterfaces, interfaces, KeyValueArgs...>() +
+         ... + 0);
+    lookup_insert inserts[count + 1] = {};
+    lookup_insert *out = inserts;
+    insert_all<TypeInterfaces...>(out, lookup_key, static_keys, keys,
+                                  std::index_sequence_for<TypeInterfaces...>{});
     return commit_record(
         registration_node_of<TypeStorage, record, TypeInterfaces...>::value,
-        keys, detail::registration_key_type<base_key>(lookup_key),
+        inserts, static_cast<std::size_t>(out - inserts),
         &construct_cell<cell_type, Arg>,
         const_cast<void *>(
             static_cast<const volatile void *>(std::addressof(arg))));
   }
 
+  template <typename... TypeInterfaces, typename LookupKey, typename StaticKeys,
+            typename KeyValues, std::size_t... Indexes>
+  static void insert_all(lookup_insert *&out, const LookupKey &lookup_key,
+                         const StaticKeys &static_keys, KeyValues &key_values,
+                         std::index_sequence<Indexes...>) {
+    (lookup_inserts_of<Indexes, TypeInterfaces, type_list<TypeInterfaces...>>(
+         out, lookup_key, std::addressof(std::get<Indexes>(static_keys)),
+         key_values),
+     ...);
+  }
+
   // Commits a registration of its node, in one transaction: constructs its
   // record, its header, its cell, and the binding of each of its interfaces,
-  // and inserts each binding into the base lookup under its key. It is of no
+  // and inserts each binding into the lookups of its interface. It is of no
   // registration type.
   DINGO_NOINLINE container_proxy commit_record(
-      const registration_node &node,
-      const detail::base_lookup_key<rtti_type> *keys, type_descriptor key_type,
-      void (*construct)(void *, void *), void *arg) {
+      const registration_node &node, const lookup_insert *inserts,
+      std::size_t count, void (*construct)(void *, void *), void *arg) {
     registration_frame frame(runtime());
     auto &transaction = frame.transaction();
     auto &state = ensure_runtime_bindings(transaction);
@@ -532,13 +565,14 @@ private:
                     runtime_binding_interface_type(node.nodes[index], made);
               }
             }));
-    using base_entry = typename store_type::base_lookup_entry;
-    for (std::size_t index = 0; index < node.count; ++index) {
-      this->template insert_lookup<base_entry>(
+    for (std::size_t index = 0; index < count; ++index) {
+      const lookup_insert &insert = inserts[index];
+      insert.lookup->insert(
           state, transaction,
           typename store_type::runtime_lookup_value(
-              binding_of(node, *header, index)),
-          keys[index], {node.interfaces[index], node.storage, key_type});
+              binding_of(node, *header, insert.binding)),
+          insert.key,
+          {node.interfaces[insert.binding], node.storage, insert.key_type});
     }
     transaction.commit();
     return container_proxy(header, this);
@@ -553,123 +587,97 @@ private:
            index;
   }
 
-  // Constructs the record of a registration, its header, the cell of its
-  // storage from the registered factory argument when there is one, and the
-  // binding of each of its interfaces, and commits the bindings to the
-  // lookups of their interfaces, in one transaction.
-  template <typename Interfaces, typename TypeStorage, typename LookupKey,
-            typename Arg, typename... KeyValueArgs>
-  DINGO_NOINLINE container_proxy commit_binding(LookupKey lookup_key, Arg &&arg,
-                                                KeyValueArgs &&...key_values) {
-    using cell_type = detail::binding_cell<TypeStorage>;
-    using record =
-        detail::runtime_binding_record<cell_type,
-                                       runtime_binding_interface_type,
-                                       type_list_size_v<Interfaces>>;
-    registration_frame frame(runtime());
-    auto &transaction = frame.transaction();
-    auto &state = ensure_runtime_bindings(transaction);
-    auto *header = static_cast<runtime_binding_header *>(
-        transaction.construct_persistent_erased(
-            record::size, record::alignment, &record::destroy,
-            [&](void *place) {
-              auto *made = ::new (place)
-                  runtime_binding_header{{nullptr, nullptr},
-                                         std::addressof(registration_owner()),
-                                         nullptr};
-              void *cell = &detail::runtime_cell<cell_type>(*made);
-              if constexpr (is_none_v<std::decay_t<Arg>>) {
-                (void)arg;
-                ::new (cell) cell_type();
-              } else {
-                ::new (cell) cell_type(std::forward<Arg>(arg));
-              }
-              std::size_t index = 0;
-              for_each(Interfaces{}, [&](auto element) {
-                using interface_type = typename decltype(element)::type;
-                ::new (record::binding(*made, index++))
-                    runtime_binding_interface_type(
-                        &runtime_registration_edge_t<interface_type,
-                                                     TypeStorage>::node,
-                        made);
-              });
-            }));
-    record_bindings<Interfaces, record> bindings{header};
-    for_each(Interfaces{}, [&](auto element) {
-      using interface_type = typename decltype(element)::type;
-      this->template commit_registration<interface_type, TypeStorage,
-                                         Interfaces>(
-          state, bindings, transaction, lookup_key, key_values...);
-    });
-    transaction.commit();
-    return container_proxy(header, this);
-  }
-
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
   friend struct detail::request_resolution;
 
-  using base_lookup_key_type = detail::base_lookup_key<rtti_type>;
-
-  // A request a container selects through the base lookup: the key of its
-  // interface, and of its normalized interface, which selects it when its
-  // interface is not bound.
-  struct base_request {
-    base_lookup_key_type exact;
-    base_lookup_key_type value;
-    bool normalizes;
+  // A request as data: the lookup and the key of its exact interface and of
+  // its normalized interface, whether it is selected by its exact interface
+  // first, and whether it falls back to its normalized interface when its
+  // exact interface binds nothing.
+  struct lookup_request {
+    const lookup_operations *exact;
+    const void *exact_key;
+    const lookup_operations *value;
+    const void *value_key;
+    bool exact_first;
+    bool falls_back;
   };
 
-  // Whether a request is selected through the base lookup: one of a type
-  // with a static key and no lookup of its own, which is not a collection.
-  template <typename Request, typename R, typename LookupKey>
-  static constexpr bool selects_by_base_lookup() {
-    using base_entry = typename store_type::base_lookup_entry;
-    using key_type = std::decay_t<LookupKey>;
-    if constexpr (collection_traits<R>::is_collection ||
-                  !detail::is_static_lookup_key_definition_v<key_type>) {
-      return false;
-    } else {
-      return std::is_same_v<typename store_type::template lookup_index_route<
-                                typename Request::exact_type, key_type>::entry,
-                            base_entry> &&
-             std::is_same_v<typename store_type::template lookup_index_route<
-                                typename Request::value_type, key_type>::entry,
-                            base_entry>;
-    }
-  }
-
-  template <typename Request, typename LookupKey>
-  static base_request base_request_of() {
-    using exact = typename Request::exact_type;
-    using value = typename Request::value_type;
-    return {store_type::template base_typed_key_lookup_key<exact, LookupKey>(),
-            store_type::template base_typed_key_lookup_key<value, LookupKey>(),
-            !std::is_same_v<value, exact>};
-  }
-
-  // Selects the binding of a request through the base lookup. It is of no
-  // request type.
-  runtime_selection select_base(const base_request &request) {
+  // Selects the binding of a request of its data. It is of no request type.
+  runtime_selection select_record(const lookup_request &request) {
     auto *state = runtime_bindings();
     if (state == nullptr) {
       return runtime_selection::miss();
     }
-    using base_entry = typename store_type::base_lookup_entry;
+    if (!request.exact_first) {
+      return request.value->find(*state, request.value_key);
+    }
+    using lookup_at = std::pair<const lookup_operations *, const void *>;
     return detail::select_exact_or_normalized(
-        [&](const base_lookup_key_type &key) {
-          return this->template select_lookup<base_entry>(*state, key);
-        },
-        request.exact, request.value, request.normalizes);
+        [&](const lookup_at &at) { return at.first->find(*state, at.second); },
+        lookup_at(request.exact, request.exact_key),
+        lookup_at(request.value, request.value_key), request.falls_back);
+  }
+
+  // Passes fn the data of a request, while its keys exist: the lookups its
+  // interfaces are routed to, as the container declares them. A static key
+  // selects the exact interface first, and the normalized one when the exact
+  // one binds nothing. A key value selects by the exact interface only when it
+  // has a lookup of its own, falling back to the normalized one when that has
+  // one too.
+  template <typename Request, typename LookupKey, typename Fn>
+  static decltype(auto) with_lookup_request(const LookupKey &key, Fn &&fn) {
+    using key_type = std::decay_t<LookupKey>;
+    using exact = typename Request::exact_type;
+    using value = typename Request::value_type;
+    using exact_route =
+        typename store_type::template lookup_index_route<exact, key_type>;
+    using value_route =
+        typename store_type::template lookup_index_route<value, key_type>;
+    if constexpr (detail::is_static_lookup_key_definition_v<key_type>) {
+      decltype(auto) exact_key = exact_route::key(key);
+      decltype(auto) value_key = value_route::key(key);
+      return fn(lookup_request{
+          &store_type::template route_operations<exact, key_type>(),
+          std::addressof(exact_key),
+          &store_type::template route_operations<value, key_type>(),
+          std::addressof(value_key), true, !std::is_same_v<value, exact>});
+    } else if constexpr (!std::is_same_v<value, exact> &&
+                         exact_route::has_explicit_lookup &&
+                         !std::is_same_v<typename exact_route::entry,
+                                         typename value_route::entry>) {
+      decltype(auto) exact_key = exact_route::key(key);
+      if constexpr (value_route::has_explicit_lookup) {
+        decltype(auto) value_key = value_route::key(key);
+        return fn(lookup_request{
+            &store_type::template route_operations<exact, key_type>(),
+            std::addressof(exact_key),
+            &store_type::template route_operations<value, key_type>(),
+            std::addressof(value_key), true, true});
+      } else {
+        return fn(lookup_request{
+            &store_type::template route_operations<exact, key_type>(),
+            std::addressof(exact_key), nullptr, nullptr, true, false});
+      }
+    } else {
+      decltype(auto) value_key = value_route::key(key);
+      return fn(lookup_request{
+          nullptr, nullptr,
+          &store_type::template route_operations<value, key_type>(),
+          std::addressof(value_key), false, false});
+    }
   }
 
   template <typename Request, typename LookupKey>
   runtime_selection select_request(const LookupKey &key) {
     static_assert(!std::is_const_v<typename Request::value_type>);
-    return select_binding<typename Request::value_type,
-                          typename Request::exact_type>(key);
+    return with_lookup_request<Request>(key,
+                                        [this](const lookup_request &request) {
+                                          return select_record(request);
+                                        });
   }
 
   template <typename Request, typename R>

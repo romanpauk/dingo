@@ -528,14 +528,9 @@ protected:
     }
   };
 
-  template <typename Value, typename Exact, bool AllowMiss, typename LookupKey>
-  runtime_selection select_binding(runtime_bindings_state *state,
-                                   LookupKey key) {
-    static_assert(detail::is_lookup_key_v<LookupKey>);
-    return state ? select_binding<Value, Exact, AllowMiss>(*state, key)
-                 : runtime_selection::miss();
-  }
-
+  // Passes fn the binding of each element of a collection, through the
+  // operations of the lookup of its element: the lookup of the collection the
+  // container declares, or the base lookup of the element.
   template <typename T, typename LookupKey, typename Fn,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   std::size_t for_each_collection_entry(runtime_bindings_state &state,
@@ -548,8 +543,13 @@ protected:
 
     if constexpr (route::has_explicit_collection_lookup ||
                   std::is_same_v<typename route::entry, base_lookup_entry>) {
-      return for_each_lookup<typename route::entry>(state, route::key(key),
-                                                    std::forward<Fn>(fn));
+      decltype(auto) element_key = route::key(key);
+      return route_operations<lookup_type, lookup_key_type>().for_each(
+          state, std::addressof(element_key),
+          [](void *visitor, runtime_binding_interface_type &binding) {
+            (*static_cast<std::remove_reference_t<Fn> *>(visitor))(binding);
+          },
+          std::addressof(fn));
     } else {
       (void)fn;
       return 0;
@@ -567,10 +567,11 @@ protected:
     if (!state) {
       return 0;
     }
-    return for_each_collection_entry<T>(*state, key, [&](auto &entry) {
-      fn(results, ::dingo::resolve_binding_request<resolve_type, rtti_type>(
-                      scope, entry.binding(), context));
-    });
+    return for_each_collection_entry<T>(
+        *state, key, [&](runtime_binding_interface_type &binding) {
+          fn(results, ::dingo::resolve_binding_request<resolve_type, rtti_type>(
+                          scope, binding, context));
+        });
   }
 
   template <typename T, typename LookupKey,
@@ -583,69 +584,9 @@ protected:
     return result;
   }
 
-  // Selection depends on the request only through its normalized value, its
-  // exact type and the lookup key, so request spellings sharing them share one
-  // chain instantiation.
-  template <typename Value, typename Exact, bool AllowMiss, typename LookupKey>
-  runtime_selection select_binding(runtime_bindings_state &state,
-                                   LookupKey &key) {
-    static_assert(detail::is_lookup_key_v<LookupKey>);
-    if constexpr (!detail::is_static_lookup_key_definition_v<LookupKey>) {
-      // The lookup of the exact interface, when it has one of its own, and
-      // else that of the normalized one, as a static container selects.
-      using lookup_route = lookup_index_route<Value, LookupKey>;
-      using exact_route = lookup_index_route<Exact, LookupKey>;
-      if constexpr (!std::is_same_v<Value, Exact> &&
-                    exact_route::has_explicit_lookup &&
-                    !std::is_same_v<typename exact_route::entry,
-                                    typename lookup_route::entry>) {
-        auto selection =
-            select_binding_at_interface<AllowMiss, LookupKey, Exact>(state,
-                                                                     key);
-        if constexpr (lookup_route::has_explicit_lookup) {
-          if (!detail::selects_normalized_interface(selection.status)) {
-            return selection;
-          }
-        } else {
-          return selection;
-        }
-      }
-      return select_binding_at_interface<AllowMiss, LookupKey, Value>(state,
-                                                                      key);
-    } else {
-      return detail::select_exact_or_normalized(
-          [&](auto interface_tag) {
-            using interface_type = typename decltype(interface_tag)::type;
-            return select_binding_at_interface<AllowMiss, LookupKey,
-                                               interface_type>(state, key);
-          },
-          type_list_iterator<Exact>{}, type_list_iterator<Value>{},
-          !std::is_same_v<Value, Exact>);
-    }
-  }
-
-  template <bool AllowMiss, typename LookupKey, typename Interface>
-  // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
-  runtime_selection select_binding_at_interface(runtime_bindings_state &state,
-                                                LookupKey &key) {
-    using route = lookup_index_route<Interface, std::decay_t<LookupKey>>;
-    using lookup_entry = typename route::entry;
-    if constexpr (std::is_void_v<lookup_entry>) {
-      if constexpr (AllowMiss) {
-        return runtime_selection::miss();
-      } else {
-        static_assert(!std::is_void_v<lookup_entry>,
-                      "keyed registration or request has no matching "
-                      "dingo lookup definition for interface/key");
-      }
-    } else {
-      return select_lookup<lookup_entry>(state, route::key(key));
-    }
-  }
-
   template <typename LookupEntry, typename Key>
-  runtime_selection select_lookup(runtime_bindings_state &state,
-                                  const Key &key) {
+  static runtime_selection select_lookup(runtime_bindings_state &state,
+                                         const Key &key) {
     auto &index = state.lookup_indexes.template get<LookupEntry>();
     auto match =
         detail::lookup_find_singular<LookupEntry, runtime_lookup_value>(index,
@@ -658,8 +599,8 @@ protected:
   }
 
   template <typename LookupEntry, typename Key, typename Fn>
-  std::size_t for_each_lookup(runtime_bindings_state &state, const Key &key,
-                              Fn &&fn) {
+  static std::size_t for_each_lookup(runtime_bindings_state &state,
+                                     const Key &key, Fn &&fn) {
     auto &index = state.lookup_indexes.template get<LookupEntry>();
     return detail::lookup_for_each<LookupEntry>(index, key,
                                                 std::forward<Fn>(fn));
@@ -715,10 +656,10 @@ protected:
   // Inserts a binding into a lookup. It is of the lookup and its key, not of
   // the binding: the value of the binding is made by the caller.
   template <typename LookupEntry, typename KeyArg>
-  void insert_lookup(runtime_bindings_state &state,
-                     runtime_transaction_type &transaction,
-                     runtime_lookup_value value, const KeyArg &key_arg,
-                     const lookup_registration &registration) {
+  static void insert_lookup(runtime_bindings_state &state,
+                            runtime_transaction_type &transaction,
+                            runtime_lookup_value value, const KeyArg &key_arg,
+                            const lookup_registration &registration) {
     auto &index = state.lookup_indexes.template get<LookupEntry>();
 
     if constexpr (std::is_same_v<
@@ -739,30 +680,6 @@ protected:
       auto handle = index.emplace(key_arg, std::move(value));
       record_lookup_rollback<LookupEntry>(transaction, state, handle, key_arg);
     }
-  }
-
-  template <typename TypeInterface, typename TypeStorage, typename LookupKey,
-            typename ValueFactory, typename KeyResolver, typename... Entries>
-  void commit_lookup(runtime_bindings_state &state, ValueFactory &value_factory,
-                     runtime_transaction_type &transaction,
-                     KeyResolver &&key_resolver, const LookupKey &lookup_key,
-                     type_list<Entries...>) {
-    static_assert(ValueFactory::shared_owner || sizeof...(Entries) <= 1,
-                  "unique runtime binding owner can only be inserted into one "
-                  "lookup");
-    auto insert = [&](auto entry, const auto &key_arg) {
-      using entry_type = typename decltype(entry)::type;
-      insert_lookup<entry_type>(
-          state, transaction, value_factory.template make<TypeInterface>(),
-          key_arg,
-          {detail::described_type_v<TypeInterface>,
-           detail::described_type_v<typename TypeStorage::type>,
-           detail::registration_key_type<std::decay_t<decltype(key_arg)>>(
-               lookup_key)});
-    };
-    (insert(type_list_iterator<Entries>{},
-            key_resolver(type_list_iterator<Entries>{})),
-     ...);
   }
 
   template <typename LookupEntry, typename Key, typename Binding>
@@ -814,9 +731,10 @@ protected:
   // traits allow it and no resolve has sealed the container. The replaced
   // binding stays owned by the container; a rollback points the lookup back.
   template <typename LookupEntry, typename Handle, typename Key>
-  lookup_commit replace_lookup(runtime_transaction_type &transaction,
-                               runtime_bindings_state &state, Handle handle,
-                               const Key &key, runtime_lookup_value &&value) {
+  static lookup_commit replace_lookup(runtime_transaction_type &transaction,
+                                      runtime_bindings_state &state,
+                                      Handle handle, const Key &key,
+                                      runtime_lookup_value &&value) {
     if constexpr (!replaces_until_resolved) {
       (void)transaction;
       (void)state;
@@ -853,57 +771,61 @@ protected:
     value = runtime_lookup_value(previous);
   }
 
-  // Commits a binding to the lookups of its interface: to each key-value
-  // lookup with its supplied key value, or else to the routed lookup of its
-  // static key.
-  template <typename TypeInterface, typename TypeStorage, typename Interfaces,
-            typename LookupKey, typename ValueFactory, typename... KeyValueArgs>
-  void commit_registration(runtime_bindings_state &state,
-                           ValueFactory &value_factory,
-                           runtime_transaction_type &transaction,
-                           LookupKey lookup_key, KeyValueArgs &&...key_values) {
-    detail::interface_registration_requirements<
-        TypeStorage, unannotated_t<TypeInterface>,
-        typename TypeStorage::type>::assert_valid();
-    using lookup_entries =
-        runtime_lookup_entries_for_interface_t<TypeInterface, Interfaces>;
-    if constexpr (sizeof...(KeyValueArgs) > 0 &&
-                  runtime_lookup_entries_for_interface<
-                      TypeInterface, Interfaces,
-                      normalized_lookup_entries>::defers_to_normalized) {
-      // A keyed request of the interface selects the lookup of its normalized
-      // interface, which the registration commits under that one.
-      (void)state;
-      (void)value_factory;
-      (void)transaction;
-      (void)lookup_key;
-      ((void)key_values, ...);
-    } else if constexpr (sizeof...(KeyValueArgs) > 0 &&
-                         type_list_size_v<lookup_entries> > 0) {
-      validate_required_runtime_registration_keys<lookup_entries,
-                                                  KeyValueArgs...>();
-      auto key_value_tuple = std::forward_as_tuple(key_values...);
-      auto key_resolver = [&](auto element) -> decltype(auto) {
-        using entry_type = typename decltype(element)::type;
-        return registration_key_value<entry_type>(key_value_tuple);
-      };
-      commit_lookup<TypeInterface, TypeStorage, LookupKey>(
-          state, value_factory, transaction, key_resolver, lookup_key,
-          lookup_entries{});
-    } else {
-      // The lookup of the static key of the registration: one insertion of
-      // the value of the binding, of no type of its own.
-      ((void)key_values, ...);
-      using route = lookup_index_route<TypeInterface, LookupKey>;
-      const auto &key_arg = route::key(lookup_key);
-      insert_lookup<typename route::entry>(
-          state, transaction, value_factory.template make<TypeInterface>(),
-          key_arg,
-          {detail::described_type_v<TypeInterface>,
-           detail::described_type_v<typename TypeStorage::type>,
-           detail::registration_key_type<std::decay_t<decltype(key_arg)>>(
-               lookup_key)});
+  // The operations of a lookup the container declares, of a key of it: one
+  // table for each, of no binding or request type, by which the runtime
+  // engine selects a request, commits a registration and enumerates a
+  // collection.
+  struct lookup_operations {
+    runtime_selection (*find)(runtime_bindings_state &state, const void *key);
+    void (*insert)(runtime_bindings_state &state,
+                   runtime_transaction_type &transaction,
+                   runtime_lookup_value value, const void *key,
+                   const lookup_registration &registration);
+    std::size_t (*for_each)(runtime_bindings_state &state, const void *key,
+                            void (*visit)(void *,
+                                          runtime_binding_interface_type &),
+                            void *visitor);
+  };
+
+  template <typename LookupEntry, typename Key> struct lookup_operations_of {
+    static runtime_selection find(runtime_bindings_state &state,
+                                  const void *key) {
+      return select_lookup<LookupEntry>(state, *static_cast<const Key *>(key));
     }
+
+    static void insert(runtime_bindings_state &state,
+                       runtime_transaction_type &transaction,
+                       runtime_lookup_value value, const void *key,
+                       const lookup_registration &registration) {
+      insert_lookup<LookupEntry>(state, transaction, std::move(value),
+                                 *static_cast<const Key *>(key), registration);
+    }
+
+    static std::size_t for_each(runtime_bindings_state &state, const void *key,
+                                void (*visit)(void *,
+                                              runtime_binding_interface_type &),
+                                void *visitor) {
+      return for_each_lookup<LookupEntry>(state, *static_cast<const Key *>(key),
+                                          [&](runtime_lookup_value &entry) {
+                                            visit(visitor, entry.binding());
+                                          });
+    }
+
+    static constexpr lookup_operations value{&find, &insert, &for_each};
+  };
+
+  // The operations of the lookup of a key of an interface, routed as the
+  // container declares it.
+  template <typename Interface, typename LookupKey>
+  static const lookup_operations &route_operations() {
+    using route = lookup_index_route<Interface, std::decay_t<LookupKey>>;
+    using entry = typename route::entry;
+    static_assert(!std::is_void_v<entry>,
+                  "keyed registration or request has no matching "
+                  "dingo lookup definition for interface/key");
+    using key_type = std::decay_t<decltype(route::key(
+        std::declval<const std::decay_t<LookupKey> &>()))>;
+    return lookup_operations_of<entry, key_type>::value;
   }
 };
 
