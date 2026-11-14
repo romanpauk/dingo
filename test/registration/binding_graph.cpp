@@ -127,9 +127,10 @@ struct matching_binding_resolution;
 
 template <typename Request, typename... Resolutions>
 struct matching_binding_resolution<Request, type_list<Resolutions...>> {
-  using type = type_list_find_t<
-      void, type_list<Resolutions...>,
-      detail::is_resolution_request_for_v<Resolutions, Request>...>;
+  using type =
+      type_list_find_t<void, type_list<Resolutions...>,
+                       detail::is_resolution_request_v<
+                           typename Resolutions::target_type, Request>...>;
 };
 
 TEST(static_execution_traits_test,

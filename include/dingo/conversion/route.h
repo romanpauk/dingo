@@ -61,10 +61,4 @@ template <typename Target, typename Operation> struct resolution {
   using operation = Operation;
 };
 
-namespace detail {
-template <typename Resolution, typename Request>
-inline constexpr bool is_resolution_request_for_v =
-    is_resolution_request_v<typename Resolution::target_type, Request>;
-} // namespace detail
-
 } // namespace dingo

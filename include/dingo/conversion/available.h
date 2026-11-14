@@ -84,10 +84,6 @@ struct available_resolution<Target, Source, Access, true> {
   using type = type_list<conversion_resolution<Target, Source, Access>>;
 };
 
-template <typename Target, typename Source, typename Access>
-using available_resolution_t =
-    typename available_resolution<Target, Source, Access>::type;
-
 // An unchanged wrapper is not probed.
 template <bool Rebound, typename Target, typename Source, typename Access>
 struct wrapper_resolution_impl {

@@ -71,12 +71,9 @@ struct no_resolution_order {};
 // what refers to an instance is reset before the instance. Zero while the
 // binding is unresolved. Only a number is kept, no address, so that a
 // resolution which cannot throw still folds.
-template <bool Keeps> struct resolved_order {
-  static constexpr bool is_tracked = false;
-};
+template <bool Keeps> struct resolved_order {};
 
 template <> struct resolved_order<true> {
-  static constexpr bool is_tracked = true;
   std::size_t resolved_order_ = 0;
 };
 
