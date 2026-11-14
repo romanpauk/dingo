@@ -70,6 +70,10 @@ struct layer_kind {
   bool adopted_array = false;
   // The layers an owned value of it converts to, as a mask of their indices.
   std::uint32_t converts = 0;
+  // Whether a registration bound only to the abstract interface stores a
+  // layer of the leaf as one of the interface: a binding wraps what holds the
+  // leaf into it, to give the interface.
+  bool rebinds = false;
 };
 
 // Whether a type can be a layer of these properties, as spec/semantics.py
@@ -85,6 +89,7 @@ constexpr bool possible(const layer_kind &kind) {
          !(kind.owns == owner::sole && kind.shares_element && kind.copyable) &&
          !(kind.owns == owner::none && (kind.made_from_value || kind.adopts)) &&
          (!kind.adopts || kind.shares_element) &&
+         (!kind.rebinds || kind.shares_element) &&
          (kind.may_be_empty || !kind.has_empty_value);
 }
 
@@ -105,7 +110,7 @@ struct universe {
   layer_kind kinds[max_kinds] = {
       // A pointer to an object.
       {owner::none, true, true, false, false, true, true, false, true, false,
-       false, false, true, false},
+       false, false, true, false, 0, true},
       // The pointer an array decays to.
       {owner::none, true, true, false, false, true, false, false, false, false,
        false, false, true, true},
@@ -309,6 +314,8 @@ constexpr bool can_move(const thing &of, const context &with) {
 
 // A kind of step, as the specification names it.
 enum class step : std::uint8_t {
+  // What a pointer a binding made points to, released by the binding.
+  release,
   decay,
   hand_over,
   adopt,
@@ -328,7 +335,7 @@ struct transition {
 };
 
 // The most steps from one thing.
-inline constexpr std::size_t max_transitions = 2 * max_kinds + 8;
+inline constexpr std::size_t max_transitions = 4 * max_kinds + 16;
 
 struct transitions_list {
   transition items[max_transitions] = {};
@@ -628,28 +635,59 @@ struct state {
   step via = step::decay;
 };
 
-inline constexpr std::size_t max_states = 512;
+inline constexpr std::size_t max_states = 1024;
 
 // The states a stored object reaches on the way to a request.
+// A hash of what tells a state apart: its thing and its cost.
+constexpr std::uint32_t hash_of(const state &of) {
+  const thing &t = of.reached;
+  std::uint32_t hash = 2166136261u;
+  auto mix = [&hash](unsigned value) { hash = (hash ^ value) * 16777619u; };
+  mix(t.depth);
+  for (std::size_t index = 0; index < t.depth; ++index) {
+    mix(t.layers[index]);
+  }
+  for (std::size_t index = 0; index <= t.depth; ++index) {
+    mix(static_cast<unsigned>(t.lifetimes[index]));
+  }
+  mix(static_cast<unsigned>(t.of));
+  mix(static_cast<unsigned>(t.from));
+  mix(t.instance);
+  mix(t.contained);
+  mix(t.unconstructed);
+  mix(t.absent);
+  mix(t.full);
+  mix(of.made.copies);
+  mix(of.made.moves);
+  return hash;
+}
+
+inline constexpr std::size_t search_slots = 2 * max_states;
+
 struct search {
   state states[max_states] = {};
   std::size_t count = 0;
   // Whether there were more states than the search holds: its answer is not
   // to be trusted.
   bool overflow = false;
+  // The states by their hash, open addressed: an index, or none.
+  std::uint16_t slots[search_slots] = {};
 
   constexpr bool add(const state &found) {
-    for (std::size_t index = 0; index < count; ++index) {
-      if (states[index].made == found.made &&
-          states[index].reached == found.reached) {
+    std::size_t slot = hash_of(found) % search_slots;
+    while (slots[slot] != 0) {
+      const state &other = states[slots[slot] - 1];
+      if (other.made == found.made && other.reached == found.reached) {
         return false;
       }
+      slot = (slot + 1) % search_slots;
     }
     if (count == max_states) {
       overflow = true;
       return false;
     }
     states[count++] = found;
+    slots[slot] = static_cast<std::uint16_t>(count);
     return true;
   }
 };
@@ -669,6 +707,20 @@ struct reached_sink {
           may_become(from.reached, goal, with))) {
       return;
     }
+    found.add({reached,
+               affected(from.made, effect_of(kind, from.reached, with)), index,
+               kind});
+  }
+};
+
+// What a closure passes a step to: every step, to the search.
+template <typename Search> struct any_sink {
+  Search &found;
+  const state &from;
+  std::uint16_t index;
+  const context &with;
+
+  constexpr void operator()(step kind, const thing &reached) {
     found.add({reached,
                affected(from.made, effect_of(kind, from.reached, with)), index,
                kind});
@@ -892,6 +944,145 @@ constexpr plan plan_of(const search &found, const answer &result) {
   return made;
 }
 
+// Who takes a step, as the specification splits them. A binding knows the
+// type it stores, a request only the interface it asks for: the binding takes
+// the steps that need the type it stores, which go into what it stores, and
+// every step from what holds the leaf, when the request asks for the
+// interface, which a request cannot name. What they reach are its layer
+// sources, which it publishes, of no request. A request takes every other
+// step from them, each of which adds a layer or converts one.
+constexpr bool binding_kind(step kind) {
+  return kind == step::element || kind == step::element_pointer ||
+         kind == step::element_or_empty ||
+         kind == step::element_or_empty_copy || kind == step::upcast;
+}
+
+constexpr bool names_leaf(const thing &of, const context &with) {
+  return with.abstract && of.of == element::leaf;
+}
+
+// Whether the layers of a thing end with the stored layers.
+constexpr bool holds_stored(const thing &of, const thing &stored) {
+  if (!stored.depth || of.depth < stored.depth) {
+    return false;
+  }
+  const std::size_t offset = of.depth - stored.depth;
+  for (std::size_t index = 0; index < stored.depth; ++index) {
+    if (of.layers[offset + index] != stored.layers[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// What a sink of the steps a binding takes passes on: a step that needs the
+// stored type, or one from what holds the leaf a request of the interface
+// cannot name that the upcast to the interface needs, which wraps into a
+// layer that rebinds or around the stored layers whole; and what a pointer
+// the binding made points to, released.
+template <typename Sink> struct binding_steps_sink {
+  const thing &from;
+  const thing &stored;
+  const context &with;
+  Sink &out;
+
+  constexpr void operator()(step kind, const thing &reached) {
+    if (binding_kind(kind)) {
+      out(kind, reached);
+    } else if (names_leaf(from, with) &&
+               (kind != step::wrap || with.kind(reached.layers[0]).rebinds ||
+                holds_stored(from, stored))) {
+      out(kind, reached);
+    }
+    if (kind == step::adopt &&
+        with.kind(reached.layers[0]).owns == owner::sole) {
+      released_sink released{out};
+      each_step(reached, with, released);
+    }
+  }
+
+  struct released_sink {
+    Sink &out;
+    constexpr void operator()(step kind, const thing &reached) {
+      if (kind == step::element) {
+        out(step::release, reached);
+      }
+    }
+  };
+};
+
+template <typename Sink>
+constexpr void each_binding_step(const thing &of, const thing &stored,
+                                 const context &with, Sink &out) {
+  binding_steps_sink<Sink> filtered{of, stored, with, out};
+  each_step(of, with, filtered);
+}
+
+// What a sink of the steps a request takes passes on: every step a binding
+// does not take, from what does not hold the leaf a request of the interface
+// cannot name.
+template <typename Sink> struct request_steps_sink {
+  Sink &out;
+  constexpr void operator()(step kind, const thing &reached) {
+    if (!binding_kind(kind)) {
+      out(kind, reached);
+    }
+  }
+};
+
+template <typename Sink>
+constexpr void each_request_step(const thing &of, const context &with,
+                                 Sink &out) {
+  if (names_leaf(of, with)) {
+    return;
+  }
+  request_steps_sink<Sink> filtered{out};
+  each_step(of, with, filtered);
+}
+
+// What a binding publishes of its stored object: the things its steps reach,
+// each with the copies and the moves of the leaf that reach it. They are of
+// no request.
+template <typename Search>
+constexpr void add_layer_sources(Search &found, const thing &start,
+                                 const context &with) {
+  found.add({start, {}, no_state, step::decay});
+  for (std::size_t next = 0; next < found.count; ++next) {
+    const state from = found.states[next];
+    any_sink<Search> sink{found, from, static_cast<std::uint16_t>(next), with};
+    each_binding_step(from.reached, start, with, sink);
+  }
+}
+
+// What a request reaches from the layer sources of a stored object, as reach
+// gives what it reaches from the stored object itself: the layer sources,
+// then the steps the request takes from them toward it.
+constexpr search layer_sources(const thing &start, const context &with) {
+  search found;
+  add_layer_sources(found, start, with);
+  return found;
+}
+
+// What a request reaches from layer sources, by the steps it takes. The
+// sources may be of a universe the request's extends: a binding's, of the
+// layers it stores and of the handles a pointer may be taken over by, which
+// the layers of the request follow.
+constexpr search reach_from(const search &sources, const context &with,
+                            const request &goal) {
+  search found = sources;
+  for (std::size_t next = 0; next < found.count; ++next) {
+    const state from = found.states[next];
+    reached_sink sink{found, from, static_cast<std::uint16_t>(next), goal,
+                      with};
+    each_request_step(from.reached, with, sink);
+  }
+  return found;
+}
+
+constexpr search reach_split(const thing &start, const context &with,
+                             const request &goal) {
+  return reach_from(layer_sources(start, with), with, goal);
+}
 // Where a request stands: itself, the dependency of an unregistered class,
 // or the dependency of a class a shared or a cyclical scope keeps.
 enum class position : std::uint8_t { direct, consumer, shared, cyclical };
@@ -1050,7 +1241,7 @@ constexpr answer resolve(const thing &start, const context &with,
       rules.at == position::direct &&
       (through == entry::resolve || through == entry::construct) &&
       taken == category::rvalue_reference;
-  const search found = searched ? *searched : reach(start, with, goal);
+  const search found = searched ? *searched : reach_split(start, with, goal);
   answer result =
       satisfy_by(found, goal, taken, required_lifetime(rules.at, through), with,
                  handed_cost{returned, rules.runtime, &with});
@@ -1075,4 +1266,5 @@ constexpr answer resolve(const thing &start, const context &with,
   }
   return result;
 }
+
 } // namespace dingo::semantics

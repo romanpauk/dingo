@@ -137,6 +137,8 @@ template <typename Wrapper> constexpr semantics::layer_kind wrapper_kind() {
     kind.relocatable = std::is_move_constructible_v<movable>;
     kind.adopts = traits::is_owning_handle &&
                   std::is_constructible_v<copyable, copyable_probe *>;
+    // A pointer-like wrapper of the leaf is rebound to one of its interface.
+    kind.rebinds = traits::is_pointer_like;
   } else {
     kind.copyable = std::is_copy_constructible_v<Wrapper>;
     kind.relocatable = std::is_move_constructible_v<Wrapper>;

@@ -124,8 +124,8 @@ def possible(layer):
     and shares it with a copy cannot be copied: the copy would share what one
     of them owns. A layer that owns nothing is not made of a value and takes
     over no pointer. A layer that takes over a pointer holds the element
-    apart from it. An empty value is a value only of a layer that may be
-    empty."""
+    apart from it, and so does a layer the leaf is rebound to the interface
+    in. An empty value is a value only of a layer that may be empty."""
     if layer.owner is not Owner.SOLE and not layer.shares_element:
         return False
     if (layer.owner is Owner.SOLE and layer.shares_element and
@@ -134,6 +134,9 @@ def possible(layer):
     if layer.owner is Owner.NONE and (layer.made_from_value or layer.adopts):
         return False
     if layer.adopts and not layer.shares_element:
+        return False
+    # A layer the leaf is rebound to the interface in holds it apart.
+    if layer.rebinds and not layer.shares_element:
         return False
     return layer.may_be_empty or not layer.has_empty_value
 
@@ -669,8 +672,11 @@ def reachable(start, context):
 # request of the interface cannot name the leaf. What these reach are its
 # layer sources, which it publishes. A request takes every other step from
 # them: each adds a layer or converts one, so a request finds the layer
-# sources it needs from its own shape. A resolution reaches from the layer
-# sources what it reaches from the stored object, at the same cost.
+# sources it needs from its own shape. A resolution is what a request
+# reaches from the layer sources. For the standard layers that is what it
+# reaches from the stored object, at the same cost; a layer a type defines
+# may reach more by steps a binding and a request take in turn, which no
+# container takes.
 
 BINDING_STEPS = frozenset({"element", "element_pointer", "element_or_empty",
                            "element_or_empty_copy", "upcast"})
@@ -918,7 +924,7 @@ def converted(scope, form, leaf, bound, shape, category, limits=frozenset(),
                       limits)
     if not makes_storage(form, context):
         return None
-    reached = reachable(source(scope, form, interfaces), context)
+    reached = requested(source(scope, form, interfaces), context)
     things = [thing for thing in reached if thing.element == element]
     return fewest_of(
         [(affected(cost, effect), thing.absent)
@@ -938,7 +944,7 @@ def fewest(scope, form, leaf, bound, shape, category, position, entry,
                       limits)
     if not makes_storage(form, context):
         return None
-    reached = reachable(source(scope, form, interfaces), context)
+    reached = requested(source(scope, form, interfaces), context)
     things = [thing for thing in reached if thing.element == element]
     direct = position is Position.DIRECT
     entry = entry_of(entry, position, selection, category)

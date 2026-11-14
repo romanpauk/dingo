@@ -165,12 +165,12 @@ using namespace dingo::model;
 
 namespace {
 void print_kind(const dingo::semantics::layer_kind &kind) {
-  std::printf("%d %d %d %d %d %d %d %d %d %d %d %d %d %d",
+  std::printf("%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d",
               static_cast<int>(kind.owns), kind.shares_element, kind.copyable,
               kind.made_from_value, kind.holds_element_only, kind.relocatable,
               kind.gives_element, kind.bounded, kind.may_be_empty,
               kind.has_empty_value, kind.adopts, kind.decays, kind.adopted,
-              kind.adopted_array);
+              kind.adopted_array, kind.rebinds);
 }
 
 template <typename Tag> void print_layer() {
@@ -249,7 +249,7 @@ def properties(layer, universe):
             int(layer.may_be_empty), int(layer.has_empty_value),
             int(layer.adopts), int(bool(layer.decays_to)),
             int(layer.adopted_with is not None),
-            int(bool(layer.adopted_with)), converts]
+            int(bool(layer.adopted_with)), int(layer.rebinds), converts]
 
 
 def order(names):
@@ -301,15 +301,15 @@ def made_layers():
     is possible, as semantics.possible says."""
     emptiness = ((False, False), (True, False), (True, True))
     for index, (owner, shares, copyable, made, holds, relocatable, empty,
-                adopts) in enumerate(itertools.product(
+                adopts, rebinds) in enumerate(itertools.product(
                     semantics.Owner, (False, True), (False, True),
                     (False, True), (False, True), (False, True), emptiness,
-                    (False, True))):
+                    (False, True), (False, True))):
         layer = semantics.Layer(
             f"made{index}", owner, shares_element=shares, copyable=copyable,
             made_from_value=made, holds_element_only=holds,
             relocatable=relocatable, may_be_empty=empty[0],
-            has_empty_value=empty[1], adopts=adopts)
+            has_empty_value=empty[1], adopts=adopts, rebinds=rebinds)
         if semantics.possible(layer):
             yield layer
 
@@ -527,6 +527,16 @@ def compare_pairs(program, jobs):
     return count, resolved, differ
 
 
+def consistent(domain):
+    """The requests of a domain a container makes: of the abstract interface
+    exactly where the context requests it. What a binding publishes reaches
+    what its stored object does only for them."""
+    for name, context, start, goals in domain:
+        yield name, context, start, [
+            goal for goal in goals
+            if (goal[1] == "interface") == context.abstract]
+
+
 def expected(reached, context, layers, element):
     """The answers of the specification for a request, by its search of
     every thing the stored object reaches."""
@@ -577,18 +587,22 @@ def header():
     return [" ".join(language), " ".join(standard_layers)]
 
 
-def compare(program, domain):
+def compare(program, domain, mode=None):
     """The requests of a domain, how many of their answers resolve, and those
     whose answers differ."""
     cases = []
     lines = header()
     for name, context, start, goals in domain:
-        reached = semantics.reachable(start, context)
+        # What the stored object reaches, or, through what a binding
+        # publishes, what a request reaches from that.
+        reached = (semantics.requested(start, context) if mode == "split"
+                   else semantics.reachable(start, context))
         for layers, element, goal in goals:
             cases.append((f"{name}/{goal}",
                           expected(reached, context, layers, element)))
             lines.append(encode(context, start, layers, element))
-    run = subprocess.run([str(program)], input="\n".join(lines) + "\n",
+    run = subprocess.run([str(program)] + ([mode] if mode else []),
+                         input="\n".join(lines) + "\n",
                          capture_output=True, text=True)
     answers = run.stdout.splitlines()
     if run.returncode != 0 or len(answers) != len(cases):
@@ -629,7 +643,12 @@ def main():
     # lifetime, or for each category and rules of a request.
     domains = [("standard layers", 14, lambda: compare(program, standard())),
                ("every layer a type could define", 14,
-                lambda: compare(program, swept()))]
+                lambda: compare(program, swept())),
+               ("standard layers, through what a binding publishes", 14,
+                lambda: compare(program, consistent(standard()), "split")),
+               ("every layer a type could define, through what a binding "
+                "publishes", 14,
+                lambda: compare(program, consistent(swept()), "split"))]
     domains.append(("the rules of requests, every stored object", 336,
                     lambda: compare_rules(program, options.jobs)))
     if options.pairs:

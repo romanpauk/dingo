@@ -40,7 +40,7 @@ using standard = dingo::detail::layer_universe<dingo::type_list<
 bool read(unsigned &value) { return std::scanf("%u", &value) == 1; }
 
 bool read_kind(layer_kind &kind) {
-  unsigned values[15] = {};
+  unsigned values[16] = {};
   for (unsigned &value : values) {
     if (!read(value)) {
       return false;
@@ -53,11 +53,11 @@ bool read_kind(layer_kind &kind) {
                    &kind.bounded,         &kind.may_be_empty,
                    &kind.has_empty_value, &kind.adopts,
                    &kind.decays,          &kind.adopted,
-                   &kind.adopted_array};
-  for (unsigned index = 0; index < 13; ++index) {
+                   &kind.adopted_array,   &kind.rebinds};
+  for (unsigned index = 0; index < 14; ++index) {
     *flags[index] = values[index + 1] != 0;
   }
-  kind.converts = values[14];
+  kind.converts = values[15];
   return true;
 }
 
@@ -69,7 +69,8 @@ bool same(const layer_kind &a, const layer_kind &b) {
          a.bounded == b.bounded && a.may_be_empty == b.may_be_empty &&
          a.has_empty_value == b.has_empty_value && a.adopts == b.adopts &&
          a.decays == b.decays && a.adopted == b.adopted &&
-         a.adopted_array == b.adopted_array && a.converts == b.converts;
+         a.adopted_array == b.adopted_array && a.rebinds == b.rebinds &&
+         a.converts == b.converts;
 }
 
 // Whether a plan replays: each of its steps is a step the semantics take
@@ -83,7 +84,10 @@ bool replays(const plan &made, const context &with, const answer &result) {
   cost so_far;
   for (std::size_t index = 0; index < made.count; ++index) {
     const thing &from = made.things[index];
-    const transitions_list taken = steps(from, with);
+    // A step the semantics allow, or one a binding takes, as the release of
+    // what a pointer it made points to.
+    transitions_list taken = steps(from, with);
+    each_binding_step(from, made.things[0], with, taken);
     bool found = false;
     for (std::size_t each = 0; each < taken.count && !found; ++each) {
       found = taken.items[each].kind == made.steps[index] &&
@@ -132,6 +136,10 @@ int main(int count, char **arguments) {
   // fewest copies and moves of resolve, or "-".
   const bool rules =
       count > 1 && arguments[1][0] == 'r' && arguments[1][1] == 'u';
+  // With "split", the answers of the search of what the binding publishes,
+  // then of the steps the request takes from it.
+  const bool split =
+      count > 1 && arguments[1][0] == 's' && arguments[1][1] == 'p';
   const universe language;
   unsigned language_count = 0;
   if (!read(language_count) || language_count != language.count) {
@@ -208,7 +216,7 @@ int main(int count, char **arguments) {
                        static_cast<std::uint8_t>(limits),
                        &layers};
     if (rules) {
-      const search searched = reach(start, with, goal);
+      const search searched = reach_split(start, with, goal);
       for (unsigned taken = 0; taken < 7; ++taken) {
         for (unsigned at = 0; at < 4; ++at) {
           for (unsigned through = 0; through < 3; ++through) {
@@ -235,7 +243,8 @@ int main(int count, char **arguments) {
       std::printf("\n");
       continue;
     }
-    const search found = reach(start, with, goal);
+    const search found =
+        split ? reach_split(start, with, goal) : reach(start, with, goal);
     if (found.overflow) {
       std::printf("overflow\n");
       continue;
