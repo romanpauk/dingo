@@ -11,7 +11,8 @@ The conversion rules are in these parts of the library:
 
 - `scope_traits` gives the target shapes that a scope publishes for a stored
   type.
-- `type_conversion_traits` checks and performs custom type conversions.
+- `type_conversion_traits` (in `detail`) checks and performs the conversion of a
+  source to a target that a constructor, a reference or a pointer cast makes.
 - `resolution` records the operation of an allowed route from a source to a
   result.
 - `instance_request` carries a runtime request: its type descriptor, the
@@ -83,8 +84,8 @@ inner conversion returns:
   reference to it or to its base, its address, or the pointer an array decays
   to. It gives a pointer to the array that an owning pointer to its first
   element points to; a unique scope hands over an array it makes in this form.
-  It also gives the address of the element of a wrapper, or what
-  `type_conversion_traits` converts the source to.
+  It also gives the address of the element of a wrapper, or what a constructor
+  of the target makes of the source.
 - `conversion_unwrap` gives the element that a pointer or a wrapper lends, its
   `type_traits::borrow`. `alternative_type_conversion` unwraps the alternative
   that an alternative type holds, with one branch for each alternative.
@@ -98,8 +99,7 @@ paths in the order of `op` and takes the first available one. It does not
 instantiate the paths of later operations. Pointer storage keeps the pointer as
 its source, and the path borrows the pointee explicitly. The operation stores
 the chosen conversion, and the binding executes it directly. Execution does not
-classify the target and the source again. A source and target pair with a custom
-`type_conversion_traits` uses only that conversion and tries no default path.
+classify the target and the source again.
 
 The resolution keeps its operation, so route selection and execution are one
 decision. The traits that publish a route can add wrapper, alternative and array
@@ -135,13 +135,8 @@ the same recursive decomposition:
 - Conversion selection uses one rule: consumed storage satisfies both
   requirements, and borrowed storage satisfies only `borrow`.
 
-Specialize `type_conversion_traits` if the default rules cannot infer a custom
-conversion. A conversion is available only if `convert(Source)` is well-formed
-and its result can construct the target. To restrict the source categories, use
-`convert` overloads or SFINAE, not a separate availability declaration. Each
-specialization also declares `required_access<Source>` as `borrow` or `consume`.
-This states the access of the conversion directly. Callability does not encode
-the access, and no separate ownership exception exists.
+A conversion between two types that no constructor performs is not an extension
+point: a type converts to another only as C++ converts it.
 
 For a default conversion, Dingo infers the access:
 

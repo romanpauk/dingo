@@ -2,12 +2,11 @@
 
 Dingo is extended by traits, one for each kind of addition:
 
-| Addition                                                    | Trait                                            |
-| ----------------------------------------------------------- | ------------------------------------------------ |
-| a wrapper or an alternative type                            | one `type_traits` specialization                 |
-| a storage scope                                             | a tag type and one `scope_traits` specialization |
-| a conversion between two types that no constructor performs | one `type_conversion_traits` specialization      |
-| a type that is not constructed as its constructors show     | one `constructor_traits` specialization          |
+| Addition                                                | Trait                                            |
+| ------------------------------------------------------- | ------------------------------------------------ |
+| a wrapper or an alternative type                        | one `type_traits` specialization                 |
+| a storage scope                                         | a tag type and one `scope_traits` specialization |
+| a type that is not constructed as its constructors show | one `constructor_traits` specialization          |
 
 The container and the resolution pipeline do not hard-code a closed list of
 wrapper forms. The library supports standard smart pointers, arrays, variants,
@@ -127,37 +126,7 @@ materialization of the scope.
 [test/registration/custom_scope.cpp](../../test/registration/custom_scope.cpp)
 defines a scope outside the library and registers it with both containers.
 
-### 3. `type_conversion_traits`
-
-Specialize `type_conversion_traits` in
-[include/dingo/conversion/paths.h](../../include/dingo/conversion/paths.h) when
-two types need a conversion step that a converting constructor or a pointer cast
-does not cover.
-
-The `convert` function performs the last step: it builds the target wrapper from
-the source wrapper. It is also the availability signal. A conversion is
-available exactly when `convert(Source)` is well-formed and its result can
-construct the target. Restrict the source categories with `convert` overloads or
-SFINAE.
-
-Every specialization also declares `required_access<Source>` as `borrow` or
-`consume`:
-
-- `borrow`: the conversion reads the source and does not transfer from it. This
-  includes conversions that allocate an independent copy.
-- `consume`: the conversion can move from the source or take the ownership that
-  the source holds.
-
-Route selection treats this declaration as it treats the requirements of the
-built-in operations, so request discovery and execution describe one conversion.
-
-An applicable specialization without `required_access<Source>` fails to compile;
-Dingo does not fall back to another route. Default value construction from an
-lvalue is a borrow only when it accepts a const view of the source. Direct
-binding of a compatible lvalue reference is a borrow, because it aliases the
-existing object and constructs no value.
-
-### 4. `constructor_traits`
+### 3. `constructor_traits`
 
 Specialize `constructor_traits` in
 [include/dingo/factory/constructor_traits.h](../../include/dingo/factory/constructor_traits.h)
@@ -193,8 +162,7 @@ executable documentation.
 ## Interface Storage Rebinding
 
 Registration rebinds a storage handle from a concrete leaf type to an interface
-leaf type when the handle of the interface can be constructed from it, or a
-`type_conversion_traits` specialization converts it; see
+leaf type when the handle of the interface can be constructed from it; see
 [include/dingo/storage/interface_storage_traits.h](../../include/dingo/storage/interface_storage_traits.h).
 This is not a trait to specialize. A wrapper takes part through its converting
 constructor.

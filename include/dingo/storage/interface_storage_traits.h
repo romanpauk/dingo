@@ -30,9 +30,7 @@ inline constexpr bool is_interface_storage_rebindable_v = [] {
                 type_traits<Storage>::is_pointer_like &&
                 is_value_borrowable_v<Storage>) {
     using rebound = rebind_leaf_t<Storage, unannotated_t<Interface>>;
-    return std::is_constructible_v<rebound, Storage> ||
-           !detail::is_default_type_conversion<
-               type_conversion_traits<rebound, Storage>>::value;
+    return std::is_constructible_v<rebound, Storage>;
   } else {
     return false;
   }

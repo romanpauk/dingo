@@ -51,17 +51,15 @@ inline constexpr bool binds_reference_v =
 template <typename Result>
 using made_result_t = std::conditional_t<std::is_lvalue_reference_v<Result>,
                                          void, std::remove_reference_t<Result>>;
-} // namespace detail
 
+// How a source of SourceType converts to TargetType, of what C++ says of them.
 template <typename TargetType, typename SourceType, typename = void>
 struct type_conversion_traits {
-  static constexpr bool is_default = true;
-
   // A reference bound to the source.
   template <
       typename Source, typename Result = TargetType,
       std::enable_if_t<!std::is_array_v<std::remove_reference_t<Result>> &&
-                           detail::binds_reference_v<Result, Source>,
+                           binds_reference_v<Result, Source>,
                        int> = 0>
   static Result convert(Source &&source) {
     return static_cast<Result>(source);
@@ -69,14 +67,13 @@ struct type_conversion_traits {
 
   // A new object made of the source, which an rvalue reference refers to
   // where it is placed.
-  template <
-      typename Source, typename Result = TargetType,
-      typename Made = detail::made_result_t<Result>,
-      std::enable_if_t<!detail::binds_reference_v<Result, Source> &&
-                           !std::is_void_v<Made> && !std::is_array_v<Made> &&
-                           !slices_v<Made, Source> &&
-                           std::is_constructible_v<Made, Source &&>,
-                       int> = 0>
+  template <typename Source, typename Result = TargetType,
+            typename Made = made_result_t<Result>,
+            std::enable_if_t<
+                !binds_reference_v<Result, Source> && !std::is_void_v<Made> &&
+                    !std::is_array_v<Made> && !slices_v<Made, Source> &&
+                    std::is_constructible_v<Made, Source &&>,
+                int> = 0>
   static Made convert(Source &&source) {
     return Made(std::forward<Source>(source));
   }
@@ -86,14 +83,11 @@ template <typename Target, typename Source>
 struct type_conversion_traits<
     Target *, Source *,
     std::enable_if_t<std::is_convertible_v<Source *, Target *>>> {
-  static constexpr bool is_default = true;
-
   static Target *convert(Source *source) {
     return static_cast<Target *>(source);
   }
 };
 
-namespace detail {
 template <typename Target, typename Traits, typename Source, typename = void>
 struct has_compatible_conversion : std::false_type {};
 
@@ -104,16 +98,7 @@ struct has_compatible_conversion<
     : std::bool_constant<std::is_constructible_v<
           Target, decltype(Traits::convert(std::declval<Source>()))>> {};
 
-template <typename Traits, typename = void>
-struct is_default_type_conversion : std::false_type {};
-
-template <typename Traits>
-struct is_default_type_conversion<Traits,
-                                  std::void_t<decltype(Traits::is_default)>>
-    : std::bool_constant<Traits::is_default> {};
-
 struct unavailable_access {};
-struct missing_access {};
 
 template <typename... Accesses> struct alternative_access {};
 
@@ -130,18 +115,6 @@ struct access_satisfies<Supplied, unavailable_access> : std::true_type {};
 template <typename Supplied, typename... Accesses>
 struct access_satisfies<Supplied, alternative_access<Accesses...>>
     : std::bool_constant<(access_satisfies<Supplied, Accesses>::value && ...)> {
-};
-
-template <typename Traits, typename Source, typename = void>
-struct custom_conversion_access {
-  using type = missing_access;
-};
-
-template <typename Traits, typename Source>
-struct custom_conversion_access<
-    Traits, Source,
-    std::void_t<typename Traits::template required_access<Source>>> {
-  using type = typename Traits::template required_access<Source>;
 };
 
 // A conversion converts a source to a target, as a path of operations. An
@@ -215,12 +188,9 @@ template <typename Conversion, typename Inner>
 using available_t = std::conditional_t<Inner::available, Conversion,
                                        unavailable_type_conversion>;
 
-// The conversion from Source to Target that Access allows. A pair with a
-// custom type_conversion_traits takes only its conversion; any other pair takes
-// the first available path of the operations.
-template <typename Target, typename Source, typename Access = consume,
-          bool Default = is_default_type_conversion<
-              type_conversion_traits<Target, remove_cvref_t<Source>>>::value>
+// The conversion from Source to Target that Access allows: the first
+// available path of the operations.
+template <typename Target, typename Source, typename Access = consume>
 struct type_conversion_path;
 
 template <typename Target, typename Source, typename Access>
@@ -618,7 +588,7 @@ constexpr auto basic_path() {
   }
 }
 
-// What the default type_conversion_traits converts the source to. Wrappers and
+// What type_conversion_traits converts the source to. Wrappers and
 // alternatives are made by the operations after it instead.
 //
 // It consumes an rvalue source, and any source of a target that takes
@@ -1006,7 +976,7 @@ constexpr unsigned candidate_ops() {
                                                    std::remove_cv_t<object>>) {
     ops |= op_bit(op::basic);
   }
-  // The default type_conversion_traits binds a reference of the target to
+  // type_conversion_traits binds a reference of the target to
   // the source, or makes the target of it.
   if constexpr (value_target && (alternative_target || optional_target)) {
   } else if constexpr (lvalue_target) {
@@ -1084,33 +1054,9 @@ constexpr auto select() {
   }
 }
 
-template <typename Target, typename Source, typename Access, bool Default>
+template <typename Target, typename Source, typename Access>
 struct type_conversion_path {
   using type = decltype(select<Target, Source, Access>());
-  static constexpr bool available = type::available;
-};
-
-// The conversion a custom type_conversion_traits declares, with the access it
-// requires.
-template <typename Target, typename Source, typename Access>
-struct type_conversion_path<Target, Source, Access, false> {
-private:
-  using traits = type_conversion_traits<Target, remove_cvref_t<Source>>;
-  using required_access =
-      typename custom_conversion_access<traits, Source>::type;
-  static constexpr bool converts =
-      has_compatible_conversion<Target, traits, Source>::value;
-  static_assert(!converts || std::is_same_v<required_access, borrow> ||
-                    std::is_same_v<required_access, consume>,
-                "type_conversion_traits specialization must declare "
-                "required_access<Source> as borrow or consume");
-
-public:
-  using type = accessed_conversion_t<
-      std::conditional_t<converts,
-                         convert_t<Target, Source, required_access, Source>,
-                         unavailable_type_conversion>,
-      Access>;
   static constexpr bool available = type::available;
 };
 

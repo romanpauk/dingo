@@ -16,29 +16,7 @@
 #include <variant>
 #include <vector>
 
-namespace resolution_operation_test {
-struct conversion_source {};
-struct conversion_result {};
-
-struct conversion_target {
-  explicit conversion_target(conversion_result) : value(53) {}
-
-  int value;
-};
-} // namespace resolution_operation_test
-
 namespace dingo {
-template <>
-struct type_conversion_traits<resolution_operation_test::conversion_target,
-                              resolution_operation_test::conversion_source> {
-  template <typename> using required_access = borrow;
-
-  static resolution_operation_test::conversion_result
-  convert(const resolution_operation_test::conversion_source &) {
-    return {};
-  }
-};
-
 namespace {
 struct alternative_a {
   explicit alternative_a(int init) : value(init) {}
@@ -152,23 +130,6 @@ TEST(resolution_operation_test, rvalue_source_destroys_materialized_value) {
   }
 
   ASSERT_EQ(order, (std::vector<int>{0}));
-}
-
-TEST(resolution_operation_test,
-     traits_conversion_explicitly_constructs_the_target_from_its_result) {
-  using source = resolution_operation_test::conversion_source;
-  using target = resolution_operation_test::conversion_target;
-  using conversion = detail::type_conversion_path_t<target, const source &>;
-  static_assert(conversion::available);
-
-  source value;
-  fake_resolution_context resolver;
-  fake_resolution_context context;
-  auto converted =
-      conversion::apply(resolver, context, value, describe_type<target>(),
-                        describe_type<source>());
-
-  EXPECT_EQ(converted.value, 53);
 }
 
 TEST(resolution_operation_test,

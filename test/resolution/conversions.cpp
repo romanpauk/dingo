@@ -104,22 +104,6 @@ void check_copy_only_alternative(Container &container, int expected) {
   ASSERT_EQ(resolution_test::copy_only::copies, 1);
 }
 
-template <typename Container>
-void check_fresh_move_only_conversions(Container &container) {
-  auto first = container.template resolve<resolution_test::move_target>();
-  auto second = container.template resolve<resolution_test::move_target>();
-  ASSERT_EQ(first.value, 23);
-  ASSERT_EQ(second.value, 23);
-}
-
-template <typename Container>
-void check_copy_only_conversion(Container &container) {
-  auto resolved =
-      container
-          .template resolve<resolution_test::copy_only_conversion_target>();
-  ASSERT_EQ(resolved.value, 53);
-}
-
 template <typename Container> void exercise_runtime() {
   {
     Container container;
@@ -141,28 +125,6 @@ template <typename Container> void exercise_runtime() {
     check_copy_only_alternative(container, 41);
     ASSERT_EQ(std::get<resolution_test::copy_only>(value).value, 41);
   }
-  {
-    resolution_test::move_source source;
-    Container container;
-    container
-        .template register_type<dingo::scope<dingo::external>,
-                                dingo::storage<resolution_test::move_source *>,
-                                dingo::interfaces<resolution_test::move_target,
-                                                  resolution_test::secondary>>(
-            &source);
-    check_fresh_move_only_conversions(container);
-    ASSERT_EQ(source.value, 23);
-  }
-  {
-    resolution_test::copy_only_conversion_source source;
-    Container container;
-    container.template register_type<
-        dingo::scope<dingo::external>,
-        dingo::storage<resolution_test::copy_only_conversion_source &>,
-        dingo::interfaces<resolution_test::copy_only_conversion_target>>(
-        source);
-    check_copy_only_conversion(container);
-  }
 }
 
 template <template <typename...> typename Container> void exercise_static() {
@@ -181,23 +143,6 @@ template <template <typename...> typename Container> void exercise_static() {
         dingo::interfaces<resolution_test::copy_only>>>;
     Container<bindings> container;
     check_copy_only_alternative(container, 31);
-  }
-  {
-    using bindings = dingo::bindings<
-        dingo::bind<dingo::scope<dingo::shared>,
-                    dingo::storage<resolution_test::move_source>,
-                    dingo::interfaces<resolution_test::move_target,
-                                      resolution_test::secondary>>>;
-    Container<bindings> container;
-    check_fresh_move_only_conversions(container);
-  }
-  {
-    using bindings = dingo::bindings<dingo::bind<
-        dingo::scope<dingo::shared>,
-        dingo::storage<resolution_test::copy_only_conversion_source>,
-        dingo::interfaces<resolution_test::copy_only_conversion_target>>>;
-    Container<bindings> container;
-    check_copy_only_conversion(container);
   }
 }
 

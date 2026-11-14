@@ -18,10 +18,6 @@
 #include <variant>
 
 namespace conversion_compatibility_test {
-struct source {};
-struct target {};
-struct declared_source {};
-struct declared_target {};
 struct owning_source {
   explicit owning_source(int initial_value)
       : value(std::make_unique<int>(initial_value)) {}
@@ -52,65 +48,11 @@ struct pointer_like {
 struct observer_pointer {
   observer_pointer(int *);
 };
-struct converted_observer_pointer {
-  converted_observer_pointer(int *);
-};
-struct safe_observer_pointer {
-  explicit safe_observer_pointer(long *value) : pointer(value) {}
-
-  long *pointer;
-};
-struct customized_value {
-  int value;
-};
-struct consuming_owner {
-  explicit consuming_owner(int *);
-};
-struct copying_owner {
-  explicit copying_owner(int *);
-};
 struct array_base {};
 struct array_derived : array_base {};
-using converted_variant =
-    std::variant<std::shared_ptr<int>, converted_observer_pointer>;
-using safe_converted_variant =
-    std::variant<std::shared_ptr<long>, safe_observer_pointer>;
 } // namespace conversion_compatibility_test
 
 namespace dingo {
-template <>
-struct type_conversion_traits<conversion_compatibility_test::target,
-                              conversion_compatibility_test::source> {
-  template <typename> using required_access = borrow;
-
-  static conversion_compatibility_test::target
-  convert(const conversion_compatibility_test::source &) {
-    return {};
-  }
-};
-
-template <>
-struct type_conversion_traits<conversion_compatibility_test::declared_target,
-                              conversion_compatibility_test::declared_source> {
-  template <typename> using required_access = consume;
-
-  static conversion_compatibility_test::declared_target
-  convert(conversion_compatibility_test::declared_source &&) {
-    return {};
-  }
-};
-
-template <>
-struct type_conversion_traits<conversion_compatibility_test::customized_value,
-                              conversion_compatibility_test::customized_value> {
-  template <typename> using required_access = borrow;
-
-  static conversion_compatibility_test::customized_value
-  convert(const conversion_compatibility_test::customized_value &source) {
-    return {source.value + 1};
-  }
-};
-
 template <> struct type_traits<conversion_compatibility_test::owning_source> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = false;
@@ -140,86 +82,6 @@ struct type_traits<conversion_compatibility_test::observer_pointer> {
   using rebind_t = conversion_compatibility_test::observer_pointer;
 };
 
-template <>
-struct type_traits<conversion_compatibility_test::converted_observer_pointer> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_owning_handle = false;
-
-  using value_type = int;
-
-  template <typename>
-  using rebind_t = conversion_compatibility_test::converted_observer_pointer;
-};
-
-template <>
-struct type_traits<conversion_compatibility_test::safe_observer_pointer> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_owning_handle = false;
-
-  using value_type = long;
-
-  template <typename>
-  using rebind_t = conversion_compatibility_test::safe_observer_pointer;
-};
-
-template <> struct type_traits<conversion_compatibility_test::consuming_owner> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_owning_handle = true;
-
-  using value_type = int;
-
-  template <typename>
-  using rebind_t = conversion_compatibility_test::consuming_owner;
-};
-
-template <> struct type_traits<conversion_compatibility_test::copying_owner> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_owning_handle = true;
-
-  using value_type = int;
-
-  template <typename>
-  using rebind_t = conversion_compatibility_test::copying_owner;
-};
-
-template <>
-struct type_conversion_traits<conversion_compatibility_test::consuming_owner,
-                              int *> {
-  template <typename> using required_access = consume;
-
-  static conversion_compatibility_test::consuming_owner convert(int *);
-};
-
-template <>
-struct type_conversion_traits<conversion_compatibility_test::copying_owner,
-                              int *> {
-  template <typename> using required_access = borrow;
-
-  static conversion_compatibility_test::copying_owner convert(int *);
-};
-
-template <>
-struct type_conversion_traits<conversion_compatibility_test::converted_variant,
-                              int *> {
-  template <typename> using required_access = consume;
-
-  static std::shared_ptr<int> convert(int *);
-};
-
-template <>
-struct type_conversion_traits<
-    conversion_compatibility_test::safe_converted_variant, long *> {
-  template <typename> using required_access = borrow;
-
-  static conversion_compatibility_test::safe_observer_pointer
-  convert(long *pointer) {
-    return conversion_compatibility_test::safe_observer_pointer(pointer);
-  }
-};
 } // namespace dingo
 
 namespace {
@@ -319,15 +181,6 @@ TEST(type_registration_test, conversion_availability_uses_source_access) {
   static_assert(detail::access_satisfies<
                 consume, detail::alternative_access<borrow, consume>>::value);
   static_assert(detail::is_type_conversion_available_v<
-                conversion_compatibility_test::target,
-                const conversion_compatibility_test::source &>);
-  static_assert(detail::is_type_conversion_available_v<
-                conversion_compatibility_test::declared_target,
-                conversion_compatibility_test::declared_source &&>);
-  static_assert(!detail::is_type_conversion_available_v<
-                conversion_compatibility_test::declared_target,
-                conversion_compatibility_test::declared_source &>);
-  static_assert(detail::is_type_conversion_available_v<
                 conversion_compatibility_test::copying_from_owner,
                 conversion_compatibility_test::owning_source &, borrow>);
   using borrowed_owner_conversion = detail::type_conversion_path_t<
@@ -353,30 +206,6 @@ TEST(type_registration_test, conversion_availability_uses_source_access) {
   static_assert(
       detail::is_type_conversion_available_v<
           conversion_compatibility_test::observer_pointer, int *, borrow>);
-  static_assert(
-      detail::is_type_conversion_available_v<
-          conversion_compatibility_test::consuming_owner, int *, consume>);
-  static_assert(!detail::is_type_conversion_available_v<
-                conversion_compatibility_test::consuming_owner, int *, borrow>);
-  using consuming_conversion = detail::type_conversion_path_t<
-      conversion_compatibility_test::consuming_owner, int *, consume>;
-  static_assert(
-      std::is_same_v<typename consuming_conversion::required_access, consume>);
-  static_assert(detail::is_type_conversion_available_v<
-                conversion_compatibility_test::copying_owner, int *, borrow>);
-  using copying_conversion = detail::type_conversion_path_t<
-      conversion_compatibility_test::copying_owner, int *, borrow>;
-  static_assert(
-      std::is_same_v<typename copying_conversion::required_access, borrow>);
-  static_assert(
-      detail::is_type_conversion_available_v<
-          conversion_compatibility_test::converted_variant, int *, consume>);
-  static_assert(
-      !detail::is_type_conversion_available_v<
-          conversion_compatibility_test::converted_variant, int *, borrow>);
-  static_assert(detail::is_type_conversion_available_v<
-                conversion_compatibility_test::safe_converted_variant, long *,
-                borrow>);
   static_assert(
       !detail::is_type_conversion_available_v<
           test_optional<std::shared_ptr<int>>, test_optional<int *> &, borrow>);
@@ -567,22 +396,6 @@ TEST(type_registration_test, inferred_borrowed_conversion_uses_const_source) {
   EXPECT_NE(value.value, nullptr);
 }
 
-TEST(type_registration_test, same_type_custom_conversion_is_preserved) {
-  using value_type = conversion_compatibility_test::customized_value;
-  using conversion =
-      detail::type_conversion_path_t<value_type, value_type &, borrow>;
-  struct conversion_context {};
-
-  value_type value{17};
-  conversion_context resolver;
-  conversion_context context;
-  auto result =
-      conversion::apply(resolver, context, value, describe_type<value_type>(),
-                        describe_type<value_type>());
-
-  EXPECT_EQ(result.value, 18);
-}
-
 TEST(type_registration_test,
      borrowed_optional_conversion_uses_const_contained_value) {
   using source = test_optional<conversion_compatibility_test::owning_source>;
@@ -622,64 +435,6 @@ TEST(type_registration_test,
   ASSERT_NE(result.value, nullptr);
   EXPECT_EQ(*result.value, 23);
   EXPECT_EQ(value.value, nullptr);
-}
-
-TEST(type_registration_test,
-     borrowed_custom_conversion_executes_non_owning_result) {
-  using target = conversion_compatibility_test::safe_converted_variant;
-  using conversion = detail::type_conversion_path_t<target, long *, borrow>;
-  struct conversion_context {};
-
-  long value = 17;
-  long *source = &value;
-  conversion_context resolver;
-  conversion_context context;
-  auto result =
-      conversion::apply(resolver, context, source, describe_type<target>(),
-                        describe_type<long *>());
-
-  EXPECT_EQ(
-      std::get<conversion_compatibility_test::safe_observer_pointer>(result)
-          .pointer,
-      &value);
-}
-
-TEST(type_registration_test,
-     borrowed_storage_publishes_fresh_move_only_conversion_results) {
-  using namespace resolution_test;
-  using registration =
-      type_registration<scope<external>, storage<move_source *>,
-                        interfaces<move_target, secondary>>;
-  using model = detail::binding_model<registration>;
-  using resolutions =
-      detail::binding_resolutions<move_target, typename model::storage_type>;
-  using binding = detail::binding<move_target, model>;
-
-  static_assert(
-      has_resolution_target_v<move_target,
-                              typename accepted_values<resolutions>::type>);
-  static_assert(std::is_same_v<typename detail::binding_supports_request<
-                                   move_target, binding>::type::target_type,
-                               move_target>);
-}
-
-TEST(type_registration_test,
-     borrowed_storage_publishes_copyable_custom_value_conversion) {
-  using namespace resolution_test;
-  static_assert(
-      std::is_same_v<detail::type_conversion_path_t<copy_target, copy_source &>,
-                     detail::convert_t<copy_target, copy_source &>>);
-
-  using registration =
-      type_registration<scope<external>, storage<copy_source *>,
-                        interfaces<copy_target, secondary>>;
-  using model = detail::binding_model<registration>;
-  using resolutions =
-      detail::binding_resolutions<copy_target, typename model::storage_type>;
-
-  static_assert(
-      has_resolution_target_v<copy_target,
-                              typename accepted_values<resolutions>::type>);
 }
 
 TEST(type_registration_test, consumed_binding_executes_custom_type_conversion) {
