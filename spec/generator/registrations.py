@@ -401,7 +401,10 @@ def probe_registrations(compiler, flags, directory, tasks, selected, map):
         compiler, flags, directory, *task, selected), tasks))
     outcomes = [outcome for found, _, _ in planned for outcome in found]
     members = [member for _, found, _ in planned for member in found]
-    rejected = [member for _, _, found in planned for member in found]
+    # The first error of a rejected probe depends on what else the program
+    # instantiates: its probes are made with the others of its registration
+    # and position only, as their errors are recorded.
+    rejected = [found for _, _, found in planned if found]
     checked = [registration for registration, position in tasks
                if position is Position.DIRECT and registration.checks()]
 
