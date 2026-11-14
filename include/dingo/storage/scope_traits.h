@@ -13,6 +13,7 @@
 #include <dingo/base/type_list.h>
 #include <dingo/context/recursion_guard.h>
 #include <dingo/conversion/source.h>
+#include <dingo/semantics/model.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/shape.h>
@@ -524,5 +525,17 @@ public:
         source_builder(scope, context, storage, container));
   }
 };
+
+// What the semantics (dingo/semantics/model.h) know of a scope, of its
+// scope_traits: it makes a new instance for each request when it consumes
+// what it resolves; it is given its instance when it can hold a reference,
+// which only such a scope can; it publishes its instance before constructing
+// it when it allows cycles.
+template <typename StorageTag>
+inline constexpr semantics::scope_traits scope_semantics_v = {
+    scope_traits<StorageTag>::consumes,
+    scope_traits<StorageTag>::exposed(storage_form::reference) !=
+        storage_exposure::none,
+    scope_allows_cycles_v<StorageTag>};
 } // namespace detail
 } // namespace dingo

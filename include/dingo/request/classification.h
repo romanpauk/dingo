@@ -380,4 +380,47 @@ template <typename Leaf> constexpr semantics::leaf_traits leaf_traits_of() {
           std::is_default_constructible_v<Leaf>,
           !std::is_default_constructible_v<Leaf>};
 }
+
+// How a request takes the shape it asks for: its outer reference or pointer,
+// and whether that is const. A pointer is always the category of a request,
+// as no request shape begins with one; a registration that binds a pointer
+// type itself is told apart by the binding a request selects. A request the
+// semantics do not model, an rvalue reference to const, is not modeled.
+template <typename Request> struct requested_category {
+  static auto make() {
+    using referred = std::remove_reference_t<Request>;
+    using pointee = std::remove_pointer_t<std::remove_cv_t<Request>>;
+    if constexpr (std::is_lvalue_reference_v<Request>) {
+      return category_of<std::is_const_v<referred>
+                             ? semantics::category::const_lvalue_reference
+                             : semantics::category::lvalue_reference,
+                         std::remove_const_t<referred>>{};
+    } else if constexpr (std::is_rvalue_reference_v<Request>) {
+      return category_of<semantics::category::rvalue_reference, referred,
+                         !std::is_const_v<referred>>{};
+    } else if constexpr (std::is_pointer_v<std::remove_cv_t<Request>>) {
+      return category_of<std::is_const_v<pointee>
+                             ? semantics::category::const_pointer
+                             : semantics::category::pointer,
+                         std::remove_const_t<pointee>>{};
+    } else {
+      return category_of<std::is_const_v<Request>
+                             ? semantics::category::const_value
+                             : semantics::category::value,
+                         std::remove_const_t<Request>>{};
+    }
+  }
+
+  template <semantics::category Category, typename Shape, bool Modeled = true>
+  struct category_of {
+    static constexpr semantics::category value = Category;
+    using shape = Shape;
+    static constexpr bool modeled = Modeled;
+  };
+
+  using type = decltype(make());
+  static constexpr semantics::category value = type::value;
+  using shape = typename type::shape;
+  static constexpr bool modeled = type::modeled;
+};
 } // namespace dingo::detail

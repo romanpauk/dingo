@@ -54,6 +54,17 @@ SOURCE = Path(__file__).parents[1] / "test" / "model" / "semantics.cpp"
 # The standard layers, which the program classifies the standard wrappers as.
 STANDARD = tuple(semantics.LAYERS)
 STACK_ELEMENTS = {"leaf": 0, "interface": 1, "other": 2}
+# How the classification program makes a request of a category of a shape,
+# which spells an array as C++ does.
+CATEGORY_TYPES = {
+    Category.VALUE: "value_of",
+    Category.CONST: "std::add_const_t",
+    Category.LVALUE_REFERENCE: "std::add_lvalue_reference_t",
+    Category.CONST_LVALUE_REFERENCE: "const_lvalue_of",
+    Category.RVALUE_REFERENCE: "std::add_rvalue_reference_t",
+    Category.POINTER: "std::add_pointer_t",
+    Category.CONST_POINTER: "const_pointer_of",
+}
 
 
 def classified_layer(name):
@@ -76,6 +87,12 @@ def classification(compiler, flags, work):
     leaves = [(leaf, f"dingo::model::{LEAF_TYPES[leaf]}")
               for leaf in semantics.LEAVES]
     entries = []
+    for scope, traits in semantics.SCOPES.items():
+        entries.append((f"scope/{scope.value}",
+                        f"print_scope<dingo::{scope.value}>()",
+                        " ".join(str(int(value)) for value in (
+                            traits.makes, traits.given,
+                            traits.publishes_early))))
     for leaf, spelled in leaves:
         traits = semantics.LEAVES[leaf]
         entries.append((f"leaf/{leaf.value}",
@@ -96,8 +113,17 @@ def classification(compiler, flags, work):
             interface = interface_of(bound, leaf)
             # A shape C++ cannot spell of the interface in any category, as
             # the grammar says, is no type to classify.
-            valid = {request.shape for request in grammar(
-                (interface,), tuple(semantics.SHAPES)) if not request.invalid}
+            requests = [request for request in grammar(
+                (interface,), tuple(semantics.SHAPES)) if not request.invalid]
+            valid = {request.shape for request in requests}
+            for request in requests:
+                shape = spell_shape(request.shape, interface.spelled)
+                entries.append((
+                    f"category/{request.name}/{bound.element}"
+                    f"{list(bound.layers)}/{leaf.value}",
+                    f"print_category<{CATEGORY_TYPES[request.category]}<"
+                    f"{shape}>, {shape}>()",
+                    f"{list(Category).index(request.category)} 1"))
             for shape in semantics.SHAPES:
                 if shape not in valid:
                     continue
@@ -119,6 +145,9 @@ def classification(compiler, flags, work):
     run = subprocess.run([str(program)], capture_output=True, text=True,
                          check=True)
     printed = run.stdout.splitlines()
+    if len(printed) != len(entries):
+        return len(entries), [("program", f"{len(entries)} lines",
+                               f"{len(printed)} lines")]
     return len(entries), [(name, want, got) for (name, _, want), got in
                           zip(entries, printed) if want != got]
 
@@ -174,6 +203,23 @@ struct printer<dingo::detail::type_stack<dingo::type_list<Tags...>, Element>> {
 
 template <typename T, typename Leaf> void print_stack() {
   printer<dingo::detail::stack_of_t<T, Leaf>>::print();
+}
+
+template <typename X> using value_of = X;
+template <typename X> using const_lvalue_of = const X &;
+template <typename X> using const_pointer_of = const X *;
+
+template <typename Request, typename Shape> void print_category() {
+  using category = dingo::detail::requested_category<Request>;
+  std::printf("%d %d\\n",
+              category::modeled ? static_cast<int>(category::value) : -1,
+              std::is_same_v<typename category::shape, Shape>);
+}
+
+template <typename Tag> void print_scope() {
+  constexpr dingo::semantics::scope_traits scope =
+      dingo::detail::scope_semantics_v<Tag>;
+  std::printf("%d %d %d\\n", scope.makes, scope.given, scope.publishes_early);
 }
 
 template <typename Leaf> void print_leaf() {

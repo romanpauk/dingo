@@ -160,7 +160,7 @@ specification. It is also the largest part of the compile time that is left.
    around anything that may become the request. Three or more layers a type
    defines in one stack are not compared.
 
-3. **Classification.** In progress.
+3. **Classification.** Done.
    [include/dingo/request/classification.h](../../include/dingo/request/classification.h)
    maps a C++ type to what the semantics know of it, of its `type_traits` and of
    what C++ says of it:
@@ -187,13 +187,26 @@ specification. It is also the largest part of the compile time that is left.
 
    - What the leaf can do: be copied, moved, or constructed of nothing.
 
-   `semantics-check` classifies every type the model spells, every stored form
-   and every request shape of every bound interface of every leaf, and compares
-   each with the layers the specification says it is made of: 604 types, all
-   equal. It also checks that the standard wrappers are the standard layers of
-   the specification. A test shows that a wrapper a user defines is classified
-   as the standard one of the same semantics. Left: the scope of a registration
-   and the category of a request.
+   - What a scope does, of its `scope_traits` (`scope_semantics_v` in
+     [include/dingo/storage/scope_traits.h](../../include/dingo/storage/scope_traits.h)):
+     it makes a new instance when it consumes what it resolves, it is given its
+     instance when it can hold a reference, and it publishes its instance early
+     when it allows cycles.
+
+   - The category of a request: its outer reference or pointer, and whether that
+     is const. A pointer is always the category, as no request shape begins with
+     one. A registration that binds a pointer type itself is told apart by the
+     binding a request selects, in the execution. An rvalue reference to const
+     is not modeled.
+
+   `semantics-check` classifies every type the model spells and compares each
+   with what the specification says of it: every stored form and every request
+   shape of every bound interface of every leaf, as the layers it is made of;
+   every valid request of the grammar, as its category and its shape; and the
+   leaves and the scopes, as their traits. That is 4,224 types, all equal. It
+   also checks that the standard wrappers are the standard layers of the
+   specification. A test shows that a wrapper a user defines is classified as
+   the standard one of the same semantics.
 
 4. **Steps.** One function template for each kind of step, with its contract as
    static assertions, and a test for each.
