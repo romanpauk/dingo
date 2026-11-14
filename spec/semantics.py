@@ -458,8 +458,16 @@ def transitions(thing, context):
     # request owns when it cannot be copied.
     if thing.element == "leaf" and context.abstract:
         outer = LAYERS[layers[0]] if layers else None
-        if outer is None or (len(layers) == 1 and outer.shares_element and
-                             outer.copyable):
+        if outer is not None and not outer.gives_element:
+            # The pointer to the first element of an array is a pointer to
+            # that element as the interface, not to an array of the
+            # interface: the request does not own what it points to.
+            if len(layers) == 1 and outer.shares_element:
+                yield "upcast", replace(thing, element="interface",
+                                        layers=(POINTER,),
+                                        origin=Origin.BORROWED)
+        elif outer is None or (len(layers) == 1 and outer.shares_element and
+                               outer.copyable):
             yield "upcast", replace(thing, element="interface")
         elif len(layers) == 1 and outer.shares_element and thing.origin.owned:
             yield "upcast", replace(

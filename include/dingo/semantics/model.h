@@ -440,8 +440,17 @@ constexpr transitions_list transitions(const thing &of, const context &with) {
     const layer_kind *outer = of.depth ? &with.kind(of.layers[0]) : nullptr;
     thing upcast = of;
     upcast.of = element::interface;
-    if (outer == nullptr ||
-        (of.depth == 1 && outer->shares_element && outer->copyable)) {
+    if (outer != nullptr && !outer->gives_element) {
+      // The pointer to the first element of an array is a pointer to that
+      // element as the interface, not to an array of the interface: the
+      // request does not own what it points to.
+      if (of.depth == 1 && outer->shares_element) {
+        upcast.layers[0] = pointer_layer;
+        upcast.from = origin::borrowed;
+        out.add(step::upcast, upcast);
+      }
+    } else if (outer == nullptr ||
+               (of.depth == 1 && outer->shares_element && outer->copyable)) {
       out.add(step::upcast, upcast);
     } else if (of.depth == 1 && outer->shares_element && owned(of.from)) {
       upcast.lifetimes[0] = request;
