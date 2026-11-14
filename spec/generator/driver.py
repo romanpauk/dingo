@@ -49,9 +49,12 @@ CRASH = "exited with"
 # a guide: a program the compiler runs out of memory on is not split, its
 # probes fail, and the size of programs or the library is to be changed.
 MEMORY_LIMIT = 1024
-# The probes a program holds, and the registrations they may be of.
+# The probes a program holds, and the registrations they may be of; and the
+# registrations a program checks what they publish of, which instantiates
+# less for each.
 GROUP_PROBES = 64
-GROUP_REGISTRATIONS = 8
+GROUP_REGISTRATIONS = 16
+GROUP_CHECKS = 32
 EXHAUSTED = re.compile(r"out of memory|memory exhausted|"
                        r"Cannot allocate memory|bad_alloc")
 OUT_OF_MEMORY = f"error: the compiler ran out of its {MEMORY_LIMIT} MiB"

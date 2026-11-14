@@ -177,7 +177,7 @@ An operation is an entry point and a position. The entry points are `resolve`,
   `shared_cyclical` scope keeps, together with what the class receives.
 
 The probe compiles the probes of several registrations in one program, with
-[`test/model/probe.h`](../test/model/probe.h): up to 64 probes of up to 8
+[`test/model/probe.h`](../test/model/probe.h): up to 64 probes of up to 16
 registrations, each registration in a part of its own. The container and the
 probe machinery are then compiled once for all of them. Each probe resolves its
 request twice and records the outcome. A request that the library rejects at
@@ -216,7 +216,7 @@ needs:
 
 A resolution with more copies or more moves than the fewest is `excess`.
 
-Programs of up to 8 registrations also check every request that each
+Programs of up to 32 registrations also check every request that each
 registration publishes. A published request that selects the binding of another
 interface is `unreachable`. A published request that no probe makes is
 `unprobed`. If such a program fails, the driver checks its registrations in

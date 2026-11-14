@@ -417,11 +417,11 @@ def probe_registrations(compiler, flags, directory, tasks, selected, map):
         for index, part in enumerate(packed(members))]
     calls += [lambda index=index, part=part: driver.probe_expecting_rejection(
         compiler, flags, directory, group_of(part), f"rejected_{index}", part)
-        for index, part in enumerate(packed(rejected))]
+        for index, part in enumerate(rejected)]
     calls += [lambda index=index, part=part: check_registrations(
         compiler, flags, directory, f"checks_{index}", Group(tuple(part)))
         for index, part in enumerate(driver.split(
-            checked, driver.GROUP_REGISTRATIONS))]
+            checked, driver.GROUP_CHECKS))]
     for found in map(lambda call: call(), calls):
         outcomes += found
     return outcomes
