@@ -752,15 +752,23 @@ struct answer {
   bool overflow = false;
   std::uint16_t state = no_state;
   satisfaction how = satisfaction::refer;
+  // Whether what satisfies it may not exist, as the element of a layer that
+  // may be empty: the request fails when it does not.
+  bool absent = false;
 };
 
+// The answer of what satisfies a request at fewer copies and moves, or at as
+// few and defined when a layer is empty where the answer so far is not, as
+// the specification's fewest prefers it.
 constexpr void consider(answer &result, cost made, std::size_t index,
-                        satisfaction how) {
-  if (!result.found || made < result.fewest) {
+                        satisfaction how, bool absent) {
+  if (!result.found || made < result.fewest ||
+      (made == result.fewest && result.absent && !absent)) {
     result.found = true;
     result.fewest = made;
     result.state = static_cast<std::uint16_t>(index);
     result.how = how;
+    result.absent = absent;
   }
 }
 
@@ -785,7 +793,7 @@ constexpr answer satisfy_by(const search &found, const request &goal,
       if (of.of == goal.of && has_layers(of, goal) && of.instance &&
           static_cast<int>(of.life()) >= static_cast<int>(needed)) {
         consider(result, finish(each.made, effect::none, of), index,
-                 satisfaction::refer);
+                 satisfaction::refer, of.absent);
       }
     }
     if (result.found || !points(taken)) {
@@ -796,7 +804,7 @@ constexpr answer satisfy_by(const search &found, const request &goal,
       if (each.reached.of == goal.of &&
           points_to(each.reached, goal, needed, with)) {
         consider(result, finish(each.made, effect::none, each.reached), index,
-                 satisfaction::point);
+                 satisfaction::point, each.reached.absent);
       }
     }
     return result;
@@ -810,7 +818,7 @@ constexpr answer satisfy_by(const search &found, const request &goal,
     if (taken == category::rvalue_reference) {
       if (of.from == origin::made && can_move(of, with)) {
         consider(result, finish(each.made, effect::none, of), index,
-                 satisfaction::take);
+                 satisfaction::take, of.absent);
       }
       continue;
     }
@@ -821,12 +829,12 @@ constexpr answer satisfy_by(const search &found, const request &goal,
     if (owned(of.from) && can_move(of, with)) {
       consider(result,
                finish(each.made, anew ? effect::move : effect::none, of), index,
-               satisfaction::move);
+               satisfaction::move, of.absent);
     }
     if (can_copy(of, with)) {
       consider(result,
                finish(each.made, anew ? effect::copy : effect::none, of), index,
-               satisfaction::copy);
+               satisfaction::copy, of.absent);
     }
   }
   return result;
