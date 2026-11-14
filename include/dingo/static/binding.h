@@ -84,49 +84,71 @@ using static_binding_facts = binding_facts_v<
     unannotated_t<typename InterfaceBinding::interface_type>,
     typename InterfaceBinding::binding_model_type::storage_type>;
 
+template <typename Request, typename InterfaceBinding> struct static_plan;
+
+// Whether a binding resolves the request it derives a request of: none when
+// it derives none.
+template <typename Request, typename InterfaceBinding, derivation How>
+struct derived_resolves
+    : std::bool_constant<static_plan<derived_request_t<How, Request>,
+                                     InterfaceBinding>::resolves> {};
+
+template <typename Request, typename InterfaceBinding>
+struct derived_resolves<Request, InterfaceBinding, derivation::none>
+    : std::false_type {};
+
+// The resolutions a static binding publishes, and void after them, which a
+// request it does not publish selects.
+template <typename Resolutions> struct static_resolutions;
+
+template <typename... Resolutions>
+struct static_resolutions<type_list<Resolutions...>> {
+  using type = type_list<Resolutions..., void>;
+};
+
+template <typename InterfaceBinding>
+using static_resolutions_t =
+    typename static_resolutions<typename binding_resolutions<
+        unannotated_t<typename InterfaceBinding::interface_type>,
+        typename InterfaceBinding::binding_model_type::storage_type>::type>::
+        type;
+
 // The plan of a request of a static binding, decided as the code compiles by
-// the functions the runtime container decides by as it resolves: the
-// resolution the binding publishes for the request, if it publishes one, and
-// the derivation it makes of a request it does not.
+// the functions the runtime container decides by as it resolves, in one
+// class for each request: whether the binding publishes the request (value)
+// and the resolution it publishes for it (type, or void); the derivation it
+// makes of a request it does not publish (how); whether it resolves the
+// request, published or derived of one it resolves (resolves); and how it
+// resolves a request it does not publish, if it resolves it (derived).
 template <typename Request, typename InterfaceBinding> struct static_plan {
   static constexpr const binding_facts &facts =
       static_binding_facts<InterfaceBinding>::value;
   static constexpr type_descriptor requested =
       described_type_v<unannotated_t<Request>>;
   static constexpr std::size_t index = published_index(facts, requested);
-  static constexpr bool published = index != facts.published_count;
-  static constexpr derivation how =
-      derive_request<Request>(binding_derivations<Request>(facts, requested));
-};
-
-template <typename Request, typename InterfaceBinding, bool Published>
-struct published_resolution_type {
-  using type = void;
-};
-
-template <typename Request, typename InterfaceBinding>
-struct published_resolution_type<Request, InterfaceBinding, true> {
-  using type = typename type_list_element<
-      static_plan<Request, InterfaceBinding>::index,
-      typename binding_resolutions<
-          unannotated_t<typename InterfaceBinding::interface_type>,
-          typename InterfaceBinding::binding_model_type::storage_type>::type>::
-      type;
+  static constexpr bool value = index != facts.published_count;
+  using type =
+      type_list_element_t<index, static_resolutions_t<InterfaceBinding>>;
+  static constexpr derivation how = derive_request(
+      request_facts_v<Request>,
+      binding_derivations(facts, requested,
+                          derivation_shape_v<derivation::convert, Request>,
+                          owner_descriptor<Request>()));
+  static constexpr bool resolves = value || derived_resolves < Request,
+                        InterfaceBinding,
+                        value ? derivation::none : how > ::value;
+  static constexpr derivation derived =
+      value || !resolves ? derivation::none : how;
 };
 
 // Whether a static binding publishes a request, and the resolution it
 // publishes for it.
 template <typename Request, typename InterfaceBinding>
-struct binding_supports_request {
-  static constexpr bool value =
-      static_plan<Request, InterfaceBinding>::published;
-  using type = typename published_resolution_type<Request, InterfaceBinding,
-                                                  value>::type;
-};
+using binding_supports_request = static_plan<Request, InterfaceBinding>;
 
 template <typename Request, typename InterfaceBinding>
 inline constexpr bool binding_supports_request_v =
-    binding_supports_request<Request, InterfaceBinding>::value;
+    static_plan<Request, InterfaceBinding>::value;
 
 // The dependencies of a static binding resolve through its local bindings if
 // they bind the request, otherwise through the host.
@@ -179,7 +201,6 @@ struct static_dependencies<Host, static_registry<LocalRegistrations...>> {
       local_binding_router<static_bindings_state<LocalRegistrations...>, Host>;
 };
 
-// Whether a static binding publishes a request.
 // The derivation of a request a static binding does not publish.
 template <typename Request, typename InterfaceBinding>
 inline constexpr derivation static_derivation_v =
@@ -188,39 +209,21 @@ inline constexpr derivation static_derivation_v =
 // Whether a binding resolves a request: one it publishes, or one it derives
 // from a request it resolves.
 template <typename Request, typename InterfaceBinding>
-constexpr bool resolves_request() {
-  if constexpr (binding_supports_request_v<Request, InterfaceBinding>) {
-    return true;
-  } else {
-    constexpr derivation how = static_derivation_v<Request, InterfaceBinding>;
-    if constexpr (how == derivation::none) {
-      return false;
-    } else {
-      return resolves_request<derived_request_t<how, Request>,
-                              InterfaceBinding>();
-    }
-  }
-}
-
-template <typename Request, typename InterfaceBinding>
 inline constexpr bool resolves_request_v =
-    resolves_request<Request, InterfaceBinding>();
+    static_plan<Request, InterfaceBinding>::resolves;
 
 // How a binding resolves a request it does not publish, if it resolves it.
 template <typename Request, typename InterfaceBinding>
 inline constexpr derivation static_request_derivation_v =
-    binding_supports_request_v<Request, InterfaceBinding> ||
-            !resolves_request_v<Request, InterfaceBinding>
-        ? derivation::none
-        : static_derivation_v<Request, InterfaceBinding>;
+    static_plan<Request, InterfaceBinding>::derived;
 
 // The resolution of a request selected at compile time.
 template <typename Request, typename InterfaceBinding, typename Context>
-struct static_request_resolution
-    : binding_supports_request<Request, InterfaceBinding> {
+struct static_request_resolution : static_plan<Request, InterfaceBinding> {
 private:
   static constexpr bool resolves =
-      rejects_late_v<Context> || resolves_request_v<Request, InterfaceBinding>;
+      rejects_late_v<Context> ||
+      static_plan<Request, InterfaceBinding>::resolves;
   // A request that does not resolve because it would slice the registered
   // type is told so.
   static constexpr bool slices =
@@ -270,8 +273,7 @@ public:
     using resolution =
         typename static_request_resolution<Request, InterfaceBinding,
                                            Context>::type;
-    constexpr derivation how =
-        static_request_derivation_v<Request, InterfaceBinding>;
+    constexpr derivation how = static_plan<Request, InterfaceBinding>::derived;
     if constexpr (how != derivation::none) {
       return derive<InterfaceBinding, Request, how>(scope, host, context);
     } else if constexpr (std::is_void_v<resolution>) {
@@ -295,7 +297,7 @@ public:
     using resolution =
         typename static_request_resolution<Request, InterfaceBinding,
                                            Context>::type;
-    if constexpr (static_request_derivation_v<Request, InterfaceBinding> !=
+    if constexpr (static_plan<Request, InterfaceBinding>::derived !=
                   derivation::none) {
       // A request the binding derives is handed over as it is derived.
       return std::forward<Fn>(fn)(
@@ -349,9 +351,9 @@ private:
   // Whether the binding composes a request, known as the code compiles.
   template <typename InterfaceBinding> static auto composes_request() {
     return [](auto tag) {
-      return std::bool_constant<static_request_derivation_v<
-                                    typename decltype(tag)::type,
-                                    InterfaceBinding> == derivation::compose>{};
+      return std::bool_constant<static_plan<typename decltype(tag)::type,
+                                            InterfaceBinding>::derived ==
+                                derivation::compose>{};
     };
   }
 
@@ -365,7 +367,7 @@ private:
     auto composes = composes_request<InterfaceBinding>();
     auto with = [&](auto tag, auto &emplace) -> wrapper {
       using candidate = typename decltype(tag)::type;
-      if constexpr (static_request_derivation_v<candidate, InterfaceBinding> ==
+      if constexpr (static_plan<candidate, InterfaceBinding>::derived ==
                     derivation::none) {
         return consume<InterfaceBinding, candidate>(
             scope, host, context, [&](auto &&instance) -> wrapper {

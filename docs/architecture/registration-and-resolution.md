@@ -186,9 +186,10 @@ as it compiles. A static binding has the facts of its interface and storage
 runtime binding of them has too. The plan of a request (`static_plan` in
 [include/dingo/static/binding.h](../../include/dingo/static/binding.h)) is the
 resolution the binding publishes for it, of `published_index`, or else the
-derivation it makes of it, of `binding_derivations` and `derive_request`. Both
-containers thus decide by one implementation. The static container applies the
-plan through typed steps, which the compiler inlines.
+derivation it makes of it, of `binding_derivations` and `derive_request`. It is
+one class for each request, which also tells whether the binding resolves the
+request at all. Both containers thus decide by one implementation. The static
+container applies the plan through typed steps, which the compiler inlines.
 
 The containers differ in their binding table and their selection, not in the
 algorithm. Both containers give the algorithm the same hooks. A runtime
