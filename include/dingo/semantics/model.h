@@ -337,6 +337,10 @@ struct transitions_list {
   constexpr void add(step kind, const thing &reached) {
     items[count++] = {kind, reached};
   }
+
+  constexpr void operator()(step kind, const thing &reached) {
+    add(kind, reached);
+  }
 };
 
 // The deepest stack a derivation makes.
@@ -358,8 +362,9 @@ constexpr thing copied(const thing &of, const context &with) {
 // What is derived of the element of a layer that may be empty without
 // failing when it is: a pointer to the element, and the optional the layer
 // holds.
+template <typename Sink>
 constexpr void empty_safe_steps(const thing &of, const thing &inner,
-                                const context &with, transitions_list &out) {
+                                const context &with, Sink &out) {
   const layer below = inner.depth ? inner.layers[0] : no_layer;
   thing pointer;
   if (below != no_layer && with.kind(below).decays) {
@@ -371,35 +376,38 @@ constexpr void empty_safe_steps(const thing &of, const thing &inner,
   }
   pointer.from = origin::borrowed;
   pointer.absent = of.absent;
-  out.add(step::element_pointer, pointer);
+  out(step::element_pointer, pointer);
   if (below != no_layer && with.kind(below).has_empty_value &&
       !inner.unconstructed) {
     if (owned(inner.from)) {
       thing same = inner;
       same.absent = of.absent;
-      out.add(step::element_or_empty, same);
+      out(step::element_or_empty, same);
     } else if (can_copy(inner, with)) {
       thing copy = copied(inner, with);
       copy.absent = of.absent;
-      out.add(step::element_or_empty_copy, copy);
+      out(step::element_or_empty_copy, copy);
     }
   }
 }
 
 // The steps the semantics allow from a thing.
-constexpr transitions_list transitions(const thing &of, const context &with) {
-  transitions_list out;
+// They are passed to a sink, out(kind, thing), one by one: a constant
+// expression returns no list of them, which a compiler would keep.
+template <typename Sink>
+constexpr void each_transition(const thing &of, const context &with,
+                               Sink &out) {
   if (of.unconstructed) {
-    return out;
+    return;
   }
   const lifetime request = lifetime::request;
   if (of.depth) {
     const layer outer = of.layers[0];
     const layer_kind &kind = with.kind(outer);
     if (kind.decays) {
-      out.add(step::decay, restacked(of, &array_pointer_layer, 1, 1, &request));
+      out(step::decay, restacked(of, &array_pointer_layer, 1, 1, &request));
       if (of.from == origin::made) {
-        out.add(step::hand_over, wrapped(of, pointer_layer, request));
+        out(step::hand_over, wrapped(of, pointer_layer, request));
       }
     } else if (kind.adopted && of.from == origin::made) {
       for (std::size_t index = 0; index < with.layers->count; ++index) {
@@ -408,8 +416,8 @@ constexpr transitions_list transitions(const thing &of, const context &with) {
         }
         const layer front[] = {static_cast<layer>(index), array_layer};
         const lifetime lives[] = {request, request};
-        out.add(step::adopt,
-                restacked(of, front, kind.adopted_array ? 2 : 1, 1, lives));
+        out(step::adopt,
+            restacked(of, front, kind.adopted_array ? 2 : 1, 1, lives));
       }
     } else if (kind.gives_element) {
       const bool made = of.lifetimes[1] == lifetime::request;
@@ -422,7 +430,7 @@ constexpr transitions_list transitions(const thing &of, const context &with) {
           with.scope.publishes_early && of.instance && of.depth > 1;
       inner.absent = of.absent || (kind.may_be_empty && !of.full);
       inner.full = static_cast<std::uint8_t>(of.full ? of.full - 1 : 0);
-      out.add(step::element, inner);
+      out(step::element, inner);
       if (kind.may_be_empty && !of.full && !kind.adopted) {
         empty_safe_steps(of, inner, with, out);
       }
@@ -431,7 +439,7 @@ constexpr transitions_list transitions(const thing &of, const context &with) {
       for (std::size_t index = 0; index < with.layers->count; ++index) {
         if (kind.converts & (std::uint32_t{1} << index)) {
           const layer to = static_cast<layer>(index);
-          out.add(step::convert, restacked(of, &to, 1, 1, &request));
+          out(step::convert, restacked(of, &to, 1, 1, &request));
         }
       }
     }
@@ -447,14 +455,14 @@ constexpr transitions_list transitions(const thing &of, const context &with) {
       if (of.depth == 1 && outer->shares_element) {
         upcast.layers[0] = pointer_layer;
         upcast.from = origin::borrowed;
-        out.add(step::upcast, upcast);
+        out(step::upcast, upcast);
       }
     } else if (outer == nullptr ||
                (of.depth == 1 && outer->shares_element && outer->copyable)) {
-      out.add(step::upcast, upcast);
+      out(step::upcast, upcast);
     } else if (of.depth == 1 && outer->shares_element && owned(of.from)) {
       upcast.lifetimes[0] = request;
-      out.add(step::upcast, upcast);
+      out(step::upcast, upcast);
     } else if (of.depth > 1) {
       const std::size_t depth = copied_layers(of, with);
       bool copyable = true;
@@ -467,12 +475,12 @@ constexpr transitions_list transitions(const thing &of, const context &with) {
         for (std::size_t index = 0; index < depth; ++index) {
           upcast.lifetimes[index] = request;
         }
-        out.add(step::upcast, upcast);
+        out(step::upcast, upcast);
       }
     }
   }
   if (can_copy(of, with)) {
-    out.add(step::copy, copied(of, with));
+    out(step::copy, copied(of, with));
   }
   const bool shares = of.from == origin::copied && of.instance;
   if ((of.from == origin::made || shares) && can_move(of, with) &&
@@ -494,26 +502,44 @@ constexpr transitions_list transitions(const thing &of, const context &with) {
       }
       thing made = wrapped(inner, static_cast<layer>(index), outer);
       made.full = static_cast<std::uint8_t>(of.full + 1);
-      out.add(step::wrap, made);
+      out(step::wrap, made);
     }
   }
+}
+
+constexpr transitions_list transitions(const thing &of, const context &with) {
+  transitions_list out;
+  each_transition(of, with, out);
   return out;
 }
 
 // The steps from a thing the library takes: those the semantics allow that no
 // limitation blocks. A pointer into a copy a binding converts is not taken.
-constexpr transitions_list steps(const thing &of, const context &with) {
-  transitions_list allowed = transitions(of, with);
-  if (!with.limited(limitation::pointer_into_converted_copy) ||
-      of.from != origin::copied) {
-    return allowed;
-  }
-  transitions_list out;
-  for (std::size_t index = 0; index < allowed.count; ++index) {
-    if (allowed.items[index].kind != step::element_pointer) {
-      out.add(allowed.items[index].kind, allowed.items[index].reached);
+// What a sink of the steps the library takes passes on: a step the
+// limitations do not block.
+template <typename Sink> struct unblocked {
+  const thing &from;
+  const context &with;
+  Sink &out;
+
+  constexpr void operator()(step kind, const thing &reached) {
+    if (kind == step::element_pointer && from.from == origin::copied &&
+        with.limited(limitation::pointer_into_converted_copy)) {
+      return;
     }
+    out(kind, reached);
   }
+};
+
+template <typename Sink>
+constexpr void each_step(const thing &of, const context &with, Sink &out) {
+  unblocked<Sink> filtered{of, with, out};
+  each_transition(of, with, filtered);
+}
+
+constexpr transitions_list steps(const thing &of, const context &with) {
+  transitions_list out;
+  each_step(of, with, out);
   return out;
 }
 
@@ -628,24 +654,36 @@ struct search {
   }
 };
 
+// What reach passes a step to: a wrap only into a layer on the way to the
+// request, or one the binding keeps.
+struct reached_sink {
+  search &found;
+  const state &from;
+  std::uint16_t index;
+  const request &goal;
+  const context &with;
+
+  constexpr void operator()(step kind, const thing &reached) {
+    if (kind == step::wrap && !may_become(reached, goal, with) &&
+        !(reached.lifetimes[0] == lifetime::stable &&
+          may_become(from.reached, goal, with))) {
+      return;
+    }
+    found.add({reached,
+               affected(from.made, effect_of(kind, from.reached, with)), index,
+               kind});
+  }
+};
+
 constexpr search reach(const thing &start, const context &with,
                        const request &goal) {
   search found;
   found.add({start, {}, no_state, step::decay});
   for (std::size_t next = 0; next < found.count; ++next) {
     const state from = found.states[next];
-    const transitions_list taken = steps(from.reached, with);
-    for (std::size_t index = 0; index < taken.count; ++index) {
-      const transition &each = taken.items[index];
-      if (each.kind == step::wrap && !may_become(each.reached, goal, with) &&
-          !(each.reached.lifetimes[0] == lifetime::stable &&
-            may_become(from.reached, goal, with))) {
-        continue;
-      }
-      found.add({each.reached,
-                 affected(from.made, effect_of(each.kind, from.reached, with)),
-                 static_cast<std::uint16_t>(next), each.kind});
-    }
+    reached_sink sink{found, from, static_cast<std::uint16_t>(next), goal,
+                      with};
+    each_step(from.reached, with, sink);
   }
   return found;
 }
