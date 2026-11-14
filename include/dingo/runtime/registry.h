@@ -417,6 +417,23 @@ private:
     }
   }
 
+  // The transaction of a registration, with its scratch memory, made and
+  // destroyed out of line, once for a container, not for every registration.
+  class registration_frame {
+  public:
+    DINGO_NOINLINE explicit registration_frame(runtime_type &runtime)
+        : transaction_(runtime, scratch_) {}
+    DINGO_NOINLINE ~registration_frame() = default;
+    registration_frame(const registration_frame &) = delete;
+    registration_frame &operator=(const registration_frame &) = delete;
+
+    runtime_transaction_type &transaction() noexcept { return transaction_; }
+
+  private:
+    inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch_;
+    runtime_transaction_type transaction_;
+  };
+
   // Constructs the owner of a registration and commits it to the lookups of
   // its interfaces in one transaction.
   template <bool SharedOwner, typename Interfaces, typename TypeStorage,
@@ -425,8 +442,8 @@ private:
   DINGO_NOINLINE container_proxy<Owner>
   commit_binding(LookupKey lookup_key, Arg &&arg,
                  KeyValueArgs &&...key_values) {
-    inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
-    runtime_transaction_type transaction(runtime(), scratch);
+    registration_frame frame(runtime());
+    auto &transaction = frame.transaction();
     auto &state = ensure_runtime_bindings(transaction);
     auto commit = [&](auto &value_factory) {
       for_each(Interfaces{}, [&](auto element) {

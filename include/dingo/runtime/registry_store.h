@@ -980,12 +980,18 @@ protected:
           state, value_factory, transaction, key_resolver, lookup_key,
           lookup_entries{});
     } else {
+      // The lookup of the static key of the registration: one insertion of
+      // the value of the binding, of no type of its own.
       ((void)key_values, ...);
       using route = lookup_index_route<TypeInterface, LookupKey>;
-      auto key_resolver = [&](auto) { return route::key(lookup_key); };
-      commit_lookup<TypeInterface, TypeStorage, LookupKey>(
-          state, value_factory, transaction, key_resolver, lookup_key,
-          type_list<typename route::entry>{});
+      const auto &key_arg = route::key(lookup_key);
+      insert_lookup<typename route::entry>(
+          state, transaction, value_factory.template make<TypeInterface>(),
+          key_arg,
+          {detail::described_type_v<TypeInterface>,
+           detail::described_type_v<typename TypeStorage::type>,
+           detail::registration_key_type<std::decay_t<decltype(key_arg)>>(
+               lookup_key)});
     }
   }
 };

@@ -166,9 +166,10 @@ Both containers match a request against the resolution list of the binding,
   It forms only the resolutions of the request category, because the target
   shapes of the categories are disjoint.
 - The runtime container matches the type descriptor of the request,
-  `instance_request::requested_type`, against the descriptor of each target
-  (`matches_resolution_request`). `runtime_binding::dispatch_request` then
-  applies the resolution at the matched index.
+  `instance_request::requested_type`, against the descriptor of each target in
+  the facts of the node of the binding (`published_index`). The engine of the
+  container then applies the resolution at the matched index through the edge of
+  the binding.
 - If no resolution matches, the binding derives the request from one that it
   resolves. In the runtime container, the `derive` function of the
   `instance_request` does this, of the node of the request.

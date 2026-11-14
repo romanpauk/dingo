@@ -186,6 +186,47 @@ through the registration container, when there is one, and else through the
 container the registration is made in. Both have the same type, so the factory
 and the activation are instantiated once for a registration.
 
+### The Runtime Engine
+
+The runtime container resolves its bindings with an engine of no binding type. A
+runtime binding is a typed edge and constant data:
+
+- The node of the binding (`runtime_binding_node` in
+  [include/dingo/binding/interface.h](../../include/dingo/binding/interface.h))
+  is constant data. It holds the descriptors of the registered type and of its
+  leaf, the facts of the binding (`binding_facts`: the resolutions it publishes,
+  what it is, and whether a value of its interface slices what it stores), the
+  recursion guard and the retention of its scope, and whether it places values
+  in the context or caches what it resolves.
+- The edge is a few functions of the type of the binding, which the node points
+  to: materialize the source of the storage in a construction scope and apply
+  the resolution it publishes at an index, the storage and the cell of the
+  binding, what it keeps of its instance, whether its storage is resolved, and
+  the reset of its cell.
+
+The engine (`runtime_binding_engine` in
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)) is one
+function for every binding of a container. It matches the request against the
+published resolutions, guards the binding against recursion, retains the source
+of an unresolved storage in the transaction and resets the cell if the
+transaction fails, refuses the caller an address into a value placed in the
+context, publishes a borrowed address in the request cache, and derives a
+request that the binding does not publish.
+
+On the side of a request, the container selects a request that has a static key
+and no lookup of its own through the base lookup, by the type indexes of its
+interface and of its normalized interface, in the container and in the
+registration containers it falls back to. The selection is of no request type.
+Only the conversion of the resolved address to the requested type, and a miss,
+which falls back to the parent or constructs the type, are functions of the
+request type. A keyed request with a lookup of its own, and a collection, take
+the typed path of the resolution algorithm.
+
+A registration commits its binding to the lookup of each interface it binds,
+with the value of the binding and its key. The insertion is of the lookup and
+its key, not of the binding. The transaction of a registration, and that of a
+request, live in a frame made out of line, once for a container.
+
 The root container owns the runtime arena and a dense table of lookup states for
 the registration containers. A registration container is a runtime container
 that does not own runtime data. In place of the data, it stores its scope ID and
@@ -196,8 +237,9 @@ registration container allocates its lookup state only when it registers its
 first local binding. Thus it needs no runtime arena and lookup set of its own.
 
 The runtime binding has a list of resolutions, derived from
-`Storage::conversions`. It matches the requested type descriptor against this
-list. If a resolution matches, the storage produces the source object.
+`Storage::conversions`. The engine matches the requested type descriptor against
+the descriptors of this list in the node of the binding. If a resolution
+matches, the edge of the binding produces the source object, and
 [include/dingo/conversion/apply.h](../../include/dingo/conversion/apply.h)
 converts it to the requested shape.
 
