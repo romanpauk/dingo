@@ -328,16 +328,11 @@ struct binding_application {
                is_runtime_context_v<Context>) == source_placement::in_context;
   }
 
-  Scope scope;
+  // The type a resolution reports as registered when it fails.
+  static constexpr type_descriptor registered_type =
+      detail::described_type_v<typename storage_type::type>;
 
-  // Applies a resolution to a source.
-  template <typename Resolution, typename Context, typename Source>
-  decltype(auto) apply(Context &context, Source &&source,
-                       type_descriptor requested_type) {
-    return Resolution::operation::apply(
-        *this, context, std::forward<Source>(source), requested_type,
-        detail::described_type_v<typename storage_type::type>);
-  }
+  Scope scope;
 
   // The address of the instance of a resolution of Request, applied to a
   // source, which places_source says whether the context holds.
@@ -346,21 +341,24 @@ struct binding_application {
   resolved_address resolve_address(Context &context, Source &&source,
                                    type_descriptor requested_type) {
     using target_type = typename Resolution::result_type;
-    using applied_type = decltype(apply<Resolution>(
-        context, std::forward<Source>(source), requested_type));
+    using applied_type = decltype(Resolution::operation::apply(
+        *this, context, std::forward<Source>(source), requested_type,
+        registered_type));
     if constexpr (!std::is_reference_v<applied_type> &&
                   !std::is_pointer_v<applied_type> &&
                   std::is_constructible_v<target_type, applied_type>) {
       // A value the resolution makes is made in the context.
       auto &value = context.template construct_made<target_type>(
           scope, [&]() -> target_type {
-            return apply<Resolution>(context, std::forward<Source>(source),
-                                     requested_type);
+            return Resolution::operation::apply(
+                *this, context, std::forward<Source>(source), requested_type,
+                registered_type);
           });
       return {std::addressof(value), resolved_address::access_kind::consume};
     } else {
-      decltype(auto) instance = apply<Resolution>(
-          context, std::forward<Source>(source), requested_type);
+      decltype(auto) instance = Resolution::operation::apply(
+          *this, context, std::forward<Source>(source), requested_type,
+          registered_type);
       using instance_type = decltype(instance);
       using object_type = std::remove_reference_t<instance_type>;
       if constexpr (std::is_pointer_v<object_type>) {
@@ -517,18 +515,18 @@ struct binding_activation {
   template <typename Request, typename Resolution, typename Context>
   Request make_value(Context &context) {
     return use_source<Request>(context, [&](auto &&source) -> Request {
-      using applied_type = decltype(application().template apply<Resolution>(
-          context, std::forward<decltype(source)>(source),
-          detail::described_type_v<Request>));
+      auto applied = application();
+      using applied_type = decltype(Resolution::operation::apply(
+          applied, context, std::forward<decltype(source)>(source),
+          detail::described_type_v<Request>, applied.registered_type));
       if constexpr (!std::is_reference_v<applied_type>) {
-        return Request(application().template apply<Resolution>(
-            context, std::forward<decltype(source)>(source),
-            detail::described_type_v<Request>));
+        return Request(Resolution::operation::apply(
+            applied, context, std::forward<decltype(source)>(source),
+            detail::described_type_v<Request>, applied.registered_type));
       } else {
-        auto applied = application();
-        auto &&instance = applied.template apply<Resolution>(
-            context, std::forward<decltype(source)>(source),
-            detail::described_type_v<Request>);
+        auto &&instance = Resolution::operation::apply(
+            applied, context, std::forward<decltype(source)>(source),
+            detail::described_type_v<Request>, applied.registered_type);
         return consume_resolved<Request>(
             std::forward<decltype(instance)>(instance),
             [](auto &&value) -> Request {
@@ -544,9 +542,9 @@ struct binding_activation {
   decltype(auto) consume_request(Context &context, Fn &&fn) {
     return use_source<Request>(context, [&](auto &&source) -> decltype(auto) {
       auto applied = application();
-      auto &&instance = applied.template apply<Resolution>(
-          context, std::forward<decltype(source)>(source),
-          detail::described_type_v<Request>);
+      auto &&instance = Resolution::operation::apply(
+          applied, context, std::forward<decltype(source)>(source),
+          detail::described_type_v<Request>, applied.registered_type);
       return consume_resolved<Request>(
           std::forward<decltype(instance)>(instance), std::forward<Fn>(fn));
     });
