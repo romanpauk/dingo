@@ -217,19 +217,23 @@ specification. It is also the largest part of the compile time that is left.
    `semantics-check` replays the plan of every answer through the steps of the
    semantics, with its copies and moves.
 
-5. **Steps.** One function template for each kind of step, which applies it to a
-   C++ object: `element`, `element_pointer` and `element_or_empty` by the `get`,
-   `borrow` and `empty_value` of the type traits of the layer, `wrap` by its
-   `emplace` or `wrap`, `convert` by the `share_t` of a sole owner, `adopt` by
-   the handle constructed of a pointer, `decay` and `hand_over` by C++ itself,
-   `copy` by the copy constructor and `upcast` by the conversion to the base.
-   The C++ type a step makes is that of its thing: a wrapper of the universe is
-   its identity rebound to the element. Each step states its contract as static
-   assertions. An interpreter applies a plan to a stored object, keeping what it
-   makes for the request where the request lives. A check applies the plan of
-   every cell of the model to the leaf types of the model, which count their
-   copies and moves, and compares the result and the counts with the
-   specification, without a container.
+5. **Steps.** Done for plans known as the code compiles.
+   [include/dingo/request/execution.h](../../include/dingo/request/execution.h)
+   has one step for each kind of step of the semantics, by the type traits of
+   its layers and by C++ itself, and an interpreter that applies the steps of a
+   plan one after another. A run of wraps makes its outermost layer at once, in
+   place, and the last run is made where the request needs it, so that the leaf
+   is moved once. What a step makes for the request is kept by a keeper. A step
+   that takes over what a pointer points to releases the handle it was taken out
+   of, by the `release` of its type traits. `execution_check.py` asks the
+   semantics the plan of every conversion of the model, applies each to the leaf
+   types of the model, which count their copies and moves, and compares the
+   counts with the plan, without a container: 60,694 cells, all equal. It found
+   three defects, each fixed: a handle a pointer was taken out of released it
+   too; a wrapper emplaced of its own element type moved the leaf twice; and the
+   pointer to the first element of an array was upcast to an array of the
+   interface, which the specification and the semantics then both allowed the
+   request to take over.
 
 6. **Execution.** The containers apply plans by the interpreter, in place of the
    conversion paths and the derivations. The steps split as the specification
