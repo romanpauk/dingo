@@ -204,15 +204,6 @@ DINGO_NOINLINE decltype(auto) execute_transaction(Runtime &runtime, Fn &&fn) {
   return std::forward<Fn>(fn)(frame.context());
 }
 
-template <typename Runtime, typename Allocator, typename Fn>
-auto execute_transaction(Runtime &runtime, runtime_context<Allocator> &context,
-                         Fn &&fn)
-    -> std::invoke_result_t<Fn, runtime_context<Allocator> &> {
-  assert(!context.owns(runtime));
-  detail::nested_transaction_frame<Runtime, Allocator> frame(runtime, context);
-  return std::forward<Fn>(fn)(context);
-}
-
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif

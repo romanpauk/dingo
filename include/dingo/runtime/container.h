@@ -1336,6 +1336,16 @@ private:
     }
   }
 
+  // Resolves a request of its selection in a transaction of the container,
+  // which its frame opens and ends, out of line of the entry.
+  template <typename Request, typename R, typename LookupKey>
+  DINGO_NOINLINE R resolve_transacted(const level_selection &found,
+                                      LookupKey &key) {
+    detail::transaction_frame<runtime_type> frame(this->runtime());
+    return detail::request_resolution::resolve_level<Request, R>(
+        found, entry_scope(caller_scope), frame.context(), *this, key);
+  }
+
   // A request that may be cached reads the cache of its selected binding
   // before it enters a transaction.
   template <typename Request, typename R, typename LookupKey>
@@ -1351,10 +1361,7 @@ private:
               {result.address, resolved_address::access_kind::borrow});
         }
       }
-      return transact([&](runtime_context_type &context) -> R {
-        return detail::request_resolution::resolve_level<Request, R>(
-            found, entry_scope(caller_scope), context, *this, key);
-      });
+      return resolve_transacted<Request, R>(found, key);
     } else {
       return transact([&](runtime_context_type &context) -> R {
         return detail::request_resolution::resolve<Request, R>(
@@ -1458,12 +1465,10 @@ private:
   DINGO_NOINLINE R resolve_nested(construction_scope scope,
                                   runtime_context_type &context, Origin &origin,
                                   LookupKey key) {
-    return execute_transaction(this->runtime(), context,
-                               [&](runtime_context_type &local_context) -> R {
-                                 return resolve_local<Request, R>(
-                                     scope, local_context, origin,
-                                     std::move(key));
-                               });
+    assert(!context.owns(this->runtime()));
+    detail::nested_transaction_frame<runtime_type, Allocator> frame(
+        this->runtime(), context);
+    return resolve_local<Request, R>(scope, context, origin, std::move(key));
   }
 
 public:
