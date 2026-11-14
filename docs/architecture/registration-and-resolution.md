@@ -87,9 +87,18 @@ The sequence is:
 
 1. For a reference or pointer request, the runtime container first reads the
    request cache of the selected binding.
-2. The container selects the bindings of the type request and the lookup key. A
-   static selection is a type, so its status is known at compile time. A runtime
-   selection is a value.
+2. The container selects the bindings of the type request and the lookup key, by
+   the selection rules in
+   [include/dingo/binding/selection.h](../../include/dingo/binding/selection.h),
+   which both containers share: the bindings of the exact interface of the
+   request, or, when it has none, those of its normalized interface
+   (`select_exact_or_normalized`); one binding is found, none is not found, and
+   more are ambiguous (`status_of_count`); and a level of local bindings answers
+   what it binds, also ambiguously, and falls back to the next level only when
+   it binds nothing (`falls_back`). The static container applies the rules as it
+   compiles, over its bindings, and its selection is a type, so its status is
+   known at compile time. The runtime container applies them as it resolves,
+   over its lookups, and its selection is a value.
 3. The algorithm continues by the status of the selection:
    - one binding: it resolves the binding
    - several bindings: the request is ambiguous; a runtime container throws

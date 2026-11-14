@@ -138,8 +138,7 @@ private:
     for (;;) {
       auto selection = level->select_base(request);
       self_type *owner = level->owner_level();
-      if (selection.status != detail::binding_status::not_found ||
-          owner == nullptr) {
+      if (!detail::falls_back(selection.status) || owner == nullptr) {
         return {selection, level};
       }
       level = owner;

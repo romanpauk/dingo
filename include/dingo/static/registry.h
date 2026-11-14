@@ -94,9 +94,28 @@ inline constexpr size_t binding_count_v =
 
 template <typename Interface, typename LookupKey> struct binding_lookup_tag {};
 
+// The selection of the binding of an interface and a key among a list of
+// bindings, as data: its status, and the index of the binding it found.
+struct static_binding_selection {
+  binding_status status;
+  std::size_t index;
+};
+
+constexpr static_binding_selection select_matching(const bool *matches,
+                                                   std::size_t count) {
+  std::size_t found = 0;
+  std::size_t index = 0;
+  for (std::size_t i = 0; i < count; ++i) {
+    if (matches[i] && found++ == 0) {
+      index = i;
+    }
+  }
+  return {status_of_count(found), index};
+}
+
 template <size_t Index, typename InterfaceBinding>
 struct binding_lookup_index_entry {
-  static found_binding_choice_t<InterfaceBinding>
+  static std::integral_constant<size_t, Index>
       select(binding_lookup_tag<typename InterfaceBinding::interface_type,
                                 typename InterfaceBinding::key_type>);
 };
@@ -112,7 +131,7 @@ struct binding_lookup_index_impl<type_list<InterfaceBindings...>,
                                  std::index_sequence<Indexes...>>
     : binding_lookup_index_entry<Indexes, InterfaceBindings>... {
   using binding_lookup_index_entry<Indexes, InterfaceBindings>::select...;
-  static missing_binding_choice_t select(...);
+  static void select(...);
 };
 
 template <typename InterfaceBindings>
@@ -120,34 +139,76 @@ using binding_lookup_index = binding_lookup_index_impl<
     InterfaceBindings,
     std::make_index_sequence<type_list_size_v<InterfaceBindings>>>;
 
+template <typename Found> struct indexed_selection {
+  static constexpr static_binding_selection value{binding_status::found,
+                                                  Found::value};
+};
+
+template <> struct indexed_selection<void> {
+  static constexpr static_binding_selection value{binding_status::not_found, 0};
+};
+
 // The bindings of a lookup without a key are indexed by interface, so the
-// choice is read from the overload set instead of counting the matches of every
-// binding. An ambiguous lookup has no viable overload.
+// selection is read from the overload set instead of matching every binding.
+// An ambiguous lookup has no viable overload.
 template <typename Interface, typename LookupKey, typename InterfaceBindings,
           typename = void>
 struct indexed_binding_selection {
-  using type = ambiguous_binding_choice_t;
+  static constexpr static_binding_selection value{binding_status::ambiguous, 0};
 };
 
 template <typename Interface, typename LookupKey, typename InterfaceBindings>
 struct indexed_binding_selection<
     Interface, LookupKey, InterfaceBindings,
     std::void_t<decltype(binding_lookup_index<InterfaceBindings>::select(
-        binding_lookup_tag<Interface, std::decay_t<LookupKey>>{}))>> {
-  using type = decltype(binding_lookup_index<InterfaceBindings>::select(
-      binding_lookup_tag<Interface, std::decay_t<LookupKey>>{}));
+        binding_lookup_tag<Interface, std::decay_t<LookupKey>>{}))>>
+    : indexed_selection<
+          decltype(binding_lookup_index<InterfaceBindings>::select(
+              binding_lookup_tag<Interface, std::decay_t<LookupKey>>{}))> {};
+
+// The bindings of a lookup with a key are those that match it.
+template <typename Interface, typename LookupKey, typename InterfaceBindings>
+struct listed_binding_selection;
+
+template <typename Interface, typename LookupKey, typename... InterfaceBindings>
+struct listed_binding_selection<Interface, LookupKey,
+                                type_list<InterfaceBindings...>> {
+  static constexpr bool matches[] = {
+      binding_matches<Interface, LookupKey, InterfaceBindings>::value...,
+      false};
+  static constexpr static_binding_selection value =
+      select_matching(matches, sizeof...(InterfaceBindings));
 };
 
 template <typename Interface, typename LookupKey, typename InterfaceBindings,
           bool UseIndex = is_no_lookup_key_v<LookupKey>>
-struct binding_selection {
-  using type = static_binding_choice_t<
-      bindings_t<Interface, LookupKey, InterfaceBindings>>;
+struct binding_selection_of
+    : listed_binding_selection<Interface, LookupKey, InterfaceBindings> {};
+
+template <typename Interface, typename LookupKey, typename InterfaceBindings>
+struct binding_selection_of<Interface, LookupKey, InterfaceBindings, true>
+    : indexed_binding_selection<Interface, LookupKey, InterfaceBindings> {};
+
+// The choice of a selection, which the static container resolves by: the
+// binding at the index of a selection that found one.
+template <typename InterfaceBindings, binding_status Status, std::size_t Index>
+struct selected_choice {
+  using type = binding_choice<Status>;
+};
+
+template <typename InterfaceBindings, std::size_t Index>
+struct selected_choice<InterfaceBindings, binding_status::found, Index> {
+  using type = found_binding_choice_t<
+      typename type_list_at<Index, InterfaceBindings>::type>;
 };
 
 template <typename Interface, typename LookupKey, typename InterfaceBindings>
-struct binding_selection<Interface, LookupKey, InterfaceBindings, true>
-    : indexed_binding_selection<Interface, LookupKey, InterfaceBindings> {};
+struct binding_selection {
+  static constexpr const static_binding_selection &selected =
+      binding_selection_of<Interface, LookupKey, InterfaceBindings>::value;
+  using type = typename selected_choice<InterfaceBindings, selected.status,
+                                        selected.index>::type;
+};
 
 template <typename Interface, typename LookupKey, typename InterfaceBindings>
 using binding_selection_t =
@@ -282,21 +343,12 @@ private:
                          binding_lookup_key_t<Interface, LookupKey>,
                          interface_bindings>;
 
-  template <typename Interface, typename LookupKey>
-  using exact_selection_t = detail::binding_selection_t<
-      detail::binding_exact_dependency_interface_t<Interface>,
-      binding_lookup_key_t<Interface, LookupKey>, interface_bindings>;
-
-  template <typename Interface, typename LookupKey>
-  using normalized_selection_t = detail::binding_selection_t<
-      detail::binding_dependency_interface_t<Interface>,
-      binding_lookup_key_t<Interface, LookupKey>, interface_bindings>;
-
   // A request is answered by the bindings of its exact interface, or else by
   // those of its normalized interface.
   template <typename Interface, typename LookupKey,
             typename Exact = exact_bindings_t<Interface, LookupKey>,
-            bool HasExact = (type_list_size_v<Exact> != 0)>
+            bool HasExact = !detail::selects_normalized_interface(
+                detail::status_of_count(type_list_size_v<Exact>))>
   struct selected_bindings {
     using type = Exact;
   };
@@ -306,17 +358,29 @@ private:
     using type = normalized_bindings_t<Interface, LookupKey>;
   };
 
-  template <typename Interface, typename LookupKey,
-            typename Exact = exact_selection_t<Interface, LookupKey>,
-            bool HasExact =
-                !detail::selects_normalized_interface(Exact::status)>
-  struct selected_binding {
-    using type = Exact;
+  // Selects among the bindings of an interface.
+  template <typename LookupKey> struct find_bindings {
+    template <typename Interface>
+    constexpr detail::static_binding_selection
+    operator()(type_list_iterator<Interface>) const {
+      return detail::binding_selection_of<Interface, LookupKey,
+                                          interface_bindings>::value;
+    }
   };
 
-  template <typename Interface, typename LookupKey, typename Exact>
-  struct selected_binding<Interface, LookupKey, Exact, false> {
-    using type = normalized_selection_t<Interface, LookupKey>;
+  // The selection of a request by the rule the runtime container selects
+  // by: its exact interface, or else its normalized interface.
+  template <typename Interface, typename LookupKey> struct selected_binding {
+    using exact = detail::binding_exact_dependency_interface_t<Interface>;
+    using normalized = detail::binding_dependency_interface_t<Interface>;
+    static constexpr detail::static_binding_selection selected =
+        detail::select_exact_or_normalized(
+            find_bindings<binding_lookup_key_t<Interface, LookupKey>>{},
+            type_list_iterator<exact>{}, type_list_iterator<normalized>{},
+            !std::is_same_v<exact, normalized>);
+    using type =
+        typename detail::selected_choice<interface_bindings, selected.status,
+                                         selected.index>::type;
   };
 
 public:

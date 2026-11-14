@@ -669,14 +669,11 @@ private:
       return runtime_selection::miss();
     }
     using base_entry = typename store_type::base_lookup_entry;
-    auto selection =
-        this->template select_lookup<base_entry>(*state, request.exact);
-    if (request.normalizes &&
-        detail::selects_normalized_interface(selection.status)) {
-      selection =
-          this->template select_lookup<base_entry>(*state, request.value);
-    }
-    return selection;
+    return detail::select_exact_or_normalized(
+        [&](const base_lookup_key_type &key) {
+          return this->template select_lookup<base_entry>(*state, key);
+        },
+        request.exact, request.value, request.normalizes);
   }
 
   template <typename Request, typename LookupKey>

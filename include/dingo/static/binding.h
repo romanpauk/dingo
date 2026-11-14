@@ -151,8 +151,10 @@ struct local_binding_router {
         return static_collection_binding_count<LocalBindings, R, LookupKey>() !=
                0;
       } else {
-        return LocalBindings::template selection<R, LookupKey>::status ==
-               binding_status::found;
+        // A level of local bindings answers what it binds, also ambiguously,
+        // by the rule of the runtime container.
+        return !falls_back(
+            LocalBindings::template selection<R, LookupKey>::status);
       }
     }();
     if constexpr (!bound_locally) {

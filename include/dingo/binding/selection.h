@@ -9,6 +9,7 @@
 
 #include <dingo/base/type_list.h>
 
+#include <cstddef>
 #include <type_traits>
 
 namespace dingo {
@@ -25,6 +26,40 @@ enum class binding_status {
 // bindings of the exact interface make the request ambiguous.
 constexpr bool selects_normalized_interface(binding_status exact) {
   return exact == binding_status::not_found;
+}
+
+// The selection rules both containers select a binding of a request by: the
+// static container as it compiles, over its bindings, the runtime container
+// as it resolves, over its lookups.
+
+// The status of a selection of the bindings that answer a request: one is
+// found, none is not found, and more are ambiguous.
+constexpr binding_status status_of_count(std::size_t count) {
+  return count == 0   ? binding_status::not_found
+         : count == 1 ? binding_status::found
+                      : binding_status::ambiguous;
+}
+
+// The selection of a request: by the bindings of its exact interface, or,
+// when its exact interface has none, by those of its normalized interface.
+// find selects the bindings of an interface; normalizes tells whether the
+// normalized interface is another one.
+template <typename Find, typename Exact, typename Normalized>
+constexpr auto select_exact_or_normalized(Find &&find, Exact exact,
+                                          Normalized normalized,
+                                          bool normalizes) {
+  auto selection = find(exact);
+  if (normalizes && selects_normalized_interface(selection.status)) {
+    selection = find(normalized);
+  }
+  return selection;
+}
+
+// Whether a level of local bindings that selected a request with a status
+// falls back to the next level: only when it binds nothing. A level that binds
+// a request ambiguously answers it so.
+constexpr bool falls_back(binding_status status) {
+  return status == binding_status::not_found;
 }
 
 template <binding_status Status, typename Binding = void>

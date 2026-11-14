@@ -613,15 +613,14 @@ protected:
       return select_binding_at_interface<AllowMiss, LookupKey, Value>(state,
                                                                       key);
     } else {
-      auto selection =
-          select_binding_at_interface<AllowMiss, LookupKey, Exact>(state, key);
-      if constexpr (!std::is_same_v<Value, Exact>) {
-        if (detail::selects_normalized_interface(selection.status)) {
-          selection = select_binding_at_interface<AllowMiss, LookupKey, Value>(
-              state, key);
-        }
-      }
-      return selection;
+      return detail::select_exact_or_normalized(
+          [&](auto interface_tag) {
+            using interface_type = typename decltype(interface_tag)::type;
+            return select_binding_at_interface<AllowMiss, LookupKey,
+                                               interface_type>(state, key);
+          },
+          type_list_iterator<Exact>{}, type_list_iterator<Value>{},
+          !std::is_same_v<Value, Exact>);
     }
   }
 
