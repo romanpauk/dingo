@@ -12,8 +12,13 @@
 
 #include <gtest/gtest.h>
 
+#include <deque>
+#include <list>
 #include <map>
 #include <memory>
+#include <set>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "support/class.h"
@@ -132,5 +137,23 @@ static_assert(std::is_same_v<
 static_assert(std::is_same_v<
               request_type<std::unique_ptr<request_type_service>>::value_type,
               request_type_service>);
+
+// A collection is recognised by the members of the standard containers: a
+// sequence by emplace_back, an associative collection by its key_type and
+// emplace, which resolves its mapped_type. A string is a value.
+static_assert(collection_traits<std::vector<int>>::is_collection);
+static_assert(collection_traits<std::vector<int>>::has_fixed_size_construct);
+static_assert(collection_traits<std::list<int>>::is_collection);
+static_assert(!collection_traits<std::list<int>>::has_fixed_size_construct);
+static_assert(collection_traits<std::deque<int>>::is_collection);
+static_assert(collection_traits<std::set<int>>::is_collection);
+static_assert(
+    std::is_same_v<collection_traits<std::map<int, long>>::resolve_type, long>);
+static_assert(
+    std::is_same_v<
+        collection_traits<std::unordered_map<int, long>>::resolve_type, long>);
+static_assert(!collection_traits<std::string>::is_collection);
+static_assert(!collection_traits<std::unique_ptr<int>>::is_collection);
+static_assert(!collection_traits<int>::is_collection);
 
 } // namespace dingo

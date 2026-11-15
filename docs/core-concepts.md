@@ -704,7 +704,12 @@ Use collections for extension points, such as:
 - handlers
 - strategy lists
 
-The collection uses a standard aggregation rule or a custom one.
+The collection uses a standard aggregation rule or a custom one. A type is a
+collection when it has the members of a standard container: a sequence appends
+with `emplace_back`, as `std::vector`, `std::list` and `std::deque` do, and an
+associative collection has a `key_type` and adds with `emplace`, as `std::set`,
+`std::map` and the unordered containers do. A map collects its `mapped_type`. A
+specialization of `collection_traits` describes any other type.
 
 <!-- { include("../examples/index/multibindings.cpp", scope="////") -->
 
