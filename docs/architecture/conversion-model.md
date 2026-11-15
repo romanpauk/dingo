@@ -50,22 +50,37 @@ moves it, or copies it. A plan is known for each lifetime a request needs: as
 long as the container, for what the caller of `resolve` takes, or as long as the
 request, for a dependency.
 
+## Programs
+
+Both containers run a plan as a program
+([include/dingo/request/execution.h](../../include/dingo/request/execution.h)).
+`compile_program` turns a plan into instructions, and takes the decisions of how
+to run it in one place:
+
+- A run of wraps of one side, the binding's or the request's, is one
+  instruction. It makes its outermost layer at once, in place.
+- A layer that a request makes of a value or of a pointer is made of the
+  qualifiers its element needs at once. The conversion to them that follows it
+  is the same instruction.
+- A value that a request takes is made where the request takes it, when the last
+  step makes it: a copy or a run of wraps that the request makes, and a copy of
+  the element of a layer that may be empty.
+
 ## Static Plans
 
 A static binding plans a request as the code compiles (`static_execution` in
-[include/dingo/static/binding.h](../../include/dingo/static/binding.h)). The
-interpreter of
-[include/dingo/request/execution.h](../../include/dingo/request/execution.h)
-applies the steps as typed functions, which the compiler inlines. A request that
-no plan satisfies does not compile.
+[include/dingo/static/binding.h](../../include/dingo/static/binding.h)). It runs
+the program of the plan as typed functions (`program_run`), which the compiler
+inlines. A request that no plan satisfies does not compile.
 
 ## Runtime Plans
 
 A runtime binding plans a request at its first use, and keeps the plan in the
 plan cache of the request type
 ([include/dingo/runtime/request.h](../../include/dingo/runtime/request.h)). The
-plan is applied through tables of erased operations
-([include/dingo/runtime/execution.h](../../include/dingo/runtime/execution.h)):
+program of the plan is run through tables of erased operations
+([include/dingo/runtime/execution.h](../../include/dingo/runtime/execution.h)).
+`plan_runtime` maps each instruction to an operation of a table:
 
 - A binding has one table for each C++ type of its layer sources and of what a
   step makes of them (`binding_sources`). Each operation of a table names the
@@ -74,10 +89,17 @@ plan is applied through tables of erased operations
   make the type of the one below (`request_tables`).
 
 Both are built from the typed steps of the static container, so the containers
-apply one implementation of each step. Each table is checked as the code
-compiles against the steps that the semantics allow from its type, so a plan
-meets no missing operation. A request that no plan satisfies throws
-`type_not_convertible_exception`.
+apply one implementation of each step. A step that does the same to an object
+that the request owns as to one that it does not has one operation for both.
+Each table is checked as the code compiles against the steps that the semantics
+allow from its type, so a plan meets no missing operation. A request that no
+plan satisfies throws `type_not_convertible_exception`.
+
+The operations keep what they make through `runtime_keeper`, an interface of no
+context. It keeps an object by its layout (`kept_layout`: size, alignment and
+destructor) and one function that constructs it. The tables, the plans and
+`plan_runtime` do not depend on the context, and keeping is not instantiated for
+each type.
 
 A runtime resolution returns a `resolved_address`: the erased address and the
 access of the result. A value is made where the call returns it, of what the
