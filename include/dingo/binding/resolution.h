@@ -12,6 +12,7 @@
 #include <dingo/binding/interface.h>
 #include <dingo/binding/selection.h>
 #include <dingo/context/resolution.h>
+#include <dingo/conversion/source.h>
 #include <dingo/request/decomposition.h>
 #include <dingo/request/execution.h>
 #include <dingo/storage/retention.h>
@@ -152,10 +153,13 @@ template <typename Storage, typename Interface> struct binding_execution {
 template <typename Stored, bool Makes, typename Source, typename Keeper>
 auto plan_start(Source &&source, Keeper &keeper) {
   using source_type = remove_cvref_t<Source>;
-  if constexpr (std::is_array_v<Stored> &&
-                std::is_pointer_v<remove_cvref_t<decltype(*source)>>) {
-    // The array a scope made, given as the pointer to its first element.
-    return execution::carry<Makes>(*reinterpret_cast<Stored *>(*source));
+  if constexpr (is_made_array_v<remove_cvref_t<decltype(*source)>>) {
+    // The array a scope made, which the request owns until a step takes it
+    // over.
+    auto &made = *source;
+    return execution::carrier<Stored, Makes>{
+        reinterpret_cast<Stored *>(made.get()), std::addressof(made),
+        &remove_cvref_t<decltype(made)>::release};
   } else if constexpr (is_pointer_source_v<source_type> &&
                        std::is_pointer_v<Stored>) {
     // The pointer the storage keeps, as an object of its own.

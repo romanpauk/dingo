@@ -13,6 +13,7 @@
 #include <dingo/binding/model.h>
 #include <dingo/binding/resolution.h>
 #include <dingo/context/resolution.h>
+#include <dingo/conversion/source.h>
 #include <dingo/storage/retention.h>
 #include <dingo/storage/scope_traits.h>
 #include <dingo/storage/type_storage_traits.h>
@@ -138,6 +139,14 @@ inline constexpr bool materializes_value_source_v = [] {
   return !std::is_reference_v<source_result> && !std::is_pointer_v<source_type>;
 }();
 
+// Whether the value a storage yields owns what an address request reaches
+// apart from itself: an array a scope made.
+template <typename Storage, typename Context, typename Owner>
+inline constexpr bool owns_apart_v =
+    is_made_array_v<remove_cvref_t<decltype(std::declval<Storage &>().resolve(
+        std::declval<construction_scope>(), std::declval<Context &>(),
+        std::declval<Owner &>()))>>;
+
 // Whether a storage is resolved: one that keeps no instance always is.
 template <typename Storage>
 bool storage_resolved([[maybe_unused]] const Storage &storage) noexcept {
@@ -156,15 +165,18 @@ constexpr materialization_facts materialization_facts_v() {
   constexpr bool guarded =
       materialization_guard_enabled_v<policy::guard, Storage, Context>;
   bool yields_value = false;
+  bool owns_apart = false;
   if constexpr (!std::is_void_v<Owner>) {
     yields_value = materializes_value_source_v<Storage, Context, Owner>;
+    owns_apart = owns_apart_v<Storage, Context, Owner>;
   }
   return {guarded && policy::guard == materialization_guard::always,
           guarded && policy::guard == materialization_guard::while_unresolved,
           policy::retains_unresolved_source,
           policy::consumes,
           yields_value,
-          std::is_trivially_move_constructible_v<typename Storage::type>};
+          std::is_trivially_move_constructible_v<typename Storage::type>,
+          owns_apart};
 }
 
 // The shape of a request of a type a source is materialized for.
@@ -311,12 +323,15 @@ struct binding_activation {
   }
 
   // Whether an address request is served from a value the storage yields,
-  // which is placed in the context and lives only as long as the context.
+  // which is placed in the context and lives only as long as the context: one
+  // of what the value owns apart from itself is not, as only a plan that
+  // takes it over gives it to the caller.
   template <typename Request, typename Context>
   static constexpr bool places_value =
       materialization_placement(facts<Context>(), materialized<Request>(),
                                 is_runtime_context_v<Context>) ==
-      source_placement::context_value;
+          source_placement::context_value &&
+      !facts<Context>().owns_apart;
 
   Cell &cell;
   Dependencies dependencies;

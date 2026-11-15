@@ -29,6 +29,10 @@ struct materialization_facts {
   bool consumes;
   bool yields_value;
   bool moves_trivially;
+  // Whether the value yielded owns what an address request reaches apart
+  // from itself, as the owner of an array a scope makes does: a request that
+  // keeps the address takes the array over.
+  bool owns_apart;
 };
 
 // The shape of a request a source is materialized for: whether it refers,
@@ -84,10 +88,11 @@ materialization_placement(const materialization_facts &facts,
 
 // Whether the caller is refused an address into what a source is placed as:
 // a value the storage yields lives only as long as the context, which ends
-// before the caller uses an address into it.
+// before the caller uses an address into it. An address of what the value
+// owns apart from itself is the caller's only as the plan takes it over.
 constexpr bool refuses_caller_address(const materialization_facts &facts,
                                       materialized_request request) {
-  return facts.yields_value && request.refers;
+  return facts.yields_value && !facts.owns_apart && request.refers;
 }
 
 } // namespace detail

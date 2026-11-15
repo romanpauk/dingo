@@ -1231,6 +1231,35 @@ template <typename Container> void check_adopted(Container &container) {
   EXPECT_EQ(sole[1].value, 5);
 }
 
+// An element that counts the elements alive.
+struct counted {
+  counted() { ++alive; }
+  counted(const counted &) { ++alive; }
+  ~counted() { --alive; }
+  static inline int alive = 0;
+};
+
+// An array a unique scope makes that a call only refers to ends with the
+// request: no handle takes it over.
+template <typename Container> void check_referred(Container &container) {
+  container.invoke([](counted(&array)[2]) {
+    EXPECT_EQ(counted::alive, 2);
+    (void)array;
+  });
+  EXPECT_EQ(counted::alive, 0);
+}
+
+// A pointer to an array a unique scope makes, or to its first element, is
+// handed over to the caller, which deletes it.
+template <typename Container> void check_handed_over(Container &container) {
+  counted *first = container.template resolve<counted *>();
+  EXPECT_EQ(counted::alive, 2);
+  delete[] first;
+  counted(*whole)[2] = container.template resolve<counted(*)[2]>();
+  EXPECT_EQ(counted::alive, 2);
+  delete[] whole;
+  EXPECT_EQ(counted::alive, 0);
+}
 } // namespace adoption_test
 
 TEST(type_registration_test, handle_takes_over_an_array_a_unique_scope_makes) {
@@ -1241,6 +1270,19 @@ TEST(type_registration_test, handle_takes_over_an_array_a_unique_scope_makes) {
 
   static_container<bindings<dingo::bind<scope<unique>, storage<E[2]>>>> fixed;
   adoption_test::check_adopted(fixed);
+}
+
+TEST(type_registration_test, array_a_unique_scope_makes_ends_with_the_request) {
+  using adoption_test::counted;
+  container<> runtime;
+  runtime.register_type<scope<unique>, storage<counted[2]>>();
+  adoption_test::check_referred(runtime);
+  adoption_test::check_handed_over(runtime);
+
+  static_container<bindings<dingo::bind<scope<unique>, storage<counted[2]>>>>
+      fixed;
+  adoption_test::check_referred(fixed);
+  adoption_test::check_handed_over(fixed);
 }
 
 TEST(type_registration_test,

@@ -441,8 +441,12 @@ template <> struct step<semantics::step::decay> {
     using pointer = std::add_pointer_t<std::remove_extent_t<T>>;
     auto &made = keeper.template keep<pointer>(
         [&] { return reinterpret_cast<pointer>(from.object); });
-    return carrier<pointer, Owned>{std::addressof(made), from.owner,
-                                   from.release};
+    if constexpr (Owned) {
+      // The pointer of an array the request owns owns it: it is given up by
+      // what it was taken out of.
+      from.released();
+    }
+    return carrier<pointer, Owned>{std::addressof(made)};
   }
 };
 

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/base/config.h>
+#include <dingo/conversion/source.h>
 
 #include <dingo/factory/constructor.h>
 #include <dingo/factory/factory_traits.h>
@@ -76,9 +77,16 @@ public:
                                            std::remove_extent_t<Type> *, Type>;
   using tag_type = unique;
 
+  // A bounded array is made as the pointer to its first element, which the
+  // request owns.
   template <typename Context, typename Container, typename Scope>
   decltype(auto) resolve(Scope scope, Context &context, Container &container) {
-    return Factory::template construct<Type>(scope, context, container);
+    if constexpr (std::extent_v<Type> > 0) {
+      return made_array<std::remove_extent_t<Type>>(
+          Factory::template construct<Type>(scope, context, container));
+    } else {
+      return Factory::template construct<Type>(scope, context, container);
+    }
   }
 };
 } // namespace detail
