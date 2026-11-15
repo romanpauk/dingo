@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/base/config.h>
+#include <dingo/base/meta.h>
 
 #include <dingo/binding/activation.h>
 #include <dingo/binding/interface.h>
@@ -18,7 +19,6 @@
 #include <dingo/runtime/request.h>
 #include <dingo/type/shape.h>
 
-#include <algorithm>
 #include <cassert>
 #include <memory>
 #include <type_traits>
@@ -65,8 +65,8 @@ struct runtime_binding_record {
       align_up(runtime_cell_offset_v<Cell> + sizeof(Cell), alignof(Binding));
   static constexpr std::size_t size =
       bindings_offset + Interfaces * sizeof(Binding);
-  static constexpr std::size_t alignment = std::max(
-      {alignof(runtime_binding_header), alignof(Cell), alignof(Binding)});
+  static constexpr std::size_t alignment =
+      strictest_alignment<runtime_binding_header, Cell, Binding>();
 
   static Binding *binding(runtime_binding_header &header,
                           std::size_t index) noexcept {

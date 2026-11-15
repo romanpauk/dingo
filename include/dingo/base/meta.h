@@ -14,6 +14,13 @@
 
 namespace dingo {
 namespace detail {
+// The strictest alignment of the types.
+template <typename... Types> constexpr std::size_t strictest_alignment() {
+  std::size_t made = 1;
+  ((made = alignof(Types) > made ? alignof(Types) : made), ...);
+  return made;
+}
+
 // Detect completeness through overload resolution instead of a partial
 // specialization. MSVC x64 accepts the specialization-based probe for some
 // forward declarations that still need to be rejected during registration.

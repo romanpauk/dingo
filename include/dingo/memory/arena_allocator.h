@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -228,7 +227,8 @@ class arena_allocator {
 
 public:
   using value_type = T;
-  static constexpr std::size_t alignment = std::max(Alignment, alignof(T));
+  static constexpr std::size_t alignment = Alignment > alignof(T) ? Alignment
+                                                                  : alignof(T);
 
   template <typename U> struct rebind {
     using other = arena_allocator<U, Arena, Alignment>;
