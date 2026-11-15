@@ -62,8 +62,10 @@ no plan satisfies does not compile.
 ## Runtime Plans
 
 A runtime binding plans a request at its first use, and keeps the plan in the
-plan cache of the request type. The plan is applied through tables of erased
-operations:
+plan cache of the request type
+([include/dingo/runtime/request.h](../../include/dingo/runtime/request.h)). The
+plan is applied through tables of erased operations
+([include/dingo/runtime/execution.h](../../include/dingo/runtime/execution.h)):
 
 - A binding has one table for each C++ type of its layer sources and of what a
   step makes of them (`binding_sources`). Each operation of a table names the

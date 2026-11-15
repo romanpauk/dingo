@@ -107,13 +107,13 @@ request takes the others through the tables of the binding.
 
 ## The Headers
 
-| Layer          | Headers                                                                                                                                                                        |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Classification | `type/type_traits.h`, `type/shape.h`, `type/annotated.h`, `request/decomposition.h`, `request/classification.h`, `factory/constructor_detection.hpp`, `base/type_descriptor.h` |
-| Semantics      | `semantics/model.h`, `binding/materialization.h`, `storage/scope_traits.h`, `binding/selection.h`                                                                              |
-| Steps          | the steps of `request/execution.h`, the storages of `storage/`, `factory/`                                                                                                     |
-| Execution      | the interpreter and the tables of `request/execution.h`, `binding/activation.h`, `runtime/binding.h`, `static_execution` of `static/binding.h`, `resolution/algorithm.h`       |
-| Plumbing       | `lookup/`, `memory/`, the registries and the transactions of `runtime/` and `static/`, `context/`                                                                              |
+| Layer          | Headers                                                                                                                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Classification | `type/type_traits.h`, `type/shape.h`, `type/annotated.h`, `request/decomposition.h`, `request/classification.h`, `factory/constructor_detection.hpp`, `base/type_descriptor.h`                                      |
+| Semantics      | `semantics/model.h`, `binding/materialization.h`, `storage/scope_traits.h`, `binding/selection.h`                                                                                                                   |
+| Steps          | the steps of `request/execution.h`, the storages of `storage/`, `factory/`                                                                                                                                          |
+| Execution      | the interpreter of `request/execution.h`, the tables of `runtime/execution.h`, `runtime/request.h`, `binding/activation.h`, `runtime/binding.h`, `static_execution` of `static/binding.h`, `resolution/algorithm.h` |
+| Plumbing       | `lookup/`, `memory/`, the registries and the transactions of `runtime/` and `static/`, `context/`                                                                                                                   |
 
 The plumbing does not decide what a request resolves to. It is tested as any
 other code.

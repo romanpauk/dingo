@@ -29,6 +29,7 @@
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>
 #include <dingo/runtime/registry_store.h>
+#include <dingo/runtime/request.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/collection_traits.h>

@@ -13,7 +13,9 @@
 #include <dingo/binding/interface.h>
 #include <dingo/binding/resolution.h>
 #include <dingo/runtime/context.h>
+#include <dingo/runtime/execution.h>
 #include <dingo/runtime/memory.h>
+#include <dingo/runtime/request.h>
 #include <dingo/type/shape.h>
 
 #include <algorithm>

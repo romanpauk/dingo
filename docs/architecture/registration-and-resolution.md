@@ -137,9 +137,11 @@ The static container plans a request with `static_execution` in
 applies the plan through the typed steps of
 [include/dingo/request/execution.h](../../include/dingo/request/execution.h),
 which the compiler inlines. The runtime container applies the same steps through
-tables of erased operations: a binding has one table for each C++ type of its
-layer sources (`binding_sources`), and a request one for each of its nested
-types (`request_tables`).
+tables of erased operations
+([include/dingo/runtime/execution.h](../../include/dingo/runtime/execution.h)):
+a binding has one table for each C++ type of its layer sources
+(`binding_sources`), and a request one for each of its nested types
+(`request_tables`).
 
 The containers differ in their binding table and their selection, not in the
 algorithm. Both containers give the algorithm the same hooks. A runtime
