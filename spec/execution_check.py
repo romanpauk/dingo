@@ -94,7 +94,7 @@ def main():
     options = parser.parse_args()
     options.work.mkdir(parents=True, exist_ok=True)
     driver.set_jobs(options.jobs)
-    driver.set_cache(options.work / "programs")
+    driver.open_cache(options.work / "programs")
     flags = shlex.split(options.flags)
     semantics_program = options.work / "semantics"
     subprocess.run(driver.compiler_command(
@@ -149,7 +149,7 @@ def main():
         print(f"  {name}: {error}")
     for name, want, got in differ[:20]:
         print(f"  {name}\n    plan    {want}\n    applied {got}")
-    driver.finish_cache(prune=not options.only)
+    driver.close_cache(prune=not options.only)
     return 1 if differ or failed else 0
 
 
@@ -297,7 +297,7 @@ def run_part(options, flags, index, part):
     their plans, and the program if it fails."""
     source = PROGRAM.replace("CELLS", "\n".join(code for _, code, _ in part))
     test = str(Path(__file__).parents[1] / "test")
-    returncode, stderr, stdout, status = driver.compiled_run(
+    returncode, stderr, stdout, status = driver.compile_and_run(
         options.compiler, [*flags, "-I" + test], options.work,
         f"execution_{index}", source)
     if returncode != 0:

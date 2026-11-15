@@ -64,7 +64,7 @@ def main():
         "expression")
     options = parser.parse_args()
     options.work.mkdir(parents=True, exist_ok=True)
-    driver.set_cache(options.work / "programs")
+    driver.open_cache(options.work / "programs")
     flags = (shlex.split(options.flags) +
              driver.error_limit_flags(options.compiler))
     flags = driver.precompile_header(options.compiler, flags, options.work,
@@ -95,7 +95,7 @@ def main():
             cells += records
     cells = report.write(options.output, apply_semantics(cells))
     write_report(options.output.with_suffix(".md"), cells)
-    driver.finish_cache(prune=not options.only)
+    driver.close_cache(prune=not options.only)
     return report.summarize(cells, [], options.output.with_suffix(".md"))
 
 
