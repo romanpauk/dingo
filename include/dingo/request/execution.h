@@ -880,10 +880,17 @@ struct binding_plan {
   }
 
   // What the binding publishes for a request of the leaf, and for one of its
-  // abstract interface. Each is made once.
+  // abstract interface. Each is made once, and is whole: a stored object of
+  // more layer sources than a search of them holds does not compile.
   template <bool Abstract>
-  static constexpr semantics::search sources =
+  static constexpr semantics::source_search sources =
       semantics::layer_sources(start(), context(Abstract));
+  template <bool Abstract> static constexpr bool whole() {
+    static_assert(!sources<Abstract>.overflow,
+                  "the stored object publishes more layer sources than "
+                  "semantics::max_sources");
+    return true;
+  }
 };
 
 // A request of a stored object, planned as the code compiles: what C++ says
@@ -936,6 +943,7 @@ struct request_plan {
       (void)needed;
       return {};
     } else {
+      static_assert(binding::template whole<abstract>());
       constexpr semantics::context with = context();
       const semantics::search found = semantics::reach_from(
           binding::template sources<abstract>, with, goal());
@@ -999,7 +1007,8 @@ template <const semantics::plan &Plan, std::size_t Index> struct plan_at {
 };
 
 // The step into a state of a search.
-template <const semantics::search &Search, std::size_t State> struct search_at {
+template <const semantics::source_search &Search, std::size_t State>
+struct search_at {
   static constexpr semantics::step kind = Search.states[State].via;
   static constexpr semantics::thing from() {
     return Search.states[Search.states[State].parent].reached;

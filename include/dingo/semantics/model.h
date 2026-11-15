@@ -940,7 +940,12 @@ struct state {
   step via = step::decay;
 };
 
+// The states a search of a request holds, and those a search of what a
+// binding publishes holds: what a request reaches, and the layer sources of a
+// stored object, of far fewer, which the code compiles a search of for every
+// binding.
 inline constexpr std::size_t max_states = 1024;
+inline constexpr std::size_t max_sources = 256;
 
 // The states a stored object reaches on the way to a request.
 // A hash of a thing and the copies and the moves of its leaf, which a state
@@ -972,29 +977,49 @@ constexpr std::uint32_t hash_of(const state &of) {
   return hash;
 }
 
-inline constexpr std::size_t search_slots = 2 * max_states;
+// The states of a search, of at most Capacity.
+template <std::size_t Capacity> struct search_of {
+  static constexpr std::size_t capacity = Capacity;
+  static constexpr std::size_t slot_count = 2 * Capacity;
 
-struct search {
-  state states[max_states] = {};
+  state states[Capacity] = {};
   std::size_t count = 0;
   // Whether there were more states than the search holds: its answer is not
   // to be trusted.
   bool overflow = false;
   // The states by their hash, open addressed: an index, or none.
-  std::uint16_t slots[search_slots] = {};
+  std::uint16_t slots[slot_count] = {};
+
+  constexpr search_of() = default;
+
+  // The states of a smaller search, at the same indices, which their parents
+  // refer to them by.
+  template <std::size_t Other>
+  constexpr explicit search_of(const search_of<Other> &from)
+      : overflow(from.overflow) {
+    static_assert(Other <= Capacity);
+    for (std::size_t index = 0; index < from.count; ++index) {
+      std::size_t slot = hash_of(from.states[index]) % slot_count;
+      while (slots[slot] != 0) {
+        slot = (slot + 1) % slot_count;
+      }
+      states[count++] = from.states[index];
+      slots[slot] = static_cast<std::uint16_t>(count);
+    }
+  }
 
   // Adds a state, unless one of its thing and of no greater cost is found
   // already.
   constexpr bool add(const state &found) {
-    std::size_t slot = hash_of(found) % search_slots;
+    std::size_t slot = hash_of(found) % slot_count;
     while (slots[slot] != 0) {
       const state &other = states[slots[slot] - 1];
       if (dominates(other.made, found.made) && other.reached == found.reached) {
         return false;
       }
-      slot = (slot + 1) % search_slots;
+      slot = (slot + 1) % slot_count;
     }
-    if (count == max_states) {
+    if (count == Capacity) {
       overflow = true;
       return false;
     }
@@ -1003,6 +1028,9 @@ struct search {
     return true;
   }
 };
+
+using search = search_of<max_states>;
+using source_search = search_of<max_sources>;
 
 // Whether a thing converted to a more qualified element may still become the
 // request: its layers may, or a raw pointer may become the observer of the
@@ -1492,8 +1520,8 @@ constexpr void add_layer_sources(Search &found, const thing &start,
 // What a request reaches from the layer sources of a stored object, as reach
 // gives what it reaches from the stored object itself: the layer sources,
 // then the steps the request takes from them toward it.
-constexpr search layer_sources(const thing &start, const context &with) {
-  search found;
+constexpr source_search layer_sources(const thing &start, const context &with) {
+  source_search found;
   add_layer_sources(found, start, with);
   return found;
 }
@@ -1514,9 +1542,9 @@ constexpr void reach_into(search &found, const context &with,
   }
 }
 
-constexpr search reach_from(const search &sources, const context &with,
+constexpr search reach_from(const source_search &sources, const context &with,
                             const request &goal) {
-  search found = sources;
+  search found(sources);
   reach_into(found, with, goal);
   return found;
 }
