@@ -105,6 +105,15 @@ template <typename Wrapper, typename Alternative> struct alternative_layer_tag {
 template <typename Semantics, typename Of>
 inline constexpr bool is_semantics_v = std::is_same_v<Semantics, Of>;
 
+// A type, named without being formed until type is asked for: the wrapper
+// Traits rebinds to an element.
+template <typename T> struct type_identity {
+  using type = T;
+};
+template <typename Traits, typename Element> struct rebound {
+  using type = typename Traits::template rebind_t<Element>;
+};
+
 // The properties of the layer of a wrapper.
 template <typename Wrapper> constexpr semantics::layer_kind wrapper_kind() {
   using traits = type_traits<Wrapper>;
@@ -133,7 +142,12 @@ template <typename Wrapper> constexpr semantics::layer_kind wrapper_kind() {
   kind.may_be_empty = true;
   if constexpr (rebinds_element<Wrapper>::value) {
     using copyable = typename traits::template rebind_t<copyable_probe>;
-    using movable = typename traits::template rebind_t<movable_probe>;
+    // A pointer-like wrapper copies and moves as it does whatever its
+    // element is: the wrapper of a copyable element is asked about both.
+    using movable =
+        typename std::conditional_t<traits::is_pointer_like,
+                                    type_identity<copyable>,
+                                    rebound<traits, movable_probe>>::type;
     kind.copyable = std::is_copy_constructible_v<copyable>;
     kind.relocatable = std::is_move_constructible_v<movable>;
     kind.adopts = traits::is_owning_handle &&
@@ -151,13 +165,9 @@ template <typename Wrapper> constexpr semantics::layer_kind wrapper_kind() {
           typename traits::template rebind_t<const copyable_probe>;
       using volatile_copyable =
           typename traits::template rebind_t<volatile copyable_probe>;
-      using const_movable =
-          typename traits::template rebind_t<const movable_probe>;
-      using volatile_movable =
-          typename traits::template rebind_t<volatile movable_probe>;
       kind.qualifies =
-          std::is_constructible_v<const_movable, movable &&> &&
-          std::is_constructible_v<volatile_movable, movable &&> &&
+          std::is_constructible_v<const_copyable, copyable &&> &&
+          std::is_constructible_v<volatile_copyable, copyable &&> &&
           (!kind.copyable ||
            (std::is_constructible_v<const_copyable, const copyable &> &&
             std::is_constructible_v<volatile_copyable, const copyable &>));
