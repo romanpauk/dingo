@@ -230,8 +230,8 @@ every registration that the library accepts:
   selected plainly: as `&` through `resolve` from a scope that keeps it, and as
   `&&` through `invoke` from a scope that makes it. Only the storage copies or
   moves the leaf here, and the specification needs none.
-- The [Conversion Check](#conversion-check) counts the conversion of every
-  published request.
+- [`spec/execution_check.py`](../spec/execution_check.py) counts the copies and
+  the moves of the plan of every conversion of the model.
 - `probe.py --layer resolution` requests the leaf of a plain registration,
   stored as `L` with no interfaces declared. No conversion copies or moves it.
   It covers every category, operation, scope, selection and container, and every
@@ -242,7 +242,6 @@ The probe fails if one of these is true:
 - A request does not compile, other than by a `static_assert`
   (`does_not_compile`), or its probe crashes (`crashed`).
 - A resolved request is `violated` or `excess`.
-- A published request is `unreachable` or `unprobed`.
 - A cell has another outcome than the specification expects (`unexpected`).
 - A limited cell resolves (`stale_limitation`).
 - A registration binds other interfaces than the specification gives.
@@ -256,58 +255,36 @@ library does not accept resolves nothing, so it covers nothing.
 
 ## Conversion Check
 
-[`spec/conversion.py`](../spec/conversion.py) asks the conversion layer of each
-registration what it publishes for every request of up to three wrappers, and of
+[`spec/conversion.py`](../spec/conversion.py) asks the binding of each
+registration what it plans for every request of up to three wrappers, and of
 each array shape. The answer comes from compilation only
 ([`test/model/conversion.h`](../test/model/conversion.h)). No container is made
 and nothing resolves, so the check covers every registration of the runtime
-container that the library accepts, several in one program. The request lists
-are the same in both containers, and selection does not change them.
+container that the library accepts, several in one program. Both containers plan
+a request alike, so one answer is of both.
 
-| Outcome           | Meaning                                                                                                                                         |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `published`       | Both containers select a resolution, and its conversion is available.                                                                           |
-| `unconvertible`   | Both select a resolution, and its conversion is not available.                                                                                  |
-| `composed`        | The binding composes a wrapper of a request it resolves, or keeps it with the instance.                                                         |
-| `derived`         | The request derives the request from what the binding publishes: refers to it, takes its address, copies or moves it, or converts a sole owner. |
-| `adopted`         | The binding takes the value out of a pointer that it hands over.                                                                                |
-| `placed`          | The binding resolves the request into the context of the call: a value placed there, or a reference into a pointer it adopts.                   |
-| `unpublished`     | None of the above.                                                                                                                              |
-| `selects_another` | The request selects the binding of another interface.                                                                                           |
-| `diverged`        | The containers select or derive the request differently.                                                                                        |
-
-The static container selects by its request lists, the runtime container by type
-descriptors. For a request that a binding does not publish, the check follows
-the chain of requests it derives from, in both containers. Each container
-derives from what its own binding tells about itself.
+| Outcome           | Meaning                                                        |
+| ----------------- | -------------------------------------------------------------- |
+| `published`       | The binding plans the request for as long as the container.    |
+| `placed`          | The binding plans the request only for as long as the request. |
+| `unpublished`     | The binding plans the request not at all.                      |
+| `selects_another` | The request selects the binding of another interface.          |
 
 The check compares each outcome with the specification, with the limitations of
 the library:
 
-- A `published`, `composed`, `derived`, `adopted` or `placed` request must
-  resolve as the dependency of a direct `invoke`.
+- A `published` or `placed` request must resolve in some position.
 - A request that resolves for the caller of a direct `resolve` must be
-  `published`, `composed` or `adopted`. A placed value ends with the call, so it
-  cannot go back to the caller.
+  `published`. A placed value ends with the call, so it cannot go back to the
+  caller.
 - A storage that cannot be made is not compared.
 - The alternative type of a probe never holds its other alternative, so the
   check compares the other alternative as a copyable type of its own.
-- What a binding reaches through `element_pointer` or `optional_element` must be
-  `published` in one of the categories that take it. A request that derives it
-  goes through an element that may be absent, and fails where the layer is
-  empty.
 
-Another outcome is `unexpected`. The check fails on an `unexpected` or
-`diverged` cell, on a registration that does not compile, and on a published
-request that is `unprobed` or `unreachable`. The [Model Probe](#model-probe)
-checks what resolving a request does.
-
-The check also applies the conversion of each `published` request alone to a new
-object of its source. It makes the request from the result as a binding does,
-and counts the copies and the moves of the leaf. `semantics.converted()` gives
-the fewest copies and moves of the derivations that reach a match for the
-request, and of the match. It does not include giving the result to the request.
-More copies or more moves are `excess`, which fails the check.
+Another outcome is `unexpected`. The check fails on an `unexpected` cell and on
+a registration that does not compile. The [Model Probe](#model-probe) checks
+what resolving a request does, and `spec/execution_check.py` the copies and the
+moves of each plan.
 
 ## Emptiness Check
 

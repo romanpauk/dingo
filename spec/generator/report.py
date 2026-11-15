@@ -17,8 +17,6 @@ MARKS = {
     Outcome.DOES_NOT_COMPILE: "DNC",
     Outcome.CRASHED: "CRASH",
     Outcome.VIOLATED: "BAD",
-    Outcome.UNPROBED: "UNPROBED",
-    Outcome.UNREACHABLE: "UNREACHABLE",
     Outcome.EXCEPTION: "exc",
     Outcome.DETECTED: "det",
     Outcome.MISDETECTED: "MIS",
@@ -28,13 +26,8 @@ MARKS = {
     Outcome.EXCESS: "excess",
     Outcome.PUBLISHED: "pub",
     Outcome.DEFINED: "def",
-    Outcome.COMPOSED: "comp",
-    Outcome.DERIVED: "deriv",
-    Outcome.ADOPTED: "adopt",
     Outcome.PLACED: "place",
-    Outcome.UNCONVERTIBLE: "unconv",
     Outcome.UNPUBLISHED: "unpub",
-    Outcome.DIVERGED: "DIVERGED",
     Outcome.SELECTS_ANOTHER: "other",
 }
 

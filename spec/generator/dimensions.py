@@ -61,10 +61,6 @@ class Outcome(Dimension):
     TYPE_NOT_CONVERTIBLE = "type_not_convertible"
     TYPE_AMBIGUOUS = "type_ambiguous"
     EXCEPTION = "exception"
-    # A request a binding publishes and selects that no probe makes, and one
-    # it publishes that selects another binding.
-    UNPROBED = "unprobed"
-    UNREACHABLE = "unreachable"
     DETECTED = "detected"
     MISDETECTED = "misdetected"
     # Misdetected as a known limitation says, and a known limitation that
@@ -76,30 +72,20 @@ class Outcome(Dimension):
     # Resolved with more copies or moves of the leaf than the specification
     # needs.
     EXCESS = "excess"
-    # What the conversion layer of a binding answers a request: a resolution
-    # with an available conversion, a wrapper composed of one, a value taken
-    # out of a pointer the binding hands over, a reference into the context
-    # of a resolution, one a request derives from a layer source by a step of
-    # its own, one whose conversion is not available, none, and a different
-    # answer of the two containers; a request the binding of another
-    # interface answers.
+    # What a binding plans for a request: for as long as the container, only
+    # for as long as the request, or not at all; a request the binding of
+    # another interface answers.
     PUBLISHED = "published"
+    PLACED = "placed"
+    UNPUBLISHED = "unpublished"
+    SELECTS_ANOTHER = "selects_another"
     # What a request of an empty stored object gives: what holds no leaf,
     # as the specification says.
     DEFINED = "defined"
-    COMPOSED = "composed"
-    DERIVED = "derived"
-    ADOPTED = "adopted"
-    PLACED = "placed"
-    UNCONVERTIBLE = "unconvertible"
-    UNPUBLISHED = "unpublished"
-    DIVERGED = "diverged"
-    SELECTS_ANOTHER = "selects_another"
 
     @property
     def is_defect(self):
         return self in (Outcome.DOES_NOT_COMPILE, Outcome.CRASHED,
-                        Outcome.VIOLATED, Outcome.UNPROBED,
-                        Outcome.UNREACHABLE, Outcome.MISDETECTED,
+                        Outcome.VIOLATED, Outcome.MISDETECTED,
                         Outcome.STALE_LIMITATION, Outcome.UNEXPECTED,
-                        Outcome.DIVERGED, Outcome.EXCESS)
+                        Outcome.EXCESS)

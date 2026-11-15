@@ -1,22 +1,19 @@
-"""Checks what the conversion layer of every binding answers every request,
+"""Checks what the binding of every registration plans for every request,
 as the code compiles, against the specification.
 
 A cell is scope x stored form x leaf x interfaces declared x interface x
-request. The conversion layer answers each cell:
+request. A binding answers each cell:
 
-- published: the request lists of the binding select a resolution of the
-  request, and its conversion is available
-- unconvertible: they select one whose conversion is not available
-- unpublished: they select none
-- diverged: the static and the runtime container select differently, which
-  is a defect
+- published: it plans the request for as long as the container, which the
+  caller may take
+- placed: it plans it only for as long as the request
+- unpublished: it plans it not at all
 - does_not_compile: the registration does not compile, which is a defect
 
-A published request the specification resolves in no position is unexpected,
-and so is one that is not published although the specification resolves it
-for the caller; both are defects. A request the registration publishes that
-no cell asks for is unprobed, and one that selects another binding
-unreachable, as in the model probe.
+A published or placed request the specification resolves in no position is
+unexpected, and so is one that is not published although the specification
+resolves it for the caller; both are defects. Both containers plan alike.
+How a plan copies and moves the leaf is what spec/execution_check.py checks.
 
 No container is made and nothing resolves, so every registration is checked,
 many in one program: spec/probe.py checks what resolutions do.

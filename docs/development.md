@@ -48,9 +48,8 @@ environment provides the development tools.
   [Layered Semantics](architecture/layered-semantics.md).
 - `semantics-check-pairs`: the same, and for every pair of layers a type could
   define. It takes minutes and is not part of `check`.
-- `conversion-check`: checks what the conversion layer of each registration
-  publishes, and the copies and the moves of its conversions, against the
-  [Specification](specification.md#conversion-check).
+- `conversion-check`: checks what the binding of each registration plans for
+  every request against the [Specification](specification.md#conversion-check).
 - `emptiness-check`: checks what each registration whose stored object holds no
   leaf gives the requests that are defined when a layer is empty, against the
   [Specification](specification.md#emptiness-check).

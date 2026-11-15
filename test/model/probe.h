@@ -389,41 +389,6 @@ inline constexpr bool selects_v =
     std::is_same_v<typename request_type<Request>::value_type, Interface> ||
     std::is_same_v<typename request_type<Request>::exact_type, Interface>;
 
-// Records a request the binding publishes for Interface that does not select
-// it, or that none of Requests asks for. Both are known as the code compiles,
-// so that a probed request makes no code.
-template <typename Interface, typename Target, typename... Requests>
-DINGO_ALWAYS_INLINE void record_unprobed(const char *prefix) {
-  if constexpr (!selects_v<Target, Interface>) {
-    record(prefix, type_name<Target>(), "unreachable", nullptr);
-  } else if constexpr (!(detail::qualifies_as(
-                             detail::described_type_v<Target>,
-                             detail::described_type_v<Requests>) ||
-                         ...)) {
-    record(prefix, type_name<Target>(), "unprobed", nullptr);
-  }
-}
-
-template <typename Interface, typename... Requests, typename... Resolutions>
-void check_probed(const char *prefix, type_list<Resolutions...>) {
-  (record_unprobed<Interface, typename Resolutions::target_type, Requests...>(
-       prefix),
-   ...);
-}
-
-// Checks each request the registration publishes for Interface: a request
-// that does not select Interface is unreachable, and one that none of
-// Requests asks for is unprobed. Every request a binding can serve has to be
-// probed, and a binding should publish only those.
-template <typename Registration, typename Interface, typename... Requests>
-void check_probed(const char *prefix) {
-  using model = detail::binding_model<Registration>;
-  using storage = typename model::storage_type;
-  using type = unannotated_t<Interface>;
-  check_probed<type, Requests...>(
-      prefix, typename detail::binding_resolutions<type, storage>::type{});
-}
-
 // One line of the outcome table: the cell and its outcome.
 // A text as a JSON string: quoted, its quotes, backslashes and control
 // characters escaped.

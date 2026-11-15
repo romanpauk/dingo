@@ -19,8 +19,6 @@ selection x operation x interface x request. The library answers each cell:
 - resolved: the request resolved and the result is right
 - type_not_found, type_not_convertible, type_ambiguous, exception: the
   exception the request threw
-- unprobed, unreachable: a request the registration publishes that no probe
-  makes, or that selects another binding; both are defects
 
 generator/semantics.py says what each cell should be: whether the library
 accepts the registration and the interfaces it binds, whether the request

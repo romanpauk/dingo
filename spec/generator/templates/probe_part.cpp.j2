@@ -60,11 +60,6 @@ template <typename Container> void run() {
     // The registration alone, which every probe of it makes.
     { Container c; {{ reg.registered(r) }} (void)c; }
 {% endif %}
-{% if checks %}
-{% for index, bound, requests in r.checks() %}
-    check_probed<{{ reg.registration(r) }}, I{{ index }}{% for request in requests %}, {{ cpp.request(request) }}{% endfor %}>("{{ r.published_prefix(bound) }}");
-{% endfor %}
-{% endif %}
 {% if r.scope.value == "external" %}
     // What the scope is given outlives the probes; make it first, so that
     // they do not count it as leaked.

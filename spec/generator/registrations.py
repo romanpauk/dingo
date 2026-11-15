@@ -126,23 +126,6 @@ class Registration:
                          self.binding, probe.operation.name,
                          probe.request.interface.name, probe.request.name))
 
-    def published_prefix(self, bound):
-        """The cell of a request the registration publishes for bound, without
-        the request."""
-        return "/".join((self.container, self.scope, self.form, self.leaf,
-                         self.binding, "published", bound.name, ""))
-
-    def checks(self):
-        """For each interface the registration binds, the valid requests of
-        the grammar: every request it publishes for the interface has to be
-        one of them."""
-        bound = self.interfaces()
-        requests = self.grammar(bound)
-        return [(index, interface, [request for request in requests
-                                    if request.index == index and
-                                    request.invalid is None])
-                for index, interface in enumerate(bound)]
-
     def expectation(self, probe):
         """What the specification expects of a probe: the answer, and the
         known limitations of the library it is expected with."""
@@ -177,20 +160,11 @@ class Registration:
             return Keeps.ADDRESSES
         return Keeps.INSTANCE
 
-    def render_part(self, part, probes, first, checks=False,
-                    registers=False):
+    def render_part(self, part, probes, first, registers=False):
         """The part of a program of the registration: its probes, numbered
-        from first, with the checks of what it publishes where checks says
-        so, and the registration alone where registers says so."""
+        from first, and the registration alone where registers says so."""
         return driver.render("probe_part.cpp.j2", r=self, part=part,
-                             probes=probes, first=first, checks=checks,
-                             registers=registers)
-
-    def check_failure(self, outcome, error):
-        """The record of a program of the checks that did not compile or
-        crashed: a defect of every interface the registration binds."""
-        return {"cell": self.published_prefix(self.interfaces()[0]),
-                "outcome": outcome.value, "error": error.strip()}
+                             probes=probes, first=first, registers=registers)
 
     def stores(self, probe):
         """Whether a probe requests what the registration stores, as it is:
@@ -263,53 +237,26 @@ class Group:
     def cell(self, member):
         return member.registration.cell(member.probe)
 
-    def render(self, members, checks=False, registers=False):
+    def render(self, members, registers=False):
         """The program of members, in their order: a part for each run of
         them of one registration, a part for each registration when the
-        checks or the registration alone are made. The probes are numbered
-        across the program, as the driver tells them apart by number."""
+        registration alone is made. The probes are numbered across the
+        program, as the driver tells them apart by number."""
         runs = []
         for member in members:
             if runs and runs[-1][0] == member.registration:
                 runs[-1][1].append(member.probe)
             else:
                 runs.append((member.registration, [member.probe]))
-        if checks or registers:
+        if registers:
             runs = [(registration, []) for registration in self.registrations]
         parts = []
         first = 0
         for registration, probes in runs:
             parts.append(registration.render_part(len(parts), probes, first,
-                                                  checks, registers))
+                                                  registers))
             first += len(probes)
         return driver.render("probe.cpp.j2", parts=parts)
-
-
-def check_registrations(compiler, flags, directory, name, group):
-    """Checks what registrations publish, in a program of their own: every
-    request one publishes has to select the interface, and a probe has to
-    ask for it. The checks hold for a registration, not for a probe, so they
-    are made once rather than in every program of its probes. Registrations
-    whose program fails are checked in halves, down to one, which records
-    the failure for each interface it binds."""
-    records, stderr, crash = driver.build_and_run(
-        compiler, flags, directory, name, group.render([], checks=True))
-    if stderr is None and crash is None:
-        return records
-    registrations = group.registrations
-    if len(registrations) > 1:
-        half = -(-len(registrations) // 2)
-        found = driver.concurrently([
-            lambda index=index, part=part: check_registrations(
-                compiler, flags, directory, f"{name}_{index}", Group(part))
-            for index, part in enumerate(
-                (registrations[:half], registrations[half:]))])
-        return [record for records in found for record in records]
-    registration = registrations[0]
-    if stderr is not None:
-        return [registration.check_failure(Outcome.DOES_NOT_COMPILE,
-                                           driver.first_error(stderr))]
-    return [registration.check_failure(Outcome.CRASHED, crash)]
 
 
 def registration_outcome(compiler, flags, directory, registration, name,
@@ -405,8 +352,6 @@ def probe_registrations(compiler, flags, directory, tasks, selected, map):
     # instantiates: its probes are made with the others of its registration
     # and position only, as their errors are recorded.
     rejected = [found for _, _, found in planned if found]
-    checked = [registration for registration, position in tasks
-               if position is Position.DIRECT and registration.checks()]
 
     def group_of(part):
         return Group(tuple(dict.fromkeys(
@@ -418,10 +363,6 @@ def probe_registrations(compiler, flags, directory, tasks, selected, map):
     calls += [lambda index=index, part=part: driver.probe_expecting_rejection(
         compiler, flags, directory, group_of(part), f"rejected_{index}", part)
         for index, part in enumerate(rejected)]
-    calls += [lambda index=index, part=part: check_registrations(
-        compiler, flags, directory, f"checks_{index}", Group(tuple(part)))
-        for index, part in enumerate(driver.split(
-            checked, driver.GROUP_CHECKS))]
     for found in map(lambda call: call(), calls):
         outcomes += found
     return outcomes

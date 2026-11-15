@@ -136,10 +136,12 @@ using shared_config_selection = detail::static_binding_choice_t<
         config, detail::no_lookup_key_t>>;
 using shared_config_binding = typename shared_config_selection::binding_type;
 
+// A shared scope keeps its instance: no rvalue reference is planned into
+// it.
 static_assert(
-    !detail::binding_supports_request_v<config &&, shared_config_binding>);
-static_assert(!detail::binding_supports_request_v<std::shared_ptr<config> &&,
-                                                  shared_config_binding>);
+    !detail::static_execution<config &&, shared_config_binding>::resolves);
+static_assert(!detail::static_execution<std::shared_ptr<config> &&,
+                                        shared_config_binding>::resolves);
 
 } // namespace
 
