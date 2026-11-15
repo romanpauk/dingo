@@ -91,16 +91,16 @@ traits of any other.
 The steps of the specification and the code that takes them. Each is in
 [include/dingo/request/execution.h](../../include/dingo/request/execution.h):
 
-| Step                                                                      | Who takes it | Code                                              |
-| ------------------------------------------------------------------------- | ------------ | ------------------------------------------------- |
-| `element`, `element_pointer`, `element_or_empty`, `element_or_empty_copy` | binding      | `step<element>` and the others of the same name   |
-| `upcast`, `convert`, `unbound`                                            | binding      | `step<upcast>`, `step<convert>`, `step<unbound>`  |
-| `release`                                                                 | binding      | `release_step`                                    |
-| `copy`, `decay`, `hand_over`                                              | binding      | `step<copy>`, `step<decay>`, `step<hand_over>`    |
-| `wrap`                                                                    | request      | `step<wrap, Target>`; a run of wraps is `made_of` |
-| `adopt`                                                                   | request      | `adopt_step`                                      |
-| `observe`                                                                 | request      | `observe_step`                                    |
-| `qualify`                                                                 | request      | `qualify_step`                                    |
+| Step                                                                      | Who takes it | Code                                                   |
+| ------------------------------------------------------------------------- | ------------ | ------------------------------------------------------ |
+| `element`, `element_pointer`, `element_or_empty`, `element_or_empty_copy` | binding      | `step<element>` and the others of the same name        |
+| `upcast`, `convert`, `unknown_bound`                                      | binding      | `step<upcast>`, `step<convert>`, `step<unknown_bound>` |
+| `release`                                                                 | binding      | `release_step`                                         |
+| `copy`, `decay`, `hand_over`                                              | binding      | `step<copy>`, `step<decay>`, `step<hand_over>`         |
+| `wrap`                                                                    | request      | `step<wrap, Target>`; a run of wraps is `made_of`      |
+| `adopt`                                                                   | request      | `adopt_step`                                           |
+| `observe`                                                                 | request      | `observe_step`                                         |
+| `qualify`                                                                 | request      | `qualify_step`                                         |
 
 A step belongs to the side that knows the type it is applied to (see phase 7). A
 request takes the others through the tables of the binding.
@@ -291,11 +291,12 @@ other code.
      marked level of the qualifiers it asks.
 
    - Arrays of unknown bound. A handle of an array of a known bound whose type
-     traits name `unbound_t` converts to that handle, which holds the same array
-     as one of unknown bound: the `unbound` step. A `std::shared_ptr<T[2]>`
-     gives a `std::shared_ptr<T[]>`. The step makes a new object, copied of a
-     handle the request does not own and moved out of one it owns. A handle
-     converted to a more qualified element is not converted again.
+     traits name `unknown_bound_t` converts to that handle, which holds the same
+     array as one of unknown bound: the `unknown_bound` step. A
+     `std::shared_ptr<T[2]>` gives a `std::shared_ptr<T[]>`. The step makes a
+     new object, copied of a handle the request does not own and moved out of
+     one it owns. A handle converted to a more qualified element is not
+     converted again.
 
    - Ownership of a pointee. A thing tells whether the request owns what its
      outer raw pointer points to: a pointer a scope makes does, a copy of it

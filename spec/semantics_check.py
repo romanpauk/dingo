@@ -90,7 +90,7 @@ def classified_layer(layers, index):
     holds_bounded = (index + 1 < len(layers) and
                      semantics.LAYERS[layers[index + 1]].bounded)
     return (f"{printed((layers[index],))} > {printed(layer.converts_to)} > "
-            f"{printed(layer.unbounds_to if holds_bounded else ())}")
+            f"{printed(layer.unknown_bound_to if holds_bounded else ())}")
 
 
 def classified_stack(layers, element):
@@ -217,8 +217,8 @@ template <typename Tag> void print_layer() {
     print_target<typename dingo::detail::shared_layer<identity>::type>();
     std::printf(" > ");
     print_target<std::conditional_t<
-        dingo::detail::unbounds<identity>(),
-        typename dingo::detail::unbound_layer<identity>::type, void>>();
+        dingo::detail::converts_to_unknown_bound<identity>(),
+        typename dingo::detail::unknown_bound_layer<identity>::type, void>>();
   }
   std::printf(" | ");
 }
@@ -276,8 +276,8 @@ def properties(layer, universe, of_object=False):
     known bound as a layer of its own."""
     converts = sum(1 << universe.index(name) for name in layer.converts_to
                    if name in universe)
-    unbounds = 0 if of_object else sum(
-        1 << universe.index(name) for name in layer.unbounds_to
+    unknown_bound = 0 if of_object else sum(
+        1 << universe.index(name) for name in layer.unknown_bound_to
         if name in universe)
     return [OWNERS[layer.owner], int(layer.shares_element),
             int(layer.copyable), int(layer.made_from_value),
@@ -287,7 +287,7 @@ def properties(layer, universe, of_object=False):
             int(layer.adopts), int(bool(layer.decays_to)),
             int(layer.adopted_with is not None),
             int(bool(layer.adopted_with)), int(layer.rebinds),
-            int(layer.observes), int(layer.qualifies), converts, unbounds]
+            int(layer.observes), int(layer.qualifies), converts, unknown_bound]
 
 
 def order(names):
@@ -341,7 +341,7 @@ def made_layers():
     an array of unknown bound converts to itself."""
     emptiness = ((False, False), (True, False), (True, True))
     for index, (owner, shares, copyable, made, holds, relocatable, empty,
-                adopts, rebinds, observes, qualifies, unbounds) in enumerate(
+                adopts, rebinds, observes, qualifies, unknown_bound) in enumerate(
                     itertools.product(
                         semantics.Owner, (False, True), (False, True),
                         (False, True), (False, True), (False, True),
@@ -354,7 +354,7 @@ def made_layers():
             relocatable=relocatable, may_be_empty=empty[0],
             has_empty_value=empty[1], adopts=adopts, rebinds=rebinds,
             observes=observes, qualifies=qualifies,
-            unbounds_to=(name,) if unbounds else ())
+            unknown_bound_to=(name,) if unknown_bound else ())
         if semantics.possible(layer):
             yield layer
 
@@ -387,7 +387,7 @@ def swept():
         universe = LANGUAGE + (name,)
         stored = ((), (name,), (name, "array"), (name, "array2"),
                   (name, name))
-        if layer.unbounds_to:
+        if layer.unknown_bound_to:
             # A layer that converts to one of an array of unknown bound is its
             # twin that does not but where it holds an array of a known bound,
             # which only a stored object holds.

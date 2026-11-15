@@ -223,32 +223,33 @@ struct shared_layer<
 
 // The layer a handle of an array of a known bound converts to, holding the
 // same array as one of unknown bound, or none.
-template <typename Wrapper, typename = void> struct unbound_layer {
+template <typename Wrapper, typename = void> struct unknown_bound_layer {
   using type = void;
 };
 
 template <typename Wrapper>
-struct unbound_layer<Wrapper, std::void_t<typename type_traits<
-                                  Wrapper>::template unbound_t<layer_probe>>> {
+struct unknown_bound_layer<
+    Wrapper, std::void_t<typename type_traits<
+                 Wrapper>::template unknown_bound_t<layer_probe>>> {
   using type = layer_identity_t<
-      typename type_traits<Wrapper>::template unbound_t<layer_probe>>;
+      typename type_traits<Wrapper>::template unknown_bound_t<layer_probe>>;
 };
 
 // Whether a handle of an array of a known bound converts to the handle its
 // type traits name: moved, and copied too when it can be copied.
-template <typename Wrapper> constexpr bool unbounds() {
-  if constexpr (std::is_void_v<typename unbound_layer<Wrapper>::type>) {
+template <typename Wrapper> constexpr bool converts_to_unknown_bound() {
+  if constexpr (std::is_void_v<typename unknown_bound_layer<Wrapper>::type>) {
     return false;
   } else {
     using traits = type_traits<Wrapper>;
     using copyable = typename traits::template rebind_t<copyable_probe>;
     using movable = typename traits::template rebind_t<movable_probe>;
     return std::is_constructible_v<
-               typename traits::template unbound_t<movable_probe>,
+               typename traits::template unknown_bound_t<movable_probe>,
                movable &&> &&
            (!std::is_copy_constructible_v<copyable> ||
             std::is_constructible_v<
-                typename traits::template unbound_t<copyable_probe>,
+                typename traits::template unknown_bound_t<copyable_probe>,
                 const copyable &>);
   }
 }
@@ -426,11 +427,11 @@ template <typename... Tags> struct layer_universe<type_list<Tags...>> {
         kind.converts |= std::uint32_t{1} << to;
       }
     }
-    if constexpr (unbounds<Identity>()) {
+    if constexpr (converts_to_unknown_bound<Identity>()) {
       const semantics::layer to =
-          index_of<typename unbound_layer<Identity>::type>(identities{});
+          index_of<typename unknown_bound_layer<Identity>::type>(identities{});
       if (to != semantics::no_layer) {
-        kind.unbounds |= std::uint32_t{1} << to;
+        kind.to_unknown_bound |= std::uint32_t{1} << to;
       }
     }
     made.add(kind);

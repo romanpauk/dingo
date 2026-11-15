@@ -32,7 +32,7 @@ struct materialization_facts {
   // Whether the value yielded owns what an address request reaches apart
   // from itself, as the owner of an array a scope makes does: a request that
   // keeps the address takes the array over.
-  bool owns_apart;
+  bool owns_pointee;
 };
 
 // The shape of a request a source is materialized for: whether it refers,
@@ -92,7 +92,7 @@ materialization_placement(const materialization_facts &facts,
 // owns apart from itself is the caller's only as the plan takes it over.
 constexpr bool refuses_caller_address(const materialization_facts &facts,
                                       materialized_request request) {
-  return facts.yields_value && !facts.owns_apart && request.refers;
+  return facts.yields_value && !facts.owns_pointee && request.refers;
 }
 
 } // namespace detail

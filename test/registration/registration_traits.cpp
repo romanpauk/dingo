@@ -1189,7 +1189,7 @@ TEST(type_registration_test, handle_converts_to_one_of_a_const_element) {
   check_made(fixed);
 }
 
-namespace unbound_test {
+namespace unknown_bound_test {
 struct E {
   E() {}
   int value = 5;
@@ -1212,14 +1212,14 @@ template <typename Container> void check_made(Container &container) {
   EXPECT_EQ(converted.use_count(), 1);
   EXPECT_EQ(converted[1].value, 5);
 }
-} // namespace unbound_test
+} // namespace unknown_bound_test
 
 namespace adoption_test {
 // An array a unique scope makes is taken over by a handle of an array: of
 // its bound, as the pointer to the whole array it hands over, and of unknown
 // bound, as the pointer to its first element it decays to.
 template <typename Container> void check_adopted(Container &container) {
-  using unbound_test::E;
+  using unknown_bound_test::E;
   auto bounded = container.template resolve<std::shared_ptr<E[2]>>();
   ASSERT_NE(bounded, nullptr);
   EXPECT_EQ(bounded[1].value, 5);
@@ -1263,7 +1263,7 @@ template <typename Container> void check_handed_over(Container &container) {
 } // namespace adoption_test
 
 TEST(type_registration_test, handle_takes_over_an_array_a_unique_scope_makes) {
-  using unbound_test::E;
+  using unknown_bound_test::E;
   container<> runtime;
   runtime.register_type<scope<unique>, storage<E[2]>>();
   adoption_test::check_adopted(runtime);
@@ -1287,7 +1287,7 @@ TEST(type_registration_test, array_a_unique_scope_makes_ends_with_the_request) {
 
 TEST(type_registration_test,
      handle_converts_to_one_of_an_array_of_unknown_bound) {
-  using namespace unbound_test;
+  using namespace unknown_bound_test;
   container<> kept;
   kept.register_type<scope<shared>, storage<std::shared_ptr<E[2]>>>();
   check_kept(kept);

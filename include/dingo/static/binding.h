@@ -253,7 +253,7 @@ private:
 // Passes fn the instance a request is satisfied with: moved or copied of
 // what a plan reaches, or referred to. What the last steps of a plan of a
 // value make is passed as they make it, so that it is made where fn takes
-// it: made_or_given makes it.
+// it: as_request makes it.
 template <semantics::satisfaction How, typename Request, typename Leaf,
           typename Interface, typename Reached, typename Keeper, typename Fn>
 decltype(auto) hand_reached(Reached reached, Keeper &keeper, Fn &&fn) {
@@ -311,7 +311,7 @@ public:
   Request resolve(Scope scope, Host &host, Context &context) {
     return consume<InterfaceBinding, Request>(
         scope, host, context, [](auto &&instance) -> Request {
-          return execution::made_or_given<Request>(
+          return execution::as_request<Request>(
               std::forward<decltype(instance)>(instance));
         });
   }
@@ -541,7 +541,7 @@ public:
       if constexpr (is_copy_constructible_v<resolve_type> &&
                     !std::is_reference_v<resolve_type>) {
         consume<binding, resolve_type>(scope, host, context, [&](auto &&value) {
-          fn(results, execution::made_or_given<resolve_type>(
+          fn(results, execution::as_request<resolve_type>(
                           std::forward<decltype(value)>(value)));
         });
       } else {

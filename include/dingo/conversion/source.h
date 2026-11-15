@@ -62,31 +62,31 @@ private:
 // An array a scope made for a request, which the request owns: deleted when
 // the request ends, unless a step took it over, as handing it over or a
 // handle taking it over does.
-template <typename Element> class made_array {
+template <typename Element> class array_owner {
 public:
-  explicit made_array(Element *array) : array_(array) {}
-  made_array(made_array &&other) noexcept : array_(other.array_) {
+  explicit array_owner(Element *array) : array_(array) {}
+  array_owner(array_owner &&other) noexcept : array_(other.array_) {
     other.array_ = nullptr;
   }
-  made_array(const made_array &) = delete;
-  made_array &operator=(const made_array &) = delete;
-  made_array &operator=(made_array &&) = delete;
-  ~made_array() { delete[] array_; }
+  array_owner(const array_owner &) = delete;
+  array_owner &operator=(const array_owner &) = delete;
+  array_owner &operator=(array_owner &&) = delete;
+  ~array_owner() { delete[] array_; }
 
   Element *get() const { return array_; }
 
   // Gives the array up to the step that took it over.
   static void release(void *owner) {
-    static_cast<made_array *>(owner)->array_ = nullptr;
+    static_cast<array_owner *>(owner)->array_ = nullptr;
   }
 
 private:
   Element *array_;
 };
 
-template <typename T> inline constexpr bool is_made_array_v = false;
+template <typename T> inline constexpr bool is_array_owner_v = false;
 template <typename Element>
-inline constexpr bool is_made_array_v<made_array<Element>> = true;
+inline constexpr bool is_array_owner_v<array_owner<Element>> = true;
 
 template <typename Source> struct lvalue_source {
   using value_type = Source;

@@ -293,14 +293,14 @@ template <> struct step<semantics::step::convert> {
 };
 
 // The handle of an array of unknown bound a handle of an array of a known
-// bound converts to, holding the same array: the unbound_t of its type
+// bound converts to, holding the same array: the unknown_bound_t of its type
 // traits, moved out of one the request owns or copied of another.
-template <> struct step<semantics::step::unbound> {
+template <> struct step<semantics::step::unknown_bound> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Keeper>
   static auto apply(carrier<T, Owned> from, Keeper &keeper) {
     using type = std::remove_cv_t<T>;
-    using made_type = typename type_traits<type>::template unbound_t<
+    using made_type = typename type_traits<type>::template unknown_bound_t<
         typename type_traits<type>::value_type>;
     auto &made = keeper.template keep<made_type>([&] {
       if constexpr (Owned) {
@@ -614,7 +614,7 @@ inline constexpr bool is_pending_v<pending<Made, Make, Stable>> = true;
 // steps of its plan make, where it is returned, or converted of the
 // instance it is given.
 template <typename Request, typename Instance>
-Request made_or_given(Instance &&instance) {
+Request as_request(Instance &&instance) {
   if constexpr (is_pending_v<remove_cvref_t<Instance>>) {
     return static_cast<Request>(instance.make());
   } else {

@@ -84,7 +84,7 @@ struct layer_kind {
   // The layers a value of it that holds an array of a known bound converts
   // to, holding the same array as one of unknown bound, as a mask of their
   // indices.
-  std::uint32_t unbounds = 0;
+  std::uint32_t to_unknown_bound = 0;
 };
 
 // Whether a type can be a layer of these properties, as spec/semantics.py
@@ -104,7 +104,7 @@ constexpr bool possible(const layer_kind &kind) {
          (!kind.adopts || kind.shares_element) &&
          (!kind.rebinds || kind.shares_element) &&
          (!kind.qualifies || kind.shares_element) &&
-         (!kind.unbounds || kind.shares_element) &&
+         (!kind.to_unknown_bound || kind.shares_element) &&
          (!kind.observes || (kind.owns == owner::none && kind.may_be_empty)) &&
          (kind.may_be_empty || !kind.has_empty_value);
 }
@@ -396,7 +396,7 @@ enum class step : std::uint8_t {
   qualify,
   // A pointer or a handle of an array of a known bound converted to one of
   // an array of unknown bound.
-  unbound,
+  unknown_bound,
 };
 
 struct transition {
@@ -539,12 +539,13 @@ constexpr void qualify_steps(const thing &of, const context &with, Sink &out) {
 // qualified element is not converted again, and a pointer the request owns is
 // handed over or taken over instead.
 template <typename Sink>
-constexpr void unbound_steps(const thing &of, const context &with, Sink &out) {
+constexpr void unknown_bound_steps(const thing &of, const context &with,
+                                   Sink &out) {
   if (of.depth < 2 || !with.kind(of.layers[1]).bounded || of.qualified ||
       of.owns_pointee) {
     return;
   }
-  const std::uint32_t targets = with.kind(of.layers[0]).unbounds;
+  const std::uint32_t targets = with.kind(of.layers[0]).to_unknown_bound;
   if (!targets) {
     return;
   }
@@ -561,7 +562,7 @@ constexpr void unbound_steps(const thing &of, const context &with, Sink &out) {
       made.from = moved ? of.from : origin::copied;
       made.quals[0] = 0;
       made.made_layer = false;
-      out(step::unbound, made);
+      out(step::unknown_bound, made);
     }
   }
 }
@@ -731,7 +732,7 @@ constexpr void each_transition_of(const thing &of, const context &with,
     out(step::copy, copied(of, with));
   }
   qualify_steps(of, with, out);
-  unbound_steps(of, with, out);
+  unknown_bound_steps(of, with, out);
   const bool shares = of.from == origin::copied && of.instance;
   // A raw pointer that owns what it points to is not wrapped: it is handed
   // over, or taken over by a handle.

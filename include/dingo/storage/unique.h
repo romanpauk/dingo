@@ -82,7 +82,7 @@ public:
   template <typename Context, typename Container, typename Scope>
   decltype(auto) resolve(Scope scope, Context &context, Container &container) {
     if constexpr (std::extent_v<Type> > 0) {
-      return made_array<std::remove_extent_t<Type>>(
+      return array_owner<std::remove_extent_t<Type>>(
           Factory::template construct<Type>(scope, context, container));
     } else {
       return Factory::template construct<Type>(scope, context, container);

@@ -75,7 +75,7 @@ bool read_kind(layer_kind &kind) {
     *flags[index] = values[index + 1] != 0;
   }
   kind.converts = values[17];
-  kind.unbounds = values[18];
+  kind.to_unknown_bound = values[18];
   return true;
 }
 
@@ -89,7 +89,7 @@ bool same(const layer_kind &a, const layer_kind &b) {
          a.decays == b.decays && a.adopted == b.adopted &&
          a.adopted_array == b.adopted_array && a.rebinds == b.rebinds &&
          a.observes == b.observes && a.qualifies == b.qualifies &&
-         a.converts == b.converts && a.unbounds == b.unbounds;
+         a.converts == b.converts && a.to_unknown_bound == b.to_unknown_bound;
 }
 
 // Whether a plan replays: each of its steps is a step the semantics take

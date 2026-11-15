@@ -153,7 +153,7 @@ template <typename Storage, typename Interface> struct binding_execution {
 template <typename Stored, bool Makes, typename Source, typename Keeper>
 auto plan_start(Source &&source, Keeper &keeper) {
   using source_type = remove_cvref_t<Source>;
-  if constexpr (is_made_array_v<remove_cvref_t<decltype(*source)>>) {
+  if constexpr (is_array_owner_v<remove_cvref_t<decltype(*source)>>) {
     // The array a scope made, which the request owns until a step takes it
     // over.
     auto &made = *source;

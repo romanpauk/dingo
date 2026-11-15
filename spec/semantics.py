@@ -88,7 +88,7 @@ class Layer:
     # The layers a value of it that holds an array of a known bound converts
     # to, holding the same array as one of unknown bound, as a
     # std::shared_ptr<T[N]> converts to a std::shared_ptr<T[]>.
-    unbounds_to: tuple = ()
+    unknown_bound_to: tuple = ()
 
 
 LAYERS = {layer.name: layer for layer in (
@@ -98,7 +98,7 @@ LAYERS = {layer.name: layer for layer in (
     Layer("shared_ptr", Owner.SHARED, shares_element=True, copyable=True,
           made_from_value=True, adopts=True, rebinds=True,
           constructs_in_place=True, may_be_empty=True, qualifies=True,
-          unbounds_to=("shared_ptr",)),
+          unknown_bound_to=("shared_ptr",)),
     Layer("unique_ptr", Owner.SOLE, shares_element=True, copyable=False,
           made_from_value=True, converts_to=("shared_ptr",), adopts=True,
           rebinds=True, may_be_empty=True, qualifies=True),
@@ -154,7 +154,7 @@ def possible(layer):
     # does one that converts to one of a more qualified element or of an
     # array of unknown bound.
     if (layer.rebinds or layer.qualifies or
-            layer.unbounds_to) and not layer.shares_element:
+            layer.unknown_bound_to) and not layer.shares_element:
         return False
     # A layer made of a pointer it does not own owns nothing, and holds none
     # when the pointer is null.
@@ -655,7 +655,7 @@ def thing_transitions(thing, context):
             instance=thing.instance and depth <= len(layers),
             quals=(0,) + thing.quals[1:])
     yield from qualify_steps(thing, context)
-    yield from unbound_steps(thing, context)
+    yield from unknown_bound_steps(thing, context)
     # A new layer holding what the request owns, moved into it: a value it
     # made, or a copy that shares what it was copied of, such as a copy of a
     # shared handle. What a scope keeps, or a copy of a value that shares
@@ -685,7 +685,7 @@ def thing_transitions(thing, context):
                     owns_pointee=False, made_layer=True)
 
 
-def unbound_steps(thing, context):
+def unknown_bound_steps(thing, context):
     """A pointer or a handle of an array of a known bound converted to one of
     an array of unknown bound, which holds the same array: a new object,
     moved out of one the request owns or copied of another. One converted to
@@ -698,8 +698,8 @@ def unbound_steps(thing, context):
     moved = thing.origin.owned and can_move(thing, context)
     if not moved and not can_copy(thing, context):
         return
-    for name in LAYERS[layers[0]].unbounds_to:
-        yield "unbound", replace(
+    for name in LAYERS[layers[0]].unknown_bound_to:
+        yield "unknown_bound", replace(
             thing, layers=(name, "array") + layers[2:],
             lifetimes=(Lifetime.REQUEST,) + thing.lifetimes[1:],
             origin=thing.origin if moved else Origin.COPIED,
@@ -886,7 +886,7 @@ def handed_over(cost, effect, container):
 MAKES_OBJECT = frozenset({"decay", "hand_over", "adopt", "observe",
                           "element_pointer", "element_or_empty_copy",
                           "convert", "copy", "wrap", "release", "qualify",
-                          "unbound"})
+                          "unknown_bound"})
 
 
 def made_at_once(thing):
