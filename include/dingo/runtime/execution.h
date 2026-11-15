@@ -307,9 +307,30 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   }
 
   template <typename Step, bool Owned>
-  using made_t = typename decltype(Step::template apply<Leaf, Interface>(
+  using reached_t = decltype(Step::template apply<Leaf, Interface>(
       std::declval<carrier<T, Owned>>(),
-      std::declval<keeper_view<Keeper> &>()))::type;
+      std::declval<keeper_view<Keeper> &>()));
+
+  template <typename Step, bool Owned>
+  using made_t = typename reached_t<Step, Owned>::type;
+
+  // Whether a step of a kind does to an object the request owns what it does
+  // to one it does not, and gives the request the same of it: it neither
+  // moves it, nor releases what it was taken out of, nor hands its element
+  // over with it. One operation is then both.
+  template <semantics::step Kind, typename Step>
+  static constexpr bool owned_as_borrowed() {
+    using semantics::step;
+    if constexpr (!std::is_same_v<reached_t<Step, true>,
+                                  reached_t<Step, false>>) {
+      return false;
+    } else {
+      return Kind == step::copy || Kind == step::element_pointer ||
+             Kind == step::element_or_empty ||
+             Kind == step::element_or_empty_copy ||
+             (Kind == step::element && !releases_element_v<T>);
+    }
+  }
 
   // An operation of a step of a kind, for an object the request owns, for
   // one it does not, or for both, where the table has it.
@@ -318,16 +339,26 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   static constexpr operation<Keeper> step_of() {
     operation<Keeper> made;
     constexpr bool transient = makes_transient(Kind);
-    if constexpr ((Mask & Bit) != 0 && Owned) {
-      made.owned = &apply<Step, true, transient>;
-      made.made = &table_of<made_t<Step, true>, Leaf, Interface, Keeper>::value;
-    }
     if constexpr ((Mask & Bit) != 0 && Borrowed) {
       made.borrowed = &apply<Step, false, transient>;
       made.made =
           &table_of<made_t<Step, false>, Leaf, Interface, Keeper>::value;
     }
+    if constexpr ((Mask & Bit) != 0 && Owned) {
+      made.owned = owned_operation<Kind, Step, Borrowed, transient>();
+      made.made = &table_of<made_t<Step, true>, Leaf, Interface, Keeper>::value;
+    }
     return made;
+  }
+
+  template <semantics::step Kind, typename Step, bool Borrowed, bool Transient>
+  static constexpr step_function<Keeper> owned_operation() {
+    if constexpr (Borrowed) {
+      if constexpr (owned_as_borrowed<Kind, Step>()) {
+        return &apply<Step, false, Transient>;
+      }
+    }
+    return &apply<Step, true, Transient>;
   }
 
   template <semantics::step Kind, typename Step = execution::step<Kind>>
