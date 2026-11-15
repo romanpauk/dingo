@@ -11,6 +11,7 @@
 // leaf types the cells store, the instances made of them, the shapes a
 // request is spelled in, and the outcome a program records for a cell.
 
+#include <dingo/registration/constructor.h>
 #include <dingo/type/type_traits.h>
 
 #include <cstdio>
@@ -70,14 +71,18 @@ protected:
   int state = 7;
 };
 
-// The object every cell stores, directly or inside its stored type.
+// The object every cell stores, directly or inside its stored type. The leaves
+// a default factory makes declare their constructors, so that a cell does not
+// detect them: detection is checked by the detection probes, of classes of
+// their own.
 struct leaf : leaf_interface {
+  DINGO_CONSTRUCTOR(leaf()) = default;
   int value() const override { return state; }
 };
 
 // A leaf that can be moved and not copied.
 struct move_only_leaf : leaf_interface {
-  move_only_leaf() = default;
+  DINGO_CONSTRUCTOR(move_only_leaf()) = default;
   move_only_leaf(move_only_leaf &&) = default;
   move_only_leaf &operator=(move_only_leaf &&) = default;
   move_only_leaf(const move_only_leaf &) = delete;
@@ -87,7 +92,7 @@ struct move_only_leaf : leaf_interface {
 
 // A leaf that can be neither copied nor moved.
 struct immovable_leaf : leaf_interface {
-  immovable_leaf() = default;
+  DINGO_CONSTRUCTOR(immovable_leaf()) = default;
   immovable_leaf(const immovable_leaf &) = delete;
   immovable_leaf &operator=(const immovable_leaf &) = delete;
   int value() const override { return state; }
