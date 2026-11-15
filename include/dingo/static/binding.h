@@ -27,6 +27,7 @@
 
 #include <cassert>
 #include <cstddef>
+#include <cstdlib>
 #include <type_traits>
 #include <utility>
 
@@ -219,43 +220,16 @@ inline constexpr derivation static_request_derivation_v =
     static_plan<Request, InterfaceBinding>::derived;
 
 // The plan of a request of a static binding, as the code compiles: of the
-// stored object its storage gives, borrowed or made for the request, and
-// of the request. A request needs what it refers to to live as long as the
+// stored object its storage gives, borrowed or made for the request, and of
+// the request. A request needs what it refers to to live as long as the
 // container when it is passed to the caller.
-// The leaf a binding of an interface stores: the leaf of its stored type, or,
-// when that is an alternative type, the leaf of the alternative of it whose
-// leaf the interface's is.
-template <typename Leaf, typename Interface, typename = void>
-struct bound_leaf {
-  using type = Leaf;
-};
-
-template <typename Leaf, typename Interface>
-struct bound_leaf<Leaf, Interface,
-                  std::enable_if_t<is_alternative_type_v<Leaf>>> {
-  template <typename... Alternatives>
-  static constexpr bool holds(type_list<Alternatives...>) {
-    return (std::is_same_v<leaf_type_t<Interface>, leaf_type_t<Alternatives>> ||
-            ...);
-  }
-  using type =
-      std::conditional_t<holds(alternative_type_alternatives_t<Leaf>{}),
-                         leaf_type_t<Interface>, Leaf>;
-};
-
 template <typename Request, typename InterfaceBinding> struct static_execution {
   using storage_type = typename InterfaceBinding::storage_type;
-  using leaf_type = typename bound_leaf<
-      leaf_type_t<typename storage_type::type>,
-      unannotated_t<typename InterfaceBinding::interface_type>>::type;
-  static constexpr semantics::scope_traits scope =
-      scope_semantics_v<typename storage_type::tag_type>;
-  using stored_type = std::conditional_t<
-      scope.makes,
-      remove_cvref_t<
-          typename storage_source_traits<storage_type>::consumed_type>,
-      remove_cvref_t<
-          typename storage_source_traits<storage_type>::borrowed_type>>;
+  using binding = binding_execution<
+      storage_type, unannotated_t<typename InterfaceBinding::interface_type>>;
+  using leaf_type = typename binding::leaf_type;
+  static constexpr semantics::scope_traits scope = binding::scope;
+  using stored_type = typename binding::stored_type;
   using plan = execution::request_plan<stored_type, Request, leaf_type,
                                        scope.makes, scope.publishes_early>;
   using interface_type = typename plan::interface_type;
@@ -300,13 +274,15 @@ constexpr bool returns_made_value() {
 // What a static resolution makes for a request: kept with the binding when
 // it lives as long as the container, in the context in the scope of the
 // request otherwise.
-template <typename T> inline constexpr char retained_key = 0;
-
 template <typename Context, typename Scope, typename Retained>
 class static_keeper {
 public:
-  static_keeper(Context &context, Scope scope, Retained &retained)
-      : transient_{context, scope}, stable_{context, retained} {}
+  static_keeper(Context &context, Scope scope, Retained &retained,
+                void (*reject)())
+      : transient_{{context, reject}, scope},
+        stable_{{context, reject}, retained} {}
+
+  [[noreturn]] void absent() { transient_.absent(); }
 
   template <bool Stable> auto &at() {
     if constexpr (Stable) {
@@ -321,26 +297,34 @@ public:
   }
 
 private:
-  struct transient {
+  // Rejects a request of what an empty layer does not hold.
+  struct rejecting {
     Context &context;
-    Scope scope;
-    template <typename T, typename Make> T &keep(Make &&make) {
-      return context.template construct_made<T>(scope,
-                                                std::forward<Make>(make));
+    void (*reject)();
+    [[noreturn]] void absent() {
+      reject();
+      std::abort();
     }
   };
-  struct stable {
-    Context &context;
+  struct transient : rejecting {
+    Scope scope;
+    template <typename T, typename Make> T &keep(Make &&make) {
+      return this->context.template construct_made<T>(scope,
+                                                      std::forward<Make>(make));
+    }
+  };
+  struct stable : rejecting {
     Retained &retained;
     template <typename T, typename Make> T &keep(Make &&make) {
       if constexpr (std::is_same_v<Retained, no_retention>) {
         static_assert(!std::is_same_v<Retained, no_retention>,
                       "a binding that keeps no instance keeps nothing made of "
                       "it");
-        return context.template construct_made<T>(caller_scope,
-                                                  std::forward<Make>(make));
+        return this->context.template construct_made<T>(
+            caller_scope, std::forward<Make>(make));
       } else {
-        return retained.template keep<T>(&retained_key<T>, context,
+        return retained.template keep<T>(&execution::retained_key<T>,
+                                         this->context,
                                          std::forward<Make>(make));
       }
     }
@@ -348,23 +332,6 @@ private:
   transient transient_;
   stable stable_;
 };
-
-// The stored object a source gives, where a plan starts: a value made for
-// the request, which it owns, or the object or the pointer the storage
-// keeps, which it borrows.
-template <typename Stored, bool Makes, typename Source, typename Keeper>
-auto plan_start(Source &&source, Keeper &keeper) {
-  using source_type = remove_cvref_t<Source>;
-  if constexpr (is_pointer_source_v<source_type> && std::is_pointer_v<Stored>) {
-    // The pointer the storage keeps, as an object of its own.
-    auto &kept = keeper.template keep<Stored>([&] { return source.get(); });
-    return execution::carry<Makes>(kept);
-  } else if constexpr (is_pointer_source_v<source_type>) {
-    return execution::carry<Makes>(*source.get());
-  } else {
-    return execution::carry<Makes>(*source);
-  }
-}
 
 // Passes fn the instance a request is satisfied with: moved or copied of
 // what a plan reaches, or referred to.
@@ -518,7 +485,8 @@ private:
     [[maybe_unused]] auto order = ordered(host, context);
     static_keeper<Context, Scope,
                   std::remove_reference_t<decltype(cell_.retained())>>
-        keeper(context, scope, cell_.retained());
+        keeper(context, scope, cell_.retained(),
+               &reject_absent<Request, InterfaceBinding>);
     return activation(scope, host)
         .template use_source<Request>(
             context, [&](auto &&source) -> decltype(auto) {
@@ -579,6 +547,15 @@ private:
       return binding_activation<binding_cell_t<model>, dependencies, Scope>{
           cell_, {this->local_bindings, host}, scope};
     }
+  }
+
+  // Rejects a request of what an empty layer does not hold, as it runs.
+  template <typename Request, typename InterfaceBinding>
+  [[noreturn]] static void reject_absent() {
+    throw_type_not_convertible(
+        detail::described_type_v<Request>,
+        detail::described_type_v<
+            typename InterfaceBinding::storage_type::type>);
   }
 
   // Rejects a request as it runs; T is the type of what the branch that

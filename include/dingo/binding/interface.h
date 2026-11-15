@@ -16,39 +16,44 @@
 
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 
 namespace dingo {
-namespace detail {
-struct derivation_site;
-struct request_node;
-} // namespace detail
-
 struct resolved_address {
   void *address;
   enum class access_kind {
     borrow,
     consume,
   } access;
-};
-
-template <typename RTTI> struct instance_request {
-  // Derives a request the binding does not publish, of its node, from one it
-  // resolves through the binding.
-  using derive_function =
-      resolved_address (*)(void *binding, const detail::derivation_site &site,
-                           construction_scope scope, void *context,
-                           const detail::request_node &request);
-
-  type_descriptor requested_type;
-  // Called only when the binding does not publish the request; none where
-  // no binding derives it.
-  derive_function derive = nullptr;
-  const detail::request_node *node = nullptr;
+  // What the last step of the plan of a value makes, which the request makes
+  // where it takes the value: nothing, a copy of the object at the address,
+  // of its qualifiers, or the value of the type at a depth of the request at
+  // the address moved into the layers above it.
+  enum class made_kind : std::uint8_t {
+    none,
+    copy,
+    run
+  } made = made_kind::none;
+  std::uint8_t depth = 0;
+  std::uint8_t quals = 0;
 };
 
 namespace detail {
-struct binding_facts;
+// What a materialization is told once the source it materializes exists:
+// fn(self).
+struct materialized_hook {
+  void (*fn)(void *self);
+  void *self;
+  void operator()() const { fn(self); }
+};
+
 class retention;
+template <typename Context> class runtime_keeper;
+template <typename Context> struct runtime_request;
+namespace execution {
+template <typename Keeper> struct binding_layout;
+template <typename Keeper> struct runtime_plan;
+} // namespace execution
 } // namespace detail
 
 template <typename RTTI, typename Context> class runtime_binding_interface;
@@ -68,7 +73,9 @@ struct runtime_binding_header {
 // of the container, which dispatches every binding by its node.
 template <typename RTTI, typename Context> struct runtime_binding_node {
   using interface_type = runtime_binding_interface<RTTI, Context>;
-  using request_type = instance_request<RTTI>;
+  using request_type = detail::runtime_request<Context>;
+  using keeper_type = detail::runtime_keeper<Context>;
+  using plan_type = detail::execution::runtime_plan<keeper_type>;
 
   // The engine: resolves a request of a binding, of its node. It is one
   // function for every binding of a container.
@@ -77,22 +84,27 @@ template <typename RTTI, typename Context> struct runtime_binding_node {
                                construction_scope scope, Context &context,
                                const request_type &request,
                                const void *cache_key);
-  // What the binding publishes and tells of itself.
-  const detail::binding_facts *facts;
   type_descriptor registered;
   // The leaf of what the binding stores, which its recursion guard names.
   type_descriptor leaf;
+  // The interface of the binding, which a request it resolves names.
+  type_descriptor interface;
+  // The layer sources of what the binding stores, which every request of it
+  // is planned from; none when C++ says of its type what the semantics do
+  // not model.
+  const detail::execution::binding_layout<keeper_type> *layout;
   // How the source of the binding is materialized, which the static
   // container decides by too.
   detail::materialization_facts materialization;
   // Whether the binding caches the addresses it resolves.
   bool caches;
-  // Materializes the source of the binding, in the construction scope, and
-  // applies to it the resolution it publishes at an index, in the scope of
-  // the request.
-  resolved_address (*resolve)(interface_type &binding, construction_scope scope,
-                              construction_scope construction, Context &context,
-                              std::size_t index, type_descriptor requested);
+  // Materializes the source of the binding, in the construction scope,
+  // tells materialized once it is, and runs a plan of a request of it, in
+  // the scope of the request.
+  resolved_address (*run)(interface_type &binding, construction_scope scope,
+                          construction_scope construction, Context &context,
+                          const plan_type &plan, const request_type &request,
+                          const detail::materialized_hook &materialized);
   // Where the cell of the binding lies in its record, after its header.
   std::size_t cell_offset;
   // What the binding keeps of its instance, or none.
@@ -103,7 +115,7 @@ template <typename RTTI, typename Context> struct runtime_binding_node {
 
 template <typename RTTI, typename Context> class runtime_binding_interface {
 public:
-  using request_type = instance_request<RTTI>;
+  using request_type = detail::runtime_request<Context>;
   using node_type = runtime_binding_node<RTTI, Context>;
 
   // The binding of an interface of a registration, of its node, in the

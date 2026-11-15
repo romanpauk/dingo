@@ -29,7 +29,12 @@ public:
   retention() = default;
   retention(const retention &) = delete;
   retention &operator=(const retention &) = delete;
-  ~retention() { clear(); }
+  ~retention() {
+    // What keeps nothing is destroyed at once, where it is known to.
+    if (head_ != nullptr) {
+      clear();
+    }
+  }
 
   template <typename T, typename Context, typename Make>
   T &keep(const void *key, Context &context, Make &&make) {

@@ -301,13 +301,13 @@ struct runtime_retained_source_pointer_dependency {
 
 int runtime_retained_source_pointer_dependency::live_count = 0;
 
+// Makes a new object for each request: a unique scope of a raw pointer owns
+// what it points to, which the resolution deletes when what it serves ends.
 struct runtime_retained_source_pointer_factory {
   template <typename Type, typename Context, typename Container>
-  Type construct(construction_scope scope, Context &context,
-                 Container &) const {
+  Type construct(construction_scope, Context &, Container &) const {
     static_assert(std::is_pointer_v<Type>);
-    using object_type = std::remove_pointer_t<Type>;
-    return std::addressof(context.template construct<object_type>(scope));
+    return new std::remove_pointer_t<Type>();
   }
 
   template <typename Type, typename Context, typename Container>

@@ -28,15 +28,20 @@ private:
 
 namespace dingo {
 template <typename T>
-struct type_traits<runtime_registration_test::observer_pointer<T>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_owning_handle = false;
-
+struct type_traits<runtime_registration_test::observer_pointer<T>>
+    : semantics::observer {
   using value_type = T;
 
   template <typename U>
   using rebind_t = runtime_registration_test::observer_pointer<U>;
+
+  static T *get(const runtime_registration_test::observer_pointer<T> &pointer) {
+    return pointer.get();
+  }
+  static bool
+  empty(const runtime_registration_test::observer_pointer<T> &pointer) {
+    return pointer.get() == nullptr;
+  }
 };
 } // namespace dingo
 
@@ -99,9 +104,12 @@ TYPED_TEST(resolution_access_test,
           test_optional<runtime_registration_test::observer_pointer<int>>>>(
       empty_source);
 
-  auto empty_result = empty_container.template resolve<
-      test_optional<runtime_registration_test::observer_pointer<int>>>();
-  EXPECT_FALSE(empty_result.has_value());
+  // An observer is made of the element of the holder: of an empty one, the
+  // request fails.
+  EXPECT_THROW(
+      (void)empty_container.template resolve<
+          test_optional<runtime_registration_test::observer_pointer<int>>>(),
+      type_not_convertible_exception);
 }
 
 TYPED_TEST(resolution_access_test,
