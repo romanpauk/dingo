@@ -122,16 +122,11 @@ void record_detection(const char *cell) {
          right ? nullptr : found.c_str());
 }
 
-// The container a class is constructed in: a static container binds what a
-// probe registers, a runtime one registers it.
-template <typename Container, typename Binding>
-using with_binding = container_with<Container, Binding>;
-
 template <typename Binding> struct registers;
 template <typename... Args> struct registers<type_registration<Args...>> {
   template <typename Container> static void in(Container &c) {
-    if constexpr (!container_with<Container,
-                                  type_registration<Args...>>::binds) {
+    if constexpr (!with_binding<Container,
+                                type_registration<Args...>>::binds_in_type) {
       c.template register_type<Args...>();
     } else {
       (void)c;

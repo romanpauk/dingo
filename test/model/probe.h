@@ -64,11 +64,11 @@ template <typename Base, typename... Interfaces> struct keyed_traits : Base {
 template <typename Model> struct statically_constructible;
 
 // A container with a binding more: a static container binds it in its type,
-// which binds is true of; a runtime container is the same, and registers it
-// once it is made. model/static.h tells of a static container.
-template <typename Container, typename Binding> struct container_with {
+// which binds_in_type is true of; a runtime container is the same, and
+// registers it once it is made. model/static.h tells of a static container.
+template <typename Container, typename Binding> struct with_binding {
   using type = Container;
-  static constexpr bool binds = false;
+  static constexpr bool binds_in_type = false;
 };
 
 // Whether the library accepts registering Registration. A registration it
@@ -264,7 +264,7 @@ public:
   }
   int seen() const { return seen_; }
   // Whether it is a null pointer.
-  bool null() const { return null_; }
+  bool is_null() const { return null_; }
   // Whether what it refers to is gone.
   bool dangles() const {
     if constexpr (holds) {
@@ -306,13 +306,12 @@ using consumer_registration =
 // The container a consumer of R in Scope is resolved from: a static container
 // binds it too, a runtime one registers it.
 template <typename Container, typename R, typename Scope>
-using with_consumer =
-    container_with<Container, consumer_registration<R, Scope>>;
+using with_consumer = with_binding<Container, consumer_registration<R, Scope>>;
 
 template <typename R, typename Scope, typename Container>
 void register_consumer(Container &c) {
-  if constexpr (container_with<Container,
-                               consumer_registration<R, Scope>>::binds) {
+  if constexpr (with_binding<Container,
+                             consumer_registration<R, Scope>>::binds_in_type) {
     (void)c;
   } else {
     c.template register_type<scope<Scope>, storage<consumer<R>>,
@@ -335,7 +334,7 @@ template <typename R> struct observation {
     return found ? found->value() : 0;
   }
   static bool dangles(const result_type &) { return false; }
-  static bool null(const result_type &result) {
+  static bool is_null(const result_type &result) {
     if constexpr (std::is_pointer_v<result_type>) {
       return result == nullptr;
     } else {
@@ -354,7 +353,7 @@ template <typename R> struct received_observation {
   }
   static int value(const received<R> &got) { return got.seen(); }
   static bool dangles(const received<R> &got) { return got.dangles(); }
-  static bool null(const received<R> &got) { return got.null(); }
+  static bool is_null(const received<R> &got) { return got.is_null(); }
   static constexpr bool refers = received<R>::refers;
   static constexpr bool keeps_leaf = received<R>::holds;
   static constexpr bool hands_over = received<R>::hands_over;
@@ -370,7 +369,7 @@ template <typename R> struct observation<consumer<R>> {
   }
   static int value(const consumer<R> &c) { return c.got.seen(); }
   static bool dangles(const consumer<R> &c) { return c.got.dangles(); }
-  static bool null(const consumer<R> &c) { return c.got.null(); }
+  static bool is_null(const consumer<R> &c) { return c.got.is_null(); }
   static constexpr bool refers = received<R>::refers;
   static constexpr bool keeps_leaf = received<R>::holds;
   static constexpr bool hands_over = received<R>::hands_over;
@@ -398,7 +397,7 @@ template <typename R> struct requested_of<consumer<R> &> : requested_of<R> {};
 // Whether a result is of a pointer to the other alternative of an
 // alternative type, which the instance of a probe never holds.
 template <typename R>
-inline constexpr bool asks_other_v =
+inline constexpr bool requests_other_alternative_v =
     std::is_same_v<
         std::remove_cv_t<std::remove_pointer_t<typename requested_of<R>::type>>,
         other> &&
@@ -410,9 +409,9 @@ inline constexpr bool asks_other_v =
 template <typename R, typename First, typename Second>
 const char *violation(keeps scope, const First &first, const Second &second) {
   using read = observation<R>;
-  if constexpr (asks_other_v<R>) {
+  if constexpr (requests_other_alternative_v<R>) {
     (void)scope;
-    return read::null(first) && read::null(second)
+    return read::is_null(first) && read::is_null(second)
                ? nullptr
                : "a pointer to the alternative the instance does not hold is "
                  "not null";

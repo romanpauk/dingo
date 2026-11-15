@@ -27,10 +27,9 @@ struct statically_constructible
           detail::binding_factory_is_default_constructible<Model>::value> {};
 
 template <typename... Bindings, typename Traits, typename Binding>
-struct container_with<static_container<bindings<Bindings...>, Traits>,
-                      Binding> {
+struct with_binding<static_container<bindings<Bindings...>, Traits>, Binding> {
   using type = static_container<bindings<Bindings..., Binding>, Traits>;
-  static constexpr bool binds = true;
+  static constexpr bool binds_in_type = true;
 };
 
 } // namespace dingo::model
