@@ -799,7 +799,7 @@ def search(starts, context, take):
     return found
 
 
-@functools.lru_cache(maxsize=None)
+@functools.lru_cache(maxsize=16)
 def reachable(start, context):
     """The things derived from a start, each with the costs of the
     derivations that reach it."""
@@ -874,7 +874,7 @@ def request_steps(thing, context):
             not (kind == "wrap" and slices(thing))]
 
 
-@functools.lru_cache(maxsize=None)
+@functools.lru_cache(maxsize=16)
 def layer_sources(start, context):
     """What a binding publishes of its stored object, each thing with a cost
     that reaches it."""
@@ -885,7 +885,7 @@ def layer_sources(start, context):
                      for cost in costs)
 
 
-@functools.lru_cache(maxsize=None)
+@functools.lru_cache(maxsize=16)
 def requested(start, context):
     """What requests reach from the layer sources of a stored object, as
     reachable gives what is reached from the stored object itself."""
