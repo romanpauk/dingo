@@ -123,15 +123,16 @@ constexpr unsigned routes() {
 // request for as long as the container, placed when only for as long as the
 // request, unpublished when not at all. A request the lookup sends to the
 // binding of another interface is answered there. Records too the ways C++
-// itself builds the request of what the binding holds.
-template <typename Model, typename Interface, typename Request, typename Leaf>
+// itself builds the request of what the binding holds, which the request
+// owns when its scope Makes it for the request alone.
+template <typename Model, typename Interface, typename Request, typename Leaf,
+          bool Makes>
 DINGO_ALWAYS_INLINE void publication(const char *prefix, const char *name) {
   using type = unannotated_t<Interface>;
   using binding = detail::binding<type, Model>;
   using planning = detail::static_execution<Request, binding>;
   using stored = typename Model::registered_storage_type;
-  constexpr bool owned = !std::is_reference_v<stored> &&
-                         std::is_same_v<typename Model::storage_tag, unique>;
+  constexpr bool owned = !std::is_reference_v<stored> && Makes;
   (void)sizeof(Leaf);
   if constexpr (!selects_v<Request, type>) {
     record(prefix, name, "selects_another", nullptr);

@@ -257,7 +257,15 @@ class Group:
             parts.append(registration.render_part(len(parts), probes, first,
                                                   registers))
             first += len(probes)
-        return driver.render("probe.cpp.j2", parts=parts)
+        # The scopes of the registrations, and of the classes a kept position
+        # registers to take a request.
+        scopes = {registration.scope for registration, _ in runs}
+        scopes |= {member.operation.position.kept_by for member in members
+                   if member.operation.position.kept_by is not None}
+        containers = {registration.container for registration, _ in runs}
+        return driver.render("probe.cpp.j2", parts=parts,
+                             headers=driver.program_headers(scopes,
+                                                            containers))
 
 
 def registration_outcome(compiler, flags, directory, registration, name,
@@ -325,10 +333,15 @@ def plan_registration(compiler, flags, directory, registration, position,
 
 def packed(members):
     """Members in programs of at most GROUP_PROBES probes of at most
-    GROUP_REGISTRATIONS registrations, in their order."""
+    GROUP_REGISTRATIONS registrations, in their order, each of one container
+    and one scope, so that it reads their headers alone."""
+    def kind(member):
+        return (member.registration.container, member.registration.scope)
     programs = []
-    for member in members:
-        if programs:
+    for member in sorted(members, key=lambda member: (
+            list(Container).index(kind(member)[0]),
+            list(Scope).index(kind(member)[1]))):
+        if programs and kind(programs[-1][0]) == kind(member):
             current = programs[-1]
             registrations = {other.registration for other in current}
             if len(current) < driver.GROUP_PROBES and (

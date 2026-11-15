@@ -125,7 +125,13 @@ class Unit:
                          probe.request.name))
 
     def render(self, probes):
-        return driver.render("detection.cpp.j2", unit=self, probes=probes)
+        # A made class is bound in a shared scope.
+        scopes = {Scope.SHARED} | ({self.provider[0]} if self.provider else
+                                   set())
+        containers = {self.container} if self.container else set()
+        return driver.render("detection.cpp.j2", unit=self, probes=probes,
+                             headers=driver.program_headers(scopes,
+                                                            containers))
 
 
 def units(strength=None):

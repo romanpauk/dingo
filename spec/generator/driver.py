@@ -119,6 +119,17 @@ def compiler_command(compiler, *arguments):
             compiler, *arguments]
 
 
+def program_headers(scopes, containers=()):
+    """The headers a program includes after the header of its family: of each
+    scope and each container its cells use, so that it reads no other; a
+    static container with model/static.h."""
+    found = {f"<dingo/storage/{scope.value}.h>" for scope in scopes}
+    for container in containers:
+        found.add("<dingo/runtime_container.h>"
+                  if container.value == "runtime" else '"model/static.h"')
+    return sorted(found)
+
+
 def render(template, **context):
     return TEMPLATES.get_template(template).render(**context)
 

@@ -181,16 +181,16 @@ An operation is an entry point and a position. The entry points are `resolve`,
 
 The probe compiles the probes of several registrations in one program, with
 [`test/model/probe.h`](../test/model/probe.h): up to 64 probes of up to 16
-registrations, each registration in a part of its own. The container and the
-probe machinery are then compiled once for all of them. Each probe resolves its
-request twice and records the outcome. A request that the library rejects at
-compile time is `rejected`, with the message of its `static_assert`. The
-compiler names the program lines of each failed request. The driver records
-those requests and compiles the others again. Probes share template
-instantiations, and the compiler reports a shared error only once. So the driver
-compiles the probes of a failed operation or request in a program for each
-operation. The driver precompiles the header once and turns off the error limit
-of clang.
+registrations of one container and one scope, each registration in a part of its
+own. The container and the probe machinery are then compiled once for all of
+them. Each probe resolves its request twice and records the outcome. A request
+that the library rejects at compile time is `rejected`, with the message of its
+`static_assert`. The compiler names the program lines of each failed request.
+The driver records those requests and compiles the others again. Probes share
+template instantiations, and the compiler reports a shared error only once. So
+the driver compiles the probes of a failed operation or request in a program for
+each operation. The driver precompiles the header once and turns off the error
+limit of clang.
 
 A resolved request is `violated` if one of these checks fails:
 

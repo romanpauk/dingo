@@ -55,8 +55,9 @@ def main():
     parser.add_argument("--flags", default="-std=c++17 -O0 -Iinclude -Itest",
                         help="compiler flags, with include paths")
     parser.add_argument("--jobs", type=int, default=driver.default_jobs())
-    parser.add_argument("--batch", type=int, default=8,
-                        help="the registrations compiled into one program")
+    parser.add_argument("--cells", type=int, default=500,
+                        help="the requests a program probes at most, of whole "
+                        "registrations: what it compiles grows with them")
     parser.add_argument(
         "--only", default="",
         help="check only the registrations whose cell matches this regular "
@@ -70,8 +71,19 @@ def main():
 
     checked = [unit for unit in units()
                if unit.probed() and re.search(options.only, unit.base)]
-    batches = [checked[index:index + options.batch]
-               for index in range(0, len(checked), options.batch)]
+    # A program is of one container and one scope, so that it reads their
+    # headers alone, and of as many requests as it compiles in its memory.
+    batches = []
+    size = 0
+    for unit in checked:
+        count = len(unit.probed())
+        if (not batches or size + count > options.cells or
+                (batches[-1][0].container, batches[-1][0].scope) !=
+                (unit.container, unit.scope)):
+            batches.append([])
+            size = 0
+        batches[-1].append(unit)
+        size += count
     cells = []
     driver.set_jobs(options.jobs)
     with concurrent.futures.ThreadPoolExecutor(options.jobs) as executor:

@@ -7,17 +7,22 @@
 
 #pragma once
 
-// Support for the generated model probes: the leaf types the cells store, the
-// instances an external scope is given, whether the library accepts a
-// registration, and the outcome a probe records for a request, with the
-// checks of a resolved one.
+// Support for the generated model probes, of no container and no scope:
+// whether the library accepts a registration, how a probe reads and checks
+// what a request resolves, and the outcome it records. A program includes the
+// container and the scopes of its cells itself, and model/static.h for a
+// static container, so that it reads only the headers it uses.
 
-#include <dingo/container.h>
-#include <dingo/static/binding.h>
-#include <dingo/storage/external.h>
-#include <dingo/storage/shared.h>
-#include <dingo/storage/shared_cyclical.h>
-#include <dingo/storage/unique.h>
+#include "model/leaves.h"
+
+#include <dingo/base/exceptions.h>
+#include <dingo/binding/model.h>
+#include <dingo/factory/auto_constructible.h>
+#include <dingo/factory/constructor.h>
+#include <dingo/lookup/lookup.h>
+#include <dingo/registration/type_registration.h>
+#include <dingo/request/decomposition.h>
+#include <dingo/type/annotated.h>
 
 #include <cstdio>
 #include <memory>
@@ -29,113 +34,6 @@
 #include <variant>
 
 namespace dingo::model {
-
-// Keeps the leaves alive, so that a probe sees what it leaks and what it
-// refers to after it is gone. A leaf moved from loses its value, so that a
-// probe sees a kept leaf moved out of. Counts the copies and the moves of
-// leaves while a probe counts them.
-struct leaf_interface {
-  leaf_interface() { alive.insert(this); }
-  leaf_interface(const leaf_interface &other) : state(other.state) {
-    copied();
-    alive.insert(this);
-  }
-  leaf_interface(leaf_interface &&other) noexcept : state(other.state) {
-    moved();
-    other.state = 0;
-    alive.insert(this);
-  }
-  leaf_interface &operator=(const leaf_interface &other) {
-    copied();
-    state = other.state;
-    return *this;
-  }
-  leaf_interface &operator=(leaf_interface &&other) noexcept {
-    moved();
-    state = other.state;
-    other.state = 0;
-    return *this;
-  }
-  virtual ~leaf_interface() { alive.erase(this); }
-  virtual int value() const = 0;
-
-  static long live() { return static_cast<long>(alive.size()); }
-  static bool is_alive(const leaf_interface *leaf) {
-    return alive.count(leaf) != 0;
-  }
-
-  inline static std::set<const leaf_interface *> alive;
-  inline static bool counting = false;
-  inline static long copies = 0;
-  inline static long moves = 0;
-
-protected:
-  static void copied() { copies += counting ? 1 : 0; }
-  static void moved() { moves += counting ? 1 : 0; }
-
-  int state = 7;
-};
-
-// The object every cell stores, directly or inside its stored type.
-struct leaf : leaf_interface {
-  int value() const override { return state; }
-};
-
-// A leaf that can be moved and not copied.
-struct move_only_leaf : leaf_interface {
-  move_only_leaf() = default;
-  move_only_leaf(move_only_leaf &&) = default;
-  move_only_leaf &operator=(move_only_leaf &&) = default;
-  move_only_leaf(const move_only_leaf &) = delete;
-  move_only_leaf &operator=(const move_only_leaf &) = delete;
-  int value() const override { return state; }
-};
-
-// A leaf that can be neither copied nor moved.
-struct immovable_leaf : leaf_interface {
-  immovable_leaf() = default;
-  immovable_leaf(const immovable_leaf &) = delete;
-  immovable_leaf &operator=(const immovable_leaf &) = delete;
-  int value() const override { return state; }
-};
-
-// What a factory makes a factory leaf of.
-struct made {};
-
-// A leaf without a default constructor: only its factory makes it.
-struct factory_leaf : leaf_interface {
-  explicit factory_leaf(made) {}
-  int value() const override { return state; }
-};
-
-// The arguments a leaf is constructed with: none, or what its factory makes it
-// of. A stored type around a leaf is constructed from them in place.
-template <typename T> struct leaf_arguments {
-  template <typename Fn> static decltype(auto) apply(Fn &&fn) { return fn(); }
-};
-
-template <> struct leaf_arguments<factory_leaf> {
-  template <typename Fn> static decltype(auto) apply(Fn &&fn) {
-    return fn(made{});
-  }
-};
-
-// The leaf of a stored type, without its arrays, handles and wrappers.
-template <typename T, typename = void> struct leaf_type {
-  using type = std::remove_cv_t<std::remove_all_extents_t<T>>;
-};
-
-// A T made in place of the arguments of its leaf.
-template <typename T> T made_value() {
-  return leaf_arguments<typename leaf_type<T>::type>::apply(
-      [](auto... args) { return T(args...); });
-}
-
-// The second alternative of a stored variant.
-struct other {};
-
-// The tag of an annotated binding.
-struct tag {};
 
 // The traits of a container with a lookup by key for each of Interfaces.
 // The keyed lookups of interfaces, one for each interface: an array and its
@@ -161,111 +59,17 @@ template <typename Base, typename... Interfaces> struct keyed_traits : Base {
       typename keyed_lookups<dingo::type_list<>, Interfaces...>::type;
 };
 
-template <typename T> inline constexpr bool is_optional_v = false;
-template <typename T>
-inline constexpr bool is_optional_v<std::optional<T>> = true;
+// Whether a static container constructs the storage and the factory of a
+// binding of a model itself; model/static.h tells.
+template <typename Model> struct statically_constructible;
 
-// An instance of a stored type, for the scopes that are given one.
-template <typename Stored> struct instance {
-  static Stored make() {
-    if constexpr (std::is_pointer_v<Stored>) {
-      static std::remove_pointer_t<Stored> object =
-          made_value<std::remove_pointer_t<Stored>>();
-      return &object;
-    } else if constexpr (std::is_array_v<Stored>) {
-      static_assert(!std::is_array_v<Stored>, "an array is given by reference");
-    } else if constexpr (is_alternative_type_v<Stored>) {
-      using leaf = std::variant_alternative_t<0, Stored>;
-      return leaf_arguments<leaf>::apply(
-          [](auto... args) { return Stored(std::in_place_index<0>, args...); });
-    } else {
-      return made_value<Stored>();
-    }
-  }
+// A container with a binding more: a static container binds it in its type,
+// which binds is true of; a runtime container is the same, and registers it
+// once it is made. model/static.h tells of a static container.
+template <typename Container, typename Binding> struct container_with {
+  using type = Container;
+  static constexpr bool binds = false;
 };
-
-template <typename T> struct instance<std::shared_ptr<T>> {
-  static std::shared_ptr<T> make() {
-    using element = std::remove_extent_t<T>;
-    if constexpr (is_optional_v<T>) {
-      return leaf_arguments<typename T::value_type>::apply([](auto... args) {
-        return std::make_shared<T>(std::in_place, args...);
-      });
-    } else if constexpr (dingo::type_traits<T>::enabled) {
-      return std::make_shared<T>(instance<T>::make());
-    } else if constexpr (std::is_array_v<T>) {
-      return leaf_arguments<element>::apply([](auto... args) {
-        return std::shared_ptr<T>(
-            new element[2]{element(args...), element(args...)});
-      });
-    } else {
-      return leaf_arguments<T>::apply(
-          [](auto... args) { return std::make_shared<T>(args...); });
-    }
-  }
-};
-
-template <typename T> struct instance<std::unique_ptr<T>> {
-  static std::unique_ptr<T> make() {
-    using element = std::remove_extent_t<T>;
-    if constexpr (is_optional_v<T>) {
-      return leaf_arguments<typename T::value_type>::apply([](auto... args) {
-        return std::make_unique<T>(std::in_place, args...);
-      });
-    } else if constexpr (dingo::type_traits<T>::enabled) {
-      return std::make_unique<T>(instance<T>::make());
-    } else if constexpr (std::is_array_v<T>) {
-      return leaf_arguments<element>::apply([](auto... args) {
-        return std::unique_ptr<T>(
-            new element[2]{element(args...), element(args...)});
-      });
-    } else {
-      return leaf_arguments<T>::apply(
-          [](auto... args) { return std::make_unique<T>(args...); });
-    }
-  }
-};
-
-template <typename T> struct instance<std::optional<T>> {
-  static std::optional<T> make() {
-    if constexpr (is_optional_v<T>) {
-      return leaf_arguments<typename T::value_type>::apply([](auto... args) {
-        return std::optional<T>(std::in_place, std::in_place, args...);
-      });
-    } else if constexpr (dingo::type_traits<T>::enabled) {
-      return std::optional<T>(instance<T>::make());
-    } else {
-      return leaf_arguments<T>::apply([](auto... args) {
-        return std::optional<T>(std::in_place, args...);
-      });
-    }
-  }
-};
-
-// A new instance of a stored type, for the factory of a registration whose
-// stored type has no default value: a pointer is to a new object, which the
-// caller owns.
-template <typename Stored> struct fresh : instance<Stored> {};
-
-template <typename T> struct fresh<T *> {
-  static T *make() {
-    return leaf_arguments<T>::apply(
-        [](auto... args) { return new T(args...); });
-  }
-};
-
-// An object an external scope refers to.
-template <typename T> T &external_object() {
-  if constexpr (std::is_array_v<T>) {
-    using element = std::remove_extent_t<T>;
-    static_assert(std::extent_v<T> == 2, "a probe array has two rows");
-    static T object = {made_value<element>(), made_value<element>()};
-    return object;
-  } else {
-    static T object = made_value<T>();
-    return object;
-  }
-}
 
 // Whether the library accepts registering Registration. A registration it
 // rejects does not compile, so the probe asks before registering.
@@ -278,8 +82,7 @@ template <typename Registration, bool Static> constexpr bool registrable() {
   } else if constexpr (!model::valid) {
     return false;
   } else if constexpr (Static) {
-    return detail::binding_storage_is_default_constructible<model>::value &&
-           detail::binding_factory_is_default_constructible<model>::value;
+    return statically_constructible<model>::value;
   } else {
     return true;
   }
@@ -323,25 +126,6 @@ template <typename T> const leaf_interface *leaf_of(const T &result) {
   }
 }
 
-// The shapes the probe requests a bound interface X in: a value, a reference
-// or a pointer of X or of a handle of it. Alias templates spell them, so that
-// an array interface is spelled as C++ spells it.
-namespace shape {
-template <typename X> using value = X;
-template <typename X> using constant = const X;
-template <typename X> using lref = X &;
-template <typename X> using clref = const X &;
-template <typename X> using rref = X &&;
-template <typename X> using ptr = X *;
-template <typename X> using cptr = const X *;
-template <typename X> using sp = std::shared_ptr<X>;
-template <typename X> using up = std::unique_ptr<X>;
-template <typename X> using opt = std::optional<X>;
-template <typename X> using sp_array = std::shared_ptr<X[]>;
-template <typename X> using up_array = std::unique_ptr<X[]>;
-template <typename X> using sp_bounded_array = std::shared_ptr<X[2]>;
-} // namespace shape
-
 // The name of a type as the compiler spells it.
 template <typename T> std::string_view type_name() {
   std::string_view text = __PRETTY_FUNCTION__;
@@ -379,58 +163,11 @@ void survey(const char *registration) {
   }
 }
 
-inline void record(const char *cell, const char *outcome, const char *error);
-inline void record(const char *prefix, std::string_view name,
-                   const char *outcome, const char *error);
-
 // A request selects the binding of its normalized type, or of its exact type.
 template <typename Request, typename Interface>
 inline constexpr bool selects_v =
     std::is_same_v<typename request_type<Request>::value_type, Interface> ||
     std::is_same_v<typename request_type<Request>::exact_type, Interface>;
-
-// One line of the outcome table: the cell and its outcome.
-// A text as a JSON string: quoted, its quotes, backslashes and control
-// characters escaped.
-inline std::string json_string(const char *text) {
-  std::string quoted = "\"";
-  for (const char *c = text; *c; ++c) {
-    if (*c == '"' || *c == '\\') {
-      quoted += '\\';
-      quoted += *c;
-    } else if (static_cast<unsigned char>(*c) < 0x20) {
-      char escaped[8];
-      std::snprintf(escaped, sizeof(escaped), "\\u%04x",
-                    static_cast<unsigned>(static_cast<unsigned char>(*c)));
-      quoted += escaped;
-    } else {
-      quoted += *c;
-    }
-  }
-  return quoted + '"';
-}
-
-inline void record(const char *cell, const char *outcome, const char *error) {
-  std::string line = "{\"cell\": " + json_string(cell) +
-                     ", \"outcome\": " + json_string(outcome);
-  if (error) {
-    line += ", \"error\": " + json_string(error);
-  }
-  std::printf("%s}\n", line.c_str());
-}
-
-// The cell is the prefix and the name, as its outcome is recorded: the
-// callers pass them as they are compiled in.
-inline void record(const char *prefix, std::string_view name,
-                   const char *outcome, const char *error) {
-  std::string cell = prefix;
-  cell += name;
-  record(cell.c_str(), outcome, error);
-}
-
-inline void record(const char *cell, const char *outcome) {
-  record(cell, outcome, nullptr);
-}
 
 // How the scope of a cell keeps what it resolves.
 enum class keeps {
@@ -560,24 +297,22 @@ struct dingo::is_auto_constructible<dingo::model::consumer<R>>
 
 namespace dingo::model {
 
+// The registration of a consumer of R in Scope.
+template <typename R, typename Scope>
+using consumer_registration =
+    type_registration<scope<Scope>, storage<consumer<R>>,
+                      factory<constructor<consumer<R>(R)>>>;
+
 // The container a consumer of R in Scope is resolved from: a static container
 // binds it too, a runtime one registers it.
-template <typename Container, typename R, typename Scope> struct with_consumer {
-  using type = Container;
-};
-
-template <typename... Bindings, typename Traits, typename R, typename Scope>
-struct with_consumer<static_container<bindings<Bindings...>, Traits>, R,
-                     Scope> {
-  using type = static_container<
-      bindings<Bindings..., dingo::bind<scope<Scope>, storage<consumer<R>>,
-                                        factory<constructor<consumer<R>(R)>>>>,
-      Traits>;
-};
+template <typename Container, typename R, typename Scope>
+using with_consumer =
+    container_with<Container, consumer_registration<R, Scope>>;
 
 template <typename R, typename Scope, typename Container>
 void register_consumer(Container &c) {
-  if constexpr (is_instance<Container, static_container>::value) {
+  if constexpr (container_with<Container,
+                               consumer_registration<R, Scope>>::binds) {
     (void)c;
   } else {
     c.template register_type<scope<Scope>, storage<consumer<R>>,

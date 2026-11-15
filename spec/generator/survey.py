@@ -12,8 +12,10 @@ def survey(compiler, flags, work, registrations):
     keyed = {}
     for registration in registrations:
         keyed.setdefault(registration.survey_key, registration)
-    source = driver.render("survey.cpp.j2",
-                           registrations=list(keyed.values()))
+    source = driver.render(
+        "survey.cpp.j2", registrations=list(keyed.values()),
+        headers=driver.program_headers(
+            {registration.scope for registration in keyed.values()}))
     records, stderr, crash = driver.build_and_run(compiler, flags, work,
                                                   "survey", source)
     if stderr is not None or crash is not None:

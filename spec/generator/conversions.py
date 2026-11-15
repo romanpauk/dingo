@@ -21,6 +21,11 @@ class Unit(Registration):
     """A registration whose conversion layer is asked."""
 
     @property
+    def makes(self):
+        """Whether the scope makes the stored object for each request."""
+        return semantics.SCOPES[self.scope].makes
+
+    @property
     def base(self):
         return "/".join((self.scope, self.form, self.leaf,
                          self.interfaces_declared))
@@ -144,7 +149,9 @@ def compile_units(compiler, flags, directory, name, batch):
     """The records of a batch of units, compiled into one program. A batch
     that does not compile is compiled a unit at a time, and a unit that does
     not compile records each of its cells with the first error."""
-    source = driver.render("conversion.cpp.j2", units=batch, none=None)
+    source = driver.render(
+        "conversion.cpp.j2", units=batch, none=None,
+        headers=driver.program_headers({unit.scope for unit in batch}))
     records, stderr, crash = driver.build_and_run(compiler, flags, directory,
                                                   name, source)
     if stderr is None and crash is None:

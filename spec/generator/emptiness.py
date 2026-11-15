@@ -95,7 +95,10 @@ def compile_units(compiler, flags, directory, name, batch):
     that does not compile or run is compiled a unit at a time, and a unit
     half of its requests at a time, down to a request, which records the
     first error or how it crashed."""
-    source = driver.render("emptiness.cpp.j2", units=batch)
+    source = driver.render(
+        "emptiness.cpp.j2", units=batch,
+        headers=driver.program_headers({unit.scope for unit in batch},
+                                       {unit.container for unit in batch}))
     records, stderr, crash = driver.build_and_run(compiler, flags, directory,
                                                   name, source)
     if stderr is None and crash is None:

@@ -71,6 +71,14 @@ With GCC and clang, `check` includes `semantics-check`, `conversion-check`,
 `sources-format*`, `includes-tidy` and `includes-check` targets need
 `DINGO_CLANG_TOOLS_ENABLED=ON` (the default).
 
+### Program Headers
+
+A program includes only the container and the scopes of its cells, and holds
+cells of one container and one scope, so it reads no other. The headers of the probes are split the
+same way: `test/model/leaves.h` has the leaf types and no container,
+`test/model/probe.h` no container and no scope, and `test/model/static.h` what a
+static container adds.
+
 ## Complexity Report
 
 [`tools/complexity.py`](../tools/complexity.py) ranks the headers to find

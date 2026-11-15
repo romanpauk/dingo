@@ -86,7 +86,9 @@ def main():
     size = 0
     for unit in checked:
         count = len(unit.cells())
-        if not batches or size + count > options.cells:
+        # A program is of one scope, so that it reads that scope alone.
+        if (not batches or size + count > options.cells or
+                batches[-1][0].scope is not unit.scope):
             batches.append([])
             size = 0
         batches[-1].append(unit)
