@@ -169,7 +169,7 @@ struct runtime_binding_edge {
       runtime_binding_interface<rtti_type, runtime_context_type>;
   using node_type = runtime_binding_node<rtti_type, runtime_context_type>;
   using cell_type = detail::binding_cell<Storage>;
-  using keeper_type = detail::runtime_keeper<runtime_context_type>;
+  using keeper_type = detail::context_keeper<runtime_context_type>;
   using execution_type =
       detail::binding_execution<Storage, std::remove_cv_t<Type>>;
   using plan_type = typename execution_type::plan;
@@ -187,9 +187,9 @@ private:
     using sources = detail::execution::binding_sources<
         plan_type, plan_type::template sources<abstract>, identities,
         stored_type, typename execution_type::leaf_type,
-        typename execution_type::interface_type, keeper_type>;
+        typename execution_type::interface_type>;
     using layers = detail::execution::runtime_layers<identities>;
-    static constexpr detail::execution::binding_layout<keeper_type> value{
+    static constexpr detail::execution::binding_layout value{
         sources::published.states,
         sources::used.count,
         plan_type::context(abstract),
@@ -198,8 +198,7 @@ private:
         sources::published.tables};
   };
 
-  static constexpr const detail::execution::binding_layout<keeper_type> *
-  layout() {
+  static constexpr const detail::execution::binding_layout *layout() {
     if constexpr (execution_type::modeled) {
       return &planned::value;
     } else {
@@ -242,7 +241,7 @@ private:
           materialized();
           keeper_type keeper(context, scope, retained(binding),
                              request.requested, registered_type());
-          detail::execution::keeper_view<keeper_type> transient{keeper, false};
+          detail::execution::keeper_view transient{keeper, false};
           detail::execution::erased_carrier reached = detail::execution::erase(
               detail::plan_start<stored_type, execution_type::scope.makes>(
                   std::forward<decltype(source)>(source), transient));

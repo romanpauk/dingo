@@ -72,11 +72,25 @@ template <typename T, typename Make> void construct_kept(void *at, void *make) {
   new (at) T((*static_cast<Make *>(make))());
 }
 
+// The keeper of a runtime resolution, of no context: it keeps an object of a
+// layout, which construct constructs of make, as long as the container when
+// it is stable, as long as the request otherwise; and it rejects a request of
+// what an empty layer does not hold.
+class runtime_keeper {
+public:
+  virtual void *keep(bool stable, const kept_layout &layout,
+                     construct_function construct, void *make) = 0;
+  [[noreturn]] virtual void absent() = 0;
+
+protected:
+  ~runtime_keeper() = default;
+};
+
 // A keeper of a runtime resolution as an operation uses it: what it makes is
 // kept as long as the container when it is stable, as long as the request
-// otherwise. The keeper knows only the layout of what it keeps.
-template <typename Keeper> struct keeper_view {
-  Keeper &keeper;
+// otherwise.
+struct keeper_view {
+  runtime_keeper &keeper;
   bool stable;
 
   template <typename T, typename Make> T &keep(Make &&make) {
@@ -86,23 +100,22 @@ template <typename Keeper> struct keeper_view {
         const_cast<void *>(static_cast<const void *>(std::addressof(make)))));
   }
 
-  [[noreturn]] void absent() { keeper.absent(); }
+  void absent() { keeper.absent(); }
 };
 
 // An operation of a runtime resolution, of no type.
-template <typename Keeper>
 using step_function = erased_carrier (*)(erased_carrier from, bool stable,
-                                         Keeper &keeper);
+                                         runtime_keeper &keeper);
 
-template <typename Keeper> struct type_table;
+struct type_table;
 
 // An operation on an object of a type: for one the request owns and for one
 // it does not, none where C++ does not apply it, and the table of the type
 // of what it makes.
-template <typename Keeper> struct operation {
-  step_function<Keeper> owned = nullptr;
-  step_function<Keeper> borrowed = nullptr;
-  const type_table<Keeper> *made = nullptr;
+struct operation {
+  step_function owned = nullptr;
+  step_function borrowed = nullptr;
+  const type_table *made = nullptr;
 };
 
 inline constexpr std::size_t step_kinds =
@@ -116,14 +129,14 @@ inline constexpr std::size_t step_kinds =
 // over to its element, or to the first element of its array; and of a
 // pointer to its element it does not own; and of a pointer or a handle of
 // its element of fewer qualifiers, by the qualifiers it lacks.
-template <typename Keeper> struct full_table {
-  operation<Keeper> from[step_kinds] = {};
-  operation<Keeper> release_array = {};
-  operation<Keeper> made_of[semantics::max_layers + 1] = {};
-  operation<Keeper> adopted = {};
-  operation<Keeper> adopted_array = {};
-  operation<Keeper> observing = {};
-  operation<Keeper> qualified[4] = {};
+struct full_table {
+  operation from[step_kinds] = {};
+  operation release_array = {};
+  operation made_of[semantics::max_layers + 1] = {};
+  operation adopted = {};
+  operation adopted_array = {};
+  operation observing = {};
+  operation qualified[4] = {};
 };
 
 // Where an operation is in a table: a kind of step from the type, the
@@ -149,34 +162,32 @@ constexpr std::uint8_t slot_of(slot at, std::size_t depth = 0) {
   return static_cast<std::uint8_t>(static_cast<std::size_t>(at) + depth);
 }
 
-template <typename Keeper> struct slot_entry {
+struct slot_entry {
   std::uint8_t at;
-  operation<Keeper> step;
+  operation step;
 };
 
 // A table as a runtime resolution keeps it: the operations it has, as many
 // as there are.
-template <typename Keeper> struct type_table {
+struct type_table {
   void *(*pointee)(void *pointer);
-  const slot_entry<Keeper> *entries;
+  const slot_entry *entries;
   std::size_t count;
 
   // The operation at a slot, or one of no function.
-  const operation<Keeper> &operator[](std::uint8_t at) const {
+  const operation &operator[](std::uint8_t at) const {
     for (std::size_t index = 0; index < count; ++index) {
       if (entries[index].at == at) {
         return entries[index].step;
       }
     }
-    static constexpr operation<Keeper> none{};
+    static constexpr operation none{};
     return none;
   }
 };
 
 // The operation at a slot of a full table.
-template <typename Keeper>
-constexpr const operation<Keeper> &slot_in(const full_table<Keeper> &table,
-                                           std::uint8_t at) {
+constexpr const operation &slot_in(const full_table &table, std::uint8_t at) {
   if (at < step_kinds) {
     return table.from[at];
   }
@@ -198,7 +209,7 @@ constexpr const operation<Keeper> &slot_in(const full_table<Keeper> &table,
   return table.qualified[at - slot_of(slot::qualified)];
 }
 
-template <typename Keeper> constexpr bool has(const operation<Keeper> &step) {
+constexpr bool has(const operation &step) {
   return step.owned != nullptr || step.borrowed != nullptr;
 }
 
@@ -227,11 +238,10 @@ constexpr bool makes_transient(semantics::step kind) {
 // The steps that make an object of type Made of another.
 // A run of wraps of a value the request owns: Made at once, of the T moved
 // into it.
-template <typename Made, typename Leaf, typename Interface, typename T,
-          typename Keeper>
+template <typename Made, typename Leaf, typename Interface, typename T>
 erased_carrier made_of_erased(erased_carrier from, bool stable,
-                              Keeper &keeper) {
-  keeper_view<Keeper> view{keeper, stable};
+                              runtime_keeper &keeper) {
+  keeper_view view{keeper, stable};
   auto &made = view.template keep<Made>([&] {
     return made_of<Leaf, Interface, Made>(
         std::move(*static_cast<T *>(from.object)));
@@ -241,10 +251,10 @@ erased_carrier made_of_erased(erased_carrier from, bool stable,
 
 // A raw pointer the request owns, taken over by the handle Made: of a Whole
 // array Made holds, as the pointer to its first element.
-template <typename Made, typename Pointer, typename Keeper, bool Whole = false>
+template <typename Made, typename Pointer, bool Whole = false>
 erased_carrier adopted_erased(erased_carrier from, bool stable,
-                              Keeper &keeper) {
-  keeper_view<Keeper> view{keeper, stable};
+                              runtime_keeper &keeper) {
+  keeper_view view{keeper, stable};
   auto &made = view.template keep<Made>([&] {
     return Made(adopted_pointer<Whole>(*static_cast<Pointer *>(from.object)));
   });
@@ -254,10 +264,10 @@ erased_carrier adopted_erased(erased_carrier from, bool stable,
 }
 
 // A handle Made that does not own its element, made of a pointer to it.
-template <typename Made, typename Pointer, typename Keeper>
+template <typename Made, typename Pointer>
 erased_carrier observing_erased(erased_carrier from, bool stable,
-                                Keeper &keeper) {
-  keeper_view<Keeper> view{keeper, stable};
+                                runtime_keeper &keeper) {
+  keeper_view view{keeper, stable};
   auto &made = view.template keep<Made>(
       [&] { return Made(*static_cast<Pointer *>(from.object)); });
   return erase(carrier<Made, true>{std::addressof(made)});
@@ -266,11 +276,11 @@ erased_carrier observing_erased(erased_carrier from, bool stable,
 // A pointer or a handle Made of an element of more qualifiers, made of one of
 // the element of fewer, Source: moved out of one the request owns, copied of
 // another.
-template <typename Made, typename Source, bool Owned, typename Keeper>
+template <typename Made, typename Source, bool Owned>
 erased_carrier qualified_erased(erased_carrier from, bool stable,
-                                Keeper &keeper) {
+                                runtime_keeper &keeper) {
   (void)stable;
-  keeper_view<Keeper> view{keeper, false};
+  keeper_view view{keeper, false};
   auto &made = view.template keep<Made>([&]() -> Made {
     if constexpr (Owned) {
       return Made(std::move(*static_cast<Source *>(from.object)));
@@ -283,13 +293,11 @@ erased_carrier qualified_erased(erased_carrier from, bool stable,
 
 // The table of a type T, toward the leaf Leaf, of the interface Interface:
 // an operation where C++ applies the step to it.
-template <typename T, typename Leaf, typename Interface, typename Keeper,
-          std::uint32_t Mask = 0>
+template <typename T, typename Leaf, typename Interface, std::uint32_t Mask = 0>
 struct table_of;
 
 // The full table of a type, of which table_of keeps the operations it has.
-template <typename T, typename Leaf, typename Interface, typename Keeper,
-          std::uint32_t Mask>
+template <typename T, typename Leaf, typename Interface, std::uint32_t Mask>
 struct table_maker : layer_types<T, Leaf, Interface> {
   using facts = layer_types<T, Leaf, Interface>;
   using type = typename facts::type;
@@ -299,17 +307,16 @@ struct table_maker : layer_types<T, Leaf, Interface> {
 
   template <typename Step, bool Owned, bool Transient>
   static erased_carrier apply(erased_carrier from, bool stable,
-                              Keeper &keeper) {
+                              runtime_keeper &keeper) {
     // What a step of a transient kind makes lives as long as the request.
-    keeper_view<Keeper> view{keeper, !Transient && stable};
+    keeper_view view{keeper, !Transient && stable};
     return erase(
         Step::template apply<Leaf, Interface>(unerase<T, Owned>(from), view));
   }
 
   template <typename Step, bool Owned>
   using reached_t = decltype(Step::template apply<Leaf, Interface>(
-      std::declval<carrier<T, Owned>>(),
-      std::declval<keeper_view<Keeper> &>()));
+      std::declval<carrier<T, Owned>>(), std::declval<keeper_view &>()));
 
   template <typename Step, bool Owned>
   using made_t = typename reached_t<Step, Owned>::type;
@@ -336,23 +343,22 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   // one it does not, or for both, where the table has it.
   template <semantics::step Kind, typename Step, bool Owned, bool Borrowed,
             std::uint32_t Bit = mask_of(Kind)>
-  static constexpr operation<Keeper> step_of() {
-    operation<Keeper> made;
+  static constexpr operation step_of() {
+    operation made;
     constexpr bool transient = makes_transient(Kind);
     if constexpr ((Mask & Bit) != 0 && Borrowed) {
       made.borrowed = &apply<Step, false, transient>;
-      made.made =
-          &table_of<made_t<Step, false>, Leaf, Interface, Keeper>::value;
+      made.made = &table_of<made_t<Step, false>, Leaf, Interface>::value;
     }
     if constexpr ((Mask & Bit) != 0 && Owned) {
       made.owned = owned_operation<Kind, Step, Borrowed, transient>();
-      made.made = &table_of<made_t<Step, true>, Leaf, Interface, Keeper>::value;
+      made.made = &table_of<made_t<Step, true>, Leaf, Interface>::value;
     }
     return made;
   }
 
   template <semantics::step Kind, typename Step, bool Borrowed, bool Transient>
-  static constexpr step_function<Keeper> owned_operation() {
+  static constexpr step_function owned_operation() {
     if constexpr (Borrowed) {
       if constexpr (owned_as_borrowed<Kind, Step>()) {
         return &apply<Step, false, Transient>;
@@ -362,27 +368,26 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   }
 
   template <semantics::step Kind, typename Step = execution::step<Kind>>
-  static constexpr operation<Keeper> both() {
+  static constexpr operation both() {
     return step_of<Kind, Step, true, true>();
   }
   template <semantics::step Kind, typename Step = execution::step<Kind>,
             std::uint32_t Bit = mask_of(Kind)>
-  static constexpr operation<Keeper> owned() {
+  static constexpr operation owned() {
     return step_of<Kind, Step, true, false, Bit>();
   }
 
-  template <std::size_t K> static constexpr operation<Keeper> run() {
-    operation<Keeper> made;
+  template <std::size_t K> static constexpr operation run() {
+    operation made;
     if constexpr (std::is_same_v<T, type> && facts::template runs<K>()) {
       using of = std::remove_cv_t<typename nested<K>::type>;
-      made.owned = &made_of_erased<type, Leaf, Interface, of, Keeper>;
+      made.owned = &made_of_erased<type, Leaf, Interface, of>;
     }
     return made;
   }
 
   template <std::size_t... K>
-  static constexpr void runs_into(full_table<Keeper> &made,
-                                  std::index_sequence<K...>) {
+  static constexpr void runs_into(full_table &made, std::index_sequence<K...>) {
     ((made.made_of[K + 1] = run<K + 1>()), ...);
   }
 
@@ -391,10 +396,10 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   }
 
   // The steps from a layer to its element.
-  static constexpr void elements(full_table<Keeper> &made) {
+  static constexpr void elements(full_table &made) {
     using semantics::step;
     using of = typename element<>::type;
-    auto at = [&](step kind) -> operation<Keeper> & {
+    auto at = [&](step kind) -> operation & {
       return made.from[static_cast<std::size_t>(kind)];
     };
     at(step::element) = both<step::element>();
@@ -408,10 +413,10 @@ struct table_maker : layer_types<T, Leaf, Interface> {
     }
   }
 
-  static constexpr full_table<Keeper> make() {
-    full_table<Keeper> made;
+  static constexpr full_table make() {
+    full_table made;
     using semantics::step;
-    auto at = [&](step kind) -> operation<Keeper> & {
+    auto at = [&](step kind) -> operation & {
       return made.from[static_cast<std::size_t>(kind)];
     };
     // Each operation the mask has, where C++ applies its step to the type.
@@ -472,24 +477,24 @@ struct table_maker : layer_types<T, Leaf, Interface> {
 
   // The pointer or the handle the type is, made of one of an element of
   // fewer qualifiers: the qualifiers of its element without Adds.
-  template <std::uint8_t Adds> static constexpr operation<Keeper> qualified() {
-    operation<Keeper> made;
+  template <std::uint8_t Adds> static constexpr operation qualified() {
+    operation made;
     constexpr std::uint8_t quals = element_quals<type>();
     if constexpr ((quals & Adds) == Adds) {
       using source =
           requalified_t<type, static_cast<std::uint8_t>(quals & ~Adds)>;
       if constexpr (std::is_constructible_v<type, source &&>) {
-        made.owned = &qualified_erased<type, source, true, Keeper>;
+        made.owned = &qualified_erased<type, source, true>;
       }
       if constexpr (std::is_constructible_v<type, const source &>) {
-        made.borrowed = &qualified_erased<type, source, false, Keeper>;
+        made.borrowed = &qualified_erased<type, source, false>;
       }
     }
     return made;
   }
 
   template <std::size_t... Adds>
-  static constexpr void qualified_into(full_table<Keeper> &made,
+  static constexpr void qualified_into(full_table &made,
                                        std::index_sequence<Adds...>) {
     ((made.qualified[Adds] = qualified<static_cast<std::uint8_t>(Adds)>()),
      ...);
@@ -606,14 +611,14 @@ struct table_maker : layer_types<T, Leaf, Interface> {
 
   // The handle the type is, made of a pointer it takes over, or the
   // observer, of one it does not.
-  static constexpr void takes_pointers(full_table<Keeper> &made) {
+  static constexpr void takes_pointers(full_table &made) {
     if constexpr (type_traits<type>::enabled && !std::is_pointer_v<type> &&
                   !is_alternative_type_v<type> && is_complete_v<type>) {
       takes_pointers_of(made);
     }
   }
 
-  static constexpr void takes_pointers_of(full_table<Keeper> &made) {
+  static constexpr void takes_pointers_of(full_table &made) {
     if constexpr (is_complete_v<std::remove_extent_t<
                       typename type_traits<type>::value_type>>) {
       // Of a pointer to the element of no qualifiers, which the handle holds
@@ -623,28 +628,27 @@ struct table_maker : layer_types<T, Leaf, Interface> {
         if constexpr (std::is_array_v<of>) {
           using pointer = std::remove_extent_t<of> *;
           if constexpr (std::is_constructible_v<type, pointer>) {
-            made.adopted_array = {&adopted_erased<type, pointer, Keeper>,
-                                  nullptr, nullptr};
+            made.adopted_array = {&adopted_erased<type, pointer>, nullptr,
+                                  nullptr};
             // A handle of an array of a known bound takes over a pointer to
             // a whole one too, as the pointer to its first element.
             if constexpr (std::extent_v<of> != 0) {
-              made.adopted = {&adopted_erased<type, of *, Keeper, true>,
-                              nullptr, nullptr};
+              made.adopted = {&adopted_erased<type, of *, true>, nullptr,
+                              nullptr};
             }
           }
         } else if constexpr (std::is_constructible_v<type, of *>) {
-          made.adopted = {&adopted_erased<type, of *, Keeper>, nullptr,
-                          nullptr};
+          made.adopted = {&adopted_erased<type, of *>, nullptr, nullptr};
         }
       } else if constexpr (wrapper_kind_v<layer_identity_t<type>>.observes &&
                            std::is_constructible_v<type, of *>) {
-        made.observing = {&observing_erased<type, of *, Keeper>,
-                          &observing_erased<type, of *, Keeper>, nullptr};
+        made.observing = {&observing_erased<type, of *>,
+                          &observing_erased<type, of *>, nullptr};
       }
     }
   }
 
-  static constexpr full_table<Keeper> full = make();
+  static constexpr full_table full = make();
 
   static constexpr std::size_t count() {
     std::size_t made = 0;
@@ -665,7 +669,7 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   }
 
   template <std::size_t Count, std::size_t... I>
-  static constexpr std::array<slot_entry<Keeper>, Count + 1>
+  static constexpr std::array<slot_entry, Count + 1>
   compact(std::index_sequence<I...>) {
     return {{{nth(I), slot_in(full, nth(I))}..., {}}};
   }
@@ -685,22 +689,21 @@ template <typename T> constexpr void *(*pointee_function())(void *) {
   }
 }
 
-template <typename T, typename Leaf, typename Interface, typename Keeper,
-          std::uint32_t Mask>
+template <typename T, typename Leaf, typename Interface, std::uint32_t Mask>
 struct table_of {
-  using maker = table_maker<T, Leaf, Interface, Keeper, Mask>;
+  using maker = table_maker<T, Leaf, Interface, Mask>;
   static constexpr std::size_t count = maker::count();
-  static constexpr std::array<slot_entry<Keeper>, count + 1> entries =
+  static constexpr std::array<slot_entry, count + 1> entries =
       maker::template compact<count>(std::make_index_sequence<count>{});
-  static constexpr type_table<Keeper> value{pointee_function<T>(),
-                                            entries.data(), count};
+  static constexpr type_table value{pointee_function<T>(), entries.data(),
+                                    count};
 };
 
 // A table of no operations: of the type of what a step makes that nothing is
 // taken of but the address a pointer points to.
-template <typename T, typename Leaf, typename Interface, typename Keeper>
-struct table_of<T, Leaf, Interface, Keeper, 0> {
-  static constexpr type_table<Keeper> value{pointee_function<T>(), nullptr, 0};
+template <typename T, typename Leaf, typename Interface>
+struct table_of<T, Leaf, Interface, 0> {
+  static constexpr type_table value{pointee_function<T>(), nullptr, 0};
 };
 
 // The identity of a layer, as an address both sides of a runtime resolution
@@ -769,24 +772,24 @@ struct runtime_layers<type_list<Identities...>> {
 // its own, whose wrapper layers it gives, what it asks for, and the table of
 // each type it spells, from its shape to its element, which make the layers
 // it makes.
-template <typename Keeper> struct request_layout {
+struct request_layout {
   const runtime_layer *layers;
   std::size_t layer_count;
   semantics::request goal;
   semantics::category category;
-  const type_table<Keeper> *const *tables;
+  const type_table *const *tables;
 };
 
 // A binding as a runtime resolution plans it: its layer sources, the states
 // of a search in its order, in a universe of its own, whose wrapper layers
 // it gives, and the table of the type of each.
-template <typename Keeper> struct binding_layout {
+struct binding_layout {
   const semantics::state *sources;
   std::size_t source_count;
   semantics::context with;
   const runtime_layer *layers;
   std::size_t layer_count;
-  const type_table<Keeper> *const *tables;
+  const type_table *const *tables;
 };
 
 // A plan as a runtime resolution runs it: the operations of the instructions
@@ -794,10 +797,10 @@ template <typename Keeper> struct binding_layout {
 // container; how it satisfies the request, how the request takes the value of
 // what it reaches, and whether what it gives the request the address of
 // lives as long as the container.
-template <typename Keeper> struct runtime_plan {
+struct runtime_plan {
   struct call {
-    step_function<Keeper> owned;
-    step_function<Keeper> borrowed;
+    step_function owned;
+    step_function borrowed;
     bool stable;
   };
   bool found = false;
@@ -807,7 +810,7 @@ template <typename Keeper> struct runtime_plan {
   std::uint8_t quals = 0;
   bool stable_address = false;
   // The table of the type of what the plan reaches.
-  const type_table<Keeper> *reached = nullptr;
+  const type_table *reached = nullptr;
   std::size_t count = 0;
   call calls[semantics::max_plan] = {};
 };
@@ -816,11 +819,10 @@ template <typename Keeper> struct runtime_plan {
 // universe of the binding, which the layers of the request it does not have
 // follow, searched from the binding's layer sources; compiled into the
 // operations of the tables of the types it steps through.
-template <typename Keeper>
-runtime_plan<Keeper> plan_runtime(const binding_layout<Keeper> &binding,
-                                  const request_layout<Keeper> &request,
-                                  semantics::lifetime needed) {
-  runtime_plan<Keeper> made;
+inline runtime_plan plan_runtime(const binding_layout &binding,
+                                 const request_layout &request,
+                                 semantics::lifetime needed) {
+  runtime_plan made;
   semantics::universe merged = *binding.with.layers;
   const void *identities[semantics::max_kinds] = {};
   const void *targets[semantics::max_kinds] = {};
@@ -887,7 +889,7 @@ runtime_plan<Keeper> plan_runtime(const binding_layout<Keeper> &binding,
 
   const program compiled = compile_program(plan, binding.source_count);
   // The table of the type of what the plan reached so far.
-  const type_table<Keeper> *table = binding.tables[0];
+  const type_table *table = binding.tables[0];
   for (std::size_t index = 0; index < compiled.count; ++index) {
     const instruction &each = compiled.at[index];
     const semantics::thing &from = plan.things[each.first];
@@ -895,10 +897,10 @@ runtime_plan<Keeper> plan_runtime(const binding_layout<Keeper> &binding,
     const std::uint16_t state = plan.states[each.last + 1];
     // The table of what an instruction makes a layer of: of a source of the
     // binding, or of a type the request spells, by its depth in the request.
-    const type_table<Keeper> *maker =
-        each.binding ? binding.tables[state]
-                     : request.tables[goal.depth - to.depth];
-    const operation<Keeper> *step = nullptr;
+    const type_table *maker = each.binding
+                                  ? binding.tables[state]
+                                  : request.tables[goal.depth - to.depth];
+    const operation *step = nullptr;
     switch (each.kind) {
     case semantics::step::wrap:
       step = &(*maker)[slot_of(slot::made_of, each.wraps)];
@@ -1083,7 +1085,7 @@ constexpr std::uint32_t request_kinds(const semantics::thing &of,
 }
 
 template <typename Plan, const semantics::search &Sources, typename Identities,
-          typename Stored, typename Leaf, typename Interface, typename Keeper>
+          typename Stored, typename Leaf, typename Interface>
 struct binding_sources {
   static constexpr bool abstract = !std::is_same_v<Leaf, Interface>;
   static constexpr state_classes classes = classes_of(Sources, abstract);
@@ -1118,7 +1120,7 @@ struct binding_sources {
   // The carrier a step into a state makes of the carrier From.
   template <std::size_t State, typename From>
   using reached_t = decltype(step_into<State>::template apply<Leaf, Interface>(
-      std::declval<From>(), std::declval<keeper_view<Keeper> &>()));
+      std::declval<From>(), std::declval<keeper_view &>()));
 
   // The carrier of a class of states.
   template <std::size_t Class> struct carrier_of {
@@ -1182,9 +1184,8 @@ struct binding_sources {
   static constexpr mask_list masks = make_masks();
 
   template <std::size_t State>
-  using table_t =
-      table_of<typename carrier_of<classes.of[State]>::type::type, Leaf,
-               Interface, Keeper, masks.of[classes.of[State]]>;
+  using table_t = table_of<typename carrier_of<classes.of[State]>::type::type,
+                           Leaf, Interface, masks.of[classes.of[State]]>;
 
   // A published state, renumbered, of the table of its type; the step into
   // it is checked to be an operation of the table it is taken from.
@@ -1211,7 +1212,7 @@ struct binding_sources {
                       "the type a binding makes a layer of is made so");
       } else {
         using parent = table_t<into.parent>;
-        constexpr operation<Keeper> step =
+        constexpr operation step =
             into.via == semantics::step::release &&
                     Sources.states[into.parent].reached.layers[0] ==
                         semantics::array_pointer_layer
@@ -1225,7 +1226,7 @@ struct binding_sources {
     using own = typename carrier_of<classes.of[State]>::type;
     constexpr std::uint32_t kinds =
         request_kinds(Sources.states[State].reached, Plan::context(abstract));
-    constexpr const full_table<Keeper> &table = table_t<State>::maker::full;
+    constexpr const full_table &table = table_t<State>::maker::full;
     static_assert(known<own>(table, kinds, semantics::step::copy) &&
                       known<own>(table, kinds, semantics::step::decay) &&
                       known<own>(table, kinds, semantics::step::hand_over) &&
@@ -1241,12 +1242,12 @@ struct binding_sources {
 
   // Whether a table has a step of a kind of a mask, for the carrier Own.
   template <typename Own>
-  static constexpr bool known(const full_table<Keeper> &table,
-                              std::uint32_t kinds, semantics::step kind) {
+  static constexpr bool known(const full_table &table, std::uint32_t kinds,
+                              semantics::step kind) {
     if (!(kinds & (std::uint32_t{1} << static_cast<unsigned>(kind)))) {
       return true;
     }
-    const operation<Keeper> &step = table.from[static_cast<std::size_t>(kind)];
+    const operation &step = table.from[static_cast<std::size_t>(kind)];
     return (Own::owned ? step.owned : step.borrowed) != nullptr;
   }
 
@@ -1265,7 +1266,7 @@ struct binding_sources {
   static constexpr auto publish(std::index_sequence<I...>) {
     struct table {
       semantics::state states[sizeof...(I)];
-      const type_table<Keeper> *tables[sizeof...(I)];
+      const type_table *tables[sizeof...(I)];
     };
     return table{{source<used.states[I]>()...},
                  {&table_t<used.states[I]>::value...}};
@@ -1291,8 +1292,7 @@ template <typename Request, typename Element> struct request_types {
 };
 
 // The tables of the types a request spells, which make the layers it makes.
-template <typename Request, typename Element, typename Keeper>
-struct request_tables {
+template <typename Request, typename Element> struct request_tables {
   using types = request_types<Request, Element>;
 
   // Whether a type is a layer a request makes: of a wrapper or an
@@ -1326,7 +1326,7 @@ struct request_tables {
   template <std::size_t K>
   using table_t =
       table_of<typename types::template nested<K>::type, Element, Element,
-               Keeper, mask_for<typename types::template nested<K>::type>()>;
+               mask_for<typename types::template nested<K>::type>()>;
 
   // A layer the semantics make of what it holds, as a wrapper the request
   // spells is made of its element value, adopts a pointer or observes one,
@@ -1371,7 +1371,7 @@ struct request_tables {
                   "and that converts each pointer or handle to the qualifiers "
                   "it asks");
     struct table {
-      const type_table<Keeper> *value[sizeof...(K)];
+      const type_table *value[sizeof...(K)];
     };
     return table{{&table_t<K>::value...}};
   }

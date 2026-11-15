@@ -48,11 +48,11 @@ struct materialized_hook {
 };
 
 class retention;
-template <typename Context> class runtime_keeper;
-template <typename Context> struct runtime_request;
+
+struct runtime_request;
 namespace execution {
-template <typename Keeper> struct binding_layout;
-template <typename Keeper> struct runtime_plan;
+struct binding_layout;
+struct runtime_plan;
 } // namespace execution
 } // namespace detail
 
@@ -73,9 +73,8 @@ struct runtime_binding_header {
 // of the container, which dispatches every binding by its node.
 template <typename RTTI, typename Context> struct runtime_binding_node {
   using interface_type = runtime_binding_interface<RTTI, Context>;
-  using request_type = detail::runtime_request<Context>;
-  using keeper_type = detail::runtime_keeper<Context>;
-  using plan_type = detail::execution::runtime_plan<keeper_type>;
+  using request_type = detail::runtime_request;
+  using plan_type = detail::execution::runtime_plan;
 
   // The engine: resolves a request of a binding, of its node. It is one
   // function for every binding of a container.
@@ -92,7 +91,7 @@ template <typename RTTI, typename Context> struct runtime_binding_node {
   // The layer sources of what the binding stores, which every request of it
   // is planned from; none when C++ says of its type what the semantics do
   // not model.
-  const detail::execution::binding_layout<keeper_type> *layout;
+  const detail::execution::binding_layout *layout;
   // How the source of the binding is materialized, which the static
   // container decides by too.
   detail::materialization_facts materialization;
@@ -115,7 +114,7 @@ template <typename RTTI, typename Context> struct runtime_binding_node {
 
 template <typename RTTI, typename Context> class runtime_binding_interface {
 public:
-  using request_type = detail::runtime_request<Context>;
+  using request_type = detail::runtime_request;
   using node_type = runtime_binding_node<RTTI, Context>;
 
   // The binding of an interface of a registration, of its node, in the

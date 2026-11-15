@@ -35,16 +35,17 @@ namespace detail {
 // What a runtime resolution makes: kept with the binding when it lives as
 // long as the container, in the context in the scope of the request
 // otherwise.
-template <typename Context> class runtime_keeper {
+template <typename Context>
+class context_keeper final : public execution::runtime_keeper {
 public:
-  runtime_keeper(Context &context, construction_scope scope,
+  context_keeper(Context &context, construction_scope scope,
                  retention *retained, type_descriptor requested,
                  type_descriptor registered) noexcept
       : context_(context), scope_(scope), retained_(retained),
         requested_(requested), registered_(registered) {}
 
   // Rejects a request of what an empty layer does not hold.
-  [[noreturn]] void absent() {
+  [[noreturn]] void absent() override {
     throw_type_not_convertible(requested_, registered_, context_);
   }
 
@@ -52,7 +53,7 @@ public:
   // the binding when it is stable, in the context in the scope of the
   // request otherwise.
   void *keep(bool stable, const execution::kept_layout &layout,
-             execution::construct_function construct, void *make) {
+             execution::construct_function construct, void *make) override {
     auto construct_at = [&](void *at) { construct(at, make); };
     if (stable) {
       // A binding that keeps no instance is planned to keep nothing made of
@@ -79,9 +80,9 @@ private:
 // container, and as long as the request. A plan depends only on the types
 // of the binding and of the request, so that the plans are shared by every
 // container, and a plan made twice at once is the same.
-template <typename Keeper> class plan_cache {
+class plan_cache {
 public:
-  using plan_type = execution::runtime_plan<Keeper>;
+  using plan_type = execution::runtime_plan;
 
   struct entry {
     const void *binding;
@@ -125,14 +126,13 @@ private:
 // A request of type T as a runtime resolution plans it: the interface it
 // names, its layers, what it asks for and the tables of the types it spells,
 // and the address it is satisfied with of what a plan reaches.
-template <typename Context> struct runtime_request {
-  using keeper_type = runtime_keeper<Context>;
+struct runtime_request {
   type_descriptor requested;
   // The interface the request names, which only a binding of it resolves.
   type_descriptor interface;
   bool modeled;
-  execution::request_layout<keeper_type> layout;
-  plan_cache<keeper_type> *plans;
+  execution::request_layout layout;
+  plan_cache *plans;
 };
 
 // The address of what satisfies a request of the shape Shape, of what a plan
@@ -140,9 +140,8 @@ template <typename Context> struct runtime_request {
 // points to; what a request takes or moves, which it consumes; a copy is
 // made of the object. A value whose last step the request makes is made of
 // what the plan reached before it.
-template <typename Keeper>
-resolved_address finish_request(execution::erased_carrier reached,
-                                const execution::runtime_plan<Keeper> &plan) {
+inline resolved_address finish_request(execution::erased_carrier reached,
+                                       const execution::runtime_plan &plan) {
   using access = resolved_address::access_kind;
   using made_kind = resolved_address::made_kind;
   switch (plan.last) {
@@ -188,30 +187,25 @@ template <typename T> struct request_execution {
   }
 };
 
-template <typename T, typename Context>
-inline plan_cache<runtime_keeper<Context>> runtime_plans;
+template <typename T> inline plan_cache runtime_plans;
 
-template <typename T, typename Context>
-constexpr runtime_request<Context> make_runtime_request() {
+template <typename T> constexpr runtime_request make_runtime_request() {
   using of = request_execution<T>;
-  using keeper = runtime_keeper<Context>;
   if constexpr (!of::modeled) {
     return {described_type_v<T>, {}, false, {}, nullptr};
   } else {
-    using tables =
-        execution::request_tables<T, typename of::element_type, keeper>;
+    using tables = execution::request_tables<T, typename of::element_type>;
     return {described_type_v<T>,
             described_type_v<execution::interface_of_t<typename of::shape>>,
             true,
             {of::layers::value, of::layers::count, of::goal(),
              of::category::value, tables::value.value},
-            &runtime_plans<T, Context>};
+            &runtime_plans<T>};
   }
 }
 
-template <typename T, typename Context>
-inline constexpr runtime_request<Context> runtime_request_v =
-    make_runtime_request<T, Context>();
+template <typename T>
+inline constexpr runtime_request runtime_request_v = make_runtime_request<T>();
 } // namespace detail
 
 namespace detail {
@@ -282,7 +276,7 @@ template <typename T, typename RTTI, typename Binding, typename Context>
 T resolve_binding(construction_scope scope, Binding &binding, Context &context,
                   const void *cache_key) {
   return detail::returned_value<T>(binding.resolve_request(
-      scope, context, detail::runtime_request_v<T, Context>, cache_key));
+      scope, context, detail::runtime_request_v<T>, cache_key));
 }
 
 } // namespace dingo
