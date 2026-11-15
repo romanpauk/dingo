@@ -10,8 +10,8 @@
 #include <dingo/base/config.h>
 
 #include <dingo/base/construction_scope.h>
-#include <dingo/context/resolution.h>
 
+#include <cstddef>
 #include <memory>
 #include <new>
 #include <utility>
@@ -36,35 +36,43 @@ public:
     }
   }
 
-  template <typename T, typename Context, typename Make>
-  T &keep(const void *key, Context &context, Make &&make) {
-    for (node *entry = head_; entry != nullptr; entry = entry->next) {
-      if (entry->key == key) {
-        return *static_cast<T *>(entry->object);
-      }
+  // Keeps a T, made of make, owned here: of a static container.
+  template <typename T, typename Make> T &keep(const void *key, Make &&make) {
+    if (void *object = find(key)) {
+      return *static_cast<T *>(object);
     }
-    if constexpr (is_runtime_context_v<Context>) {
-      auto &object = context.template construct_made<T>(
-          persistent_scope, std::forward<Make>(make));
-      head_ = std::addressof(context.template construct<node>(
-          persistent_scope, node{key, std::addressof(object), head_, nullptr}));
-      context.defer_rollback(
-          +[](void *self, void *) noexcept {
-            auto &kept = *static_cast<retention *>(self);
-            kept.head_ = kept.head_->next;
-          },
-          this);
+    auto made = std::make_unique<owned<T>>(std::forward<Make>(make));
+    made->entry = node{key, std::addressof(made->object), head_,
+                       +[](node *entry) noexcept {
+                         delete static_cast<owned<T> *>(entry->self);
+                       }};
+    made->entry.self = made.get();
+    head_ = std::addressof(made->entry);
+    return made.release()->object;
+  }
+
+  // Keeps an object of a size and an alignment, which construct constructs
+  // at the address it is given and destroy destroys, none where it has no
+  // destructor, in the persistent memory of a runtime container.
+  template <typename Context, typename ConstructFn>
+  void *keep_erased(const void *key, Context &context, std::size_t size,
+                    std::size_t alignment, void (*destroy)(void *) noexcept,
+                    ConstructFn &&construct) {
+    if (void *object = find(key)) {
       return object;
-    } else {
-      auto made = std::make_unique<owned<T>>(std::forward<Make>(make));
-      made->entry = node{key, std::addressof(made->object), head_,
-                         +[](node *entry) noexcept {
-                           delete static_cast<owned<T> *>(entry->self);
-                         }};
-      made->entry.self = made.get();
-      head_ = std::addressof(made->entry);
-      return made.release()->object;
     }
+    void *object =
+        context.construct_erased(persistent_scope, size, alignment, destroy,
+                                 std::forward<ConstructFn>(construct));
+    head_ = std::addressof(context.template construct<node>(
+        persistent_scope, node{key, object, head_, nullptr}));
+    context.defer_rollback(
+        +[](void *self, void *) noexcept {
+          auto &kept = *static_cast<retention *>(self);
+          kept.head_ = kept.head_->next;
+        },
+        this);
+    return object;
   }
 
   // Forgets what is kept, and destroys what is owned here.
@@ -79,6 +87,15 @@ public:
   }
 
 private:
+  void *find(const void *key) const noexcept {
+    for (node *entry = head_; entry != nullptr; entry = entry->next) {
+      if (entry->key == key) {
+        return entry->object;
+      }
+    }
+    return nullptr;
+  }
+
   struct node {
     const void *key;
     void *object;

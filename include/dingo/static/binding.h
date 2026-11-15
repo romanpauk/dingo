@@ -238,7 +238,6 @@ private:
             caller_scope, std::forward<Make>(make));
       } else {
         return retained.template keep<T>(&execution::retained_key<T>,
-                                         this->context,
                                          std::forward<Make>(make));
       }
     }

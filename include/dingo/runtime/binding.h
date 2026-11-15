@@ -242,7 +242,7 @@ private:
           materialized();
           keeper_type keeper(context, scope, retained(binding),
                              request.requested, registered_type());
-          detail::execution::transient_view<keeper_type> transient{keeper};
+          detail::execution::keeper_view<keeper_type> transient{keeper, false};
           detail::execution::erased_carrier reached = detail::execution::erase(
               detail::plan_start<stored_type, execution_type::scope.makes>(
                   std::forward<decltype(source)>(source), transient));

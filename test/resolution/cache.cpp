@@ -14,13 +14,11 @@
 
 #include <gtest/gtest.h>
 
-#include <functional>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 namespace dingo {
 namespace {
@@ -114,34 +112,6 @@ struct cache_value {
   int value;
 };
 
-struct cache_owner {
-  template <typename T, typename... Args>
-  T &construct(construction_scope, Args &&...args) {
-    static_assert(std::is_same_v<T, cache_value>);
-    values.push_back(std::make_unique<T>(std::forward<Args>(args)...));
-    return *values.back();
-  }
-
-  std::vector<std::unique_ptr<cache_value>> values;
-};
-
-struct tracked_cache_context : cache_owner {
-  void defer_rollback(void (*fn)(void *, void *) noexcept, void *first,
-                      void *second = nullptr) {
-    rollback_actions.emplace_back([fn, first, second] { fn(first, second); });
-  }
-
-  void rollback() {
-    for (auto it = rollback_actions.rbegin(); it != rollback_actions.rend();
-         ++it) {
-      (*it)();
-    }
-    rollback_actions.clear();
-  }
-
-  std::vector<std::function<void()>> rollback_actions;
-};
-
 template <bool Enabled>
 struct exposed_cache_state : detail::cache::state<Enabled> {
   using detail::cache::state<Enabled>::slot;
@@ -192,16 +162,12 @@ TEST(cache_test, stable_storage_trait_requires_explicit_stability) {
 // until it is cleared, and destroyed then.
 TEST(cache_test, retention_keeps_one_object_per_key_until_cleared) {
   detail::retention kept;
-  tracked_cache_context context;
   int key_a = 0;
   int key_b = 0;
 
-  auto &first =
-      kept.keep<cache_value>(&key_a, context, [] { return cache_value(1); });
-  auto &again =
-      kept.keep<cache_value>(&key_a, context, [] { return cache_value(2); });
-  auto &other =
-      kept.keep<cache_value>(&key_b, context, [] { return cache_value(3); });
+  auto &first = kept.keep<cache_value>(&key_a, [] { return cache_value(1); });
+  auto &again = kept.keep<cache_value>(&key_a, [] { return cache_value(2); });
+  auto &other = kept.keep<cache_value>(&key_b, [] { return cache_value(3); });
 
   EXPECT_EQ(std::addressof(again), std::addressof(first));
   EXPECT_EQ(again.value, 1);
@@ -210,7 +176,7 @@ TEST(cache_test, retention_keeps_one_object_per_key_until_cleared) {
 
   kept.clear();
   auto &after_clear =
-      kept.keep<cache_value>(&key_a, context, [] { return cache_value(4); });
+      kept.keep<cache_value>(&key_a, [] { return cache_value(4); });
   EXPECT_EQ(after_clear.value, 4);
 }
 

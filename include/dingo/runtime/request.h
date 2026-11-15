@@ -48,21 +48,22 @@ public:
     throw_type_not_convertible(requested_, registered_, context_);
   }
 
-  template <typename T, typename Make> T &keep_transient(Make &&make) {
-    return context_.template construct_made<T>(scope_,
-                                               std::forward<Make>(make));
-  }
-
-  template <typename T, typename Make> T &keep_stable(Make &&make) {
-    // A binding that keeps no instance is planned to keep nothing made of
-    // it.
-    assert(retained_ != nullptr);
-    return retained_->template keep<T>(&execution::retained_key<T>, context_,
-                                       std::forward<Make>(make));
-  }
-
-  template <typename T, typename Make> T &keep(Make &&make) {
-    return keep_transient<T>(std::forward<Make>(make));
+  // Keeps an object of a layout, which construct constructs of make: with
+  // the binding when it is stable, in the context in the scope of the
+  // request otherwise.
+  void *keep(bool stable, const execution::kept_layout &layout,
+             execution::construct_function construct, void *make) {
+    auto construct_at = [&](void *at) { construct(at, make); };
+    if (stable) {
+      // A binding that keeps no instance is planned to keep nothing made of
+      // it.
+      assert(retained_ != nullptr);
+      return retained_->keep_erased(&layout, context_, layout.size,
+                                    layout.alignment, layout.destroy,
+                                    construct_at);
+    }
+    return context_.construct_erased(scope_, layout.size, layout.alignment,
+                                     layout.destroy, construct_at);
   }
 
 private:

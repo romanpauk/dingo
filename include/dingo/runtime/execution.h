@@ -47,18 +47,43 @@ carrier<T, Owned> unerase(erased_carrier from) {
   return {static_cast<T *>(from.object), from.owner, from.release};
 }
 
+// The layout of a type a runtime resolution keeps an object of: its size, its
+// alignment, and its destructor, none where it has none. A keeper keeps one
+// object of each layout with a binding, under the address of the layout.
+struct kept_layout {
+  std::size_t size;
+  std::size_t alignment;
+  void (*destroy)(void *) noexcept;
+};
+
+template <typename T> void destroy_kept(void *object) noexcept {
+  static_cast<T *>(object)->~T();
+}
+
+template <typename T>
+inline constexpr kept_layout kept_layout_v{
+    sizeof(T), alignof(T),
+    std::is_trivially_destructible_v<T> ? nullptr : &destroy_kept<T>};
+
+// Constructs at an address the object that what make points to makes.
+using construct_function = void (*)(void *at, void *make);
+
+template <typename T, typename Make> void construct_kept(void *at, void *make) {
+  new (at) T((*static_cast<Make *>(make))());
+}
+
 // A keeper of a runtime resolution as an operation uses it: what it makes is
 // kept as long as the container when it is stable, as long as the request
-// otherwise.
+// otherwise. The keeper knows only the layout of what it keeps.
 template <typename Keeper> struct keeper_view {
   Keeper &keeper;
   bool stable;
 
   template <typename T, typename Make> T &keep(Make &&make) {
-    if (stable) {
-      return keeper.template keep_stable<T>(std::forward<Make>(make));
-    }
-    return keeper.template keep_transient<T>(std::forward<Make>(make));
+    using make_type = std::remove_reference_t<Make>;
+    return *static_cast<T *>(keeper.keep(
+        stable, kept_layout_v<T>, &construct_kept<T, make_type>,
+        const_cast<void *>(static_cast<const void *>(std::addressof(make)))));
   }
 
   [[noreturn]] void absent() { keeper.absent(); }
@@ -199,17 +224,6 @@ constexpr bool makes_transient(semantics::step kind) {
          kind == semantics::step::unknown_bound;
 }
 
-// A keeper of what lives as long as the request.
-template <typename Keeper> struct transient_view {
-  Keeper &keeper;
-
-  template <typename T, typename Make> T &keep(Make &&make) {
-    return keeper.template keep_transient<T>(std::forward<Make>(make));
-  }
-
-  [[noreturn]] void absent() { keeper.absent(); }
-};
-
 // The steps that make an object of type Made of another.
 // A run of wraps of a value the request owns: Made at once, of the T moved
 // into it.
@@ -256,7 +270,7 @@ template <typename Made, typename Source, bool Owned, typename Keeper>
 erased_carrier qualified_erased(erased_carrier from, bool stable,
                                 Keeper &keeper) {
   (void)stable;
-  transient_view<Keeper> view{keeper};
+  keeper_view<Keeper> view{keeper, false};
   auto &made = view.template keep<Made>([&]() -> Made {
     if constexpr (Owned) {
       return Made(std::move(*static_cast<Source *>(from.object)));
@@ -286,22 +300,16 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   template <typename Step, bool Owned, bool Transient>
   static erased_carrier apply(erased_carrier from, bool stable,
                               Keeper &keeper) {
-    if constexpr (Transient) {
-      (void)stable;
-      transient_view<Keeper> view{keeper};
-      return erase(
-          Step::template apply<Leaf, Interface>(unerase<T, Owned>(from), view));
-    } else {
-      keeper_view<Keeper> view{keeper, stable};
-      return erase(
-          Step::template apply<Leaf, Interface>(unerase<T, Owned>(from), view));
-    }
+    // What a step of a transient kind makes lives as long as the request.
+    keeper_view<Keeper> view{keeper, !Transient && stable};
+    return erase(
+        Step::template apply<Leaf, Interface>(unerase<T, Owned>(from), view));
   }
 
   template <typename Step, bool Owned>
   using made_t = typename decltype(Step::template apply<Leaf, Interface>(
       std::declval<carrier<T, Owned>>(),
-      std::declval<transient_view<Keeper> &>()))::type;
+      std::declval<keeper_view<Keeper> &>()))::type;
 
   // An operation of a step of a kind, for an object the request owns, for
   // one it does not, or for both, where the table has it.
@@ -1079,7 +1087,7 @@ struct binding_sources {
   // The carrier a step into a state makes of the carrier From.
   template <std::size_t State, typename From>
   using reached_t = decltype(step_into<State>::template apply<Leaf, Interface>(
-      std::declval<From>(), std::declval<transient_view<Keeper> &>()));
+      std::declval<From>(), std::declval<keeper_view<Keeper> &>()));
 
   // The carrier of a class of states.
   template <std::size_t Class> struct carrier_of {
