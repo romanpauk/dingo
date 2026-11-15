@@ -56,7 +56,7 @@ bool read_quals(std::uint8_t *quals, std::size_t depth) {
 }
 
 bool read_kind(layer_kind &kind) {
-  unsigned values[18] = {};
+  unsigned values[19] = {};
   for (unsigned &value : values) {
     if (!read(value)) {
       return false;
@@ -75,6 +75,7 @@ bool read_kind(layer_kind &kind) {
     *flags[index] = values[index + 1] != 0;
   }
   kind.converts = values[17];
+  kind.unbounds = values[18];
   return true;
 }
 
@@ -88,7 +89,7 @@ bool same(const layer_kind &a, const layer_kind &b) {
          a.decays == b.decays && a.adopted == b.adopted &&
          a.adopted_array == b.adopted_array && a.rebinds == b.rebinds &&
          a.observes == b.observes && a.qualifies == b.qualifies &&
-         a.converts == b.converts;
+         a.converts == b.converts && a.unbounds == b.unbounds;
 }
 
 // Whether a plan replays: each of its steps is a step the semantics take

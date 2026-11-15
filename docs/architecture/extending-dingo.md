@@ -57,8 +57,12 @@ properties what a binding of the wrapper answers.
 
 A wrapper declares `borrow` when its element can be borrowed as an object. An
 owning handle without `borrow` holds an array. Such a handle declares `extent`,
-the bound of the array, when it holds an array of a known bound. An owning
-handle is not made of an object that something else owns.
+the bound of the array, when it holds an array of a known bound. Such a handle
+may also declare `unbound_t<U>`, the handle of an array of unknown bound of `U`
+that it converts to, as a `std::shared_ptr<T[2]>` converts to a
+`std::shared_ptr<T[]>`. It converts when its converting constructor takes it:
+moved, and copied too when it can be copied. An owning handle is not made of an
+object that something else owns.
 
 A pointer-like wrapper converts to one of a more qualified element, as a
 `std::shared_ptr<T>` converts to a `std::shared_ptr<const T>`, when its

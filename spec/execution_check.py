@@ -31,7 +31,7 @@ from spec.vocabulary import Category, InterfaceSet, Scope, StoredForm  # noqa: E
 # The kinds of step, in the order of semantics::step.
 STEPS = ("release", "decay", "hand_over", "adopt", "element",
          "element_pointer", "element_or_empty", "element_or_empty_copy",
-         "convert", "upcast", "copy", "wrap", "observe", "qualify")
+         "convert", "upcast", "copy", "wrap", "observe", "qualify", "unbound")
 SATISFACTIONS = ("refer", "point", "take", "move", "copy")
 # The identity of a standard layer, which a step makes a layer of.
 IDENTITIES = {

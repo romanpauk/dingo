@@ -221,6 +221,38 @@ struct shared_layer<
       typename type_traits<Wrapper>::template share_t<layer_probe>>;
 };
 
+// The layer a handle of an array of a known bound converts to, holding the
+// same array as one of unknown bound, or none.
+template <typename Wrapper, typename = void> struct unbound_layer {
+  using type = void;
+};
+
+template <typename Wrapper>
+struct unbound_layer<Wrapper, std::void_t<typename type_traits<
+                                  Wrapper>::template unbound_t<layer_probe>>> {
+  using type = layer_identity_t<
+      typename type_traits<Wrapper>::template unbound_t<layer_probe>>;
+};
+
+// Whether a handle of an array of a known bound converts to the handle its
+// type traits name: moved, and copied too when it can be copied.
+template <typename Wrapper> constexpr bool unbounds() {
+  if constexpr (std::is_void_v<typename unbound_layer<Wrapper>::type>) {
+    return false;
+  } else {
+    using traits = type_traits<Wrapper>;
+    using copyable = typename traits::template rebind_t<copyable_probe>;
+    using movable = typename traits::template rebind_t<movable_probe>;
+    return std::is_constructible_v<
+               typename traits::template unbound_t<movable_probe>,
+               movable &&> &&
+           (!std::is_copy_constructible_v<copyable> ||
+            std::is_constructible_v<
+                typename traits::template unbound_t<copyable_probe>,
+                const copyable &>);
+  }
+}
+
 // What a stack ends in: the leaf, the abstract interface of the leaf, or
 // another type, which the semantics do not reach.
 enum class stack_element { leaf, interface, other };
@@ -381,8 +413,9 @@ template <typename... Tags> struct layer_universe<type_list<Tags...>> {
     }
   }
 
-  // Adds the layer of a wrapper, with the layer its owned value converts to
-  // if it is in the universe.
+  // Adds the layer of a wrapper, with the layer its owned value converts to,
+  // and the layer it converts to of an array of unknown bound, if they are in
+  // the universe.
   template <typename Identity>
   static constexpr void add(semantics::universe &made) {
     semantics::layer_kind kind = wrapper_kind_v<Identity>;
@@ -391,6 +424,13 @@ template <typename... Tags> struct layer_universe<type_list<Tags...>> {
       const semantics::layer to = index_of<target>(identities{});
       if (to != semantics::no_layer) {
         kind.converts |= std::uint32_t{1} << to;
+      }
+    }
+    if constexpr (unbounds<Identity>()) {
+      const semantics::layer to =
+          index_of<typename unbound_layer<Identity>::type>(identities{});
+      if (to != semantics::no_layer) {
+        kind.unbounds |= std::uint32_t{1} << to;
       }
     }
     made.add(kind);

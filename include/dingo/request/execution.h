@@ -292,6 +292,27 @@ template <> struct step<semantics::step::convert> {
   }
 };
 
+// The handle of an array of unknown bound a handle of an array of a known
+// bound converts to, holding the same array: the unbound_t of its type
+// traits, moved out of one the request owns or copied of another.
+template <> struct step<semantics::step::unbound> {
+  template <typename Leaf, typename Interface, typename T, bool Owned,
+            typename Keeper>
+  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+    using type = std::remove_cv_t<T>;
+    using made_type = typename type_traits<type>::template unbound_t<
+        typename type_traits<type>::value_type>;
+    auto &made = keeper.template keep<made_type>([&] {
+      if constexpr (Owned) {
+        return made_type(std::move(*from.object));
+      } else {
+        return made_type(*from.object);
+      }
+    });
+    return carrier<made_type, true>{std::addressof(made)};
+  }
+};
+
 // The type of a stack with its leaf replaced by Interface.
 // The leaf keeps its qualifiers as its interface; a new pointer or handle
 // is of none.
@@ -1191,7 +1212,7 @@ template <typename Keeper> struct operation {
 };
 
 inline constexpr std::size_t step_kinds =
-    static_cast<std::size_t>(semantics::step::qualify) + 1;
+    static_cast<std::size_t>(semantics::step::unbound) + 1;
 
 // What a runtime resolution does with an object of a type, as the steps of
 // the semantics do it, one table for each type: the steps from an object of
@@ -1305,7 +1326,8 @@ inline constexpr std::uint32_t qualified_mask = std::uint32_t{1}
 constexpr bool makes_transient(semantics::step kind) {
   return kind == semantics::step::copy || kind == semantics::step::decay ||
          kind == semantics::step::hand_over ||
-         kind == semantics::step::convert || kind == semantics::step::release;
+         kind == semantics::step::convert || kind == semantics::step::release ||
+         kind == semantics::step::unbound;
 }
 
 // A keeper of what lives as long as the request.
@@ -1656,6 +1678,10 @@ struct table_maker : layer_types<T, Leaf, Interface> {
         at(step::convert) = owned<step::convert>();
       }
     }
+    if constexpr (wants(step::unbound)) {
+      at(step::unbound) = step_of<step::unbound, execution::step<step::unbound>,
+                                  unbounds<true>(), unbounds<false>()>();
+    }
     if constexpr (wants(step::upcast)) {
       if constexpr (upcasts<true>() || upcasts<false>()) {
         at(step::upcast) = step_of<step::upcast, execution::step<step::upcast>,
@@ -1715,6 +1741,35 @@ struct table_maker : layer_types<T, Leaf, Interface> {
     using type = typename type_traits<U>::template share_t<
         typename type_traits<U>::value_type>;
   };
+
+  // Whether a handle of an array of a known bound converts to the handle of
+  // an array of unknown bound its type traits name: moved out of, or copied.
+  template <typename U, typename = void> struct unbound {
+    using type = void;
+  };
+  template <typename U>
+  struct unbound<U, std::void_t<typename type_traits<U>::template unbound_t<
+                        typename type_traits<U>::value_type>>> {
+    using type = typename type_traits<U>::template unbound_t<
+        typename type_traits<U>::value_type>;
+  };
+
+  template <bool Owned> static constexpr bool unbounds() {
+    if constexpr (!std::is_same_v<T, type> || std::is_pointer_v<type> ||
+                  std::is_array_v<type> || !is_complete_v<type>) {
+      return false;
+    } else if constexpr (!type_traits<type>::enabled ||
+                         is_alternative_type_v<type>) {
+      return false;
+    } else if constexpr (std::is_void_v<typename unbound<type>::type>) {
+      return false;
+    } else if constexpr (Owned) {
+      return std::is_constructible_v<typename unbound<type>::type, type &&>;
+    } else {
+      return std::is_constructible_v<typename unbound<type>::type,
+                                     const type &>;
+    }
+  }
 
   static constexpr bool converts() {
     if constexpr (!std::is_same_v<T, type> || std::is_pointer_v<type> ||
@@ -1889,23 +1944,35 @@ inline constexpr const void *language_identities[4] = {
     &identity_tag_v<bounded_array_layer_tag>};
 
 // A wrapper layer of a universe as a runtime resolution merges it with
-// another: what it is, its identity, and the identity of the layer an owned
-// value of it converts to, or none.
+// another: what it is, its identity, the identity of the layer an owned value
+// of it converts to, and that of the layer it converts to of an array of
+// unknown bound, or none.
 struct runtime_layer {
   semantics::layer_kind kind;
   const void *identity;
   const void *converts_to;
+  const void *unbounds_to;
 };
+
+// The identity tag of a layer, or none.
+template <typename Identity> constexpr const void *identity_or_none() {
+  if constexpr (std::is_void_v<Identity>) {
+    return nullptr;
+  } else {
+    return &identity_tag_v<Identity>;
+  }
+}
 
 template <typename Identity> constexpr runtime_layer runtime_layer_of() {
   semantics::layer_kind kind = wrapper_kind_v<Identity>;
   kind.converts = 0;
-  using target = typename shared_layer<Identity>::type;
-  if constexpr (std::is_void_v<target>) {
-    return {kind, &identity_tag_v<Identity>, nullptr};
-  } else {
-    return {kind, &identity_tag_v<Identity>, &identity_tag_v<target>};
-  }
+  kind.unbounds = 0;
+  using unbounded =
+      std::conditional_t<unbounds<Identity>(),
+                         typename unbound_layer<Identity>::type, void>;
+  return {kind, &identity_tag_v<Identity>,
+          identity_or_none<typename shared_layer<Identity>::type>(),
+          identity_or_none<unbounded>()};
 }
 
 // The wrapper layers of a universe, in its order.
@@ -1981,12 +2048,14 @@ runtime_plan<Keeper> plan_runtime(const binding_layout<Keeper> &binding,
   semantics::universe merged = *binding.with.layers;
   const void *identities[semantics::max_kinds] = {};
   const void *targets[semantics::max_kinds] = {};
+  const void *unbounded[semantics::max_kinds] = {};
   for (std::size_t index = 0; index < 4; ++index) {
     identities[index] = language_identities[index];
   }
   for (std::size_t index = 0; index < binding.layer_count; ++index) {
     identities[4 + index] = binding.layers[index].identity;
     targets[4 + index] = binding.layers[index].converts_to;
+    unbounded[4 + index] = binding.layers[index].unbounds_to;
   }
   semantics::layer mapped[semantics::max_kinds] = {0, 1, 2, 3};
   for (std::size_t index = 0; index < request.layer_count; ++index) {
@@ -2001,16 +2070,20 @@ runtime_plan<Keeper> plan_runtime(const binding_layout<Keeper> &binding,
       }
       identities[at] = layer.identity;
       targets[at] = layer.converts_to;
+      unbounded[at] = layer.unbounds_to;
       merged.add(layer.kind);
     }
     mapped[4 + index] = static_cast<semantics::layer>(at);
   }
   for (std::size_t index = 4; index < merged.count; ++index) {
     merged.kinds[index].converts = 0;
-    for (std::size_t to = 4; targets[index] != nullptr && to < merged.count;
-         ++to) {
-      if (identities[to] == targets[index]) {
+    merged.kinds[index].unbounds = 0;
+    for (std::size_t to = 4; to < merged.count; ++to) {
+      if (targets[index] != nullptr && identities[to] == targets[index]) {
         merged.kinds[index].converts |= std::uint32_t{1} << to;
+      }
+      if (unbounded[index] != nullptr && identities[to] == unbounded[index]) {
+        merged.kinds[index].unbounds |= std::uint32_t{1} << to;
       }
     }
   }
@@ -2323,9 +2396,10 @@ struct binding_sources {
 
   // The operations each class of states needs: the steps the binding takes
   // from it, the steps a request may take from it, and the wraps that make
-  // it. A sole owner converts to the sharing handle its type traits name,
-  // which a request may bring into the universe: of every source that is
-  // one.
+  // it. A sole owner converts to the sharing handle its type traits name, and
+  // a handle of an array of a known bound to the handle of an array of unknown
+  // bound they name, which a request may bring into the universe: of every
+  // source that is one.
   struct mask_list {
     std::uint32_t of[semantics::max_states] = {};
   };
@@ -2333,13 +2407,15 @@ struct binding_sources {
     mask_list made;
     constexpr std::uint32_t taken =
         mask_of(semantics::step::copy) | mask_of(semantics::step::decay) |
-        mask_of(semantics::step::hand_over) | mask_of(semantics::step::convert);
+        mask_of(semantics::step::hand_over) |
+        mask_of(semantics::step::convert) | mask_of(semantics::step::unbound);
     const semantics::context with = Plan::context(abstract);
     for (std::size_t index = 0; index < used.count; ++index) {
       const std::size_t at = used.states[index];
       const semantics::state &each = Sources.states[at];
       made.of[classes.of[at]] |= (request_kinds(each.reached, with) & taken) |
-                                 mask_of(semantics::step::convert);
+                                 mask_of(semantics::step::convert) |
+                                 mask_of(semantics::step::unbound);
       if (at == 0) {
         continue;
       }
@@ -2405,7 +2481,8 @@ struct binding_sources {
     static_assert(known<own>(table, kinds, semantics::step::copy) &&
                       known<own>(table, kinds, semantics::step::decay) &&
                       known<own>(table, kinds, semantics::step::hand_over) &&
-                      known<own>(table, kinds, semantics::step::convert),
+                      known<own>(table, kinds, semantics::step::convert) &&
+                      known<own>(table, kinds, semantics::step::unbound),
                   "the table of a source has every step a request takes of it");
     semantics::state made = Sources.states[State];
     if (made.parent != semantics::no_state) {

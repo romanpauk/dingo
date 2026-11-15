@@ -68,15 +68,28 @@ CATEGORY_TYPES = {
 }
 
 
-def classified_layer(name):
-    """A layer as the classification program prints it: its properties, and
-    those of the layer an owned value of it converts to, or "-"."""
-    layer = semantics.LAYERS[name]
-    own = " ".join(map(str, properties(layer, ())[:-1]))
-    target = (" ".join(map(str, properties(
-        semantics.LAYERS[layer.converts_to[0]], ())[:-1]))
-              if layer.converts_to else "-")
-    return f"{own} > {target}"
+def classified_layer(layers, index):
+    """A layer of a stack as the classification program prints it: its
+    properties, those of the layer an owned value of it converts to, and
+    those of the layer it converts to of an array of unknown bound when it
+    holds an array of a known bound, each or "-"."""
+    layer = semantics.LAYERS[layers[index]]
+
+    def printed(names):
+        return (" ".join(map(str, properties(semantics.LAYERS[names[0]],
+                                             ())[:-2]))
+                if names else "-")
+    holds_bounded = (index + 1 < len(layers) and
+                     semantics.LAYERS[layers[index + 1]].bounded)
+    return (f"{printed((layers[index],))} > {printed(layer.converts_to)} > "
+            f"{printed(layer.unbounds_to if holds_bounded else ())}")
+
+
+def classified_stack(layers, element):
+    """A stack as the classification program prints it."""
+    return " | ".join([classified_layer(layers, index)
+                       for index in range(len(layers))] +
+                      [str(STACK_ELEMENTS[element])])
 
 
 def classification(compiler, flags, work):
@@ -108,8 +121,7 @@ def classification(compiler, flags, work):
             entries.append((
                 f"stored/{form.value}/{leaf.value}",
                 f"print_stack<std::remove_reference_t<{stored}>, {spelled}>()",
-                " | ".join([classified_layer(name) for name in layers] +
-                           [str(STACK_ELEMENTS["leaf"])])))
+                classified_stack(layers, "leaf")))
         for bound in bounds():
             interface = interface_of(bound, leaf)
             # A shape C++ cannot spell of the interface in any category, as
@@ -134,8 +146,7 @@ def classification(compiler, flags, work):
                     f"request/{shape.value}/{bound.element}"
                     f"{list(bound.layers)}/{leaf.value}",
                     f"print_stack<{spell_shape(shape, inner)}, {spelled}>()",
-                    " | ".join([classified_layer(name) for name in layers] +
-                               [str(STACK_ELEMENTS[bound.element])])))
+                    classified_stack(layers, bound.element)))
     source = work / "classification.cpp"
     source.write_text(CLASSIFICATION.replace(
         "ENTRIES", "\n".join(f"  {call};" for _, call, _ in entries)))
@@ -174,21 +185,28 @@ void print_kind(const dingo::semantics::layer_kind &kind) {
               kind.qualifies);
 }
 
+template <typename Target> void print_target() {
+  if constexpr (std::is_void_v<Target>) {
+    std::printf("-");
+  } else {
+    print_kind(dingo::detail::wrapper_kind_v<Target>);
+  }
+}
+
 template <typename Tag> void print_layer() {
   print_kind(dingo::detail::tag_kind<Tag>());
-  std::printf(" > ");
   if constexpr (std::is_same_v<Tag, dingo::detail::pointer_layer_tag> ||
                 std::is_same_v<Tag, dingo::detail::array_layer_tag> ||
                 std::is_same_v<Tag, dingo::detail::bounded_array_layer_tag>) {
-    std::printf("-");
+    std::printf(" > - > -");
   } else {
-    using target =
-        typename dingo::detail::shared_layer<typename Tag::identity>::type;
-    if constexpr (std::is_void_v<target>) {
-      std::printf("-");
-    } else {
-      print_kind(dingo::detail::wrapper_kind_v<target>);
-    }
+    using identity = typename Tag::identity;
+    std::printf(" > ");
+    print_target<typename dingo::detail::shared_layer<identity>::type>();
+    std::printf(" > ");
+    print_target<std::conditional_t<
+        dingo::detail::unbounds<identity>(),
+        typename dingo::detail::unbound_layer<identity>::type, void>>();
   }
   std::printf(" | ");
 }
@@ -238,11 +256,17 @@ ENTRIES
 """
 
 
-def properties(layer, universe):
-    """A layer as the program reads it: its properties, and the layers of the
-    universe an owned value of it converts to, as a mask."""
+def properties(layer, universe, of_object=False):
+    """A layer as the program reads it: its properties, the layers of the
+    universe an owned value of it converts to, and those it converts to of an
+    array of unknown bound, each as a mask. A layer of an object converts to
+    none of the latter: the library classifies the layer of an array of a
+    known bound as a layer of its own."""
     converts = sum(1 << universe.index(name) for name in layer.converts_to
                    if name in universe)
+    unbounds = 0 if of_object else sum(
+        1 << universe.index(name) for name in layer.unbounds_to
+        if name in universe)
     return [OWNERS[layer.owner], int(layer.shares_element),
             int(layer.copyable), int(layer.made_from_value),
             int(layer.holds_element_only), int(layer.relocatable),
@@ -251,7 +275,7 @@ def properties(layer, universe):
             int(layer.adopts), int(bool(layer.decays_to)),
             int(layer.adopted_with is not None),
             int(bool(layer.adopted_with)), int(layer.rebinds),
-            int(layer.observes), int(layer.qualifies), converts]
+            int(layer.observes), int(layer.qualifies), converts, unbounds]
 
 
 def order(names):
@@ -301,21 +325,24 @@ def standard():
 def made_layers():
     """Every layer a type could define, by its properties, beside the layers
     of C++ itself: it gives its element, is no raw pointer and no array, and
-    is possible, as semantics.possible says."""
+    is possible, as semantics.possible says. One that converts to the layer of
+    an array of unknown bound converts to itself."""
     emptiness = ((False, False), (True, False), (True, True))
     for index, (owner, shares, copyable, made, holds, relocatable, empty,
-                adopts, rebinds, observes, qualifies) in enumerate(
+                adopts, rebinds, observes, qualifies, unbounds) in enumerate(
                     itertools.product(
                         semantics.Owner, (False, True), (False, True),
                         (False, True), (False, True), (False, True),
                         emptiness, (False, True), (False, True),
-                        (False, True), (False, True))):
+                        (False, True), (False, True), (False, True))):
+        name = f"made{index}"
         layer = semantics.Layer(
-            f"made{index}", owner, shares_element=shares, copyable=copyable,
+            name, owner, shares_element=shares, copyable=copyable,
             made_from_value=made, holds_element_only=holds,
             relocatable=relocatable, may_be_empty=empty[0],
             has_empty_value=empty[1], adopts=adopts, rebinds=rebinds,
-            observes=observes, qualifies=qualifies)
+            observes=observes, qualifies=qualifies,
+            unbounds_to=(name,) if unbounds else ())
         if semantics.possible(layer):
             yield layer
 
@@ -339,13 +366,20 @@ def makes(layers, context):
 
 def swept():
     """Each layer a type could define, stored and requested in every stack of
-    it, of a pointer and of an array, of every scope and leaf."""
+    it, of a pointer and of an array, of every scope and leaf; one that
+    converts to the layer of an array of unknown bound stored only around an
+    array of a known bound."""
     for layer in made_layers():
         semantics.LAYERS[layer.name] = layer
         name = layer.name
         universe = LANGUAGE + (name,)
         stored = ((), (name,), (name, "array"), (name, "array2"),
                   (name, name))
+        if layer.unbounds_to:
+            # A layer that converts to one of an array of unknown bound is its
+            # twin that does not but where it holds an array of a known bound,
+            # which only a stored object holds.
+            stored = ((name, "array2"),)
         requested = [stack for depth in range(4)
                      for stack in itertools.product((name, "pointer"),
                                                     repeat=depth)]
@@ -664,7 +698,7 @@ def header():
     standard_layers = [str(len(universe) - len(LANGUAGE))]
     for name in universe[len(LANGUAGE):]:
         standard_layers += map(str, properties(semantics.LAYERS[name],
-                                               universe))
+                                               universe, of_object=True))
     return [" ".join(language), " ".join(standard_layers)]
 
 

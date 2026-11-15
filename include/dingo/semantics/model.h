@@ -81,6 +81,10 @@ struct layer_kind {
   // pointer to the element converts: a raw pointer, and a handle whose
   // converting constructor does.
   bool qualifies = false;
+  // The layers a value of it that holds an array of a known bound converts
+  // to, holding the same array as one of unknown bound, as a mask of their
+  // indices.
+  std::uint32_t unbounds = 0;
 };
 
 // Whether a type can be a layer of these properties, as spec/semantics.py
@@ -91,8 +95,8 @@ struct layer_kind {
 // nothing is not made of a value and takes over no pointer. A layer that
 // takes over a pointer holds the element apart from it, and so do a layer the
 // leaf is rebound to the interface in and a layer that converts to one of a
-// more qualified element. An empty value is a value only of a layer that may
-// be empty.
+// more qualified element or of an array of unknown bound. An empty value is a
+// value only of a layer that may be empty.
 constexpr bool possible(const layer_kind &kind) {
   return (kind.owns == owner::sole || kind.shares_element) &&
          !(kind.owns == owner::sole && kind.shares_element && kind.copyable) &&
@@ -100,6 +104,7 @@ constexpr bool possible(const layer_kind &kind) {
          (!kind.adopts || kind.shares_element) &&
          (!kind.rebinds || kind.shares_element) &&
          (!kind.qualifies || kind.shares_element) &&
+         (!kind.unbounds || kind.shares_element) &&
          (!kind.observes || (kind.owns == owner::none && kind.may_be_empty)) &&
          (kind.may_be_empty || !kind.has_empty_value);
 }
@@ -389,6 +394,9 @@ enum class step : std::uint8_t {
   observe,
   // A pointer or a handle converted to one of a more qualified element.
   qualify,
+  // A pointer or a handle of an array of a known bound converted to one of
+  // an array of unknown bound.
+  unbound,
 };
 
 struct transition {
@@ -523,6 +531,39 @@ constexpr void qualify_steps(const thing &of, const context &with, Sink &out) {
   made.quals[0] = 0;
   made.qualified = true;
   qualify_levels(of, with, made, 1, true, false, out);
+}
+
+// A pointer or a handle of an array of a known bound converted to one of an
+// array of unknown bound, which holds the same array: a new object, moved out
+// of one the request owns or copied of another. One converted to a more
+// qualified element is not converted again, and a pointer the request owns is
+// handed over or taken over instead.
+template <typename Sink>
+constexpr void unbound_steps(const thing &of, const context &with, Sink &out) {
+  if (of.depth < 2 || !with.kind(of.layers[1]).bounded || of.qualified ||
+      of.owns_pointee) {
+    return;
+  }
+  const std::uint32_t targets = with.kind(of.layers[0]).unbounds;
+  if (!targets) {
+    return;
+  }
+  const bool moved = owned(of.from) && can_move(of, with);
+  if (!moved && !can_copy(of, with)) {
+    return;
+  }
+  for (std::size_t index = 0; index < with.layers->count; ++index) {
+    if (targets & (std::uint32_t{1} << index)) {
+      thing made = of;
+      made.layers[0] = static_cast<layer>(index);
+      made.layers[1] = array_layer;
+      made.lifetimes[0] = lifetime::request;
+      made.from = moved ? of.from : origin::copied;
+      made.quals[0] = 0;
+      made.made_layer = false;
+      out(step::unbound, made);
+    }
+  }
 }
 
 // What a sink of the steps from a thing passes on: a step that makes another
@@ -690,6 +731,7 @@ constexpr void each_transition_of(const thing &of, const context &with,
     out(step::copy, copied(of, with));
   }
   qualify_steps(of, with, out);
+  unbound_steps(of, with, out);
   const bool shares = of.from == origin::copied && of.instance;
   // A raw pointer that owns what it points to is not wrapped: it is handed
   // over, or taken over by a handle.

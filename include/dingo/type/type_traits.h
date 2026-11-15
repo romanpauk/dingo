@@ -99,6 +99,9 @@ struct alternative_value {
 //                  the caller then owns, and returns its address
 //   extent         optional, 0 by default: for an owning handle of an array,
 //                  its bound, when the handle holds an array of a known one
+//   unbound_t<U>   optional, for a handle of an array of a known bound: the
+//                  handle of an array of unknown bound of the element U that
+//                  it converts to, holding the same array
 //   wrap(v), empty_value()
 //                  for an optional value: a wrapper of v, and an empty one
 //
@@ -520,6 +523,7 @@ struct type_traits<
   static constexpr std::size_t extent = std::extent_v<Array, 0>;
   template <typename U>
   using rebind_t = std::shared_ptr<U[std::extent_v<Array, 0>]>;
+  template <typename U> using unbound_t = std::shared_ptr<U[]>;
 
   static auto *get(const std::shared_ptr<Array> &wrapper) {
     return wrapper.get();

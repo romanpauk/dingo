@@ -1188,3 +1188,48 @@ TEST(type_registration_test, handle_converts_to_one_of_a_const_element) {
   check_kept(fixed);
   check_made(fixed);
 }
+
+namespace unbound_test {
+struct E {
+  E() {}
+  int value = 5;
+};
+
+// A handle of an array of a known bound converts to one of an array of
+// unknown bound, which shares the same array: copied of one the binding
+// keeps, moved out of one a request owns.
+template <typename Container> void check_kept(Container &container) {
+  auto &stored = container.template resolve<std::shared_ptr<E[2]> &>();
+  auto converted = container.template resolve<std::shared_ptr<E[]>>();
+  EXPECT_EQ(converted.get(), stored.get());
+  EXPECT_EQ(converted.use_count(), stored.use_count());
+  EXPECT_EQ(converted[1].value, 5);
+}
+
+template <typename Container> void check_made(Container &container) {
+  auto converted = container.template resolve<std::shared_ptr<E[]>>();
+  ASSERT_NE(converted, nullptr);
+  EXPECT_EQ(converted.use_count(), 1);
+  EXPECT_EQ(converted[1].value, 5);
+}
+} // namespace unbound_test
+
+TEST(type_registration_test,
+     handle_converts_to_one_of_an_array_of_unknown_bound) {
+  using namespace unbound_test;
+  container<> kept;
+  kept.register_type<scope<shared>, storage<std::shared_ptr<E[2]>>>();
+  check_kept(kept);
+  container<> made;
+  made.register_type<scope<unique>, storage<std::shared_ptr<E[2]>>>();
+  check_made(made);
+
+  static_container<
+      bindings<dingo::bind<scope<shared>, storage<std::shared_ptr<E[2]>>>>>
+      fixed_kept;
+  check_kept(fixed_kept);
+  static_container<
+      bindings<dingo::bind<scope<unique>, storage<std::shared_ptr<E[2]>>>>>
+      fixed_made;
+  check_made(fixed_made);
+}

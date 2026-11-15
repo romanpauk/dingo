@@ -65,7 +65,9 @@ whether a copy of it holds the same element, whether it can be copied, moved,
 made of a value or be empty, whether an empty one is a value, whether it holds
 only its element, whether it takes over a raw pointer, and whether a value of it
 converts to one of a more qualified element. Whether an owned value of one layer
-converts to another is a fact of the two, given for the layers in play.
+converts to another is a fact of the two, given for the layers in play. So is
+whether a value of a layer that holds an array of a known bound converts to
+another that holds the same array as one of unknown bound.
 
 The layers of C++ itself are fixed: a pointer to an object, an array of unknown
 bound, a bounded array, and the pointer an array decays to. Every other layer is
@@ -78,9 +80,13 @@ Not every combination of properties is a layer a type can be.
 it owns, holds an element that lives apart from it; a layer that owns its
 element alone and shares it with a copy cannot be copied; a layer that owns
 nothing is not made of a value and takes over no pointer; a layer that takes
-over a pointer holds its element apart from it; and an empty value is a value
-only of a layer that may be empty. Of the combinations, 216 are possible. The
-classification rejects the type traits of any other.
+over a pointer holds its element apart from it, and so does a layer the leaf is
+rebound to the interface in, and one that converts to one of a more qualified
+element or of an array of unknown bound; a layer made of a pointer it does not
+own owns nothing and may be empty; and an empty value is a value only of a layer
+that may be empty. Of the combinations that give their element and are no raw
+pointer and no array, 1,520 are possible. The classification rejects the type
+traits of any other.
 
 The steps of the specification and the code that takes them. Each is in
 [include/dingo/request/execution.h](../../include/dingo/request/execution.h):
@@ -88,12 +94,13 @@ The steps of the specification and the code that takes them. Each is in
 | Step                                                                      | Who takes it | Code                                              |
 | ------------------------------------------------------------------------- | ------------ | ------------------------------------------------- |
 | `element`, `element_pointer`, `element_or_empty`, `element_or_empty_copy` | binding      | `step<element>` and the others of the same name   |
-| `upcast`, `convert`                                                       | binding      | `step<upcast>`, `step<convert>`                   |
+| `upcast`, `convert`, `unbound`                                            | binding      | `step<upcast>`, `step<convert>`, `step<unbound>`  |
 | `release`                                                                 | binding      | `release_step`                                    |
 | `copy`, `decay`, `hand_over`                                              | binding      | `step<copy>`, `step<decay>`, `step<hand_over>`    |
 | `wrap`                                                                    | request      | `step<wrap, Target>`; a run of wraps is `made_of` |
 | `adopt`                                                                   | request      | `adopt_step`                                      |
 | `observe`                                                                 | request      | `observe_step`                                    |
+| `qualify`                                                                 | request      | `qualify_step`                                    |
 
 A step belongs to the side that knows the type it is applied to (see phase 7). A
 request takes the others through the tables of the binding.
@@ -130,19 +137,21 @@ other code.
 
    - The standard layers: every stored object the specification makes, with and
      without the known limitations, and every request of every shape of every
-     bound interface. 629,520 requests, 8,813,280 answers.
+     bound interface. 673,440 requests, 9,428,160 answers.
 
-   - Every possible layer a type could define: each of the 216, beside the
+   - Every possible layer a type could define: each of the 1,520, beside the
      layers of C++ itself, stored and requested in every stack of it, of a
-     pointer and of an array, of every scope and leaf. 1,129,344 requests,
-     15,810,816 answers.
+     pointer and of an array, of every scope and leaf. A layer that converts to
+     one of an array of unknown bound is stored only around an array of a known
+     bound: anywhere else it is the same as its twin that does not convert.
+     5,948,544 requests, 83,279,616 answers.
 
    - With `semantics-check-pairs`, every pair of possible layers, with each
      conversion between them that `semantics.possible_conversion` allows: an
      owned value of a layer that owns its element alone converts to a layer that
      owns an element apart from it. Each pair is stored and requested in every
      stack that holds both of them, of a pointer and of an array, of every scope
-     and leaf: 31,212 universes, 247,595,712 requests, 3,466,339,968 answers.
+     and leaf: 1,669,960 universes.
 
    All answers are equal. A rule of the port changed on purpose makes 216
    requests differ. The pairs found a defect the single layers did not: the
@@ -280,6 +289,13 @@ other code.
      again. The specification marks each level a conversion may qualify, instead
      of making a thing for each qualifier, and a request is satisfied of a
      marked level of the qualifiers it asks.
+
+   - Arrays of unknown bound. A handle of an array of a known bound whose type
+     traits name `unbound_t` converts to that handle, which holds the same array
+     as one of unknown bound: the `unbound` step. A `std::shared_ptr<T[2]>`
+     gives a `std::shared_ptr<T[]>`. The step makes a new object, copied of a
+     handle the request does not own and moved out of one it owns. A handle
+     converted to a more qualified element is not converted again.
 
    - Ownership of a pointee. A thing tells whether the request owns what its
      outer raw pointer points to: a pointer a scope makes does, a copy of it
