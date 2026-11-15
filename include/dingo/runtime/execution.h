@@ -225,13 +225,15 @@ erased_carrier made_of_erased(erased_carrier from, bool stable,
   return erase(carrier<Made, true>{std::addressof(made)});
 }
 
-// A raw pointer the request owns, taken over by the handle Made.
-template <typename Made, typename Pointer, typename Keeper>
+// A raw pointer the request owns, taken over by the handle Made: of a Whole
+// array Made holds, as the pointer to its first element.
+template <typename Made, typename Pointer, typename Keeper, bool Whole = false>
 erased_carrier adopted_erased(erased_carrier from, bool stable,
                               Keeper &keeper) {
   keeper_view<Keeper> view{keeper, stable};
-  auto &made = view.template keep<Made>(
-      [&] { return Made(*static_cast<Pointer *>(from.object)); });
+  auto &made = view.template keep<Made>([&] {
+    return Made(adopted_pointer<Whole>(*static_cast<Pointer *>(from.object)));
+  });
   // The handle owns what the pointer points to now.
   carrier<Pointer, true>{nullptr, from.owner, from.release}.released();
   return erase(carrier<Made, true>{std::addressof(made)});
@@ -579,6 +581,12 @@ struct table_maker : layer_types<T, Leaf, Interface> {
           if constexpr (std::is_constructible_v<type, pointer>) {
             made.adopted_array = {&adopted_erased<type, pointer, Keeper>,
                                   nullptr, nullptr};
+            // A handle of an array of a known bound takes over a pointer to
+            // a whole one too, as the pointer to its first element.
+            if constexpr (std::extent_v<of> != 0) {
+              made.adopted = {&adopted_erased<type, of *, Keeper, true>,
+                              nullptr, nullptr};
+            }
           }
         } else if constexpr (std::is_constructible_v<type, of *>) {
           made.adopted = {&adopted_erased<type, of *, Keeper>, nullptr,

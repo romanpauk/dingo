@@ -520,6 +520,35 @@ struct observe_step {
   }
 };
 
+// The handle of the layer Target that takes over a raw pointer to Pointee,
+// of an array when Array, the pointer then pointing to its first element. A
+// handle of an array is rebound to the element of the array, as its type
+// traits rebind it; another one to what it holds.
+template <typename Target, typename Pointee, bool Array>
+struct adopting_handle {
+  using type =
+      typename type_traits<Target>::template rebind_t<std::conditional_t<
+          is_array_like_type_v<Target>,
+          std::conditional_t<Array, Pointee, std::remove_extent_t<Pointee>>,
+          std::conditional_t<Array, Pointee[], Pointee>>>;
+};
+
+template <typename Target, typename Pointee, bool Array>
+using adopting_handle_t =
+    typename adopting_handle<Target, Pointee, Array>::type;
+
+// The pointer a handle takes over of a raw pointer: the pointer itself, or,
+// of a Whole array the handle holds, the pointer to its first element, as a
+// handle of an array takes it.
+template <bool Whole, typename Pointer> auto adopted_pointer(Pointer pointer) {
+  if constexpr (Whole) {
+    using element = std::remove_extent_t<std::remove_pointer_t<Pointer>>;
+    return pointer ? &(*pointer)[0] : static_cast<element *>(nullptr);
+  } else {
+    return pointer;
+  }
+}
+
 // A raw pointer the request owns, taken over by a handle of the layer
 // Target: of an array when it points to the first element of one.
 template <typename Target, bool Array, std::uint8_t Quals = made_quals>
@@ -528,10 +557,13 @@ struct adopt_step {
             typename Keeper>
   static auto apply(carrier<T, Owned> from, Keeper &keeper) {
     using pointee = held_of_t<std::remove_pointer_t<T>, Quals>;
-    using made_type = typename type_traits<Target>::template rebind_t<
-        std::conditional_t<Array, pointee[], pointee>>;
+    using made_type = adopting_handle_t<Target, pointee, Array>;
+    // A handle of an array takes over a pointer to the whole array as the
+    // pointer to its first element.
+    constexpr bool whole =
+        !Array && is_array_like_type_v<Target> && std::is_array_v<pointee>;
     auto &made = keeper.template keep<made_type>(
-        [&] { return made_type(*from.object); });
+        [&] { return made_type(adopted_pointer<whole>(*from.object)); });
     // The handle owns what the pointer points to now.
     from.released();
     return carrier<made_type, true>{std::addressof(made)};
