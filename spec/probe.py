@@ -142,6 +142,7 @@ def main():
         "registration, in every position")
     options = parser.parse_args()
     options.work.mkdir(parents=True, exist_ok=True)
+    driver.set_cache(options.work / "programs")
     flags = (shlex.split(options.flags) +
              driver.error_limit_flags(options.compiler))
     flags = driver.precompile_header(options.compiler, flags, options.work,
@@ -174,6 +175,7 @@ def main():
             lambda function, items: list(executor.map(function, items)))
     cells = report.write(options.output, apply_semantics(cells, units))
     write_report(options.output.with_suffix(".md"), cells, mismatches)
+    driver.finish_cache(prune=not options.only)
     return report.summarize(cells, mismatches,
                             options.output.with_suffix(".md"))
 

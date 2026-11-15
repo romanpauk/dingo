@@ -26,23 +26,35 @@ Run a quality target with `cmake --build build -t <target>`. The locked `uv`
 environment provides the development tools.
 
 - `format`: runs `sources-format` and `markdown-format`.
+
 - `sources-format`: formats the C++ files under `benchmark`, `examples`,
   `include` and `test`.
+
 - `sources-format-check`: verifies the same C++ files.
+
 - `markdown-format`: formats `README.md` and the Markdown files under `docs` and
   `docker`.
+
 - `markdown-format-check`: verifies the same Markdown files.
+
 - `format-check`: runs `sources-format-check` and `markdown-format-check`.
+
 - `layers-check`: verifies that a header includes only headers of lower layers
   or of its own directory. See
   [Header Layers](architecture/overview.md#header-layers).
+
 - `includes-compile`: compiles one generated translation unit for each public
   header.
+
 - `includes-tidy`: runs clang-tidy on those translation units.
+
 - `includes-check`: checks the includes of those translation units.
+
 - `check`: runs all verification targets that are available on the platform.
+
 - `complexity-report`: prints where the complexity of the headers is. It is a
   report, not part of `check`. See [Complexity Report](#complexity-report).
+
 - `semantics-check`: compares the semantics of the library, of no C++ type, with
   the specification, for every stored object and every request. See
   [Layered Semantics](architecture/layered-semantics.md). It compares each
@@ -50,17 +62,23 @@ environment provides the development tools.
   specification in `semantics/answers` of the build directory and makes them
   again when a source of `spec/` changes. A change of the library alone only
   compiles and runs the library's side, in seconds.
+
 - `semantics-check-pairs`: the same, and for every pair of layers a type could
   define: 1,669,960 pairs. It is not part of `check`.
+
 - `conversion-check`: checks what the binding of each registration plans for
   every request against the [Specification](specification.md#conversion-check).
+
 - `emptiness-check`: checks what each registration whose stored object holds no
   leaf gives the requests that are defined when a layer is empty, against the
   [Specification](specification.md#emptiness-check).
+
 - `storage-check`: checks the copies and the moves of the storage of each
   registration against the [Specification](specification.md#model-probe).
+
 - `resolution-check`: checks the copies and the moves when a leaf is passed on
   in each position, against the [Specification](specification.md#model-probe).
+
 - `model-check-small`, `model-check-medium`, `model-check-large`: run both model
   probes of the [Specification](specification.md). See
   [Model Checks](#model-checks).
@@ -71,10 +89,25 @@ With GCC and clang, `check` includes `semantics-check`, `conversion-check`,
 `sources-format*`, `includes-tidy` and `includes-check` targets need
 `DINGO_CLANG_TOOLS_ENABLED=ON` (the default).
 
-### Program Headers
+### Kept Results
+
+The checks that compile programs (`conversion-check`, `emptiness-check`,
+`storage-check`, `resolution-check`, the model checks and
+`spec/execution_check.py`) keep the result of each program in `programs/` of
+their work directory, compressed with zstd. As ccache does, a result is kept
+under a key of the compiler, the flags, the name of the program and the source
+the preprocessor makes of it. A program is compiled again only when one of them
+changes: a header changed, added or removed changes the preprocessed source of
+the programs that read it, and a change of comments only changes none. A result
+is not kept when a header the precompiled header read changed after it was
+compiled, as the compiler took that header as it was. The key holds no path of
+the checkout, so a cache made in one checkout serves another. A run of every
+program of a check removes the results it did not use, and each run prints how
+many programs it compiled and how many results it used.
 
 A program includes only the container and the scopes of its cells, and holds
-cells of one container and one scope, so it reads no other. The headers of the probes are split the
+cells of one container and one scope, so a change of one scope or one container
+compiles only the programs of it again. The headers of the probes are split the
 same way: `test/model/leaves.h` has the leaf types and no container,
 `test/model/probe.h` no container and no scope, and `test/model/static.h` what a
 static container adds.

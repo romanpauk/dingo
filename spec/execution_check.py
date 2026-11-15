@@ -94,6 +94,7 @@ def main():
     options = parser.parse_args()
     options.work.mkdir(parents=True, exist_ok=True)
     driver.set_jobs(options.jobs)
+    driver.set_cache(options.work / "programs")
     flags = shlex.split(options.flags)
     semantics_program = options.work / "semantics"
     subprocess.run(driver.compiler_command(
@@ -148,6 +149,7 @@ def main():
         print(f"  {name}: {error}")
     for name, want, got in differ[:20]:
         print(f"  {name}\n    plan    {want}\n    applied {got}")
+    driver.finish_cache(prune=not options.only)
     return 1 if differ or failed else 0
 
 
@@ -293,18 +295,13 @@ CELLS
 def run_part(options, flags, index, part):
     """Compiles and runs a part of the cells: those whose counts differ from
     their plans, and the program if it fails."""
-    source = options.work / f"execution_{index}.cpp"
-    source.write_text(PROGRAM.replace(
-        "CELLS", "\n".join(code for _, code, _ in part)))
-    program = options.work / f"execution_{index}"
+    source = PROGRAM.replace("CELLS", "\n".join(code for _, code, _ in part))
     test = str(Path(__file__).parents[1] / "test")
-    # Every compile waits for one of the compilers the driver allows at once.
-    with driver.COMPILES:
-        result = subprocess.run(driver.compiler_command(
-            options.compiler, *flags, "-I" + test, str(source), "-o",
-            str(program)), capture_output=True, text=True)
-    if result.returncode != 0:
-        if driver.EXHAUSTED.search(result.stderr) and len(part) > 1:
+    returncode, stderr, stdout, status = driver.compiled_run(
+        options.compiler, [*flags, "-I" + test], options.work,
+        f"execution_{index}", source)
+    if returncode != 0:
+        if driver.EXHAUSTED.search(stderr) and len(part) > 1:
             # Fewer cells take less memory: the halves are compiled apart.
             half = len(part) // 2
             found = [run_part(options, flags, f"{index}_{side}", cells)
@@ -312,12 +309,11 @@ def run_part(options, flags, index, part):
                                                    part[half:]))]
             return ([item for each in found for item in each[0]],
                     [item for each in found for item in each[1]])
-        return [], [(f"execution_{index}", driver.first_error(result.stderr))]
-    run = subprocess.run([str(program)], capture_output=True, text=True)
-    counts = run.stdout.splitlines()
-    if run.returncode != 0 or len(counts) != len(part):
+        return [], [(f"execution_{index}", driver.first_error(stderr))]
+    counts = stdout.splitlines()
+    if status != 0 or len(counts) != len(part):
         return [], [(f"execution_{index}",
-                     f"exited {run.returncode} after {len(counts)} cells")]
+                     f"exited {status} after {len(counts)} cells")]
     return [(name, cost, got) for (name, _, cost), got in zip(part, counts)
             if cost != got], []
 

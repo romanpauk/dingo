@@ -5,13 +5,25 @@ the program of a list of its probes from a template. The template
 marks the lines of each probe, `// probe N` before them and `// probes end`
 after the last, so that a compile error is told apart by probe: the
 compiler names the lines of the program an error was instantiated from.
+
+What a program does is kept, once set_cache names a directory: what it
+printed, or how it failed to compile, under a key of its compiler, its flags,
+its name and its source as the preprocessor makes it, as ccache does. A
+program is compiled again only when one of them changes: a header changed,
+added or removed changes the source the preprocessor makes of it, where the
+program reads it. The key holds no path of the checkout, so that what one
+checkout kept another finds. Each run notes the results it used, and
+finish_cache removes the others after a run of every program of a check.
 """
 
 import concurrent.futures
+import hashlib
+from compression import zstd
 import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -119,6 +131,156 @@ def compiler_command(compiler, *arguments):
             compiler, *arguments]
 
 
+# The directory the results of programs are kept in, or None; what this run
+# found of compilers; and the results this run used, and those it compiled.
+CACHE = None
+FOUND = {}
+FOUND_LOCK = threading.Lock()
+USED = set()
+COMPILED = []
+
+# How hard a kept result is compressed: past it, zstd makes it little smaller
+# and far slower.
+ZSTD_LEVEL = 9
+
+# The project, which no key holds the path of.
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def set_cache(directory):
+    """Keeps the results of programs in a directory."""
+    global CACHE
+    directory.mkdir(parents=True, exist_ok=True)
+    CACHE = directory
+
+
+def compiler_identity(compiler):
+    """What tells a compiler apart: the file it runs and what it says of
+    itself."""
+    with FOUND_LOCK:
+        if compiler in FOUND:
+            return FOUND[compiler]
+    executable = os.path.realpath(shutil.which(compiler) or compiler)
+    version = subprocess.run([compiler, "--version"], capture_output=True,
+                             text=True).stdout
+    identity = [hashlib.sha256(Path(executable).read_bytes()).hexdigest(),
+                version]
+    with FOUND_LOCK:
+        FOUND[compiler] = identity
+    return identity
+
+
+def without_root(text):
+    return text.replace(str(ROOT), "$ROOT")
+
+
+def key_flag(flag):
+    """A flag as a key holds it: an include path absolute, then of no path
+    of the checkout, so that a relative and an absolute one are the same."""
+    for prefix in ("-I", "-isystem", "-iquote"):
+        if flag.startswith(prefix) and len(flag) > len(prefix):
+            return prefix + without_root(os.path.abspath(flag[len(prefix):]))
+    return without_root(flag)
+
+
+def program_key(compiler, flags, directory, name, cpp):
+    """The key of a program written to cpp: of its compiler, its flags, its
+    name and directory, and the source the preprocessor makes of it, with no
+    line markers and no path of the checkout; None when it cannot be
+    preprocessed."""
+    with COMPILES:
+        run = subprocess.run(
+            compiler_command(compiler, *[flag for flag in flags
+                                         if flag != COMPILE_ONLY],
+                             "-E", "-P", str(cpp)),
+            capture_output=True)
+    if run.returncode != 0:
+        return None
+    return hashlib.sha256(json.dumps(
+        [compiler_identity(compiler), MEMORY_LIMIT,
+         [key_flag(flag) for flag in flags],
+         without_root(os.path.abspath(directory)), name,
+         hashlib.sha256(run.stdout).hexdigest()]).encode()).hexdigest()
+
+
+def kept_result(key):
+    """The result kept of a program, or None."""
+    try:
+        with zstd.open(CACHE / key[:2] / f"{key}.zst", "rt") as entry:
+            result = json.load(entry)
+    except (OSError, ValueError, zstd.ZstdError):
+        return None
+    with FOUND_LOCK:
+        USED.add(key)
+    return result
+
+
+def keep_result(key, result):
+    """Keeps the result of a program, written whole or not at all; not when
+    a file the precompiled header read changed since it was compiled, as the
+    compiler took that file as the header was then, which the key of the
+    program is not of."""
+    if not precompiled_current():
+        return
+    path = CACHE / key[:2] / f"{key}.zst"
+    path.parent.mkdir(exist_ok=True)
+    written = path.with_suffix(f".{threading.get_ident()}")
+    with zstd.open(written, "wt", level=ZSTD_LEVEL) as out:
+        json.dump(result, out)
+    written.replace(path)
+    with FOUND_LOCK:
+        USED.add(key)
+
+
+def finish_cache(prune):
+    """Prints how many programs this run compiled and how many results it
+    used as kept; when it prunes, as after a run of every program of a
+    check, removes the results it did not use, so that what is kept is what
+    the next run may use."""
+    if CACHE is None:
+        return
+    kept = len(USED - set(COMPILED))
+    print(f"programs: {len(COMPILED)} compiled, {kept} kept")
+    if prune:
+        for path in CACHE.glob("??/*.zst"):
+            if path.stem not in USED:
+                path.unlink()
+
+
+def compiled_run(compiler, flags, directory, name, source):
+    """Compiles a program and runs it, unless compiled only; returns
+    (returncode, stderr, stdout, status): how the compile ended and what it
+    reported, and what the program printed and how it exited. Every result
+    is kept: a compile of the same source in the same memory, and a program
+    of it, end alike."""
+    cpp = directory / f"{name}.cpp"
+    exe = directory / name
+    cpp.write_text(source)
+    key = (program_key(compiler, flags, directory, name, cpp)
+           if CACHE is not None else None)
+    kept = kept_result(key) if key is not None else None
+    if kept is not None:
+        return tuple(kept)
+    with FOUND_LOCK:
+        COMPILED.append(key)
+    precompiled()
+    output = [] if compiles_only(flags) else ["-o", str(exe)]
+    with COMPILES:
+        returncode, stderr = run_compiler(
+            compiler_command(compiler, *flags, str(cpp), *output))
+    if returncode != 0 or compiles_only(flags):
+        result = (returncode, stderr, "", 0)
+        if key is not None:
+            keep_result(key, result)
+        return result
+    run = subprocess.run([str(exe)], capture_output=True, text=True)
+    exe.unlink()
+    result = (0, stderr, run.stdout, run.returncode)
+    if key is not None:
+        keep_result(key, result)
+    return result
+
+
 def program_headers(scopes, containers=()):
     """The headers a program includes after the header of its family: of each
     scope and each container its cells use, so that it reads no other; a
@@ -170,31 +332,22 @@ def build_and_run(compiler, flags, directory, name, source):
     """Compiles and runs one program; returns (records, stderr, crash): the
     records it printed, the compiler output when it did not compile, and how
     it exited when it crashed."""
-    cpp = directory / f"{name}.cpp"
-    exe = directory / name
-    cpp.write_text(source)
-    output = [] if compiles_only(flags) else ["-o", str(exe)]
-    with COMPILES:
-        returncode, stderr = run_compiler(
-            compiler_command(compiler, *flags, str(cpp), *output))
-    exhausted = returncode != 0 and EXHAUSTED.search(stderr)
+    returncode, stderr, stdout, status = compiled_run(
+        compiler, flags, directory, name, source)
     if returncode != 0:
-        if exhausted:
+        if EXHAUSTED.search(stderr):
             # What it reported before is not all it would, and names no probe.
             return None, OUT_OF_MEMORY, None
         return None, stderr, None
     if compiles_only(flags):
         return [], None, None
-    run = subprocess.run([str(exe)], capture_output=True, text=True)
-    exe.unlink()
     try:
-        records = [json.loads(line) for line in run.stdout.splitlines()
-                   if line]
+        records = [json.loads(line) for line in stdout.splitlines() if line]
     except json.JSONDecodeError:
         # A record the program could not print is a crash of its probe.
         return [], None, f"{CRASH} a malformed record"
-    if run.returncode != 0:
-        return records, None, f"{CRASH} {run.returncode}"
+    if status != 0:
+        return records, None, f"{CRASH} {status}"
     return records, None, None
 
 
@@ -415,17 +568,65 @@ def error_limit_flags(compiler):
     return ["-ferror-limit=0"] if "clang" in result.stdout else []
 
 
+# The compile of the precompiled header of this run, made before the first
+# program is compiled, or None once made.
+PRECOMPILE = None
+PRECOMPILE_LOCK = threading.Lock()
+
+
 def precompile_header(compiler, flags, work, header):
-    """Precompiles model/<header>, which every program of a family includes
-    first, and returns the include path that finds it first; no path when the
-    compiler cannot. The headers are copied, so that the one a program
-    includes is the one precompiled."""
+    """Prepares model/<header>, which every program of a family includes
+    first, to be precompiled, and returns the include path that finds it
+    first. It is compiled before the first program is, so that a run that
+    compiles none does not compile it either; the preprocessor reads the
+    header itself. The headers are copied, so that the one a program
+    includes is the one precompiled; a compiler that cannot precompile it
+    reads the copy."""
+    global PRECOMPILE
     directory = work / "pch"
     (directory / "model").mkdir(parents=True, exist_ok=True)
     for path in HEADERS.glob("*.h"):
         (directory / "model" / path.name).write_text(path.read_text())
     copy = directory / "model" / header
-    result = subprocess.run(
-        compiler_command(compiler, *flags, "-x", "c++-header", str(copy),
-                         "-o", str(copy) + ".gch"), capture_output=True)
-    return [f"-I{directory}"] if result.returncode == 0 else []
+    gch = Path(str(copy) + ".gch")
+    if gch.exists():
+        gch.unlink()
+    PRECOMPILE = compiler_command(compiler, *flags, "-x", "c++-header",
+                                  str(copy), "-o", str(gch))
+    return [f"-I{directory}"]
+
+
+# The size and the time of change of each file the precompiled header of
+# this run read, as it was compiled.
+PRECOMPILED_FILES = {}
+
+
+def stamp(path):
+    try:
+        found = os.stat(path)
+    except OSError:
+        return None
+    return found.st_size, found.st_mtime_ns
+
+
+def precompiled():
+    """Compiles the precompiled header, once, before a program is, and notes
+    the files it read."""
+    global PRECOMPILE
+    with PRECOMPILE_LOCK:
+        if PRECOMPILE is not None:
+            depfile = Path(PRECOMPILE[-1] + ".d")
+            subprocess.run([*PRECOMPILE, "-MD", "-MF", str(depfile)],
+                           capture_output=True)
+            if depfile.exists():
+                text = depfile.read_text().replace("\\\n", " ")
+                depfile.unlink()
+                for name in text.partition(": ")[2].split():
+                    PRECOMPILED_FILES[name] = stamp(name)
+            PRECOMPILE = None
+
+
+def precompiled_current():
+    """Whether every file the precompiled header read is as it was."""
+    return all(stamp(name) == found
+               for name, found in PRECOMPILED_FILES.items())

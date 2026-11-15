@@ -73,6 +73,7 @@ def main():
         "of them")
     options = parser.parse_args()
     options.work.mkdir(parents=True, exist_ok=True)
+    driver.set_cache(options.work / "programs")
     flags = (shlex.split(options.flags) +
              driver.error_limit_flags(options.compiler))
     flags = driver.precompile_header(options.compiler, flags, options.work,
@@ -93,6 +94,7 @@ def main():
     cells = report.write(options.output, apply_limitations(cells, selected))
     disagreeing = disagreements(cells, selected)
     write_report(options.output.with_suffix(".md"), cells, disagreeing)
+    driver.finish_cache(prune=not options.only)
     return report.summarize(cells, disagreeing,
                             options.output.with_suffix(".md"))
 
