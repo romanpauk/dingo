@@ -13,6 +13,13 @@ request. A binding answers each cell:
 A published or placed request the specification resolves in no position is
 unexpected, and so is one that is not published although the specification
 resolves it for the caller; both are defects. Both containers plan alike.
+
+Each cell also records how C++ itself builds the request from what the
+binding holds. A request C++ builds that the specification, without the
+limitations of the library, resolves nowhere is unexpected, unless the
+specification refuses it on purpose; so is one it refuses on purpose and
+resolves.
+
 How a plan copies and moves the leaf is what spec/execution_check.py checks.
 
 No container is made and nothing resolves, so every registration is checked,

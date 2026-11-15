@@ -284,6 +284,41 @@ the library:
 - The alternative type of a probe never holds its other alternative, so the
   check compares the other alternative as a copyable type of its own.
 
+The check also compares the specification with C++ itself. For each cell, the
+program records how C++ builds the request from what the binding holds, without
+the library. The source is the stored object, or an object that it dereferences
+to, down to the leaf. An array is not dereferenced. The request owns the stored
+object of a unique scope. It also owns what a `std::unique_ptr`, a
+`std::optional` or a raw pointer that it owns holds. C++ builds a request in one
+of these ways:
+
+- It binds a reference or a pointer to the source without a temporary. An rvalue
+  reference binds only to a source that the request owns. A pointer can also be
+  what an array decays to.
+- It moves a source that the request owns into a value, by an implicit
+  conversion.
+- It copies a source that the request does not own into a value, by an implicit
+  conversion.
+- It copies such a source into a new `std::optional`.
+
+A request that C++ builds must resolve in some position in the specification
+without the limitations of the library. A limitation of the library is not a
+defect here. The exception is a request that the specification refuses on
+purpose, for every way that C++ builds it
+([`spec/generator/conversions.py`](../spec/generator/conversions.py),
+`REFUSALS`):
+
+- A new layer does not hold a copy of an instance, or a copy of a value that
+  shares nothing.
+- A cyclical scope publishes its instance before it constructs it. A request can
+  refer to the stored object and to what the stored object holds in place. It
+  can copy only a stored handle.
+- An rvalue reference is answered by a value moved out of what the request owns.
+  An immovable leaf, or an optional of one, cannot be moved.
+
+A request that the specification refuses on purpose and still resolves is a
+defect too.
+
 Another outcome is `unexpected`. The check fails on an `unexpected` cell and on
 a registration that does not compile. The [Model Probe](#model-probe) checks
 what resolving a request does, and `spec/execution_check.py` the copies and the
