@@ -7,13 +7,13 @@
 
 #pragma once
 
+#include <dingo/base/exceptions.h>
 #include <dingo/lookup/storage.h>
 #include <dingo/lookup/tags.h>
 
 #include <array>
 #include <cstddef>
 #include <optional>
-#include <stdexcept>
 #include <type_traits>
 #include <vector>
 
@@ -114,7 +114,7 @@ private:
   static std::size_t checked_index(const Key &key) {
     auto index = to_index(key);
     if (!index) {
-      throw std::out_of_range("dingo array lookup key out of range");
+      throw lookup_key_out_of_range_exception("array lookup key out of range");
     }
     return *index;
   }
@@ -209,7 +209,7 @@ private:
   static std::size_t checked_index(const Key &key) {
     auto index = to_index(key);
     if (!index) {
-      throw std::out_of_range("dingo array lookup key out of range");
+      throw lookup_key_out_of_range_exception("array lookup key out of range");
     }
     return *index;
   }

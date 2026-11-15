@@ -10,7 +10,6 @@
 #include <dingo/base/config.h>
 
 #include <cstdint>
-#include <string>
 #include <string_view>
 #include <type_traits>
 
@@ -54,7 +53,8 @@ constexpr bool operator==(type_descriptor lhs, type_descriptor rhs) {
 
 template <typename T> constexpr std::string_view raw_type_name();
 template <typename T> constexpr type_descriptor describe_type();
-inline void append_type_name(std::string &name, type_descriptor descriptor);
+template <typename Text>
+void append_type_name(Text &name, type_descriptor descriptor);
 
 namespace detail {
 
@@ -240,8 +240,9 @@ template <typename T>
 inline constexpr type_descriptor type_descriptor_v =
     type_descriptor_of<T>::value;
 
-inline void append_type_cv(std::string &name, type_cv_flags flags,
-                           std::string_view separator = " ") {
+template <typename Text>
+void append_type_cv(Text &name, type_cv_flags flags,
+                    std::string_view separator = " ") {
   if (has_cv_flag(flags, type_cv_flags::is_const)) {
     name += separator;
     name += "const";
@@ -254,8 +255,8 @@ inline void append_type_cv(std::string &name, type_cv_flags flags,
   }
 }
 
-inline void append_described_type_name(std::string &name,
-                                       type_descriptor descriptor) {
+template <typename Text>
+void append_described_type_name(Text &name, type_descriptor descriptor) {
   if (descriptor.pointee != nullptr) {
     append_described_type_name(name, *descriptor.pointee);
     name += "*";
@@ -304,7 +305,9 @@ template <typename T> constexpr type_descriptor describe_type() {
   return detail::described_type_v<T>;
 }
 
-inline void append_type_name(std::string &name, type_descriptor descriptor) {
+// Appends the name of a type to a text that appends a std::string_view.
+template <typename Text>
+void append_type_name(Text &name, type_descriptor descriptor) {
   detail::append_described_type_name(name, descriptor);
 }
 

@@ -256,7 +256,7 @@ TEST(associative_backend_test, array_one_uses_dense_key_lookup) {
   EXPECT_THROW((container.template register_type<
                    scope<shared>, storage<out_of_range_processor>,
                    interfaces<processor>>(dingo::key_value{std::size_t(4)})),
-               std::out_of_range);
+               lookup_key_out_of_range_exception);
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(3)).id(), 1);
   EXPECT_THROW((container.template resolve<processor &>(std::size_t(4))),
                type_not_found_exception);
@@ -284,7 +284,7 @@ TEST(associative_backend_test,
   EXPECT_THROW((container.template register_type<
                    scope<shared>, storage<out_of_range_processor>,
                    interfaces<processor>>(dingo::key_value{std::size_t(1)})),
-               std::out_of_range);
+               lookup_key_out_of_range_exception);
   EXPECT_THROW((container.template resolve<processor &>(std::size_t(1))),
                type_not_found_exception);
 
@@ -355,7 +355,7 @@ TEST(associative_backend_test, array_many_uses_dense_key_rows) {
   EXPECT_THROW((container.template register_type<
                    scope<shared>, storage<out_of_range_processor>,
                    interfaces<processor>>(dingo::key_value{std::size_t(4)})),
-               std::out_of_range);
+               lookup_key_out_of_range_exception);
 }
 
 TEST(associative_backend_test,
@@ -380,7 +380,7 @@ TEST(associative_backend_test,
   EXPECT_THROW((container.template register_type<
                    scope<shared>, storage<out_of_range_processor>,
                    interfaces<processor>>(dingo::key_value{std::size_t(1)})),
-               std::out_of_range);
+               lookup_key_out_of_range_exception);
   ASSERT_TRUE(
       container.template resolve<std::vector<processor *>>(std::size_t(1))
           .empty());

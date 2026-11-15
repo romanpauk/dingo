@@ -19,7 +19,6 @@
 #include <cstddef>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -76,10 +75,14 @@ public:
 
   const type_descriptor *active_type() const;
 
-  void append_type_path(std::string &message) const;
+  void append_type_path(message_text &message) const;
 
 protected:
   friend class resolving_frame;
+
+  // The types of the frames from the outermost to a frame.
+  static void append_frames(message_text &message,
+                            const resolving_frame &frame);
 
   detail::resolving_frame *active_resolving_frame_ = nullptr;
 };
@@ -120,18 +123,18 @@ inline const type_descriptor *context_path_state::active_type() const {
                                             : nullptr;
 }
 
-inline void context_path_state::append_type_path(std::string &message) const {
-  std::vector<type_descriptor> names;
-  for (auto *frame = active_resolving_frame_; frame != nullptr;
-       frame = frame->parent_) {
-    names.emplace_back(frame->type_);
+inline void context_path_state::append_frames(message_text &message,
+                                              const resolving_frame &frame) {
+  if (frame.parent_ != nullptr) {
+    append_frames(message, *frame.parent_);
+    message += " -> ";
   }
+  append_type_name(message, frame.type_);
+}
 
-  for (auto it = names.rbegin(); it != names.rend(); ++it) {
-    if (it != names.rbegin()) {
-      message += " -> ";
-    }
-    append_type_name(message, *it);
+inline void context_path_state::append_type_path(message_text &message) const {
+  if (active_resolving_frame_ != nullptr) {
+    append_frames(message, *active_resolving_frame_);
   }
 }
 
