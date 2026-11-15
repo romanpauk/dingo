@@ -1,18 +1,22 @@
 // Answers the requests spec/semantics_check.py gives on its standard input by
 // the semantics of the library (dingo/semantics/model.h), one line for each:
-// for every category and lifetime, the fewest copies and moves of the leaf
-// of what satisfies the request, or "-" when nothing does.
+// for every category and lifetime, the cost of what satisfies the request at
+// the least cost: the copies and the moves of the leaf, whether it may be
+// absent, the objects kept and made; or "-" when nothing does.
 //
 // The first line is the layers of C++ itself as the specification describes
 // them, which have to be those of the library; the second the standard layers
 // it describes, which have to be those the library classifies the standard
 // wrappers as. A request is a line of
-// numbers: the limitations, the leaf (copyable, movable), the scope (makes,
-// publishes early), whether the abstract interface is requested, the layers
-// of the universe after those of C++ itself, the stored object (its depth,
-// its layers, its element, its lifetime, its origin) and the request (its
-// depth, its layers, its element). A layer is its properties, as
-// layer_kind declares them.
+// numbers: the limitations, the leaf (copyable, movable, default
+// constructible, copies a volatile one), the scope (makes, publishes early),
+// whether the abstract interface is requested, the layers of the universe
+// after those of C++ itself, the stored object (its depth, its layers, its
+// element, its lifetime, its origin, the qualifiers of each level, whether
+// the request owns what its outer pointer points to) and the
+// request (its depth, its layers, its element, the qualifiers of each level,
+// the depth of its shape). A layer is its properties, as layer_kind declares
+// them.
 
 #include <dingo/request/classification.h>
 #include <dingo/semantics/model.h>
@@ -39,8 +43,20 @@ using standard = dingo::detail::layer_universe<dingo::type_list<
 
 bool read(unsigned &value) { return std::scanf("%u", &value) == 1; }
 
+// The qualifiers of each level of a stack of a depth.
+bool read_quals(std::uint8_t *quals, std::size_t depth) {
+  for (std::size_t index = 0; index <= depth; ++index) {
+    unsigned value = 0;
+    if (!read(value) || value > 3) {
+      return false;
+    }
+    quals[index] = static_cast<std::uint8_t>(value);
+  }
+  return true;
+}
+
 bool read_kind(layer_kind &kind) {
-  unsigned values[16] = {};
+  unsigned values[17] = {};
   for (unsigned &value : values) {
     if (!read(value)) {
       return false;
@@ -53,11 +69,12 @@ bool read_kind(layer_kind &kind) {
                    &kind.bounded,         &kind.may_be_empty,
                    &kind.has_empty_value, &kind.adopts,
                    &kind.decays,          &kind.adopted,
-                   &kind.adopted_array,   &kind.rebinds};
-  for (unsigned index = 0; index < 14; ++index) {
+                   &kind.adopted_array,   &kind.rebinds,
+                   &kind.observes};
+  for (unsigned index = 0; index < 15; ++index) {
     *flags[index] = values[index + 1] != 0;
   }
-  kind.converts = values[15];
+  kind.converts = values[16];
   return true;
 }
 
@@ -70,13 +87,12 @@ bool same(const layer_kind &a, const layer_kind &b) {
          a.has_empty_value == b.has_empty_value && a.adopts == b.adopts &&
          a.decays == b.decays && a.adopted == b.adopted &&
          a.adopted_array == b.adopted_array && a.rebinds == b.rebinds &&
-         a.converts == b.converts;
+         a.observes == b.observes && a.converts == b.converts;
 }
 
 // Whether a plan replays: each of its steps is a step the semantics take
-// from the thing before it, to the thing after it, and the copies and the
-// moves of the leaf of the steps and of how the last thing satisfies the
-// request are those of the answer.
+// from the thing before it, to the thing after it, and the cost of the steps
+// and of how the last thing satisfies the request is that of the answer.
 bool replays(const plan &made, const context &with, const answer &result) {
   if (!made.found) {
     return false;
@@ -96,7 +112,8 @@ bool replays(const plan &made, const context &with, const answer &result) {
     if (!found) {
       return false;
     }
-    so_far = affected(so_far, effect_of(made.steps[index], from, with));
+    so_far =
+        stepped(so_far, made.steps[index], from, made.things[index + 1], with);
   }
   const thing &last = made.things[made.count];
   const bool anew = makes_leaf_anew(last, with);
@@ -128,7 +145,8 @@ bool read_layers(layer *layers, std::uint8_t &depth) {
 int main(int count, char **arguments) {
   // With "plans", a line of plans for each request instead of its answers:
   // for each category, of the lifetime of the request, how it is satisfied
-  // and each step with the layer it makes, or "-".
+  // and each step with the layer it makes, or "-". A plan is of what the
+  // binding publishes, as the containers plan.
   const bool plans =
       count > 1 && arguments[1][0] == 'p' && arguments[1][1] == 'l';
   // With "rules", for each category, position, entry point, whether the
@@ -139,7 +157,8 @@ int main(int count, char **arguments) {
   // With "split", the answers of the search of what the binding publishes,
   // then of the steps the request takes from it.
   const bool split =
-      count > 1 && arguments[1][0] == 's' && arguments[1][1] == 'p';
+      count > 1 &&
+      ((arguments[1][0] == 's' && arguments[1][1] == 'p') || plans);
   const universe language;
   unsigned language_count = 0;
   if (!read(language_count) || language_count != language.count) {
@@ -172,9 +191,9 @@ int main(int count, char **arguments) {
   }
   for (;;) {
     unsigned limits = 0, copyable = 0, movable = 0, constructible = 0,
-             makes = 0, early = 0, abstract = 0, made = 0, start_element = 0,
-             start_lifetime = 0, start_origin = 0, goal_element = 0,
-             shape_depth = 0;
+             copies_volatile = 0, makes = 0, early = 0, abstract = 0, made = 0,
+             start_element = 0, start_owns = 0, start_lifetime = 0,
+             start_origin = 0, goal_element = 0, shape_depth = 0;
     if (!read(limits)) {
       return 0;
     }
@@ -182,8 +201,8 @@ int main(int count, char **arguments) {
     thing start;
     request goal;
     if (!read(copyable) || !read(movable) || !read(constructible) ||
-        !read(makes) || !read(early) || !read(abstract) || !read(made) ||
-        made > max_kinds - layers.count) {
+        !read(copies_volatile) || !read(makes) || !read(early) ||
+        !read(abstract) || !read(made) || made > max_kinds - layers.count) {
       std::fprintf(stderr, "malformed request\n");
       return 1;
     }
@@ -197,8 +216,9 @@ int main(int count, char **arguments) {
     }
     if (!read_layers(start.layers, start.depth) || !read(start_element) ||
         !read(start_lifetime) || !read(start_origin) ||
+        !read_quals(start.quals, start.depth) || !read(start_owns) ||
         !read_layers(goal.layers, goal.depth) || !read(goal_element) ||
-        !read(shape_depth)) {
+        !read_quals(goal.quals, goal.depth) || !read(shape_depth)) {
       std::fprintf(stderr, "malformed request\n");
       return 1;
     }
@@ -207,10 +227,12 @@ int main(int count, char **arguments) {
       start.lifetimes[index] = static_cast<lifetime>(start_lifetime);
     }
     start.from = static_cast<origin>(start_origin);
+    start.owns_pointee = start_owns != 0;
     start.instance = true;
     goal.of = static_cast<element>(goal_element);
     goal.shape_depth = static_cast<std::uint8_t>(shape_depth);
-    const context with{{copyable != 0, movable != 0, constructible != 0},
+    const context with{{copyable != 0, movable != 0, constructible != 0, false,
+                        copies_volatile != 0},
                        {makes != 0, false, early != 0},
                        abstract != 0,
                        static_cast<std::uint8_t>(limits),
@@ -279,7 +301,9 @@ int main(int count, char **arguments) {
         if (result.found && !replays(plan_of(found, result), with, result)) {
           std::printf("replay ");
         } else if (result.found) {
-          std::printf("%u,%u ", result.fewest.copies, result.fewest.moves);
+          std::printf("%u,%u,%u,%u,%u ", result.fewest.copies,
+                      result.fewest.moves, result.absent ? 1u : 0u,
+                      result.fewest.kept, result.fewest.made);
         } else {
           std::printf("- ");
         }

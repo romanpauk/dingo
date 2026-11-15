@@ -77,6 +77,9 @@ class Layer:
     # Whether an empty one is a value of its own, which an empty layer
     # around it gives.
     has_empty_value: bool = False
+    # Whether it is made of a raw pointer to its element, which it does not
+    # own, as an observer handle is.
+    observes: bool = False
 
 
 LAYERS = {layer.name: layer for layer in (
@@ -138,6 +141,11 @@ def possible(layer):
     # A layer the leaf is rebound to the interface in holds it apart.
     if layer.rebinds and not layer.shares_element:
         return False
+    # A layer made of a pointer it does not own owns nothing, and holds none
+    # when the pointer is null.
+    if layer.observes and (layer.owner is not Owner.NONE or
+                           not layer.may_be_empty):
+        return False
     return layer.may_be_empty or not layer.has_empty_value
 
 
@@ -157,6 +165,8 @@ class LeafTraits:
     # registration names makes it.
     default_constructible: bool = True
     made_by_factory: bool = False
+    # Whether a volatile one can be copied, as a scalar can.
+    copies_volatile: bool = False
 
 
 LEAVES = {
@@ -272,6 +282,15 @@ class Thing:
       fails when the layer is empty
     full: how many of its outer layers hold their element for sure, as a
       layer the derivation made of a value does
+    quals: the qualifiers of each layer and of the element, outermost
+      first, as a mask of CONST and VOLATILE: of the outermost as it is
+      reached, of the others as the type of the layer above declares them
+    owns_pointee: whether the request owns what its outer raw pointer points
+      to, which it deletes or hands over: what a pointer a scope makes, or a
+      copy of it, points to
+    made_layer: whether the derivation made its outer layer of a value or of
+      a pointer, which it makes as the layer it needs at once, and so never
+      converts
     """
     layers: tuple
     element: str
@@ -282,11 +301,38 @@ class Thing:
     unconstructed: bool = False
     absent: bool = False
     full: int = 0
+    quals: tuple = None
+    owns_pointee: bool = False
+    made_layer: bool = False
+
+    def __post_init__(self):
+        if self.quals is None:
+            object.__setattr__(self, "quals", (0,) * (len(self.layers) + 1))
 
     @property
     def lifetime(self):
         return self.lifetimes[0]
 
+
+# The qualifiers of an object.
+CONST = 1
+VOLATILE = 2
+
+
+def held_quals(thing, layer):
+    """The qualifiers of the element of the outer layer of a thing: as the
+    layer declares them, and those of the layer too when it holds the element
+    in place, as an optional or an array does."""
+    inherited = 0 if layer.shares_element else thing.quals[0]
+    return thing.quals[1] | inherited
+
+
+def anew_quals(thing):
+    """The qualifiers of what a copy or a move of a thing makes anew, with
+    whether each is the element."""
+    depth = copied_layers(thing.layers)
+    return [(quals, level == len(thing.layers))
+            for level, quals in enumerate(thing.quals[:depth])]
 
 @dataclass(frozen=True)
 class Context:
@@ -322,19 +368,22 @@ def makes_storage(form, context):
                 outer.shares_element)
 
 
-def source(scope, form, interfaces=InterfaceSet.DEFAULT):
-    """What a resolution of the scope starts from: the stored object. A
-    pointer or a handle of the leaf a registration binds only to its abstract
-    interface is stored as one of the interface."""
+def source(scope, form, interfaces=InterfaceSet.DEFAULT, quals=None):
+    """What a resolution of the scope starts from: the stored object, of the
+    qualifiers its type declares. A pointer or a handle of the leaf a
+    registration binds only to its abstract interface is stored as one of
+    the interface."""
     layers = FORMS[form]
     traits = SCOPES[scope]
     lifetime = Lifetime.REQUEST if traits.makes else Lifetime.STABLE
     rebound = (interfaces is InterfaceSet.INTERFACE and len(layers) == 1 and
                LAYERS[layers[0]].rebinds)
+    pointer = bool(layers) and LAYERS[layers[0]].adopted_with is not None
     return Thing(layers, "interface" if rebound else "leaf",
                  (lifetime,) * (len(layers) + 1),
                  Origin.MADE if traits.makes else Origin.BORROWED,
-                 instance=True)
+                 instance=True, quals=quals,
+                 owns_pointee=traits.makes and pointer)
 
 
 # What can be done with a thing.
@@ -377,17 +426,22 @@ def slices(thing):
 
 
 def can_copy(thing, context):
+    """Whether a thing can be copied: what a copy makes anew can be, and
+    none of it is volatile, but a leaf that copies a volatile one."""
     return not slices(thing) and stack_can(
         thing.layers, lambda layer: layer.copyable,
-        copies_element(thing, context))
+        copies_element(thing, context)) and all(
+            not quals & VOLATILE or (element and context.leaf.copies_volatile)
+            for quals, element in anew_quals(thing))
 
 
 def can_move(thing, context):
     """Whether a thing can be moved: a pointer or a handle can, an array
     cannot, and an optional or an alternative type can when what it holds
-    can."""
+    can. A const or a volatile object is not moved from."""
     return stack_can(thing.layers, lambda layer: layer.relocatable,
-                     context.leaf.movable)
+                     context.leaf.movable) and all(
+                         not quals for quals, _ in anew_quals(thing))
 
 
 # The deepest stack a derivation makes: a request has at most SHAPE_DEPTH
@@ -405,6 +459,16 @@ def transitions(thing, context):
     if layers:
         layer = LAYERS[layers[0]]
         below = layers[1:]
+        if layer.adopted_with == () and not thing.owns_pointee:
+            # A handle that does not own its element, made of a raw pointer
+            # to it that owns nothing either: a new object, which points to
+            # what the pointer does.
+            for name in (name for name in context.universe
+                         if LAYERS[name].observes):
+                yield "observe", replace(
+                    thing, layers=(name,) + below, origin=Origin.MADE,
+                    lifetimes=(Lifetime.REQUEST,) + thing.lifetimes[1:],
+                    quals=(0,) + thing.quals[1:], made_layer=True)
         if layer.decays_to:
             # An array decays to a pointer to its first element, which owns
             # it when the request owns the array. An array a scope makes is
@@ -412,12 +476,16 @@ def transitions(thing, context):
             # element.
             yield "decay", replace(
                 thing, layers=(layer.decays_to,) + below,
-                lifetimes=(Lifetime.REQUEST,) + thing.lifetimes[1:])
+                lifetimes=(Lifetime.REQUEST,) + thing.lifetimes[1:],
+                quals=(0, held_quals(thing, layer)) + thing.quals[2:],
+                owns_pointee=thing.origin is Origin.MADE, made_layer=False)
             if thing.origin is Origin.MADE:
                 yield "hand_over", replace(
                     thing, layers=(POINTER,) + layers,
-                    lifetimes=(Lifetime.REQUEST,) + thing.lifetimes)
-        elif layer.adopted_with is not None and thing.origin is Origin.MADE:
+                    lifetimes=(Lifetime.REQUEST,) + thing.lifetimes,
+                    quals=(0,) + thing.quals, owns_pointee=True,
+                    made_layer=False)
+        elif layer.adopted_with is not None and thing.owns_pointee:
             # A raw pointer the request owns, not a copy of one the scope
             # keeps, owns its element: it is handed over as a pointer, or
             # taken over by a handle, of an array when it points to one.
@@ -426,8 +494,13 @@ def transitions(thing, context):
                 yield "adopt", replace(
                     thing, layers=(handle,) + layer.adopted_with + below,
                     lifetimes=(Lifetime.REQUEST,) *
-                    (1 + len(layer.adopted_with)) + thing.lifetimes[1:])
-        elif layer.gives_element:
+                    (1 + len(layer.adopted_with)) + thing.lifetimes[1:],
+                    quals=(0,) * (1 + len(layer.adopted_with)) +
+                    thing.quals[1:], origin=Origin.MADE, owns_pointee=False,
+                    made_layer=True)
+        elif layer.gives_element and not thing.full:
+            # A layer the derivation wrapped a value in is not taken apart:
+            # its element is what it was made of, as it was.
             # The element of a pointer or a handle lives as long as it is
             # held; it is owned by the request only when it owns the layer
             # and the layer owns its element alone. The element of a copy of
@@ -443,18 +516,23 @@ def transitions(thing, context):
                                thing.instance and bool(below)),
                 absent=thing.absent or (layer.may_be_empty and
                                         not thing.full),
-                full=max(thing.full - 1, 0))
+                full=max(thing.full - 1, 0),
+                quals=(held_quals(thing, layer),) + thing.quals[2:],
+                owns_pointee=False, made_layer=False)
             yield "element", element
             if (layer.may_be_empty and not thing.full and
                     layer.adopted_with is None):
                 yield from empty_safe_steps(thing, element, context)
         # A handle the request owns converts to another, sharing or taking
-        # over its element.
-        if thing.origin.owned:
+        # over its element; not one the derivation made, which it makes as
+        # the other at once.
+        if (thing.origin.owned and not thing.quals[0] and
+                not thing.made_layer):
             for name in layer.converts_to:
                 yield "convert", replace(
                     thing, layers=(name,) + below,
-                    lifetimes=(Lifetime.REQUEST,) + thing.lifetimes[1:])
+                    lifetimes=(Lifetime.REQUEST,) + thing.lifetimes[1:],
+                    quals=(0,) + thing.quals[1:])
     # A leaf is one of its interface too, as the base it is. A pointer or a
     # handle of it converts to one of the interface: a new pointer or handle,
     # which the binding retains for what it keeps, or which takes over one the
@@ -468,14 +546,22 @@ def transitions(thing, context):
             if len(layers) == 1 and outer.shares_element:
                 yield "upcast", replace(thing, element="interface",
                                         layers=(POINTER,),
-                                        origin=Origin.BORROWED)
-        elif outer is None or (len(layers) == 1 and outer.shares_element and
-                               outer.copyable):
+                                        origin=Origin.BORROWED,
+                                        owns_pointee=False)
+        elif outer is None:
+            # The leaf as the base it is: the same object.
             yield "upcast", replace(thing, element="interface")
-        elif len(layers) == 1 and outer.shares_element and thing.origin.owned:
+        elif (len(layers) == 1 and outer.shares_element and
+              outer.copyable and not thing.quals[0] & VOLATILE):
+            # A new pointer or handle of the interface.
+            yield "upcast", replace(thing, element="interface",
+                                    quals=(0,) + thing.quals[1:])
+        elif (len(layers) == 1 and outer.shares_element and
+              thing.origin.owned and not thing.quals[0]):
             yield "upcast", replace(
                 thing, element="interface",
-                lifetimes=(Lifetime.REQUEST,) + thing.lifetimes[1:])
+                lifetimes=(Lifetime.REQUEST,) + thing.lifetimes[1:],
+                quals=(0,) + thing.quals[1:])
         elif len(layers) > 1:
             # A copy of the layers above the handle that holds the leaf, the
             # first of them to share it, holds a handle of the interface: a
@@ -483,12 +569,14 @@ def transitions(thing, context):
             # leaf is not one of a handle of the interface.
             depth = copied_layers(layers)
             if depth == len(layers) and all(
-                    LAYERS[name].copyable for name in layers):
+                    LAYERS[name].copyable for name in layers) and all(
+                        not quals & VOLATILE for quals in thing.quals[:depth]):
                 yield "upcast", replace(
                     thing, element="interface", origin=Origin.COPIED,
                     instance=False,
                     lifetimes=(Lifetime.REQUEST,) * depth +
-                    thing.lifetimes[depth:])
+                    thing.lifetimes[depth:],
+                    quals=(0,) + thing.quals[1:])
     # A copy: a new object the request owns. What a layer that shares its
     # element holds is not copied: the copy still holds the instance.
     if can_copy(thing, context):
@@ -496,7 +584,8 @@ def transitions(thing, context):
         yield "copy", replace(
             thing, lifetimes=(Lifetime.REQUEST,) * depth +
             thing.lifetimes[depth:], origin=Origin.COPIED,
-            instance=thing.instance and depth <= len(layers))
+            instance=thing.instance and depth <= len(layers),
+            quals=(0,) + thing.quals[1:])
     # A new layer holding what the request owns, moved into it: a value it
     # made, or a copy that shares what it was copied of, such as a copy of a
     # shared handle. What a scope keeps, or a copy of a value that shares
@@ -504,9 +593,12 @@ def transitions(thing, context):
     # instance, nor share one that no handle owns. A layer holding a copy
     # that shares what the scope or the caller keeps is kept with it, as the
     # copy in it is: the binding retains it.
+    # A raw pointer that owns what it points to is not: it is handed over,
+    # or taken over by a handle.
     shares = thing.origin is Origin.COPIED and thing.instance
     if ((thing.origin is Origin.MADE or shares) and
-            can_move(thing, context) and len(layers) < DEPTH):
+            can_move(thing, context) and len(layers) < DEPTH and
+            not thing.owns_pointee):
         depth = copied_layers(layers)
         if shares and thing.lifetimes[depth] is Lifetime.STABLE:
             lifetimes = ((Lifetime.STABLE,) * (1 + depth) +
@@ -519,7 +611,8 @@ def transitions(thing, context):
                     slices(thing) and not made.shares_element):
                 yield "wrap", replace(
                     thing, layers=(made.name,) + layers, lifetimes=lifetimes,
-                    full=thing.full + 1)
+                    full=thing.full + 1, quals=(0,) + thing.quals,
+                    owns_pointee=False, made_layer=True)
 
 
 def empty_safe_steps(thing, element, context):
@@ -530,13 +623,16 @@ def empty_safe_steps(thing, element, context):
     inner = LAYERS[below[0]] if below else None
     if inner is not None and inner.decays_to:
         pointer = (inner.decays_to,) + below[1:]
+        quals = (0, held_quals(element, inner)) + element.quals[2:]
     else:
         pointer = (POINTER,) + below
+        quals = (0,) + element.quals
     yield "element_pointer", replace(
         element, layers=pointer,
         lifetimes=(thing.lifetimes[0],) + element.lifetimes[
             len(below) - len(pointer) + 1:],
-        origin=Origin.BORROWED, absent=thing.absent)
+        origin=Origin.BORROWED, absent=thing.absent, quals=quals,
+        owns_pointee=False)
     if inner is not None and inner.has_empty_value and not element.unconstructed:
         if element.origin.owned:
             yield "element_or_empty", replace(element, absent=thing.absent)
@@ -623,14 +719,21 @@ def effect_of(kind, thing):
     return None
 
 
+# The cost of a derivation: the copies and the moves of the leaf, the objects
+# it keeps as long as the container, and the objects it makes for the
+# request. A plan is the cheapest of these in this order, with what may not
+# exist when a layer is empty after the leaf.
+NO_COST = (0, 0, 0, 0)
+
+
 def affected(cost, effect):
-    """The copies and the moves of the leaf, as (copies, moves), after an
-    effect: a copy is made where it is moved to."""
-    copies, moves = cost
+    """The cost after an effect on the leaf: a copy is made where it is moved
+    to."""
+    copies, moves = cost[:2]
     if effect == "copy":
-        return 1, moves
+        return (1, moves) + cost[2:]
     if effect == "move" and not copies:
-        return copies, 1
+        return (copies, 1) + cost[2:]
     return cost
 
 
@@ -640,26 +743,67 @@ def handed_over(cost, effect, container):
     one that holds a leaf moved for the request is moved once more."""
     if (container is Container.RUNTIME and effect == "move" and
             not cost[0]):
-        return cost[0], cost[1] + 1
+        return (cost[0], cost[1] + 1) + cost[2:]
     return affected(cost, effect)
+
+
+# The steps that make a new object: an upcast makes one of all but the leaf
+# itself, which is the base it is.
+MAKES_OBJECT = frozenset({"decay", "hand_over", "adopt", "observe",
+                          "element_pointer", "element_or_empty_copy",
+                          "convert", "copy", "wrap", "release"})
+
+
+def stepped(cost, kind, thing, following):
+    """The cost after a step from a thing to the thing it reaches."""
+    cost = affected(cost, effect_of(kind, thing))
+    if kind not in MAKES_OBJECT and not (kind == "upcast" and thing.layers):
+        return cost
+    if following.lifetime is Lifetime.STABLE:
+        return cost[:2] + (cost[2] + 1, cost[3])
+    return cost[:3] + (cost[3] + 1,)
+
+
+def dominated(costs, cost):
+    """Whether a cost of a thing is no better than one it has: of the same
+    copies and moves of the leaf, and of no fewer objects. A derivation from
+    it costs no less, so a search that drops it ends."""
+    return any(other[:2] == cost[:2] and other[2] <= cost[2] and
+               other[3] <= cost[3] for other in costs)
+
+
+def search(starts, context, take):
+    """The things reached from starts, each a thing with a cost, by the steps
+    take gives, each with the costs of the derivations that reach it that no
+    other one of them dominates."""
+    found = {}
+    frontier = []
+    for thing, cost in starts:
+        if not dominated(found.get(thing, ()), cost):
+            found.setdefault(thing, set()).add(cost)
+            frontier.append((thing, cost))
+    while frontier:
+        thing, cost = frontier.pop(0)
+        if cost not in found[thing]:
+            continue
+        for kind, following in take(thing, context):
+            reached = stepped(cost, kind, thing, following)
+            costs = found.setdefault(following, set())
+            if dominated(costs, reached):
+                continue
+            for other in [other for other in costs
+                          if dominated((reached,), other)]:
+                costs.discard(other)
+            costs.add(reached)
+            frontier.append((following, reached))
+    return found
 
 
 @functools.lru_cache(maxsize=None)
 def reachable(start, context):
     """The things derived from a start, each with the costs of the
-    derivations that reach it, as (copies, moves) of the leaf."""
-    seen = {(start, (0, 0))}
-    frontier = list(seen)
-    while frontier:
-        thing, cost = frontier.pop()
-        for kind, following in steps(thing, context):
-            state = (following, affected(cost, effect_of(kind, thing)))
-            if state not in seen:
-                seen.add(state)
-                frontier.append(state)
-    found = {}
-    for thing, cost in seen:
-        found.setdefault(thing, set()).add(cost)
+    derivations that reach it."""
+    found = search({(start, NO_COST)}, context, steps)
     return {thing: frozenset(costs) for thing, costs in found.items()}
 
 
@@ -691,14 +835,17 @@ def names_leaf(thing, context):
 def binding_step(kind, thing, following, context, stored):
     """Whether a binding takes a step: one that needs the type it stores, or
     one from what holds the leaf a request cannot name that the upcast to
-    the interface needs. That wraps into a layer that rebinds, or wraps the
-    stored layers whole, which keeps them as defined as they are when empty."""
+    the interface needs. That wraps the leaf itself into a layer that
+    rebinds, or the stored layers as they are stored, which keeps them as
+    defined as they are when empty: what wraps anything else is upcast to
+    nothing a request takes."""
     if kind in BINDING_STEPS:
         return True
     if not names_leaf(thing, context):
         return False
-    return (kind != "wrap" or LAYERS[following.layers[0]].rebinds or
-            (bool(stored) and thing.layers[-len(stored):] == stored))
+    return (kind != "wrap" or
+            (not thing.layers and LAYERS[following.layers[0]].rebinds) or
+            (bool(stored) and thing.layers == stored))
 
 
 def binding_steps(thing, context, stored=()):
@@ -717,45 +864,32 @@ def binding_steps(thing, context, stored=()):
 
 def request_steps(thing, context):
     """The steps a request takes from a layer source: every step a binding
-    does not take, each of which adds a layer or converts one."""
+    does not take, each of which adds a layer or converts one. A request does
+    not wrap the leaf as the bare interface, which only the binding can name:
+    the binding wraps the leaf itself."""
     if names_leaf(thing, context):
         return []
     return [(kind, following) for kind, following in steps(thing, context)
-            if kind not in BINDING_STEPS]
-
-
-def closure(states, context, take):
-    """The states reached from states by the steps take gives, each a thing
-    with the copies and the moves of the leaf that reach it."""
-    seen = set(states)
-    frontier = list(seen)
-    while frontier:
-        thing, cost = frontier.pop()
-        for kind, following in take(thing, context):
-            state = (following, affected(cost, effect_of(kind, thing)))
-            if state not in seen:
-                seen.add(state)
-                frontier.append(state)
-    return seen
+            if kind not in BINDING_STEPS and
+            not (kind == "wrap" and slices(thing))]
 
 
 @functools.lru_cache(maxsize=None)
 def layer_sources(start, context):
-    """What a binding publishes of its stored object, each with the copies
-    and the moves of the leaf that reach it."""
-    return frozenset(closure(
-        {(start, (0, 0))}, context,
-        lambda thing, each: binding_steps(thing, each, start.layers)))
+    """What a binding publishes of its stored object, each thing with a cost
+    that reaches it."""
+    found = search({(start, NO_COST)}, context,
+                   lambda thing, each: binding_steps(thing, each,
+                                                     start.layers))
+    return frozenset((thing, cost) for thing, costs in found.items()
+                     for cost in costs)
 
 
 @functools.lru_cache(maxsize=None)
 def requested(start, context):
     """What requests reach from the layer sources of a stored object, as
     reachable gives what is reached from the stored object itself."""
-    found = {}
-    for thing, cost in closure(set(layer_sources(start, context)), context,
-                               request_steps):
-        found.setdefault(thing, set()).add(cost)
+    found = search(layer_sources(start, context), context, request_steps)
     return {thing: frozenset(costs) for thing, costs in found.items()}
 
 
@@ -784,7 +918,7 @@ def empty_safe_sources(scope, form, leaf, bound, interfaces):
         for kind, safe in binding_steps(thing, context, start.layers):
             if kind not in EMPTY_SAFE_STEPS or safe.absent:
                 continue
-            for reached, _ in closure({(safe, (0, 0))}, context, upcasts):
+            for reached in search({(safe, NO_COST)}, context, upcasts):
                 if reached.element != bound.element or reached.absent:
                     continue
                 layers = reached.layers
@@ -822,32 +956,69 @@ REFERENCES = (Category.LVALUE_REFERENCE, Category.CONST_LVALUE_REFERENCE,
 POINTERS = (Category.POINTER, Category.CONST_POINTER)
 
 
-def satisfactions(things, category, lifetime, layers, context):
+CONST_CATEGORIES = (Category.CONST_LVALUE_REFERENCE, Category.CONST_POINTER)
+
+
+def converts_quals(got, wanted, layers, outer):
+    """Whether a pointer to an object of the qualifiers got, of the layers
+    layers, converts to a pointer of the qualifiers wanted, as C++ converts
+    one: the object may be of more, of the mask outer, and a level below it
+    may be of more when every level above it, from the object down, is a raw
+    pointer the request makes const."""
+    if got[0] & ~outer:
+        return False
+    through = True
+    for level in range(1, len(got)):
+        above = outer if level == 1 else wanted[level - 1]
+        through = (through and LAYERS[layers[level - 1]].adopted_with == () and
+                   bool(above & CONST))
+        if got[level] != wanted[level] and (got[level] & ~wanted[level] or
+                                            not through):
+            return False
+    return True
+
+
+def satisfactions(things, category, lifetime, layers, context, quals=None):
     """The things of a request's element that satisfy it, each with what
-    satisfying it does to the leaf, as effect_of says."""
-    of_shape = [thing for thing in things if thing.layers == layers]
+    satisfying it does to the leaf, as effect_of says. The request is of the
+    qualifiers quals, of the object it is of and of each layer below,
+    outermost first; a reference or a pointer may add qualifiers to the
+    object it refers to, and none other is told apart."""
+    if quals is None:
+        quals = (0,) * (len(layers) + 1)
+    outer = quals[0] | (CONST if category in CONST_CATEGORIES else 0)
+    of_shape = [thing for thing in things if thing.layers == layers and
+                thing.quals[1:] == quals[1:]]
     if category in REFERENCES:
         # A reference or a pointer refers to the instance, or to a layer of
-        # it, that lives long enough.
-        referred = [(thing, None) for thing in of_shape
-                    if thing.instance and
+        # it, that lives long enough. A reference adds qualifiers only to
+        # what it refers to; a pointer converts as C++ converts one.
+        def qualified(got, of):
+            if category in POINTERS:
+                return converts_quals(got, quals, of, outer)
+            return got[1:] == quals[1:] and not got[0] & ~outer
+        referred = [(thing, None) for thing in things
+                    if thing.layers == layers and thing.instance and
+                    qualified(thing.quals, thing.layers) and
                     thing.lifetime.value >= lifetime.value]
-        if referred:
+        if category not in POINTERS:
             return referred
-        if category in POINTERS:
-            # A pointer value: one the request owns, or one whose pointee
-            # lives long enough.
-            def points(thing):
-                outer = thing.layers[:1]
-                if (not outer or LAYERS[outer[0]].adopted_with is None or
-                        thing.layers[1:] != layers or not thing.instance):
-                    return False
-                if (thing.origin is Origin.MADE and
-                        not blocked(context, "point", category, thing)):
-                    return True
-                return thing.lifetimes[1].value >= lifetime.value
-            return [(thing, None) for thing in things if points(thing)]
-        return []
+        # A pointer value: one whose pointee lives long enough, which
+        # satisfies it besides what it refers to, which may be absent where a
+        # pointer to it is null; or one whose pointee the request owns, which
+        # hands that over, only where nothing is referred to.
+        def points(thing):
+            pointer = thing.layers[:1]
+            if (not pointer or LAYERS[pointer[0]].adopted_with is None or
+                    thing.layers[1:] != layers or not thing.instance or
+                    not converts_quals(thing.quals[1:], quals,
+                                       thing.layers[1:], outer)):
+                return False
+            if thing.owns_pointee:
+                return (not referred and
+                        not blocked(context, "point", category, thing))
+            return thing.lifetimes[1].value >= lifetime.value
+        return referred + [(thing, None) for thing in things if points(thing)]
     if category is Category.RVALUE_REFERENCE:
         # The object the request moves from: one it made.
         return [(thing, None) for thing in of_shape
@@ -905,10 +1076,11 @@ def fewest_of(answers, defined):
     there is none."""
     if not answers:
         return None
-    cost = min(cost for cost, _ in answers)
+    cost = min(cost[:2] for cost, _ in answers)
     if not defined:
         return cost
-    return cost, any(not absent for each, absent in answers if each == cost)
+    return cost, any(not absent for each, absent in answers
+                     if each[:2] == cost)
 
 
 def converted(scope, form, leaf, bound, shape, category, limits=frozenset(),

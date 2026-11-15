@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 from spec import semantics  # noqa: E402
 from spec.generator import driver  # noqa: E402
 from spec.vocabulary import (Category, Container, Entry,  # noqa: E402
-                             InterfaceSet, Position, Scope, Selection,
+                             InterfaceSet, Leaf, Position, Scope, Selection,
                              StoredForm)
 
 # The layers of C++ itself, at their indices in every universe of the
@@ -165,12 +165,12 @@ using namespace dingo::model;
 
 namespace {
 void print_kind(const dingo::semantics::layer_kind &kind) {
-  std::printf("%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d",
+  std::printf("%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d",
               static_cast<int>(kind.owns), kind.shares_element, kind.copyable,
               kind.made_from_value, kind.holds_element_only, kind.relocatable,
               kind.gives_element, kind.bounded, kind.may_be_empty,
               kind.has_empty_value, kind.adopts, kind.decays, kind.adopted,
-              kind.adopted_array, kind.rebinds);
+              kind.adopted_array, kind.rebinds, kind.observes);
 }
 
 template <typename Tag> void print_layer() {
@@ -249,7 +249,8 @@ def properties(layer, universe):
             int(layer.may_be_empty), int(layer.has_empty_value),
             int(layer.adopts), int(bool(layer.decays_to)),
             int(layer.adopted_with is not None),
-            int(bool(layer.adopted_with)), int(layer.rebinds), converts]
+            int(bool(layer.adopted_with)), int(layer.rebinds),
+            int(layer.observes), converts]
 
 
 def order(names):
@@ -301,15 +302,16 @@ def made_layers():
     is possible, as semantics.possible says."""
     emptiness = ((False, False), (True, False), (True, True))
     for index, (owner, shares, copyable, made, holds, relocatable, empty,
-                adopts, rebinds) in enumerate(itertools.product(
+                adopts, rebinds, observes) in enumerate(itertools.product(
                     semantics.Owner, (False, True), (False, True),
                     (False, True), (False, True), (False, True), emptiness,
-                    (False, True), (False, True))):
+                    (False, True), (False, True), (False, True))):
         layer = semantics.Layer(
             f"made{index}", owner, shares_element=shares, copyable=copyable,
             made_from_value=made, holds_element_only=holds,
             relocatable=relocatable, may_be_empty=empty[0],
-            has_empty_value=empty[1], adopts=adopts, rebinds=rebinds)
+            has_empty_value=empty[1], adopts=adopts, rebinds=rebinds,
+            observes=observes)
         if semantics.possible(layer):
             yield layer
 
@@ -360,7 +362,11 @@ def swept():
                             (lifetime(scope_traits),) * (len(layers) + 1),
                             (semantics.Origin.MADE if scope_traits.makes
                              else semantics.Origin.BORROWED),
-                            instance=True)
+                            instance=True,
+                            owns_pointee=scope_traits.makes and
+                            bool(layers) and
+                            semantics.LAYERS[layers[0]].adopted_with
+                            is not None)
                         yield (f"{list(layers)}/{scope.value}/{leaf.value}/"
                                f"{'interface' if abstract else 'leaf'}/{name}",
                                context, start, goals)
@@ -418,7 +424,11 @@ def paired(universes):
                             (lifetime(scope_traits),) * (len(layers) + 1),
                             (semantics.Origin.MADE if scope_traits.makes
                              else semantics.Origin.BORROWED),
-                            instance=True)
+                            instance=True,
+                            owns_pointee=scope_traits.makes and
+                            bool(layers) and
+                            semantics.LAYERS[layers[0]].adopted_with
+                            is not None)
                         yield (f"{list(layers)}/{scope.value}/{leaf.value}/"
                                f"{'interface' if abstract else 'leaf'}/"
                                f"{[(layer.name, layer.converts_to) for layer in (first, second)]}",
@@ -527,6 +537,56 @@ def compare_pairs(program, jobs):
     return count, resolved, differ
 
 
+# The qualifiers a check sweeps: of the object a request is of, every one;
+# of a level below it, and of what a scope stores, those a type declares.
+QUALS = (0, semantics.CONST, semantics.VOLATILE,
+         semantics.CONST | semantics.VOLATILE)
+INNER_QUALS = (0, semantics.CONST)
+
+
+def qualified():
+    """The stored objects of the standard layers of at most one layer, of
+    every qualifier of each level a scope stores, with a leaf that copies a
+    volatile one or not, and the requests of them of every qualifier of the
+    object they are of and of each level below."""
+    goals = []
+    for shape in semantics.SHAPES:
+        for bound in bounds():
+            layers = semantics.SHAPES[shape] + bound.layers
+            if len(layers) > 1:
+                continue
+            for quals in itertools.product(QUALS, *[INNER_QUALS] *
+                                           len(layers)):
+                goals.append((layers, bound.element,
+                              f"{shape.value}/{bound.element}"
+                              f"{list(bound.layers)}/{list(quals)}", quals))
+    leaves = ((Leaf.COPYABLE, False), (Leaf.COPYABLE, True),
+              (Leaf.MOVE_ONLY, False))
+    for scope in Scope:
+        for form in StoredForm:
+            if len(semantics.FORMS[form]) > 1:
+                continue
+            for leaf, copies_volatile in leaves:
+                traits = dataclasses.replace(semantics.LEAVES[leaf],
+                                             copies_volatile=copies_volatile)
+                for abstract in (False, True):
+                    context = semantics.Context(
+                        traits, semantics.SCOPES[scope], abstract)
+                    if not semantics.makes_storage(form, context):
+                        continue
+                    depth = len(semantics.FORMS[form])
+                    for quals in itertools.product(
+                            QUALS[:3], *[INNER_QUALS] * depth):
+                        yield (f"{scope.value}/{form.value}/{leaf.value}/"
+                               f"{int(copies_volatile)}/"
+                               f"{'interface' if abstract else 'leaf'}/"
+                               f"{list(quals)}",
+                               context,
+                               semantics.source(scope, form,
+                                                quals=tuple(quals)),
+                               goals)
+
+
 def consistent(domain):
     """The requests of a domain a container makes: of the abstract interface
     exactly where the context requests it. What a binding publishes reaches
@@ -537,28 +597,36 @@ def consistent(domain):
             if (goal[1] == "interface") == context.abstract]
 
 
-def expected(reached, context, layers, element):
+def expected(reached, context, layers, element, quals=None):
     """The answers of the specification for a request, by its search of
     every thing the stored object reaches."""
     things = [thing for thing in reached if thing.element == element]
     answers = []
     for category in Category:
         for lifetime_of in LIFETIMES:
-            costs = [semantics.affected(cost, effect)
+            # The cheapest, as the plan is chosen: the copies and the moves
+            # of the leaf, whether it may be absent, the objects kept and
+            # made.
+            costs = [semantics.affected(cost, effect)[:2] +
+                     (int(thing.absent),) +
+                     semantics.affected(cost, effect)[2:]
                      for thing, effect in semantics.satisfactions(
-                         things, category, lifetime_of, layers, context)
+                         things, category, lifetime_of, layers, context,
+                         quals)
                      for cost in reached[thing]]
-            answers.append("%d,%d" % min(costs) if costs else "-")
+            answers.append("%d,%d,%d,%d,%d" % min(costs) if costs else "-")
     return " ".join(answers)
 
 
-def encode(context, start, layers, element, shape_depth=0):
+def encode(context, start, layers, element, shape_depth=0, quals=None):
     """A request as the program reads it."""
     universe = order(context.universe)
     made = universe[len(LANGUAGE):]
+    quals = quals or (0,) * (len(layers) + 1)
     numbers = [LIMITS[context.limits], int(context.leaf.copyable),
                int(context.leaf.movable),
                int(context.leaf.default_constructible),
+               int(context.leaf.copies_volatile),
                int(context.scope.makes),
                int(context.scope.publishes_early), int(context.abstract),
                len(made)]
@@ -567,9 +635,10 @@ def encode(context, start, layers, element, shape_depth=0):
     numbers += [len(start.layers),
                 *(universe.index(name) for name in start.layers),
                 ELEMENTS[start.element], start.lifetime.value,
-                ORIGINS[start.origin], len(layers),
+                ORIGINS[start.origin], *start.quals,
+                int(start.owns_pointee), len(layers),
                 *(universe.index(name) for name in layers),
-                ELEMENTS[element], shape_depth]
+                ELEMENTS[element], *quals, shape_depth]
     return " ".join(map(str, numbers))
 
 
@@ -597,10 +666,11 @@ def compare(program, domain, mode=None):
         # publishes, what a request reaches from that.
         reached = (semantics.requested(start, context) if mode == "split"
                    else semantics.reachable(start, context))
-        for layers, element, goal in goals:
+        for layers, element, goal, *qualified in goals:
+            quals = qualified[0] if qualified else None
             cases.append((f"{name}/{goal}",
-                          expected(reached, context, layers, element)))
-            lines.append(encode(context, start, layers, element))
+                          expected(reached, context, layers, element, quals)))
+            lines.append(encode(context, start, layers, element, 0, quals))
     run = subprocess.run([str(program)] + ([mode] if mode else []),
                          input="\n".join(lines) + "\n",
                          capture_output=True, text=True)
@@ -648,7 +718,12 @@ def main():
                 lambda: compare(program, consistent(standard()), "split")),
                ("every layer a type could define, through what a binding "
                 "publishes", 14,
-                lambda: compare(program, consistent(swept()), "split"))]
+                lambda: compare(program, consistent(swept()), "split")),
+               ("standard layers of every qualifier", 14,
+                lambda: compare(program, qualified())),
+               ("standard layers of every qualifier, through what a binding "
+                "publishes", 14,
+                lambda: compare(program, consistent(qualified()), "split"))]
     domains.append(("the rules of requests, every stored object", 336,
                     lambda: compare_rules(program, options.jobs)))
     if options.pairs:

@@ -11,6 +11,7 @@
 
 #include <dingo/base/type_list.h>
 #include <dingo/semantics/model.h>
+#include <dingo/type/collection_traits.h>
 #include <dingo/type/type_traits.h>
 
 #include <cstddef>
@@ -139,6 +140,9 @@ template <typename Wrapper> constexpr semantics::layer_kind wrapper_kind() {
                   std::is_constructible_v<copyable, copyable_probe *>;
     // A pointer-like wrapper of the leaf is rebound to one of its interface.
     kind.rebinds = traits::is_pointer_like;
+    // An observer is made of a raw pointer to its element.
+    kind.observes = kind.owns == semantics::owner::none &&
+                    std::is_constructible_v<copyable, copyable_probe *>;
   } else {
     kind.copyable = std::is_copy_constructible_v<Wrapper>;
     kind.relocatable = std::is_move_constructible_v<Wrapper>;
@@ -385,12 +389,50 @@ template <typename... Tags> struct layer_universe<type_list<Tags...>> {
 
 // What the leaf can do, as C++ says of it. A leaf that cannot be constructed
 // of nothing is made by the factory its registration names.
+// A leaf is copied as the library copies it: a collection of what cannot be
+// copied cannot be either.
 template <typename Leaf> constexpr semantics::leaf_traits leaf_traits_of() {
-  return {std::is_copy_constructible_v<Leaf>,
-          std::is_move_constructible_v<Leaf>,
+  return {is_copy_constructible_v<Leaf>, std::is_move_constructible_v<Leaf>,
           std::is_default_constructible_v<Leaf>,
-          !std::is_default_constructible_v<Leaf>};
+          !std::is_default_constructible_v<Leaf>,
+          std::is_constructible_v<Leaf, const volatile Leaf &>};
 }
+
+// The qualifiers of a type, as the semantics know them.
+template <typename T>
+inline constexpr std::uint8_t quals_v = static_cast<std::uint8_t>(
+    (std::is_const_v<T> ? semantics::const_qual : 0) |
+    (std::is_volatile_v<T> ? semantics::volatile_qual : 0));
+
+// The qualifiers of each level of the stack of T toward Leaf, as its type
+// declares them, outermost first: of T itself, then of each element.
+template <typename T, typename Leaf> struct quals_of {
+  static constexpr void fill(std::uint8_t *out) {
+    using type = std::remove_cv_t<T>;
+    out[0] = quals_v<T>;
+    if constexpr (std::is_same_v<type, Leaf>) {
+    } else if constexpr (std::is_pointer_v<type>) {
+      quals_of<std::remove_pointer_t<type>, Leaf>::fill(out + 1);
+    } else if constexpr (std::is_array_v<type>) {
+      quals_of<std::remove_extent_t<type>, Leaf>::fill(out + 1);
+    } else if constexpr (type_traits<type>::enabled) {
+      using element = typename type_traits<type>::value_type;
+      if constexpr (is_array_like_type_v<type>) {
+        // The array a handle holds is of the qualifiers of its element.
+        out[1] = quals_v<element>;
+        quals_of<element, Leaf>::fill(out + 2);
+      } else {
+        quals_of<element, Leaf>::fill(out + 1);
+      }
+    } else if constexpr (is_alternative_type_v<type>) {
+      using held = typename alternatives_stack<
+          Leaf, alternative_type_alternatives_t<type>>::alternative;
+      if constexpr (!std::is_void_v<held>) {
+        quals_of<held, Leaf>::fill(out + 1);
+      }
+    }
+  }
+};
 
 // How a request takes the shape it asks for: its outer reference or pointer,
 // and whether that is const. A pointer is always the category of a request,
