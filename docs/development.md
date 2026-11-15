@@ -45,9 +45,13 @@ environment provides the development tools.
   report, not part of `check`. See [Complexity Report](#complexity-report).
 - `semantics-check`: compares the semantics of the library, of no C++ type, with
   the specification, for every stored object and every request. See
-  [Layered Semantics](architecture/layered-semantics.md).
+  [Layered Semantics](architecture/layered-semantics.md). It compares each
+  domain in parts, in processes at once. It keeps the answers of the
+  specification in `semantics/answers` of the build directory and makes them
+  again when a source of `spec/` changes. A change of the library alone only
+  compiles and runs the library's side, in seconds.
 - `semantics-check-pairs`: the same, and for every pair of layers a type could
-  define. It takes minutes and is not part of `check`.
+  define: 1,669,960 pairs. It is not part of `check`.
 - `conversion-check`: checks what the binding of each registration plans for
   every request against the [Specification](specification.md#conversion-check).
 - `emptiness-check`: checks what each registration whose stored object holds no

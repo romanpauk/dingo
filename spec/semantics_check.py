@@ -21,10 +21,18 @@ does. Both domains are finite, so the comparison is complete.
   them that is possible: stored and requested in every stack of both of them
   and of a pointer, of every scope and leaf. With --pairs only: it takes
   longer.
+
+Each domain but the pairs is compared in parts, in processes at once. The
+answers of the specification of each part are kept in the work directory and
+made again when a source of the specification or of this check changes: the
+specification answers far slower than the program, and a change of the
+library alone does not change its answers.
 """
 
 import argparse
 import dataclasses
+import gzip
+import hashlib
 import itertools
 import multiprocessing
 import os
@@ -525,47 +533,10 @@ def rules_cases(starts):
                                   semantics.shape_quals(shape, bound)))
 
 
-def compare_rules_part(arguments):
-    """The rules domain of some stored objects, in a process of its own."""
-    program, starts = arguments
-    cases = list(rules_cases(starts))
-    run = subprocess.run([str(program), "rules"],
-                         input="\n".join(header() + [line for _, _, line in
-                                                     cases]) + "\n",
-                         capture_output=True, text=True)
-    answers = run.stdout.splitlines()
-    if run.returncode != 0 or len(answers) != len(cases):
-        return len(cases), 0, [(name, want, "") for name, want, _ in cases]
-    resolved = sum(answer != "-" for _, want, _ in cases
-                   for answer in want.split())
-    return len(cases), resolved, [
-        (name, want, got.strip())
-        for (name, want, _), got in zip(cases, answers)
-        if want != got.strip()][:20]
-
-
-def compare_rules(program, jobs):
-    """The rules domain: every stored object of every scope, form, leaf,
-    interfaces and limitations, in parts compared in processes at once."""
-    starts = [(scope, form, leaf, interfaces, limits)
-              for scope in Scope for form in StoredForm
-              for leaf in semantics.LEAVES for interfaces in InterfaceSet
-              for limits in LIMITS]
-    parts = [(program, starts[index:index + 8])
-             for index in range(0, len(starts), 8)]
-    count, resolved, differ = 0, 0, []
-    with multiprocessing.Pool(jobs) as pool:
-        for found in pool.imap_unordered(compare_rules_part, parts):
-            count += found[0]
-            resolved += found[1]
-            differ += found[2]
-    return count, resolved, differ
-
-
-def compare_part(arguments):
+def compare_pairs_part(arguments):
     """compare of a part of the pairs, in a process of its own."""
     program, universes = arguments
-    return compare(program, paired(universes))
+    return answered(program, None, list(cases_of(paired(universes))))
 
 
 def compare_pairs(program, jobs):
@@ -576,7 +547,7 @@ def compare_pairs(program, jobs):
              for index in range(0, len(universes), size)]
     count, resolved, differ = 0, 0, []
     with multiprocessing.Pool(jobs) as pool:
-        for found in pool.imap_unordered(compare_part, parts):
+        for found in pool.imap_unordered(compare_pairs_part, parts):
             count += found[0]
             resolved += found[1]
             differ += found[2][:20]
@@ -702,11 +673,9 @@ def header():
     return [" ".join(language), " ".join(standard_layers)]
 
 
-def compare(program, domain, mode=None):
-    """The requests of a domain, how many of their answers resolve, and those
-    whose answers differ."""
-    cases = []
-    lines = header()
+def cases_of(domain, mode=None):
+    """The requests of a domain, each its name, the answers of the
+    specification and the line the program reads."""
     for name, context, start, goals in domain:
         # What the stored object reaches, or, through what a binding
         # publishes, what a request reaches from that.
@@ -714,22 +683,115 @@ def compare(program, domain, mode=None):
                    else semantics.reachable(start, context))
         for layers, element, goal, *qualified in goals:
             quals = qualified[0] if qualified else None
-            cases.append((f"{name}/{goal}",
-                          expected(reached, context, layers, element, quals)))
-            lines.append(encode(context, start, layers, element, 0, quals))
+            yield (f"{name}/{goal}",
+                   expected(reached, context, layers, element, quals),
+                   encode(context, start, layers, element, 0, quals))
+
+
+def answered(program, mode, cases):
+    """The answers of the program to some requests: how many there are, how
+    many answers of the specification resolve, and the requests whose
+    answers differ."""
     run = subprocess.run([str(program)] + ([mode] if mode else []),
-                         input="\n".join(lines) + "\n",
+                         input="\n".join(header() + [line for _, _, line in
+                                                     cases]) + "\n",
                          capture_output=True, text=True)
     answers = run.stdout.splitlines()
     if run.returncode != 0 or len(answers) != len(cases):
         print(run.stderr or f"{len(answers)} answers to {len(cases)} requests")
-        return len(cases), 0, [(name, want, "") for name, want in cases]
-    resolved = sum(answer != "-" for _, want in cases
+        return len(cases), 0, [(name, want, "") for name, want, _ in cases]
+    resolved = sum(answer != "-" for _, want, _ in cases
                    for answer in want.split())
     return len(cases), resolved, [
         (name, want, got.strip())
-        for (name, want), got in zip(cases, answers)
+        for (name, want, _), got in zip(cases, answers)
         if want != got.strip()][:20]
+
+
+# The domains compared in parts, by name: each made of no arguments, with
+# the mode the program answers it in. The rules domain is made of its
+# stored objects instead.
+DOMAINS = {
+    "standard": (standard, None),
+    "swept": (swept, None),
+    "standard_split": (lambda: consistent(standard()), "split"),
+    "swept_split": (lambda: consistent(swept()), "split"),
+    "qualified": (qualified, None),
+    "qualified_split": (lambda: consistent(qualified()), "split"),
+    "rules": (None, "rules"),
+}
+
+# The parts a domain is compared in, in processes at once: every PARTS-th
+# stored object of it. As many whatever the processors, so that the answers
+# of the specification kept of a part are of the same part.
+PARTS = 64
+
+
+def part_cases(domain, part):
+    """The requests of a part of a domain."""
+    if domain == "rules":
+        starts = [(scope, form, leaf, interfaces, limits)
+                  for scope in Scope for form in StoredForm
+                  for leaf in semantics.LEAVES for interfaces in InterfaceSet
+                  for limits in LIMITS]
+        return rules_cases(starts[part::PARTS])
+    make, mode = DOMAINS[domain]
+    return cases_of((item for index, item in enumerate(make())
+                     if index % PARTS == part), mode)
+
+
+def specification_hash():
+    """What the answers of the specification are of: its sources and those
+    of this check."""
+    digest = hashlib.sha256()
+    root = Path(__file__).parent
+    for path in sorted(root.rglob("*.py")):
+        digest.update(path.relative_to(root).as_posix().encode() + b"\0")
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def specified(cache, domain, part):
+    """The requests of a part of a domain, with the answers of the
+    specification: kept in the cache, a directory, and made again when the
+    sources of the specification change. The specification answers far
+    slower than the program, and a change of the library alone does not
+    change its answers."""
+    directory, digest = cache
+    path = directory / f"{domain}-{part}.gz"
+    if path.exists():
+        with gzip.open(path, "rt") as kept:
+            if kept.readline().rstrip("\n") == digest:
+                return [tuple(line.rstrip("\n").split("\t"))
+                        for line in kept]
+    cases = list(part_cases(domain, part))
+    written = path.with_suffix(".part")
+    with gzip.open(written, "wt", compresslevel=1) as kept:
+        kept.write(digest + "\n")
+        kept.writelines("\t".join(case) + "\n" for case in cases)
+    written.replace(path)
+    return cases
+
+
+def compare_part(arguments):
+    """compare of a part of a domain, in a process of its own."""
+    program, domain, part, cache = arguments
+    return answered(program, DOMAINS[domain][1],
+                    specified(cache, domain, part))
+
+
+def compare(program, domain, jobs, cache):
+    """The requests of a domain, how many of their answers resolve, and
+    those whose answers differ: in parts compared in processes at once."""
+    count, resolved, differ = 0, 0, []
+    with multiprocessing.Pool(jobs) as pool:
+        for found in pool.imap_unordered(
+                compare_part, [(program, domain, part, cache)
+                               for part in range(PARTS)]):
+            count += found[0]
+            resolved += found[1]
+            differ += found[2]
+    return count, resolved, sorted(differ)[:20]
 
 
 def main():
@@ -757,21 +819,23 @@ def main():
     failed = bool(differ)
     # Each domain with the answers of a request: one for each category and
     # lifetime, or for each category and rules of a request.
-    domains = [("standard layers", 14, lambda: compare(program, standard())),
-               ("every layer a type could define", 14,
-                lambda: compare(program, swept())),
-               ("standard layers, through what a binding publishes", 14,
-                lambda: compare(program, consistent(standard()), "split")),
-               ("every layer a type could define, through what a binding "
-                "publishes", 14,
-                lambda: compare(program, consistent(swept()), "split")),
-               ("standard layers of every qualifier", 14,
-                lambda: compare(program, qualified())),
-               ("standard layers of every qualifier, through what a binding "
-                "publishes", 14,
-                lambda: compare(program, consistent(qualified()), "split"))]
-    domains.append(("the rules of requests, every stored object", 336,
-                    lambda: compare_rules(program, options.jobs)))
+    cache = (options.work / "answers", specification_hash())
+    cache[0].mkdir(exist_ok=True)
+    domains = [
+        ("standard layers", 14, "standard"),
+        ("every layer a type could define", 14, "swept"),
+        ("standard layers, through what a binding publishes", 14,
+         "standard_split"),
+        ("every layer a type could define, through what a binding publishes",
+         14, "swept_split"),
+        ("standard layers of every qualifier", 14, "qualified"),
+        ("standard layers of every qualifier, through what a binding "
+         "publishes", 14, "qualified_split"),
+        ("the rules of requests, every stored object", 336, "rules")]
+    domains = [(title, answers,
+                lambda domain=domain: compare(program, domain, options.jobs,
+                                              cache))
+               for title, answers, domain in domains]
     if options.pairs:
         domains.append(("every pair of layers a type could define", 14,
                         lambda: compare_pairs(program, options.jobs)))
