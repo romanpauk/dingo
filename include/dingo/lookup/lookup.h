@@ -14,7 +14,6 @@
 #include <dingo/lookup/collection.h>
 #include <dingo/lookup/lookup_key.h>
 #include <dingo/lookup/ordered.h>
-#include <dingo/lookup/unordered.h>
 #include <dingo/type/shape.h>
 
 #include <type_traits>

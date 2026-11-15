@@ -6,6 +6,7 @@
 //
 
 #include <dingo/container.h>
+#include <dingo/lookup/unordered.h>
 #include <dingo/runtime/lookup_index.h>
 
 #include <gtest/gtest.h>

@@ -7,6 +7,8 @@
 
 #include "index_common.h"
 
+#include <dingo/lookup/unordered.h>
+
 namespace dingo {
 
 TEST(index_test, base_one_ordered_resolves_implicit_static_keys) {

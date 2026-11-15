@@ -56,7 +56,7 @@ built-in backends are:
 
 - `ordered`: map lookup by runtime key, `O(log N)` plus the entries of the key.
 - `unordered`: hash map lookup by runtime key, average `O(1)` plus the entries
-  of the key.
+  of the key. Include `<dingo/lookup/unordered.h>` to use it.
 - `array<N>`: direct indexed lookup for dense integral or enum keys in `[0, N)`.
   A key outside that range throws `lookup_key_out_of_range_exception`.
 
