@@ -15,8 +15,7 @@
 
 #include <dingo/factory/constructor_detection.h>
 
-#include <stdexcept>
-#include <string>
+#include <cstdio>
 
 namespace dingo::model {
 
@@ -102,24 +101,25 @@ template <typename Class, typename Mode>
 void record_detection(const char *cell) {
   using detection = constructor_detection<Class, Mode>;
   using expected = typename parameters_of<Class>::type;
-  std::string found;
+  const char *kind = "invalid";
   if constexpr (detection::kind == detail::constructor_kind::concrete) {
-    found = "concrete";
+    kind = "concrete";
   } else if constexpr (detection::kind == detail::constructor_kind::generic) {
-    found = "generic";
-  } else {
-    found = "invalid";
+    kind = "generic";
   }
-  found += ", arity " + std::to_string(detection::arity);
+  char found[4096];
+  int length = std::snprintf(found, sizeof(found), "%s, arity %zu", kind,
+                             static_cast<std::size_t>(detection::arity));
   bool right = detection::kind == detail::constructor_kind::concrete &&
                detection::arity == type_list_size_v<expected>;
   if constexpr (std::is_same_v<Mode, detail::constructor_signature>) {
     using arguments = typename detection::arguments;
-    found += ", arguments " + std::string(type_name<arguments>());
+    const std::string_view name = type_name<arguments>();
+    std::snprintf(found + length, sizeof(found) - length, ", arguments %.*s",
+                  static_cast<int>(name.size()), name.data());
     right = right && std::is_same_v<arguments, expected>;
   }
-  record(cell, right ? "detected" : "misdetected",
-         right ? nullptr : found.c_str());
+  record(cell, right ? "detected" : "misdetected", right ? nullptr : found);
 }
 
 template <typename Binding> struct registers;
@@ -142,7 +142,8 @@ void construct_probe(const char *cell, Setup setup, Make make) {
     Container c;
     setup(c);
     if (!make(c)) {
-      throw std::logic_error("the class does not reach the registered leaf");
+      return record(cell, "violated",
+                    "the class does not reach the registered leaf");
     }
   } catch (const type_not_found_exception &) {
     return record(cell, "type_not_found");
@@ -150,8 +151,6 @@ void construct_probe(const char *cell, Setup setup, Make make) {
     return record(cell, "type_not_convertible");
   } catch (const type_ambiguous_exception &) {
     return record(cell, "type_ambiguous");
-  } catch (const std::logic_error &e) {
-    return record(cell, "violated", e.what());
   } catch (const std::exception &e) {
     return record(cell, "exception", e.what());
   }

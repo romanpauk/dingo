@@ -14,11 +14,11 @@
 #include <dingo/registration/constructor.h>
 #include <dingo/type/type_traits.h>
 
+#include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <optional>
-#include <set>
-#include <string>
 #include <string_view>
 #include <type_traits>
 #include <variant>
@@ -30,15 +30,15 @@ namespace dingo::model {
 // probe sees a kept leaf moved out of. Counts the copies and the moves of
 // leaves while a probe counts them.
 struct leaf_interface {
-  leaf_interface() { alive.insert(this); }
+  leaf_interface() { born(this); }
   leaf_interface(const leaf_interface &other) : state(other.state) {
     copied();
-    alive.insert(this);
+    born(this);
   }
   leaf_interface(leaf_interface &&other) noexcept : state(other.state) {
     moved();
     other.state = 0;
-    alive.insert(this);
+    born(this);
   }
   leaf_interface &operator=(const leaf_interface &other) {
     copied();
@@ -51,15 +51,39 @@ struct leaf_interface {
     other.state = 0;
     return *this;
   }
-  virtual ~leaf_interface() { alive.erase(this); }
+  virtual ~leaf_interface() { died(this); }
   virtual int value() const = 0;
 
-  static long live() { return static_cast<long>(alive.size()); }
+  static long live() { return static_cast<long>(alive_count); }
   static bool is_alive(const leaf_interface *leaf) {
-    return alive.count(leaf) != 0;
+    for (std::size_t index = 0; index < alive_count; ++index) {
+      if (alive[index] == leaf) {
+        return true;
+      }
+    }
+    return false;
   }
 
-  inline static std::set<const leaf_interface *> alive;
+  // The leaves alive, which a program holds few of: more is a defect of the
+  // library, which the program stops at.
+  static void born(const leaf_interface *leaf) {
+    if (alive_count == alive_capacity) {
+      std::abort();
+    }
+    alive[alive_count++] = leaf;
+  }
+  static void died(const leaf_interface *leaf) {
+    for (std::size_t index = 0; index < alive_count; ++index) {
+      if (alive[index] == leaf) {
+        alive[index] = alive[--alive_count];
+        return;
+      }
+    }
+  }
+
+  static constexpr std::size_t alive_capacity = 4096;
+  inline static const leaf_interface *alive[alive_capacity] = {};
+  inline static std::size_t alive_count = 0;
   inline static bool counting = false;
   inline static long copies = 0;
   inline static long moves = 0;
@@ -261,47 +285,45 @@ template <typename X> using up_array = std::unique_ptr<X[]>;
 template <typename X> using sp_bounded_array = std::shared_ptr<X[2]>;
 } // namespace shape
 
-inline void record(const char *cell, const char *outcome, const char *error);
 inline void record(const char *prefix, std::string_view name,
                    const char *outcome, const char *error);
+inline void record(const char *cell, const char *outcome, const char *error);
 
-// One line of the outcome table: the cell and its outcome.
-// A text as a JSON string: quoted, its quotes, backslashes and control
+// A text as the inside of a JSON string: its quotes, backslashes and control
 // characters escaped.
-inline std::string json_string(const char *text) {
-  std::string quoted = "\"";
-  for (const char *c = text; *c; ++c) {
-    if (*c == '"' || *c == '\\') {
-      quoted += '\\';
-      quoted += *c;
-    } else if (static_cast<unsigned char>(*c) < 0x20) {
-      char escaped[8];
-      std::snprintf(escaped, sizeof(escaped), "\\u%04x",
-                    static_cast<unsigned>(static_cast<unsigned char>(*c)));
-      quoted += escaped;
+inline void print_json_text(std::string_view text) {
+  for (char c : text) {
+    if (c == '"' || c == '\\') {
+      std::printf("\\%c", c);
+    } else if (static_cast<unsigned char>(c) < 0x20) {
+      std::printf("\\u%04x",
+                  static_cast<unsigned>(static_cast<unsigned char>(c)));
     } else {
-      quoted += *c;
+      std::putchar(c);
     }
   }
-  return quoted + '"';
+}
+
+// One line of the outcome table: the cell, of a prefix and a name as the
+// callers compile them in, and its outcome.
+inline void record(const char *prefix, std::string_view name,
+                   const char *outcome, const char *error) {
+  std::printf("{\"cell\": \"");
+  print_json_text(prefix);
+  print_json_text(name);
+  std::printf("\", \"outcome\": \"");
+  print_json_text(outcome);
+  std::printf("\"");
+  if (error) {
+    std::printf(", \"error\": \"");
+    print_json_text(error);
+    std::printf("\"");
+  }
+  std::printf("}\n");
 }
 
 inline void record(const char *cell, const char *outcome, const char *error) {
-  std::string line = "{\"cell\": " + json_string(cell) +
-                     ", \"outcome\": " + json_string(outcome);
-  if (error) {
-    line += ", \"error\": " + json_string(error);
-  }
-  std::printf("%s}\n", line.c_str());
-}
-
-// The cell is the prefix and the name, as its outcome is recorded: the
-// callers pass them as they are compiled in.
-inline void record(const char *prefix, std::string_view name,
-                   const char *outcome, const char *error) {
-  std::string cell = prefix;
-  cell += name;
-  record(cell.c_str(), outcome, error);
+  record(cell, std::string_view(), outcome, error);
 }
 
 inline void record(const char *cell, const char *outcome) {

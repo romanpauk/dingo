@@ -27,8 +27,6 @@
 #include <cstdio>
 #include <memory>
 #include <optional>
-#include <set>
-#include <string>
 #include <string_view>
 #include <type_traits>
 #include <variant>
@@ -464,10 +462,11 @@ decltype(auto) counted(int index, counts &into, Resolve &&resolve) {
 
 // Records a resolved probe with the copies and the moves of its resolutions.
 inline void record_resolved(const char *cell, const counts &made) {
-  std::printf("{\"cell\": %s, \"outcome\": \"resolved\", \"copies\": "
+  std::printf("{\"cell\": \"");
+  print_json_text(cell);
+  std::printf("\", \"outcome\": \"resolved\", \"copies\": "
               "[%ld, %ld], \"moves\": [%ld, %ld]}\n",
-              json_string(cell).c_str(), made.copies[0], made.copies[1],
-              made.moves[0], made.moves[1]);
+              made.copies[0], made.copies[1], made.moves[0], made.moves[1]);
 }
 
 // Runs the resolutions of a probe and records its outcome: what is wrong

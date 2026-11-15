@@ -142,9 +142,11 @@ DINGO_ALWAYS_INLINE void publication(const char *prefix, const char *name) {
                           : planning::template planned<false>().found
                               ? "placed"
                               : "unpublished";
+    std::printf("{\"cell\": \"");
+    print_json_text(prefix);
+    print_json_text(name);
     std::printf(
-        "{\"cell\": %s, \"outcome\": \"%s\", \"cpp_routes\": %u}\n",
-        json_string((std::string(prefix) + name).c_str()).c_str(), outcome,
+        "\", \"outcome\": \"%s\", \"cpp_routes\": %u}\n", outcome,
         routes_through<Request, std::remove_reference_t<stored>, owned>());
   }
 }
