@@ -27,10 +27,6 @@
 // request takes of what a plan reached.
 
 namespace dingo {
-template <typename T, typename RTTI, typename Binding, typename Context>
-T resolve_binding(construction_scope scope, Binding &binding, Context &context,
-                  const void *cache_key = nullptr);
-
 namespace detail {
 // What a runtime resolution makes: kept with the binding when it lives as
 // long as the container, in the context in the scope of the request
@@ -267,12 +263,5 @@ template <typename T> T returned_value(resolved_address result) {
   }
 }
 } // namespace detail
-
-template <typename T, typename RTTI, typename Binding, typename Context>
-T resolve_binding(construction_scope scope, Binding &binding, Context &context,
-                  const void *cache_key) {
-  return detail::returned_value<T>(binding.resolve_request(
-      scope, context, detail::runtime_request_v<T>, cache_key));
-}
 
 } // namespace dingo

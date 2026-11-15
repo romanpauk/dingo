@@ -394,8 +394,10 @@ protected:
     }
     return visit_collection<T>(
         *state, key, [&](runtime_binding_interface_type &binding) {
-          fn(results, ::dingo::resolve_binding<resolve_type, rtti_type>(
-                          scope, binding, context));
+          fn(results,
+             detail::returned_value<resolve_type>(binding.resolve_request(
+                 scope, context, detail::runtime_request_v<resolve_type>,
+                 nullptr)));
         });
   }
 
@@ -1158,15 +1160,15 @@ private:
         lookup_target(request.value, request.value_key), request.falls_back);
   }
 
-  // Selects a request by select, of its data, while its keys exist: the lookups
-  // its interfaces are routed to, as the container declares them. A static key
-  // selects the exact interface first, and the normalized one when the exact
-  // one binds nothing. A key value selects by the exact interface only when it
-  // has a lookup of its own, falling back to the normalized one when that has
-  // one too.
-  template <typename Request, typename LookupKey, typename Selection>
-  Selection select_key(const LookupKey &key,
-                       Selection (self_type::*select)(const lookup_request &)) {
+  // Selects a request in the levels, of its data, while its keys exist: the
+  // lookups its interfaces are routed to, as the container declares them. A
+  // static key selects the exact interface first, and the normalized one when
+  // the exact one binds nothing. A key value selects by the exact interface
+  // only when it has a lookup of its own, falling back to the normalized one
+  // when that has one too.
+  template <typename Request, typename LookupKey>
+  level_selection select_request(const LookupKey &key) {
+    static_assert(!std::is_const_v<typename Request::value_type>);
     using key_type = std::decay_t<LookupKey>;
     using exact = typename Request::exact_type;
     using value = typename Request::value_type;
@@ -1175,7 +1177,7 @@ private:
     if constexpr (detail::is_static_lookup_key_definition_v<key_type>) {
       decltype(auto) exact_key = exact_route::key(key);
       decltype(auto) value_key = value_route::key(key);
-      return (this->*select)(lookup_request{
+      return select_levels(lookup_request{
           &route_operations<exact, key_type>(), std::addressof(exact_key),
           &route_operations<value, key_type>(), std::addressof(value_key), true,
           !std::is_same_v<value, exact>});
@@ -1186,27 +1188,21 @@ private:
       decltype(auto) exact_key = exact_route::key(key);
       if constexpr (value_route::has_explicit_lookup) {
         decltype(auto) value_key = value_route::key(key);
-        return (this->*select)(lookup_request{
+        return select_levels(lookup_request{
             &route_operations<exact, key_type>(), std::addressof(exact_key),
             &route_operations<value, key_type>(), std::addressof(value_key),
             true, true});
       } else {
-        return (this->*select)(lookup_request{
+        return select_levels(lookup_request{
             &route_operations<exact, key_type>(), std::addressof(exact_key),
             nullptr, nullptr, true, false});
       }
     } else {
       decltype(auto) value_key = value_route::key(key);
-      return (this->*select)(
+      return select_levels(
           lookup_request{nullptr, nullptr, &route_operations<value, key_type>(),
                          std::addressof(value_key), false, false});
     }
-  }
-
-  template <typename Request, typename LookupKey>
-  level_selection select_request(const LookupKey &key) {
-    static_assert(!std::is_const_v<typename Request::value_type>);
-    return select_key<Request>(key, &self_type::select_levels);
   }
 
   // The binding of a selection resolves the request, through the cache of
@@ -1215,14 +1211,14 @@ private:
   R resolve_selected(runtime_selection selection, construction_scope scope,
                      runtime_context_type &context) {
     using interface_type = typename Request::interface_type;
-    auto &binding = *selection.binding;
+    const void *cache_key = nullptr;
     if constexpr (detail::cache::supports_v<interface_type>) {
-      return ::dingo::resolve_binding<interface_type, rtti_type>(
-          scope, binding, context, detail::cache::key<interface_type>());
-    } else {
-      return ::dingo::resolve_binding<interface_type, rtti_type>(scope, binding,
-                                                                 context);
+      cache_key = detail::cache::key<interface_type>();
     }
+    return detail::returned_value<interface_type>(
+        selection.binding->resolve_request(
+            scope, context, detail::runtime_request_v<interface_type>,
+            cache_key));
   }
 
   template <typename R, typename LookupKey>
