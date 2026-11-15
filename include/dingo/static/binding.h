@@ -159,9 +159,6 @@ template <typename Request, typename InterfaceBinding> struct static_execution {
     }
   }
 
-  template <bool Stable>
-  using steps = typename execution::plan_steps_of<plan, Stable>::type;
-
   // Whether the binding resolves the request at all, for some lifetime.
   static constexpr bool resolves = plan::transient.found || plan::stable.found;
 };
@@ -250,33 +247,6 @@ private:
   stable stable_;
 };
 
-// Passes fn the instance a request is satisfied with: moved or copied of
-// what a plan reaches, or referred to. What the last steps of a plan of a
-// value make is passed as they make it, so that it is made where fn takes
-// it: as_request makes it.
-template <semantics::satisfaction How, typename Request, typename Leaf,
-          typename Interface, typename Reached, typename Keeper, typename Fn>
-decltype(auto) hand_reached(Reached reached, Keeper &keeper, Fn &&fn) {
-  if constexpr (execution::is_pending_v<Reached> &&
-                How == semantics::satisfaction::move) {
-    return std::forward<Fn>(fn)(reached);
-  } else if constexpr (execution::is_pending_v<Reached>) {
-    auto &made = execution::keeper_of<Reached::stable>(keeper)
-                     .template keep<typename Reached::made_type>(reached.make);
-    return hand_reached<How, Request, Leaf, Interface>(
-        execution::carrier<typename Reached::made_type, true>{
-            std::addressof(made)},
-        keeper, std::forward<Fn>(fn));
-  } else if constexpr (How == semantics::satisfaction::move) {
-    return std::forward<Fn>(fn)(std::move(*reached.object));
-  } else if constexpr (How == semantics::satisfaction::copy) {
-    return std::forward<Fn>(fn)(*reached.object);
-  } else {
-    return std::forward<Fn>(fn)(
-        execution::satisfy<How, Request, Leaf, Interface>(reached, keeper));
-  }
-}
-
 // One binding of a static container: the cell of its registration, the state
 // of the local bindings the registration declares, and the resolution of a
 // request through one of its interfaces.
@@ -305,45 +275,30 @@ public:
   }
 
   // Resolves a request by its plan, from the stored object the activation
-  // of the binding materializes.
+  // of the binding materializes. A request the binding does not resolve for
+  // the lifetime it needs is rejected: as the code compiles where the
+  // lifetime is known then.
   template <typename InterfaceBinding, typename Request, typename Host,
             typename Context, typename Scope>
   Request resolve(Scope scope, Host &host, Context &context) {
-    return consume<InterfaceBinding, Request>(
-        scope, host, context, [](auto &&instance) -> Request {
-          return execution::as_request<Request>(
-              std::forward<decltype(instance)>(instance));
-        });
-  }
-
-  // Passes fn the instance a request is satisfied with, while what it is
-  // made of exists. A request the binding does not resolve for the
-  // lifetime it needs is rejected: as the code compiles where the lifetime
-  // is known then.
-  template <typename InterfaceBinding, typename Request, typename Host,
-            typename Context, typename Fn, typename Scope>
-  decltype(auto) consume(Scope scope, Host &host, Context &context, Fn &&fn) {
     using planning = static_execution<Request, InterfaceBinding>;
-    using result_type = decltype(std::forward<Fn>(fn)(std::declval<Request>()));
     if constexpr (is_fixed_construction_scope<Scope>::value) {
       constexpr bool stable =
           Scope::lifetime_value == construction_lifetime::caller;
       if constexpr (planning::template planned<stable>().found) {
-        return run<InterfaceBinding, Request, stable>(scope, host, context,
-                                                      std::forward<Fn>(fn));
+        return run<InterfaceBinding, Request, stable>(scope, host, context);
       } else {
         check_planned<Request, InterfaceBinding, Context, Scope, stable>();
-        return not_convertible<Request, InterfaceBinding, result_type>(context);
+        return not_convertible<Request, InterfaceBinding, Request>(context);
       }
     } else if constexpr (!planning::resolves) {
       check_planned<Request, InterfaceBinding, Context, Scope, false>();
-      return not_convertible<Request, InterfaceBinding, result_type>(context);
+      return not_convertible<Request, InterfaceBinding, Request>(context);
     } else {
       // The lifetime a request needs is known as it runs.
       if constexpr (planning::template planned<true>().found) {
         if (scope.is_caller()) {
-          return run<InterfaceBinding, Request, true>(scope, host, context,
-                                                      std::forward<Fn>(fn));
+          return run<InterfaceBinding, Request, true>(scope, host, context);
         }
       } else {
         if (scope.is_caller()) {
@@ -351,10 +306,9 @@ public:
         }
       }
       if constexpr (planning::template planned<false>().found) {
-        return run<InterfaceBinding, Request, false>(scope, host, context,
-                                                     std::forward<Fn>(fn));
+        return run<InterfaceBinding, Request, false>(scope, host, context);
       } else {
-        return not_convertible<Request, InterfaceBinding, result_type>(context);
+        return not_convertible<Request, InterfaceBinding, Request>(context);
       }
     }
   }
@@ -392,31 +346,25 @@ private:
     }
   }
 
-  // Applies the plan of a request to the stored object.
+  // Runs the plan of a request of the stored object.
   template <typename InterfaceBinding, typename Request, bool Stable,
-            typename Host, typename Context, typename Fn, typename Scope>
-  decltype(auto) run(Scope scope, Host &host, Context &context, Fn &&fn) {
+            typename Host, typename Context, typename Scope>
+  Request run(Scope scope, Host &host, Context &context) {
     using planning = static_execution<Request, InterfaceBinding>;
-    using leaf = typename planning::leaf_type;
-    using interface = typename planning::interface_type;
-    constexpr const semantics::plan &plan =
-        planning::template planned<Stable>();
     [[maybe_unused]] auto order = ordered(host, context);
     static_keeper<Context, Scope,
                   std::remove_reference_t<decltype(cell_.retained())>>
         keeper(context, scope, cell_.retained(),
                &reject_absent<Request, InterfaceBinding>);
     return activation(scope, host)
-        .template use_source<Request>(
-            context, [&](auto &&source) -> decltype(auto) {
-              auto start = plan_start<typename planning::stored_type,
-                                      planning::scope.makes>(
-                  std::forward<decltype(source)>(source), keeper);
-              auto reached = execution::interpreter<leaf, interface>::run_list(
-                  typename planning::template steps<Stable>{}, start, keeper);
-              return hand_reached<plan.how, Request, leaf, interface>(
-                  reached, keeper, std::forward<Fn>(fn));
-            });
+        .template use_source<Request>(context, [&](auto &&source) -> Request {
+          return execution::planned_run<typename planning::plan, Stable>::
+              template run<Request>(
+                  plan_start<typename planning::stored_type,
+                             planning::scope.makes>(
+                      std::forward<decltype(source)>(source), keeper),
+                  keeper);
+        });
   }
 
   // A resolution of the cell, which takes the next order of the static
@@ -515,14 +463,6 @@ public:
         .template resolve<InterfaceBinding, Request>(scope, host, context);
   }
 
-  template <typename InterfaceBinding, typename Request, typename Host,
-            typename Context, typename Fn, typename Scope>
-  decltype(auto) consume(Scope scope, Host &host, Context &context, Fn &&fn) {
-    return binding<InterfaceBinding>()
-        .template consume<InterfaceBinding, Request>(scope, host, context,
-                                                     std::forward<Fn>(fn));
-  }
-
   template <typename T, typename LookupKey, typename Host, typename Context,
             typename Fn, typename Scope>
   std::size_t append_collection(Scope scope, T &results, Host &host,
@@ -538,15 +478,7 @@ public:
 
     dingo::for_each(interface_bindings{}, [&](auto binding_iterator) {
       using binding = typename decltype(binding_iterator)::type;
-      if constexpr (is_copy_constructible_v<resolve_type> &&
-                    !std::is_reference_v<resolve_type>) {
-        consume<binding, resolve_type>(scope, host, context, [&](auto &&value) {
-          fn(results, execution::as_request<resolve_type>(
-                          std::forward<decltype(value)>(value)));
-        });
-      } else {
-        fn(results, resolve<binding, resolve_type>(scope, host, context));
-      }
+      fn(results, resolve<binding, resolve_type>(scope, host, context));
     });
     return type_list_size_v<interface_bindings>;
   }

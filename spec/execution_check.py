@@ -186,8 +186,7 @@ def cell(name, scope, form, leaf, layers, element, quals, category,
     auto &stored = {"kept.keep<" + stored + ">([] { return " + make + "; })" if make else source};
     counting_on();
     {{
-      auto reached = dingo::detail::execution::interpreter<{leaf_type}, plan::interface_type>::run_list(dingo::detail::execution::plan_steps_t<plan::transient, plan::identities>{{}}, dingo::detail::execution::carry<{makes}>(stored), kept);
-      {request} result = dingo::detail::execution::satisfy<plan::transient.how, {request}, {leaf_type}, plan::interface_type>(reached, kept);
+      {request} result = dingo::detail::execution::planned_run<plan, false>::template run<{request}>(dingo::detail::execution::carry<{makes}>(stored), kept);
       (void)result;
     }}
     counted();

@@ -750,16 +750,11 @@ template <typename Keeper> struct binding_layout {
   const type_table<Keeper> *const *tables;
 };
 
-// What the last step of a plan of a value makes, which the request makes
-// where it takes the value: nothing, a copy, or the value its nested type at
-// a depth is, moved into all the layers of its shape.
-enum class last_step : std::uint8_t { none, copy, run };
-
-// A plan as a runtime resolution runs it: the operations of the binding and
-// of the request, each with whether what it makes lives as long as the
-// container; how it satisfies the request; the last step a value request
-// makes, and whether what it gives the request the address of lives as long
-// as the container.
+// A plan as a runtime resolution runs it: the operations of the instructions
+// of its program, each with whether what it makes lives as long as the
+// container; how it satisfies the request, how the request takes the value of
+// what it reaches, and whether what it gives the request the address of
+// lives as long as the container.
 template <typename Keeper> struct runtime_plan {
   struct call {
     step_function<Keeper> owned;
@@ -768,7 +763,7 @@ template <typename Keeper> struct runtime_plan {
   };
   bool found = false;
   semantics::satisfaction how = semantics::satisfaction::refer;
-  last_step last = last_step::none;
+  finish last = finish::satisfy;
   std::uint8_t depth = 0;
   std::uint8_t quals = 0;
   bool stable_address = false;
@@ -851,46 +846,23 @@ runtime_plan<Keeper> plan_runtime(const binding_layout<Keeper> &binding,
     return made;
   }
 
-  auto stable = [](const semantics::thing &of) {
-    return of.lifetimes[0] == semantics::lifetime::stable;
-  };
-  auto add = [&](const operation<Keeper> &step, const semantics::thing &to) {
-    made.calls[made.count++] = {step.owned, step.borrowed, stable(to)};
-  };
+  const program compiled = compile_program(plan, binding.source_count);
   // The table of the type of what the plan reached so far.
   const type_table<Keeper> *table = binding.tables[0];
-  std::size_t at = 1;
-  while (at <= plan.count) {
-    const semantics::step kind = plan.steps[at - 1];
-    const semantics::thing &from = plan.things[at - 1];
-    // A run of wraps is one step.
-    std::size_t last = at;
-    while (kind == semantics::step::wrap && last < plan.count &&
-           plan.steps[last] == semantics::step::wrap &&
-           (plan.states[last] < binding.source_count) ==
-               (plan.states[at] < binding.source_count)) {
-      ++last;
-    }
-    const std::uint8_t run = static_cast<std::uint8_t>(last - at + 1);
-    // A layer a request makes is made of the qualifiers its element needs at
-    // once: the conversion to them that follows is the same step.
-    if ((kind == semantics::step::wrap || kind == semantics::step::adopt ||
-         kind == semantics::step::observe) &&
-        last < plan.count && plan.steps[last] == semantics::step::qualify &&
-        plan.states[last] >= binding.source_count) {
-      ++last;
-    }
-    const semantics::thing &to = plan.things[last];
-    const bool binding_step = plan.states[last] < binding.source_count;
-    // The type a layer the plan makes is of: a source of the binding, or a
-    // type the request spells, by its depth in the request.
+  for (std::size_t index = 0; index < compiled.count; ++index) {
+    const instruction &each = compiled.at[index];
+    const semantics::thing &from = plan.things[each.first];
+    const semantics::thing &to = plan.things[each.last + 1];
+    const std::uint16_t state = plan.states[each.last + 1];
+    // The table of what an instruction makes a layer of: of a source of the
+    // binding, or of a type the request spells, by its depth in the request.
     const type_table<Keeper> *maker =
-        binding_step ? binding.tables[plan.states[last]]
+        each.binding ? binding.tables[state]
                      : request.tables[goal.depth - to.depth];
     const operation<Keeper> *step = nullptr;
-    switch (kind) {
+    switch (each.kind) {
     case semantics::step::wrap:
-      step = &(*maker)[slot_of(slot::made_of, run)];
+      step = &(*maker)[slot_of(slot::made_of, each.wraps)];
       break;
     case semantics::step::adopt:
       step = &(*maker)[to.layers[1] == semantics::array_layer && to.depth > 1
@@ -908,52 +880,27 @@ runtime_plan<Keeper> plan_runtime(const binding_layout<Keeper> &binding,
     case semantics::step::release:
       step = &(*table)[from.layers[0] == semantics::array_pointer_layer
                            ? slot_of(slot::release_array)
-                           : slot_of(kind)];
+                           : slot_of(each.kind)];
       break;
     default:
-      step = &(*table)[slot_of(kind)];
+      step = &(*table)[slot_of(each.kind)];
       break;
     }
-    const bool final_step = last == plan.count;
-    // A copy of the element of a layer that may be empty the binding makes
-    // last is made where the request takes it: of the element the binding
-    // gives, or of the empty value it gives in place of it.
-    if (final_step && binding_step &&
-        kind == semantics::step::element_or_empty_copy &&
-        (plan.how == semantics::satisfaction::move ||
-         plan.how == semantics::satisfaction::copy)) {
-      add((*table)[slot_of(semantics::step::element_or_empty)], to);
-      made.last = last_step::copy;
-      made.quals = from.quals[1];
-      break;
-    }
-    // The last step of a plan of a value makes it where the request takes
-    // it: a copy, or a run of wraps of the shape of the request.
-    if (final_step && !binding_step &&
-        (plan.how == semantics::satisfaction::move ||
-         plan.how == semantics::satisfaction::copy)) {
-      if (kind == semantics::step::copy) {
-        made.last = last_step::copy;
-        made.quals = from.quals[0];
-        break;
-      }
-      if (kind == semantics::step::wrap) {
-        made.last = last_step::run;
-        made.depth = run;
-        break;
-      }
-    }
-    add(*step, to);
+    made.calls[made.count++] = {step->owned, step->borrowed,
+                                to.lifetimes[0] == semantics::lifetime::stable};
     // The table of what a step of the binding makes is that of its source;
     // of what a step of a request makes, that its operation names.
-    table =
-        binding_step ? binding.tables[plan.states[last]]
-        : (kind == semantics::step::wrap || kind == semantics::step::adopt ||
-           kind == semantics::step::observe || kind == semantics::step::qualify)
-            ? maker
-            : step->made;
-    at = last + 1;
+    table = each.binding ? binding.tables[state]
+            : (each.kind == semantics::step::wrap ||
+               each.kind == semantics::step::adopt ||
+               each.kind == semantics::step::observe ||
+               each.kind == semantics::step::qualify)
+                ? maker
+                : step->made;
   }
+  made.last = compiled.last;
+  made.depth = compiled.depth;
+  made.quals = compiled.quals;
   made.found = true;
   made.reached = table;
   made.how = plan.how;

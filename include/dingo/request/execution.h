@@ -23,11 +23,12 @@
 
 // The execution of a plan of the semantics (dingo/semantics/model.h) on C++
 // objects: one step for each kind of step of the semantics, each by the type
-// traits of its layers and by C++ itself, and the interpreter that applies
-// the steps of a plan one after another, then satisfies the request of what
-// they reach. What a step makes for the request is kept by a keeper, which
-// constructs it in place of what makes it and keeps it while the request
-// lives: keep<T>(make) returns a T & of T(make()).
+// traits of its layers and by C++ itself; the program a plan is compiled
+// into, which both containers run; and the run of a program as the code
+// compiles, which applies its steps one after another, then satisfies the
+// request of what they reach. What a step makes for the request is kept by a
+// keeper, which constructs it in place of what makes it and keeps it while
+// the request lives: keep<T>(make) returns a T & of T(make()).
 
 namespace dingo::detail::execution {
 
@@ -259,21 +260,14 @@ template <> struct step<semantics::step::element_or_empty_copy> {
             typename Keeper>
   static auto apply(carrier<T, Owned> from, Keeper &keeper) {
     using element = std::remove_cv_t<element_of_t<T, Leaf>>;
-    auto &made = keeper.template keep<element>(defer<Leaf, Interface>(from));
-    return carrier<element, true>{std::addressof(made)};
-  }
-
-  // What makes the copy.
-  template <typename Leaf, typename Interface, typename T, bool Owned>
-  static auto defer(carrier<T, Owned> from) {
-    using element = std::remove_cv_t<element_of_t<T, Leaf>>;
     auto *held = element_address<T, Leaf>(*from.object);
-    return [held]() -> element {
+    auto &made = keeper.template keep<element>([held]() -> element {
       if (held) {
         return *held;
       }
       return type_traits<element>::empty_value();
-    };
+    });
+    return carrier<element, true>{std::addressof(made)};
   }
 };
 
@@ -372,21 +366,15 @@ template <> struct step<semantics::step::upcast> {
   }
 };
 
-// A copy: a new object the request owns.
+// A copy: a new object the request owns, of no qualifiers.
 template <> struct step<semantics::step::copy> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Keeper>
   static auto apply(carrier<T, Owned> from, Keeper &keeper) {
     using made_type = std::remove_cv_t<T>;
-    auto &made = keeper.template keep<made_type>(defer<Leaf, Interface>(from));
+    auto &made = keeper.template keep<made_type>(
+        [object = from.object]() -> made_type { return made_type(*object); });
     return carrier<made_type, true>{std::addressof(made)};
-  }
-
-  // What makes the copy: an object of no qualifiers.
-  template <typename Leaf, typename Interface, typename T, bool Owned>
-  static auto defer(carrier<T, Owned> from) {
-    using made_type = std::remove_cv_t<T>;
-    return [object = from.object]() -> made_type { return made_type(*object); };
   }
 };
 
@@ -592,64 +580,6 @@ template <std::uint8_t Quals> struct qualify_step {
   }
 };
 
-// What the last steps of a plan make, not yet made: a run of wraps, or a
-// copy. It is made where the request takes it, so that a value the request
-// takes is made there at once; make returns it.
-template <typename Made, typename Make, bool Stable = false> struct pending {
-  using made_type = Made;
-  static constexpr bool stable = Stable;
-  Make make;
-};
-
-template <bool Stable, typename Make> auto pending_of(Make make) {
-  return pending<decltype(make()), Make, Stable>{make};
-}
-
-template <typename T> inline constexpr bool is_pending_v = false;
-
-template <typename Made, typename Make, bool Stable>
-inline constexpr bool is_pending_v<pending<Made, Make, Stable>> = true;
-
-// A value of Request of what a request is handed: made of what the last
-// steps of its plan make, where it is returned, or converted of the
-// instance it is given.
-template <typename Request, typename Instance>
-Request as_request(Instance &&instance) {
-  if constexpr (is_pending_v<remove_cvref_t<Instance>>) {
-    return static_cast<Request>(instance.make());
-  } else {
-    return static_cast<Request>(std::forward<Instance>(instance));
-  }
-}
-
-// Whether a step makes a copy, which the last step of a plan makes where the
-// request takes it.
-template <typename Step> inline constexpr bool copies_v = false;
-template <> inline constexpr bool copies_v<step<semantics::step::copy>> = true;
-template <>
-inline constexpr bool copies_v<step<semantics::step::element_or_empty_copy>> =
-    true;
-
-// A step of a plan, with whether what it makes lives as long as the
-// container.
-template <typename Step, bool Stable> struct planned {
-  using type = Step;
-  static constexpr bool stable = Stable;
-};
-
-// A step, and whether what it makes lives as long as the container: a step
-// that is not planned makes what lives as long as the request.
-template <typename Step> struct step_of_plan {
-  using type = Step;
-  static constexpr bool stable = false;
-};
-
-template <typename Step, bool Stable>
-struct step_of_plan<planned<Step, Stable>> {
-  using type = Step;
-  static constexpr bool stable = Stable;
-};
-
 // The keeper of what lives as long as the container, or as long as the
 // request: a keeper that keeps them apart gives each with at<Stable>().
 template <bool Stable, typename Keeper> auto &keeper_of(Keeper &keeper) {
@@ -659,30 +589,6 @@ template <bool Stable, typename Keeper> auto &keeper_of(Keeper &keeper) {
     return keeper;
   }
 }
-
-// Whether a step wraps.
-template <typename Step> inline constexpr bool is_wrap_v = false;
-
-template <typename Target>
-inline constexpr bool is_wrap_v<step<semantics::step::wrap, Target>> = true;
-
-template <typename Step, bool Stable>
-inline constexpr bool is_wrap_v<planned<Step, Stable>> = is_wrap_v<Step>;
-
-// The type a run of wraps makes of a value of T, the first the innermost.
-template <typename Leaf, typename Interface, typename T, typename... Wraps>
-struct wrapped_stack {
-  using type = T;
-};
-
-template <typename Leaf, typename Interface, typename T, typename Wrap,
-          typename... Wraps>
-struct wrapped_stack<Leaf, Interface, T, Wrap, Wraps...> {
-  using type = typename wrapped_stack<
-      Leaf, Interface,
-      typename step_of_plan<Wrap>::type::template wrapped_t<Leaf, Interface, T>,
-      Wraps...>::type;
-};
 
 // A layer made of what its element is made of, in place: the layer's emplace
 // or wrap is given it when the element can be constructed of it, which the
@@ -720,27 +626,9 @@ Made made_of(T &&value) {
   }
 }
 
-// Whether a step converts to a more qualified element, and the qualifiers of
-// the element it converts to.
-template <typename Step> inline constexpr bool is_qualify_v = false;
-template <std::uint8_t Quals>
-inline constexpr bool is_qualify_v<qualify_step<Quals>> = true;
-
-template <typename Step> inline constexpr std::uint8_t qualified_quals_v = 0;
-template <std::uint8_t Quals>
-inline constexpr std::uint8_t qualified_quals_v<qualify_step<Quals>> = Quals;
-template <typename Step, bool Stable>
-inline constexpr std::uint8_t qualified_quals_v<planned<Step, Stable>> =
-    qualified_quals_v<Step>;
-
-// Whether a step makes a layer of a pointer, which holds its element of the
-// qualifiers given; and the step that holds it of the qualifiers Quals.
-template <typename Step> inline constexpr bool makes_held_v = false;
-template <typename Target, std::uint8_t Quals>
-inline constexpr bool makes_held_v<observe_step<Target, Quals>> = true;
-template <typename Target, bool Array, std::uint8_t Quals>
-inline constexpr bool makes_held_v<adopt_step<Target, Array, Quals>> = true;
-
+// The step that makes a layer of a pointer, holding its element of the
+// qualifiers Quals: of a layer a request makes of the qualifiers its element
+// needs at once.
 template <typename Step, std::uint8_t Quals> struct held_as;
 template <typename Target, std::uint8_t Given, std::uint8_t Quals>
 struct held_as<observe_step<Target, Given>, Quals> {
@@ -750,174 +638,6 @@ template <typename Target, bool Array, std::uint8_t Given, std::uint8_t Quals>
 struct held_as<adopt_step<Target, Array, Given>, Quals> {
   using type = adopt_step<Target, Array, Quals>;
 };
-
-// The steps of a plan, applied one after another. A run of wraps makes its
-// outermost layer at once.
-template <typename Leaf, typename Interface> struct interpreter {
-  template <typename Carrier, typename Keeper>
-  static Carrier run(Carrier from, Keeper &) {
-    return from;
-  }
-
-  template <typename... Steps, typename Carrier, typename Keeper>
-  static auto run_list(type_list<Steps...>, Carrier from, Keeper &keeper) {
-    return run<Steps...>(from, keeper);
-  }
-
-  template <typename Step, typename... Steps, typename Carrier, typename Keeper>
-  static auto run(Carrier from, Keeper &keeper) {
-    if constexpr (is_wrap_v<Step>) {
-      return wrap_run<type_list<Step>, Steps...>(from, keeper);
-    } else if constexpr (makes_held_v<typename step_of_plan<Step>::type> &&
-                         starts_qualify<Steps...>()) {
-      // A layer a request makes is made of the qualifiers its element needs
-      // at once.
-      return run_fused<Step, Steps...>(from, keeper);
-    } else if constexpr (sizeof...(Steps) == 0 &&
-                         copies_v<typename step_of_plan<Step>::type>) {
-      // The last step copies: the copy is made where the request takes it.
-      using of = step_of_plan<Step>;
-      return pending_of<of::stable>(
-          of::type::template defer<Leaf, Interface>(from));
-    } else {
-      using of = step_of_plan<Step>;
-      return run<Steps...>(of::type::template apply<Leaf, Interface>(
-                               from, keeper_of<of::stable>(keeper)),
-                           keeper);
-    }
-  }
-
-  template <typename Step, typename Qualify, typename... Steps,
-            typename Carrier, typename Keeper>
-  static auto run_fused(Carrier from, Keeper &keeper) {
-    using of = step_of_plan<Step>;
-    using fused =
-        typename held_as<typename of::type, qualified_quals_v<Qualify>>::type;
-    return run<Steps...>(fused::template apply<Leaf, Interface>(
-                             from, keeper_of<of::stable>(keeper)),
-                         keeper);
-  }
-
-  template <typename Wraps, typename... Steps, typename Carrier,
-            typename Keeper>
-  static auto wrap_run(Carrier from, Keeper &keeper) {
-    if constexpr (starts_wrap<Steps...>()) {
-      return wrap_more<Wraps, Steps...>(from, keeper);
-    } else if constexpr (starts_qualify<Steps...>()) {
-      return wrap_qualified<Wraps, Steps...>(from, keeper);
-    } else {
-      using made_type =
-          typename wrapped_of<typename Carrier::type, Wraps>::type;
-      return wrap_made<made_type, step_of_plan<last_of_t<Wraps>>::stable,
-                       Steps...>(from, keeper);
-    }
-  }
-
-  // A run of wraps made of the qualifiers its element needs at once.
-  template <typename Wraps, typename Qualify, typename... Steps,
-            typename Carrier, typename Keeper>
-  static auto wrap_qualified(Carrier from, Keeper &keeper) {
-    using made_type =
-        requalified_t<typename wrapped_of<typename Carrier::type, Wraps>::type,
-                      qualified_quals_v<Qualify>>;
-    return wrap_made<made_type, step_of_plan<last_of_t<Wraps>>::stable,
-                     Steps...>(from, keeper);
-  }
-
-  template <typename Made, bool Stable, typename... Steps, typename Carrier,
-            typename Keeper>
-  static auto wrap_made(Carrier from, Keeper &keeper) {
-    if constexpr (sizeof...(Steps) == 0) {
-      // The last steps: what they make is made where the request needs it.
-      return pending_of<Stable>([from]() -> Made {
-        return made_of<Leaf, Interface, Made>(std::move(*from.object));
-      });
-    } else {
-      auto &made = keeper_of<Stable>(keeper).template keep<Made>([&] {
-        return made_of<Leaf, Interface, Made>(std::move(*from.object));
-      });
-      return run<Steps...>(carrier<Made, true>{std::addressof(made)}, keeper);
-    }
-  }
-
-  template <typename Wraps, typename Next, typename... Steps, typename Carrier,
-            typename Keeper>
-  static auto wrap_more(Carrier from, Keeper &keeper) {
-    return wrap_run<typename appended<Wraps, Next>::type, Steps...>(from,
-                                                                    keeper);
-  }
-
-  // Whether the steps begin with a conversion to a more qualified element.
-  template <typename... Steps> static constexpr bool starts_qualify() {
-    if constexpr (sizeof...(Steps) == 0) {
-      return false;
-    } else {
-      return is_qualify_v<typename step_of_plan<
-          type_list_element_t<0, type_list<Steps...>>>::type>;
-    }
-  }
-
-  // Whether the steps begin with a wrap.
-  template <typename... Steps> static constexpr bool starts_wrap() {
-    if constexpr (sizeof...(Steps) == 0) {
-      return false;
-    } else {
-      return is_wrap_v<type_list_element_t<0, type_list<Steps...>>>;
-    }
-  }
-
-  template <typename List> struct last_of;
-  template <typename... Items> struct last_of<type_list<Items...>> {
-    using type = type_list_element_t<sizeof...(Items) - 1, type_list<Items...>>;
-  };
-  template <typename List> using last_of_t = typename last_of<List>::type;
-
-  template <typename List, typename Next> struct appended;
-  template <typename... Items, typename Next>
-  struct appended<type_list<Items...>, Next> {
-    using type = type_list<Items..., Next>;
-  };
-
-  template <typename T, typename Wraps> struct wrapped_of;
-  template <typename T, typename... Wraps>
-  struct wrapped_of<T, type_list<Wraps...>>
-      : wrapped_stack<Leaf, Interface, T, Wraps...> {};
-};
-
-// The request satisfied of what a plan reaches.
-template <semantics::satisfaction How, typename Request, typename Leaf,
-          typename Interface, typename T, bool Owned, typename Keeper>
-Request satisfy(carrier<T, Owned> reached, Keeper &) {
-  if constexpr (How == semantics::satisfaction::refer) {
-    if constexpr (std::is_pointer_v<Request>) {
-      return reached.object;
-    } else {
-      return static_cast<Request>(*reached.object);
-    }
-  } else if constexpr (How == semantics::satisfaction::point) {
-    return *reached.object;
-  } else if constexpr (How == semantics::satisfaction::take) {
-    return static_cast<Request>(std::move(*reached.object));
-  } else if constexpr (How == semantics::satisfaction::move) {
-    return Request(std::move(*reached.object));
-  } else {
-    return Request(*reached.object);
-  }
-}
-// The request satisfied of what the last steps of a plan make.
-template <semantics::satisfaction How, typename Request, typename Leaf,
-          typename Interface, typename Made, typename Make, bool Stable,
-          typename Keeper>
-Request satisfy(pending<Made, Make, Stable> reached, Keeper &keeper) {
-  if constexpr (How == semantics::satisfaction::move) {
-    // A value is made where it is returned.
-    return Request(reached.make());
-  } else {
-    auto &made = keeper_of<Stable>(keeper).template keep<Made>(reached.make);
-    return satisfy<How, Request, Leaf, Interface>(
-        carrier<Made, true>{std::addressof(made)}, keeper);
-  }
-}
 
 // The innermost type of a stack toward Leaf: the leaf, the base of it the
 // stack holds, or another type.
@@ -1003,6 +723,115 @@ constexpr semantics::element element_of_stack(stack_element of) {
   return of == stack_element::interface ? semantics::element::interface : semantics::element::leaf;
 }
 
+// A plan as both containers run it: a program of instructions, each of the
+// plan steps from first to last, which it takes at once, with whether the
+// binding takes them or the request; and how the request takes the value of
+// what the last of them reaches. The containers take the decisions of how to
+// run a plan here alone:
+//
+// - A run of wraps is one instruction, made at once of the value it wraps,
+//   of the steps of one side.
+// - A layer a request makes of a value or of a pointer is made of the
+//   qualifiers its element needs at once: the conversion to them that follows
+//   it is the same instruction.
+// - A value a request takes is made where it takes it when the last step
+//   makes it: a copy or a run of wraps the request makes is left to it; and a
+//   copy of the element of a layer that may be empty, which the binding
+//   makes, is made by the request of what element_or_empty gives.
+
+// How a request takes the value of what a program reaches: as the plan
+// satisfies it, or by making it of what the program reached, a copy of it or
+// the value a run of wraps makes of it.
+enum class finish : std::uint8_t { satisfy, copy, run };
+
+// An instruction of a program: the plan steps from first to last, the kind
+// it takes, and whether the binding takes it; the wraps of a run of wraps,
+// and whether a conversion to a more qualified element ends it.
+struct instruction {
+  semantics::step kind = semantics::step::copy;
+  std::uint8_t first = 0;
+  std::uint8_t last = 0;
+  bool binding = false;
+  std::uint8_t wraps = 0;
+  bool qualified = false;
+};
+
+struct program {
+  instruction at[semantics::max_plan] = {};
+  std::size_t count = 0;
+  finish last = finish::satisfy;
+  // The wraps of a run the request makes last.
+  std::uint8_t depth = 0;
+  // The qualifiers of what the program reaches, which a copy is made of.
+  std::uint8_t quals = 0;
+};
+
+// The program of a found plan of what a binding publishes, whose first
+// source_count states are its layer sources: the steps into them are the
+// binding's.
+constexpr program compile_program(const semantics::plan &plan,
+                                  std::size_t source_count) {
+  using semantics::step;
+  program made;
+  const bool value = plan.how == semantics::satisfaction::move ||
+                     plan.how == semantics::satisfaction::copy;
+  // Whether the binding takes the plan step at an index.
+  auto binding_at = [&](std::size_t index) {
+    return plan.states[index + 1] < source_count;
+  };
+  std::size_t at = 0;
+  while (at < plan.count) {
+    const step kind = plan.steps[at];
+    std::size_t last = at;
+    while (kind == step::wrap && last + 1 < plan.count &&
+           plan.steps[last + 1] == step::wrap &&
+           binding_at(last + 1) == binding_at(at)) {
+      ++last;
+    }
+    const auto wraps =
+        static_cast<std::uint8_t>(kind == step::wrap ? last - at + 1 : 0);
+    bool qualified = false;
+    if ((kind == step::wrap || kind == step::adopt || kind == step::observe) &&
+        last + 1 < plan.count && plan.steps[last + 1] == step::qualify &&
+        !binding_at(last)) {
+      ++last;
+      qualified = true;
+    }
+    const bool binding = binding_at(last);
+    if (last + 1 == plan.count && value) {
+      if (binding && kind == step::element_or_empty_copy) {
+        made.at[made.count++] = {step::element_or_empty,
+                                 static_cast<std::uint8_t>(at),
+                                 static_cast<std::uint8_t>(last),
+                                 true,
+                                 0,
+                                 false};
+        made.last = finish::copy;
+        made.quals = plan.things[at].quals[1];
+        return made;
+      }
+      if (!binding && kind == step::copy) {
+        made.last = finish::copy;
+        made.quals = plan.things[at].quals[0];
+        return made;
+      }
+      if (!binding && kind == step::wrap && !qualified) {
+        made.last = finish::run;
+        made.depth = wraps;
+        return made;
+      }
+    }
+    made.at[made.count++] = {kind,
+                             static_cast<std::uint8_t>(at),
+                             static_cast<std::uint8_t>(last),
+                             binding,
+                             wraps,
+                             qualified};
+    at = last + 1;
+  }
+  return made;
+}
+
 // What a binding of a stored object publishes, planned as the code compiles,
 // of no request: the layer sources of its stored object, in a universe of the
 // layers it takes steps into, those it stores and those of the handles a
@@ -1077,6 +906,7 @@ struct request_plan {
       layer_universe<typename joined<typename binding::layers,
                                      typename request_stack::layers>::type>;
   using identities = typename universe_type::identities;
+  using leaf_type = Leaf;
   using interface_type = innermost_t<shape, Leaf>;
 
   static constexpr bool abstract =
@@ -1121,6 +951,14 @@ struct request_plan {
   static constexpr semantics::plan stable = make(semantics::lifetime::stable);
   static constexpr semantics::plan transient =
       make(semantics::lifetime::request);
+
+  // The programs of the plans.
+  static constexpr std::size_t source_count =
+      binding::template sources<abstract>.count;
+  static constexpr program stable_program =
+      compile_program(stable, source_count);
+  static constexpr program transient_program =
+      compile_program(transient, source_count);
 };
 
 // The C++ step of a step of the semantics, from the thing At::from() to the
@@ -1128,8 +966,6 @@ struct request_plan {
 template <typename Identities, typename At> struct typed_step_at {
   static constexpr semantics::step kind = At::kind;
   static constexpr semantics::thing reached = At::reached();
-  static constexpr bool stable =
-      reached.lifetimes[0] == semantics::lifetime::stable;
 
   template <semantics::layer Layer>
   using layer_type = type_list_element_t<Layer - 4, Identities>;
@@ -1154,7 +990,6 @@ template <typename Identities, typename At> struct typed_step_at {
     }
   }
   using step_type = decltype(make());
-  using type = planned<step_type, stable>;
 };
 
 // The step at an index of a plan.
@@ -1175,32 +1010,133 @@ template <const semantics::search &Search, std::size_t State> struct search_at {
   }
 };
 
+// The C++ step of the step at an index of a plan.
 template <const semantics::plan &Plan, typename Identities, std::size_t Index>
-using typed_step = typed_step_at<Identities, plan_at<Plan, Index>>;
+using plan_step_t =
+    typename typed_step_at<Identities, plan_at<Plan, Index>>::step_type;
 
-template <const semantics::plan &Plan, typename Identities, typename Indexes>
-struct typed_steps;
-
-template <const semantics::plan &Plan, typename Identities, std::size_t... I>
-struct typed_steps<Plan, Identities, std::index_sequence<I...>> {
-  using type = type_list<typename typed_step<Plan, Identities, I>::type...>;
+// The type a run of Count wraps of a plan, from the plan step First, makes
+// of a value of T.
+template <const semantics::plan &Plan, typename Identities, typename Leaf,
+          typename Interface, typename T, std::size_t First, std::size_t Count>
+struct wrapped_run {
+  using type =
+      typename wrapped_run<Plan, Identities, Leaf, Interface,
+                           typename plan_step_t<Plan, Identities, First>::
+                               template wrapped_t<Leaf, Interface, T>,
+                           First + 1, Count - 1>::type;
 };
 
-// The C++ steps of a plan.
-template <const semantics::plan &Plan, typename Identities>
-using plan_steps_t =
-    typename typed_steps<Plan, Identities,
-                         std::make_index_sequence<Plan.count>>::type;
-
-// The C++ steps of the plan of a request_plan for a lifetime: as long as the
-// container (Stable), or as long as the request. Only that plan is made.
-template <typename Plan, bool Stable> struct plan_steps_of {
-  using type = plan_steps_t<Plan::transient, typename Plan::identities>;
+template <const semantics::plan &Plan, typename Identities, typename Leaf,
+          typename Interface, typename T, std::size_t First>
+struct wrapped_run<Plan, Identities, Leaf, Interface, T, First, 0> {
+  using type = T;
 };
 
-template <typename Plan> struct plan_steps_of<Plan, true> {
-  using type = plan_steps_t<Plan::stable, typename Plan::identities>;
+// A program of a plan, run as the code compiles: each instruction applies
+// its step to what the one before reached, and the request takes its value.
+template <const semantics::plan &Plan, const program &Program,
+          typename Identities, typename Leaf, typename Interface>
+struct program_run {
+  template <typename Request, std::size_t Index = 0, typename Carrier,
+            typename Keeper>
+  static Request run(Carrier from, Keeper &keeper) {
+    if constexpr (Index == Program.count) {
+      return finished<Request>(from);
+    } else {
+      return run<Request, Index + 1>(apply<Index>(from, keeper), keeper);
+    }
+  }
+
+  template <std::size_t Index, typename T, bool Owned, typename Keeper>
+  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+    constexpr instruction Each = Program.at[Index];
+    constexpr semantics::thing reached = Plan.things[Each.last + 1];
+    auto &kept =
+        keeper_of<reached.lifetimes[0] == semantics::lifetime::stable>(keeper);
+    if constexpr (Each.kind == semantics::step::wrap) {
+      using made_type = typename wrapped_as<T, Index>::type;
+      auto &made = kept.template keep<made_type>([&] {
+        return made_of<Leaf, Interface, made_type>(std::move(*from.object));
+      });
+      return carrier<made_type, true>{std::addressof(made)};
+    } else if constexpr (Each.qualified) {
+      using step_type =
+          typename held_as<plan_step_t<Plan, Identities, Each.first>,
+                           reached.quals[1]>::type;
+      return step_type::template apply<Leaf, Interface>(from, kept);
+    } else if constexpr (Each.kind == Plan.steps[Each.first]) {
+      return plan_step_t<Plan, Identities,
+                         Each.first>::template apply<Leaf, Interface>(from,
+                                                                      kept);
+    } else {
+      // A step the program takes in place of the plan's.
+      return step<Each.kind>::template apply<Leaf, Interface>(from, kept);
+    }
+  }
+
+  // The type a run of wraps makes of a value of T, of the qualifiers its
+  // element needs when a conversion to them ends it.
+  template <typename T, std::size_t Index> struct wrapped_as {
+    static constexpr instruction Each = Program.at[Index];
+    using wrapped = typename wrapped_run<Plan, Identities, Leaf, Interface, T,
+                                         Each.first, Each.wraps>::type;
+    template <typename U> struct tag {
+      using type = U;
+    };
+    static auto make() {
+      if constexpr (Each.qualified) {
+        return tag<
+            requalified_t<wrapped, Plan.things[Each.last + 1].quals[1]>>{};
+      } else {
+        return tag<wrapped>{};
+      }
+    }
+    using type = typename decltype(make())::type;
+  };
+
+  // The request of what the program reached.
+  template <typename Request, typename T, bool Owned>
+  static Request finished(carrier<T, Owned> reached) {
+    using semantics::satisfaction;
+    if constexpr (Program.last == finish::copy) {
+      return Request(*reached.object);
+    } else if constexpr (Program.last == finish::run) {
+      using made_type =
+          typename wrapped_run<Plan, Identities, Leaf, Interface, T,
+                               Plan.count - Program.depth, Program.depth>::type;
+      return static_cast<Request>(
+          made_of<Leaf, Interface, made_type>(std::move(*reached.object)));
+    } else if constexpr (Plan.how == satisfaction::refer) {
+      if constexpr (std::is_pointer_v<Request>) {
+        return reached.object;
+      } else {
+        return static_cast<Request>(*reached.object);
+      }
+    } else if constexpr (Plan.how == satisfaction::point) {
+      return *reached.object;
+    } else if constexpr (Plan.how == satisfaction::take) {
+      return static_cast<Request>(std::move(*reached.object));
+    } else if constexpr (Plan.how == satisfaction::move) {
+      return Request(std::move(*reached.object));
+    } else {
+      return Request(*reached.object);
+    }
+  }
 };
+
+// The program of the plan of a request_plan for a lifetime, run as the code
+// compiles: as long as the container (Stable), or as long as the request.
+template <typename Plan, bool Stable>
+struct planned_run
+    : program_run<Plan::transient, Plan::transient_program,
+                  typename Plan::identities, typename Plan::leaf_type,
+                  typename Plan::interface_type> {};
+
+template <typename Plan>
+struct planned_run<Plan, true>
+    : program_run<Plan::stable, Plan::stable_program, typename Plan::identities,
+                  typename Plan::leaf_type, typename Plan::interface_type> {};
 
 // What a plan makes lives as long as the container when it is kept with the
 // binding, under a key of its type.

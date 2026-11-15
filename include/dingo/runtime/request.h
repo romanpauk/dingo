@@ -145,9 +145,9 @@ resolved_address finish_request(execution::erased_carrier reached,
   using access = resolved_address::access_kind;
   using made_kind = resolved_address::made_kind;
   switch (plan.last) {
-  case execution::last_step::copy:
+  case execution::finish::copy:
     return {reached.object, access::borrow, made_kind::copy, 0, plan.quals};
-  case execution::last_step::run:
+  case execution::finish::run:
     return {reached.object, access::consume, made_kind::run, plan.depth, 0};
   default:
     break;
