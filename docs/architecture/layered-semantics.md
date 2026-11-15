@@ -247,32 +247,123 @@ specification. It is also the largest part of the compile time that is left.
    category, position, entry point, selection and container: 105,759,360
    answers, all equal.
 
-7. **Execution.** The containers apply plans by the interpreter, in place of the
-   conversion paths and the derivations. The steps split as the specification
-   splits them. A binding takes the steps that need the type it stores: the
-   element of a layer, a pointer to it, the optional it holds, and the upcast to
-   the interface. What they reach are the sources the binding publishes, which
-   it makes by functions of its type. A request takes every other step: each
-   wraps, converts, copies, adopts, decays or hands over toward the layers of
-   the request, so its C++ types are those of the suffixes of the request type,
-   and the request has a function of its type for each step from each suffix.
-   The static container plans each request as the code compiles. The runtime
-   container plans a request of a binding as it resolves, by one function of no
-   type, and keeps the plan in the binding.
+7. **Execution.** The containers apply plans in place of the conversion paths
+   and the derivations. The static container is done: a static binding plans a
+   request as the code compiles (`static_execution` in
+   [include/dingo/static/binding.h](../../include/dingo/static/binding.h)) and
+   applies the plan through the typed interpreter. The runtime container plans a
+   request of a binding at its first use, and keeps the plan for the type of the
+   request. This phase is designed as follows, and both containers are built so.
 
-   The static container is done. A static binding plans a request
-   (`static_execution` in
-   [include/dingo/static/binding.h](../../include/dingo/static/binding.h)) from
-   the stored object its storage gives, borrowed or made for the request, for
-   the lifetime the request needs: as long as the container when it is passed to
-   the caller, as long as the request otherwise. It applies the plan through the
-   interpreter. What the plan makes lives in the context, in the scope of the
-   request, or with the binding when it lives as long as the container. What the
-   last steps make, wraps or a copy, is made where the request takes it. Every
-   baseline cell is the same. A plan takes about 2 MB of compiler memory and 12
-   ms with GCC, and a static type costs as much to compile as it did with the
-   derivations. The runtime container is left; then the conversion paths, the
-   published resolutions and the derivations go.
+   **The model.** Three additions are specified in
+   [spec/semantics.py](../../spec/semantics.py) first, ported to
+   [include/dingo/semantics/model.h](../../include/dingo/semantics/model.h), and
+   compared in every domain of `semantics-check`.
+
+   - Qualifiers. A thing has the const and volatile qualifiers of each of its
+     levels: of the outermost as it is reached, of the others as the type above
+     declares them. An element held in place takes those of its holder. What a
+     copy or a move makes anew has none. A const or a volatile object is not
+     moved from, and a volatile one is copied only by a leaf that can be. A
+     reference may add qualifiers to what it refers to, and only to that; a
+     pointer converts as C++ converts one, adding them below where every level
+     above is a const raw pointer. Inner levels match exactly otherwise.
+
+   - Observers. A layer that owns nothing and is made of a raw pointer to its
+     element is made of a pointer that owns nothing either: the `observe` step.
+
+   - Ownership of a pointee. A thing tells whether the request owns what its
+     outer raw pointer points to: a pointer a scope makes does, a copy of it
+     does too, and adopting it or releasing its element ends that. Such a
+     pointer is handed over or taken over by a handle, never wrapped, and an
+     observer is made only of a pointer that owns nothing. A pointer request
+     takes a pointer value whose pointee the request does not own as one way to
+     satisfy it besides referring to the object. It takes one whose pointee it
+     owns, which hands that over, only where nothing can be referred to for as
+     long as the request needs. A layer made of a pointer it does not own may be
+     empty, as the pointer may be null.
+
+   - Cost. The cost of a plan is lexicographic: the copies of the leaf, its
+     moves, whether what satisfies the request may be absent when a layer is
+     empty, the objects kept as long as the container, and the objects made for
+     the request. The cheapest plan is the fewest objects by construction, not
+     by the order of the search. A step that makes a new object counts one; one
+     kept with the binding counts as kept. A search keeps a thing at a cost
+     unless it has the thing at the same copies and moves of the leaf and at no
+     more objects: objects only grow along a derivation, so the search ends, and
+     no cheaper plan is dropped.
+
+   - Who makes a layer. A request makes a new layer, by a wrap, an adoption or
+     an observer, only as the layer of the request at the depth it will have: a
+     layer the derivation made is not converted, so another leads nowhere. A
+     request does not wrap the bare interface, which only the binding can name
+     the leaf of. A binding wraps the leaf itself into a layer that rebinds, or
+     the stored layers as they are stored; every other wrap of what holds the
+     leaf is upcast to nothing a request takes. A layer the derivation wrapped a
+     value in is not taken apart again: its element is what it was made of, and
+     taking it would only drop what tells it apart, as a copy, a const or a
+     limitation.
+
+   - The leaf. Whether the leaf can be copied is what the library says of it: a
+     collection of what cannot be copied cannot be either, whatever
+     `std::is_copy_constructible` says.
+
+   **Steps by the type that knows them.** A step needs the C++ type of what it
+   is applied to. Its function belongs to the side that knows that type.
+
+   - A binding knows the type of each of its layer sources and of everything a
+     step makes of them. For each such type it has one table of erased
+     operations: its size and alignment, destruction, copy, move, the address of
+     its element, the pointer to it, the empty value of it, the decay of an
+     array, the hand-over of an array, the conversion of a sole owner to its
+     sharing handle, the release of what a pointer owns, and the upcast to the
+     interface. Each operation names the table of the type it makes. The tables
+     are built from the typed steps of the static container, so both containers
+     apply one implementation of each step.
+
+   - A request knows the types it spells. It has a table for each of its nested
+     types, with the operations that make that type of the one below: a run of
+     wraps, the adoption of a pointer it owns, and an observer of a pointer.
+     Nothing else is the request's.
+
+   - A plan is compiled once, at its first use, into the operations it calls. A
+     step of a layer the request makes is found among the request's operations,
+     by the depth of the layer in the request; every other step is the operation
+     of the table of what it is applied to. Each table has, as the code
+     compiles, every operation the semantics allow from its type: each binding
+     checks its tables against the steps the semantics allow from each of its
+     sources, and each request its tables against the layers it makes. A plan
+     meets no missing operation.
+
+   **Cost as the code compiles.** The functions a binding instantiates scale
+   with the distinct C++ types of its sources, not with the steps between them.
+   A binding of the abstract interface publishes only the sources a request
+   takes something of, those of the interface, and the sources on the way to
+   them. The sources and the tables are emitted as many as there are.
+
+   **Undo follows nesting.** A runtime binding registers the rollback of its
+   cell as soon as its source is materialized, before the plan runs. What the
+   plan keeps with the binding is undone before the cell is reset, so the undo
+   of what a retention keeps is unconditional.
+
+   **Values are made where they are returned.** A plan for a value ends in what
+   makes the value: a copy, a move, or a run of wraps. The runtime container
+   does not apply that last step. It returns what the plan reached, and the
+   request makes its value of it in place of the value the call returns, as the
+   static container does with a pending result.
+
+   **Known limitations.** An empty holder of a pointer is not mapped to an empty
+   holder of an observer of it: a request through the element of an empty holder
+   fails. A shared handle that cannot be made of a value is not made of a sole
+   owner a request makes and converts; one stored by the binding still converts.
+   A handle family a request uses for the bare interface is one of
+   `owning_handles`, which the binding wraps the leaf in.
+
+   **Measured.** A runtime type costs about 0.32 G instructions, 12.4 KB of code
+   and 5.7 MB of compiler memory, against 12.5 KB and 5.1 MB of the published
+   resolutions; a static type 0.30 G, 10.5 KB and 5.3 MB. The rest of the memory
+   is the compile-time search of the layer sources of each binding, which the
+   static container makes too.
 
 8. **Tests.** The model checks become a cover of the composition, and the full
    model run a regression.
