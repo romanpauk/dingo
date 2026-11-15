@@ -610,6 +610,18 @@ template <typename T> inline constexpr bool is_pending_v = false;
 template <typename Made, typename Make, bool Stable>
 inline constexpr bool is_pending_v<pending<Made, Make, Stable>> = true;
 
+// A value of Request of what a request is handed: made of what the last
+// steps of its plan make, where it is returned, or converted of the
+// instance it is given.
+template <typename Request, typename Instance>
+Request made_or_given(Instance &&instance) {
+  if constexpr (is_pending_v<remove_cvref_t<Instance>>) {
+    return static_cast<Request>(instance.make());
+  } else {
+    return static_cast<Request>(std::forward<Instance>(instance));
+  }
+}
+
 // Whether a step makes a copy, which the last step of a plan makes where the
 // request takes it.
 template <typename Step> inline constexpr bool copies_v = false;

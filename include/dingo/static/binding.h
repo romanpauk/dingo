@@ -251,13 +251,15 @@ private:
 };
 
 // Passes fn the instance a request is satisfied with: moved or copied of
-// what a plan reaches, or referred to.
+// what a plan reaches, or referred to. What the last steps of a plan of a
+// value make is passed as they make it, so that it is made where fn takes
+// it: made_or_given makes it.
 template <semantics::satisfaction How, typename Request, typename Leaf,
           typename Interface, typename Reached, typename Keeper, typename Fn>
 decltype(auto) hand_reached(Reached reached, Keeper &keeper, Fn &&fn) {
   if constexpr (execution::is_pending_v<Reached> &&
                 How == semantics::satisfaction::move) {
-    return std::forward<Fn>(fn)(reached.make());
+    return std::forward<Fn>(fn)(reached);
   } else if constexpr (execution::is_pending_v<Reached>) {
     auto &made = execution::keeper_of<Reached::stable>(keeper)
                      .template keep<typename Reached::made_type>(reached.make);
@@ -309,7 +311,7 @@ public:
   Request resolve(Scope scope, Host &host, Context &context) {
     return consume<InterfaceBinding, Request>(
         scope, host, context, [](auto &&instance) -> Request {
-          return static_cast<Request>(
+          return execution::made_or_given<Request>(
               std::forward<decltype(instance)>(instance));
         });
   }
@@ -539,7 +541,8 @@ public:
       if constexpr (is_copy_constructible_v<resolve_type> &&
                     !std::is_reference_v<resolve_type>) {
         consume<binding, resolve_type>(scope, host, context, [&](auto &&value) {
-          fn(results, std::forward<decltype(value)>(value));
+          fn(results, execution::made_or_given<resolve_type>(
+                          std::forward<decltype(value)>(value)));
         });
       } else {
         fn(results, resolve<binding, resolve_type>(scope, host, context));

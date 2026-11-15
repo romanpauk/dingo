@@ -909,6 +909,18 @@ runtime_plan<Keeper> plan_runtime(const binding_layout<Keeper> &binding,
       break;
     }
     const bool final_step = last == plan.count;
+    // A copy of the element of a layer that may be empty the binding makes
+    // last is made where the request takes it: of the element the binding
+    // gives, or of the empty value it gives in place of it.
+    if (final_step && binding_step &&
+        kind == semantics::step::element_or_empty_copy &&
+        (plan.how == semantics::satisfaction::move ||
+         plan.how == semantics::satisfaction::copy)) {
+      add((*table)[slot_of(semantics::step::element_or_empty)], to);
+      made.last = last_step::copy;
+      made.quals = from.quals[1];
+      break;
+    }
     // The last step of a plan of a value makes it where the request takes
     // it: a copy, or a run of wraps of the shape of the request.
     if (final_step && !binding_step &&
@@ -1164,6 +1176,12 @@ struct binding_sources {
         made.of[classes.of[each.parent]] |= release_array_mask;
       } else {
         made.of[classes.of[each.parent]] |= mask_of(each.via);
+        // A request makes the copy of what element_or_empty gives where it
+        // takes it.
+        if (each.via == semantics::step::element_or_empty_copy) {
+          made.of[classes.of[each.parent]] |=
+              mask_of(semantics::step::element_or_empty);
+        }
       }
     }
     return made;
