@@ -619,10 +619,13 @@ def consistent(domain):
             if (goal[1] == "interface") == context.abstract]
 
 
-def expected(reached, context, layers, element, quals=None):
+def expected(reached, context, layers, element, quals=None,
+             candidates=None):
     """The answers of the specification for a request, by its search of
     every thing the stored object reaches."""
-    things = [thing for thing in reached if thing.element == element]
+    if candidates is None:
+        candidates = semantics.candidates_of(reached)
+    things = candidates.get((element, layers), ())
     answers = []
     for category in Category:
         for lifetime_of in LIFETIMES:
@@ -688,11 +691,14 @@ def cases_of(domain, mode=None, kept=None):
         reached = (None if kept is not None else
                    semantics.requested(start, context) if mode == "split"
                    else semantics.reachable(start, context))
+        candidates = (semantics.candidates_of(reached) if reached is not None
+                      else None)
         for layers, element, goal, *qualified in goals:
             quals = qualified[0] if qualified else None
             yield (f"{name}/{goal}",
                    next(kept) if kept is not None else
-                   expected(reached, context, layers, element, quals),
+                   expected(reached, context, layers, element, quals,
+                            candidates),
                    encode(context, start, layers, element, 0, quals))
 
 

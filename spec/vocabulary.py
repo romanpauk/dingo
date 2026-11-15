@@ -3,6 +3,7 @@ of, an enum each. The value of a member is its name where the specification
 is written out, such as in a cell of a probe."""
 
 from enum import Enum
+import functools
 import itertools
 
 
@@ -176,6 +177,7 @@ class Shape(Dimension):
         return self is Shape.OPTIONAL
 
 
+@functools.cache
 def _wrappers_of(shape):
     names = []
     rest = shape.value

@@ -9,28 +9,11 @@
   "interface": "leaf",
 } %}
 
-{% set CATEGORY = {
-  "X": None,
-  "const X": "constant",
-  "X &": "lref",
-  "const X &": "clref",
-  "X &&": "rref",
-  "X *": "ptr",
-  "const X *": "cptr",
-} %}
-
 {% set KEY = "dingo::key_type<std::size_t, 1>" %}
 
 {#- The type a leaf stores in a stored form. -#}
 {% macro stored(form, leaf) -%}
 {{ spell_stored(form) | replace("L", LEAF[leaf.value]) }}
-{%- endmacro %}
-
-{#- A request: a shape of the interface I<index>, in a category. -#}
-{% macro request(r) -%}
-{% set shaped = spell_shape(r.shape, "I" ~ r.index) %}
-{% if CATEGORY[r.category.value] is none %}{{ shaped }}{% else
-%}shape::{{ CATEGORY[r.category.value] }}<{{ shaped }}>{% endif %}
 {%- endmacro %}
 
 {#- A request as it names its binding: with its annotation or its key. -#}

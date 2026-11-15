@@ -27,7 +27,7 @@ struct unit_{{ loop.index0 }} {
     dingo::static_container<dingo::bindings<dingo::bind<{{ arguments }}>>> c;
 {% endif %}
 {% for request in u.probed() %}
-    empty_probe<{{ cpp.request(request) }}>("{{ u.prefix(request) }}{{ request.name }}", c);
+    empty_probe<{{ spell_request(request) }}>("{{ u.prefix(request) }}{{ request.name }}", c);
 {% endfor %}
   }
 };

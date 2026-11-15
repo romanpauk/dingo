@@ -42,7 +42,8 @@ def is_defect(cell):
 
 def counts_table(cells, dimensions, dimension):
     """The outcomes counted by the values of a dimension of the cells."""
-    outcomes = [o for o in MARKS if any(c["outcome"] == o.value for c in cells)]
+    present = {cell["outcome"] for cell in cells}
+    outcomes = [o for o in MARKS if o.value in present]
     totals = {}
     for cell in cells:
         value = cell["cell"].split("/")[dimensions.index(dimension)]

@@ -2,6 +2,7 @@
 the requests of the grammar over them, and a probe of a request."""
 
 from dataclasses import dataclass, field
+import functools
 
 from spec.vocabulary import WRAPPERS, Category, Shape, StoredForm
 
@@ -37,6 +38,28 @@ def spell_stored(form):
     for name in reversed(form.wrappers):
         spelled = WRAPPERS[name][1].format(spelled)
     return spelled
+
+
+# The alias templates of test/model/leaves.h that spell a request in a
+# category of its shape X; none of a value.
+CATEGORY_ALIASES = {
+    Category.VALUE: None,
+    Category.CONST: "constant",
+    Category.LVALUE_REFERENCE: "lref",
+    Category.CONST_LVALUE_REFERENCE: "clref",
+    Category.RVALUE_REFERENCE: "rref",
+    Category.POINTER: "ptr",
+    Category.CONST_POINTER: "cptr",
+}
+
+
+@functools.cache
+def spell_request(request):
+    """A request as a program spells it: a shape of the interface
+    I<index>, in its category."""
+    shaped = spell_shape(request.shape, f"I{request.index}")
+    alias = CATEGORY_ALIASES[request.category]
+    return shaped if alias is None else f"shape::{alias}<{shaped}>"
 
 
 def spell_shape(shape, inner):

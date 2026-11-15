@@ -4,6 +4,7 @@ empty. A unit is a registration of either container, its stored object
 empty in its outermost layer, or in the layer that holds."""
 
 from dataclasses import dataclass, replace
+import multiprocessing
 
 from spec import semantics
 from spec.vocabulary import (Container, Entry, InterfaceSet, Leaf, Position,
@@ -24,7 +25,8 @@ class Unit(ConversionUnit):
     """A registration whose stored object holds no leaf: its outermost layer
     is empty, or, inner, holds an empty one."""
     inner: bool = False
-    # The requests probed, when only some of them are.
+    # The requests probed, once they are known: all those defined when a
+    # layer is empty, or some of them.
     only: tuple = None
 
     @property
@@ -84,6 +86,20 @@ def units():
             not (container is Container.STATIC and scope is Scope.EXTERNAL)
             and semantics.registrable(container, scope, form, Leaf.COPYABLE,
                                       interfaces)]
+
+
+def probed_of(unit):
+    """The requests a unit probes, in a process of its own."""
+    return tuple(unit.probed())
+
+
+def specified(units, jobs):
+    """The units that probe a request, each with the requests it probes,
+    which the specification tells in processes at once."""
+    with multiprocessing.Pool(jobs) as pool:
+        found = pool.map(probed_of, units)
+    return [replace(unit, only=probed)
+            for unit, probed in zip(units, found) if probed]
 
 
 def batch_name(index):

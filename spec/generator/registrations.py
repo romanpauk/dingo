@@ -2,6 +2,7 @@
 registration binds, made through every entry point, in every position."""
 
 from dataclasses import dataclass
+import multiprocessing
 
 from spec import semantics
 from spec.vocabulary import (NESTED_SHAPES, Answer, Category, Container,
@@ -128,7 +129,21 @@ class Registration:
 
     def expectation(self, probe):
         """What the specification expects of a probe: the answer, and the
-        known limitations of the library it is expected with."""
+        known limitations of the library it is expected with; as specify
+        made it, when it did."""
+        found = SPECIFIED.get(self.cell(probe))
+        return found[0] if found else self.expected(probe)
+
+    def fewest(self, probe):
+        """The fewest copies and moves of the leaf the specification
+        resolves a probe with, as (copies, moves); as specify made it, when
+        it did."""
+        found = SPECIFIED.get(self.cell(probe))
+        return (found[1] if found and found[1] is not None
+                else self.fewest_of(probe))
+
+    def expected(self, probe):
+        """What the specification expects of a probe, asked of it."""
         if not semantics.registrable(self.container, self.scope, self.form,
                                      self.leaf, self.interfaces_declared):
             return Answer.NOT_REGISTRABLE, ()
@@ -143,9 +158,9 @@ class Registration:
         return semantics.failure(self.container, *request, self.selection,
                                  self.interfaces_declared), limitations
 
-    def fewest(self, probe):
-        """The fewest copies and moves of the leaf the specification
-        resolves a probe with, as (copies, moves)."""
+    def fewest_of(self, probe):
+        """The fewest copies and moves of a probe, asked of the
+        specification."""
         return semantics.fewest(
             self.scope, self.form, self.leaf, probe.request.interface.bound,
             probe.request.shape, probe.request.category,
@@ -192,6 +207,39 @@ class Registration:
         moves is what passing it on in its position does."""
         return (probe.request.shape is Shape.OBJECT and
                 probe.request.interface.bound == semantics.LEAF)
+
+
+# What the specification answers of the probes of this run, by cell: the
+# expectation, and the fewest copies and moves of one it expects to resolve.
+# specify makes them in processes at once before the probes are made, which
+# the threads that make the probes would ask of it one at a time.
+SPECIFIED = {}
+
+
+def specify_unit(work):
+    """The answers of the specification of the probes of a registration, in
+    a process of its own: a registration at a time, as the specification
+    searches what it stores once for all its probes."""
+    unit, probes = work
+    found = {}
+    for probe in probes:
+        expected = unit.expected(probe)
+        fewest = (unit.fewest_of(probe) if expected[0] is Answer.RESOLVED
+                  and not expected[1] else None)
+        found[unit.cell(probe)] = (expected, fewest)
+    return found
+
+
+def specify(units, selected, jobs):
+    """Makes the answers of the specification of the valid probes of units,
+    those selected when told which, in processes at once."""
+    work = [(unit, [probe for probe, invalid in unit.probes()
+                    if not invalid and (selected is None or
+                                        selected(unit, probe))])
+            for unit in units]
+    with multiprocessing.Pool(jobs) as pool:
+        for found in pool.imap_unordered(specify_unit, work):
+            SPECIFIED.update(found)
 
 
 def registrations():

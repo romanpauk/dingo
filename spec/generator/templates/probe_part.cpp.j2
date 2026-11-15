@@ -2,7 +2,7 @@
 {% import "registration.j2" as reg %}
 {% set selection = r.selection %}
 {% macro dependency(probe) -%}
-{{ cpp.selected(selection, cpp.request(probe.request)) }}
+{{ cpp.selected(selection, spell_request(probe.request)) }}
 {%- endmacro %}
 {#- The expression that makes the request of a probe in container c. -#}
 {% macro make(probe) -%}
@@ -15,7 +15,7 @@ c.invoke([]({{ selected }} arg) { return received<{{ selected }}>(pass_on<{{ sel
 {%- elif entry == "construct" -%}
 c.template construct<{{ selected }}>()
 {%- elif r.selection.value == "keyed" and r.container.value == "runtime" -%}
-c.template resolve<{{ cpp.request(probe.request) }}>(std::size_t(1))
+c.template resolve<{{ spell_request(probe.request) }}>(std::size_t(1))
 {%- else -%}
 c.template resolve<{{ selected }}>()
 {%- endif %}

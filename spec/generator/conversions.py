@@ -5,6 +5,7 @@ plainly: both containers plan a request of a binding alike, and selection
 does not change it."""
 
 from dataclasses import dataclass
+import multiprocessing
 
 from spec import semantics
 from spec.vocabulary import (Category, Container, Entry, InterfaceSet, Leaf,
@@ -49,6 +50,14 @@ class Unit(Registration):
                 for request in self.requests()}
 
     def expectation(self, request, limits=semantics.LIMITATIONS):
+        """What the specification expects of a request under limitations,
+        as specify made it of the limitations of the library, when it did."""
+        name = self.prefix(request) + request.name
+        if limits == semantics.LIMITATIONS and name in SPECIFIED:
+            return SPECIFIED[name]
+        return self.expected(request, limits)
+
+    def expected(self, request, limits):
         """Whether the specification, under limitations, resolves a request
         at all, in a call, and for the caller, in a resolve; None when it
         says nothing of the request. It does not of a storage that cannot be
@@ -131,6 +140,26 @@ def refused(unit, request, mask):
     return "; ".join(reasons) if reasons else None
 
 
+# What the specification expects of each cell of this run under the
+# limitations of the library, by cell: made by specify in processes at once.
+SPECIFIED = {}
+
+
+def specify_unit(unit):
+    """The expectations of the cells of a unit, in a process of its own."""
+    return {name: unit.expected(request, semantics.LIMITATIONS)
+            for name, request in unit.cells().items()}
+
+
+def specify(units, jobs):
+    """Makes the expectations of the cells of units, in processes at once:
+    a unit at a time, as the specification searches what it stores once for
+    all its requests."""
+    with multiprocessing.Pool(jobs) as pool:
+        for found in pool.imap_unordered(specify_unit, units):
+            SPECIFIED.update(found)
+
+
 def units():
     """Every registration of the runtime container the library accepts."""
     return [Unit(Container.RUNTIME, scope, form, leaf, interfaces,
@@ -178,32 +207,36 @@ def apply_semantics(cells, units):
     specification without the limitations of the library resolves nowhere,
     unless it refuses it on purpose; and one it refuses on purpose that it
     resolves."""
-    requests = {cell: (unit, request) for unit in units
-                for cell, request in unit.cells().items()}
-    for cell in cells:
-        if cell["cell"] not in requests:
-            continue
-        unit, request = requests[cell["cell"]]
-        expected = unit.expectation(request)
-        if expected is None:
-            continue
-        anywhere, for_caller = expected
-        outcome = Outcome(cell["outcome"])
-        if (outcome in (Outcome.PUBLISHED, Outcome.PLACED) and
-                not anywhere):
-            cell.update(outcome=Outcome.UNEXPECTED.value,
-                        error=f"{outcome.value}, which the specification "
-                        "resolves nowhere")
-        elif (outcome in (Outcome.UNPUBLISHED, Outcome.PLACED) and
-              for_caller):
-            cell.update(outcome=Outcome.UNEXPECTED.value,
-                        error=f"{outcome.value}, which the specification "
-                        "resolves for the caller")
-        elif cell.get("native"):
-            error = native_error(unit, request, cell["native"], anywhere)
-            if error is not None:
-                cell.update(outcome=Outcome.UNEXPECTED.value, error=error)
+    recorded = {cell["cell"]: cell for cell in cells}
+    # A unit at a time, as the specification searches what a unit stores
+    # once for all its requests.
+    for unit in units:
+        for name, request in unit.cells().items():
+            if name in recorded:
+                compare(recorded[name], unit, request)
     return cells
+
+
+def compare(cell, unit, request):
+    """Marks a cell unexpected where it is not what the specification
+    expects of it."""
+    expected = unit.expectation(request)
+    if expected is None:
+        return
+    anywhere, for_caller = expected
+    outcome = Outcome(cell["outcome"])
+    if outcome in (Outcome.PUBLISHED, Outcome.PLACED) and not anywhere:
+        cell.update(outcome=Outcome.UNEXPECTED.value,
+                    error=f"{outcome.value}, which the specification "
+                    "resolves nowhere")
+    elif outcome in (Outcome.UNPUBLISHED, Outcome.PLACED) and for_caller:
+        cell.update(outcome=Outcome.UNEXPECTED.value,
+                    error=f"{outcome.value}, which the specification "
+                    "resolves for the caller")
+    elif cell.get("native"):
+        error = native_error(unit, request, cell["native"], anywhere)
+        if error is not None:
+            cell.update(outcome=Outcome.UNEXPECTED.value, error=error)
 
 
 def native_error(unit, request, mask, anywhere):

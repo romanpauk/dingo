@@ -39,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from spec.generator import driver, report  # noqa: E402
 from spec.generator.conversions import (  # noqa: E402
-    apply_semantics, batch_name, compile_units, units)
+    apply_semantics, batch_name, compile_units, specify, units)
 
 DIMENSIONS = ("scope", "form", "leaf", "interfaces", "interface", "request")
 
@@ -100,6 +100,7 @@ def main():
                                           for unit in batches[index]))
     cells = []
     driver.set_jobs(options.jobs)
+    specify(checked, options.jobs)
     with concurrent.futures.ThreadPoolExecutor(options.jobs) as executor:
         for records in executor.map(
                 lambda item: compile_units(options.compiler, flags,

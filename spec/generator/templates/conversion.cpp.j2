@@ -20,7 +20,7 @@ struct unit_{{ loop.index0 }} {
     if constexpr (registrable<registration, false>()) {
       using model = dingo::detail::binding_model<registration>;
 {% for request in u.requests() %}
-      publication<model, I{{ request.index }}, {{ cpp.request(request) }}, {{ cpp.LEAF[u.leaf.value] }}, {{ "true" if u.makes else "false" }}>("{{ u.prefix(request) }}", "{{ request.name }}");
+      publication<model, I{{ request.index }}, {{ spell_request(request) }}, {{ cpp.LEAF[u.leaf.value] }}, {{ "true" if u.makes else "false" }}>("{{ u.prefix(request) }}", "{{ request.name }}");
 {% endfor %}
     } else {
       record("{{ u.prefix(none) }}", "not_registrable", nullptr);

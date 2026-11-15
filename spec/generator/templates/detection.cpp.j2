@@ -9,11 +9,11 @@
 {% set keyed = unit.selection.value == "keyed" %}
 {#- The class generated around the parameter a probe requests. -#}
 {% macro made(probe) -%}
-{{ KIND[unit.kind.value] }}<{{ cpp.selected(unit.selection, cpp.request(probe.request)) }}>
+{{ KIND[unit.kind.value] }}<{{ cpp.selected(unit.selection, spell_request(probe.request)) }}>
 {%- endmacro %}
 {#- The factory of a constructor, or none for shape detection. -#}
 {% macro factory(probe) -%}
-{% set parameter = "parameter_t<" ~ cpp.selected(unit.selection, cpp.request(probe.request)) ~ ">" %}
+{% set parameter = "parameter_t<" ~ cpp.selected(unit.selection, spell_request(probe.request)) ~ ">" %}
 {% if probe.operation.construction.value == "explicit" -%}
 dingo::constructor<{{ made(probe) }}({{ ([parameter] * unit.kind.arity) | join(", ") }})>
 {%- elif probe.operation.construction.value == "signature" -%}

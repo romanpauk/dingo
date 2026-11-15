@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from spec.generator import driver, report  # noqa: E402
 from spec.generator.emptiness import (  # noqa: E402
-    apply_semantics, batch_name, compile_units, units)
+    apply_semantics, batch_name, compile_units, specified, units)
 
 DIMENSIONS = ("container", "scope", "form", "leaf", "interfaces", "empty",
               "interface", "request")
@@ -70,8 +70,8 @@ def main():
     flags = driver.precompile_header(options.compiler, flags, options.work,
                                      "emptiness.h") + flags
 
-    checked = [unit for unit in units()
-               if unit.probed() and re.search(options.only, unit.base)]
+    checked = specified([unit for unit in units()
+                         if re.search(options.only, unit.base)], options.jobs)
     # A program is of one container and one scope, so that it reads their
     # headers alone, and of as many requests as it compiles in its memory.
     batches = []

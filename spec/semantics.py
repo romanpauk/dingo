@@ -14,6 +14,7 @@ over a step, a reference or a storage the rules allow, which the expectations
 apply on top of them.
 """
 
+import collections
 from dataclasses import dataclass, replace
 from enum import Enum
 import functools
@@ -924,13 +925,13 @@ def search(starts, context, take):
     take gives, each with the costs of the derivations that reach it that no
     other one of them dominates."""
     found = {}
-    frontier = []
+    frontier = collections.deque()
     for thing, cost in starts:
         if not dominated(found.get(thing, ()), cost):
             found.setdefault(thing, set()).add(cost)
             frontier.append((thing, cost))
     while frontier:
-        thing, cost = frontier.pop(0)
+        thing, cost = frontier.popleft()
         if cost not in found[thing]:
             continue
         for kind, following in take(thing, context):
@@ -1040,6 +1041,30 @@ def requested(start, context):
     reachable gives what is reached from the stored object itself."""
     found = search(layer_sources(start, context), context, request_steps)
     return {thing: frozenset(costs) for thing, costs in found.items()}
+
+
+def candidates_of(reached):
+    """The things reached that may satisfy a request of an element and its
+    layers, by (element, layers): those of the layers, then the raw pointers
+    to them, which a pointer request may take. satisfactions of them is that
+    of every thing reached, of far fewer."""
+    found = {}
+    for thing in reached:
+        found.setdefault((thing.element, thing.layers), []).append(thing)
+    for thing in reached:
+        if (thing.layers and
+                LAYERS[thing.layers[0]].adopted_with is not None):
+            found.setdefault((thing.element, thing.layers[1:]),
+                             []).append(thing)
+    return found
+
+
+@functools.lru_cache(maxsize=16)
+def requested_candidates(start, context):
+    """What requests reach from the layer sources of a stored object, and
+    its candidates_of."""
+    reached = requested(start, context)
+    return reached, candidates_of(reached)
 
 
 # What a request asks of the things.
@@ -1208,8 +1233,9 @@ def converted(scope, form, leaf, bound, shape, category, limits=frozenset(),
                       limits)
     if not makes_storage(form, context):
         return None
-    reached = requested(source(scope, form, interfaces), context)
-    things = [thing for thing in reached if thing.element == element]
+    reached, candidates = requested_candidates(
+        source(scope, form, interfaces), context)
+    things = candidates.get((element, layers), ())
     return fewest_of(
         [(affected(cost, effect), thing.absent)
          for thing, effect in satisfactions(
@@ -1240,8 +1266,9 @@ def fewest(scope, form, leaf, bound, shape, category, position, entry,
                       limits)
     if not makes_storage(form, context):
         return None
-    reached = requested(source(scope, form, interfaces), context)
-    things = [thing for thing in reached if thing.element == element]
+    reached, candidates = requested_candidates(
+        source(scope, form, interfaces), context)
+    things = candidates.get((element, layers), ())
     direct = position is Position.DIRECT
     entry = entry_of(entry, position, selection, category)
     if selector_rejects(layers, category, position, entry, selection,
@@ -1325,9 +1352,9 @@ def explain(scope, form, leaf, bound, shape, limits=frozenset(),
                       bound.element == "interface", limits)
     start = source(scope, form, interfaces)
     parent = {start: None}
-    frontier = [start]
+    frontier = collections.deque([start])
     while frontier:
-        thing = frontier.pop(0)
+        thing = frontier.popleft()
         for kind, following in steps(thing, context):
             if following not in parent:
                 parent[following] = (kind, thing)
