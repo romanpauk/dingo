@@ -12,29 +12,52 @@
 #include <dingo/request/decomposition.h>
 #include <dingo/type/shape.h>
 
-#include <functional>
 #include <type_traits>
 #include <utility>
 
 namespace dingo {
 
 namespace detail {
+template <typename Member> struct member_class;
+template <typename Type, typename Class> struct member_class<Type Class::*> {
+  using type = Class;
+};
+
+// A member pointer applied to an object, or to what a pointer or a handle to
+// one points to: its function called, or its data member read.
+template <typename Member, typename Object, typename... Args>
+decltype(auto) apply_member(Member member, Object &&object, Args &&...args) {
+  using class_type = typename member_class<Member>::type;
+  auto &&target = [&]() -> decltype(auto) {
+    if constexpr (std::is_base_of_v<class_type, std::decay_t<Object>>) {
+      return std::forward<Object>(object);
+    } else {
+      return *std::forward<Object>(object);
+    }
+  }();
+  if constexpr (std::is_member_function_pointer_v<Member>) {
+    return (std::forward<decltype(target)>(target).*
+            member)(std::forward<Args>(args)...);
+  } else {
+    return std::forward<decltype(target)>(target).*member;
+  }
+}
+
 template <typename Signature> struct callable_invoke;
 
 template <typename R, typename... Args> struct callable_invoke<R(Args...)> {
   // A callable is called directly, so that a value its parameter takes
   // initializes it in place: a type that can be neither copied nor moved can
-  // be passed by value. std::invoke would take it as a reference and have to
-  // move it. A member pointer is invoked.
+  // be passed by value. A member pointer is applied to the object its first
+  // parameter resolves.
   template <typename Fn, typename Context, typename Container, typename Scope>
   static decltype(auto) construct(Fn &&fn, Scope scope, Context &ctx,
                                   Container &container) {
     (void)scope;
     if constexpr (std::is_member_pointer_v<std::decay_t<Fn>>) {
-      return std::invoke(
-          std::forward<Fn>(fn),
-          ctx.template resolve<Args>(detail::dependency_scope<Args>(scope),
-                                     container)...);
+      return apply_member(
+          fn, ctx.template resolve<Args>(detail::dependency_scope<Args>(scope),
+                                         container)...);
     } else {
       return std::forward<Fn>(fn)(ctx.template resolve<Args>(
           detail::dependency_scope<Args>(scope), container)...);

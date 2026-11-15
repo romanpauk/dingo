@@ -31,8 +31,11 @@
 using namespace dingo;
 
 namespace {
+struct made_by_callable;
+
 struct marked {
   int marker() const { return 3; }
+  made_by_callable make() const;
 };
 
 using value_binding = dingo::bind<scope<shared>, storage<marked>>;
@@ -72,6 +75,10 @@ struct made_by_callable {
 
   int value;
 };
+
+made_by_callable marked::make() const {
+  return made_by_callable(marker() + 40);
+}
 
 struct overloaded_factory {
   made_by_callable operator()(marked &dependency) const {
@@ -132,6 +139,15 @@ TYPED_TEST(factory_kinds_test, construct_with_callable_of_given_signature) {
     auto made = container.template construct<made_by_callable>(
         callable<made_by_callable(marked &)>(overloaded_factory{}));
     EXPECT_EQ(made.value, 21);
+  });
+}
+
+// A member function is called on the object its first parameter resolves.
+TYPED_TEST(factory_kinds_test, construct_with_member_function_callable) {
+  TypeParam::template with<value_binding>([](auto &container) {
+    auto made = container.template construct<made_by_callable>(
+        callable<made_by_callable(const marked &)>(&marked::make));
+    EXPECT_EQ(made.value, 43);
   });
 }
 

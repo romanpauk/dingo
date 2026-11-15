@@ -13,7 +13,6 @@
 #include <dingo/lookup/tags.h>
 
 #include <cstddef>
-#include <functional>
 #include <tuple>
 #include <type_traits>
 
@@ -95,18 +94,3 @@ using base_lookup_definition_t =
 } // namespace detail
 
 } // namespace dingo
-
-namespace std {
-template <typename Rtti> struct hash<dingo::detail::base_lookup_key<Rtti>> {
-  std::size_t
-  operator()(const dingo::detail::base_lookup_key<Rtti> &key) const {
-    using lookup_type_index =
-        typename dingo::detail::base_lookup_key<Rtti>::type_index;
-    const auto interface_hash =
-        std::hash<lookup_type_index>{}(key.interface_type);
-    const auto key_hash = std::hash<lookup_type_index>{}(key.key_type);
-    return interface_hash ^ (key_hash + 0x9e3779b9U + (interface_hash << 6U) +
-                             (interface_hash >> 2U));
-  }
-};
-} // namespace std
