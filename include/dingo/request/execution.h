@@ -14,7 +14,6 @@
 #include <dingo/type/collection_traits.h>
 #include <dingo/type/type_traits.h>
 
-#include <array>
 #include <cassert>
 #include <cstdint>
 #include <memory>

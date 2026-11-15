@@ -17,7 +17,6 @@
 #include <dingo/lookup/unordered.h>
 #include <dingo/type/shape.h>
 
-#include <tuple>
 #include <type_traits>
 
 namespace dingo {

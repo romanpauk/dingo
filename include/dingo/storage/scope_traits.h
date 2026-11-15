@@ -22,7 +22,6 @@
 #include <cstddef>
 #include <memory>
 #include <new>
-#include <optional>
 #include <type_traits>
 #include <utility>
 

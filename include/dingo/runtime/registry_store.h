@@ -34,19 +34,13 @@
 #include <dingo/type/collection_traits.h>
 #include <dingo/type/shape.h>
 
-#include <algorithm>
 #include <cassert>
 #include <cstddef>
-#include <functional>
 #include <limits>
-#include <map>
 #include <memory>
 #include <new>
-#include <tuple>
 #include <type_traits>
-#include <typeindex>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace dingo {

@@ -18,11 +18,9 @@
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/shape.h>
 
-#include <atomic>
 #include <memory>
 #include <new>
 #include <type_traits>
-#include <vector>
 
 namespace dingo {
 struct shared_cyclical {};

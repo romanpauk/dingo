@@ -23,8 +23,6 @@
 #include <dingo/type/shape.h>
 #include <dingo/type/type_traits.h>
 
-#include <array>
-#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <memory>

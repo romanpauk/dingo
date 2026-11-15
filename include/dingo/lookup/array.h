@@ -10,7 +10,6 @@
 #include <dingo/lookup/storage.h>
 #include <dingo/lookup/tags.h>
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <optional>

@@ -15,7 +15,6 @@
 #include <dingo/memory/object_layout.h>
 #include <dingo/type/annotated.h>
 
-#include <array>
 #include <cassert>
 #include <cstddef>
 #include <type_traits>

@@ -19,7 +19,6 @@
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/annotated.h>
 
-#include <functional>
 #include <memory>
 #include <type_traits>
 #include <utility>

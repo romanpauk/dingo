@@ -14,7 +14,6 @@
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <type_traits>
