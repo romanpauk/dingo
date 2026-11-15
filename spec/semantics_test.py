@@ -34,11 +34,24 @@ def defined(unit, request):
         for entry in (Entry.INVOKE, Entry.RESOLVE))
 
 
+def converted(unit, request):
+    """The fewest copies and moves of the leaf the conversion of a request
+    makes, as the specification says; None when it says nothing of them, as
+    of the other alternative, which holds no leaf."""
+    bound = request.interface.bound
+    if bound.element == "other":
+        return None
+    return semantics.converted(unit.scope, unit.form, unit.leaf, bound,
+                               request.shape, request.category,
+                               semantics.LIMITATIONS,
+                               unit.interfaces_declared)
+
+
 def answers(cells):
     """What the specification says of each cell: whether it resolves in a
     call and for the caller, its fewest copies and moves, and whether it is
     defined when a layer is empty."""
-    return [(unit.expectation(request), unit.converted(request),
+    return [(unit.expectation(request), converted(unit, request),
              defined(unit, request))
             for unit, request in cells]
 
