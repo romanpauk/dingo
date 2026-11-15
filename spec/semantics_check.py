@@ -50,7 +50,7 @@ ORIGINS = {semantics.Origin.BORROWED: 0, semantics.Origin.MADE: 1,
            semantics.Origin.COPIED: 2}
 OWNERS = {semantics.Owner.NONE: 0, semantics.Owner.SOLE: 1,
           semantics.Owner.SHARED: 2}
-LIMITS = {frozenset(): 0, semantics.LIMITATIONS: 3}
+LIMITS = {frozenset(): 0, semantics.LIMITATIONS: 7}
 SOURCE = Path(__file__).parents[1] / "test" / "model" / "semantics.cpp"
 # The standard layers, which the program classifies the standard wrappers as.
 STANDARD = tuple(semantics.LAYERS)
@@ -165,12 +165,13 @@ using namespace dingo::model;
 
 namespace {
 void print_kind(const dingo::semantics::layer_kind &kind) {
-  std::printf("%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d",
+  std::printf("%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d",
               static_cast<int>(kind.owns), kind.shares_element, kind.copyable,
               kind.made_from_value, kind.holds_element_only, kind.relocatable,
               kind.gives_element, kind.bounded, kind.may_be_empty,
               kind.has_empty_value, kind.adopts, kind.decays, kind.adopted,
-              kind.adopted_array, kind.rebinds, kind.observes);
+              kind.adopted_array, kind.rebinds, kind.observes,
+              kind.qualifies);
 }
 
 template <typename Tag> void print_layer() {
@@ -250,7 +251,7 @@ def properties(layer, universe):
             int(layer.adopts), int(bool(layer.decays_to)),
             int(layer.adopted_with is not None),
             int(bool(layer.adopted_with)), int(layer.rebinds),
-            int(layer.observes), converts]
+            int(layer.observes), int(layer.qualifies), converts]
 
 
 def order(names):
@@ -275,7 +276,8 @@ def standard():
     """The stored objects the specification makes, with the context of their
     registration, and the requests of them."""
     goals = [(semantics.SHAPES[shape] + bound.layers, bound.element,
-              f"{shape.value}/{bound.element}{list(bound.layers)}")
+              f"{shape.value}/{bound.element}{list(bound.layers)}",
+              semantics.shape_quals(shape, bound))
              for shape in semantics.SHAPES for bound in bounds()]
     for scope in Scope:
         for form in StoredForm:
@@ -302,16 +304,18 @@ def made_layers():
     is possible, as semantics.possible says."""
     emptiness = ((False, False), (True, False), (True, True))
     for index, (owner, shares, copyable, made, holds, relocatable, empty,
-                adopts, rebinds, observes) in enumerate(itertools.product(
-                    semantics.Owner, (False, True), (False, True),
-                    (False, True), (False, True), (False, True), emptiness,
-                    (False, True), (False, True), (False, True))):
+                adopts, rebinds, observes, qualifies) in enumerate(
+                    itertools.product(
+                        semantics.Owner, (False, True), (False, True),
+                        (False, True), (False, True), (False, True),
+                        emptiness, (False, True), (False, True),
+                        (False, True), (False, True))):
         layer = semantics.Layer(
             f"made{index}", owner, shares_element=shares, copyable=copyable,
             made_from_value=made, holds_element_only=holds,
             relocatable=relocatable, may_be_empty=empty[0],
             has_empty_value=empty[1], adopts=adopts, rebinds=rebinds,
-            observes=observes)
+            observes=observes, qualifies=qualifies)
         if semantics.possible(layer):
             yield layer
 
@@ -348,6 +352,13 @@ def swept():
         requested += [(name, "array"), (name, "array2")]
         goals = [(stack, element, f"{list(stack)}/{element}")
                  for stack in requested for element in ELEMENTS]
+        # The element const, in a stack of the layer, of it and a pointer,
+        # and of it twice.
+        goals += [(stack, element, f"{list(stack)}/const {element}",
+                   (0,) * len(stack) + (semantics.CONST,))
+                  for stack in ((name,), (name, "pointer"), ("pointer", name),
+                                (name, name))
+                  for element in ELEMENTS]
         for scope, scope_traits in semantics.SCOPES.items():
             for leaf, traits in semantics.LEAVES.items():
                 for abstract in (False, True):
@@ -476,7 +487,8 @@ def rules_cases(starts):
                            f"{list(bound.layers)}",
                            " ".join(answers),
                            encode(context, start, layers, bound.element,
-                                  len(shaped)))
+                                  len(shaped),
+                                  semantics.shape_quals(shape, bound)))
 
 
 def compare_rules_part(arguments):
@@ -553,7 +565,7 @@ def qualified():
     for shape in semantics.SHAPES:
         for bound in bounds():
             layers = semantics.SHAPES[shape] + bound.layers
-            if len(layers) > 1:
+            if len(layers) > 1 or shape.const_element:
                 continue
             for quals in itertools.product(QUALS, *[INNER_QUALS] *
                                            len(layers)):

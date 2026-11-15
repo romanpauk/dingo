@@ -1130,3 +1130,61 @@ TEST(type_registration_test, construct_of_rvalue_reference_resolves_it) {
   static_container<bindings<dingo::bind<scope<unique>, storage<A>>>> fixed;
   EXPECT_EQ(fixed.construct<A &&>().value, 7);
 }
+
+namespace qualification_test {
+struct I {
+  virtual ~I() = default;
+  virtual int get() const = 0;
+};
+struct T : I {
+  T() {}
+  int value = 7;
+  int get() const override { return value; }
+};
+struct U {
+  U() {}
+  int value = 3;
+};
+
+// A handle the binding keeps is converted to one of a const element, which
+// shares it, alone or held by an optional, and so is one of its interface.
+template <typename Container> void check_kept(Container &container) {
+  auto &stored = container.template resolve<std::shared_ptr<T> &>();
+  auto converted = container.template resolve<std::shared_ptr<const T>>();
+  EXPECT_EQ(converted.get(), stored.get());
+  EXPECT_EQ(converted.use_count(), stored.use_count());
+  auto held =
+      container.template resolve<std::optional<std::shared_ptr<const T>>>();
+  ASSERT_TRUE(held.has_value());
+  EXPECT_EQ(held->get(), stored.get());
+  auto interface = container.template resolve<std::shared_ptr<const I>>();
+  EXPECT_EQ(interface.get(), static_cast<I *>(stored.get()));
+}
+
+// A handle a request makes of a value is made of a const element at once.
+template <typename Container> void check_made(Container &container) {
+  auto sole = container.template resolve<std::unique_ptr<const U>>();
+  ASSERT_NE(sole, nullptr);
+  EXPECT_EQ(sole->value, 3);
+  auto shared = container.template resolve<std::shared_ptr<const U>>();
+  ASSERT_NE(shared, nullptr);
+  EXPECT_EQ(shared->value, 3);
+}
+} // namespace qualification_test
+
+TEST(type_registration_test, handle_converts_to_one_of_a_const_element) {
+  using namespace qualification_test;
+  container<> runtime;
+  runtime.register_type<scope<shared>, storage<std::shared_ptr<T>>,
+                        interfaces<T, I>>();
+  runtime.register_type<scope<unique>, storage<U>>();
+  check_kept(runtime);
+  check_made(runtime);
+
+  static_container<bindings<
+      dingo::bind<scope<shared>, storage<std::shared_ptr<T>>, interfaces<T, I>>,
+      dingo::bind<scope<unique>, storage<U>>>>
+      fixed;
+  check_kept(fixed);
+  check_made(fixed);
+}

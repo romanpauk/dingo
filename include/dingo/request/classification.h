@@ -143,6 +143,25 @@ template <typename Wrapper> constexpr semantics::layer_kind wrapper_kind() {
     // An observer is made of a raw pointer to its element.
     kind.observes = kind.owns == semantics::owner::none &&
                     std::is_constructible_v<copyable, copyable_probe *>;
+    // A handle converts to one of a more qualified element as a pointer to
+    // the element does, when its converting constructor does: of a copy of
+    // it, and of one moved out of.
+    if constexpr (traits::is_pointer_like) {
+      using const_copyable =
+          typename traits::template rebind_t<const copyable_probe>;
+      using volatile_copyable =
+          typename traits::template rebind_t<volatile copyable_probe>;
+      using const_movable =
+          typename traits::template rebind_t<const movable_probe>;
+      using volatile_movable =
+          typename traits::template rebind_t<volatile movable_probe>;
+      kind.qualifies =
+          std::is_constructible_v<const_movable, movable &&> &&
+          std::is_constructible_v<volatile_movable, movable &&> &&
+          (!kind.copyable ||
+           (std::is_constructible_v<const_copyable, const copyable &> &&
+            std::is_constructible_v<volatile_copyable, const copyable &>));
+    }
   } else {
     kind.copyable = std::is_copy_constructible_v<Wrapper>;
     kind.relocatable = std::is_move_constructible_v<Wrapper>;

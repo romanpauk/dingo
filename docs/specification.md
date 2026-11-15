@@ -155,14 +155,17 @@ interfaces that the specification gives. Then the probe makes these requests of
 each bound interface `I`:
 
 - The shapes `I`, `std::shared_ptr<I>`, `std::unique_ptr<I>`,
-  `std::optional<I>`, `std::shared_ptr<I[]>`, `std::unique_ptr<I[]>` and
-  `std::shared_ptr<I[2]>`, each in every category.
+  `std::optional<I>`, `std::shared_ptr<I[]>`, `std::unique_ptr<I[]>`,
+  `std::shared_ptr<I[2]>`, `std::shared_ptr<const I>` and
+  `std::unique_ptr<const I>`, each in every category. A handle of a `const I` is
+  a conversion of a handle of `I`, as a pointer to `I` converts.
 - For a stored form of two wrappers, such as
   `std::shared_ptr<std::optional<L>>`, also its own shape. For a
   `std::unique_ptr` outside, also the shape with `std::shared_ptr` outside,
   because the unique handle converts to it.
 - For a copyable or move-only leaf stored as `L` or in one wrapper, also every
-  shape of two wrappers, such as `std::optional<std::shared_ptr<I>>`.
+  shape of two wrappers, such as `std::optional<std::shared_ptr<I>>` and
+  `std::optional<std::shared_ptr<const I>>`.
 
 The probe records a request that is not valid C++ as `invalid`, with the reason.
 An example is an abstract type held by value.

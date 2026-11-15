@@ -177,7 +177,8 @@ class Registration:
         bound = request.interface.bound
         if (probe.operation.position is not Position.DIRECT or
                 semantics.SHAPES[request.shape] + bound.layers !=
-                source.layers or bound.element != source.element):
+                source.layers or bound.element != source.element or
+                request.shape.const_element):
             return False
         if semantics.SCOPES[self.scope].makes:
             return (probe.operation.entry is Entry.INVOKE and

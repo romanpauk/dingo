@@ -130,6 +130,11 @@ class Shape(Dimension):
     SHARED_ARRAY = "std::shared_ptr<I[]>"
     UNIQUE_ARRAY = "std::unique_ptr<I[]>"
     SHARED_BOUNDED_ARRAY = "std::shared_ptr<I[2]>"
+    # A handle of a const interface, which a handle of the interface
+    # converts to, as a pointer to it does; and one held by an optional.
+    SHARED_PTR_CONST = "std::shared_ptr<const I>"
+    UNIQUE_PTR_CONST = "std::unique_ptr<const I>"
+    OPTIONAL_SHARED_PTR_CONST = "std::optional<std::shared_ptr<const I>>"
     # Two wrappers or more, outermost first.
     locals().update(_composed_shapes())
 
@@ -142,6 +147,12 @@ class Shape(Dimension):
     @property
     def depth(self):
         return len(self.wrappers)
+
+    @property
+    def const_element(self):
+        """Whether the shape holds a const interface."""
+        return self.value.endswith("const I>") or self.value.endswith(
+            "const I>>")
 
     @property
     def holds_optional(self):
@@ -168,7 +179,7 @@ class Shape(Dimension):
 def _wrappers_of(shape):
     names = []
     rest = shape.value
-    while rest != "I":
+    while rest not in ("I", "const I"):
         name = next(name for name, (_, spelled, _) in WRAPPERS.items()
                     if rest.startswith(spelled.split("{}")[0]))
         names.append(name)

@@ -63,9 +63,9 @@ request.
 The rules name no wrapper. A layer is what the rules ask of it: what it owns,
 whether a copy of it holds the same element, whether it can be copied, moved,
 made of a value or be empty, whether an empty one is a value, whether it holds
-only its element, and whether it takes over a raw pointer. Whether an owned
-value of one layer converts to another is a fact of the two, given for the
-layers in play.
+only its element, whether it takes over a raw pointer, and whether a value of it
+converts to one of a more qualified element. Whether an owned value of one layer
+converts to another is a fact of the two, given for the layers in play.
 
 The layers of C++ itself are fixed: a pointer to an object, an array of unknown
 bound, a bounded array, and the pointer an array decays to. Every other layer is
@@ -264,6 +264,23 @@ other code.
    - Observers. A layer that owns nothing and is made of a raw pointer to its
      element is made of a pointer that owns nothing either: the `observe` step.
 
+   - Qualification. A raw pointer, and a handle whose type traits rebind to a
+     more qualified element it converts to, converts to one of a more qualified
+     element as C++ converts a pointer to the element: the `qualify` step. Its
+     element may gain any qualifiers, and a level below the element only where
+     every level above it is a raw pointer made const: a `std::shared_ptr<T>`
+     gives a `std::shared_ptr<const T>`, and a `std::shared_ptr<T *>` a
+     `std::shared_ptr<T * const>` but no `std::shared_ptr<const T *>`. The step
+     makes a new object, copied of a pointer or a handle the request does not
+     own and moved out of one it owns; one the request owns as a pointer it
+     hands over is not converted. A reference never refers to a converted one as
+     to the one converted. A layer the request makes of a value or of a pointer
+     is made of the qualifiers it needs at once, so the step after it makes no
+     other object. A converted layer is not taken apart, copied or converted
+     again. The specification marks each level a conversion may qualify, instead
+     of making a thing for each qualifier, and a request is satisfied of a
+     marked level of the qualifiers it asks.
+
    - Ownership of a pointee. A thing tells whether the request owns what its
      outer raw pointer points to: a pointer a scope makes does, a copy of it
      does too, and adopting it or releasing its element ends that. Such a
@@ -356,7 +373,10 @@ other code.
    fails. A shared handle that cannot be made of a value is not made of a sole
    owner a request makes and converts; one stored by the binding still converts.
    A handle family a request uses for the bare interface is one of
-   `owning_handles`, which the binding wraps the leaf in.
+   `owning_handles`, which the binding wraps the leaf in. A pointer or a handle
+   is converted to one more qualified only at its element: a level below it, as
+   of a `std::shared_ptr<T *>` to a `std::shared_ptr<const T * const>`, would
+   take a conversion for every qualifier of every level.
 
    **Measured.** A runtime type costs about 0.32 G instructions, 12.4 KB of code
    and 5.7 MB of compiler memory, against 12.5 KB and 5.1 MB of the published

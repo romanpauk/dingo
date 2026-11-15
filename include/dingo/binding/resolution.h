@@ -358,7 +358,8 @@ namespace detail {
 // spells at a depth K, moved into all the layers above it at once.
 template <typename T, typename Element, typename Types, std::size_t K>
 T made_of_nested(void *address) {
-  using of = typename Types::template nested<K>::type;
+  // The value is moved into what holds it of the qualifiers it needs.
+  using of = std::remove_cv_t<typename Types::template nested<K>::type>;
   return execution::made_of<Element, Element, T>(
       std::move(*static_cast<of *>(address)));
 }

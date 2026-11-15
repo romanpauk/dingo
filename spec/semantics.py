@@ -80,18 +80,22 @@ class Layer:
     # Whether it is made of a raw pointer to its element, which it does not
     # own, as an observer handle is.
     observes: bool = False
+    # Whether a value of it converts to one of a more qualified element, as
+    # a pointer to the element converts: a raw pointer, and a handle whose
+    # converting constructor does.
+    qualifies: bool = False
 
 
 LAYERS = {layer.name: layer for layer in (
     Layer("pointer", Owner.NONE, shares_element=True, copyable=True,
           made_from_value=False, adopted_with=(), rebinds=True,
-          may_be_empty=True),
+          may_be_empty=True, qualifies=True),
     Layer("shared_ptr", Owner.SHARED, shares_element=True, copyable=True,
           made_from_value=True, adopts=True, rebinds=True,
-          constructs_in_place=True, may_be_empty=True),
+          constructs_in_place=True, may_be_empty=True, qualifies=True),
     Layer("unique_ptr", Owner.SOLE, shares_element=True, copyable=False,
           made_from_value=True, converts_to=("shared_ptr",), adopts=True,
-          rebinds=True, may_be_empty=True),
+          rebinds=True, may_be_empty=True, qualifies=True),
     Layer("optional", Owner.SOLE, shares_element=False, copyable=True,
           made_from_value=True, may_be_empty=True, has_empty_value=True),
     # An alternative type, std::variant<L, other>: its element is the
@@ -128,7 +132,9 @@ def possible(layer):
     of them owns. A layer that owns nothing is not made of a value and takes
     over no pointer. A layer that takes over a pointer holds the element
     apart from it, and so does a layer the leaf is rebound to the interface
-    in. An empty value is a value only of a layer that may be empty."""
+    in, and a layer that converts to one of a more qualified element, as a
+    pointer to the element does. An empty value is a value only of a layer
+    that may be empty."""
     if layer.owner is not Owner.SOLE and not layer.shares_element:
         return False
     if (layer.owner is Owner.SOLE and layer.shares_element and
@@ -138,8 +144,9 @@ def possible(layer):
         return False
     if layer.adopts and not layer.shares_element:
         return False
-    # A layer the leaf is rebound to the interface in holds it apart.
-    if layer.rebinds and not layer.shares_element:
+    # A layer the leaf is rebound to the interface in holds it apart, and so
+    # does one that converts to one of a more qualified element.
+    if (layer.rebinds or layer.qualifies) and not layer.shares_element:
         return False
     # A layer made of a pointer it does not own owns nothing, and holds none
     # when the pointer is null.
@@ -224,6 +231,21 @@ SHAPES = {
        for shape in Shape if not shape.is_array},
 }
 
+def shape_quals(shape, bound):
+    """The qualifiers a request of a shape of the bound interface asks of
+    each level: none of the object it is of, as its category gives them, and
+    of the element of the shape those the shape names, which the element of
+    an array of the interface has too, as C++ declares it."""
+    depth = len(SHAPES[shape])
+    quals = [0] * (depth + len(bound.layers) + 1)
+    if shape.const_element:
+        quals[depth] = CONST
+        for level, name in enumerate(bound.layers, depth):
+            if LAYERS[name].decays_to:
+                quals[level + 1] |= quals[level]
+    return tuple(quals)
+
+
 @dataclass(frozen=True, order=True)
 class Bound:
     """An interface a registration binds: layers around an element, which is
@@ -291,6 +313,9 @@ class Thing:
     made_layer: whether the derivation made its outer layer of a value or of
       a pointer, which it makes as the layer it needs at once, and so never
       converts
+    qualified: whether its outer layer is converted to one of a more
+      qualified element, as of all the qualifiers it is converted to at
+      once, and so is not converted again
     """
     layers: tuple
     element: str
@@ -304,6 +329,7 @@ class Thing:
     quals: tuple = None
     owns_pointee: bool = False
     made_layer: bool = False
+    qualified: bool = False
 
     def __post_init__(self):
         if self.quals is None:
@@ -317,6 +343,28 @@ class Thing:
 # The qualifiers of an object.
 CONST = 1
 VOLATILE = 2
+# A level of a pointer or a handle converted to one of a more qualified
+# element, which may gain any qualifiers a request asks of it, as matches
+# says, on top of those it is marked with.
+GAIN = 4
+
+
+def matches(got, wanted):
+    """Whether the qualifiers of the levels of a thing are those a request
+    asks: each level as it is, or of more where it may gain them, which a
+    level below the first that may gain only does where every level above it
+    is made const, as C++ converts a pointer."""
+    for level, (quals, asked) in enumerate(zip(got, wanted)):
+        if not quals & GAIN:
+            if quals != asked:
+                return False
+            continue
+        if quals & 3 & ~asked:
+            return False
+        above = [index for index in range(level) if got[index] & GAIN]
+        if above and not all(wanted[index] & CONST for index in above):
+            return False
+    return True
 
 
 def held_quals(thing, layer):
@@ -452,7 +500,15 @@ DEPTH = SHAPE_DEPTH + 1
 
 def transitions(thing, context):
     """The steps the semantics allow from a thing, each as its kind and the
-    thing it reaches."""
+    thing it reaches. A step that makes another outer layer makes one not
+    converted to a more qualified element."""
+    for kind, following in thing_transitions(thing, context):
+        if following.qualified and kind != "qualify":
+            following = replace(following, qualified=False)
+        yield kind, following
+
+
+def thing_transitions(thing, context):
     layers = thing.layers
     if thing.unconstructed:
         return
@@ -498,9 +554,11 @@ def transitions(thing, context):
                     quals=(0,) * (1 + len(layer.adopted_with)) +
                     thing.quals[1:], origin=Origin.MADE, owns_pointee=False,
                     made_layer=True)
-        elif layer.gives_element and not thing.full:
+        elif layer.gives_element and not thing.full and not thing.qualified:
             # A layer the derivation wrapped a value in is not taken apart:
-            # its element is what it was made of, as it was.
+            # its element is what it was made of, as it was; nor is one it
+            # converted to a more qualified element: its element is that of
+            # what it was converted of.
             # The element of a pointer or a handle lives as long as it is
             # held; it is owned by the request only when it owns the layer
             # and the layer owns its element alone. The element of a copy of
@@ -527,7 +585,7 @@ def transitions(thing, context):
         # over its element; not one the derivation made, which it makes as
         # the other at once.
         if (thing.origin.owned and not thing.quals[0] and
-                not thing.made_layer):
+                not thing.made_layer and not thing.qualified):
             for name in layer.converts_to:
                 yield "convert", replace(
                     thing, layers=(name,) + below,
@@ -578,14 +636,17 @@ def transitions(thing, context):
                     thing.lifetimes[depth:],
                     quals=(0,) + thing.quals[1:])
     # A copy: a new object the request owns. What a layer that shares its
-    # element holds is not copied: the copy still holds the instance.
-    if can_copy(thing, context):
+    # element holds is not copied: the copy still holds the instance. A
+    # conversion to a more qualified element is not copied: what it converts
+    # is.
+    if can_copy(thing, context) and not thing.qualified:
         depth = copied_layers(layers)
         yield "copy", replace(
             thing, lifetimes=(Lifetime.REQUEST,) * depth +
             thing.lifetimes[depth:], origin=Origin.COPIED,
             instance=thing.instance and depth <= len(layers),
             quals=(0,) + thing.quals[1:])
+    yield from qualify_steps(thing, context)
     # A new layer holding what the request owns, moved into it: a value it
     # made, or a copy that shares what it was copied of, such as a copy of a
     # shared handle. What a scope keeps, or a copy of a value that shares
@@ -613,6 +674,40 @@ def transitions(thing, context):
                     thing, layers=(made.name,) + layers, lifetimes=lifetimes,
                     full=thing.full + 1, quals=(0,) + thing.quals,
                     owns_pointee=False, made_layer=True)
+
+
+def qualify_steps(thing, context):
+    """A pointer or a handle converted to one of a more qualified element, as
+    a pointer to the element converts: a new object, which holds the same
+    element, moved out of one the request owns or copied of another. A
+    pointer the request owns is handed over or taken over instead, never
+    converted. Its element may gain any qualifiers, and so may each level
+    below it that a raw pointer holds where every level above is a raw
+    pointer made const, as matches says: each such level is marked GAIN, of
+    the element alone or of every level that may gain."""
+    layers = thing.layers
+    if (not layers or not LAYERS[layers[0]].qualifies or thing.qualified or
+            thing.owns_pointee):
+        return
+    moved = thing.origin.owned and can_move(thing, context)
+    if not moved and not can_copy(thing, context):
+        return
+    # The levels below the element that may gain: those raw pointers hold.
+    deepest = 1
+    while (deepest < len(layers) and
+           LAYERS[layers[deepest]].adopted_with == ()):
+        deepest += 1
+    # A layer made at once is the same object, of the qualifiers it needs.
+    life = thing.lifetime if made_at_once(thing) else Lifetime.REQUEST
+    for depth in sorted({1, deepest}):
+        quals = list(thing.quals)
+        for level in range(1, depth + 1):
+            quals[level] |= GAIN
+        quals[0] = 0
+        yield "qualify", replace(
+            thing, lifetimes=(life,) + thing.lifetimes[1:],
+            origin=thing.origin if moved else Origin.COPIED,
+            quals=tuple(quals), qualified=True)
 
 
 def empty_safe_steps(thing, element, context):
@@ -672,6 +767,12 @@ class Limitation(Enum):
     # library points to the handle it converts of the element instead, which
     # fails when the stored optional is empty.
     POINTER_INTO_CONVERTED_COPY = "pointer_into_converted_copy"
+    # A pointer or a handle converted to one more qualified below its
+    # element, such as the std::shared_ptr<const L * const> of a
+    # std::shared_ptr<L *>. The library converts the qualifiers of the
+    # element alone: a level below it would take a conversion for every
+    # qualifier of every level.
+    QUALIFIED_BELOW_ELEMENT = "qualified_below_element"
 
 
 GAPS = (
@@ -679,6 +780,9 @@ GAPS = (
         lambda context, category, thing: thing.contained is not None),
     Gap(Limitation.POINTER_INTO_CONVERTED_COPY, "element_pointer",
         lambda context, thing, following: thing.origin is Origin.COPIED),
+    Gap(Limitation.QUALIFIED_BELOW_ELEMENT, "qualify",
+        lambda context, thing, following:
+        following.quals[2:] != thing.quals[2:]),
 )
 
 
@@ -751,13 +855,26 @@ def handed_over(cost, effect, container):
 # itself, which is the base it is.
 MAKES_OBJECT = frozenset({"decay", "hand_over", "adopt", "observe",
                           "element_pointer", "element_or_empty_copy",
-                          "convert", "copy", "wrap", "release"})
+                          "convert", "copy", "wrap", "release", "qualify"})
+
+
+def made_at_once(thing):
+    """Whether the outer layer of a thing is made as the layer a request
+    needs, of the qualifiers of its element too: one the request made of a
+    value or of a pointer. A handle of the interface is one the binding made
+    of the leaf and upcast, which a request converts."""
+    return thing.made_layer and not (thing.element == "interface" and
+                                     len(thing.layers) == 1)
 
 
 def stepped(cost, kind, thing, following):
-    """The cost after a step from a thing to the thing it reaches."""
+    """The cost after a step from a thing to the thing it reaches. A layer
+    made of what it holds is made of the qualifiers its element needs at
+    once."""
     cost = affected(cost, effect_of(kind, thing))
     if kind not in MAKES_OBJECT and not (kind == "upcast" and thing.layers):
+        return cost
+    if kind == "qualify" and made_at_once(thing):
         return cost
     if following.lifetime is Lifetime.STABLE:
         return cost[:2] + (cost[2] + 1, cost[3])
@@ -841,7 +958,9 @@ def binding_step(kind, thing, following, context, stored):
     nothing a request takes."""
     if kind in BINDING_STEPS:
         return True
-    if not names_leaf(thing, context):
+    # A request converts a handle of the interface to one of a more
+    # qualified element, once the binding upcasts it.
+    if kind == "qualify" or not names_leaf(thing, context):
         return False
     return (kind != "wrap" or
             (not thing.layers and LAYERS[following.layers[0]].rebinds) or
@@ -931,8 +1050,12 @@ def converts_quals(got, wanted, layers, outer):
         above = outer if level == 1 else wanted[level - 1]
         through = (through and LAYERS[layers[level - 1]].adopted_with == () and
                    bool(above & CONST))
-        if got[level] != wanted[level] and (got[level] & ~wanted[level] or
-                                            not through):
+        if got[level] & GAIN:
+            # A level a conversion marked may gain what it is asked.
+            if got[level] & 3 & ~wanted[level]:
+                return False
+        elif got[level] != wanted[level] and (got[level] & ~wanted[level] or
+                                              not through):
             return False
     return True
 
@@ -947,7 +1070,7 @@ def satisfactions(things, category, lifetime, layers, context, quals=None):
         quals = (0,) * (len(layers) + 1)
     outer = quals[0] | (CONST if category in CONST_CATEGORIES else 0)
     of_shape = [thing for thing in things if thing.layers == layers and
-                thing.quals[1:] == quals[1:]]
+                matches(thing.quals[1:], quals[1:])]
     if category in REFERENCES:
         # A reference or a pointer refers to the instance, or to a layer of
         # it, that lives long enough. A reference adds qualifiers only to
@@ -955,7 +1078,7 @@ def satisfactions(things, category, lifetime, layers, context, quals=None):
         def qualified(got, of):
             if category in POINTERS:
                 return converts_quals(got, quals, of, outer)
-            return got[1:] == quals[1:] and not got[0] & ~outer
+            return matches(got[1:], quals[1:]) and not got[0] & ~outer
         referred = [(thing, None) for thing in things
                     if thing.layers == layers and thing.instance and
                     qualified(thing.quals, thing.layers) and
@@ -1060,7 +1183,8 @@ def converted(scope, form, leaf, bound, shape, category, limits=frozenset(),
     return fewest_of(
         [(affected(cost, effect), thing.absent)
          for thing, effect in satisfactions(
-             things, category, Lifetime.REQUEST, layers, context)
+             things, category, Lifetime.REQUEST, layers, context,
+             shape_quals(shape, bound))
          for cost in reached[thing]], defined)
 
 
@@ -1092,7 +1216,7 @@ def fewest(scope, form, leaf, bound, shape, category, position, entry,
                             container), thing.absent)
                for thing, effect in satisfactions(
                    things, category, required_lifetime(position, entry),
-                   layers, context)
+                   layers, context, shape_quals(shape, bound))
                for cost in reached[thing]]
     if answers:
         return fewest_of(answers, defined)
@@ -1170,7 +1294,8 @@ def explain(scope, form, leaf, bound, shape, limits=frozenset(),
     paths = []
     for thing in parent:
         if (thing.layers == SHAPES[shape] + bound.layers and
-                thing.element == bound.element):
+                thing.element == bound.element and
+                thing.quals[1:] == shape_quals(shape, bound)[1:]):
             path = [("target", thing)]
             while parent[thing] is not None:
                 kind, previous = parent[thing]

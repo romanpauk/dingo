@@ -437,13 +437,61 @@ template <> struct step<semantics::step::hand_over> {
   }
 };
 
+// A type with qualifiers of its own, as a mask of the qualifiers of the
+// semantics.
+template <typename T, std::uint8_t Quals>
+using with_quals_t = std::conditional_t<
+    (Quals & semantics::volatile_qual) != 0,
+    std::add_volatile_t<std::conditional_t<(Quals & semantics::const_qual) != 0,
+                                           std::add_const_t<T>, T>>,
+    std::conditional_t<(Quals & semantics::const_qual) != 0,
+                       std::add_const_t<T>, T>>;
+
+// The pointer or the handle T of the same element of the qualifiers Quals.
+template <typename T, std::uint8_t Quals, typename = void> struct requalified {
+  using element = std::remove_cv_t<typename type_traits<T>::value_type>;
+  using type =
+      typename type_traits<T>::template rebind_t<with_quals_t<element, Quals>>;
+};
+
+template <typename T, std::uint8_t Quals>
+struct requalified<T, Quals, std::enable_if_t<std::is_pointer_v<T>>> {
+  using type =
+      with_quals_t<std::remove_cv_t<std::remove_pointer_t<T>>, Quals> *;
+};
+
+template <typename T, std::uint8_t Quals>
+using requalified_t = typename requalified<std::remove_cv_t<T>, Quals>::type;
+
+// The qualifiers of the element of a pointer or a handle.
+template <typename T> constexpr std::uint8_t element_quals() {
+  using type = std::remove_cv_t<T>;
+  using element =
+      std::conditional_t<std::is_pointer_v<type>, std::remove_pointer_t<type>,
+                         typename type_traits<type>::value_type>;
+  return static_cast<std::uint8_t>(
+      (std::is_const_v<element> ? semantics::const_qual : 0) |
+      (std::is_volatile_v<element> ? semantics::volatile_qual : 0));
+}
+
 // A handle of the layer Target that does not own its element, made of a raw
 // pointer to it.
-template <typename Target> struct observe_step {
+// The qualifiers a layer a request makes holds its element of: none given,
+// those of what it is made of.
+inline constexpr std::uint8_t made_quals = 0xFF;
+
+template <typename T, std::uint8_t Quals>
+using held_of_t =
+    std::conditional_t<Quals == made_quals, T,
+                       with_quals_t<std::remove_cv_t<T>, Quals & 3>>;
+
+template <typename Target, std::uint8_t Quals = made_quals>
+struct observe_step {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Keeper>
   static auto apply(carrier<T, Owned> from, Keeper &keeper) {
-    using pointee = std::remove_pointer_t<std::remove_cv_t<T>>;
+    using pointee =
+        held_of_t<std::remove_pointer_t<std::remove_cv_t<T>>, Quals>;
     using made_type = typename type_traits<Target>::template rebind_t<pointee>;
     auto &made = keeper.template keep<made_type>(
         [&] { return made_type(*from.object); });
@@ -453,17 +501,36 @@ template <typename Target> struct observe_step {
 
 // A raw pointer the request owns, taken over by a handle of the layer
 // Target: of an array when it points to the first element of one.
-template <typename Target, bool Array> struct adopt_step {
+template <typename Target, bool Array, std::uint8_t Quals = made_quals>
+struct adopt_step {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Keeper>
   static auto apply(carrier<T, Owned> from, Keeper &keeper) {
-    using pointee = std::remove_pointer_t<T>;
+    using pointee = held_of_t<std::remove_pointer_t<T>, Quals>;
     using made_type = typename type_traits<Target>::template rebind_t<
         std::conditional_t<Array, pointee[], pointee>>;
     auto &made = keeper.template keep<made_type>(
         [&] { return made_type(*from.object); });
     // The handle owns what the pointer points to now.
     from.released();
+    return carrier<made_type, true>{std::addressof(made)};
+  }
+};
+
+// A pointer or a handle converted to one of an element of the qualifiers
+// Quals: a new object, moved out of one the request owns, copied of another.
+template <std::uint8_t Quals> struct qualify_step {
+  template <typename Leaf, typename Interface, typename T, bool Owned,
+            typename Keeper>
+  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+    using made_type = requalified_t<T, Quals>;
+    auto &made = keeper.template keep<made_type>([&]() -> made_type {
+      if constexpr (Owned) {
+        return made_type(std::move(*from.object));
+      } else {
+        return made_type(*from.object);
+      }
+    });
     return carrier<made_type, true>{std::addressof(made)};
   }
 };
@@ -584,6 +651,37 @@ Made made_of(T &&value) {
   }
 }
 
+// Whether a step converts to a more qualified element, and the qualifiers of
+// the element it converts to.
+template <typename Step> inline constexpr bool is_qualify_v = false;
+template <std::uint8_t Quals>
+inline constexpr bool is_qualify_v<qualify_step<Quals>> = true;
+
+template <typename Step> inline constexpr std::uint8_t qualified_quals_v = 0;
+template <std::uint8_t Quals>
+inline constexpr std::uint8_t qualified_quals_v<qualify_step<Quals>> = Quals;
+template <typename Step, bool Stable>
+inline constexpr std::uint8_t qualified_quals_v<planned<Step, Stable>> =
+    qualified_quals_v<Step>;
+
+// Whether a step makes a layer of a pointer, which holds its element of the
+// qualifiers given; and the step that holds it of the qualifiers Quals.
+template <typename Step> inline constexpr bool makes_held_v = false;
+template <typename Target, std::uint8_t Quals>
+inline constexpr bool makes_held_v<observe_step<Target, Quals>> = true;
+template <typename Target, bool Array, std::uint8_t Quals>
+inline constexpr bool makes_held_v<adopt_step<Target, Array, Quals>> = true;
+
+template <typename Step, std::uint8_t Quals> struct held_as;
+template <typename Target, std::uint8_t Given, std::uint8_t Quals>
+struct held_as<observe_step<Target, Given>, Quals> {
+  using type = observe_step<Target, Quals>;
+};
+template <typename Target, bool Array, std::uint8_t Given, std::uint8_t Quals>
+struct held_as<adopt_step<Target, Array, Given>, Quals> {
+  using type = adopt_step<Target, Array, Quals>;
+};
+
 // The steps of a plan, applied one after another. A run of wraps makes its
 // outermost layer at once.
 template <typename Leaf, typename Interface> struct interpreter {
@@ -601,6 +699,11 @@ template <typename Leaf, typename Interface> struct interpreter {
   static auto run(Carrier from, Keeper &keeper) {
     if constexpr (is_wrap_v<Step>) {
       return wrap_run<type_list<Step>, Steps...>(from, keeper);
+    } else if constexpr (makes_held_v<typename step_of_plan<Step>::type> &&
+                         starts_qualify<Steps...>()) {
+      // A layer a request makes is made of the qualifiers its element needs
+      // at once.
+      return run_fused<Step, Steps...>(from, keeper);
     } else if constexpr (sizeof...(Steps) == 0 &&
                          copies_v<typename step_of_plan<Step>::type>) {
       // The last step copies: the copy is made where the request takes it.
@@ -615,27 +718,56 @@ template <typename Leaf, typename Interface> struct interpreter {
     }
   }
 
+  template <typename Step, typename Qualify, typename... Steps,
+            typename Carrier, typename Keeper>
+  static auto run_fused(Carrier from, Keeper &keeper) {
+    using of = step_of_plan<Step>;
+    using fused =
+        typename held_as<typename of::type, qualified_quals_v<Qualify>>::type;
+    return run<Steps...>(fused::template apply<Leaf, Interface>(
+                             from, keeper_of<of::stable>(keeper)),
+                         keeper);
+  }
+
   template <typename Wraps, typename... Steps, typename Carrier,
             typename Keeper>
   static auto wrap_run(Carrier from, Keeper &keeper) {
     if constexpr (starts_wrap<Steps...>()) {
       return wrap_more<Wraps, Steps...>(from, keeper);
+    } else if constexpr (starts_qualify<Steps...>()) {
+      return wrap_qualified<Wraps, Steps...>(from, keeper);
     } else {
       using made_type =
           typename wrapped_of<typename Carrier::type, Wraps>::type;
-      constexpr bool stable = step_of_plan<last_of_t<Wraps>>::stable;
-      if constexpr (sizeof...(Steps) == 0) {
-        // The last steps: what they make is made where the request needs it.
-        return pending_of<stable>([from]() -> made_type {
-          return made_of<Leaf, Interface, made_type>(std::move(*from.object));
-        });
-      } else {
-        auto &made = keeper_of<stable>(keeper).template keep<made_type>([&] {
-          return made_of<Leaf, Interface, made_type>(std::move(*from.object));
-        });
-        return run<Steps...>(carrier<made_type, true>{std::addressof(made)},
-                             keeper);
-      }
+      return wrap_made<made_type, step_of_plan<last_of_t<Wraps>>::stable,
+                       Steps...>(from, keeper);
+    }
+  }
+
+  // A run of wraps made of the qualifiers its element needs at once.
+  template <typename Wraps, typename Qualify, typename... Steps,
+            typename Carrier, typename Keeper>
+  static auto wrap_qualified(Carrier from, Keeper &keeper) {
+    using made_type =
+        requalified_t<typename wrapped_of<typename Carrier::type, Wraps>::type,
+                      qualified_quals_v<Qualify>>;
+    return wrap_made<made_type, step_of_plan<last_of_t<Wraps>>::stable,
+                     Steps...>(from, keeper);
+  }
+
+  template <typename Made, bool Stable, typename... Steps, typename Carrier,
+            typename Keeper>
+  static auto wrap_made(Carrier from, Keeper &keeper) {
+    if constexpr (sizeof...(Steps) == 0) {
+      // The last steps: what they make is made where the request needs it.
+      return pending_of<Stable>([from]() -> Made {
+        return made_of<Leaf, Interface, Made>(std::move(*from.object));
+      });
+    } else {
+      auto &made = keeper_of<Stable>(keeper).template keep<Made>([&] {
+        return made_of<Leaf, Interface, Made>(std::move(*from.object));
+      });
+      return run<Steps...>(carrier<Made, true>{std::addressof(made)}, keeper);
     }
   }
 
@@ -644,6 +776,16 @@ template <typename Leaf, typename Interface> struct interpreter {
   static auto wrap_more(Carrier from, Keeper &keeper) {
     return wrap_run<typename appended<Wraps, Next>::type, Steps...>(from,
                                                                     keeper);
+  }
+
+  // Whether the steps begin with a conversion to a more qualified element.
+  template <typename... Steps> static constexpr bool starts_qualify() {
+    if constexpr (sizeof...(Steps) == 0) {
+      return false;
+    } else {
+      return is_qualify_v<typename step_of_plan<
+          type_list_element_t<0, type_list<Steps...>>>::type>;
+    }
   }
 
   // Whether the steps begin with a wrap.
@@ -815,7 +957,9 @@ struct binding_plan {
                 static_cast<unsigned>(
                     semantics::limitation::pointer_out_of_made_holder) |
                 static_cast<unsigned>(
-                    semantics::limitation::pointer_into_converted_copy)),
+                    semantics::limitation::pointer_into_converted_copy) |
+                static_cast<unsigned>(
+                    semantics::limitation::qualified_below_element)),
             &universe_type::value};
   }
 
@@ -934,6 +1078,8 @@ template <typename Identities, typename At> struct typed_step_at {
                         reached.layers[1] == semantics::array_layer>{};
     } else if constexpr (kind == semantics::step::observe) {
       return observe_step<layer_type<reached.layers[0]>>{};
+    } else if constexpr (kind == semantics::step::qualify) {
+      return qualify_step<reached.quals[1]>{};
     } else {
       return step<kind>{};
     }
@@ -1045,7 +1191,7 @@ template <typename Keeper> struct operation {
 };
 
 inline constexpr std::size_t step_kinds =
-    static_cast<std::size_t>(semantics::step::observe) + 1;
+    static_cast<std::size_t>(semantics::step::qualify) + 1;
 
 // What a runtime resolution does with an object of a type, as the steps of
 // the semantics do it, one table for each type: the steps from an object of
@@ -1053,7 +1199,8 @@ inline constexpr std::size_t step_kinds =
 // an array; and the steps that make one of it: of the value its nested type
 // at a depth is, moved into all its layers at once; of a pointer it takes
 // over to its element, or to the first element of its array; and of a
-// pointer to its element it does not own.
+// pointer to its element it does not own; and of a pointer or a handle of
+// its element of fewer qualifiers, by the qualifiers it lacks.
 template <typename Keeper> struct full_table {
   operation<Keeper> from[step_kinds] = {};
   operation<Keeper> release_array = {};
@@ -1061,20 +1208,23 @@ template <typename Keeper> struct full_table {
   operation<Keeper> adopted = {};
   operation<Keeper> adopted_array = {};
   operation<Keeper> observing = {};
+  operation<Keeper> qualified[4] = {};
 };
 
 // Where an operation is in a table: a kind of step from the type, the
 // release of a pointer to the first element of an array, the run of wraps
 // that makes the type of its nested type at a depth, the adoption of a
-// pointer to its element or to the first element of its array, and the
-// observer of a pointer.
+// pointer to its element or to the first element of its array, the
+// observer of a pointer, and the pointer or the handle of an element of more
+// qualifiers, by the qualifiers it adds.
 enum class slot : std::uint8_t {
   release_array = step_kinds,
   made_of,
   adopted = made_of + semantics::max_layers + 1,
   adopted_array,
   observing,
-  count
+  qualified,
+  count = qualified + 4
 };
 
 constexpr std::uint8_t slot_of(semantics::step kind) {
@@ -1127,7 +1277,10 @@ constexpr const operation<Keeper> &slot_in(const full_table<Keeper> &table,
   if (at == slot_of(slot::adopted_array)) {
     return table.adopted_array;
   }
-  return table.observing;
+  if (at == slot_of(slot::observing)) {
+    return table.observing;
+  }
+  return table.qualified[at - slot_of(slot::qualified)];
 }
 
 template <typename Keeper> constexpr bool has(const operation<Keeper> &step) {
@@ -1144,6 +1297,8 @@ inline constexpr std::uint32_t release_array_mask = std::uint32_t{1}
                                                     << step_kinds;
 inline constexpr std::uint32_t makers_mask = std::uint32_t{1}
                                              << (step_kinds + 1);
+inline constexpr std::uint32_t qualified_mask = std::uint32_t{1}
+                                                << (step_kinds + 2);
 
 // Whether what a step of a kind makes lives as long as the request, as the
 // semantics give it: nothing kept with the binding is made of it.
@@ -1198,6 +1353,24 @@ erased_carrier observing_erased(erased_carrier from, bool stable,
   keeper_view<Keeper> view{keeper, stable};
   auto &made = view.template keep<Made>(
       [&] { return Made(*static_cast<Pointer *>(from.object)); });
+  return erase(carrier<Made, true>{std::addressof(made)});
+}
+
+// A pointer or a handle Made of an element of more qualifiers, made of one of
+// the element of fewer, Source: moved out of one the request owns, copied of
+// another.
+template <typename Made, typename Source, bool Owned, typename Keeper>
+erased_carrier qualified_erased(erased_carrier from, bool stable,
+                                Keeper &keeper) {
+  (void)stable;
+  transient_view<Keeper> view{keeper};
+  auto &made = view.template keep<Made>([&]() -> Made {
+    if constexpr (Owned) {
+      return Made(std::move(*static_cast<Source *>(from.object)));
+    } else {
+      return Made(*static_cast<const Source *>(from.object));
+    }
+  });
   return erase(carrier<Made, true>{std::addressof(made)});
 }
 
@@ -1285,7 +1458,8 @@ template <typename T, typename Leaf, typename Interface> struct layer_types {
   // of what it holds, which is a value.
   template <std::size_t K, typename U = T> static constexpr bool runs() {
     if constexpr (K == 0) {
-      return movable<U>();
+      // The value is moved into what holds it of the qualifiers it needs.
+      return movable<std::remove_cv_t<U>>();
     } else if constexpr (!made_of_value<U>()) {
       return false;
     } else {
@@ -1408,7 +1582,7 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   template <std::size_t K> static constexpr operation<Keeper> run() {
     operation<Keeper> made;
     if constexpr (std::is_same_v<T, type> && facts::template runs<K>()) {
-      using of = typename nested<K>::type;
+      using of = std::remove_cv_t<typename nested<K>::type>;
       made.owned = &made_of_erased<type, Leaf, Interface, of, Keeper>;
     }
     return made;
@@ -1492,7 +1666,35 @@ struct table_maker : layer_types<T, Leaf, Interface> {
       runs_into(made, std::make_index_sequence<semantics::max_layers>{});
       takes_pointers(made);
     }
+    if constexpr (std::is_same_v<T, type> && (Mask & qualified_mask) != 0) {
+      qualified_into(made, std::index_sequence<1, 2, 3>{});
+    }
     return made;
+  }
+
+  // The pointer or the handle the type is, made of one of an element of
+  // fewer qualifiers: the qualifiers of its element without Adds.
+  template <std::uint8_t Adds> static constexpr operation<Keeper> qualified() {
+    operation<Keeper> made;
+    constexpr std::uint8_t quals = element_quals<type>();
+    if constexpr ((quals & Adds) == Adds) {
+      using source =
+          requalified_t<type, static_cast<std::uint8_t>(quals & ~Adds)>;
+      if constexpr (std::is_constructible_v<type, source &&>) {
+        made.owned = &qualified_erased<type, source, true, Keeper>;
+      }
+      if constexpr (std::is_constructible_v<type, const source &>) {
+        made.borrowed = &qualified_erased<type, source, false, Keeper>;
+      }
+    }
+    return made;
+  }
+
+  template <std::size_t... Adds>
+  static constexpr void qualified_into(full_table<Keeper> &made,
+                                       std::index_sequence<Adds...>) {
+    ((made.qualified[Adds] = qualified<static_cast<std::uint8_t>(Adds)>()),
+     ...);
   }
 
   // Whether a type has an empty value of its own.
@@ -1584,7 +1786,9 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   static constexpr void takes_pointers_of(full_table<Keeper> &made) {
     if constexpr (is_complete_v<std::remove_extent_t<
                       typename type_traits<type>::value_type>>) {
-      using of = typename element<>::type;
+      // Of a pointer to the element of no qualifiers, which the handle holds
+      // of those it needs.
+      using of = std::remove_cv_t<typename element<>::type>;
       if constexpr (type_traits<type>::is_owning_handle) {
         if constexpr (std::is_array_v<of>) {
           using pointer = std::remove_extent_t<of> *;
@@ -1851,9 +2055,17 @@ runtime_plan<Keeper> plan_runtime(const binding_layout<Keeper> &binding,
                (plan.states[at] < binding.source_count)) {
       ++last;
     }
+    const std::uint8_t run = static_cast<std::uint8_t>(last - at + 1);
+    // A layer a request makes is made of the qualifiers its element needs at
+    // once: the conversion to them that follows is the same step.
+    if ((kind == semantics::step::wrap || kind == semantics::step::adopt ||
+         kind == semantics::step::observe) &&
+        last < plan.count && plan.steps[last] == semantics::step::qualify &&
+        plan.states[last] >= binding.source_count) {
+      ++last;
+    }
     const semantics::thing &to = plan.things[last];
     const bool binding_step = plan.states[last] < binding.source_count;
-    const std::uint8_t run = static_cast<std::uint8_t>(last - at + 1);
     // The type a layer the plan makes is of: a source of the binding, or a
     // type the request spells, by its depth in the request.
     const type_table<Keeper> *maker =
@@ -1871,6 +2083,11 @@ runtime_plan<Keeper> plan_runtime(const binding_layout<Keeper> &binding,
       break;
     case semantics::step::observe:
       step = &(*maker)[slot_of(slot::observing)];
+      break;
+    case semantics::step::qualify:
+      step = &(
+          *maker)[slot_of(slot::qualified, static_cast<std::uint8_t>(
+                                               to.quals[1] & ~from.quals[1]))];
       break;
     case semantics::step::release:
       step = &(*table)[from.layers[0] == semantics::array_pointer_layer
@@ -1904,7 +2121,7 @@ runtime_plan<Keeper> plan_runtime(const binding_layout<Keeper> &binding,
     table =
         binding_step ? binding.tables[plan.states[last]]
         : (kind == semantics::step::wrap || kind == semantics::step::adopt ||
-           kind == semantics::step::observe)
+           kind == semantics::step::observe || kind == semantics::step::qualify)
             ? maker
             : step->made;
     at = last + 1;
@@ -2261,10 +2478,30 @@ struct request_tables {
            (is_alternative_type_v<type> || type_traits<type>::enabled);
   }
 
+  // Whether a type is a pointer or a handle of a qualified element, which a
+  // request converts one of fewer qualifiers to.
+  template <typename T> static constexpr bool qualifies() {
+    using type = std::remove_cv_t<T>;
+    if constexpr (std::is_pointer_v<type>) {
+      return element_quals<type>() != 0;
+    } else if constexpr (!makes<type>() || is_alternative_type_v<type> ||
+                         !is_complete_v<type>) {
+      return false;
+    } else {
+      return wrapper_kind_v<layer_identity_t<type>>.qualifies &&
+             element_quals<type>() != 0;
+    }
+  }
+
+  template <typename T> static constexpr std::uint32_t mask_for() {
+    return (makes<T>() ? makers_mask : 0) |
+           (qualifies<T>() ? qualified_mask : 0);
+  }
+
   template <std::size_t K>
-  using table_t = table_of<
-      typename types::template nested<K>::type, Element, Element, Keeper,
-      makes<typename types::template nested<K>::type>() ? makers_mask : 0>;
+  using table_t =
+      table_of<typename types::template nested<K>::type, Element, Element,
+               Keeper, mask_for<typename types::template nested<K>::type>()>;
 
   // A layer the semantics make of what it holds, as a wrapper the request
   // spells is made of its element value, adopts a pointer or observes one,
@@ -2272,6 +2509,20 @@ struct request_tables {
   template <std::size_t K> static constexpr bool checked() {
     using nested = typename types::template nested<K>::type;
     using type = std::remove_cv_t<nested>;
+    // A pointer or a handle of a qualified element is made of one of each
+    // fewer qualifiers, moved, and copied when it can be.
+    if constexpr (qualifies<type>() && std::is_same_v<nested, type>) {
+      using maker = typename table_t<K>::maker;
+      constexpr std::uint8_t quals = element_quals<type>();
+      constexpr bool copies = std::is_copy_constructible_v<type>;
+      for (std::uint8_t adds = 1; adds < 4; ++adds) {
+        if ((quals & adds) == adds &&
+            (maker::full.qualified[adds].owned == nullptr ||
+             (copies && maker::full.qualified[adds].borrowed == nullptr))) {
+          return false;
+        }
+      }
+    }
     // What the semantics make is of no qualifiers.
     if constexpr (!makes<type>() || is_alternative_type_v<type> ||
                   !is_complete_v<type> || !std::is_same_v<nested, type>) {
@@ -2291,7 +2542,9 @@ struct request_tables {
   template <std::size_t... K>
   static constexpr auto make(std::index_sequence<K...>) {
     static_assert((checked<K>() && ...),
-                  "a request has the operation that makes each layer it makes");
+                  "a request has the operation that makes each layer it makes, "
+                  "and that converts each pointer or handle to the qualifiers "
+                  "it asks");
     struct table {
       const type_table<Keeper> *value[sizeof...(K)];
     };

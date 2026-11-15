@@ -77,6 +77,10 @@ struct layer_kind {
   // Whether it is made of a raw pointer to its element, which it does not
   // own, as an observer handle is.
   bool observes = false;
+  // Whether a value of it converts to one of a more qualified element, as a
+  // pointer to the element converts: a raw pointer, and a handle whose
+  // converting constructor does.
+  bool qualifies = false;
 };
 
 // Whether a type can be a layer of these properties, as spec/semantics.py
@@ -85,14 +89,17 @@ struct layer_kind {
 // layer that owns its element alone and shares it with a copy cannot be
 // copied: the copy would share what one of them owns. A layer that owns
 // nothing is not made of a value and takes over no pointer. A layer that
-// takes over a pointer holds the element apart from it. An empty value is a
-// value only of a layer that may be empty.
+// takes over a pointer holds the element apart from it, and so do a layer the
+// leaf is rebound to the interface in and a layer that converts to one of a
+// more qualified element. An empty value is a value only of a layer that may
+// be empty.
 constexpr bool possible(const layer_kind &kind) {
   return (kind.owns == owner::sole || kind.shares_element) &&
          !(kind.owns == owner::sole && kind.shares_element && kind.copyable) &&
          !(kind.owns == owner::none && (kind.made_from_value || kind.adopts)) &&
          (!kind.adopts || kind.shares_element) &&
          (!kind.rebinds || kind.shares_element) &&
+         (!kind.qualifies || kind.shares_element) &&
          (!kind.observes || (kind.owns == owner::none && kind.may_be_empty)) &&
          (kind.may_be_empty || !kind.has_empty_value);
 }
@@ -114,7 +121,7 @@ struct universe {
   layer_kind kinds[max_kinds] = {
       // A pointer to an object.
       {owner::none, true, true, false, false, true, true, false, true, false,
-       false, false, true, false, 0, true},
+       false, false, true, false, 0, true, false, true},
       // The pointer an array decays to.
       {owner::none, true, true, false, false, true, false, false, false, false,
        false, false, true, true},
@@ -172,6 +179,7 @@ enum class element : std::uint8_t { leaf, interface };
 enum class limitation : std::uint8_t {
   pointer_out_of_made_holder = 1 << 0,
   pointer_into_converted_copy = 1 << 1,
+  qualified_below_element = 1 << 2,
 };
 
 // What a derivation knows of its registration, and the layers it may make.
@@ -220,6 +228,9 @@ struct thing {
   // Whether the derivation made its outer layer of a value or of a pointer,
   // which it never converts.
   bool made_layer = false;
+  // Whether its outer layer is converted to one of a more qualified element,
+  // of all the qualifiers it is converted to at once.
+  bool qualified = false;
 
   constexpr lifetime life() const { return lifetimes[0]; }
 };
@@ -229,7 +240,7 @@ constexpr bool operator==(const thing &a, const thing &b) {
       a.instance != b.instance || a.contained != b.contained ||
       a.unconstructed != b.unconstructed || a.absent != b.absent ||
       a.full != b.full || a.owns_pointee != b.owns_pointee ||
-      a.made_layer != b.made_layer) {
+      a.made_layer != b.made_layer || a.qualified != b.qualified) {
     return false;
   }
   for (std::size_t index = 0; index < a.depth; ++index) {
@@ -376,6 +387,8 @@ enum class step : std::uint8_t {
   wrap,
   // A handle that does not own its element, made of a raw pointer to it.
   observe,
+  // A pointer or a handle converted to one of a more qualified element.
+  qualify,
 };
 
 struct transition {
@@ -450,12 +463,100 @@ constexpr void empty_safe_steps(const thing &of, const thing &inner,
   }
 }
 
+// Whether the outer layer of a thing is made as the layer a request needs, of
+// the qualifiers of its element too: one the request made of a value or of a
+// pointer. A handle of the interface is one the binding made of the leaf and
+// upcast, which a request converts.
+constexpr bool made_at_once(const thing &of) {
+  return of.made_layer && !(of.of == element::interface && of.depth == 1);
+}
+
+// The things a pointer or a handle converts to of a more qualified element,
+// as a pointer to the element converts, from the level of the thing on: each
+// level of qualifiers that may gain more, the element always, a level below
+// it only where every level above it is a raw pointer made const.
+template <typename Sink>
+constexpr void qualify_levels(const thing &of, const context &with, thing &made,
+                              std::size_t level, bool may_gain, bool gained,
+                              Sink &out) {
+  if (level > of.depth || level > max_layers) {
+    if (gained) {
+      out(step::qualify, made);
+    }
+    return;
+  }
+  const std::uint8_t got = of.quals[level];
+  for (std::uint8_t wanted = 0; wanted < 4; ++wanted) {
+    if ((got & ~wanted) || (wanted != got && !may_gain)) {
+      continue;
+    }
+    const bool below =
+        level < of.depth && with.kind(of.layers[level]).adopted &&
+        !with.kind(of.layers[level]).adopted_array && (wanted & const_qual);
+    made.quals[level] = wanted;
+    qualify_levels(of, with, made, level + 1, may_gain && below,
+                   gained || wanted != got, out);
+  }
+  made.quals[level] = got;
+}
+
+// A pointer or a handle converted to one of a more qualified element: a new
+// object, which holds the same element, moved out of one the request owns or
+// copied of another. A pointer the request owns is handed over or taken over
+// instead, never converted.
+template <typename Sink>
+constexpr void qualify_steps(const thing &of, const context &with, Sink &out) {
+  if (!of.depth || !with.kind(of.layers[0]).qualifies || of.qualified ||
+      of.owns_pointee) {
+    return;
+  }
+  const bool moved = owned(of.from) && can_move(of, with);
+  if (!moved && !can_copy(of, with)) {
+    return;
+  }
+  thing made = of;
+  // A layer made at once is the same object, of the qualifiers it needs.
+  if (!made_at_once(of)) {
+    made.lifetimes[0] = lifetime::request;
+  }
+  made.from = moved ? of.from : origin::copied;
+  made.quals[0] = 0;
+  made.qualified = true;
+  qualify_levels(of, with, made, 1, true, false, out);
+}
+
+// What a sink of the steps from a thing passes on: a step that makes another
+// outer layer makes one not converted to a more qualified element.
+template <typename Sink> struct unqualified_sink {
+  Sink &out;
+  constexpr void operator()(step kind, const thing &reached) {
+    if (reached.qualified && kind != step::qualify) {
+      thing made = reached;
+      made.qualified = false;
+      out(kind, made);
+    } else {
+      out(kind, reached);
+    }
+  }
+};
+
+template <typename Sink>
+constexpr void each_transition_of(const thing &of, const context &with,
+                                  Sink &out);
+
 // The steps the semantics allow from a thing.
 // They are passed to a sink, out(kind, thing), one by one: a constant
 // expression returns no list of them, which a compiler would keep.
 template <typename Sink>
 constexpr void each_transition(const thing &of, const context &with,
                                Sink &out) {
+  unqualified_sink<Sink> reset{out};
+  each_transition_of(of, with, reset);
+}
+
+template <typename Sink>
+constexpr void each_transition_of(const thing &of, const context &with,
+                                  Sink &out) {
   if (of.unconstructed) {
     return;
   }
@@ -503,9 +604,11 @@ constexpr void each_transition(const thing &of, const context &with,
         adopted.made_layer = true;
         out(step::adopt, adopted);
       }
-    } else if (kind.gives_element && !of.full) {
+    } else if (kind.gives_element && !of.full && !of.qualified) {
       // A layer the derivation wrapped a value in is not taken apart: its
-      // element is what it was made of, as it was.
+      // element is what it was made of, as it was; nor is one it converted
+      // to a more qualified element: its element is that of what it was
+      // converted of.
       const bool made = of.lifetimes[1] == lifetime::request;
       thing inner = restacked(of, nullptr, 0, 1, nullptr);
       inner.from = kind.owns == owner::sole ? of.from : origin::borrowed;
@@ -524,8 +627,9 @@ constexpr void each_transition(const thing &of, const context &with,
         empty_safe_steps(of, inner, with, out);
       }
     }
-    // Not a layer the derivation made, which it makes as the other at once.
-    if (owned(of.from) && !of.quals[0] && !of.made_layer) {
+    // Not a layer the derivation made, which it makes as the other at once,
+    // nor one it converted to a more qualified element.
+    if (owned(of.from) && !of.quals[0] && !of.made_layer && !of.qualified) {
       for (std::size_t index = 0; index < with.layers->count; ++index) {
         if (kind.converts & (std::uint32_t{1} << index)) {
           const layer to = static_cast<layer>(index);
@@ -580,9 +684,12 @@ constexpr void each_transition(const thing &of, const context &with,
       }
     }
   }
-  if (can_copy(of, with)) {
+  // A conversion to a more qualified element is not copied: what it converts
+  // is.
+  if (can_copy(of, with) && !of.qualified) {
     out(step::copy, copied(of, with));
   }
+  qualify_steps(of, with, out);
   const bool shares = of.from == origin::copied && of.instance;
   // A raw pointer that owns what it points to is not wrapped: it is handed
   // over, or taken over by a handle.
@@ -619,7 +726,9 @@ constexpr transitions_list transitions(const thing &of, const context &with) {
 }
 
 // The steps from a thing the library takes: those the semantics allow that no
-// limitation blocks. A pointer into a copy a binding converts is not taken.
+// limitation blocks. A pointer into a copy a binding converts is not taken,
+// nor is a pointer or a handle converted to one more qualified below its
+// element.
 // What a sink of the steps the library takes passes on: a step the
 // limitations do not block.
 template <typename Sink> struct unblocked {
@@ -631,6 +740,14 @@ template <typename Sink> struct unblocked {
     if (kind == step::element_pointer && from.from == origin::copied &&
         with.limited(limitation::pointer_into_converted_copy)) {
       return;
+    }
+    if (kind == step::qualify &&
+        with.limited(limitation::qualified_below_element)) {
+      for (std::size_t level = 2; level <= reached.depth; ++level) {
+        if (reached.quals[level] != from.quals[level]) {
+          return;
+        }
+      }
     }
     out(kind, reached);
   }
@@ -712,12 +829,14 @@ constexpr cost affected(cost before, effect made) {
 
 // The cost after a step from a thing to what it reaches: of the leaf, and of
 // the object it makes, kept when it lives as long as the container. Every
-// step but the element, and the upcast of the leaf itself, makes one.
+// step but the element, the upcast of the leaf itself, and the qualifiers of
+// a layer made at once, makes one.
 constexpr cost stepped(cost before, step kind, const thing &of,
                        const thing &reached, const context &with) {
   cost made = affected(before, effect_of(kind, of, with));
   const bool makes = kind != step::element && kind != step::element_or_empty &&
-                     !(kind == step::upcast && of.depth == 0);
+                     !(kind == step::upcast && of.depth == 0) &&
+                     !(kind == step::qualify && made_at_once(of));
   if (makes) {
     if (reached.lifetimes[0] == lifetime::stable) {
       ++made.kept;
@@ -804,6 +923,7 @@ constexpr std::uint32_t hash_of(const state &of) {
   mix(t.full);
   mix(t.owns_pointee);
   mix(t.made_layer);
+  mix(t.qualified);
   mix(of.made.copies);
   mix(of.made.moves);
   return hash;
@@ -841,8 +961,40 @@ struct search {
   }
 };
 
+// Whether a thing converted to a more qualified element may still become the
+// request: its layers may, or a raw pointer may become the observer of the
+// request at its depth, which takes the qualifiers of what the pointer points
+// to; and below its outermost its qualifiers are those of the request at the
+// same depth, which no later step changes.
+constexpr bool qualified_as(const thing &of, const request &goal,
+                            const context &with) {
+  if (of.depth == 0 || of.depth > goal.depth) {
+    return false;
+  }
+  const std::size_t offset = goal.depth - of.depth;
+  const layer_kind &outer = with.kind(of.layers[0]);
+  const bool observed = outer.adopted && !outer.adopted_array &&
+                        with.kind(goal.layers[offset]).observes;
+  if (!may_become(of, goal, with) && !observed) {
+    return false;
+  }
+  for (std::size_t index = 1; index < of.depth; ++index) {
+    if (of.layers[index] != goal.layers[offset + index]) {
+      return false;
+    }
+  }
+  for (std::size_t level = 1; level <= of.depth; ++level) {
+    if (of.quals[level] != goal.quals[offset + level]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // What reach passes a step to: a wrap or an observer only as the layer of
-// the request at its depth. An adopted handle may give its element.
+// the request at its depth, and a pointer or a handle converted to a more
+// qualified element only as the qualifiers of the request at its depth. An
+// adopted handle may give its element.
 struct reached_sink {
   search &found;
   const state &from;
@@ -854,6 +1006,9 @@ struct reached_sink {
     if ((kind == step::wrap || kind == step::observe) &&
         !(may_become(reached, goal, with) &&
           reached.layers[0] == goal.layers[goal.depth - reached.depth])) {
+      return;
+    }
+    if (kind == step::qualify && !qualified_as(reached, goal, with)) {
       return;
     }
     found.add({reached, stepped(from.made, kind, from.reached, reached, with),
@@ -1211,7 +1366,9 @@ constexpr bool holds_stored(const thing &of, const thing &stored) {
 // stored type, or one from what holds the leaf a request of the interface
 // cannot name that the upcast to the interface needs, which wraps the leaf
 // itself into a layer that rebinds, or the stored layers as they are stored;
-// and what a pointer the binding made points to, released.
+// and what a pointer the binding made points to, released. A request
+// converts a handle of the interface to one of a more qualified element,
+// once the binding upcasts it.
 template <typename Sink> struct binding_steps_sink {
   const thing &from;
   const thing &stored;
@@ -1221,7 +1378,7 @@ template <typename Sink> struct binding_steps_sink {
   constexpr void operator()(step kind, const thing &reached) {
     if (binding_kind(kind)) {
       out(kind, reached);
-    } else if (names_leaf(from, with) &&
+    } else if (kind != step::qualify && names_leaf(from, with) &&
                (kind != step::wrap ||
                 (from.depth == 0 && with.kind(reached.layers[0]).rebinds) ||
                 holds_stored(from, stored))) {

@@ -31,7 +31,7 @@ from spec.vocabulary import Category, InterfaceSet, Scope, StoredForm  # noqa: E
 # The kinds of step, in the order of semantics::step.
 STEPS = ("release", "decay", "hand_over", "adopt", "element",
          "element_pointer", "element_or_empty", "element_or_empty_copy",
-         "convert", "upcast", "copy", "wrap", "observe")
+         "convert", "upcast", "copy", "wrap", "observe", "qualify")
 SATISFACTIONS = ("refer", "point", "take", "move", "copy")
 # The identity of a standard layer, which a step makes a layer of.
 IDENTITIES = {
@@ -104,13 +104,14 @@ def main():
     requests = []
     lines = []
     for scope, form, leaf, context, start, goals in cases():
-        for layers, element, goal in goals:
+        for layers, element, goal, quals in goals:
             # A container requests the interface exactly where the context
             # requests it, and plans through what the binding publishes.
             if (element == "interface") != context.abstract:
                 continue
-            requests.append((scope, form, leaf, layers, element, goal))
-            lines.append(check.encode(context, start, layers, element))
+            requests.append((scope, form, leaf, layers, element, goal, quals))
+            lines.append(check.encode(context, start, layers, element, 0,
+                                      quals))
     header = check.header()
     run = subprocess.run([str(semantics_program), "plans"],
                          input="\n".join(header + lines) + "\n",
@@ -119,8 +120,8 @@ def main():
     assert len(plans) == len(requests), (len(plans), len(requests))
 
     cells = []
-    for (scope, form, leaf, layers, element, goal), line in zip(requests,
-                                                                 plans):
+    for (scope, form, leaf, layers, element, goal, quals), line in zip(
+            requests, plans):
         for category, planned in zip(Category, line.split()):
             if planned == "-":
                 continue
@@ -128,7 +129,7 @@ def main():
             if options.only not in name:
                 continue
             cells.append(cell(name, scope, form, leaf, layers, element,
-                              category, planned))
+                              quals, category, planned))
     parts = [cells[index:index + CELLS]
              for index in range(0, len(cells), CELLS)]
     differ = []
@@ -150,7 +151,8 @@ def main():
     return 1 if differ or failed else 0
 
 
-def cell(name, scope, form, leaf, layers, element, category, planned):
+def cell(name, scope, form, leaf, layers, element, quals, category,
+         planned):
     """The code of a cell, and the copies and moves its plan says."""
     leaf_type = f"dingo::model::{LEAF_TYPES[leaf]}"
     stored = spell_stored(form).replace("L", leaf_type)
@@ -158,7 +160,7 @@ def cell(name, scope, form, leaf, layers, element, category, planned):
         stored = stored[:-1].strip()
     interface = interface_of(semantics.Bound((), element), leaf).spelled
     how, cost, *steps = planned.split(":")
-    shape = spell_request(layers, element, leaf_type, interface)
+    shape = spell_request(layers, element, leaf_type, interface, quals)
     request = f"{check.CATEGORY_TYPES[category]}<{shape}>"
     makes = "true" if semantics.SCOPES[scope].makes else "false"
     if stored.endswith("]"):
@@ -195,10 +197,23 @@ def semantics_array_layer():
     return check.LANGUAGE.index("array")
 
 
-def spell_request(layers, element, leaf_type, interface):
-    """The shape of a request, around its element, as C++ spells it."""
-    spelled = leaf_type if element == "leaf" else interface
-    for name in reversed(layers):
+def qualified(spelled, quals):
+    """A type of the qualifiers of the semantics."""
+    if quals & semantics.CONST:
+        spelled = f"const {spelled}"
+    if quals & semantics.VOLATILE:
+        spelled = f"volatile {spelled}"
+    return spelled
+
+
+def spell_request(layers, element, leaf_type, interface, quals):
+    """The shape of a request, around its element, as C++ spells it: each
+    level below the object of the qualifiers the request asks of it."""
+    spelled = qualified(leaf_type if element == "leaf" else interface,
+                        quals[len(layers)])
+    for level, name in reversed(list(enumerate(layers))):
+        if level < len(layers) - 1:
+            spelled = qualified(spelled, quals[level + 1])
         if name == "pointer":
             spelled = f"std::add_pointer_t<{spelled}>"
         elif name == "array":

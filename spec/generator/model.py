@@ -40,9 +40,12 @@ def spell_stored(form):
 
 
 def spell_shape(shape, inner):
-    """A shape around the type inner, in the aliases of probe.h."""
+    """A shape around the type inner, in the aliases of probe.h, of a const
+    inner where the shape holds a const interface."""
     if shape in ARRAY_ALIASES:
         return f"shape::{ARRAY_ALIASES[shape]}<{inner}>"
+    if shape.const_element:
+        inner = f"const {inner}"
     for name in reversed(shape.wrappers):
         inner = f"shape::{WRAPPERS[name][2]}<{inner}>"
     return inner
