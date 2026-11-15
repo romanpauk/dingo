@@ -31,8 +31,8 @@ library alone does not change its answers.
 
 import argparse
 import dataclasses
-import gzip
 import hashlib
+from compression import zstd
 import itertools
 import multiprocessing
 import os
@@ -496,10 +496,11 @@ POSITIONS = list(Position)
 ENTRIES = list(Entry)
 
 
-def rules_cases(starts):
+def rules_cases(starts, kept=None):
     """The requests of the rules domain of some stored objects, each with the
     answers of the specification's fewest for every category, position,
-    entry point, selection and container."""
+    entry point, selection and container: those kept, an iterator of them,
+    when given."""
     for scope, form, leaf, interfaces, limits in starts:
         traits = semantics.LEAVES[leaf]
         for abstract in (False, True):
@@ -513,8 +514,8 @@ def rules_cases(starts):
                     continue
                 for shape, shaped in semantics.SHAPES.items():
                     layers = shaped + bound.layers
-                    answers = []
-                    for category in Category:
+                    answers = [next(kept)] if kept is not None else []
+                    for category in (Category if kept is None else ()):
                         for position in POSITIONS:
                             for entry in ENTRIES:
                                 for selection in (Selection.PLAIN,
@@ -677,17 +678,20 @@ def header():
     return [" ".join(language), " ".join(standard_layers)]
 
 
-def cases_of(domain, mode=None):
+def cases_of(domain, mode=None, kept=None):
     """The requests of a domain, each its name, the answers of the
-    specification and the line the program reads."""
+    specification and the line the program reads: the answers kept, an
+    iterator of them, when given, which spares the search."""
     for name, context, start, goals in domain:
         # What the stored object reaches, or, through what a binding
         # publishes, what a request reaches from that.
-        reached = (semantics.requested(start, context) if mode == "split"
+        reached = (None if kept is not None else
+                   semantics.requested(start, context) if mode == "split"
                    else semantics.reachable(start, context))
         for layers, element, goal, *qualified in goals:
             quals = qualified[0] if qualified else None
             yield (f"{name}/{goal}",
+                   next(kept) if kept is not None else
                    expected(reached, context, layers, element, quals),
                    encode(context, start, layers, element, 0, quals))
 
@@ -731,17 +735,18 @@ DOMAINS = {
 PARTS = 64
 
 
-def part_cases(domain, part):
-    """The requests of a part of a domain."""
+def part_cases(domain, part, kept=None):
+    """The requests of a part of a domain, with the answers kept, an iterator
+    of them, when given."""
     if domain == "rules":
         starts = [(scope, form, leaf, interfaces, limits)
                   for scope in Scope for form in StoredForm
                   for leaf in semantics.LEAVES for interfaces in InterfaceSet
                   for limits in LIMITS]
-        return rules_cases(starts[part::PARTS])
+        return rules_cases(starts[part::PARTS], kept)
     make, mode = DOMAINS[domain]
     return cases_of((item for index, item in enumerate(make())
-                     if index % PARTS == part), mode)
+                     if index % PARTS == part), mode, kept)
 
 
 def specification_hash():
@@ -757,22 +762,31 @@ def specification_hash():
 
 def specified(cache, domain, part):
     """The requests of a part of a domain, with the answers of the
-    specification: kept in the cache, a directory, and made again when the
-    sources of the specification change. The specification answers far
-    slower than the program, and a change of the library alone does not
-    change its answers."""
+    specification: those kept in the cache, a directory, while the sources of
+    the specification are the same, and made again otherwise. The
+    specification answers far slower than the program, and a change of the
+    library alone does not change its answers. Only the answers are kept:
+    the names and the lines of the requests are made again, which needs no
+    search."""
     directory, digest = cache
-    path = directory / f"{domain}-{part}.gz"
+    path = directory / f"{domain}-{part}.zst"
     if path.exists():
-        with gzip.open(path, "rt") as kept:
+        with zstd.open(path, "rt") as kept:
             if kept.readline().rstrip("\n") == digest:
-                return [tuple(line.rstrip("\n").split("\t"))
-                        for line in kept]
+                text = kept.read()
+                answers = text.split("\n") if text else []
+                try:
+                    cases = list(part_cases(domain, part, iter(answers)))
+                except RuntimeError:
+                    # Fewer answers than requests: made again.
+                    cases = None
+                if cases is not None and len(cases) == len(answers):
+                    return cases
     cases = list(part_cases(domain, part))
     written = path.with_suffix(".part")
-    with gzip.open(written, "wt", compresslevel=1) as kept:
+    with zstd.open(written, "wt", level=9) as kept:
         kept.write(digest + "\n")
-        kept.writelines("\t".join(case) + "\n" for case in cases)
+        kept.write("\n".join(want for _, want, _ in cases))
     written.replace(path)
     return cases
 
