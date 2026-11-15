@@ -189,10 +189,10 @@ constexpr bool returns_made_value() {
 // it lives as long as the container, in the context in the scope of the
 // request otherwise.
 template <typename Context, typename Scope, typename Retained>
-class static_keeper {
+class static_store {
 public:
-  static_keeper(Context &context, Scope scope, Retained &retained,
-                void (*reject)())
+  static_store(Context &context, Scope scope, Retained &retained,
+               void (*reject)())
       : transient_{{context, reject}, scope},
         stable_{{context, reject}, retained} {}
 
@@ -351,18 +351,18 @@ private:
   Request run(Scope scope, Host &host, Context &context) {
     using planning = static_execution<Request, InterfaceBinding>;
     [[maybe_unused]] auto order = ordered(host, context);
-    static_keeper<Context, Scope,
-                  std::remove_reference_t<decltype(cell_.retained())>>
-        keeper(context, scope, cell_.retained(),
-               &reject_absent<Request, InterfaceBinding>);
+    static_store<Context, Scope,
+                 std::remove_reference_t<decltype(cell_.retained())>>
+        store(context, scope, cell_.retained(),
+              &reject_absent<Request, InterfaceBinding>);
     return activation(scope, host)
         .template use_source<Request>(context, [&](auto &&source) -> Request {
           return execution::planned_run<typename planning::plan, Stable>::
               template run<Request>(
                   plan_start<typename planning::stored_type,
                              planning::scope.makes>(
-                      std::forward<decltype(source)>(source), keeper),
-                  keeper);
+                      std::forward<decltype(source)>(source), store),
+                  store);
         });
   }
 

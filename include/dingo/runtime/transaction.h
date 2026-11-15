@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/memory/arena_allocator.h>
+#include <dingo/memory/object_layout.h>
 #include <dingo/memory/object_store.h>
 #include <dingo/runtime/memory.h>
 
@@ -143,16 +144,15 @@ public:
     return instance;
   }
 
-  // Constructs an object of a type known only by its size and its alignment,
-  // which dtor destroys; none where it has no destructor.
+  // Places an object of a type known only by its layout in persistent
+  // memory.
   template <typename ConstructFn>
-  void *construct_persistent_erased(std::size_t size, std::size_t alignment,
-                                    void (*dtor)(void *) noexcept,
-                                    ConstructFn &&construct_fn) {
-    void *instance = allocate_persistent(size, alignment);
+  void *place_persistent(const detail::object_layout &layout,
+                         ConstructFn &&construct_fn) {
+    void *instance = allocate_persistent(layout.size, layout.alignment);
     std::forward<ConstructFn>(construct_fn)(instance);
-    if (dtor != nullptr) {
-      add_persistent_destructor(instance, dtor);
+    if (layout.destroy != nullptr) {
+      add_persistent_destructor(instance, layout.destroy);
     }
     return instance;
   }

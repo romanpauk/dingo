@@ -182,7 +182,7 @@ def cell(name, scope, form, leaf, layers, element, quals, category,
     using plan = {plan};
     static_assert(plan::transient.found);
     static_assert(static_cast<int>(plan::transient.how) == {how});
-    keeper kept;
+    store kept;
     auto &stored = {"kept.keep<" + stored + ">([] { return " + make + "; })" if make else source};
     counting_on();
     {{
@@ -250,7 +250,7 @@ template <typename X> using const_pointer_of = const X *;
 
 // What the steps make for the request, constructed in place and kept until
 // the cell ends.
-class keeper {
+class store {
 public:
   template <typename T, typename Make> T &keep(Make &&make) {
     void *place = ::operator new(sizeof(T), std::align_val_t(alignof(T)));
@@ -263,7 +263,7 @@ public:
   }
   // A request of what an empty layer does not hold fails.
   [[noreturn]] void absent() { throw std::runtime_error("absent"); }
-  ~keeper() {
+  ~store() {
     for (auto each = kept_.rbegin(); each != kept_.rend(); ++each) {
       (*each)();
     }

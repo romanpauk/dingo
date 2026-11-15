@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/base/config.h>
+#include <dingo/memory/object_layout.h>
 #include <dingo/request/classification.h>
 #include <dingo/request/execution.h>
 #include <dingo/semantics/model.h>
@@ -47,65 +48,47 @@ carrier<T, Owned> unerase(erased_carrier from) {
   return {static_cast<T *>(from.object), from.owner, from.release};
 }
 
-// The layout of a type a runtime resolution keeps an object of: its size, its
-// alignment, and its destructor, none where it has none. A keeper keeps one
-// object of each layout with a binding, under the address of the layout.
-struct kept_layout {
-  std::size_t size;
-  std::size_t alignment;
-  void (*destroy)(void *) noexcept;
-};
-
-template <typename T> void destroy_kept(void *object) noexcept {
-  static_cast<T *>(object)->~T();
-}
-
-template <typename T>
-inline constexpr kept_layout kept_layout_v{
-    sizeof(T), alignof(T),
-    std::is_trivially_destructible_v<T> ? nullptr : &destroy_kept<T>};
-
 // Constructs at an address the object that what make points to makes.
 using construct_function = void (*)(void *at, void *make);
 
-template <typename T, typename Make> void construct_kept(void *at, void *make) {
+template <typename T, typename Make> void construct_made(void *at, void *make) {
   new (at) T((*static_cast<Make *>(make))());
 }
 
-// The keeper of a runtime resolution, of no context: it keeps an object of a
+// The store of a runtime resolution, of no context: it keeps an object of a
 // layout, which construct constructs of make, as long as the container when
 // it is stable, as long as the request otherwise; and it rejects a request of
 // what an empty layer does not hold.
-class runtime_keeper {
+class runtime_store {
 public:
-  virtual void *keep(bool stable, const kept_layout &layout,
+  virtual void *keep(bool stable, const object_layout &layout,
                      construct_function construct, void *make) = 0;
   [[noreturn]] virtual void absent() = 0;
 
 protected:
-  ~runtime_keeper() = default;
+  ~runtime_store() = default;
 };
 
-// A keeper of a runtime resolution as an operation uses it: what it makes is
+// A store of a runtime resolution as an operation uses it: what it makes is
 // kept as long as the container when it is stable, as long as the request
 // otherwise.
-struct keeper_view {
-  runtime_keeper &keeper;
+struct store_view {
+  runtime_store &store;
   bool stable;
 
   template <typename T, typename Make> T &keep(Make &&make) {
     using make_type = std::remove_reference_t<Make>;
-    return *static_cast<T *>(keeper.keep(
-        stable, kept_layout_v<T>, &construct_kept<T, make_type>,
+    return *static_cast<T *>(store.keep(
+        stable, object_layout_v<T>, &construct_made<T, make_type>,
         const_cast<void *>(static_cast<const void *>(std::addressof(make)))));
   }
 
-  void absent() { keeper.absent(); }
+  void absent() { store.absent(); }
 };
 
 // An operation of a runtime resolution, of no type.
 using step_function = erased_carrier (*)(erased_carrier from, bool stable,
-                                         runtime_keeper &keeper);
+                                         runtime_store &store);
 
 struct type_table;
 
@@ -239,9 +222,9 @@ constexpr bool makes_transient(semantics::step kind) {
 // A run of wraps of a value the request owns: Made at once, of the T moved
 // into it.
 template <typename Made, typename Leaf, typename Interface, typename T>
-erased_carrier made_of_erased(erased_carrier from, bool stable,
-                              runtime_keeper &keeper) {
-  keeper_view view{keeper, stable};
+erased_carrier made_of_operation(erased_carrier from, bool stable,
+                                 runtime_store &store) {
+  store_view view{store, stable};
   auto &made = view.template keep<Made>([&] {
     return made_of<Leaf, Interface, Made>(
         std::move(*static_cast<T *>(from.object)));
@@ -252,9 +235,9 @@ erased_carrier made_of_erased(erased_carrier from, bool stable,
 // A raw pointer the request owns, taken over by the handle Made: of a Whole
 // array Made holds, as the pointer to its first element.
 template <typename Made, typename Pointer, bool Whole = false>
-erased_carrier adopted_erased(erased_carrier from, bool stable,
-                              runtime_keeper &keeper) {
-  keeper_view view{keeper, stable};
+erased_carrier adopted_operation(erased_carrier from, bool stable,
+                                 runtime_store &store) {
+  store_view view{store, stable};
   auto &made = view.template keep<Made>([&] {
     return Made(adopted_pointer<Whole>(*static_cast<Pointer *>(from.object)));
   });
@@ -265,9 +248,9 @@ erased_carrier adopted_erased(erased_carrier from, bool stable,
 
 // A handle Made that does not own its element, made of a pointer to it.
 template <typename Made, typename Pointer>
-erased_carrier observing_erased(erased_carrier from, bool stable,
-                                runtime_keeper &keeper) {
-  keeper_view view{keeper, stable};
+erased_carrier observing_operation(erased_carrier from, bool stable,
+                                   runtime_store &store) {
+  store_view view{store, stable};
   auto &made = view.template keep<Made>(
       [&] { return Made(*static_cast<Pointer *>(from.object)); });
   return erase(carrier<Made, true>{std::addressof(made)});
@@ -277,10 +260,10 @@ erased_carrier observing_erased(erased_carrier from, bool stable,
 // the element of fewer, Source: moved out of one the request owns, copied of
 // another.
 template <typename Made, typename Source, bool Owned>
-erased_carrier qualified_erased(erased_carrier from, bool stable,
-                                runtime_keeper &keeper) {
+erased_carrier qualified_operation(erased_carrier from, bool stable,
+                                   runtime_store &store) {
   (void)stable;
-  keeper_view view{keeper, false};
+  store_view view{store, false};
   auto &made = view.template keep<Made>([&]() -> Made {
     if constexpr (Owned) {
       return Made(std::move(*static_cast<Source *>(from.object)));
@@ -307,16 +290,16 @@ struct table_maker : layer_types<T, Leaf, Interface> {
 
   template <typename Step, bool Owned, bool Transient>
   static erased_carrier apply(erased_carrier from, bool stable,
-                              runtime_keeper &keeper) {
+                              runtime_store &store) {
     // What a step of a transient kind makes lives as long as the request.
-    keeper_view view{keeper, !Transient && stable};
+    store_view view{store, !Transient && stable};
     return erase(
         Step::template apply<Leaf, Interface>(unerase<T, Owned>(from), view));
   }
 
   template <typename Step, bool Owned>
   using reached_t = decltype(Step::template apply<Leaf, Interface>(
-      std::declval<carrier<T, Owned>>(), std::declval<keeper_view &>()));
+      std::declval<carrier<T, Owned>>(), std::declval<store_view &>()));
 
   template <typename Step, bool Owned>
   using made_t = typename reached_t<Step, Owned>::type;
@@ -381,7 +364,7 @@ struct table_maker : layer_types<T, Leaf, Interface> {
     operation made;
     if constexpr (std::is_same_v<T, type> && facts::template runs<K>()) {
       using of = std::remove_cv_t<typename nested<K>::type>;
-      made.owned = &made_of_erased<type, Leaf, Interface, of>;
+      made.owned = &made_of_operation<type, Leaf, Interface, of>;
     }
     return made;
   }
@@ -484,10 +467,10 @@ struct table_maker : layer_types<T, Leaf, Interface> {
       using source =
           requalified_t<type, static_cast<std::uint8_t>(quals & ~Adds)>;
       if constexpr (std::is_constructible_v<type, source &&>) {
-        made.owned = &qualified_erased<type, source, true>;
+        made.owned = &qualified_operation<type, source, true>;
       }
       if constexpr (std::is_constructible_v<type, const source &>) {
-        made.borrowed = &qualified_erased<type, source, false>;
+        made.borrowed = &qualified_operation<type, source, false>;
       }
     }
     return made;
@@ -628,22 +611,22 @@ struct table_maker : layer_types<T, Leaf, Interface> {
         if constexpr (std::is_array_v<of>) {
           using pointer = std::remove_extent_t<of> *;
           if constexpr (std::is_constructible_v<type, pointer>) {
-            made.adopted_array = {&adopted_erased<type, pointer>, nullptr,
+            made.adopted_array = {&adopted_operation<type, pointer>, nullptr,
                                   nullptr};
             // A handle of an array of a known bound takes over a pointer to
             // a whole one too, as the pointer to its first element.
             if constexpr (std::extent_v<of> != 0) {
-              made.adopted = {&adopted_erased<type, of *, true>, nullptr,
+              made.adopted = {&adopted_operation<type, of *, true>, nullptr,
                               nullptr};
             }
           }
         } else if constexpr (std::is_constructible_v<type, of *>) {
-          made.adopted = {&adopted_erased<type, of *>, nullptr, nullptr};
+          made.adopted = {&adopted_operation<type, of *>, nullptr, nullptr};
         }
       } else if constexpr (wrapper_kind_v<layer_identity_t<type>>.observes &&
                            std::is_constructible_v<type, of *>) {
-        made.observing = {&observing_erased<type, of *>,
-                          &observing_erased<type, of *>, nullptr};
+        made.observing = {&observing_operation<type, of *>,
+                          &observing_operation<type, of *>, nullptr};
       }
     }
   }
@@ -1120,7 +1103,7 @@ struct binding_sources {
   // The carrier a step into a state makes of the carrier From.
   template <std::size_t State, typename From>
   using reached_t = decltype(step_into<State>::template apply<Leaf, Interface>(
-      std::declval<From>(), std::declval<keeper_view &>()));
+      std::declval<From>(), std::declval<store_view &>()));
 
   // The carrier of a class of states.
   template <std::size_t Class> struct carrier_of {

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/memory/arena_allocator.h>
+#include <dingo/memory/object_layout.h>
 
 #include <cassert>
 #include <cstddef>
@@ -86,19 +87,17 @@ public:
 #pragma warning(pop)
 #endif
 
-  // Constructs an object of a type known only by its size and its alignment,
-  // which dtor destroys; none where it has no destructor.
+  // Places an object of a type known only by its layout.
   template <typename ConstructFn>
-  void *construct_erased(Arena &arena, std::size_t size, std::size_t alignment,
-                         void (*dtor)(void *) noexcept,
-                         ConstructFn &&construct) {
-    void *instance = allocate(arena, size, alignment);
+  void *place(Arena &arena, const object_layout &layout,
+              ConstructFn &&construct) {
+    void *instance = allocate(arena, layout.size, layout.alignment);
     std::forward<ConstructFn>(construct)(instance);
-    if (dtor != nullptr) {
+    if (layout.destroy != nullptr) {
       try {
-        add_destructor(arena, instance, dtor);
+        add_destructor(arena, instance, layout.destroy);
       } catch (...) {
-        dtor(instance);
+        layout.destroy(instance);
         throw;
       }
     }

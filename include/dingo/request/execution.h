@@ -27,7 +27,7 @@
 // into, which both containers run; and the run of a program as the code
 // compiles, which applies its steps one after another, then satisfies the
 // request of what they reach. What a step makes for the request is kept by a
-// keeper, which constructs it in place of what makes it and keeps it while
+// store, which constructs it in place of what makes it and keeps it while
 // the request lives: keep<T>(make) returns a T & of T(make()).
 
 namespace dingo::detail::execution {
@@ -154,13 +154,13 @@ template <typename T> constexpr bool owns_alone() {
   }
 }
 
-// Whether a keeper keeps what lives as long as the container apart.
-template <typename Keeper, typename = void>
-struct has_keeper_at : std::false_type {};
+// Whether a store keeps what lives as long as the container apart.
+template <typename Store, typename = void>
+struct has_store_at : std::false_type {};
 
-template <typename Keeper>
-struct has_keeper_at<
-    Keeper, std::void_t<decltype(std::declval<Keeper &>().template at<true>())>>
+template <typename Store>
+struct has_store_at<
+    Store, std::void_t<decltype(std::declval<Store &>().template at<true>())>>
     : std::true_type {};
 
 // A step of a kind, to the layer Target where it makes one.
@@ -186,13 +186,13 @@ template <typename T, bool Array> struct released_pointer {
 
 template <bool Array> struct release_step {
   template <typename Leaf, typename Interface, typename T, bool Owned,
-            typename Keeper>
-  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+            typename Store>
+  static auto apply(carrier<T, Owned> from, Store &store) {
     static_assert(Owned && std::is_pointer_v<T>,
                   "only a pointer the request owns is released");
     using pointee = std::remove_pointer_t<T>;
     T pointer = *from.object;
-    keeper.template keep<released_pointer<pointee, Array>>(
+    store.template keep<released_pointer<pointee, Array>>(
         [&] { return released_pointer<pointee, Array>(pointer); });
     // What it points to is released from what it was taken out of.
     from.released();
@@ -201,16 +201,16 @@ template <bool Array> struct release_step {
 };
 
 // The element of a layer. A request of the element of an empty layer
-// fails: the keeper rejects it.
+// fails: the store rejects it.
 template <> struct step<semantics::step::element> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
-            typename Keeper>
-  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+            typename Store>
+  static auto apply(carrier<T, Owned> from, Store &store) {
     using element = element_of_t<T, Leaf>;
     carrier<element, Owned && owns_alone<T>()> reached{
         element_address<T, Leaf>(*from.object), from.owner, from.release};
     if (reached.object == nullptr) {
-      keeper.absent();
+      store.absent();
     }
     if constexpr (Owned && releases_element_v<T>) {
       // The element of a handle the request owns is handed over with it.
@@ -225,11 +225,11 @@ template <> struct step<semantics::step::element> {
 // element when it is an array.
 template <> struct step<semantics::step::element_pointer> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
-            typename Keeper>
-  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+            typename Store>
+  static auto apply(carrier<T, Owned> from, Store &store) {
     using element = element_of_t<T, Leaf>;
     using pointer = std::add_pointer_t<std::remove_extent_t<element>>;
-    auto &made = keeper.template keep<pointer>([&] {
+    auto &made = store.template keep<pointer>([&] {
       return reinterpret_cast<pointer>(element_address<T, Leaf>(*from.object));
     });
     return carrier<pointer, false>{std::addressof(made)};
@@ -240,8 +240,8 @@ template <> struct step<semantics::step::element_pointer> {
 // empty itself: that value, or an empty one when the layer is empty.
 template <> struct step<semantics::step::element_or_empty> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
-            typename Keeper>
-  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+            typename Store>
+  static auto apply(carrier<T, Owned> from, Store &store) {
     using element = element_of_t<T, Leaf>;
     constexpr bool owned = Owned && owns_alone<T>();
     if (auto *held = element_address<T, Leaf>(*from.object)) {
@@ -249,7 +249,7 @@ template <> struct step<semantics::step::element_or_empty> {
     }
     using value_type = std::remove_cv_t<element>;
     return carrier<element, owned>{
-        std::addressof(keeper.template keep<value_type>(
+        std::addressof(store.template keep<value_type>(
             [] { return type_traits<value_type>::empty_value(); }))};
   }
 };
@@ -257,11 +257,11 @@ template <> struct step<semantics::step::element_or_empty> {
 // A copy of what element_or_empty gives.
 template <> struct step<semantics::step::element_or_empty_copy> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
-            typename Keeper>
-  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+            typename Store>
+  static auto apply(carrier<T, Owned> from, Store &store) {
     using element = std::remove_cv_t<element_of_t<T, Leaf>>;
     auto *held = element_address<T, Leaf>(*from.object);
-    auto &made = keeper.template keep<element>([held]() -> element {
+    auto &made = store.template keep<element>([held]() -> element {
       if (held) {
         return *held;
       }
@@ -275,12 +275,12 @@ template <> struct step<semantics::step::element_or_empty_copy> {
 // element: the share_t of its type traits.
 template <> struct step<semantics::step::convert> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
-            typename Keeper>
-  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+            typename Store>
+  static auto apply(carrier<T, Owned> from, Store &store) {
     static_assert(Owned, "only an owned value converts");
     using made_type = typename type_traits<T>::template share_t<
         typename type_traits<T>::value_type>;
-    auto &made = keeper.template keep<made_type>(
+    auto &made = store.template keep<made_type>(
         [&] { return made_type(std::move(*from.object)); });
     return carrier<made_type, true>{std::addressof(made)};
   }
@@ -291,12 +291,12 @@ template <> struct step<semantics::step::convert> {
 // traits, moved out of one the request owns or copied of another.
 template <> struct step<semantics::step::unknown_bound> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
-            typename Keeper>
-  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+            typename Store>
+  static auto apply(carrier<T, Owned> from, Store &store) {
     using type = std::remove_cv_t<T>;
     using made_type = typename type_traits<type>::template unknown_bound_t<
         typename type_traits<type>::value_type>;
-    auto &made = keeper.template keep<made_type>([&] {
+    auto &made = store.template keep<made_type>([&] {
       if constexpr (Owned) {
         return made_type(std::move(*from.object));
       } else {
@@ -334,8 +334,8 @@ template <typename T, typename Leaf, typename Interface> struct upcast_of {
 // stack of them of the interface, converted of the stack of the leaf.
 template <> struct step<semantics::step::upcast> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
-            typename Keeper>
-  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+            typename Store>
+  static auto apply(carrier<T, Owned> from, Store &store) {
     if constexpr (std::is_same_v<std::remove_cv_t<T>, Leaf>) {
       using interface = qualified_as_t<T, Interface>;
       return carrier<interface, Owned>{static_cast<interface *>(from.object),
@@ -344,7 +344,7 @@ template <> struct step<semantics::step::upcast> {
       // A pointer of the interface, to the same object: a pointer the request
       // owns stays owned, and still releases what it was taken out of.
       using made_type = typename upcast_of<T, Leaf, Interface>::type;
-      auto &made = keeper.template keep<made_type>(
+      auto &made = store.template keep<made_type>(
           [&] { return made_type(*from.object); });
       return carrier<made_type, Owned>{std::addressof(made), from.owner,
                                        from.release};
@@ -353,7 +353,7 @@ template <> struct step<semantics::step::upcast> {
       // one the request owns, which is moved, or copied, as a new object the
       // request owns.
       using made_type = typename upcast_of<T, Leaf, Interface>::type;
-      auto &made = keeper.template keep<made_type>([&]() -> made_type {
+      auto &made = store.template keep<made_type>([&]() -> made_type {
         if constexpr (Owned) {
           return made_type(std::move(*from.object));
         } else {
@@ -369,10 +369,10 @@ template <> struct step<semantics::step::upcast> {
 // A copy: a new object the request owns, of no qualifiers.
 template <> struct step<semantics::step::copy> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
-            typename Keeper>
-  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+            typename Store>
+  static auto apply(carrier<T, Owned> from, Store &store) {
     using made_type = std::remove_cv_t<T>;
-    auto &made = keeper.template keep<made_type>(
+    auto &made = store.template keep<made_type>(
         [object = from.object]() -> made_type { return made_type(*object); });
     return carrier<made_type, true>{std::addressof(made)};
   }
@@ -382,10 +382,10 @@ template <> struct step<semantics::step::copy> {
 // it.
 template <typename Target> struct step<semantics::step::wrap, Target> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
-            typename Keeper>
-  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+            typename Store>
+  static auto apply(carrier<T, Owned> from, Store &store) {
     using made_type = wrapped_t<Leaf, Interface, T>;
-    auto &made = keeper.template keep<made_type>(
+    auto &made = store.template keep<made_type>(
         [&] { return wrapped<Leaf, Interface>(std::move(*from.object)); });
     return carrier<made_type, true>{std::addressof(made)};
   }
@@ -424,10 +424,10 @@ template <typename Target> struct step<semantics::step::wrap, Target> {
 // An array decayed to the pointer to its first element.
 template <> struct step<semantics::step::decay> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
-            typename Keeper>
-  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+            typename Store>
+  static auto apply(carrier<T, Owned> from, Store &store) {
     using pointer = std::add_pointer_t<std::remove_extent_t<T>>;
-    auto &made = keeper.template keep<pointer>(
+    auto &made = store.template keep<pointer>(
         [&] { return reinterpret_cast<pointer>(from.object); });
     if constexpr (Owned) {
       // The pointer of an array the request owns owns it: it is given up by
@@ -441,9 +441,9 @@ template <> struct step<semantics::step::decay> {
 // An array the request owns, handed over as the pointer that owns it.
 template <> struct step<semantics::step::hand_over> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
-            typename Keeper>
-  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
-    auto &made = keeper.template keep<T *>([&] { return from.object; });
+            typename Store>
+  static auto apply(carrier<T, Owned> from, Store &store) {
+    auto &made = store.template keep<T *>([&] { return from.object; });
     // The pointer owns the array now.
     from.released();
     return carrier<T *, Owned>{std::addressof(made)};
@@ -501,13 +501,13 @@ using held_of_t =
 template <typename Target, std::uint8_t Quals = made_quals>
 struct observe_step {
   template <typename Leaf, typename Interface, typename T, bool Owned,
-            typename Keeper>
-  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+            typename Store>
+  static auto apply(carrier<T, Owned> from, Store &store) {
     using pointee =
         held_of_t<std::remove_pointer_t<std::remove_cv_t<T>>, Quals>;
     using made_type = typename type_traits<Target>::template rebind_t<pointee>;
-    auto &made = keeper.template keep<made_type>(
-        [&] { return made_type(*from.object); });
+    auto &made =
+        store.template keep<made_type>([&] { return made_type(*from.object); });
     return carrier<made_type, true>{std::addressof(made)};
   }
 };
@@ -546,15 +546,15 @@ template <bool Whole, typename Pointer> auto adopted_pointer(Pointer pointer) {
 template <typename Target, bool Array, std::uint8_t Quals = made_quals>
 struct adopt_step {
   template <typename Leaf, typename Interface, typename T, bool Owned,
-            typename Keeper>
-  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+            typename Store>
+  static auto apply(carrier<T, Owned> from, Store &store) {
     using pointee = held_of_t<std::remove_pointer_t<T>, Quals>;
     using made_type = adopting_handle_t<Target, pointee, Array>;
     // A handle of an array takes over a pointer to the whole array as the
     // pointer to its first element.
     constexpr bool whole =
         !Array && is_array_like_type_v<Target> && std::is_array_v<pointee>;
-    auto &made = keeper.template keep<made_type>(
+    auto &made = store.template keep<made_type>(
         [&] { return made_type(adopted_pointer<whole>(*from.object)); });
     // The handle owns what the pointer points to now.
     from.released();
@@ -566,10 +566,10 @@ struct adopt_step {
 // Quals: a new object, moved out of one the request owns, copied of another.
 template <std::uint8_t Quals> struct qualify_step {
   template <typename Leaf, typename Interface, typename T, bool Owned,
-            typename Keeper>
-  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+            typename Store>
+  static auto apply(carrier<T, Owned> from, Store &store) {
     using made_type = requalified_t<T, Quals>;
-    auto &made = keeper.template keep<made_type>([&]() -> made_type {
+    auto &made = store.template keep<made_type>([&]() -> made_type {
       if constexpr (Owned) {
         return made_type(std::move(*from.object));
       } else {
@@ -580,13 +580,13 @@ template <std::uint8_t Quals> struct qualify_step {
   }
 };
 
-// The keeper of what lives as long as the container, or as long as the
-// request: a keeper that keeps them apart gives each with at<Stable>().
-template <bool Stable, typename Keeper> auto &keeper_of(Keeper &keeper) {
-  if constexpr (has_keeper_at<Keeper>::value) {
-    return keeper.template at<Stable>();
+// The store of what lives as long as the container, or as long as the
+// request: a store that keeps them apart gives each with at<Stable>().
+template <bool Stable, typename Store> auto &store_of(Store &store) {
+  if constexpr (has_store_at<Store>::value) {
+    return store.template at<Stable>();
   } else {
-    return keeper;
+    return store;
   }
 }
 
@@ -1039,21 +1039,21 @@ template <const semantics::plan &Plan, const program &Program,
           typename Identities, typename Leaf, typename Interface>
 struct program_run {
   template <typename Request, std::size_t Index = 0, typename Carrier,
-            typename Keeper>
-  static Request run(Carrier from, Keeper &keeper) {
+            typename Store>
+  static Request run(Carrier from, Store &store) {
     if constexpr (Index == Program.count) {
       return finished<Request>(from);
     } else {
-      return run<Request, Index + 1>(apply<Index>(from, keeper), keeper);
+      return run<Request, Index + 1>(apply<Index>(from, store), store);
     }
   }
 
-  template <std::size_t Index, typename T, bool Owned, typename Keeper>
-  static auto apply(carrier<T, Owned> from, Keeper &keeper) {
+  template <std::size_t Index, typename T, bool Owned, typename Store>
+  static auto apply(carrier<T, Owned> from, Store &store) {
     constexpr instruction Each = Program.at[Index];
     constexpr semantics::thing reached = Plan.things[Each.last + 1];
     auto &kept =
-        keeper_of<reached.lifetimes[0] == semantics::lifetime::stable>(keeper);
+        store_of<reached.lifetimes[0] == semantics::lifetime::stable>(store);
     if constexpr (Each.kind == semantics::step::wrap) {
       using made_type = typename wrapped_as<T, Index>::type;
       auto &made = kept.template keep<made_type>([&] {

@@ -224,7 +224,7 @@ other code.
    which applies the steps of a plan one after another. A run of wraps makes its
    outermost layer at once, in place, and the last run is made where the request
    needs it, so that the leaf is moved once. What a step makes for the request
-   is kept by a keeper. A step that takes over what a pointer points to releases
+   is kept by a store. A step that takes over what a pointer points to releases
    the handle it was taken out of, by the `release` of its type traits.
    `execution_check.py` asks the semantics the plan of every conversion of the
    model, applies each to the leaf types of the model, which count their copies

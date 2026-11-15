@@ -169,7 +169,7 @@ struct runtime_binding_edge {
       runtime_binding_interface<rtti_type, runtime_context_type>;
   using node_type = runtime_binding_node<rtti_type, runtime_context_type>;
   using cell_type = detail::binding_cell<Storage>;
-  using keeper_type = detail::context_keeper<runtime_context_type>;
+  using store_type = detail::context_store<runtime_context_type>;
   using execution_type =
       detail::binding_execution<Storage, std::remove_cv_t<Type>>;
   using plan_type = typename execution_type::plan;
@@ -239,16 +239,16 @@ private:
         construction, context, [&](auto &&source) -> resolved_address {
           // What the plan keeps is undone before the cell is reset.
           materialized();
-          keeper_type keeper(context, scope, retained(binding),
-                             request.requested, registered_type());
-          detail::execution::keeper_view transient{keeper, false};
+          store_type store(context, scope, retained(binding), request.requested,
+                           registered_type());
+          detail::execution::store_view transient{store, false};
           detail::execution::erased_carrier reached = detail::execution::erase(
               detail::plan_start<stored_type, execution_type::scope.makes>(
                   std::forward<decltype(source)>(source), transient));
           for (std::size_t index = 0; index < plan.count; ++index) {
             const auto &call = plan.calls[index];
             reached = (reached.owned ? call.owned : call.borrowed)(
-                reached, call.stable, keeper);
+                reached, call.stable, store);
           }
           return detail::finish_request(reached, plan);
         });

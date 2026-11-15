@@ -19,6 +19,7 @@
 #include <dingo/lookup/lookup.h>
 #include <dingo/lookup/lookup_key.h>
 #include <dingo/memory/allocator.h>
+#include <dingo/memory/object_layout.h>
 #include <dingo/registration/requirements.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/request/collection.h>
@@ -936,11 +937,9 @@ private:
   // destroys its cell, and the node and the descriptor of the binding of each
   // of its interfaces.
   struct registration_node {
-    std::size_t size;
-    std::size_t alignment;
+    detail::object_layout record;
     std::size_t cell_offset;
     std::size_t bindings_offset;
-    void (*destroy)(void *) noexcept;
     const runtime_binding_node_type *const *nodes;
     const type_descriptor *interfaces;
     std::size_t count;
@@ -967,11 +966,9 @@ private:
     static constexpr type_descriptor interfaces[] = {
         detail::described_type_v<TypeInterfaces>...};
     static constexpr registration_node value{
-        Record::size,
-        Record::alignment,
+        {Record::size, Record::alignment, &Record::destroy},
         detail::runtime_cell_offset_v<detail::binding_cell<TypeStorage>>,
         Record::bindings_offset,
-        &Record::destroy,
         nodes,
         interfaces,
         sizeof...(TypeInterfaces),
@@ -1093,17 +1090,16 @@ private:
     auto &transaction = frame.transaction();
     auto &state = make_bindings(transaction);
     auto *header = static_cast<runtime_binding_header *>(
-        transaction.construct_persistent_erased(
-            node.size, node.alignment, node.destroy, [&](void *place) {
-              auto *made = ::new (place)
-                  runtime_binding_header{{nullptr, nullptr}, this, nullptr};
-              make_cell(static_cast<unsigned char *>(place) + node.cell_offset,
-                        arg);
-              for (std::size_t index = 0; index < node.count; ++index) {
-                ::new (binding_address(node, *made, index))
-                    runtime_binding_interface_type(node.nodes[index], made);
-              }
-            }));
+        transaction.place_persistent(node.record, [&](void *place) {
+          auto *made = ::new (place)
+              runtime_binding_header{{nullptr, nullptr}, this, nullptr};
+          make_cell(static_cast<unsigned char *>(place) + node.cell_offset,
+                    arg);
+          for (std::size_t index = 0; index < node.count; ++index) {
+            ::new (binding_address(node, *made, index))
+                runtime_binding_interface_type(node.nodes[index], made);
+          }
+        }));
     for (std::size_t index = 0; index < count; ++index) {
       const lookup_insert &insert = inserts[index];
       insert.lookup->insert(

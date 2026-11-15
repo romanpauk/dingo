@@ -36,11 +36,10 @@ namespace detail {
 // long as the container, in the context in the scope of the request
 // otherwise.
 template <typename Context>
-class context_keeper final : public execution::runtime_keeper {
+class context_store final : public execution::runtime_store {
 public:
-  context_keeper(Context &context, construction_scope scope,
-                 retention *retained, type_descriptor requested,
-                 type_descriptor registered) noexcept
+  context_store(Context &context, construction_scope scope, retention *retained,
+                type_descriptor requested, type_descriptor registered) noexcept
       : context_(context), scope_(scope), retained_(retained),
         requested_(requested), registered_(registered) {}
 
@@ -52,19 +51,16 @@ public:
   // Keeps an object of a layout, which construct constructs of make: with
   // the binding when it is stable, in the context in the scope of the
   // request otherwise.
-  void *keep(bool stable, const execution::kept_layout &layout,
+  void *keep(bool stable, const object_layout &layout,
              execution::construct_function construct, void *make) override {
     auto construct_at = [&](void *at) { construct(at, make); };
     if (stable) {
       // A binding that keeps no instance is planned to keep nothing made of
       // it.
       assert(retained_ != nullptr);
-      return retained_->keep_erased(&layout, context_, layout.size,
-                                    layout.alignment, layout.destroy,
-                                    construct_at);
+      return retained_->keep(&layout, context_, layout, construct_at);
     }
-    return context_.construct_erased(scope_, layout.size, layout.alignment,
-                                     layout.destroy, construct_at);
+    return context_.place(scope_, layout, construct_at);
   }
 
 private:

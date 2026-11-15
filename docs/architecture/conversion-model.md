@@ -95,8 +95,8 @@ Each table is checked as the code compiles against the steps that the semantics
 allow from its type, so a plan meets no missing operation. A request that no
 plan satisfies throws `type_not_convertible_exception`.
 
-The operations keep what they make through `runtime_keeper`, an interface of no
-context. It keeps an object by its layout (`kept_layout`: size, alignment and
+The operations keep what they make through `runtime_store`, an interface of no
+context. It keeps an object by its layout (`object_layout`: size, alignment and
 destructor) and one function that constructs it. The tables, the plans and
 `plan_runtime` do not depend on the context, and keeping is not instantiated for
 each type.

@@ -10,6 +10,7 @@
 #include <dingo/base/config.h>
 
 #include <dingo/base/construction_scope.h>
+#include <dingo/memory/object_layout.h>
 
 #include <cstddef>
 #include <memory>
@@ -51,18 +52,16 @@ public:
     return made.release()->object;
   }
 
-  // Keeps an object of a size and an alignment, which construct constructs
-  // at the address it is given and destroy destroys, none where it has no
-  // destructor, in the persistent memory of a runtime container.
+  // Keeps an object of a type known only by its layout, which construct
+  // constructs at the address it is given, in the persistent memory of a
+  // runtime container.
   template <typename Context, typename ConstructFn>
-  void *keep_erased(const void *key, Context &context, std::size_t size,
-                    std::size_t alignment, void (*destroy)(void *) noexcept,
-                    ConstructFn &&construct) {
+  void *keep(const void *key, Context &context, const object_layout &layout,
+             ConstructFn &&construct) {
     if (void *object = find(key)) {
       return object;
     }
-    void *object =
-        context.construct_erased(persistent_scope, size, alignment, destroy,
+    void *object = context.place(persistent_scope, layout,
                                  std::forward<ConstructFn>(construct));
     head_ = std::addressof(context.template construct<node>(
         persistent_scope, node{key, object, head_, nullptr}));

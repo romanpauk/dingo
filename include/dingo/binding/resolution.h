@@ -150,8 +150,8 @@ template <typename Storage, typename Interface> struct binding_execution {
 // The stored object a source gives, where a plan starts: a value made for
 // the request, which it owns, or the object or the pointer the storage
 // keeps, which it borrows.
-template <typename Stored, bool Makes, typename Source, typename Keeper>
-auto plan_start(Source &&source, Keeper &keeper) {
+template <typename Stored, bool Makes, typename Source, typename Store>
+auto plan_start(Source &&source, Store &store) {
   using source_type = remove_cvref_t<Source>;
   if constexpr (is_array_owner_v<remove_cvref_t<decltype(*source)>>) {
     // The array a scope made, which the request owns until a step takes it
@@ -163,7 +163,7 @@ auto plan_start(Source &&source, Keeper &keeper) {
   } else if constexpr (is_pointer_source_v<source_type> &&
                        std::is_pointer_v<Stored>) {
     // The pointer the storage keeps, as an object of its own.
-    auto &kept = keeper.template keep<Stored>([&] { return source.get(); });
+    auto &kept = store.template keep<Stored>([&] { return source.get(); });
     return execution::carry<Makes>(kept);
   } else if constexpr (is_pointer_source_v<source_type>) {
     return execution::carry<Makes>(*source.get());
