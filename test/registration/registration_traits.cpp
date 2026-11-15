@@ -17,424 +17,21 @@
 #include <optional>
 #include <variant>
 
-namespace conversion_compatibility_test {
-struct owning_source {
-  explicit owning_source(int initial_value)
-      : value(std::make_unique<int>(initial_value)) {}
+template <typename Request, typename Binding>
+inline constexpr bool plans_v =
+    detail::static_execution<Request, Binding>::resolves;
 
-  std::unique_ptr<int> value;
-};
-struct copying_from_owner {
-  explicit copying_from_owner(owning_source &source)
-      : value(*source.value), used_const_source(false) {
-    source.value.reset();
-  }
-
-  explicit copying_from_owner(const owning_source &source)
-      : value(*source.value), used_const_source(true) {}
-
-  int value;
-  bool used_const_source;
-};
-struct consuming_from_owner {
-  explicit consuming_from_owner(owning_source &source)
-      : value(std::move(source.value)) {}
-
-  std::unique_ptr<int> value;
-};
-struct pointer_like {
-  pointer_like(int *);
-};
-struct observer_pointer {
-  observer_pointer(int *);
-};
-struct array_base {};
-struct array_derived : array_base {};
-} // namespace conversion_compatibility_test
-
-namespace dingo {
-template <> struct type_traits<conversion_compatibility_test::owning_source> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = false;
-  static constexpr bool is_owning_handle = true;
-};
-
-template <> struct type_traits<conversion_compatibility_test::pointer_like> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_owning_handle = true;
-
-  using value_type = int;
-
-  template <typename>
-  using rebind_t = conversion_compatibility_test::pointer_like;
-};
-
-template <>
-struct type_traits<conversion_compatibility_test::observer_pointer> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_owning_handle = false;
-
-  using value_type = int;
-
-  template <typename>
-  using rebind_t = conversion_compatibility_test::observer_pointer;
-};
-
-} // namespace dingo
-
-namespace {
-template <typename Resolutions> struct resolution_targets;
-
-template <typename... Resolutions>
-struct resolution_targets<type_list<Resolutions...>> {
-  using type = type_list<typename Resolutions::target_type...>;
-};
-
-template <typename Resolutions>
-using resolution_targets_t = typename resolution_targets<Resolutions>::type;
-
-template <typename Target, typename Resolutions>
-inline constexpr bool has_resolution_target_v =
-    type_list_contains_v<Target, resolution_targets_t<Resolutions>>;
-
-// The targets that accept the value form of a request, as a binding publishes
-// them.
-template <typename Target> struct accepted_target {
-  using target_type = Target;
-};
-
-template <typename Resolutions> struct accepted_value_targets;
-
-template <typename... Resolutions>
-struct accepted_value_targets<type_list<Resolutions...>> {
-  template <typename Resolution>
-  using targets = std::conditional_t<
-      std::is_reference_v<typename Resolution::target_type> ||
-          std::is_pointer_v<typename Resolution::target_type>,
-      type_list<>,
-      type_list<accepted_target<typename Resolution::target_type>>>;
-
-  using type = type_list_cat_t<targets<Resolutions>...>;
-};
-
-template <typename BindingResolutions>
-struct accepted_values
-    : accepted_value_targets<typename BindingResolutions::type> {};
-
-template <typename Resolutions> struct reference_resolution_targets;
-
-template <typename... Resolutions>
-struct reference_resolution_targets<type_list<Resolutions...>> {
-  template <typename Resolution>
-  using targets = std::conditional_t<
-      std::is_lvalue_reference_v<typename Resolution::target_type>,
-      type_list<typename Resolution::target_type>, type_list<>>;
-
-  using type = type_list_cat_t<targets<Resolutions>...>;
-};
-
-template <typename Resolutions>
-using reference_resolution_targets_t =
-    typename reference_resolution_targets<Resolutions>::type;
-
-template <typename Resolutions> struct pointer_resolution_targets;
-
-template <typename... Resolutions>
-struct pointer_resolution_targets<type_list<Resolutions...>> {
-  template <typename Resolution>
-  using targets =
-      std::conditional_t<std::is_pointer_v<typename Resolution::target_type>,
-                         type_list<typename Resolution::target_type>,
-                         type_list<>>;
-
-  using type = type_list_cat_t<targets<Resolutions>...>;
-};
-
-template <typename Resolutions>
-using pointer_resolution_targets_t =
-    typename pointer_resolution_targets<Resolutions>::type;
-
-template <typename Type> struct fresh_value_storage {
-  using type = Type;
-  using resolved_type = Type;
-
-  struct conversions {
-    static constexpr bool is_stable = true;
-
-    using value_types = type_list<>;
-    using lvalue_reference_types = type_list<>;
-    using rvalue_reference_types = type_list<runtime_type &&>;
-    using pointer_types = type_list<>;
-  };
-};
-} // namespace
-
-TEST(type_registration_test, conversion_availability_uses_source_access) {
-  static_assert(
-      detail::access_satisfies<borrow,
-                               detail::alternative_access<
-                                   borrow, detail::unavailable_access>>::value);
-  static_assert(!detail::access_satisfies<
-                borrow, detail::alternative_access<borrow, consume>>::value);
-  static_assert(detail::access_satisfies<
-                consume, detail::alternative_access<borrow, consume>>::value);
-  static_assert(detail::is_type_conversion_available_v<
-                conversion_compatibility_test::copying_from_owner,
-                conversion_compatibility_test::owning_source &, borrow>);
-  using borrowed_owner_conversion = detail::type_conversion_path_t<
-      conversion_compatibility_test::copying_from_owner,
-      conversion_compatibility_test::owning_source &, borrow>;
-  static_assert(std::is_same_v<
-                borrowed_owner_conversion,
-                detail::convert_t<
-                    conversion_compatibility_test::copying_from_owner,
-                    conversion_compatibility_test::owning_source &, borrow,
-                    const conversion_compatibility_test::owning_source &>>);
-  static_assert(!detail::is_type_conversion_available_v<
-                conversion_compatibility_test::consuming_from_owner,
-                conversion_compatibility_test::owning_source &, borrow>);
-  static_assert(detail::is_type_conversion_available_v<
-                conversion_compatibility_test::consuming_from_owner,
-                conversion_compatibility_test::owning_source &, consume>);
-  static_assert(!detail::is_type_conversion_available_v<int, const void *>);
-  static_assert(detail::is_type_conversion_available_v<
-                conversion_compatibility_test::pointer_like, int *, consume>);
-  static_assert(!detail::is_type_conversion_available_v<
-                conversion_compatibility_test::pointer_like, int *, borrow>);
-  static_assert(
-      detail::is_type_conversion_available_v<
-          conversion_compatibility_test::observer_pointer, int *, borrow>);
-  static_assert(
-      !detail::is_type_conversion_available_v<
-          test_optional<std::shared_ptr<int>>, test_optional<int *> &, borrow>);
-  static_assert(detail::is_type_conversion_available_v<
-                test_optional<std::shared_ptr<int>>, test_optional<int *> &&,
-                consume>);
-  using move_optional = test_optional<std::unique_ptr<int>>;
-  static_assert(
-      detail::is_type_conversion_available_v<move_optional, move_optional &&,
-                                             consume>);
-  static_assert(
-      !detail::is_type_conversion_available_v<move_optional,
-                                              const move_optional &&, consume>);
-  static_assert(!detail::is_type_conversion_available_v<
-                move_optional, volatile move_optional &, borrow>);
-  static_assert(detail::is_type_conversion_available_v<std::shared_ptr<int>,
-                                                       int *, consume>);
-  static_assert(!detail::is_type_conversion_available_v<std::shared_ptr<int>,
-                                                        int *, borrow>);
-  static_assert(!detail::is_type_conversion_available_v<std::shared_ptr<int> &,
-                                                        int *, borrow>);
-  static_assert(!detail::is_type_conversion_available_v<
-                std::optional<std::shared_ptr<int>>, int *, borrow>);
-  static_assert(!detail::is_type_conversion_available_v<
-                std::optional<std::unique_ptr<int>>, int *, borrow>);
-  using shared_optional = std::optional<std::shared_ptr<int>>;
-  using const_shared_optional = std::optional<std::shared_ptr<const int>>;
-  static_assert(
-      detail::is_type_conversion_available_v<const_shared_optional,
-                                             shared_optional &, borrow>);
-  static_assert(detail::is_type_conversion_available_v<
-                const_shared_optional, std::optional<std::unique_ptr<int>> &&,
-                consume>);
-  using shared_optional_conversion =
-      detail::type_conversion_path_t<const_shared_optional, shared_optional &,
-                                     borrow>;
-  static_assert(
-      std::is_same_v<typename shared_optional_conversion::required_access,
-                     borrow>);
-  using owning_variant =
-      std::variant<conversion_compatibility_test::pointer_like, int>;
-  static_assert(std::is_constructible_v<owning_variant, int *>);
-  static_assert(
-      detail::is_type_conversion_available_v<owning_variant, int *, consume>);
-  static_assert(
-      detail::is_type_conversion_available_v<owning_variant, int *, borrow>);
-  static_assert(!std::is_same_v<
-                detail::type_conversion_path_t<owning_variant, int *, borrow>,
-                detail::convert_t<owning_variant, int *>>);
-  using nested_owning_variant = std::optional<owning_variant>;
-  static_assert(std::is_constructible_v<nested_owning_variant, int *>);
-  static_assert(detail::is_type_conversion_available_v<nested_owning_variant,
-                                                       int *, consume>);
-  static_assert(detail::is_type_conversion_available_v<nested_owning_variant,
-                                                       int *, borrow>);
-  using nested_borrowed_conversion =
-      detail::type_conversion_path_t<nested_owning_variant, int *, borrow>;
-  static_assert(
-      std::is_same_v<typename nested_borrowed_conversion::required_access,
-                     borrow>);
-  using observer_variant =
-      std::variant<conversion_compatibility_test::observer_pointer, int>;
-  static_assert(std::is_constructible_v<observer_variant, int *>);
-  static_assert(
-      detail::is_type_conversion_available_v<observer_variant, int *, borrow>);
-  using mixed_variant =
-      std::variant<std::shared_ptr<int>,
-                   conversion_compatibility_test::observer_pointer>;
-  static_assert(std::is_constructible_v<mixed_variant, int *>);
-  static_assert(
-      detail::is_type_conversion_available_v<mixed_variant, int *, borrow>);
-  static_assert(
-      detail::is_type_conversion_available_v<mixed_variant &, mixed_variant &,
-                                             borrow>);
-  static_assert(
-      detail::is_type_conversion_available_v<const mixed_variant &,
-                                             mixed_variant &, borrow>);
-  using mixed_variant_conversion = detail::conversion_wrap<
-      detail::wrap_alternative<conversion_compatibility_test::observer_pointer>,
-      mixed_variant,
-      detail::convert_t<conversion_compatibility_test::observer_pointer, int *,
-                        borrow, int *>>;
-  static_assert(std::is_same_v<
-                detail::type_conversion_path_t<mixed_variant, int *, borrow>,
-                detail::converted_construction<mixed_variant_conversion>>);
-  using nested_mixed_variant = std::optional<mixed_variant>;
-  static_assert(std::is_constructible_v<nested_mixed_variant, int *>);
-  static_assert(detail::is_type_conversion_available_v<nested_mixed_variant,
-                                                       int *, borrow>);
-  static_assert(
-      std::is_same_v<
-          detail::type_conversion_path_t<nested_mixed_variant, int *, borrow>,
-          detail::converted_construction<detail::conversion_wrap<
-              detail::wrap_optional, nested_mixed_variant,
-              mixed_variant_conversion>>>);
-  // Taking the address of a compatible lvalue is selected directly, also when
-  // the source is itself an alternative type. A pointer that merely converts
-  // to the target keeps its direct conversion, and a variant lvalue still
-  // resolves a base pointer target through its alternatives.
-  using address_variant = std::variant<int, long>;
-  static_assert(
-      std::is_same_v<detail::type_conversion_path_t<int *, int &, borrow>,
-                     detail::conversion_leaf<detail::address, int *, borrow>>);
-  static_assert(
-      std::is_same_v<detail::type_conversion_path_t<const address_variant *,
-                                                    address_variant &, borrow>,
-                     detail::conversion_leaf<detail::address,
-                                             const address_variant *, borrow>>);
-  static_assert(
-      std::is_same_v<
-          detail::type_conversion_path_t<address_variant *, address_variant &,
-                                         consume>,
-          detail::conversion_leaf<detail::address, address_variant *, borrow>>);
-  static_assert(!std::is_same_v<
-                detail::type_conversion_path_t<void *, int *&, borrow>,
-                detail::conversion_leaf<detail::address, void *, borrow>>);
-  static_assert(
-      detail::is_type_conversion_available_v<void *, address_variant &,
-                                             borrow>);
-  static_assert(
-      !std::is_same_v<
-          detail::type_conversion_path_t<void *, address_variant &, borrow>,
-          detail::conversion_leaf<detail::address, void *, borrow>>);
-  // An lvalue array decays to a pointer to its first element.
-  static_assert(
-      std::is_same_v<
-          detail::type_conversion_path_t<int (*)[3], int (&)[2][3], borrow>,
-          detail::conversion_leaf<detail::decay, int (*)[3], borrow>>);
-  static_assert(
-      !detail::is_type_conversion_available_v<int (*)[4], int (&)[2][3]>);
-  static_assert(
-      !detail::is_type_conversion_available_v<int (*)[3],
-                                              volatile int (&)[2][3]>);
-  static_assert(
-      detail::is_type_conversion_available_v<const volatile int (*)[3],
-                                             int (&)[2][3]>);
-  // A pointer to the first element of an array is a pointer to the array, of
-  // the same element.
-  static_assert(
-      detail::is_type_conversion_available_v<int (*)[2][3], int (*)[3]>);
-  static_assert(
-      !detail::is_type_conversion_available_v<int (*)[4], int (*)[3]>);
-  static_assert(
-      !detail::is_type_conversion_available_v<int (*)[3], volatile int (*)[3]>);
-  static_assert(
-      detail::is_type_conversion_available_v<const volatile int (*)[2][3],
-                                             int (*)[3]>);
-  static_assert(!detail::is_type_conversion_available_v<
-                conversion_compatibility_test::array_base(*)[2],
-                conversion_compatibility_test::array_derived *>);
-  static_assert(!detail::is_type_conversion_available_v<
-                conversion_compatibility_test::array_base(&)[2],
-                conversion_compatibility_test::array_derived *>);
-  using volatile_variant = volatile std::variant<int, float>;
-  static_assert(
-      !detail::is_type_conversion_available_v<int &, volatile_variant &>);
-  static_assert(detail::is_type_conversion_available_v<volatile_variant &,
-                                                       volatile_variant &>);
-
+// A volatile reference is reached only through volatile references, and
+// copied as a value.
+TEST(type_registration_test, volatile_binding_plans_volatile_access) {
   using volatile_model = detail::binding_model<
       type_registration<scope<external>, storage<volatile int &>>>;
   using volatile_binding = detail::binding<int, volatile_model>;
-  static_assert(detail::binding_supports_request_v<int, volatile_binding>);
-  static_assert(
-      detail::binding_supports_request_v<volatile int &, volatile_binding>);
-  static_assert(detail::binding_supports_request_v<const volatile int &,
-                                                   volatile_binding>);
-  static_assert(!detail::binding_supports_request_v<int &, volatile_binding>);
-  static_assert(
-      !detail::binding_supports_request_v<const int &, volatile_binding>);
-}
-
-TEST(type_registration_test, inferred_borrowed_conversion_uses_const_source) {
-  using source = conversion_compatibility_test::owning_source;
-  using target = conversion_compatibility_test::copying_from_owner;
-  using conversion = detail::type_conversion_path_t<target, source &, borrow>;
-  struct conversion_context {};
-
-  source value(17);
-  conversion_context resolver;
-  conversion_context context;
-  auto result =
-      conversion::apply(resolver, context, value, describe_type<target>(),
-                        describe_type<source>());
-
-  EXPECT_TRUE(result.used_const_source);
-  EXPECT_EQ(result.value, 17);
-  EXPECT_NE(value.value, nullptr);
-}
-
-TEST(type_registration_test,
-     borrowed_optional_conversion_uses_const_contained_value) {
-  using source = test_optional<conversion_compatibility_test::owning_source>;
-  using target =
-      test_optional<conversion_compatibility_test::copying_from_owner>;
-  using conversion = detail::type_conversion_path_t<target, source &, borrow>;
-  struct conversion_context {};
-
-  source value(conversion_compatibility_test::owning_source(19));
-  conversion_context resolver;
-  conversion_context context;
-  auto result =
-      conversion::apply(resolver, context, value, describe_type<target>(),
-                        describe_type<source>());
-
-  ASSERT_NE(result.get(), nullptr);
-  EXPECT_TRUE(result.get()->used_const_source);
-  EXPECT_EQ(result.get()->value, 19);
-  ASSERT_NE(value.get(), nullptr);
-  EXPECT_NE(value.get()->value, nullptr);
-}
-
-TEST(type_registration_test,
-     inferred_mutable_lvalue_conversion_consumes_source) {
-  using source = conversion_compatibility_test::owning_source;
-  using target = conversion_compatibility_test::consuming_from_owner;
-  using conversion = detail::type_conversion_path_t<target, source &, consume>;
-  struct conversion_context {};
-
-  source value(23);
-  conversion_context resolver;
-  conversion_context context;
-  auto result =
-      conversion::apply(resolver, context, value, describe_type<target>(),
-                        describe_type<source>());
-
-  ASSERT_NE(result.value, nullptr);
-  EXPECT_EQ(*result.value, 23);
-  EXPECT_EQ(value.value, nullptr);
+  static_assert(plans_v<int, volatile_binding>);
+  static_assert(plans_v<volatile int &, volatile_binding>);
+  static_assert(plans_v<const volatile int &, volatile_binding>);
+  static_assert(!plans_v<int &, volatile_binding>);
+  static_assert(!plans_v<const int &, volatile_binding>);
 }
 
 TEST(type_registration_test, consumed_binding_executes_custom_type_conversion) {
@@ -513,30 +110,6 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
     virtual ~J() = default;
   };
   struct A : I, J {};
-  struct move_only {
-    move_only() = default;
-    move_only(const move_only &) = delete;
-    move_only(move_only &&) = default;
-  };
-  struct copy_only {
-    copy_only() = default;
-    copy_only(const copy_only &) = default;
-    copy_only(copy_only &&) = delete;
-  };
-  struct immovable {
-    immovable() = default;
-    immovable(const immovable &) = delete;
-    immovable(immovable &&) = delete;
-  };
-  struct incompatible_deleter {
-    void operator()(A *value) const { delete value; }
-  };
-
-  static_assert(detail::is_type_conversion_available_v<std::unique_ptr<I>,
-                                                       std::unique_ptr<A> &&>);
-  static_assert(
-      !detail::is_type_conversion_available_v<
-          std::unique_ptr<I>, std::unique_ptr<A, incompatible_deleter> &&>);
 
   using nested_handle = const std::shared_ptr<std::unique_ptr<A>> &;
   using nested_list = type_list<nested_handle, std::unique_ptr<A *>>;
@@ -561,77 +134,13 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   static_assert(
       std::is_same_v<rebind_leaf_t<std::unique_ptr<const volatile A>, I>,
                      std::unique_ptr<const volatile I>>);
-  using nested_array_handle =
-      std::shared_ptr<std::unique_ptr<A[], std::default_delete<A[]>>>;
-  static_assert(
-      detail::is_type_conversion_available_v<A *, nested_array_handle &>);
-  using exact_const_optional_pointer = exact_lookup<const std::optional<A>> *;
-  static_assert(std::is_same_v<resolved_type_t<exact_const_optional_pointer,
-                                               const std::optional<A> *>,
-                               const std::optional<A> *>);
-
-  static_assert(detail::is_resolution_request_v<A, A>);
-  static_assert(detail::is_resolution_request_v<A, const A>);
-  static_assert(detail::is_resolution_request_v<A, volatile A>);
-  static_assert(detail::is_resolution_request_v<A, const volatile A>);
-  using optional_pointer_resolution = resolution<std::optional<A> *, void>;
-  static_assert(
-      detail::is_resolution_request_v<std::optional<A> *, std::optional<A> *>);
-  static_assert(detail::is_resolution_request_v<std::optional<A> *,
-                                                std::optional<A> *const>);
-  static_assert(detail::is_resolution_request_v<std::optional<A> *,
-                                                volatile std::optional<A> *>);
-  static_assert(
-      detail::is_resolution_request_v<std::optional<A> *,
-                                      const volatile std::optional<A> *>);
-  static_assert(detail::is_resolution_request_v<const std::optional<A> *,
-                                                const std::optional<A> *>);
-  static_assert(
-      detail::is_resolution_request_v<const std::optional<A> *,
-                                      const volatile std::optional<A> *>);
-  static_assert(!detail::is_resolution_request_v<const std::optional<A> *,
-                                                 std::optional<A> *>);
-  static_assert(!detail::is_resolution_request_v<const std::optional<A> *,
-                                                 volatile std::optional<A> *>);
-  using function_type = void();
-  static_assert(
-      detail::is_resolution_request_v<function_type *, function_type *const>);
-  static_assert(
-      detail::is_resolution_request_v<std::optional<A> &, std::optional<A> &>);
-  static_assert(detail::is_resolution_request_v<std::optional<A> &,
-                                                const std::optional<A> &>);
-  static_assert(detail::is_resolution_request_v<std::optional<A> &,
-                                                volatile std::optional<A> &>);
-  static_assert(
-      detail::is_resolution_request_v<std::optional<A> &,
-                                      const volatile std::optional<A> &>);
-  static_assert(detail::is_resolution_request_v<volatile std::optional<A> &,
-                                                volatile std::optional<A> &>);
-  static_assert(
-      detail::is_resolution_request_v<volatile std::optional<A> &,
-                                      const volatile std::optional<A> &>);
-  static_assert(!detail::is_resolution_request_v<volatile std::optional<A> &,
-                                                 std::optional<A> &>);
-  static_assert(!detail::is_resolution_request_v<volatile std::optional<A> &,
-                                                 const std::optional<A> &>);
-  static_assert(detail::is_resolution_request_v<std::optional<A> &&,
-                                                std::optional<A> &&>);
-  static_assert(detail::is_resolution_request_v<std::optional<A> &&,
-                                                const std::optional<A> &&>);
-  static_assert(detail::is_resolution_request_v<std::optional<A> &&,
-                                                volatile std::optional<A> &&>);
-  static_assert(
-      detail::is_resolution_request_v<std::optional<A> &&,
-                                      const volatile std::optional<A> &&>);
-  static_assert(detail::is_resolution_request_v<A **, const A *const *>);
-  static_assert(!detail::is_resolution_request_v<A **, const A **>);
 
   EXPECT_TRUE(detail::qualifies_as(describe_type<A **>(),
                                    describe_type<const A *const *>()));
   EXPECT_FALSE(
       detail::qualifies_as(describe_type<A **>(), describe_type<const A **>()));
-  constexpr type_descriptor optional_pointer_target = detail::described_type_v<
-      typename optional_pointer_resolution::target_type>;
+  constexpr type_descriptor optional_pointer_target =
+      detail::described_type_v<std::optional<A> *>;
   static_assert(detail::qualifies_as(
       optional_pointer_target, detail::described_type_v<std::optional<A> *>));
   static_assert(
@@ -639,310 +148,6 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
                            detail::described_type_v<const std::optional<A> *>));
   static_assert(!detail::qualifies_as(
       optional_pointer_target, detail::described_type_v<std::optional<I> *>));
-
-  using plain_pointer_model =
-      detail::binding_model<type_registration<scope<external>, storage<A *>>>;
-  using plain_pointer_resolutions =
-      detail::binding_resolutions<A,
-                                  typename plain_pointer_model::storage_type>;
-  static_assert(std::is_same_v<resolution_targets_t<typename accepted_values<
-                                   plain_pointer_resolutions>::type>,
-                               type_list<A>>);
-  static_assert(std::is_same_v<
-                pointer_resolution_targets_t<
-                    typename plain_pointer_resolutions::object_resolutions>,
-                type_list<A *>>);
-
-  using optional_pointer = std::optional<A> *;
-  // An optional of the base would hold a copy of it, which slices the leaf.
-  static_assert(!detail::type_conversion_path_t<std::optional<I>,
-                                                optional_pointer>::available);
-  using optional_pointer_model = detail::binding_model<
-      type_registration<scope<external>, storage<optional_pointer>>>;
-  using optional_pointer_resolutions = detail::binding_resolutions<
-      A, typename optional_pointer_model::storage_type>;
-  static_assert(std::is_same_v<resolution_targets_t<typename accepted_values<
-                                   optional_pointer_resolutions>::type>,
-                               type_list<std::optional<A>>>);
-  static_assert(std::is_same_v<
-                reference_resolution_targets_t<
-                    typename optional_pointer_resolutions::object_resolutions>,
-                type_list<std::optional<A> &>>);
-  static_assert(std::is_same_v<
-                pointer_resolution_targets_t<
-                    typename optional_pointer_resolutions::object_resolutions>,
-                type_list<std::optional<A> *>>);
-  using optional_interface_pointer_model =
-      detail::binding_model<type_registration<
-          scope<external>, storage<optional_pointer>, interfaces<I, J>>>;
-  using optional_interface_resolutions = detail::binding_resolutions<
-      I, typename optional_interface_pointer_model::storage_type>;
-  // The optional of the leaf selects the leaf, which is not bound; an optional
-  // of the interface would hold a copy of it, which slices the leaf.
-  static_assert(
-      !has_resolution_target_v<
-          std::optional<A>,
-          typename accepted_values<optional_interface_resolutions>::type>);
-  static_assert(
-      !has_resolution_target_v<
-          std::optional<I>,
-          typename accepted_values<optional_interface_resolutions>::type>);
-  static_assert(
-      std::is_same_v<
-          pointer_resolution_targets_t<
-              typename optional_interface_resolutions::object_resolutions>,
-          type_list<>>);
-  using optional_interface_binding =
-      detail::binding<I, optional_interface_pointer_model>;
-  static_assert(
-      !detail::binding_supports_request_v<std::optional<I>,
-                                          optional_interface_binding>);
-  using const_pointer_interface_model = detail::binding_model<
-      type_registration<scope<external>, storage<const A *>, interfaces<I, J>>>;
-  using const_pointer_interface_resolutions = detail::binding_resolutions<
-      I, typename const_pointer_interface_model::storage_type>;
-  static_assert(
-      std::is_same_v<
-          reference_resolution_targets_t<
-              typename const_pointer_interface_resolutions::object_resolutions>,
-          type_list<const I &>>);
-  static_assert(
-      std::is_same_v<
-          pointer_resolution_targets_t<
-              typename const_pointer_interface_resolutions::object_resolutions>,
-          type_list<const I *>>);
-
-  using external_move_only_pointer_model = detail::binding_model<
-      type_registration<scope<external>, storage<move_only *>>>;
-  using external_resolutions = detail::binding_resolutions<
-      move_only, typename external_move_only_pointer_model::storage_type>;
-  static_assert(
-      std::is_same_v<typename accepted_values<external_resolutions>::type,
-                     type_list<>>);
-  static_assert(
-      std::is_same_v<pointer_resolution_targets_t<
-                         typename external_resolutions::object_resolutions>,
-                     type_list<move_only *>>);
-
-  // A raw pointer and a unique_ptr publish a copy of the leaf in shared and
-  // external storage alike, a move-only leaf publishes none.
-  using shared_pointer_model =
-      detail::binding_model<type_registration<scope<shared>, storage<A *>>>;
-  using shared_pointer_resolutions =
-      detail::binding_resolutions<A,
-                                  typename shared_pointer_model::storage_type>;
-  static_assert(std::is_same_v<resolution_targets_t<typename accepted_values<
-                                   shared_pointer_resolutions>::type>,
-                               type_list<A>>);
-  using shared_move_only_pointer_model = detail::binding_model<
-      type_registration<scope<shared>, storage<move_only *>>>;
-  using shared_move_only_pointer_resolutions = detail::binding_resolutions<
-      move_only, typename shared_move_only_pointer_model::storage_type>;
-  static_assert(
-      std::is_same_v<
-          typename accepted_values<shared_move_only_pointer_resolutions>::type,
-          type_list<>>);
-  using external_unique_model = detail::binding_model<
-      type_registration<scope<external>, storage<std::unique_ptr<A>>>>;
-  using external_unique_resolutions =
-      detail::binding_resolutions<A,
-                                  typename external_unique_model::storage_type>;
-  static_assert(std::is_same_v<resolution_targets_t<typename accepted_values<
-                                   external_unique_resolutions>::type>,
-                               type_list<>>);
-  using external_move_only_unique_model = detail::binding_model<
-      type_registration<scope<external>, storage<std::unique_ptr<move_only>>>>;
-  using external_move_only_unique_resolutions = detail::binding_resolutions<
-      move_only, typename external_move_only_unique_model::storage_type>;
-  static_assert(
-      std::is_same_v<
-          typename accepted_values<external_move_only_unique_resolutions>::type,
-          type_list<>>);
-
-  using shared_move_only_model = detail::binding_model<
-      type_registration<scope<shared>, storage<move_only>>>;
-  using shared_resolutions = detail::binding_resolutions<
-      move_only, typename shared_move_only_model::storage_type>;
-  static_assert(
-      std::is_same_v<typename accepted_values<shared_resolutions>::type,
-                     type_list<>>);
-  static_assert(
-      std::is_same_v<reference_resolution_targets_t<
-                         typename shared_resolutions::object_resolutions>,
-                     type_list<move_only &>>);
-
-  using shared_cyclical_handle = std::shared_ptr<A>;
-  using shared_cyclical_handle_model = detail::binding_model<
-      type_registration<scope<shared_cyclical>, storage<shared_cyclical_handle>,
-                        interfaces<shared_cyclical_handle>>>;
-  using shared_cyclical_handle_resolutions = detail::binding_resolutions<
-      shared_cyclical_handle,
-      typename shared_cyclical_handle_model::storage_type>;
-  static_assert(
-      has_resolution_target_v<
-          shared_cyclical_handle,
-          typename accepted_values<shared_cyclical_handle_resolutions>::type>);
-  static_assert(
-      !has_resolution_target_v<shared_cyclical_handle &&,
-                               typename shared_cyclical_handle_resolutions::
-                                   rvalue_reference_resolutions>);
-
-  using unique_move_only_model = detail::binding_model<
-      type_registration<scope<unique>, storage<move_only>>>;
-  using unique_resolutions = detail::binding_resolutions<
-      move_only, typename unique_move_only_model::storage_type>;
-  static_assert(
-      std::is_same_v<
-          resolution_targets_t<
-              typename accepted_values<unique_resolutions>::type>,
-          type_list<std::unique_ptr<move_only>, std::shared_ptr<move_only>>>);
-
-  using compatible_unique_handle_model =
-      detail::binding_model<type_registration<
-          scope<unique>, storage<std::unique_ptr<A>>, interfaces<I>>>;
-  using compatible_unique_handle_resolutions = detail::binding_resolutions<
-      I, typename compatible_unique_handle_model::storage_type>;
-  static_assert(
-      has_resolution_target_v<std::unique_ptr<I> &&,
-                              typename compatible_unique_handle_resolutions::
-                                  rvalue_reference_resolutions>);
-
-  using incompatible_unique_handle_model =
-      detail::binding_model<type_registration<
-          scope<unique>, storage<std::unique_ptr<A, incompatible_deleter>>,
-          interfaces<I>>>;
-  using incompatible_unique_handle_resolutions = detail::binding_resolutions<
-      I, typename incompatible_unique_handle_model::storage_type>;
-  static_assert(!has_resolution_target_v<
-                std::unique_ptr<I>,
-                typename accepted_values<
-                    incompatible_unique_handle_resolutions>::type>);
-
-  using fresh_resolutions =
-      detail::binding_resolutions<move_only, fresh_value_storage<move_only>>;
-  static_assert(
-      std::is_same_v<resolution_targets_t<
-                         typename accepted_values<fresh_resolutions>::type>,
-                     type_list<>>);
-  using immovable_fresh_resolutions =
-      detail::binding_resolutions<immovable, fresh_value_storage<immovable>>;
-  static_assert(std::is_same_v<
-                typename accepted_values<immovable_fresh_resolutions>::type,
-                type_list<>>);
-
-  using shared_variant =
-      std::variant<std::shared_ptr<move_only>, std::monostate>;
-  using shared_variant_model = detail::binding_model<
-      type_registration<scope<shared>, storage<shared_variant>>>;
-  using shared_variant_resolutions =
-      detail::binding_resolutions<std::shared_ptr<move_only>,
-                                  typename shared_variant_model::storage_type>;
-  static_assert(has_resolution_target_v<
-                std::shared_ptr<move_only> &,
-                typename shared_variant_resolutions::object_resolutions>);
-
-  using shared_move_only_variant =
-      std::variant<std::unique_ptr<move_only>, std::monostate>;
-  using shared_move_only_variant_model = detail::binding_model<
-      type_registration<scope<shared>, storage<shared_move_only_variant>>>;
-  using shared_move_only_variant_resolutions = detail::binding_resolutions<
-      std::unique_ptr<move_only>,
-      typename shared_move_only_variant_model::storage_type>;
-  static_assert(
-      std::is_same_v<
-          typename accepted_values<shared_move_only_variant_resolutions>::type,
-          type_list<>>);
-
-  using unique_variant =
-      std::variant<std::unique_ptr<move_only>, std::monostate>;
-  using unique_variant_model = detail::binding_model<
-      type_registration<scope<unique>, storage<unique_variant>>>;
-  using unique_variant_resolutions =
-      detail::binding_resolutions<std::unique_ptr<move_only>,
-                                  typename unique_variant_model::storage_type>;
-  static_assert(
-      has_resolution_target_v<
-          std::unique_ptr<move_only> &&,
-          typename unique_variant_resolutions::rvalue_reference_resolutions>);
-
-  using external_nested_move_only_pointer_model = detail::binding_model<
-      type_registration<scope<external>, storage<std::optional<move_only> *>>>;
-  using nested_resolutions = detail::binding_resolutions<
-      move_only,
-      typename external_nested_move_only_pointer_model::storage_type>;
-  static_assert(
-      std::is_same_v<typename accepted_values<nested_resolutions>::type,
-                     type_list<>>);
-  static_assert(
-      std::is_same_v<pointer_resolution_targets_t<
-                         typename nested_resolutions::object_resolutions>,
-                     type_list<std::optional<move_only> *>>);
-
-  using external_nested_move_only_reference_model =
-      detail::binding_model<type_registration<
-          scope<external>, storage<const std::optional<move_only> &>>>;
-  using nested_reference_resolutions = detail::binding_resolutions<
-      move_only,
-      typename external_nested_move_only_reference_model::storage_type>;
-  static_assert(std::is_same_v<
-                typename accepted_values<nested_reference_resolutions>::type,
-                type_list<>>);
-
-  using exact_optional_model = detail::binding_model<
-      type_registration<scope<external>, storage<std::optional<copy_only> &>,
-                        interfaces<std::optional<copy_only>>>>;
-  using exact_optional_binding =
-      detail::binding<std::optional<copy_only>, exact_optional_model>;
-  static_assert(detail::resolves_request_v<std::optional<copy_only>,
-                                           exact_optional_binding>);
-  static_assert(
-      !detail::binding_supports_request_v<
-          std::optional<std::optional<copy_only>>, exact_optional_binding>);
-
-  using const_array_pointer = const std::array<A, 2> *;
-  using const_array_pointer_model = detail::binding_model<
-      type_registration<scope<external>, storage<const_array_pointer>>>;
-  using const_array_pointer_resolutions = detail::binding_resolutions<
-      std::array<A, 2>, typename const_array_pointer_model::storage_type>;
-  static_assert(std::is_same_v<resolution_targets_t<typename accepted_values<
-                                   const_array_pointer_resolutions>::type>,
-                               type_list<std::array<A, 2>>>);
-  static_assert(
-      std::is_same_v<
-          reference_resolution_targets_t<
-              typename const_array_pointer_resolutions::object_resolutions>,
-          type_list<const std::array<A, 2> &>>);
-  static_assert(
-      std::is_same_v<
-          pointer_resolution_targets_t<
-              typename const_array_pointer_resolutions::object_resolutions>,
-          type_list<const std::array<A, 2> *>>);
-
-  using unique_optional_pointer_model = detail::binding_model<
-      type_registration<scope<unique>, storage<optional_pointer>>>;
-  using unique_optional_pointer_resolutions = detail::binding_resolutions<
-      A, typename unique_optional_pointer_model::storage_type>;
-  static_assert(
-      has_resolution_target_v<
-          std::unique_ptr<std::optional<A>>,
-          typename accepted_values<unique_optional_pointer_resolutions>::type>);
-  static_assert(
-      has_resolution_target_v<
-          std::shared_ptr<std::optional<A>>,
-          typename accepted_values<unique_optional_pointer_resolutions>::type>);
-  static_assert(
-      has_resolution_target_v<std::unique_ptr<std::optional<A>> &&,
-                              typename unique_optional_pointer_resolutions::
-                                  rvalue_reference_resolutions>);
-  static_assert(
-      has_resolution_target_v<std::shared_ptr<std::optional<A>> &&,
-                              typename unique_optional_pointer_resolutions::
-                                  rvalue_reference_resolutions>);
-  static_assert(
-      std::is_same_v<
-          pointer_resolution_targets_t<
-              typename unique_optional_pointer_resolutions::object_resolutions>,
-          type_list<std::optional<A> *>>);
 }
 
 TEST(type_registration_test,
@@ -1097,19 +302,11 @@ TEST(type_registration_test,
 TEST(type_registration_test, const_reference_storage_preserves_const_access) {
   using model = detail::binding_model<
       type_registration<scope<external>, storage<const int &>>>;
-  using resolutions =
-      detail::binding_resolutions<int, typename model::storage_type>;
-
-  static_assert(
-      std::is_same_v<
-          resolution_targets_t<typename accepted_values<resolutions>::type>,
-          type_list<>>);
-  static_assert(std::is_same_v<reference_resolution_targets_t<
-                                   typename resolutions::object_resolutions>,
-                               type_list<const int &>>);
-  static_assert(std::is_same_v<pointer_resolution_targets_t<
-                                   typename resolutions::object_resolutions>,
-                               type_list<>>);
+  using binding = detail::binding<int, model>;
+  static_assert(plans_v<const int &, binding>);
+  static_assert(plans_v<const int *, binding>);
+  static_assert(!plans_v<int &, binding>);
+  static_assert(!plans_v<int *, binding>);
 
   const int value = 7;
   container<> value_container;
@@ -1120,12 +317,6 @@ TEST(type_registration_test, const_reference_storage_preserves_const_access) {
   EXPECT_EQ(value_container.resolve<const int *>(), &value);
 
   const std::optional<int> optional_value{11};
-  using optional_model = detail::binding_model<
-      type_registration<scope<external>, storage<const std::optional<int> &>>>;
-  using optional_resolutions =
-      detail::binding_resolutions<int, typename optional_model::storage_type>;
-  static_assert(!has_resolution_target_v<
-                int, typename accepted_values<optional_resolutions>::type>);
 
   container<> optional_container;
   optional_container
@@ -1282,15 +473,6 @@ TEST(type_registration_test,
      const_alternative_storage_only_publishes_const_borrows) {
   using variant_type = std::variant<int, float>;
 
-  static_assert(
-      !detail::is_type_conversion_available_v<int &, const variant_type &>);
-  static_assert(detail::is_type_conversion_available_v<const int &,
-                                                       const variant_type &>);
-  static_assert(
-      !detail::is_type_conversion_available_v<int *, const variant_type &>);
-  static_assert(detail::is_type_conversion_available_v<const int *,
-                                                       const variant_type &>);
-
   const variant_type value{std::in_place_type<int>, 13};
   container<> variant_container;
   variant_container.register_type<
@@ -1305,27 +487,11 @@ TEST(type_registration_test,
      multidimensional_array_storage_preserves_exact_and_row_shapes) {
   using model = detail::binding_model<
       type_registration<scope<shared>, storage<int[2][3]>>>;
-  // Each shape is published by the interface it selects: the whole array by
+  // Each shape is planned by the interface it selects: the whole array by
   // itself, its rows by the row type.
-  using whole_resolutions =
-      detail::binding_resolutions<int[2][3], typename model::storage_type>;
-  using row_resolutions =
-      detail::binding_resolutions<int[3], typename model::storage_type>;
-  static_assert(
-      std::is_same_v<typename accepted_values<whole_resolutions>::type,
-                     type_list<>>);
-  static_assert(
-      std::is_same_v<reference_resolution_targets_t<
-                         typename whole_resolutions::object_resolutions>,
-                     type_list<int (&)[2][3]>>);
-  static_assert(
-      std::is_same_v<pointer_resolution_targets_t<
-                         typename whole_resolutions::object_resolutions>,
-                     type_list<int (*)[2][3]>>);
-  static_assert(
-      std::is_same_v<pointer_resolution_targets_t<
-                         typename row_resolutions::object_resolutions>,
-                     type_list<int (*)[3]>>);
+  static_assert(plans_v<int (&)[2][3], detail::binding<int[2][3], model>>);
+  static_assert(plans_v<int (*)[2][3], detail::binding<int[2][3], model>>);
+  static_assert(plans_v<int (*)[3], detail::binding<int[3], model>>);
 
   container<> container;
   container.register_type<scope<shared>, storage<int[2][3]>>();
@@ -1407,20 +573,6 @@ struct reader {
   int value;
 };
 } // namespace abstract_interface_test
-
-TEST(type_registration_test, value_of_abstract_type_is_not_formable) {
-  using abstract_interface_test::A;
-  using abstract_interface_test::I;
-
-  static_assert(!detail::is_formable_v<I>);
-  static_assert(!detail::is_formable_v<const I>);
-  static_assert(!detail::is_formable_v<std::optional<I>>);
-  static_assert(!detail::is_formable_v<std::variant<A, I>>);
-  static_assert(detail::is_formable_v<I &>);
-  static_assert(detail::is_formable_v<I *>);
-  static_assert(detail::is_formable_v<std::shared_ptr<I>>);
-  static_assert(detail::is_formable_v<std::optional<A>>);
-}
 
 TEST(type_registration_test, scope_stores_reference_only_when_given_it) {
   struct A {};
@@ -1730,29 +882,15 @@ TEST(type_registration_test, kept_instance_keeps_unique_dependency) {
   check_static<shared_cyclical>();
 }
 
-namespace published_test {
-template <typename Target, typename... Resolutions>
-constexpr bool publishes(type_list<Resolutions...>) {
-  return (std::is_same_v<typename Resolutions::target_type, Target> || ...);
-}
-} // namespace published_test
-
 // A binding publishes only the requests that select it: a bounded array binds
 // its rows and itself, and each of them serves its own requests.
 TEST(type_registration_test, binding_publishes_only_requests_it_selects) {
-  using published_test::publishes;
   struct A {};
   using model =
       detail::binding_model<type_registration<scope<shared>, storage<A[2]>>>;
-  using storage_type = typename model::storage_type;
-  using rows = typename detail::binding_resolutions<A, storage_type>::type;
-  using whole = typename detail::binding_resolutions<A[2], storage_type>::type;
-
-  static_assert(publishes<A *>(rows{}));
-  static_assert(!publishes<A(*)[2]>(rows{}));
-  static_assert(!publishes<A(&)[2]>(rows{}));
-  static_assert(publishes<A(*)[2]>(whole{}));
-  static_assert(!publishes<A *>(whole{}));
+  static_assert(plans_v<A *, detail::binding<A, model>>);
+  static_assert(plans_v<A(*)[2], detail::binding<A[2], model>>);
+  static_assert(plans_v<A(&)[2], detail::binding<A[2], model>>);
 }
 
 // A pointer to a bounded array is not constructed: new cannot make one, so

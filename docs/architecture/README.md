@@ -12,14 +12,13 @@ Read these pages in this order:
 - [Registration And Resolution](registration-and-resolution.md): runtime and
   compile-time registration, and the shared path to `resolve<T>()`.
 - [Handles, Leaf Types, And Lookup](handles-leaf-types-and-lookup.md): wrapper
-  algebra, `leaf_type_t`, `rebind_leaf_t`, binding lookup, and
-  `exact_lookup<T>`.
+  algebra, `leaf_type_t`, `rebind_leaf_t` and binding lookup.
 - [Extending Dingo](extending-dingo.md): which trait to specialize for a new
-  wrapper, storage scope, or conversion.
-- [Conversion Model](conversion-model.md): how Dingo selects value, reference,
-  pointer, and wrapper conversions at resolution time.
-- [Layered Semantics](layered-semantics.md): the design, in progress, that makes
-  resolution correct by construction.
+  wrapper or storage scope.
+- [Conversion Model](conversion-model.md): how Dingo plans and applies value,
+  reference, pointer, and wrapper conversions.
+- [Layered Semantics](layered-semantics.md): the design that makes resolution
+  correct by construction.
 
 The public API has three container headers:
 
@@ -57,4 +56,4 @@ The main owners are:
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
 - [include/dingo/type/shape.h](../../include/dingo/type/shape.h)
-- [include/dingo/conversion/apply.h](../../include/dingo/conversion/apply.h)
+- [include/dingo/request/execution.h](../../include/dingo/request/execution.h)

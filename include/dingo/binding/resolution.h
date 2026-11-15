@@ -12,10 +12,7 @@
 #include <dingo/binding/interface.h>
 #include <dingo/binding/selection.h>
 #include <dingo/context/resolution.h>
-#include <dingo/conversion/apply.h>
-#include <dingo/request/composition.h>
 #include <dingo/request/decomposition.h>
-#include <dingo/request/derivation.h>
 #include <dingo/request/execution.h>
 #include <dingo/storage/retention.h>
 #include <dingo/storage/scope_traits.h>
@@ -447,17 +444,14 @@ inline constexpr bool constructible_normalized_v =
     std::is_object_v<request_constructed_t<Request>> &&
     !std::is_abstract_v<request_constructed_t<Request>> &&
     std::extent_v<request_constructed_t<Request>> == 0;
-// A wrapper is made of the normalized value the request resolves, which it
-// copies or moves, by the conversion from that value.
+// A wrapper is made of the normalized value the request resolves: moved into
+// all its layers at once, or into a handle of an array of it.
 template <typename Request>
 inline constexpr bool construct_normalized_request_v = [] {
   if constexpr (constructs_normalized_v<Request> &&
                 constructible_normalized_v<Request>) {
-    using value = request_constructed_t<Request>;
-    return (std::is_move_constructible_v<value> ||
-            std::is_copy_constructible_v<value>) &&
-           detail::is_type_conversion_available_v<std::decay_t<Request>,
-                                                  value &&, consume>;
+    return detail::execution::makes_as<std::decay_t<Request>,
+                                       request_constructed_t<Request>>();
   } else {
     return false;
   }

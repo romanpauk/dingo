@@ -29,7 +29,6 @@ deduces these parts:
 - storage
 - factory
 - interfaces
-- conversions
 
 A short registration such as `scope<shared>, storage<T>` expands to the full
 policy set before Dingo creates the factory.
@@ -113,83 +112,34 @@ The sequence is:
 4. A collection request without a key first resolves a binding of the collection
    type. If there is none, Dingo constructs the collection from the bindings of
    its element. A container without such bindings falls back as in step 3.
-5. The selected binding applies its resolution through a binding activation. A
-   static container selects the resolution at compile time. A runtime binding
-   matches the requested type descriptor in its `instance_request`.
-6. If the binding does not publish the request, Dingo derives it from a request
-   that the binding resolves. Both containers apply the rules in
-   [include/dingo/request/derivation.h](../../include/dingo/request/derivation.h).
+5. The selected binding plans the request and applies the plan through a binding
+   activation. A static binding plans it as the code compiles. A runtime binding
+   plans it at the first request of its type and keeps the plan.
 
-The derivation rules are:
+### Plans
 
-| Rule    | Request                                                                | Resolved as                                    |
-| ------- | ---------------------------------------------------------------------- | ---------------------------------------------- |
-| adopt   | a reference to the object that a pointer made by the binding points to | the pointer; an owner in the context adopts it |
-| keep    | a reference or pointer to a wrapper that shares what the binding keeps | the wrapper; the binding keeps it              |
-| place   | a reference or pointer to a value made for the request                 | the value; the context holds it                |
-| take    | a value of the object that a pointer made by the binding points to     | the pointer; the value is moved out            |
-| compose | a wrapper                                                              | the value that the wrapper holds               |
+Both containers plan a request by the [layered semantics](layered-semantics.md):
+the steps from what the binding stores to the request, at the fewest copies and
+moves of the leaf, then at the fewest objects kept and made. A request that no
+plan satisfies is not convertible.
 
-The same binding resolves the derived request, which can be derived again. A
-wrapper of wrappers is composed at once, of the first value down its layers that
-the binding resolves by another rule. Dingo moves that value once. The caller
-cannot get a reference into the context.
+The binding takes the steps that need the types it stores: the element of a
+wrapper, the upcast to its interface, a copy, the decay of an array, and the
+hand-over or the release of what a pointer it makes points to. The request takes
+the steps that make its own layers: a wrap, the adoption of a pointer it owns,
+and an observer of a pointer. A wrapper of wrappers is made at once of its
+value, which is moved once. What a plan makes for the request lives in the
+context. What it keeps as long as the container lives in the retention of the
+binding cell. The caller cannot get a reference into the context.
 
-[include/dingo/binding/interface.h](../../include/dingo/binding/interface.h)
-defines `instance_request`. The runtime container passes this object to a
-binding. The object stores:
-
-- the requested type descriptor
-- the derivation of the request; the binding calls it only for a request that it
-  does not publish, and passes facts about itself (see `derivation_site`)
-- the node of the request, which the derivation uses
-
-The node of a request (`request_node` in
-[include/dingo/binding/resolution.h](../../include/dingo/binding/resolution.h))
-is constant data. It holds the descriptor of the request, the derivations whose
-shape it has, the operations of the object that it is or refers to, and the
-nodes of the requests that each derivation resolves through. One function
-derives a value, a reference or a pointer of the node: it chooses the rule,
-resolves the node of the derived request through the binding, and places a value
-or an owner in the context with the operations of the object.
-
-A request is of an object and has a shape (`request_object` in
-[include/dingo/request/derivation.h](../../include/dingo/request/derivation.h)):
-
-- a reference is of the object that it names, so `Y*&` is of the pointer `Y*`;
-- a pointer is of the object that it points to, whatever the qualification of
-  the pointer;
-- a value is of its object.
-
-The derivations of a request follow from what its object is (`object_traits`)
-and from its shape (`shape_facts`). Both containers use these.
-
-The nodes of the requests of one object are one table (`request_table`). A table
-has the eight shapes `O`, `const O`, `O&`, `const O&`, `O&&`, `const O&&`, `O*`
-and `const O*`. An object has one table as it is, and one as `volatile` when a
-request of it is volatile. One constexpr function makes each node of the table,
-so an object adds one table to a program, not a node and its functions for each
-request of it. Adopting a pointer and taking an address resolve through a node
-of the same table. The other derivations resolve through the table of the object
-as not volatile. A value of a pointer is the pointer node of the table of the
-object that it points to.
-
-A derivation of a wrapper (keep, convert, compose) is a function of the type of
-the wrapper: one keeps the wrapper for each reference and pointer to it, one
-converts or composes it for a value, and one for an rvalue reference, unless the
-rvalue reference composes it the same way as the value.
-
-The static container decides a request by the same data and the same functions,
-as it compiles. A static binding has the facts of its interface and storage
-(`binding_facts_v` in
-[include/dingo/binding/facts.h](../../include/dingo/binding/facts.h)), which a
-runtime binding of them has too. The plan of a request (`static_plan` in
-[include/dingo/static/binding.h](../../include/dingo/static/binding.h)) is the
-resolution the binding publishes for it, of `published_index`, or else the
-derivation it makes of it, of `binding_derivations` and `derive_request`. It is
-one class for each request, which also tells whether the binding resolves the
-request at all. Both containers thus decide by one implementation. The static
-container applies the plan through typed steps, which the compiler inlines.
+The static container plans a request with `static_execution` in
+[include/dingo/static/binding.h](../../include/dingo/static/binding.h) and
+applies the plan through the typed steps of
+[include/dingo/request/execution.h](../../include/dingo/request/execution.h),
+which the compiler inlines. The runtime container applies the same steps through
+tables of erased operations: a binding has one table for each C++ type of its
+layer sources (`binding_sources`), and a request one for each of its nested
+types (`request_tables`).
 
 The containers differ in their binding table and their selection, not in the
 algorithm. Both containers give the algorithm the same hooks. A runtime
@@ -246,34 +196,23 @@ runtime binding is a typed edge and constant data:
 
 - The node of the binding (`runtime_binding_node` in
   [include/dingo/binding/interface.h](../../include/dingo/binding/interface.h))
-  is constant data. It holds the descriptors of the registered type and of its
-  leaf, the facts of the binding (`binding_facts`: the resolutions it publishes,
-  what it is, and whether a value of its interface slices what it stores), the
-  recursion guard and the retention of its scope, and whether it places values
-  in the context or caches what it resolves.
+  is constant data. It holds the descriptors of the registered type, of its leaf
+  and of its interface, the layer sources of what it stores with their tables
+  (`binding_layout`), how its source is materialized, and whether it caches what
+  it resolves.
 - The edge is a few functions of the type of the binding, which the node points
-  to: materialize the source of the storage in a construction scope and apply
-  the resolution it publishes at an index, the storage and the cell of the
-  binding, what it keeps of its instance, whether its storage is resolved, and
-  the reset of its cell.
-- A runtime binding does not publish an owning wrapper of its registered type,
-  as a value or an rvalue, that a request can compose of an rvalue the binding
-  publishes (`runtime_resolutions` in
-  [include/dingo/binding/facts.h](../../include/dingo/binding/facts.h)). For
-  example, a `unique` binding of `T` publishes `T&&`, and a request of
-  `std::shared_ptr<T>` composes the wrapper of it. The code of the wrapper is
-  then instantiated only where it is requested. The static container keeps such
-  wrappers published, because it instantiates only what is requested and the
-  compiler folds a published wrapper better.
+  to: materialize the source of the storage in a construction scope and run a
+  plan on it, what the binding keeps of its instance, whether its storage is
+  resolved, and the reset of its cell.
 
 The engine (`runtime_binding_engine` in
 [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)) is one
-function for every binding of a container. It matches the request against the
-published resolutions, guards the binding against recursion, retains the source
-of an unresolved storage in the transaction and resets the cell if the
-transaction fails, refuses the caller an address into a value placed in the
-context, publishes a borrowed address in the request cache, and derives a
-request that the binding does not publish.
+function for every binding of a container. It plans a request of the binding at
+its first use and keeps the plans in the plan cache of the request type, for
+each lifetime a request needs. It guards the binding against recursion, retains
+the source of an unresolved storage in the transaction and resets the cell if
+the transaction fails, gives the caller only what lives as long as the
+container, and publishes a borrowed address in the request cache.
 
 Each lookup the container declares, and its base lookup, have a table of
 operations of no binding or request type (`lookup_operations` in
@@ -310,16 +249,9 @@ constant time, then uses the original lookup backend and logical key. A
 registration container allocates its lookup state only when it registers its
 first local binding. Thus it needs no runtime arena and lookup set of its own.
 
-The runtime binding has a list of resolutions, derived from
-`Storage::conversions`. The engine matches the requested type descriptor against
-the descriptors of this list in the node of the binding. If a resolution
-matches, the edge of the binding produces the source object, and
-[include/dingo/conversion/apply.h](../../include/dingo/conversion/apply.h)
-converts it to the requested shape.
-
-The static path uses the same binding model, conversion rules and binding facts.
-It selects from a validated compile-time binding source, not from mutable
-runtime binding state.
+The static path uses the same binding model and the same semantics. It selects
+from a validated compile-time binding source, not from mutable runtime binding
+state.
 
 ## Registration Child Bindings
 

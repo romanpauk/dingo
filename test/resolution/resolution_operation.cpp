@@ -7,54 +7,19 @@
 
 #include <dingo/base/exceptions.h>
 #include <dingo/binding/resolution.h>
-#include <dingo/conversion/apply.h>
 #include <dingo/storage/shared.h>
 
 #include <gtest/gtest.h>
 
 #include <optional>
-#include <variant>
 #include <vector>
 
 namespace dingo {
 namespace {
-struct alternative_a {
-  explicit alternative_a(int init) : value(init) {}
-  int value;
-};
-
-struct alternative_b {
-  explicit alternative_b(float init) : value(init) {}
-  float value;
-};
-
-struct unrelated_alternative {
-  int value;
-};
-
 struct immovable {
   immovable() = default;
   immovable(const immovable &) = delete;
   immovable(immovable &&) = delete;
-};
-
-using alternative_type = std::variant<alternative_a, alternative_b>;
-
-struct alternative_factory {
-  alternative_type &value;
-
-  template <typename Context> auto &resolve(Context &) { return value; }
-};
-
-struct alternative_pointer_factory {
-  alternative_type *value;
-
-  template <typename Context> auto *resolve(Context &) { return value; }
-};
-
-struct alternative_storage {
-  using type = alternative_type;
-  using resolved_type = alternative_type &;
 };
 
 struct fake_resolution_context {};
@@ -82,35 +47,6 @@ struct destructor_order_array_factory {
 } // namespace
 
 TEST(resolution_operation_test,
-     alternative_projectors_reject_unrelated_targets_with_runtime_exception) {
-  alternative_type value(std::in_place_type<alternative_a>, 7);
-  alternative_factory lvalue_factory{value};
-  alternative_pointer_factory pointer_factory{&value};
-  fake_resolution_context context;
-
-  using reference_operation =
-      detail::type_resolution<alternative_type &,
-                              detail::type_conversion_path_t<
-                                  unrelated_alternative &, alternative_type &>>;
-  ASSERT_THROW((reference_operation::apply(
-                   lvalue_factory, context, detail::make_resolved_source(value),
-                   describe_type<unrelated_alternative &>(),
-                   describe_type<alternative_type>())),
-               type_not_convertible_exception);
-
-  using pointer_operation =
-      detail::type_resolution<alternative_type *,
-                              detail::type_conversion_path_t<
-                                  unrelated_alternative *, alternative_type *>>;
-  ASSERT_THROW(
-      (pointer_operation::apply(pointer_factory, context,
-                                detail::make_resolved_source(&value),
-                                describe_type<unrelated_alternative *>(),
-                                describe_type<alternative_type *>())),
-      type_not_convertible_exception);
-}
-
-TEST(resolution_operation_test,
      resolved_immovable_value_is_rejected_without_copy_instantiation) {
   immovable value;
   resolved_address result{&value, resolved_address::access_kind::borrow};
@@ -136,10 +72,8 @@ TEST(resolution_operation_test,
      shared_fixed_array_storage_reset_destroys_elements_in_reverse_order) {
   std::vector<int> order;
   using array_type = destructor_order_value[3];
-  using storage_type =
-      detail::storage<shared, array_type, array_type,
-                      destructor_order_array_factory,
-                      detail::conversions<shared, array_type, array_type>>;
+  using storage_type = detail::storage<shared, array_type, array_type,
+                                       destructor_order_array_factory>;
   fake_resolution_context context;
   fake_resolution_context container;
 

@@ -28,32 +28,8 @@ namespace dingo {
 struct shared_cyclical {};
 
 namespace detail {
-template <typename Type, typename StoredType, typename Factory,
-          typename Conversions>
+template <typename Type, typename StoredType, typename Factory>
 class shared_cyclical_storage;
-
-// Cells of shared_cyclical: the lists of the rule for what it exposes, but
-// of a shared_ptr, which publishes what it holds, constructed in place: the
-// leaf U, or a wrapper of it. What the wrapper holds is not in place until
-// the wrapper is constructed, so it is not published, and nothing is copied
-// of what is published before it is constructed.
-template <storage_form Form, typename Type, typename U>
-struct shared_cyclical_requests
-    : scope_rule_requests<shared_cyclical, Type, U> {};
-
-template <typename Type, typename U>
-struct shared_cyclical_requests<storage_form::shared_handle, Type, U> {
-private:
-  using element = typename type_traits<Type>::value_type;
-  using held = std::conditional_t<type_traits<element>::enabled,
-                                  wrapper_rebind_leaf_t<element, U>, U>;
-
-public:
-  using value_types = type_list<std::shared_ptr<held>>;
-  using lvalue_reference_types = type_list<held &, std::shared_ptr<held> &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<held *, std::shared_ptr<held> *>;
-};
 } // namespace detail
 
 template <> struct scope_traits<shared_cyclical> {
@@ -90,13 +66,8 @@ template <> struct scope_traits<shared_cyclical> {
     return storage_exposure::none;
   }
 
-  template <storage_form Form, typename Type, typename U>
-  using requests = detail::shared_cyclical_requests<Form, Type, U>;
-
-  template <typename Type, typename StoredType, typename Factory,
-            typename Conversions>
-  using storage =
-      detail::shared_cyclical_storage<Type, StoredType, Factory, Conversions>;
+  template <typename Type, typename StoredType, typename Factory>
+  using storage = detail::shared_cyclical_storage<Type, StoredType, Factory>;
 };
 
 namespace detail {
@@ -204,8 +175,7 @@ private:
   std::shared_ptr<StoredType> instance_;
 };
 
-template <typename Type, typename StoredType, typename Factory,
-          typename Conversions>
+template <typename Type, typename StoredType, typename Factory>
 class shared_cyclical_storage {
   storage_instance<shared_cyclical, Type, StoredType, Factory> instance_;
   // What the bindings of the instance convert it to, which the graph may
@@ -234,7 +204,6 @@ public:
   shared_cyclical_storage(Args &&...args)
       : instance_(std::forward<Args>(args)...) {}
 
-  using conversions = Conversions;
   using type = Type;
   using stored_type = StoredType;
   using resolved_type =

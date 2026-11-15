@@ -1,8 +1,7 @@
 # Layered Semantics
 
-This page is a design in progress. It describes how the resolution code is to be
-built so that it is correct by construction, and which parts of the code today
-belong to which layer. The sections marked "today" describe the code as it is.
+This page describes how the resolution code is built so that it is correct by
+construction, and which parts of the code belong to which layer.
 
 ## The Problem
 
@@ -14,9 +13,9 @@ show that the library is correct.
 
 ## The Layers
 
-The library is to be built of four layers. Each layer has a small domain of its
-own, which a test covers completely. The composition of the layers is correct
-when each layer is.
+The library is built of four layers. Each layer has a small domain of its own,
+which a test covers completely. The composition of the layers is correct when
+each layer is.
 
 1. **Classification.** A C++ type is mapped to abstract facts: the layers around
    its element (a shared handle, a unique handle, an optional, an alternative
@@ -54,10 +53,10 @@ copies and the moves of the leaf. A binding takes the steps that need the type
 it stores (`binding_steps`); a request takes the others (`request_steps`).
 `satisfactions` tells which things satisfy a request.
 
-The library is to compute the same: one implementation of the steps, the
-reachable things and the satisfactions, as constant expressions over these
-values. Its results are then compared with the specification for every starting
-object and every request.
+The library computes the same: one implementation of the steps, the reachable
+things and the satisfactions, as constant expressions over these values. Its
+results are compared with the specification for every starting object and every
+request.
 
 ## A Layer Is Its Properties
 
@@ -81,44 +80,36 @@ element alone and shares it with a copy cannot be copied; a layer that owns
 nothing is not made of a value and takes over no pointer; a layer that takes
 over a pointer holds its element apart from it; and an empty value is a value
 only of a layer that may be empty. Of the combinations, 216 are possible. The
-classification is to reject the type traits of any other.
+classification rejects the type traits of any other.
 
-The steps of the specification and the code that takes them today:
+The steps of the specification and the code that takes them. Each is in
+[include/dingo/request/execution.h](../../include/dingo/request/execution.h):
 
-| Step                                             | Who takes it | Code today                                                                        |
-| ------------------------------------------------ | ------------ | --------------------------------------------------------------------------------- |
-| `element`, `element_pointer`, `element_or_empty` | binding      | the resolutions a storage publishes (`binding_resolutions`, `conversion/paths.h`) |
-| `upcast`                                         | binding      | the rebinding of a handle, the base reference (`conversion/paths.h`)              |
-| `release`                                        | binding      | `release_object` (`binding/resolution.h`)                                         |
-| `copy`                                           | request      | `derivation::copy`, `copy_object`                                                 |
-| `wrap`                                           | request      | `derivation::compose`, `derivation::keep`                                         |
-| `convert`                                        | request      | `derivation::convert`                                                             |
-| `adopt`, `hand_over`                             | request      | `derivation::adopt`, `derivation::take`                                           |
-| `decay`                                          | request      | the pointer of an array (`conversion/paths.h`)                                    |
-| satisfaction of a reference or a pointer         | request      | `derivation::refer`, `derivation::address`                                        |
-| satisfaction of a value                          | request      | `derivation::place`, `derivation::move`, `derivation::copy`                       |
+| Step                                                                      | Who takes it | Code                                              |
+| ------------------------------------------------------------------------- | ------------ | ------------------------------------------------- |
+| `element`, `element_pointer`, `element_or_empty`, `element_or_empty_copy` | binding      | `step<element>` and the others of the same name   |
+| `upcast`, `convert`                                                       | binding      | `step<upcast>`, `step<convert>`                   |
+| `release`                                                                 | binding      | `release_step`                                    |
+| `copy`, `decay`, `hand_over`                                              | binding      | `step<copy>`, `step<decay>`, `step<hand_over>`    |
+| `wrap`                                                                    | request      | `step<wrap, Target>`; a run of wraps is `made_of` |
+| `adopt`                                                                   | request      | `adopt_step`                                      |
+| `observe`                                                                 | request      | `observe_step`                                    |
 
-The library names its derivations by what the request does, and the
-specification by the step. The first phase sets one vocabulary.
+A step belongs to the side that knows the type it is applied to (see phase 7). A
+request takes the others through the tables of the binding.
 
-## The Headers Today
+## The Headers
 
-| Layer          | Headers                                                                                                                                                                                     |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Classification | `type/type_traits.h`, `type/shape.h`, `type/annotated.h`, `request/decomposition.h`, `factory/constructor_detection.hpp`, `base/type_descriptor.h`                                          |
-| Semantics      | `request/derivation.h`, `binding/facts.h`, `binding/materialization.h`, `storage/scope_traits.h`, `binding/selection.h`, the decisions of `conversion/paths.h` and `conversion/available.h` |
-| Steps          | the operations of `conversion/paths.h`, `conversion/apply.h`, `request/composition.h`, the derivations of `binding/resolution.h`, the storages of `storage/`, `factory/`                    |
-| Execution      | `binding/activation.h`, the engine of `runtime/binding.h`, `static_plan` of `static/binding.h`, `resolution/algorithm.h`                                                                    |
-| Plumbing       | `lookup/`, `memory/`, the registries and the transactions of `runtime/` and `static/`, `context/`                                                                                           |
+| Layer          | Headers                                                                                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Classification | `type/type_traits.h`, `type/shape.h`, `type/annotated.h`, `request/decomposition.h`, `request/classification.h`, `factory/constructor_detection.hpp`, `base/type_descriptor.h` |
+| Semantics      | `semantics/model.h`, `binding/materialization.h`, `storage/scope_traits.h`, `binding/selection.h`                                                                              |
+| Steps          | the steps of `request/execution.h`, the storages of `storage/`, `factory/`                                                                                                     |
+| Execution      | the interpreter and the tables of `request/execution.h`, `binding/activation.h`, `runtime/binding.h`, `static_execution` of `static/binding.h`, `resolution/algorithm.h`       |
+| Plumbing       | `lookup/`, `memory/`, the registries and the transactions of `runtime/` and `static/`, `context/`                                                                              |
 
 The plumbing does not decide what a request resolves to. It is tested as any
 other code.
-
-Most decisions of layer 2 are values already: `request_facts`,
-`derivation_facts`, `binding_facts` and `derive_request` take no C++ type. The
-gap is the conversion paths. `conversion/paths.h` searches a path through the
-C++ types of a request, so the path is not a value that can be compared with the
-specification. It is also the largest part of the compile time that is left.
 
 ## The Phases
 
@@ -247,13 +238,14 @@ specification. It is also the largest part of the compile time that is left.
    category, position, entry point, selection and container: 105,759,360
    answers, all equal.
 
-7. **Execution.** The containers apply plans in place of the conversion paths
-   and the derivations. The static container is done: a static binding plans a
-   request as the code compiles (`static_execution` in
+7. **Execution.** Done. The containers apply plans. The conversion paths, the
+   derivations, the request lists of the scopes and the resolutions a binding
+   published before are deleted. A static binding plans a request as the code
+   compiles (`static_execution` in
    [include/dingo/static/binding.h](../../include/dingo/static/binding.h)) and
    applies the plan through the typed interpreter. The runtime container plans a
    request of a binding at its first use, and keeps the plan for the type of the
-   request. This phase is designed as follows, and both containers are built so.
+   request. Both are built as follows.
 
    **The model.** Three additions are specified in
    [spec/semantics.py](../../spec/semantics.py) first, ported to
@@ -345,6 +337,13 @@ specification. It is also the largest part of the compile time that is left.
    cell as soon as its source is materialized, before the plan runs. What the
    plan keeps with the binding is undone before the cell is reset, so the undo
    of what a retention keeps is unconditional.
+
+   **Objects made of a value.** A storage, a factory and `construct<T>()` make
+   an object of a value with `made_as`: the object constructed of the value, a
+   run of wraps around it (`made_of`), or a handle of an array of it that its
+   type traits emplace. A factory emplaces a wrapper of what it constructs in
+   place, down the layers that declare `emplaces_element`, and makes it of the
+   constructed value only where it cannot.
 
    **Values are made where they are returned.** A plan for a value ends in what
    makes the value: a copy, a move, or a run of wraps. The runtime container

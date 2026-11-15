@@ -142,7 +142,7 @@ private:
       return false;
     } else {
       using model = typename selection::binding_type::binding_model_type;
-      if constexpr (model::conversions_type::is_stable) {
+      if constexpr (cache::is_stable_storage_v<typename model::storage_type>) {
         return false;
       } else {
         using activation = binding_activation<

@@ -9,8 +9,8 @@
 
 #include <dingo/base/config.h>
 
-#include <dingo/conversion/apply.h>
 #include <dingo/factory/constructor.h>
+#include <dingo/request/execution.h>
 #include <dingo/storage/scope_traits.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>
@@ -20,8 +20,7 @@ namespace dingo {
 struct external {};
 
 namespace detail {
-template <typename Type, typename StoredType, typename Factory,
-          typename Conversions>
+template <typename Type, typename StoredType, typename Factory>
 class external_storage;
 } // namespace detail
 
@@ -37,10 +36,8 @@ template <> struct scope_traits<external> {
            storage_exposure::pointer;
   }
 
-  template <typename Type, typename StoredType, typename Factory,
-            typename Conversions>
-  using storage =
-      detail::external_storage<Type, StoredType, Factory, Conversions>;
+  template <typename Type, typename StoredType, typename Factory>
+  using storage = detail::external_storage<Type, StoredType, Factory>;
 };
 
 namespace detail {
@@ -64,8 +61,7 @@ class storage_instance<external, Type, StoredType, void> {
 
   template <typename T> static held_type hold(T &&instance) {
     if constexpr (converts) {
-      return detail::convert_type<StoredType, consume>(
-          std::forward<T>(instance));
+      return execution::made_as<StoredType>(std::forward<T>(instance));
     } else {
       return std::forward<T>(instance);
     }
@@ -88,13 +84,11 @@ private:
   held_type instance_;
 };
 
-template <typename Type, typename StoredType, typename Factory,
-          typename Conversions>
+template <typename Type, typename StoredType, typename Factory>
 class external_storage {
   storage_instance<external, Type, StoredType, void> instance_;
 
 public:
-  using conversions = Conversions;
   using type = Type;
   using stored_type = StoredType;
   using resolved_type =

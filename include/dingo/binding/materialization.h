@@ -38,14 +38,6 @@ struct materialized_request {
   bool rvalue;
 };
 
-constexpr materialized_request
-materialized_request_v(type_descriptor requested) {
-  return {requested.reference == type_reference_kind::lvalue ||
-              (requested.reference == type_reference_kind::none &&
-               requested.pointee != nullptr),
-          requested.reference == type_reference_kind::rvalue};
-}
-
 // Where a source is materialized: as the storage yields it, in the context of
 // the resolution, or, for a request that refers, as a value placed in the
 // context.

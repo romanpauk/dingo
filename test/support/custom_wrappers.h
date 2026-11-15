@@ -8,7 +8,6 @@
 #pragma once
 
 #include <dingo/base/exceptions.h>
-#include <dingo/conversion/paths.h>
 #include <dingo/storage/scope_traits.h>
 #include <dingo/type/type_traits.h>
 

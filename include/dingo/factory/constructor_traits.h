@@ -8,7 +8,7 @@
 #pragma once
 
 #include <dingo/base/config.h>
-#include <dingo/conversion/apply.h>
+#include <dingo/request/execution.h>
 #include <dingo/type/type_traits.h>
 
 #include <array>
@@ -140,45 +140,76 @@ using construction_result_t =
     std::conditional_t<std::is_pointer_v<Type>, std::remove_pointer_t<Type>,
                        Type>;
 
-template <typename Type, typename Selected>
-using construction_conversion_t =
-    type_conversion_path_t<construction_result_t<Type>, Selected &&, consume>;
-
-// Type made of the Selected type a factory constructs, through Conversion.
-template <typename Type, typename Selected, typename Conversion>
-struct converted_constructor {
+// Type made of the Selected type a factory constructs.
+template <typename Type, typename Selected> struct converted_constructor {
   using type = construction_result_t<Type>;
 
   template <typename... Args> static auto construct(Args &&...args) {
     if constexpr (std::is_pointer_v<Type>) {
-      return new type(convert_type<type>(
-          constructor_traits<Selected>::construct(std::forward<Args>(args)...),
-          Conversion{}));
+      return new type(
+          execution::made_as<type>(constructor_traits<Selected>::construct(
+              std::forward<Args>(args)...)));
     } else {
-      return convert_type<type>(
-          constructor_traits<Selected>::construct(std::forward<Args>(args)...),
-          Conversion{});
+      return execution::made_as<type>(
+          constructor_traits<Selected>::construct(std::forward<Args>(args)...));
     }
   }
 
   template <typename... Args> static auto construct(void *ptr, Args &&...args) {
-    new (ptr) type(convert_type<type>(
-        constructor_traits<Selected>::construct(std::forward<Args>(args)...),
-        Conversion{}));
+    new (ptr) type(execution::made_as<type>(
+        constructor_traits<Selected>::construct(std::forward<Args>(args)...)));
   }
 };
 
-// What constructs Type of the Selected type a factory constructs: Type itself
-// when no conversion is needed, else the conversion of Selected to it.
-template <typename Type, typename Selected,
-          typename Conversion = construction_conversion_t<Type, Selected>>
-struct construction_select {
-  using type = constructor_traits<Type>;
-};
+// Whether type_traits<Wrapper>::emplace passes its arguments to the emplace
+// of an element that is a wrapper too, as the wrapper declares with
+// emplaces_element.
+template <typename Wrapper, typename = void>
+inline constexpr bool emplaces_element_v = false;
 
-template <typename Type, typename Selected, typename Conversion>
-struct construction_select<Type, Selected, converted_construction<Conversion>> {
-  using type = converted_constructor<Type, Selected, Conversion>;
+template <typename Wrapper>
+inline constexpr bool emplaces_element_v<
+    Wrapper, std::void_t<decltype(type_traits<Wrapper>::emplaces_element)>> =
+    type_traits<Wrapper>::emplaces_element;
+
+// Whether Type is emplaced of the arguments of Selected: it is Selected, or a
+// wrapper whose element is, down layers that each emplace their element. An
+// alternative type selects its alternative of the arguments instead.
+template <typename Type, typename Selected> constexpr bool emplaced_of() {
+  if constexpr (std::is_same_v<Type, Selected>) {
+    return true;
+  } else if constexpr (!type_traits<Type>::enabled || std::is_pointer_v<Type> ||
+                       is_alternative_type_v<Type>) {
+    return false;
+  } else {
+    using element = std::remove_cv_t<typename type_traits<Type>::value_type>;
+    if constexpr (std::is_same_v<element, Selected>) {
+      return true;
+    } else if constexpr (emplaces_element_v<Type>) {
+      return emplaced_of<element, Selected>();
+    } else {
+      return false;
+    }
+  }
+}
+
+// Whether Type is made of the Selected type a factory constructs, when it is
+// not emplaced of its arguments in place: an array is made of its elements.
+template <typename Type, typename Selected> constexpr bool made_of_selected() {
+  using type = std::remove_cv_t<construction_result_t<Type>>;
+  if constexpr (emplaced_of<type, Selected>() || std::is_array_v<type>) {
+    return false;
+  } else {
+    return execution::makes_as<type, Selected>();
+  }
+}
+
+// What constructs Type of the Selected type a factory constructs: Type made
+// of Selected where it is, else Type itself.
+template <typename Type, typename Selected> struct construction_select {
+  using type = std::conditional_t<made_of_selected<Type, Selected>(),
+                                  converted_constructor<Type, Selected>,
+                                  constructor_traits<Type>>;
 };
 
 template <typename Type, typename Selected>

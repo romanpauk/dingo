@@ -50,16 +50,12 @@ inline constexpr bool scope_allows_cycles_v =
     detail::scope_allows_cycles<StorageTag>::value;
 
 namespace detail {
-// The requests a scope publishes by default, from the scope_traits of the
-// scope.
-template <typename StorageTag, typename Type, typename U> struct conversions;
-
 // The storage of a scope for a registered type.
 template <typename StorageTag, typename Type, typename StoredType,
-          typename Factory, typename Conversions>
+          typename Factory>
 using storage =
     typename scope_traits<StorageTag>::template storage<Type, StoredType,
-                                                        Factory, Conversions>;
+                                                        Factory>;
 
 template <typename StorageTag, typename Type, typename StoredType,
           typename Factory>

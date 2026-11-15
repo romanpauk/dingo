@@ -8,7 +8,7 @@
 #pragma once
 
 #include <dingo/base/type_list.h>
-#include <dingo/conversion/apply.h>
+#include <dingo/binding/cache.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/static/registry.h>
 #include <dingo/storage/storage.h>
@@ -258,7 +258,8 @@ constexpr bool may_refer_made() {
     if constexpr (std::is_void_v<found>) {
       return true;
     } else {
-      return !found::binding_model_type::conversions_type::is_stable;
+      return !cache::is_stable_storage_v<
+          typename found::binding_model_type::storage_type>;
     }
   }
 }

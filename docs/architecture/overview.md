@@ -136,10 +136,9 @@ The containers differ only in how they select the resolution of a request. A
 static container selects it at compile time. A runtime binding matches the
 requested type descriptor at run time.
 
-[include/dingo/conversion/paths.h](../../include/dingo/conversion/paths.h)
-defines the last conversion step, from the stored source to the requested
-target. A conversion is a path of operations. Dingo takes the first available
-path.
+[include/dingo/request/execution.h](../../include/dingo/request/execution.h)
+applies the plan of a request: the steps from the stored source to the requested
+target, which the [layered semantics](layered-semantics.md) choose.
 
 A request passes through four folders that both containers share:
 
@@ -198,4 +197,4 @@ To read the core path in source order, start here:
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
 - [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)
-- [include/dingo/conversion/apply.h](../../include/dingo/conversion/apply.h)
+- [include/dingo/request/execution.h](../../include/dingo/request/execution.h)

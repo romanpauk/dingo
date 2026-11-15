@@ -19,6 +19,7 @@
 #include <dingo/lookup/lookup_key.h>
 #include <dingo/request/collection.h>
 #include <dingo/request/decomposition.h>
+#include <dingo/request/execution.h>
 #include <dingo/type/collection_traits.h>
 #include <dingo/type/shape.h>
 #include <dingo/type/type_traits.h>
@@ -214,15 +215,8 @@ struct request_resolution {
     using made = std::decay_t<typename Request::user_type>;
     auto &&instance = resolve<normalized, typename normalized::lookup_type>(
         host, scope, context, host, no_lookup_key());
-    if constexpr (detail::emplaces_v<made,
-                                     remove_cvref_t<decltype(instance)>>) {
-      // A wrapper of wrappers is made at once of the value.
-      return type_traits<made>::emplace(
-          std::forward<decltype(instance)>(instance));
-    } else {
-      return detail::convert_type<made, consume>(
-          std::forward<decltype(instance)>(instance));
-    }
+    return detail::execution::made_as<made>(
+        std::forward<decltype(instance)>(instance));
   }
 
   // A request that no container of the chain binds. A collection is

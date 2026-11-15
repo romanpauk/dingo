@@ -46,11 +46,6 @@ template <typename T> struct factory {
   template <typename U> using rebind_t = factory<U>;
 };
 
-template <typename T> struct conversions {
-  using type = T;
-  template <typename U> using rebind_t = conversions<U>;
-};
-
 template <typename... Args> struct dependencies {
   using type = type_list<Args...>;
   template <typename U> using rebind_t = dependencies<U>;
@@ -173,8 +168,6 @@ template <typename... Args> struct registration_args {
   using interface_type = registration_arg_t<::dingo::interfaces<void>, Args...>;
   using key_type =
       registration_arg_t<::dingo::key_type<::dingo::none_t>, Args...>;
-  using conversions_type =
-      registration_arg_t<::dingo::conversions<void>, Args...>;
   using dependencies_type =
       registration_arg_t<::dingo::dependencies<void>, Args...>;
   using bindings_type = registration_arg_t<::dingo::bindings<void>, Args...>;
@@ -184,8 +177,8 @@ template <typename... Args> struct registration_args {
 using registration_roles =
     type_list<::dingo::scope<void>, ::dingo::storage<void>,
               ::dingo::factory<void>, ::dingo::interfaces<void>,
-              ::dingo::key_type<::dingo::none_t>, ::dingo::conversions<void>,
-              ::dingo::dependencies<void>, ::dingo::bindings<void>>;
+              ::dingo::key_type<::dingo::none_t>, ::dingo::dependencies<void>,
+              ::dingo::bindings<void>>;
 
 template <typename T, typename Roles = registration_roles>
 inline constexpr bool is_supported_registration_arg_v = false;
@@ -370,15 +363,6 @@ using registration_interface_t = std::conditional_t<
                        storage_interface_t<ParsedArgs>,
                        factory_interface_t<ParsedArgs>>>;
 
-template <typename ParsedArgs>
-using registration_conversions_t = std::conditional_t<
-    !std::is_same_v<typename ParsedArgs::conversions_type,
-                    ::dingo::conversions<void>>,
-    typename ParsedArgs::conversions_type,
-    ::dingo::conversions<detail::conversions<
-        typename registration_scope_t<ParsedArgs>::type,
-        typename registration_storage_t<ParsedArgs>::type, runtime_type>>>;
-
 template <typename T> struct normalize_dependencies {
   using type = ::dingo::dependencies<T>;
 };
@@ -439,7 +423,7 @@ public:
   using scope_type = detail::registration_scope_t<parsed_args>;
   static_assert((detail::is_supported_registration_arg_v<Args> && ...),
                 "type_registration expects "
-                "scope/storage/factory/interfaces/key/conversions/"
+                "scope/storage/factory/interfaces/key/"
                 "dependencies/bindings wrappers");
   static_assert(!std::is_same_v<scope_type, scope<void>>,
                 "failed to deduce a scope type");
@@ -460,11 +444,6 @@ public:
                 "failed to deduce an interface type");
 
   using key_type = detail::registration_key_t<parsed_args>;
-
-  // Conversions are deduced from Storage and Scope
-  using conversions_type = detail::registration_conversions_t<parsed_args>;
-  static_assert(!std::is_same_v<conversions_type, conversions<void>>,
-                "failed to deduce a conversions type");
 
   using dependencies_type = detail::registration_dependencies_t<parsed_args>;
   using bindings_type =

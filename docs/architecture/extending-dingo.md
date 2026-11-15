@@ -51,16 +51,14 @@ The semantics are:
   `std::optional`
 
 The semantics tell whether the wrapper is pointer-like and owns its element.
-They also select the storage form, which decides the requests that each scope
-publishes for the wrapper.
+They also select the storage form, which decides whether a scope stores the
+wrapper. The [layered semantics](layered-semantics.md) decide of these
+properties what a binding of the wrapper answers.
 
 A wrapper declares `borrow` when its element can be borrowed as an object. An
 owning handle without `borrow` holds an array. Such a handle declares `extent`,
-the bound of the array, when it holds an array of a known bound. A default
-conversion does not create an owning handle from a borrowed non-owning source.
-This rule applies to the leaf handle conversion. Alternative and optional
-conversions first select or unwrap their contained conversion. They then take
-its `borrow` or `consume` requirement.
+the bound of the array, when it holds an array of a known bound. An owning
+handle is not made of an object that something else owns.
 
 An optional wrapper provides `value_type`, `get`, `empty`, `wrap`, and
 `empty_value`. Dingo uses them to keep an empty source empty and to wrap the
@@ -109,20 +107,19 @@ A storage scope is a tag type, used as `scope<Tag>`, and one specialization of
 The built-in `unique`, `shared`, `external` and `shared_cyclical` scopes use the
 same kind of specialization. The specialization declares:
 
-| Member                                            | Meaning                                                                                                                                                                                                                                    |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `enabled`                                         | `true`                                                                                                                                                                                                                                     |
-| `is_stable`                                       | references and pointers that the scope hands out stay valid                                                                                                                                                                                |
-| `consumes`                                        | a request consumes a produced value instead of borrowing the stored instance                                                                                                                                                               |
-| `guard`                                           | the kind of recursion guard                                                                                                                                                                                                                |
-| `retains_unresolved_source`                       | an unresolved storage can keep source state across a resolution                                                                                                                                                                            |
-| `exposed(storage_form)`                           | the request categories (value, lvalue reference, rvalue reference, pointer) that the scope publishes for each form of stored type; `storage_form::reference` is a stored reference, which only a scope that is given its instance can hold |
-| `storage<Type, StoredType, Factory, Conversions>` | the class that keeps the instance; it provides `resolve`, and also `is_resolved` and `reset` if it keeps the instance between requests                                                                                                     |
-| `requests<Form, Type, U>`                         | optional: the request lists of a form, when the scope publishes more or other requests than the exposed ones                                                                                                                               |
-| `allows_cycles`                                   | optional: whether the bindings of the scope can be part of a dependency cycle                                                                                                                                                              |
+| Member                               | Meaning                                                                                                                                                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`                            | `true`                                                                                                                                                                                                              |
+| `is_stable`                          | references and pointers that the scope hands out stay valid                                                                                                                                                         |
+| `consumes`                           | a request consumes a produced value instead of borrowing the stored instance                                                                                                                                        |
+| `guard`                              | the kind of recursion guard                                                                                                                                                                                         |
+| `retains_unresolved_source`          | an unresolved storage can keep source state across a resolution                                                                                                                                                     |
+| `exposed(storage_form)`              | whether the scope stores each form of stored type: any value other than `storage_exposure::none` stores it; `storage_form::reference` is a stored reference, which only a scope that is given its instance can hold |
+| `storage<Type, StoredType, Factory>` | the class that keeps the instance; it provides `resolve`, and also `is_resolved` and `reset` if it keeps the instance between requests                                                                              |
+| `allows_cycles`                      | optional: whether the bindings of the scope can be part of a dependency cycle                                                                                                                                       |
 
-Dingo derives from it the request lists of every stored type and the
-materialization of the scope.
+Dingo derives from it the semantics of the scope (`scope_semantics_v`), of which
+a binding plans its requests, and the materialization of the scope.
 [test/registration/custom_scope.cpp](../../test/registration/custom_scope.cpp)
 defines a scope outside the library and registers it with both containers.
 
@@ -171,6 +168,6 @@ constructor.
 
 - [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
 - [include/dingo/storage/scope_traits.h](../../include/dingo/storage/scope_traits.h)
-- [include/dingo/conversion/paths.h](../../include/dingo/conversion/paths.h)
+- [include/dingo/request/execution.h](../../include/dingo/request/execution.h)
 - [test/support/custom_wrappers.h](../../test/support/custom_wrappers.h)
 - [test/registration/custom_scope.cpp](../../test/registration/custom_scope.cpp)

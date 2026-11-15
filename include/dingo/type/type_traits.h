@@ -25,7 +25,6 @@ struct unique;
 struct shared;
 struct external;
 
-template <class T> struct exact_lookup;
 template <class T> struct collection_traits;
 
 // The wrapper semantics a type_traits specialization names. The library knows
@@ -171,32 +170,6 @@ inline constexpr bool is_optional_type_v =
                           semantics::optional_value>::value;
 
 namespace detail {
-// Whether a value of T can exist: an abstract class cannot, nor can a value
-// that holds an abstract element in place. References and pointers can. It is
-// decided without instantiating T.
-template <typename... Types>
-constexpr bool is_formable_list(type_list<Types...>);
-
-template <typename T> constexpr bool is_formable() {
-  using type = std::remove_cv_t<T>;
-  if constexpr (has_semantics<type, semantics::optional_value>::value) {
-    return is_formable<typename type_traits<type>::value_type>();
-  } else if constexpr (is_alternative_type_v<type>) {
-    return is_formable_list(typename type_traits<type>::alternatives{});
-  } else if constexpr (std::is_class_v<type>) {
-    return !std::is_abstract_v<type>;
-  } else {
-    return true;
-  }
-}
-
-template <typename... Types>
-constexpr bool is_formable_list(type_list<Types...>) {
-  return (is_formable<Types>() && ...);
-}
-
-template <typename T> inline constexpr bool is_formable_v = is_formable<T>();
-
 template <typename Type, typename = void>
 struct alternative_type_alternatives {};
 
@@ -386,100 +359,6 @@ template <typename Handle, typename Argument, size_t Count>
 inline constexpr bool can_emplace_repeated_v =
     can_emplace_repeated<Handle, Argument,
                          std::make_index_sequence<Count>>::value;
-
-template <typename Type, typename U, typename = void>
-struct wrapper_rebind_leaf {
-  using type = copy_cv_t<Type, U>;
-};
-
-template <typename Type, size_t N, typename U>
-struct wrapper_rebind_leaf<Type[N], U, void> {
-  using type = typename wrapper_rebind_leaf<Type, U>::type[N];
-};
-
-template <typename Type, typename U>
-struct wrapper_rebind_leaf<Type[], U, void> {
-  using type = typename wrapper_rebind_leaf<Type, U>::type[];
-};
-
-template <typename Type, typename U>
-struct wrapper_rebind_leaf<
-    Type, U,
-    std::enable_if_t<type_traits<Type>::enabled && !std::is_pointer_v<Type>>> {
-  using type = typename type_traits<Type>::template rebind_t<
-      typename wrapper_rebind_leaf<typename type_traits<Type>::value_type,
-                                   U>::type>;
-};
-
-template <typename Type, typename U>
-using wrapper_rebind_leaf_t = typename wrapper_rebind_leaf<Type, U>::type;
-
-template <typename Handle, typename T, typename U, typename = void>
-struct smart_array_pointer_types {
-  using type = type_list<U *, Handle *>;
-};
-
-template <typename Handle, typename T, typename U>
-struct smart_array_pointer_types<Handle, T, U,
-                                 std::enable_if_t<std::is_array_v<T>>> {
-  using type =
-      type_list<exact_lookup<typename wrapper_rebind_leaf<T, U>::type> *,
-                Handle *>;
-};
-
-template <typename Handle, typename = void> struct wrapper_storage_types {
-  using lvalue_reference_types = type_list<Handle &>;
-  using pointer_types = type_list<Handle *>;
-  using copyable_value_types =
-      std::conditional_t<std::is_copy_constructible_v<Handle>,
-                         type_list<Handle>, type_list<>>;
-};
-
-// A handle or an optional is walked through to its element too: the chain is
-// walked once, collecting every list together instead of recursing over it
-// separately for each.
-template <typename Handle>
-struct wrapper_storage_types<
-    Handle, std::enable_if_t<
-                type_traits<Handle>::enabled &&
-                (type_traits<Handle>::is_pointer_like ||
-                 has_semantics<Handle, semantics::optional_value>::value)>> {
-private:
-  using next = wrapper_storage_types<typename type_traits<Handle>::value_type>;
-  using copyable_handle_types =
-      std::conditional_t<std::is_copy_constructible_v<Handle>,
-                         type_list<Handle>, type_list<>>;
-
-public:
-  using lvalue_reference_types =
-      type_list_cat_t<type_list<Handle &>,
-                      typename next::lvalue_reference_types>;
-  using pointer_types =
-      type_list_cat_t<type_list<Handle *>, typename next::pointer_types>;
-  using copyable_value_types =
-      type_list_cat_t<copyable_handle_types,
-                      typename next::copyable_value_types>;
-};
-
-// Whether every layer of a wrapper can exist: a handle can hold an abstract
-// element, a value that holds its element in place cannot. It is decided
-// without instantiating the wrapper.
-template <typename Type> constexpr bool is_wrapper_formable() {
-  if constexpr (type_traits<Type>::enabled && !std::is_pointer_v<Type>) {
-    using element = typename type_traits<Type>::value_type;
-    constexpr bool element_formable = is_wrapper_formable<element>();
-    if constexpr (type_traits<Type>::is_pointer_like) {
-      return element_formable;
-    } else {
-      return is_formable_v<Type> && element_formable;
-    }
-  } else {
-    return true;
-  }
-}
-
-template <typename Type>
-inline constexpr bool is_wrapper_formable_v = is_wrapper_formable<Type>();
 
 // An array, or an owning handle whose element cannot be borrowed as an object,
 // which owns an array; its exact interface is the array.
@@ -769,29 +648,12 @@ template <typename = void> struct owning_handles {
 };
 
 namespace detail {
-// The handles of the families of owning_handles of Element, as rvalue
-// references, which a scope publishes. The families are looked up where a
-// scope rebinds them, after a user's specialization of owning_handles.
+// The key owning_handles is looked up by, which depends on Element, so that
+// the families are looked up where they are used, after a user's
+// specialization of owning_handles.
 template <typename Element> struct owning_handles_key {
   using type = void;
 };
-
-template <typename Element,
-          typename Families = typename owning_handles<
-              typename owning_handles_key<Element>::type>::type>
-struct owning_handle_list;
-
-template <typename Element, typename... Families>
-struct owning_handle_list<Element, type_list<Families...>> {
-  using type = type_list_cat_t<std::conditional_t<
-      type_traits<
-          typename type_traits<Families>::template rebind_t<Element>>::enabled,
-      type_list<typename type_traits<Families>::template rebind_t<Element> &&>,
-      type_list<>>...>;
-};
-
-template <typename Element>
-using owning_handle_list_t = typename owning_handle_list<Element>::type;
 } // namespace detail
 
 } // namespace dingo

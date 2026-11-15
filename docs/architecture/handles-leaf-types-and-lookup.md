@@ -48,23 +48,7 @@ rule for each wrapper combination.
 ## Binding Lookup
 
 A request selects a binding by its normalized type or by its exact type. The
-binding then matches the type descriptor of the request against its resolutions
-(see [Factory Dispatch](conversion-model.md#factory-dispatch)).
-
-## Exact Lookup
-
-`exact_lookup<T>` marks a request in the request list of a storage that keeps
-its exact wrapper type. Rebinding does not change it: `rebind_leaf_t` of
-`exact_lookup<T>` is `T`. Without the mark, a request is rebound to the leaf of
-the interface, and that is too permissive for a request whose wrapper shape
-matters.
-
-It is defined in [include/dingo/type/shape.h](../../include/dingo/type/shape.h).
-A storage uses it to publish its stored wrapper as itself. Examples are the
-`std::optional<L>` that a kept optional is copied as, and a reference or a
-pointer to a stored bounded array. The runtime binding,
-[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h),
-matches a request against these targets as against any other.
+binding then plans the request (see [Plans](conversion-model.md#plans)).
 
 ## Request Type
 

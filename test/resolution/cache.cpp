@@ -148,15 +148,11 @@ struct exposed_cache_state : detail::cache::state<Enabled> {
 };
 
 struct stable_storage {
-  struct conversions {
-    static constexpr bool is_stable = true;
-  };
+  using tag_type = shared;
 };
 
 struct unstable_storage {
-  struct conversions {
-    static constexpr bool is_stable = false;
-  };
+  using tag_type = unique;
 };
 
 struct unmarked_storage {};

@@ -278,7 +278,7 @@ public:
       layout(),
       detail::materialization_facts_v<Storage, runtime_context_type,
                                       Container>(),
-      Storage::conversions::is_stable,
+      detail::cache::is_stable_storage_v<Storage>,
       &run,
       detail::runtime_cell_offset_v<cell_type>,
       &retained,

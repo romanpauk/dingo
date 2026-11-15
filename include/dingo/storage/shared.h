@@ -9,11 +9,11 @@
 
 #include <dingo/base/config.h>
 
-#include <dingo/conversion/apply.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/factory/factory_traits.h>
 #include <dingo/memory/aligned_storage.h>
 #include <dingo/memory/object_lifetime.h>
+#include <dingo/request/execution.h>
 #include <dingo/storage/scope_traits.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>
@@ -25,8 +25,7 @@ namespace dingo {
 struct shared {};
 
 namespace detail {
-template <typename Type, typename StoredType, typename Factory,
-          typename Conversions>
+template <typename Type, typename StoredType, typename Factory>
 class shared_storage;
 } // namespace detail
 
@@ -46,10 +45,8 @@ template <> struct scope_traits<shared> {
                      storage_exposure::pointer;
   }
 
-  template <typename Type, typename StoredType, typename Factory,
-            typename Conversions>
-  using storage =
-      detail::shared_storage<Type, StoredType, Factory, Conversions>;
+  template <typename Type, typename StoredType, typename Factory>
+  using storage = detail::shared_storage<Type, StoredType, Factory>;
 };
 
 namespace detail {
@@ -82,7 +79,7 @@ public:
       new (&this->buffer_) StoredType(
           Factory::template construct<Type>(scope, context, container));
     } else if constexpr (converts) {
-      new (&this->buffer_) StoredType(detail::convert_type<StoredType, consume>(
+      new (&this->buffer_) StoredType(execution::made_as<StoredType>(
           Factory::template construct<Type>(scope, context, container)));
     } else if constexpr (std::is_array_v<Type>) {
       Factory::template construct<Type>(&this->buffer_, scope, context,
@@ -120,9 +117,7 @@ public:
     instance_ = Factory::template construct<Type *>(scope, context, container);
   }
 
-  StoredType *get() const {
-    return detail::convert_type<StoredType *, borrow>(instance_);
-  }
+  StoredType *get() const { return static_cast<StoredType *>(instance_); }
   void reset() {
     delete instance_;
     instance_ = nullptr;
@@ -133,8 +128,7 @@ private:
   Type *instance_ = nullptr;
 };
 
-template <typename Type, typename StoredType, typename Factory,
-          typename Conversions>
+template <typename Type, typename StoredType, typename Factory>
 class shared_storage {
   storage_instance<shared, Type, StoredType, Factory> instance_;
 
@@ -142,7 +136,6 @@ public:
   template <typename... Args>
   shared_storage(Args &&...args) : instance_(std::forward<Args>(args)...) {}
 
-  using conversions = Conversions;
   using factory_type = Factory;
   using type = Type;
   using stored_type = StoredType;

@@ -803,7 +803,8 @@ struct binding_plan {
   using stored_stack = stack_of_t<Stored, Leaf>;
   using layers = typename joined<
       typename stored_stack::layers,
-      typename owning_layers<typename owning_handles<>::type>::type>::type;
+      typename owning_layers<typename owning_handles<
+          typename owning_handles_key<Leaf>::type>::type>::type>::type;
   using universe_type = layer_universe<layers>;
 
   static constexpr semantics::context context(bool abstract) {
@@ -1293,6 +1294,51 @@ template <typename T, typename Leaf, typename Interface> struct layer_types {
     }
   }
 };
+
+// Whether a handle of an array is made of a value, as an array of it its
+// type_traits emplaces.
+template <typename Target, typename Value> constexpr bool emplaces_array_of() {
+  if constexpr (type_traits<Target>::enabled && is_array_like_type_v<Target>) {
+    return can_emplace_v<Target, Value &&>;
+  } else {
+    return false;
+  }
+}
+
+// An object of type Target made of a value, Value: constructed of it, a
+// handle of an array of it, or a wrapper made of it at once.
+template <typename Target, typename Value> constexpr bool makes_as() {
+  if constexpr (std::is_constructible_v<Target, Value &&>) {
+    return true;
+  } else if constexpr (emplaces_array_of<Target, Value>()) {
+    return true;
+  } else if constexpr (std::is_pointer_v<Target> || std::is_array_v<Target> ||
+                       !type_traits<Target>::enabled) {
+    return false;
+  } else {
+    constexpr std::size_t depth =
+        type_list_size_v<typename stack_of_t<Target, Value>::layers>;
+    return depth != 0 &&
+           layer_types<Target, Value, Value>::template runs<depth>();
+  }
+}
+
+// An object of type Target made of what a storage or a factory is given: a
+// pointer to it, or the object makes_as makes of it.
+template <typename Target, typename Source> Target made_as(Source &&source) {
+  using value_type = remove_cvref_t<Source>;
+  if constexpr (std::is_constructible_v<Target, Source &&>) {
+    return Target(std::forward<Source>(source));
+  } else if constexpr (std::is_pointer_v<Target> &&
+                       std::is_lvalue_reference_v<Source>) {
+    return std::addressof(source);
+  } else if constexpr (emplaces_array_of<Target, value_type>()) {
+    return type_traits<Target>::emplace(std::forward<Source>(source));
+  } else {
+    return made_of<value_type, value_type, Target>(
+        std::forward<Source>(source));
+  }
+}
 
 // The table of a type T, toward the leaf Leaf, of the interface Interface:
 // an operation where C++ applies the step to it.

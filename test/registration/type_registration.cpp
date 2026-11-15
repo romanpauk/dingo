@@ -42,7 +42,6 @@ TEST(type_registration_test, registration_prefers_first_explicit_match) {
       type_registration<scope<int>, scope<float>, storage<double>,
                         storage<char>, factory<long>, factory<short>,
                         interfaces<unsigned>, interfaces<bool>,
-                        conversions<void *>, conversions<int *>,
                         dependencies<long>, dependencies<short>>;
 
   static_assert(std::is_same_v<typename registration::scope_type, scope<int>>);
@@ -52,8 +51,6 @@ TEST(type_registration_test, registration_prefers_first_explicit_match) {
       std::is_same_v<typename registration::factory_type, factory<long>>);
   static_assert(std::is_same_v<typename registration::interface_type,
                                interfaces<unsigned>>);
-  static_assert(std::is_same_v<typename registration::conversions_type,
-                               conversions<void *>>);
   static_assert(std::is_same_v<typename registration::dependencies_type,
                                dependencies<long>>);
 }
@@ -78,7 +75,7 @@ TEST(type_registration_test, registration_deduction) {
           factory<constructor<int>>>);
 }
 
-TEST(type_registration_test, registration_default_interface_and_conversions) {
+TEST(type_registration_test, registration_default_interface) {
   using registration_from_factory =
       type_registration<scope<shared>, factory<int>>;
   static_assert(std::is_same_v<typename registration_from_factory::storage_type,
@@ -86,18 +83,12 @@ TEST(type_registration_test, registration_default_interface_and_conversions) {
   static_assert(
       std::is_same_v<typename registration_from_factory::interface_type,
                      interfaces<int>>);
-  static_assert(std::is_same_v<
-                typename registration_from_factory::conversions_type,
-                conversions<detail::conversions<shared, int, runtime_type>>>);
 
   using registration_from_storage =
       type_registration<scope<shared>, storage<int>>;
   static_assert(
       std::is_same_v<typename registration_from_storage::interface_type,
                      interfaces<int>>);
-  static_assert(std::is_same_v<
-                typename registration_from_storage::conversions_type,
-                conversions<detail::conversions<shared, int, runtime_type>>>);
 }
 
 TEST(type_registration_test,
@@ -211,8 +202,7 @@ TEST(type_registration_test, registration_specialization) {
       detail::storage<typename shared_registration::scope_type::type,
                       typename shared_registration::storage_type::type,
                       typename shared_registration::storage_type::type,
-                      typename shared_registration::factory_type::type,
-                      typename shared_registration::conversions_type::type>;
+                      typename shared_registration::factory_type::type>;
   using shared_cell = detail::binding_cell<shared_storage>;
 
   using shared_ptr_registration =
@@ -221,8 +211,7 @@ TEST(type_registration_test, registration_specialization) {
       detail::storage<typename shared_ptr_registration::scope_type::type,
                       typename shared_ptr_registration::storage_type::type,
                       typename shared_ptr_registration::storage_type::type,
-                      typename shared_ptr_registration::factory_type::type,
-                      typename shared_ptr_registration::conversions_type::type>;
+                      typename shared_ptr_registration::factory_type::type>;
   using shared_ptr_cell = detail::binding_cell<shared_ptr_storage>;
 
   using external_registration =
@@ -231,8 +220,7 @@ TEST(type_registration_test, registration_specialization) {
       detail::storage<typename external_registration::scope_type::type,
                       typename external_registration::storage_type::type,
                       typename external_registration::storage_type::type,
-                      typename external_registration::factory_type::type,
-                      typename external_registration::conversions_type::type>;
+                      typename external_registration::factory_type::type>;
   using external_cell = detail::binding_cell<external_storage>;
 
   using external_shared_registration =
@@ -241,8 +229,7 @@ TEST(type_registration_test, registration_specialization) {
       typename external_shared_registration::scope_type::type,
       typename external_shared_registration::storage_type::type,
       typename external_shared_registration::storage_type::type,
-      typename external_shared_registration::factory_type::type,
-      typename external_shared_registration::conversions_type::type>;
+      typename external_shared_registration::factory_type::type>;
   using external_shared_cell = detail::binding_cell<external_shared_storage>;
 
   using nested_registration =

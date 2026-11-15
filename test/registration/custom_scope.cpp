@@ -27,14 +27,12 @@ struct counted_value {
 int constructions = 0;
 
 // Constructs an instance for every request, as unique does, and counts them.
-template <typename Type, typename StoredType, typename Factory,
-          typename Conversions>
+template <typename Type, typename StoredType, typename Factory>
 class counted_storage : Factory {
 public:
   template <typename... Args>
   counted_storage(Args &&...args) : Factory(std::forward<Args>(args)...) {}
 
-  using conversions = Conversions;
   using factory_type = Factory;
   using type = Type;
   using stored_type = StoredType;
@@ -62,9 +60,8 @@ template <> struct dingo::scope_traits<counted> {
                                        : storage_exposure::none;
   }
 
-  template <typename Type, typename StoredType, typename Factory,
-            typename Conversions>
-  using storage = counted_storage<Type, StoredType, Factory, Conversions>;
+  template <typename Type, typename StoredType, typename Factory>
+  using storage = counted_storage<Type, StoredType, Factory>;
 };
 
 namespace {

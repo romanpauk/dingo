@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <dingo/storage/storage.h>
+
 #include <cassert>
 #include <memory>
 #include <type_traits>
@@ -37,10 +39,13 @@ struct entry {
 template <typename Storage, typename = void>
 struct is_stable_storage : std::false_type {};
 
+// A storage of a scope that keeps its instance as long as the container.
 template <typename Storage>
-struct is_stable_storage<Storage,
-                         std::void_t<decltype(Storage::conversions::is_stable)>>
-    : std::bool_constant<Storage::conversions::is_stable> {};
+struct is_stable_storage<
+    Storage,
+    std::void_t<decltype(scope_traits<typename Storage::tag_type>::is_stable)>>
+    : std::bool_constant<scope_traits<typename Storage::tag_type>::is_stable> {
+};
 
 template <typename Storage>
 inline constexpr bool is_stable_storage_v = is_stable_storage<Storage>::value;

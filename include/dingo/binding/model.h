@@ -40,7 +40,6 @@ template <typename Registration> struct binding_model_base {
   using factory_type = typename Registration::factory_type::type;
   using registration_key_type = typename Registration::key_type;
   using key_type = detail::make_lookup_key_t<registration_key_type>;
-  using conversions_type = typename Registration::conversions_type::type;
   using dependencies_type = typename Registration::dependencies_type;
   using bindings_type = typename Registration::bindings_type::type;
 };
@@ -81,7 +80,7 @@ struct binding_model_impl<Registration, true, true>
   using stored_type = rebind_leaf_t<registered_storage_type, stored_leaf_type>;
   using storage_type =
       storage<typename base::storage_tag, registered_storage_type, stored_type,
-              typename base::factory_type, typename base::conversions_type>;
+              typename base::factory_type>;
   using requirements = registration_requirements<storage_type, interface_types,
                                                  typename storage_type::type>;
 

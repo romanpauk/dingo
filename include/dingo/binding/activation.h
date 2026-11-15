@@ -13,7 +13,6 @@
 #include <dingo/binding/model.h>
 #include <dingo/binding/resolution.h>
 #include <dingo/context/resolution.h>
-#include <dingo/conversion/apply.h>
 #include <dingo/storage/retention.h>
 #include <dingo/storage/scope_traits.h>
 #include <dingo/storage/type_storage_traits.h>
@@ -138,44 +137,6 @@ inline constexpr bool materializes_value_source_v = [] {
   using source_type = std::remove_cv_t<std::remove_reference_t<source_result>>;
   return !std::is_reference_v<source_result> && !std::is_pointer_v<source_type>;
 }();
-
-// Whether a storage makes a value for each request that a reference may
-// refer to: one moved out of what it makes, or a wrapper it is moved into,
-// rather than a copy of an element a handle shares.
-template <typename Storage>
-inline constexpr bool places_made_values_v =
-    scope_materialization<typename Storage::tag_type>::consumes &&
-    storage_form_traits<typename Storage::type>::form !=
-        storage_form::shared_handle &&
-    storage_form_traits<typename Storage::type>::form !=
-        storage_form::shared_array_handle;
-
-// Whether a storage hands over a pointer it makes for each request: to the
-// object, or to the first element of an array.
-template <typename Storage>
-inline constexpr bool hands_over_made_pointers_v =
-    scope_materialization<typename Storage::tag_type>::consumes &&
-    (storage_form_traits<typename Storage::type>::form ==
-         storage_form::pointer ||
-     storage_form_traits<typename Storage::type>::form ==
-         storage_form::bounded_array);
-
-// Whether a pointer to Pointee the storage hands over is adopted for a
-// reference to what it points to: one to an object, or one to the array it
-// makes, not to the first element of the array.
-template <typename Storage, typename Pointee>
-inline constexpr bool adopts_made_pointer_v =
-    hands_over_made_pointers_v<Storage> &&
-    (storage_form_traits<typename Storage::type>::form ==
-         storage_form::pointer ||
-     std::is_array_v<Pointee>);
-
-// Whether a value of what a pointer the storage hands over points to is
-// moved out of it: one to an object, not to an array.
-template <typename Storage>
-inline constexpr bool takes_made_pointee_v =
-    hands_over_made_pointers_v<Storage> &&
-    storage_form_traits<typename Storage::type>::form == storage_form::pointer;
 
 // Whether a storage is resolved: one that keeps no instance always is.
 template <typename Storage>
@@ -327,92 +288,6 @@ template <typename Cell> struct cell_access {
   void *rollback_argument() const noexcept { return nullptr; }
 };
 
-// The application of the resolutions of a binding to the source its storage
-// yields. It is apart from the activation, which also knows the container
-// the factory resolves its dependencies through, so that a resolution is
-// instantiated once for a storage, whatever container the factory resolves
-// through: no conversion uses it.
-template <typename Storage, typename Scope = construction_scope>
-struct binding_application {
-  using storage_type = Storage;
-
-  // Whether the source of a request is placed in the context, as the
-  // materialization of the storage places it.
-  template <typename Request, typename Context>
-  static constexpr bool places_source() {
-    return materialization_placement(
-               materialization_facts_v<storage_type, Context>(),
-               materialized<Request>(),
-               is_runtime_context_v<Context>) == source_placement::in_context;
-  }
-
-  // The type a resolution reports as registered when it fails.
-  static constexpr type_descriptor registered_type =
-      detail::described_type_v<typename storage_type::type>;
-
-  Scope scope;
-
-  // The address of the instance of a resolution of Request, applied to a
-  // source, which places_source says whether the context holds.
-  template <typename Resolution, typename Request = void, typename Context,
-            typename Source>
-  resolved_address resolve_address(Context &context, Source &&source,
-                                   type_descriptor requested_type) {
-    using target_type = typename Resolution::result_type;
-    using applied_type = decltype(Resolution::operation::apply(
-        *this, context, std::forward<Source>(source), requested_type,
-        registered_type));
-    if constexpr (!std::is_reference_v<applied_type> &&
-                  !std::is_pointer_v<applied_type> &&
-                  std::is_constructible_v<target_type, applied_type>) {
-      // A value the resolution makes is made in the context.
-      auto &value = context.template construct_made<target_type>(
-          scope, [&]() -> target_type {
-            return Resolution::operation::apply(
-                *this, context, std::forward<Source>(source), requested_type,
-                registered_type);
-          });
-      return {std::addressof(value), resolved_address::access_kind::consume};
-    } else {
-      decltype(auto) instance = Resolution::operation::apply(
-          *this, context, std::forward<Source>(source), requested_type,
-          registered_type);
-      using instance_type = decltype(instance);
-      using object_type = std::remove_reference_t<instance_type>;
-      if constexpr (std::is_pointer_v<object_type>) {
-        return {
-            const_cast<std::remove_cv_t<std::remove_pointer_t<object_type>> *>(
-                instance),
-            resolved_address::access_kind::borrow};
-      } else if constexpr (std::is_lvalue_reference_v<instance_type> ||
-                           (std::is_rvalue_reference_v<instance_type> &&
-                            places_source<Request, Context>())) {
-        // What an lvalue reference refers to is borrowed. The context holds
-        // the source a consuming scope places there, and what it is
-        // converted to by rvalue reference lives there too: it is handed
-        // over where it is.
-        return {const_cast<std::remove_cv_t<object_type> *>(
-                    std::addressof(instance)),
-                std::is_rvalue_reference_v<instance_type>
-                    ? resolved_address::access_kind::consume
-                    : resolved_address::access_kind::borrow};
-      } else if constexpr (std::is_constructible_v<target_type,
-                                                   object_type &&>) {
-        // A value, or what an rvalue reference refers to outside the
-        // context, is moved into it.
-        return {&context.template construct<target_type>(
-                    scope, static_cast<object_type &&>(instance)),
-                resolved_address::access_kind::consume};
-      } else {
-        static_assert(std::is_constructible_v<target_type, object_type &>,
-                      "resolution result must construct the requested type");
-        return {&context.template construct<target_type>(scope, instance),
-                resolved_address::access_kind::consume};
-      }
-    }
-  }
-};
-
 // One resolution of a binding: the cell it resolves, the dependencies its
 // factory resolves through and the scope of the request. Both containers
 // resolve their bindings through it; they differ only in how they select the
@@ -430,7 +305,6 @@ struct binding_activation {
   using owner_type = std::remove_reference_t<Dependencies>;
   using materialization_traits =
       scope_materialization<typename storage_type::tag_type>;
-  using application_type = binding_application<storage_type, Scope>;
 
   template <typename Context> static constexpr materialization_facts facts() {
     return materialization_facts_v<storage_type, Context, owner_type>();
@@ -447,8 +321,6 @@ struct binding_activation {
   Cell &cell;
   Dependencies dependencies;
   Scope scope;
-
-  application_type application() const { return {scope}; }
 
   // Materializes the storage and passes its source to fn.
   //
@@ -522,60 +394,6 @@ struct binding_activation {
     }
   }
 
-  // The address of the instance of a resolution selected at compile time.
-  // The address is deduced: a deduced return type is instantiated at the
-  // call and does not add a level to the template depth of a dependency
-  // chain.
-  template <typename Request, typename Resolution, typename Context>
-  decltype(auto) resolve_request_address(Context &context) {
-    return use_source<Request>(context, [&](auto &&source) {
-      return application().template resolve_address<Resolution, Request>(
-          context, std::forward<decltype(source)>(source),
-          detail::described_type_v<Request>);
-    });
-  }
-
-  // The value of a resolution selected at compile time, made where it is
-  // requested: a value the resolution makes initializes it.
-  template <typename Request, typename Resolution, typename Context>
-  Request make_value(Context &context) {
-    return use_source<Request>(context, [&](auto &&source) -> Request {
-      auto applied = application();
-      using applied_type = decltype(Resolution::operation::apply(
-          applied, context, std::forward<decltype(source)>(source),
-          detail::described_type_v<Request>, applied.registered_type));
-      if constexpr (!std::is_reference_v<applied_type>) {
-        return Request(Resolution::operation::apply(
-            applied, context, std::forward<decltype(source)>(source),
-            detail::described_type_v<Request>, applied.registered_type));
-      } else {
-        auto &&instance = Resolution::operation::apply(
-            applied, context, std::forward<decltype(source)>(source),
-            detail::described_type_v<Request>, applied.registered_type);
-        return consume_resolved<Request>(
-            std::forward<decltype(instance)>(instance),
-            [](auto &&value) -> Request {
-              return Request(std::forward<decltype(value)>(value));
-            });
-      }
-    });
-  }
-
-  // Passes the instance of a resolution selected at compile time to fn.
-  template <typename Request, typename Resolution, typename Context,
-            typename Fn>
-  decltype(auto) consume_request(Context &context, Fn &&fn) {
-    return use_source<Request>(context, [&](auto &&source) -> decltype(auto) {
-      auto applied = application();
-      auto &&instance = Resolution::operation::apply(
-          applied, context, std::forward<decltype(source)>(source),
-          detail::described_type_v<Request>, applied.registered_type);
-      return consume_resolved<Request>(
-          std::forward<decltype(instance)>(instance), std::forward<Fn>(fn));
-    });
-  }
-
-private:
 public:
   // A runtime context places a source it retains in the transaction, as it
   // does every source of a persistent request.

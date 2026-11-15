@@ -17,9 +17,6 @@
 
 namespace dingo {
 struct runtime_type {};
-template <class T> struct exact_lookup {
-  using type = T;
-};
 template <class T, class = void> struct leaf_type;
 template <class T, class U, class = void> struct rebind_leaf_type;
 
@@ -108,10 +105,6 @@ template <class T, class U, class = void> struct rebind_leaf_base {
   using type = typename leaf_type<U>::type;
 };
 
-template <class T, class U> struct rebind_leaf_base<exact_lookup<T>, U, void> {
-  using type = T;
-};
-
 template <class T, class U>
 struct rebind_leaf_base<
     T, U, std::enable_if_t<type_traits<T>::enabled && !std::is_pointer_v<T>>> {
@@ -141,23 +134,6 @@ struct rebind_leaf_base<type_list<Args...>, U, void> {
   using type = type_list<typename rebind_leaf_type<Args, U>::type...>;
 };
 
-template <class T, class U, class = void> struct resolved_base {
-  using type = typename rebind_leaf_base<T, U>::type;
-};
-
-template <class T, class U>
-struct resolved_base<exact_lookup<T>, U,
-                     std::enable_if_t<!std::is_same_v<
-                         typename leaf_type<T>::type, runtime_type>>> {
-  using type = T;
-};
-
-template <class T, class U>
-struct resolved_base<exact_lookup<T>, U,
-                     std::enable_if_t<std::is_same_v<
-                         typename leaf_type<T>::type, runtime_type>>> {
-  using type = typename rebind_leaf_type<T, typename leaf_type<U>::type>::type;
-};
 } // namespace detail
 
 template <class T, class> struct leaf_type {
@@ -182,18 +158,6 @@ public:
 
 template <typename T, typename U>
 using rebind_leaf_t = typename rebind_leaf_type<T, U>::type;
-
-template <class T, class U, class = void> struct resolved_type {
-private:
-  using outer = detail::outer_traits<T>;
-  using rebound = typename detail::resolved_base<typename outer::type, U>::type;
-
-public:
-  using type = typename outer::template rebind_t<rebound>;
-};
-
-template <typename T, typename U>
-using resolved_type_t = typename resolved_type<T, U>::type;
 
 // The type a request is looked up by: its leaf, the bound array a reference or
 // a pointer to one refers to, and an annotation or a key selection of either.

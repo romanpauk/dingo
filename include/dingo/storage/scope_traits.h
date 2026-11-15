@@ -105,28 +105,15 @@ enum class materialization_guard {
 //                              disables the form. For a stored reference,
 //                              exposed(reference) enables it and the form it
 //                              refers to selects the lists
-//   storage<Type, StoredType, Factory, Conversions>
+//   storage<Type, StoredType, Factory>
 //                              the storage of a registered type: resolve(),
 //                              and is_resolved() and reset() for a scope that
 //                              keeps its instance
-//   requests<Form, Type, U>    optional: the request lists of a form, when
-//                              the scope does not publish the exposed lists of
-//                              the form; detail::scope_rule_requests is the
-//                              default to extend
 
 namespace detail {
-constexpr bool exposes_any(storage_exposure exposed, storage_exposure lists) {
-  return (exposed & lists) != storage_exposure::none;
-}
-
 template <typename Type, typename = void> struct storage_form_traits {
   static constexpr storage_form form = storage_form::unknown;
 };
-
-// storage_form_traits<Type>::borrowed<U> lists what a borrowed storage can
-// hand out for the leaf U: copies, references and pointers. consumed<U> lists
-// what a consumed value can be converted to. They are separate so a scope only
-// instantiates the lists it publishes.
 
 template <typename Type>
 struct storage_form_traits<Type, std::enable_if_t<!type_traits<Type>::enabled &&
@@ -135,78 +122,22 @@ struct storage_form_traits<Type, std::enable_if_t<!type_traits<Type>::enabled &&
   static constexpr storage_form form = is_alternative_type_v<Type>
                                            ? storage_form::alternative
                                            : storage_form::plain;
-
-  template <typename U> struct borrowed {
-    using value_types = type_list<U>;
-    using lvalue_reference_types = type_list<U &>;
-    using pointer_types = type_list<U *>;
-  };
-
-  template <typename U> struct consumed {
-    using rvalue_reference_types = type_list<U &&>;
-  };
 };
 
 template <typename T> struct storage_form_traits<T *> {
   static constexpr storage_form form = storage_form::pointer;
-
-  template <typename U> struct borrowed {
-    using value_types = type_list<U>;
-    using lvalue_reference_types = type_list<U &>;
-    using pointer_types = type_list<U *>;
-  };
-
-  // A pointer it makes is taken over by an owning handle.
-  template <typename U> struct consumed {
-    using rvalue_reference_types = owning_handle_list_t<U>;
-  };
-};
-
-// An array is consumed as an owning handle to its rows.
-template <typename T, typename U> struct array_row_handle_promotions {
-  using type = owning_handle_list_t<wrapper_rebind_leaf_t<T, U>[]>;
 };
 
 template <typename T> struct storage_form_traits<T[]> {
   static constexpr storage_form form = storage_form::array;
-
-  template <typename U> struct borrowed {
-    using value_types = type_list<>;
-    using lvalue_reference_types = type_list<>;
-    using pointer_types = type_list<typename wrapper_rebind_leaf<T, U>::type *>;
-  };
-
-  template <typename U> struct consumed {
-    using rvalue_reference_types =
-        typename array_row_handle_promotions<T, U>::type;
-  };
 };
 
 template <typename T, size_t N> struct storage_form_traits<T[N]> {
   static constexpr storage_form form = storage_form::bounded_array;
-
-  template <typename U> struct borrowed {
-  private:
-    using row_type = typename wrapper_rebind_leaf<T, U>::type;
-    using exact_type = typename wrapper_rebind_leaf<T[N], U>::type;
-
-  public:
-    using value_types = type_list<>;
-    using lvalue_reference_types = type_list<exact_lookup<exact_type> &>;
-    using pointer_types = type_list<row_type *, exact_lookup<exact_type> *>;
-  };
-
-  // An owning handle of the bounded array takes it over too.
-  template <typename U> struct consumed {
-    using rvalue_reference_types =
-        type_list_cat_t<typename array_row_handle_promotions<T, U>::type,
-                        owning_handle_list_t<wrapper_rebind_leaf_t<T[N], U>>>;
-  };
 };
 
-// A wrapper is classified by its semantics; the lists of a form are those of
-// any wrapper of the form, the standard ones and a user's alike. The element
-// of an array handle cannot be borrowed as an object.
+// A wrapper is classified by its semantics, the standard ones and a user's
+// alike. The element of an array handle cannot be borrowed as an object.
 template <typename Wrapper, typename = void> struct wrapper_semantics {
   using type = void;
 };
@@ -230,78 +161,11 @@ struct storage_form_traits<Wrapper,
                                             !std::is_pointer_v<Wrapper>>>
     : wrapper_storage_form<Wrapper> {};
 
-template <typename Wrapper, typename U>
-using wrapper_element_t =
-    wrapper_rebind_leaf_t<typename type_traits<Wrapper>::value_type, U>;
-
-// The sharing handle of the element U of a sole owner.
-template <typename Wrapper, typename U>
-using shared_handle_t = typename type_traits<Wrapper>::template share_t<
-    wrapper_element_t<Wrapper, U>>;
-
-// What reaches the element of a wrapper rebound to an interface it cannot
-// hold, such as an optional of an abstract one: a reference and a pointer.
-template <typename U> struct element_storage_types {
-  using lvalue_reference_types = type_list<U &>;
-  using pointer_types = type_list<U *>;
-  using copyable_value_types = type_list<>;
-};
-
-// Whether a wrapper of the leaf U can exist, every layer of it.
-template <typename Wrapper, typename U>
-inline constexpr bool rebindable_v =
-    is_wrapper_formable_v<wrapper_rebind_leaf_t<Wrapper, U>>;
-
-template <typename Wrapper, bool Array> struct owner_storage_form_base {
-  template <typename U> struct borrowed {
-  private:
-    using handle = wrapper_rebind_leaf_t<Wrapper, U>;
-    using types = std::conditional_t<rebindable_v<Wrapper, U>,
-                                     wrapper_storage_types<handle>,
-                                     element_storage_types<U>>;
-
-  public:
-    using lvalue_reference_types =
-        std::conditional_t<Array, type_list<handle &>,
-                           typename types::lvalue_reference_types>;
-    using pointer_types = std::conditional_t<
-        Array,
-        typename smart_array_pointer_types<
-            handle, typename type_traits<Wrapper>::value_type, U>::type,
-        typename types::pointer_types>;
-    using copyable_value_types = typename types::copyable_value_types;
-    // What a kept owner is copied as: its leaf, and what it holds that can
-    // be copied.
-    using owned_value_types =
-        type_list_unique_t<type_list_cat_t<type_list<U>, copyable_value_types>>;
-  };
-};
-
 template <typename Wrapper, bool Borrowable>
 struct wrapper_storage_form<Wrapper, semantics::sole_owner, Borrowable> {
   static constexpr storage_form form = Borrowable
                                            ? storage_form::unique_handle
                                            : storage_form::unique_array_handle;
-
-  // A kept sole owner is copied as its leaf, and as what it holds that can be
-  // copied, such as an optional of its leaf.
-  template <typename U>
-  struct borrowed
-      : owner_storage_form_base<Wrapper, !Borrowable>::template borrowed<U> {
-    using value_types = std::conditional_t<
-        Borrowable,
-        typename owner_storage_form_base<
-            Wrapper, !Borrowable>::template borrowed<U>::owned_value_types,
-        type_list<>>;
-  };
-
-  template <typename U> struct consumed {
-    using rvalue_reference_types =
-        std::conditional_t<rebindable_v<Wrapper, U>,
-                           type_list<wrapper_rebind_leaf_t<Wrapper, U> &&,
-                                     shared_handle_t<Wrapper, U> &&>,
-                           type_list<>>;
-  };
 };
 
 template <typename Wrapper, bool Borrowable>
@@ -309,69 +173,15 @@ struct wrapper_storage_form<Wrapper, semantics::shared_owner, Borrowable> {
   static constexpr storage_form form = Borrowable
                                            ? storage_form::shared_handle
                                            : storage_form::shared_array_handle;
-
-  template <typename U>
-  struct borrowed
-      : owner_storage_form_base<Wrapper, !Borrowable>::template borrowed<U> {
-    using value_types = std::conditional_t<
-        Borrowable,
-        typename owner_storage_form_base<
-            Wrapper, !Borrowable>::template borrowed<U>::owned_value_types,
-        type_list<wrapper_rebind_leaf_t<Wrapper, U>>>;
-  };
-
-  template <typename U> struct consumed {
-    using rvalue_reference_types =
-        std::conditional_t<rebindable_v<Wrapper, U>,
-                           type_list<wrapper_rebind_leaf_t<Wrapper, U> &&>,
-                           type_list<>>;
-  };
 };
 
 template <typename Wrapper>
 struct wrapper_storage_form<Wrapper, semantics::optional_value, true> {
   static constexpr storage_form form = storage_form::optional;
-
-  // A kept optional is copied as its element or as itself, and what its
-  // element is a wrapper of is reached through it.
-  template <typename U> struct borrowed {
-  private:
-    using element = wrapper_storage_types<wrapper_element_t<Wrapper, U>>;
-
-  public:
-    using value_types = type_list_unique_t<
-        type_list_cat_t<type_list<U>, typename element::copyable_value_types,
-                        type_list<exact_lookup<Wrapper>>>>;
-    using lvalue_reference_types = type_list_unique_t<
-        type_list_cat_t<typename element::lvalue_reference_types,
-                        type_list<exact_lookup<Wrapper> &>>>;
-    using pointer_types =
-        type_list_unique_t<type_list_cat_t<typename element::pointer_types,
-                                           type_list<exact_lookup<Wrapper> *>>>;
-  };
-
-  template <typename U> struct consumed {
-    using rvalue_reference_types = type_list<Wrapper &&>;
-  };
 };
 
-template <bool Active, typename Lists> struct borrowed_storage_lists {
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<>;
-  using pointer_types = type_list<>;
-};
-
-template <typename Lists> struct borrowed_storage_lists<true, Lists> : Lists {};
-
-template <bool Active, typename Lists> struct consumed_storage_lists {
-  using rvalue_reference_types = type_list<>;
-};
-
-template <typename Lists> struct consumed_storage_lists<true, Lists> : Lists {};
-
-// A form is stored in a scope if the scope publishes any list for it. A
-// reference is stored if the scope exposes references, with the lists of the
-// form it refers to.
+// A form is stored in a scope if the scope exposes it. A reference is stored
+// if the scope exposes references, and the form it refers to.
 template <typename StorageTag, typename Type>
 inline constexpr bool has_storage_cell_v = [] {
   constexpr storage_form form = storage_form_traits<remove_cvref_t<Type>>::form;
@@ -386,78 +196,6 @@ inline constexpr bool has_storage_cell_v = [] {
   }
 }();
 
-// Whether a type publishes pointers of its own. A pointer to a plain object
-// is the address of the reference it publishes, which a request takes
-// itself. A pointer, an array, a wrapper and an alternative type publish
-// theirs: a pointer to what a wrapper or an alternative type holds is null
-// when it holds nothing, where a reference to it does not exist.
-template <typename Type> constexpr bool publishes_pointers() {
-  return storage_form_traits<Type>::form != storage_form::plain;
-}
-
-// The generic rule: publish the lists of the form that the scope exposes.
-template <typename StorageTag, typename Type, typename U>
-struct scope_rule_requests {
-private:
-  using policy = scope_traits<StorageTag>;
-  using form = storage_form_traits<Type>;
-  static constexpr storage_exposure exposed = policy::exposed(form::form);
-  static constexpr storage_exposure borrowed_lists = storage_exposure::value |
-                                                     storage_exposure::lvalue |
-                                                     storage_exposure::pointer;
-
-  using borrowed = borrowed_storage_lists<exposes_any(exposed, borrowed_lists),
-                                          typename form::template borrowed<U>>;
-  using consumed =
-      consumed_storage_lists<exposes_any(exposed, storage_exposure::rvalue),
-                             typename form::template consumed<U>>;
-
-public:
-  using value_types =
-      std::conditional_t<exposes_any(exposed, storage_exposure::value),
-                         typename borrowed::value_types, type_list<>>;
-  using lvalue_reference_types =
-      std::conditional_t<exposes_any(exposed, storage_exposure::lvalue),
-                         typename borrowed::lvalue_reference_types,
-                         type_list<>>;
-  using rvalue_reference_types =
-      std::conditional_t<exposes_any(exposed, storage_exposure::rvalue),
-                         typename consumed::rvalue_reference_types,
-                         type_list<>>;
-  using pointer_types =
-      std::conditional_t<exposes_any(exposed, storage_exposure::pointer) &&
-                             publishes_pointers<Type>(),
-                         typename borrowed::pointer_types, type_list<>>;
-};
-
-// The request lists of a scope for a form: those it declares, or the rule.
-template <typename StorageTag, storage_form Form, typename Type, typename U,
-          typename = void>
-struct scope_requests : scope_rule_requests<StorageTag, Type, U> {};
-
-template <typename StorageTag, storage_form Form, typename Type, typename U>
-struct scope_requests<StorageTag, Form, Type, U,
-                      std::void_t<typename scope_traits<
-                          StorageTag>::template requests<Form, Type, U>>>
-    : scope_traits<StorageTag>::template requests<Form, Type, U> {};
-
-struct no_scope_requests {};
-
-// The requests a registration publishes when it declares no conversions: the
-// request lists its scope publishes for the form of the stored type.
-template <typename StorageTag, typename Type, typename U>
-struct conversions
-    : std::conditional_t<
-          has_storage_cell_v<StorageTag, Type>,
-          scope_requests<StorageTag,
-                         storage_form_traits<remove_cvref_t<Type>>::form,
-                         remove_cvref_t<Type>, U>,
-          no_scope_requests> {
-  static_assert(has_storage_cell_v<StorageTag, Type>,
-                "the scope does not store this type");
-  static constexpr bool is_stable = scope_traits<StorageTag>::is_stable;
-  static constexpr bool consumes = scope_traits<StorageTag>::consumes;
-};
 } // namespace detail
 
 namespace detail {

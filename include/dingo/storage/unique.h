@@ -22,31 +22,8 @@ namespace dingo {
 struct unique {};
 
 namespace detail {
-template <typename Type, typename StoredType, typename Factory,
-          typename Conversions>
+template <typename Type, typename StoredType, typename Factory>
 class unique_storage;
-
-// Whether a wrapper holds another wrapper.
-template <typename Type, typename = void>
-inline constexpr bool holds_wrapper_v = false;
-
-template <typename Type>
-inline constexpr bool
-    holds_wrapper_v<Type, std::void_t<typename type_traits<Type>::value_type>> =
-        type_traits<Type>::enabled && !std::is_pointer_v<Type> &&
-        type_traits<typename type_traits<Type>::value_type>::enabled;
-
-// The element of a wrapper that holds another wrapper, of the leaf U, which a
-// unique scope makes with the wrapper and moves out of it.
-template <typename Type, typename U, typename = void> struct nested_element {
-  using type = type_list<>;
-};
-
-template <typename Type, typename U>
-struct nested_element<Type, U, std::enable_if_t<holds_wrapper_v<Type>>> {
-  using type = type_list<
-      wrapper_rebind_leaf_t<typename type_traits<Type>::value_type, U> &&>;
-};
 } // namespace detail
 
 template <> struct scope_traits<unique> {
@@ -80,51 +57,17 @@ template <> struct scope_traits<unique> {
     return storage_exposure::none;
   }
 
-  // A new value is additionally moved into an owning handle of its own, of
-  // the families owning_handles declares: a plain one or an alternative, or
-  // the element of an optional. The element of an optional or of a sole
-  // owner is moved out of it; that of a shared owner is copied. The leaf of
-  // one that holds another wrapper is moved out of both, and into an owning
-  // handle. Any other wrapper of what is moved out is composed of it.
-  template <storage_form Form, typename Type, typename U>
-  struct requests : detail::scope_rule_requests<unique, Type, U> {
-  private:
-    using rule = detail::scope_rule_requests<unique, Type, U>;
-    static constexpr bool moves_out =
-        Form == storage_form::optional || Form == storage_form::unique_handle;
-    static constexpr bool into_handles =
-        Form == storage_form::plain || Form == storage_form::alternative ||
-        Form == storage_form::optional ||
-        (Form == storage_form::unique_handle && detail::holds_wrapper_v<Type>);
-    using wrapped = type_list_cat_t<
-        std::conditional_t<
-            moves_out,
-            type_list_cat_t<type_list<U &&>,
-                            typename detail::nested_element<Type, U>::type>,
-            type_list<>>,
-        std::conditional_t<into_handles, detail::owning_handle_list_t<U>,
-                           type_list<>>>;
-
-  public:
-    using rvalue_reference_types =
-        type_list_cat_t<typename rule::rvalue_reference_types, wrapped>;
-  };
-
-  template <typename Type, typename StoredType, typename Factory,
-            typename Conversions>
-  using storage =
-      detail::unique_storage<Type, StoredType, Factory, Conversions>;
+  template <typename Type, typename StoredType, typename Factory>
+  using storage = detail::unique_storage<Type, StoredType, Factory>;
 };
 
 namespace detail {
-template <typename Type, typename StoredType, typename Factory,
-          typename Conversions>
+template <typename Type, typename StoredType, typename Factory>
 class unique_storage : Factory {
 public:
   template <typename... Args>
   unique_storage(Args &&...args) : Factory(std::forward<Args>(args)...) {}
 
-  using conversions = Conversions;
   using factory_type = Factory;
   using type = Type;
   using stored_type = StoredType;

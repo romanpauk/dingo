@@ -295,17 +295,14 @@ TEST(constructor_detection_test,
   EXPECT_EQ(value->value, 11);
 }
 
-TEST(constructor_detection_test, selected_conversion_route_is_executed) {
+TEST(constructor_detection_test, selected_type_is_made_into_target) {
   using target = std::variant<int, long>;
-  using conversion = detail::conversion_wrap<
-      detail::wrap_alternative<long>, target,
-      detail::type_conversion_path_t<long, int &&, consume>>;
-  using dispatch = detail::converted_constructor<target, int, conversion>;
+  using dispatch = detail::converted_constructor<target, int>;
 
   auto value = dispatch::construct(7);
 
-  ASSERT_TRUE(std::holds_alternative<long>(value));
-  EXPECT_EQ(std::get<long>(value), 7);
+  ASSERT_TRUE(std::holds_alternative<int>(value));
+  EXPECT_EQ(std::get<int>(value), 7);
 }
 
 } // namespace dingo
