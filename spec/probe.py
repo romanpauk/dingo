@@ -48,7 +48,7 @@ from spec import semantics  # noqa: E402
 from spec.generator import driver, report  # noqa: E402
 from spec.generator.registrations import (  # noqa: E402
     Registration, apply_semantics, covering, probe_registrations,
-    registrations, specify)
+    registrations, expect_all)
 from spec.generator.survey import survey  # noqa: E402
 from spec.vocabulary import (Category, Container,  # noqa: E402
                              InterfaceSet, Leaf, Position, Selection, Shape,
@@ -169,7 +169,7 @@ def main():
                    key=lambda task: (task[0].container is not Container.RUNTIME,
                                      task[1].kept_by is None))
     driver.set_jobs(options.jobs)
-    specify(units, selected, options.jobs)
+    expect_all(units, selected, options.jobs)
     with concurrent.futures.ThreadPoolExecutor(options.jobs) as executor:
         cells = probe_registrations(
             options.compiler, flags, options.work, tasks, selected,

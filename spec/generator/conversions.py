@@ -51,13 +51,13 @@ class Unit(Registration):
 
     def expectation(self, request, limits=semantics.LIMITATIONS):
         """What the specification expects of a request under limitations,
-        as specify made it of the limitations of the library, when it did."""
+        as expect_all made it of the limitations of the library, when it did."""
         name = self.prefix(request) + request.name
-        if limits == semantics.LIMITATIONS and name in SPECIFIED:
-            return SPECIFIED[name]
-        return self.expected(request, limits)
+        if limits == semantics.LIMITATIONS and name in EXPECTATIONS:
+            return EXPECTATIONS[name]
+        return self.ask_expectation(request, limits)
 
-    def expected(self, request, limits):
+    def ask_expectation(self, request, limits):
         """Whether the specification, under limitations, resolves a request
         at all, in a call, and for the caller, in a resolve; None when it
         says nothing of the request. It does not of a storage that cannot be
@@ -141,23 +141,23 @@ def refused(unit, request, mask):
 
 
 # What the specification expects of each cell of this run under the
-# limitations of the library, by cell: made by specify in processes at once.
-SPECIFIED = {}
+# limitations of the library, by cell: made by expect_all in processes at once.
+EXPECTATIONS = {}
 
 
-def specify_unit(unit):
+def expect_unit(unit):
     """The expectations of the cells of a unit, in a process of its own."""
-    return {name: unit.expected(request, semantics.LIMITATIONS)
+    return {name: unit.ask_expectation(request, semantics.LIMITATIONS)
             for name, request in unit.cells().items()}
 
 
-def specify(units, jobs):
+def expect_all(units, jobs):
     """Makes the expectations of the cells of units, in processes at once:
     a unit at a time, as the specification searches what it stores once for
     all its requests."""
     with multiprocessing.Pool(jobs) as pool:
-        for found in pool.imap_unordered(specify_unit, units):
-            SPECIFIED.update(found)
+        for found in pool.imap_unordered(expect_unit, units):
+            EXPECTATIONS.update(found)
 
 
 def units():
@@ -213,11 +213,11 @@ def apply_semantics(cells, units):
     for unit in units:
         for name, request in unit.cells().items():
             if name in recorded:
-                compare(recorded[name], unit, request)
+                check_cell(recorded[name], unit, request)
     return cells
 
 
-def compare(cell, unit, request):
+def check_cell(cell, unit, request):
     """Marks a cell unexpected where it is not what the specification
     expects of it."""
     expected = unit.expectation(request)
@@ -233,13 +233,13 @@ def compare(cell, unit, request):
         cell.update(outcome=Outcome.UNEXPECTED.value,
                     error=f"{outcome.value}, which the specification "
                     "resolves for the caller")
-    elif cell.get("native"):
-        error = native_error(unit, request, cell["native"], anywhere)
+    elif cell.get("cpp_routes"):
+        error = cpp_mismatch(unit, request, cell["cpp_routes"], anywhere)
         if error is not None:
             cell.update(outcome=Outcome.UNEXPECTED.value, error=error)
 
 
-def native_error(unit, request, mask, anywhere):
+def cpp_mismatch(unit, request, mask, anywhere):
     """What is unexpected of a request C++ builds of what the binding holds,
     or None: that the specification resolves it nowhere although it refuses
     it on no purpose, or resolves it although it refuses it on one."""

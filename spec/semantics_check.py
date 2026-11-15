@@ -541,7 +541,7 @@ def rules_cases(starts, kept=None):
 def compare_pairs_part(arguments):
     """compare of a part of the pairs, in a process of its own."""
     program, universes = arguments
-    return answered(program, None, list(cases_of(paired(universes))))
+    return compare_answers(program, None, list(domain_cases(paired(universes))))
 
 
 def compare_pairs(program, jobs):
@@ -624,7 +624,7 @@ def expected(reached, context, layers, element, quals=None,
     """The answers of the specification for a request, by its search of
     every thing the stored object reaches."""
     if candidates is None:
-        candidates = semantics.candidates_of(reached)
+        candidates = semantics.by_shape(reached)
     things = candidates.get((element, layers), ())
     answers = []
     for category in Category:
@@ -681,7 +681,7 @@ def header():
     return [" ".join(language), " ".join(standard_layers)]
 
 
-def cases_of(domain, mode=None, kept=None):
+def domain_cases(domain, mode=None, kept=None):
     """The requests of a domain, each its name, the answers of the
     specification and the line the program reads: the answers kept, an
     iterator of them, when given, which spares the search."""
@@ -691,7 +691,7 @@ def cases_of(domain, mode=None, kept=None):
         reached = (None if kept is not None else
                    semantics.requested(start, context) if mode == "split"
                    else semantics.reachable(start, context))
-        candidates = (semantics.candidates_of(reached) if reached is not None
+        candidates = (semantics.by_shape(reached) if reached is not None
                       else None)
         for layers, element, goal, *qualified in goals:
             quals = qualified[0] if qualified else None
@@ -702,7 +702,7 @@ def cases_of(domain, mode=None, kept=None):
                    encode(context, start, layers, element, 0, quals))
 
 
-def answered(program, mode, cases):
+def compare_answers(program, mode, cases):
     """The answers of the program to some requests: how many there are, how
     many answers of the specification resolve, and the requests whose
     answers differ."""
@@ -751,7 +751,7 @@ def part_cases(domain, part, kept=None):
                   for limits in LIMITS]
         return rules_cases(starts[part::PARTS], kept)
     make, mode = DOMAINS[domain]
-    return cases_of((item for index, item in enumerate(make())
+    return domain_cases((item for index, item in enumerate(make())
                      if index % PARTS == part), mode, kept)
 
 
@@ -766,7 +766,7 @@ def specification_hash():
     return digest.hexdigest()
 
 
-def specified(cache, domain, part):
+def spec_answers(cache, domain, part):
     """The requests of a part of a domain, with the answers of the
     specification: those kept in the cache, a directory, while the sources of
     the specification are the same, and made again otherwise. The
@@ -797,11 +797,11 @@ def specified(cache, domain, part):
     return cases
 
 
-def compare_part(arguments):
+def compare_domain_part(arguments):
     """compare of a part of a domain, in a process of its own."""
     program, domain, part, cache = arguments
-    return answered(program, DOMAINS[domain][1],
-                    specified(cache, domain, part))
+    return compare_answers(program, DOMAINS[domain][1],
+                    spec_answers(cache, domain, part))
 
 
 def compare(program, domain, jobs, cache):
@@ -810,7 +810,7 @@ def compare(program, domain, jobs, cache):
     count, resolved, differ = 0, 0, []
     with multiprocessing.Pool(jobs) as pool:
         for found in pool.imap_unordered(
-                compare_part, [(program, domain, part, cache)
+                compare_domain_part, [(program, domain, part, cache)
                                for part in range(PARTS)]):
             count += found[0]
             resolved += found[1]

@@ -88,16 +88,16 @@ def units():
                                       interfaces)]
 
 
-def probed_of(unit):
+def probed_requests(unit):
     """The requests a unit probes, in a process of its own."""
     return tuple(unit.probed())
 
 
-def specified(units, jobs):
+def with_probed(units, jobs):
     """The units that probe a request, each with the requests it probes,
     which the specification tells in processes at once."""
     with multiprocessing.Pool(jobs) as pool:
-        found = pool.map(probed_of, units)
+        found = pool.map(probed_requests, units)
     return [replace(unit, only=probed)
             for unit, probed in zip(units, found) if probed]
 

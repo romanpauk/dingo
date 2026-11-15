@@ -1043,7 +1043,7 @@ def requested(start, context):
     return {thing: frozenset(costs) for thing, costs in found.items()}
 
 
-def candidates_of(reached):
+def by_shape(reached):
     """The things reached that may satisfy a request of an element and its
     layers, by (element, layers): those of the layers, then the raw pointers
     to them, which a pointer request may take. satisfactions of them is that
@@ -1060,11 +1060,11 @@ def candidates_of(reached):
 
 
 @functools.lru_cache(maxsize=16)
-def requested_candidates(start, context):
+def requested_by_shape(start, context):
     """What requests reach from the layer sources of a stored object, and
-    its candidates_of."""
+    its by_shape."""
     reached = requested(start, context)
-    return reached, candidates_of(reached)
+    return reached, by_shape(reached)
 
 
 # What a request asks of the things.
@@ -1233,7 +1233,7 @@ def converted(scope, form, leaf, bound, shape, category, limits=frozenset(),
                       limits)
     if not makes_storage(form, context):
         return None
-    reached, candidates = requested_candidates(
+    reached, candidates = requested_by_shape(
         source(scope, form, interfaces), context)
     things = candidates.get((element, layers), ())
     return fewest_of(
@@ -1266,7 +1266,7 @@ def fewest(scope, form, leaf, bound, shape, category, position, entry,
                       limits)
     if not makes_storage(form, context):
         return None
-    reached, candidates = requested_candidates(
+    reached, candidates = requested_by_shape(
         source(scope, form, interfaces), context)
     things = candidates.get((element, layers), ())
     direct = position is Position.DIRECT

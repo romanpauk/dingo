@@ -32,10 +32,10 @@ struct owns_element<std::unique_ptr<T, Deleter>> : std::true_type {};
 template <typename T> struct owns_element<std::optional<T>> : std::true_type {};
 
 // The value an optional is made of.
-template <typename T> struct wrapped {
+template <typename T> struct optional_value_of {
   using type = void;
 };
-template <typename T> struct wrapped<std::optional<T>> {
+template <typename T> struct optional_value_of<std::optional<T>> {
   using type = T;
 };
 
@@ -66,7 +66,7 @@ constexpr unsigned route_bit(route how, std::size_t depth, bool value) {
 // rvalue reference only to what the request owns; or a pointer the source
 // is, or an array decays to.
 template <typename Request, typename Source, bool Owned, std::size_t Depth>
-constexpr unsigned routes_of() {
+constexpr unsigned routes_at() {
   static_assert(Depth < 4, "a route_bit holds four depths");
   using object = std::remove_reference_t<Request>;
   using value = std::remove_cv_t<Request>;
@@ -92,7 +92,7 @@ constexpr unsigned routes_of() {
         found |= route_bit(moves, Depth, shares_nothing);
       }
     } else if constexpr (std::is_convertible_v<Source &, value>) {
-      using made_of = typename wrapped<value>::type;
+      using made_of = typename optional_value_of<value>::type;
       if constexpr (!std::is_void_v<made_of> &&
                     std::is_convertible_v<Source &, made_of>) {
         found |= route_bit(wraps, Depth, shares_nothing);
@@ -107,13 +107,14 @@ constexpr unsigned routes_of() {
 // The ways C++ builds Request of Source or of anything Source dereferences
 // to.
 template <typename Request, typename Source, bool Owned, std::size_t Depth = 0>
-constexpr unsigned routes() {
+constexpr unsigned routes_through() {
   using element = typename dereferenced<Source>::type;
-  constexpr unsigned found = routes_of<Request, Source, Owned, Depth>();
+  constexpr unsigned found = routes_at<Request, Source, Owned, Depth>();
   if constexpr (std::is_void_v<element>) {
     return found;
   } else {
-    return found | routes<Request, element,
+    return found |
+           routes_through<Request, element,
                           Owned && owns_element<Source>::value, Depth + 1>();
   }
 }
@@ -141,10 +142,10 @@ DINGO_ALWAYS_INLINE void publication(const char *prefix, const char *name) {
                           : planning::template planned<false>().found
                               ? "placed"
                               : "unpublished";
-    std::printf("{\"cell\": %s, \"outcome\": \"%s\", \"native\": %u}\n",
-                json_string((std::string(prefix) + name).c_str()).c_str(),
-                outcome,
-                routes<Request, std::remove_reference_t<stored>, owned>());
+    std::printf(
+        "{\"cell\": %s, \"outcome\": \"%s\", \"cpp_routes\": %u}\n",
+        json_string((std::string(prefix) + name).c_str()).c_str(), outcome,
+        routes_through<Request, std::remove_reference_t<stored>, owned>());
   }
 }
 
