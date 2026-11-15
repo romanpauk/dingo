@@ -508,7 +508,9 @@ public:
       value_.emplace(std::forward<Arg>(arg));
       address_ = leaf_of(*value_);
     } else if constexpr (std::is_pointer_v<result_type>) {
-      address_ = leaf_of(unwrap<result_type>(std::forward<Arg>(arg)));
+      result_type pointer = unwrap<result_type>(std::forward<Arg>(arg));
+      null_ = pointer == nullptr;
+      address_ = leaf_of(pointer);
     } else {
       address_ = leaf_of(
           static_cast<const std::remove_reference_t<result_type> &>(arg));
@@ -524,6 +526,8 @@ public:
     }
   }
   int seen() const { return seen_; }
+  // Whether it is a null pointer.
+  bool null() const { return null_; }
   // Whether what it refers to is gone.
   bool dangles() const {
     if constexpr (holds) {
@@ -537,6 +541,7 @@ private:
   std::conditional_t<holds, std::optional<held_type>, std::nullptr_t> value_{};
   const leaf_interface *address_ = nullptr;
   int seen_ = 0;
+  bool null_ = false;
 };
 
 // A class that takes R as the dependency of its constructor. A container
@@ -595,6 +600,13 @@ template <typename R> struct observation {
     return found ? found->value() : 0;
   }
   static bool dangles(const result_type &) { return false; }
+  static bool null(const result_type &result) {
+    if constexpr (std::is_pointer_v<result_type>) {
+      return result == nullptr;
+    } else {
+      return false;
+    }
+  }
   static constexpr bool refers = refers_v<R>;
   static constexpr bool keeps_leaf = true;
   static constexpr bool hands_over = std::is_pointer_v<R>;
@@ -607,6 +619,7 @@ template <typename R> struct received_observation {
   }
   static int value(const received<R> &got) { return got.seen(); }
   static bool dangles(const received<R> &got) { return got.dangles(); }
+  static bool null(const received<R> &got) { return got.null(); }
   static constexpr bool refers = received<R>::refers;
   static constexpr bool keeps_leaf = received<R>::holds;
   static constexpr bool hands_over = received<R>::hands_over;
@@ -622,6 +635,7 @@ template <typename R> struct observation<consumer<R>> {
   }
   static int value(const consumer<R> &c) { return c.got.seen(); }
   static bool dangles(const consumer<R> &c) { return c.got.dangles(); }
+  static bool null(const consumer<R> &c) { return c.got.null(); }
   static constexpr bool refers = received<R>::refers;
   static constexpr bool keeps_leaf = received<R>::holds;
   static constexpr bool hands_over = received<R>::hands_over;
@@ -637,11 +651,37 @@ struct observation<consumer<R> &> : observation<consumer<R>> {
   static constexpr bool kept = true;
 };
 
+// The request a result is of: of a dependency a callable or a class
+// received, the dependency, without its annotation.
+template <typename R> struct requested_of {
+  using type = dingo::unannotated_t<R>;
+};
+template <typename R> struct requested_of<received<R>> : requested_of<R> {};
+template <typename R> struct requested_of<consumer<R>> : requested_of<R> {};
+template <typename R> struct requested_of<consumer<R> &> : requested_of<R> {};
+
+// Whether a result is of a pointer to the other alternative of an
+// alternative type, which the instance of a probe never holds.
+template <typename R>
+inline constexpr bool asks_other_v =
+    std::is_same_v<
+        std::remove_cv_t<std::remove_pointer_t<typename requested_of<R>::type>>,
+        other> &&
+    std::is_pointer_v<typename requested_of<R>::type>;
+
 // What is wrong with two results of one request, or null. A leaf that was not
-// kept may be gone, so it is not compared.
+// kept may be gone, so it is not compared. A pointer to the other alternative
+// of an alternative type that holds the leaf is null.
 template <typename R, typename First, typename Second>
 const char *violation(keeps scope, const First &first, const Second &second) {
   using read = observation<R>;
+  if constexpr (asks_other_v<R>) {
+    (void)scope;
+    return read::null(first) && read::null(second)
+               ? nullptr
+               : "a pointer to the alternative the instance does not hold is "
+                 "not null";
+  }
   const leaf_interface *a = read::leaf(first);
   const leaf_interface *b = read::leaf(second);
   if (!a || !b || read::value(first) != 7 || read::value(second) != 7) {

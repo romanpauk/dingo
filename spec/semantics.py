@@ -1224,6 +1224,17 @@ def fewest(scope, form, leaf, bound, shape, category, position, entry,
     """The fewest copies and moves of the leaf a request of a shape of the
     bound interface resolves with, as (copies, moves), under the
     limitations given, in a container; None when it does not resolve."""
+    if bound.element == "other":
+        # The other alternative of an alternative type is published as the
+        # leaf would be, of a type of its own that can be copied. The
+        # alternative type holds the leaf, so a pointer to the other
+        # alternative is null, as one to an element of an empty layer is, and
+        # anything else of it fails.
+        if shape is not Shape.OBJECT or category not in POINTERS:
+            return None
+        return fewest(scope, form, Leaf.COPYABLE, LEAF, shape, category,
+                      position, entry, limits, selection, interfaces,
+                      container, defined)
     layers, element = SHAPES[shape] + bound.layers, bound.element
     context = Context(LEAVES[leaf], SCOPES[scope], element == "interface",
                       limits)
