@@ -64,7 +64,7 @@ bool read_kind(layer_kind &kind) {
   }
   kind.owns = static_cast<owner>(values[0]);
   bool *flags[] = {&kind.shares_element,  &kind.copyable,
-                   &kind.made_from_value, &kind.holds_element_only,
+                   &kind.wraps_value,     &kind.holds_element_only,
                    &kind.relocatable,     &kind.gives_element,
                    &kind.bounded,         &kind.may_be_empty,
                    &kind.has_empty_value, &kind.adopts,
@@ -76,13 +76,13 @@ bool read_kind(layer_kind &kind) {
     *flags[index] = values[index + 1] != 0;
   }
   kind.converts = values[18];
-  kind.to_unknown_bound = values[19];
+  kind.converts_unknown_bound = values[19];
   return true;
 }
 
 bool same(const layer_kind &a, const layer_kind &b) {
   return a.owns == b.owns && a.shares_element == b.shares_element &&
-         a.copyable == b.copyable && a.made_from_value == b.made_from_value &&
+         a.copyable == b.copyable && a.wraps_value == b.wraps_value &&
          a.holds_element_only == b.holds_element_only &&
          a.relocatable == b.relocatable && a.gives_element == b.gives_element &&
          a.bounded == b.bounded && a.may_be_empty == b.may_be_empty &&
@@ -91,35 +91,35 @@ bool same(const layer_kind &a, const layer_kind &b) {
          a.adopted == b.adopted && a.adopted_array == b.adopted_array &&
          a.rebinds == b.rebinds && a.observes == b.observes &&
          a.qualifies == b.qualifies && a.converts == b.converts &&
-         a.to_unknown_bound == b.to_unknown_bound;
+         a.converts_unknown_bound == b.converts_unknown_bound;
 }
 
 // Whether a plan replays: each of its steps is a step the semantics take
-// from the thing before it, to the thing after it, and the cost of the steps
-// and of how the last thing satisfies the request is that of the answer.
+// from the object before it, to the object after it, and the cost of the steps
+// and of how the last object satisfies the request is that of the answer.
 bool replays(const plan &made, const context &with, const answer &result) {
   if (!made.found) {
     return false;
   }
   cost so_far;
   for (std::size_t index = 0; index < made.count; ++index) {
-    const thing &from = made.things[index];
+    const object &from = made.objects[index];
     // A step the semantics allow, or one a binding takes, as the release of
     // what a pointer it made points to.
     transitions_list taken = steps(from, with);
-    each_binding_step(from, made.things[0], with, taken);
+    each_binding_step(from, made.objects[0], with, taken);
     bool found = false;
     for (std::size_t each = 0; each < taken.count && !found; ++each) {
       found = taken.items[each].kind == made.steps[index] &&
-              taken.items[each].reached == made.things[index + 1];
+              taken.items[each].reached == made.objects[index + 1];
     }
     if (!found) {
       return false;
     }
     so_far =
-        stepped(so_far, made.steps[index], from, made.things[index + 1], with);
+        stepped(so_far, made.steps[index], from, made.objects[index + 1], with);
   }
-  const thing &last = made.things[made.count];
+  const object &last = made.objects[made.count];
   const bool anew = makes_leaf_anew(last, with);
   if (made.how == satisfaction::move) {
     so_far = affected(so_far, anew ? effect::move : effect::none);
@@ -202,7 +202,7 @@ int main(int count, char **arguments) {
       return 0;
     }
     universe layers;
-    thing start;
+    object start;
     request goal;
     if (!read(copyable) || !read(movable) || !read(constructible) ||
         !read(copies_volatile) || !read(makes) || !read(early) ||
@@ -287,7 +287,7 @@ int main(int count, char **arguments) {
         std::printf("%u:%u,%u", static_cast<unsigned>(made.how),
                     made.fewest.copies, made.fewest.moves);
         for (std::size_t index = 0; index < made.count; ++index) {
-          const thing &next = made.things[index + 1];
+          const object &next = made.objects[index + 1];
           std::printf(":%u/%u/%u", static_cast<unsigned>(made.steps[index]),
                       next.depth ? static_cast<unsigned>(next.layers[0]) : 255u,
                       next.depth > 1 ? static_cast<unsigned>(next.layers[1])

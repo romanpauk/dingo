@@ -68,7 +68,7 @@ def empty_layers(form, inner):
     """Whether a stored form has the layer a unit leaves empty: the
     outermost one, or the one it holds; no array is."""
     layers = semantics.FORMS[form]
-    if any(semantics.LAYERS[name].decays_to for name in layers):
+    if any(semantics.LAYERS[name].decay_layer for name in layers):
         return False
     depth = 2 if inner else 1
     return (len(layers) >= depth and

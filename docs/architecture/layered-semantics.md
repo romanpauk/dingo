@@ -46,15 +46,15 @@ product checks only the composition.
 ## The Specification Is Layer 2
 
 [spec/semantics.py](../../spec/semantics.py) is already a model of layer 2. A
-`Thing` is a stack of layers around an element, with a lifetime for each layer,
+`Object` is a stack of layers around an element, with a lifetime for each layer,
 an origin, and what it is of the instance. `transitions` gives the steps from a
-thing, and `reachable` gives every thing a stored object reaches, with the
+object, and `reachable` gives every object a stored object reaches, with the
 copies and the moves of the leaf. A binding takes the steps that need the type
 it stores (`binding_steps`); a request takes the others (`request_steps`).
-`satisfactions` tells which things satisfy a request.
+`satisfactions` tells which objects satisfy a request.
 
 The library computes the same: one implementation of the steps, the reachable
-things and the satisfactions, as constant expressions over these values. Its
+objects and the satisfactions, as constant expressions over these values. Its
 results are compared with the specification for every starting object and every
 request.
 
@@ -123,17 +123,17 @@ other code.
 1. **Semantics as values.** Done.
    [include/dingo/semantics/model.h](../../include/dingo/semantics/model.h)
    ports the steps, the search and the satisfactions of the specification to
-   constant expressions over layers, things and requests. It includes no other
-   part of the library. The port does not search every thing a stored object
-   reaches: up to 2859 of them, 468 on average. It searches the things on the
-   way to the request, which wraps a layer around a thing only as one of the
+   constant expressions over layers, objects and requests. It includes no other
+   part of the library. The port does not search every object a stored object
+   reaches: up to 2859 of them, 468 on average. It searches the objects on the
+   way to the request, which wraps a layer around an object only as one of the
    layers of the request, or as a layer that converts to one of them: 145 states
    at most and 13 on average.
 
 2. **Exhaustive comparison.** Done. `semantics-check` compares the port with the
    specification in two domains. For each request it compares the fewest copies
    and moves of what satisfies each of the 7 categories, for both lifetimes,
-   with the specification's search of every thing.
+   with the specification's search of every object.
 
    - The standard layers: every stored object the specification makes, with and
      without the known limitations, and every request of every shape of every
@@ -209,7 +209,7 @@ other code.
    the standard one of the same semantics.
 
 4. **Plans.** Done. A state of the search keeps the state and the step it
-   reached its thing from first. The answer to a request is the state that
+   reached its object from first. The answer to a request is the state that
    satisfies it at the fewest copies and moves, and how: a reference or a
    pointer refers to it, a pointer request takes it as a pointer value, an
    rvalue reference takes what is made for the request, or a value is moved or
@@ -261,7 +261,7 @@ other code.
    [include/dingo/semantics/model.h](../../include/dingo/semantics/model.h), and
    compared in every domain of `semantics-check`.
 
-   - Qualifiers. A thing has the const and volatile qualifiers of each of its
+   - Qualifiers. An object has the const and volatile qualifiers of each of its
      levels: of the outermost as it is reached, of the others as the type above
      declares them. An element held in place takes those of its holder. What a
      copy or a move makes anew has none. A const or a volatile object is not
@@ -287,7 +287,7 @@ other code.
      is made of the qualifiers it needs at once, so the step after it makes no
      other object. A converted layer is not taken apart, copied or converted
      again. The specification marks each level a conversion may qualify, instead
-     of making a thing for each qualifier, and a request is satisfied of a
+     of making an object for each qualifier, and a request is satisfied of a
      marked level of the qualifiers it asks.
 
    - Arrays of unknown bound. A handle of an array of a known bound whose type
@@ -298,7 +298,7 @@ other code.
      one it owns. A handle converted to a more qualified element is not
      converted again.
 
-   - Ownership of a pointee. A thing tells whether the request owns what its
+   - Ownership of a pointee. An object tells whether the request owns what its
      outer raw pointer points to: a pointer a scope makes does, a copy of it
      does too, and adopting it or releasing its element ends that. Such a
      pointer is handed over or taken over by a handle, never wrapped, and an
@@ -314,8 +314,8 @@ other code.
      empty, the objects kept as long as the container, and the objects made for
      the request. The cheapest plan is the fewest objects by construction, not
      by the order of the search. A step that makes a new object counts one; one
-     kept with the binding counts as kept. A search keeps a thing at a cost
-     unless it has the thing at the same copies and moves of the leaf and at no
+     kept with the binding counts as kept. A search keeps an object at a cost
+     unless it has the object at the same copies and moves of the leaf and at no
      more objects: objects only grow along a derivation, so the search ends, and
      no cheaper plan is dropped.
 

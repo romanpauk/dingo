@@ -944,12 +944,12 @@ constexpr program compile_program(const semantics::plan &plan,
                                  0,
                                  false};
         made.last = finish::copy;
-        made.quals = plan.things[at].quals[1];
+        made.quals = plan.objects[at].quals[1];
         return made;
       }
       if (!binding && kind == step::copy) {
         made.last = finish::copy;
-        made.quals = plan.things[at].quals[0];
+        made.quals = plan.objects[at].quals[0];
         return made;
       }
       if (!binding && kind == step::wrap && !qualified) {
@@ -988,7 +988,7 @@ constexpr bool test_bit(std::uint64_t code, unsigned at) {
 
 constexpr std::uint64_t encode_kind(const semantics::layer_kind &kind) {
   return static_cast<std::uint64_t>(kind.owns) | bit(kind.shares_element, 2) |
-         bit(kind.copyable, 3) | bit(kind.made_from_value, 4) |
+         bit(kind.copyable, 3) | bit(kind.wraps_value, 4) |
          bit(kind.holds_element_only, 5) | bit(kind.relocatable, 6) |
          bit(kind.gives_element, 7) | bit(kind.bounded, 8) |
          bit(kind.may_be_empty, 9) | bit(kind.has_empty_value, 10) |
@@ -1005,7 +1005,7 @@ constexpr semantics::layer_kind decode_kind(std::uint64_t code,
   made.owns = static_cast<semantics::owner>(code & 3u);
   made.shares_element = test_bit(code, 2);
   made.copyable = test_bit(code, 3);
-  made.made_from_value = test_bit(code, 4);
+  made.wraps_value = test_bit(code, 4);
   made.holds_element_only = test_bit(code, 5);
   made.relocatable = test_bit(code, 6);
   made.gives_element = test_bit(code, 7);
@@ -1021,7 +1021,7 @@ constexpr semantics::layer_kind decode_kind(std::uint64_t code,
   made.qualifies = test_bit(code, 17);
   made.adopts_bounded = test_bit(code, 18);
   made.converts = static_cast<std::uint32_t>(code >> 32);
-  made.to_unknown_bound = static_cast<std::uint32_t>(unknown_bound);
+  made.converts_unknown_bound = static_cast<std::uint32_t>(unknown_bound);
   return made;
 }
 
@@ -1029,7 +1029,7 @@ constexpr semantics::layer_kind decode_kind(std::uint64_t code,
 constexpr std::uint64_t encode_context(const semantics::context &with) {
   return bit(with.leaf.copyable, 0) | bit(with.leaf.movable, 1) |
          bit(with.leaf.default_constructible, 2) |
-         bit(with.leaf.made_by_factory, 3) | bit(with.leaf.copies_volatile, 4) |
+         bit(with.leaf.factory_made, 3) | bit(with.leaf.copies_volatile, 4) |
          bit(with.scope.makes, 5) | bit(with.scope.given, 6) |
          bit(with.scope.publishes_early, 7) | bit(with.abstract, 8) |
          (static_cast<std::uint64_t>(with.limits) << 16);
@@ -1045,8 +1045,8 @@ constexpr semantics::context decode_context(std::uint64_t code,
           layers};
 }
 
-// A thing, in two integers.
-constexpr std::uint64_t encode_thing(const semantics::thing &of) {
+// An object, in two integers.
+constexpr std::uint64_t encode_object(const semantics::object &of) {
   std::uint64_t made = 0;
   for (std::size_t index = 0; index < semantics::max_layers; ++index) {
     made |= static_cast<std::uint64_t>(of.layers[index]) << (8 * index);
@@ -1059,7 +1059,7 @@ constexpr std::uint64_t encode_thing(const semantics::thing &of) {
          bit(of.qualified, 61);
 }
 
-constexpr std::uint64_t encode_thing_detail(const semantics::thing &of) {
+constexpr std::uint64_t encode_object_detail(const semantics::object &of) {
   std::uint64_t made = 0;
   for (std::size_t index = 0; index <= semantics::max_layers; ++index) {
     made |= static_cast<std::uint64_t>(of.lifetimes[index]) << (2 * index);
@@ -1070,9 +1070,9 @@ constexpr std::uint64_t encode_thing_detail(const semantics::thing &of) {
          (static_cast<std::uint64_t>(of.full & 15u) << 50);
 }
 
-constexpr semantics::thing decode_thing(std::uint64_t code,
-                                        std::uint64_t detail) {
-  semantics::thing made;
+constexpr semantics::object decode_object(std::uint64_t code,
+                                          std::uint64_t detail) {
+  semantics::object made;
   for (std::size_t index = 0; index < semantics::max_layers; ++index) {
     made.layers[index] = static_cast<semantics::layer>(code >> (8 * index));
   }
@@ -1097,15 +1097,15 @@ constexpr semantics::thing decode_thing(std::uint64_t code,
 }
 
 constexpr shape_code encode_shape(const semantics::context &with,
-                                  const semantics::thing &start) {
+                                  const semantics::object &start) {
   shape_code made;
   made.at[made.count++] = encode_context(with);
-  made.at[made.count++] = encode_thing(start);
-  made.at[made.count++] = encode_thing_detail(start);
+  made.at[made.count++] = encode_object(start);
+  made.at[made.count++] = encode_object_detail(start);
   made.at[made.count++] = with.layers->count;
   for (std::size_t index = 0; index < with.layers->count; ++index) {
     made.at[made.count++] = encode_kind(with.layers->kinds[index]);
-    made.at[made.count++] = with.layers->kinds[index].to_unknown_bound;
+    made.at[made.count++] = with.layers->kinds[index].converts_unknown_bound;
   }
   return made;
 }
@@ -1126,7 +1126,7 @@ template <std::uint64_t... Code> struct binding_shape {
   static constexpr semantics::universe universe = make_universe();
   static constexpr semantics::context context =
       decode_context(code[0], &universe);
-  static constexpr semantics::thing start = decode_thing(code[1], code[2]);
+  static constexpr semantics::object start = decode_object(code[1], code[2]);
   static constexpr semantics::search sources =
       semantics::layer_sources(start, context);
   static constexpr semantics::search closed =
@@ -1174,8 +1174,8 @@ struct binding_plan {
             &universe_type::value};
   }
 
-  static constexpr semantics::thing start() {
-    semantics::thing made;
+  static constexpr semantics::object start() {
+    semantics::object made;
     place_layers<universe_type>(made.layers, typename stored_stack::layers{});
     made.depth = static_cast<std::uint8_t>(
         type_list_size_v<typename stored_stack::layers>);
@@ -1291,11 +1291,11 @@ struct request_plan {
       compile_program(transient, source_count);
 };
 
-// The C++ step of a step of the semantics, from the thing At::from() to the
-// thing At::reached(), to the layers of a universe of identities.
+// The C++ step of a step of the semantics, from the object At::from() to the
+// object At::reached(), to the layers of a universe of identities.
 template <typename Identities, typename At> struct typed_step {
   static constexpr semantics::step kind = At::kind;
-  static constexpr semantics::thing reached = At::reached();
+  static constexpr semantics::object reached = At::reached();
 
   template <semantics::layer Layer>
   using layer_type = type_list_element_t<Layer - 4, Identities>;
@@ -1325,18 +1325,20 @@ template <typename Identities, typename At> struct typed_step {
 // The step at an index of a plan.
 template <const semantics::plan &Plan, std::size_t Index> struct plan_step {
   static constexpr semantics::step kind = Plan.steps[Index];
-  static constexpr semantics::thing from() { return Plan.things[Index]; }
-  static constexpr semantics::thing reached() { return Plan.things[Index + 1]; }
+  static constexpr semantics::object from() { return Plan.objects[Index]; }
+  static constexpr semantics::object reached() {
+    return Plan.objects[Index + 1];
+  }
 };
 
 // The step into a state of a search.
 template <const semantics::search &Search, std::size_t State>
 struct search_step {
   static constexpr semantics::step kind = Search.states[State].via;
-  static constexpr semantics::thing from() {
+  static constexpr semantics::object from() {
     return Search.states[Search.states[State].parent].reached;
   }
-  static constexpr semantics::thing reached() {
+  static constexpr semantics::object reached() {
     return Search.states[State].reached;
   }
 };
@@ -1392,7 +1394,7 @@ struct program_run {
   template <std::size_t Index, typename T, bool Owned, typename Store>
   static auto apply(carrier<T, Owned> from, Store &store) {
     constexpr instruction Each = Program.at[Index];
-    constexpr semantics::thing reached = Plan.things[Each.last + 1];
+    constexpr semantics::object reached = Plan.objects[Each.last + 1];
     auto &&kept =
         store_of<reached.lifetimes[0] == semantics::lifetime::stable>(store);
     if constexpr (Each.kind == semantics::step::wrap) {
@@ -1428,7 +1430,7 @@ struct program_run {
     static auto make() {
       if constexpr (Each.qualified) {
         return tag<
-            requalified_t<wrapped, Plan.things[Each.last + 1].quals[1]>>{};
+            requalified_t<wrapped, Plan.objects[Each.last + 1].quals[1]>>{};
       } else {
         return tag<wrapped>{};
       }
@@ -1557,7 +1559,7 @@ template <typename T, typename Leaf, typename Interface> struct layer_types {
       return true;
     } else if constexpr (type_traits<layer_type>::enabled &&
                          !is_array_like_type_v<layer_type>) {
-      return wrapper_kind_v<layer_identity_t<layer_type>>.made_from_value;
+      return wrapper_kind_v<layer_identity_t<layer_type>>.wraps_value;
     } else {
       return false;
     }

@@ -124,7 +124,7 @@ def _composed_shapes():
 
 class Shape(Dimension):
     """What a request asks of a bound interface I."""
-    OBJECT = "I"
+    PLAIN = "I"
     SHARED_PTR = "std::shared_ptr<I>"
     UNIQUE_PTR = "std::unique_ptr<I>"
     OPTIONAL = "std::optional<I>"
@@ -215,7 +215,7 @@ class Category(Dimension):
     CONST_POINTER = "const X *"
 
     @property
-    def by_value(self):
+    def returns_value(self):
         """Whether a request in the category holds X by value; a resolved
         rvalue reference is returned by value."""
         return self in (Category.VALUE, Category.CONST,

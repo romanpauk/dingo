@@ -107,16 +107,16 @@ class Request:
     @property
     def invalid(self):
         """Why the request is not valid C++, or None."""
-        by_value = self.category.by_value
+        returns_value = self.category.returns_value
         if self.interface.abstract:
-            if self.shape is Shape.OBJECT and by_value:
+            if self.shape is Shape.PLAIN and returns_value:
                 return "an abstract type cannot be held by value"
             if self.shape.holds_optional:
                 return "an optional cannot hold an abstract type"
             if self.shape.is_array:
                 return "an array cannot hold an abstract type"
         if self.interface.array:
-            if self.shape is Shape.OBJECT and by_value:
+            if self.shape is Shape.PLAIN and returns_value:
                 return "an array cannot be returned by value"
             if self.shape.holds_optional:
                 return "an optional cannot hold an array"

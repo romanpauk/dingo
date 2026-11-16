@@ -125,18 +125,18 @@ template <typename Wrapper> constexpr semantics::layer_kind wrapper_kind() {
   } else if constexpr (is_semantics_v<of, ::dingo::semantics::sole_owner>) {
     kind.owns = semantics::owner::sole;
     kind.shares_element = true;
-    kind.made_from_value = true;
+    kind.wraps_value = true;
   } else if constexpr (is_semantics_v<of, ::dingo::semantics::shared_owner>) {
     kind.owns = semantics::owner::shared;
     kind.shares_element = true;
-    kind.made_from_value = true;
+    kind.wraps_value = true;
   } else {
     static_assert(is_semantics_v<of, ::dingo::semantics::optional_value>,
                   "a wrapper derives from one of the semantics of "
                   "type_traits; an alternative type is a layer by the "
                   "alternative that holds the element");
     kind.owns = semantics::owner::sole;
-    kind.made_from_value = true;
+    kind.wraps_value = true;
     kind.has_empty_value = true;
   }
   kind.may_be_empty = true;
@@ -187,7 +187,7 @@ template <typename Wrapper> constexpr semantics::layer_kind wrapper_kind() {
 template <typename Alternative, typename... Alternatives>
 constexpr semantics::layer_kind alternative_kind(type_list<Alternatives...>) {
   semantics::layer_kind kind;
-  kind.made_from_value = true;
+  kind.wraps_value = true;
   kind.holds_element_only = true;
   kind.may_be_empty = true;
   kind.copyable = ((std::is_same_v<Alternatives, Alternative> ||
@@ -445,7 +445,7 @@ template <typename... Tags> struct layer_universe<type_list<Tags...>> {
           layer_index<typename unknown_bound_layer<Identity>::type>(
               identities{});
       if constexpr (to != semantics::no_layer) {
-        kind.to_unknown_bound |= std::uint32_t{1} << to;
+        kind.converts_unknown_bound |= std::uint32_t{1} << to;
       }
     }
     made.add(kind);

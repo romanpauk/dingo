@@ -56,7 +56,7 @@ def cases():
             continue
         form = StoredForm(form)
         if (context.scope.makes and
-                any(semantics.LAYERS[layer].decays_to
+                any(semantics.LAYERS[layer].decay_layer
                     for layer in semantics.FORMS[form][:1])):
             continue
         yield (Scope(scope), form, [key for key in semantics.LEAVES

@@ -205,7 +205,7 @@ class Registration:
         """Whether a probe requests the leaf a plain registration stores,
         which no conversion copies or moves: what resolving it copies and
         moves is what passing it on in its position does."""
-        return (probe.request.shape is Shape.OBJECT and
+        return (probe.request.shape is Shape.PLAIN and
                 probe.request.interface.bound == semantics.LEAF)
 
 

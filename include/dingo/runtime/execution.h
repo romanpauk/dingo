@@ -715,8 +715,8 @@ inline constexpr const void *language_identities[4] = {
 struct runtime_layer {
   semantics::layer_kind kind;
   const void *identity;
-  const void *converts_to;
-  const void *unknown_bound_to;
+  const void *sharing_identity;
+  const void *unknown_bound_identity;
 };
 
 // The identity tag of a layer, or none.
@@ -731,7 +731,7 @@ template <typename Identity> constexpr const void *layer_identity_v() {
 template <typename Identity> constexpr runtime_layer runtime_layer_v() {
   semantics::layer_kind kind = wrapper_kind_v<Identity>;
   kind.converts = 0;
-  kind.to_unknown_bound = 0;
+  kind.converts_unknown_bound = 0;
   using unknown_bound_target =
       std::conditional_t<converts_unknown_bound<Identity>(),
                          typename unknown_bound_layer<Identity>::type, void>;
@@ -899,8 +899,9 @@ inline runtime_plans plan_runtime(const binding_layout &binding,
     }
     for (std::size_t index = 0; index < binding.layer_count; ++index) {
       identities[4 + index] = binding.layers[index].identity;
-      targets[4 + index] = binding.layers[index].converts_to;
-      unknown_bound_targets[4 + index] = binding.layers[index].unknown_bound_to;
+      targets[4 + index] = binding.layers[index].sharing_identity;
+      unknown_bound_targets[4 + index] =
+          binding.layers[index].unknown_bound_identity;
     }
     for (std::size_t index = 0; index < request.layer_count; ++index) {
       const runtime_layer &layer = request.layers[index];
@@ -913,22 +914,22 @@ inline runtime_plans plan_runtime(const binding_layout &binding,
           return made;
         }
         identities[at] = layer.identity;
-        targets[at] = layer.converts_to;
-        unknown_bound_targets[at] = layer.unknown_bound_to;
+        targets[at] = layer.sharing_identity;
+        unknown_bound_targets[at] = layer.unknown_bound_identity;
         merged.add(layer.kind);
       }
       mapped[4 + index] = static_cast<semantics::layer>(at);
     }
     for (std::size_t index = 4; index < merged.count; ++index) {
       merged.kinds[index].converts = 0;
-      merged.kinds[index].to_unknown_bound = 0;
+      merged.kinds[index].converts_unknown_bound = 0;
       for (std::size_t to = 4; to < merged.count; ++to) {
         if (targets[index] != nullptr && identities[to] == targets[index]) {
           merged.kinds[index].converts |= std::uint32_t{1} << to;
         }
         if (unknown_bound_targets[index] != nullptr &&
             identities[to] == unknown_bound_targets[index]) {
-          merged.kinds[index].to_unknown_bound |= std::uint32_t{1} << to;
+          merged.kinds[index].converts_unknown_bound |= std::uint32_t{1} << to;
         }
       }
     }
@@ -946,7 +947,7 @@ inline runtime_plans plan_runtime(const binding_layout &binding,
   // code of a user, so it is never planning already on the thread.
   thread_local semantics::search found;
   found.clear();
-  // The closed states are distinct already, so they are not hashed: a thing
+  // The closed states are distinct already, so they are not hashed: an object
   // the request reaches again is only a state more.
   for (std::size_t index = 0; index < binding.state_count; ++index) {
     found.states[index] = binding.sources[index];
@@ -1001,8 +1002,8 @@ inline runtime_plan make_runtime_plan(const semantics::plan &plan,
   const type_table *table = binding.tables[made.route];
   for (std::size_t index = first; index < compiled.count; ++index) {
     const instruction &each = compiled.at[index];
-    const semantics::thing &from = plan.things[each.first];
-    const semantics::thing &to = plan.things[each.last + 1];
+    const semantics::object &from = plan.objects[each.first];
+    const semantics::object &to = plan.objects[each.last + 1];
     const std::uint16_t state = plan.states[each.last + 1];
     // The table of what an instruction makes a layer of: of a source of the
     // binding, or of a type the request spells, by its depth in the request.
@@ -1057,7 +1058,7 @@ inline runtime_plan make_runtime_plan(const semantics::plan &plan,
   made.found = true;
   made.reached = table;
   made.how = plan.how;
-  const semantics::thing &reached = plan.things[plan.count];
+  const semantics::object &reached = plan.objects[plan.count];
   made.stable_address =
       (plan.how == semantics::satisfaction::point
            ? reached.lifetimes[1]
@@ -1076,7 +1077,8 @@ struct state_classes {
   std::size_t edge_count = 0;
 };
 
-constexpr bool same_type(const semantics::thing &a, const semantics::thing &b) {
+constexpr bool same_type(const semantics::object &a,
+                         const semantics::object &b) {
   if (a.depth != b.depth || a.of != b.of || a.from != b.from) {
     return false;
   }
@@ -1093,7 +1095,7 @@ constexpr bool same_type(const semantics::thing &a, const semantics::thing &b) {
   return true;
 }
 
-constexpr std::uint32_t type_hash(const semantics::thing &of) {
+constexpr std::uint32_t type_hash(const semantics::object &of) {
   std::uint32_t hash = 2166136261u;
   hash = (hash ^ of.depth) * 16777619u;
   hash = (hash ^ static_cast<unsigned>(of.of)) * 16777619u;
@@ -1181,7 +1183,7 @@ constexpr bool step_makes(semantics::step kind) {
          kind == semantics::step::observe;
 }
 
-// The kinds of the steps a request takes from a thing, as a mask.
+// The kinds of the steps a request takes from an object, as a mask.
 struct step_kinds_sink {
   std::uint32_t kinds = 0;
   // It takes a step of every outer layer.
@@ -1191,12 +1193,12 @@ struct step_kinds_sink {
   constexpr bool takes_quals(std::size_t, std::uint8_t, std::size_t) const {
     return true;
   }
-  constexpr void operator()(semantics::step kind, const semantics::thing &) {
+  constexpr void operator()(semantics::step kind, const semantics::object &) {
     kinds |= std::uint32_t{1} << static_cast<unsigned>(kind);
   }
 };
 
-constexpr std::uint32_t request_kinds(const semantics::thing &of,
+constexpr std::uint32_t request_kinds(const semantics::object &of,
                                       const semantics::context &with) {
   step_kinds_sink sink;
   semantics::each_request_step(of, with, sink);
@@ -1410,7 +1412,7 @@ struct closed_answer_table {
       if (!possible(at)) {
         continue;
       }
-      const semantics::thing &of = closure.states[at].reached;
+      const semantics::object &of = closure.states[at].reached;
       semantics::request goal;
       goal.depth = of.depth;
       goal.of = of.of;
@@ -1459,7 +1461,7 @@ struct closed_answer_table {
                         result.how == semantics::satisfaction::copy) &&
                        finished.copies;
     made.quals = finished.quals;
-    const semantics::thing &reached = closure.states[result.state].reached;
+    const semantics::object &reached = closure.states[result.state].reached;
     made.stable_address =
         (result.how == semantics::satisfaction::point
              ? reached.lifetimes[1]
@@ -1494,7 +1496,7 @@ struct closed_answer_table {
   // Whether a step a request takes of what the binding does not know may
   // start from a state: a wrap of what it owns, a handle made of a raw
   // pointer, or a handle it owns converted.
-  static constexpr bool starts_steps(const semantics::thing &of) {
+  static constexpr bool starts_steps(const semantics::object &of) {
     const semantics::context with = Semantic::context();
     const bool wraps =
         (of.from == semantics::origin::made ||
@@ -1628,7 +1630,7 @@ struct binding_sources {
           "a step into a state makes the type of its class");
       if constexpr (step_makes(into.via)) {
         using made = typename table_t<State>::maker;
-        constexpr const semantics::thing &reached =
+        constexpr const semantics::object &reached =
             Sources.states[State].reached;
         static_assert(into.via == semantics::step::wrap
                           ? made::full.wrap_runs[run_length(State)].owned !=
@@ -1748,7 +1750,7 @@ struct binding_sources {
       constexpr instruction each = made.at[made.count - 1];
       constexpr std::uint16_t before = plan.states[each.first];
       constexpr std::uint16_t first = plan.states[each.first + 1];
-      constexpr semantics::thing reached = plan.things[each.last + 1];
+      constexpr semantics::object reached = plan.objects[each.last + 1];
       auto &&kept =
           store_of<reached.lifetimes[0] == semantics::lifetime::stable>(store);
       auto reached_before = reach_state<before, false, Store>(from, store);
@@ -1986,7 +1988,7 @@ template <typename Request, typename Element> struct request_tables {
           wrapper_kind_v<layer_identity_t<type>>;
       using maker = typename table_t<K>::maker;
       using of = typename types::template nested<K + 1>::type;
-      return (!kind.made_from_value ||
+      return (!kind.wraps_value ||
               !layer_types<of, Element, Element>::template movable<of>() ||
               has(maker::full.wrap_runs[1])) &&
              (!kind.observes || has(maker::full.observing));

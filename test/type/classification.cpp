@@ -79,7 +79,7 @@ using universe_of =
 constexpr bool same_kind(const semantics::layer_kind &a,
                          const semantics::layer_kind &b) {
   return a.owns == b.owns && a.shares_element == b.shares_element &&
-         a.copyable == b.copyable && a.made_from_value == b.made_from_value &&
+         a.copyable == b.copyable && a.wraps_value == b.wraps_value &&
          a.holds_element_only == b.holds_element_only &&
          a.relocatable == b.relocatable && a.may_be_empty == b.may_be_empty &&
          a.has_empty_value == b.has_empty_value;

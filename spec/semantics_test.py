@@ -94,10 +94,10 @@ class LayerSourcesTest(unittest.TestCase):
                     interface.element == "interface", semantics.LIMITATIONS)
                 start = semantics.source(unit.scope, unit.form,
                                          unit.interfaces_declared)
-                forms = {(thing.layers, thing.origin.owned)
-                         for thing, _ in semantics.layer_sources(start,
+                forms = {(object.layers, object.origin.owned)
+                         for object, _ in semantics.layer_sources(start,
                                                                  context)
-                         if thing.element == interface.element}
+                         if object.element == interface.element}
                 layers = len(semantics.FORMS[unit.form])
                 self.assertLessEqual(len(forms), 3 * (layers + 1), unit.base)
 

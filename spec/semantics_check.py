@@ -89,8 +89,8 @@ def classified_layer(layers, index):
                 if names else "-")
     holds_bounded = (index + 1 < len(layers) and
                      semantics.LAYERS[layers[index + 1]].bounded)
-    return (f"{printed((layers[index],))} > {printed(layer.converts_to)} > "
-            f"{printed(layer.unknown_bound_to if holds_bounded else ())}")
+    return (f"{printed((layers[index],))} > {printed(layer.converts)} > "
+            f"{printed(layer.converts_unknown_bound if holds_bounded else ())}")
 
 
 def classified_stack(layers, element):
@@ -122,7 +122,7 @@ def classification(compiler, flags, work):
                         " ".join(str(int(value)) for value in (
                             traits.copyable, traits.movable,
                             traits.default_constructible,
-                            traits.made_by_factory))))
+                            traits.factory_made))))
         for form in StoredForm:
             stored = spell_stored(form).replace("L", spelled)
             layers = semantics.FORMS[form]
@@ -190,7 +190,7 @@ namespace {
 void print_kind(const dingo::semantics::layer_kind &kind) {
   std::printf("%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d",
               static_cast<int>(kind.owns), kind.shares_element, kind.copyable,
-              kind.made_from_value, kind.holds_element_only, kind.relocatable,
+              kind.wraps_value, kind.holds_element_only, kind.relocatable,
               kind.gives_element, kind.bounded, kind.may_be_empty,
               kind.has_empty_value, kind.adopts, kind.adopts_bounded,
               kind.decays, kind.adopted,
@@ -259,7 +259,7 @@ template <typename Leaf> void print_leaf() {
   constexpr dingo::semantics::leaf_traits traits =
       dingo::detail::leaf_traits_v<Leaf>();
   std::printf("%d %d %d %d\\n", traits.copyable, traits.movable,
-              traits.default_constructible, traits.made_by_factory);
+              traits.default_constructible, traits.factory_made);
 }
 } // namespace
 
@@ -275,20 +275,20 @@ def properties(layer, universe, of_object=False):
     array of unknown bound, each as a mask. A layer of an object converts to
     none of the latter: the library classifies the layer of an array of a
     known bound as a layer of its own."""
-    converts = sum(1 << universe.index(name) for name in layer.converts_to
+    converts = sum(1 << universe.index(name) for name in layer.converts
                    if name in universe)
     unknown_bound = 0 if of_object else sum(
-        1 << universe.index(name) for name in layer.unknown_bound_to
+        1 << universe.index(name) for name in layer.converts_unknown_bound
         if name in universe)
     return [OWNERS[layer.owner], int(layer.shares_element),
-            int(layer.copyable), int(layer.made_from_value),
+            int(layer.copyable), int(layer.wraps_value),
             int(layer.holds_element_only), int(layer.relocatable),
             int(layer.gives_element), int(layer.bounded),
             int(layer.may_be_empty), int(layer.has_empty_value),
             int(layer.adopts), int(layer.adopts_bounded),
-            int(bool(layer.decays_to)),
-            int(layer.adopted_with is not None),
-            int(bool(layer.adopted_with)), int(layer.rebinds),
+            int(bool(layer.decay_layer)),
+            int(layer.adopted_layers is not None),
+            int(bool(layer.adopted_layers)), int(layer.rebinds),
             int(layer.observes), int(layer.qualifies), converts, unknown_bound]
 
 
@@ -355,12 +355,12 @@ def made_layers():
         name = f"made{index}"
         layer = semantics.Layer(
             name, owner, shares_element=shares, copyable=copyable,
-            made_from_value=made, holds_element_only=holds,
+            wraps_value=made, holds_element_only=holds,
             relocatable=relocatable, may_be_empty=empty[0],
             has_empty_value=empty[1], adopts=adopts[0],
             adopts_bounded=adopts[1], rebinds=rebinds,
             observes=observes, qualifies=qualifies,
-            unknown_bound_to=(name,) if unknown_bound else ())
+            converts_unknown_bound=(name,) if unknown_bound else ())
         if semantics.possible(layer):
             yield layer
 
@@ -379,7 +379,7 @@ def makes(layers, context):
     if outer.bounded and not context.leaf.default_constructible:
         return False
     return not (context.scope.publishes_early and
-                context.leaf.made_by_factory and outer.shares_element)
+                context.leaf.factory_made and outer.shares_element)
 
 
 def swept():
@@ -393,7 +393,7 @@ def swept():
         universe = LANGUAGE + (name,)
         stored = ((), (name,), (name, "array"), (name, "array2"),
                   (name, name))
-        if layer.unknown_bound_to:
+        if layer.converts_unknown_bound:
             # A layer that converts to one of an array of unknown bound is its
             # twin that does not but where it holds an array of a known bound,
             # which only a stored object holds.
@@ -420,7 +420,7 @@ def swept():
                     for layers in stored:
                         if not makes(layers, context):
                             continue
-                        start = semantics.Thing(
+                        start = semantics.Object(
                             layers, "leaf",
                             (lifetime(scope_traits),) * (len(layers) + 1),
                             (semantics.Origin.MADE if scope_traits.makes
@@ -428,7 +428,7 @@ def swept():
                             instance=True,
                             owns_pointee=scope_traits.makes and
                             bool(layers) and
-                            semantics.LAYERS[layers[0]].adopted_with
+                            semantics.LAYERS[layers[0]].adopted_layers
                             is not None)
                         yield (f"{list(layers)}/{scope.value}/{leaf.value}/"
                                f"{'interface' if abstract else 'leaf'}/{name}",
@@ -445,7 +445,7 @@ def pairs():
         for count in range(len(ways) + 1):
             for converting in itertools.combinations(ways, count):
                 yield tuple(dataclasses.replace(
-                    layer, converts_to=tuple(
+                    layer, converts=tuple(
                         target.name for source, target in converting
                         if source is layer))
                     for layer in (first, second))
@@ -482,7 +482,7 @@ def paired(universes):
                     for layers, goals in stored:
                         if not makes(layers, context):
                             continue
-                        start = semantics.Thing(
+                        start = semantics.Object(
                             layers, "leaf",
                             (lifetime(scope_traits),) * (len(layers) + 1),
                             (semantics.Origin.MADE if scope_traits.makes
@@ -490,11 +490,11 @@ def paired(universes):
                             instance=True,
                             owns_pointee=scope_traits.makes and
                             bool(layers) and
-                            semantics.LAYERS[layers[0]].adopted_with
+                            semantics.LAYERS[layers[0]].adopted_layers
                             is not None)
                         yield (f"{list(layers)}/{scope.value}/{leaf.value}/"
                                f"{'interface' if abstract else 'leaf'}/"
-                               f"{[(layer.name, layer.converts_to) for layer in (first, second)]}",
+                               f"{[(layer.name, layer.converts) for layer in (first, second)]}",
                                context, start, goals)
 
 
@@ -628,10 +628,10 @@ def consistent(domain):
 def expected(reached, context, layers, element, quals=None,
              candidates=None):
     """The answers of the specification for a request, by its search of
-    every thing the stored object reaches."""
+    every object the stored object reaches."""
     if candidates is None:
         candidates = semantics.by_shape(reached)
-    things = candidates.get((element, layers), ())
+    objects = candidates.get((element, layers), ())
     answers = []
     for category in Category:
         for lifetime_of in LIFETIMES:
@@ -639,12 +639,12 @@ def expected(reached, context, layers, element, quals=None,
             # of the leaf, whether it may be absent, the objects kept and
             # made.
             costs = [semantics.affected(cost, effect)[:2] +
-                     (int(thing.absent),) +
+                     (int(object.absent),) +
                      semantics.affected(cost, effect)[2:]
-                     for thing, effect in semantics.satisfactions(
-                         things, category, lifetime_of, layers, context,
+                     for object, effect in semantics.satisfactions(
+                         objects, category, lifetime_of, layers, context,
                          quals)
-                     for cost in reached[thing]]
+                     for cost in reached[object]]
             answers.append("%d,%d,%d,%d,%d" % min(costs) if costs else "-")
     return " ".join(answers)
 
