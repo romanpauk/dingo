@@ -277,7 +277,8 @@ template <typename Context>
 // The key type a registration is looked up by: the type of the key it is
 // registered with, or the selector of its lookup key.
 template <typename BackendKey, typename Selector>
-constexpr type_descriptor registration_key_type(const lookup_key<Selector> &) {
+constexpr const type_descriptor &
+registration_key_type(const lookup_key<Selector> &) {
   if constexpr (!std::is_same_v<std::decay_t<BackendKey>, none_t>) {
     return detail::described_type_v<std::decay_t<BackendKey>>;
   } else if constexpr (std::is_same_v<Selector, key_type<none_t>>) {

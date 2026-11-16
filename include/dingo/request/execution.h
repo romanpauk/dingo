@@ -579,13 +579,146 @@ template <std::uint8_t Quals> struct qualify_step {
   }
 };
 
+// What a step a request takes makes of a carrier of T, as the code compiles
+// without making it: the carrier it reaches, and whether C++ makes it. The
+// semantics allow a step of a layer of any type; a type may not make it,
+// and a binding makes only what its types do.
+template <typename Step, typename Leaf, typename Interface, typename T,
+          bool Owned, typename = void>
+struct step_result {
+  static constexpr bool possible = false;
+  using type = void;
+};
+
+template <typename T, typename = void>
+inline constexpr bool has_value_type_v = false;
+template <typename T>
+inline constexpr bool
+    has_value_type_v<T, std::void_t<typename type_traits<T>::value_type>> =
+        true;
+
+template <typename Leaf, typename Interface, typename T, bool Owned>
+struct step_result<
+    step<semantics::step::copy>, Leaf, Interface, T, Owned,
+    std::enable_if_t<std::is_object_v<T> && !std::is_array_v<T>>> {
+  using made_type = std::remove_cv_t<T>;
+  static constexpr bool possible = std::is_constructible_v<made_type, T &>;
+  using type = carrier<made_type, true>;
+};
+
+template <typename Leaf, typename Interface, typename T, bool Owned>
+struct step_result<step<semantics::step::decay>, Leaf, Interface, T, Owned,
+                   std::enable_if_t<std::is_array_v<T>>> {
+  static constexpr bool possible = true;
+  using type = carrier<std::add_pointer_t<std::remove_extent_t<T>>, Owned>;
+};
+
+template <typename Leaf, typename Interface, typename T, bool Owned>
+struct step_result<step<semantics::step::hand_over>, Leaf, Interface, T,
+                   Owned> {
+  static constexpr bool possible = true;
+  using type = carrier<T *, Owned>;
+};
+
+template <typename Leaf, typename Interface, typename T, bool Owned>
+struct step_result<step<semantics::step::convert>, Leaf, Interface, T, Owned,
+                   std::void_t<typename type_traits<T>::template share_t<
+                       typename type_traits<T>::value_type>>> {
+  using made_type = typename type_traits<T>::template share_t<
+      typename type_traits<T>::value_type>;
+  static constexpr bool possible =
+      Owned && std::is_constructible_v<made_type, T &&>;
+  using type = carrier<made_type, true>;
+};
+
+template <typename Leaf, typename Interface, typename T, bool Owned>
+struct step_result<
+    step<semantics::step::unknown_bound>, Leaf, Interface, T, Owned,
+    std::void_t<
+        typename type_traits<std::remove_cv_t<T>>::template unknown_bound_t<
+            typename type_traits<std::remove_cv_t<T>>::value_type>>> {
+  using made_type =
+      typename type_traits<std::remove_cv_t<T>>::template unknown_bound_t<
+          typename type_traits<std::remove_cv_t<T>>::value_type>;
+  static constexpr bool possible =
+      Owned ? std::is_constructible_v<made_type, T &&>
+            : std::is_constructible_v<made_type, T &>;
+  using type = carrier<made_type, true>;
+};
+
+template <typename Target, std::uint8_t Quals, typename Leaf,
+          typename Interface, typename T, bool Owned>
+struct step_result<
+    observe_step<Target, Quals>, Leaf, Interface, T, Owned,
+    std::enable_if_t<
+        std::is_pointer_v<std::remove_cv_t<T>> &&
+        std::is_object_v<std::remove_pointer_t<std::remove_cv_t<T>>>>> {
+  using pointee = held_of_t<std::remove_pointer_t<std::remove_cv_t<T>>, Quals>;
+  template <typename U, typename = void> struct made {
+    static constexpr bool possible = false;
+    using type = void;
+  };
+  template <typename U>
+  struct made<U,
+              std::void_t<typename type_traits<Target>::template rebind_t<U>>> {
+    using made_type = typename type_traits<Target>::template rebind_t<U>;
+    static constexpr bool possible = std::is_constructible_v<made_type, T &>;
+    using type = carrier<made_type, true>;
+  };
+  static constexpr bool possible = made<pointee>::possible;
+  using type = typename made<pointee>::type;
+};
+
+template <typename Target, bool Array, std::uint8_t Quals, typename Leaf,
+          typename Interface, typename T, bool Owned>
+struct step_result<adopt_step<Target, Array, Quals>, Leaf, Interface, T, Owned,
+                   std::enable_if_t<std::is_pointer_v<T>>> {
+  using pointee = held_of_t<std::remove_pointer_t<T>, Quals>;
+  static constexpr bool whole =
+      !Array && is_array_like_type_v<Target> && std::is_array_v<pointee>;
+  using pointer = std::conditional_t<whole, std::remove_extent_t<pointee> *, T>;
+  template <typename U, typename = void> struct made {
+    static constexpr bool possible = false;
+    using type = void;
+  };
+  template <typename U>
+  struct made<U, std::void_t<adopting_handle_t<Target, U, Array>>> {
+    using made_type = adopting_handle_t<Target, U, Array>;
+    static constexpr bool possible =
+        std::is_constructible_v<made_type, pointer>;
+    using type = carrier<made_type, true>;
+  };
+  static constexpr bool possible = made<pointee>::possible;
+  using type = typename made<pointee>::type;
+};
+
+template <std::uint8_t Quals, typename Leaf, typename Interface, typename T,
+          bool Owned>
+struct step_result<qualify_step<Quals>, Leaf, Interface, T, Owned,
+                   std::enable_if_t<std::is_pointer_v<std::remove_cv_t<T>> ||
+                                    has_value_type_v<std::remove_cv_t<T>>>> {
+  template <typename U, typename = void> struct made {
+    static constexpr bool possible = false;
+    using type = void;
+  };
+  template <typename U> struct made<U, std::void_t<requalified_t<U, Quals>>> {
+    using made_type = requalified_t<U, Quals>;
+    static constexpr bool possible =
+        Owned ? std::is_constructible_v<made_type, U &&>
+              : std::is_constructible_v<made_type, U &>;
+    using type = carrier<made_type, true>;
+  };
+  static constexpr bool possible = made<T>::possible;
+  using type = typename made<T>::type;
+};
+
 // The store of what lives as long as the container, or as long as the
 // request: a store that keeps them apart gives each with at<Stable>().
-template <bool Stable, typename Store> auto &store_of(Store &store) {
+template <bool Stable, typename Store> decltype(auto) store_of(Store &store) {
   if constexpr (has_store_at<Store>::value) {
     return store.template at<Stable>();
   } else {
-    return store;
+    return (store);
   }
 }
 
@@ -831,6 +964,166 @@ constexpr program compile_program(const semantics::plan &plan,
   return made;
 }
 
+// The shape of a binding as the semantics know it, of no C++ type: its
+// context, the universe of its layers and its stored object, encoded as
+// integers. The semantics of a binding are a template of its shape, so that
+// a constant expression of them is evaluated once for every shape, not for
+// every type of it.
+struct shape_code {
+  std::uint64_t at[4 + 2 * semantics::max_kinds] = {};
+  std::size_t count = 0;
+};
+
+constexpr std::uint64_t bit(bool value, unsigned at) {
+  return static_cast<std::uint64_t>(value) << at;
+}
+constexpr bool bit_at(std::uint64_t code, unsigned at) {
+  return ((code >> at) & 1u) != 0;
+}
+
+constexpr std::uint64_t kind_code(const semantics::layer_kind &kind) {
+  return static_cast<std::uint64_t>(kind.owns) | bit(kind.shares_element, 2) |
+         bit(kind.copyable, 3) | bit(kind.made_from_value, 4) |
+         bit(kind.holds_element_only, 5) | bit(kind.relocatable, 6) |
+         bit(kind.gives_element, 7) | bit(kind.bounded, 8) |
+         bit(kind.may_be_empty, 9) | bit(kind.has_empty_value, 10) |
+         bit(kind.adopts, 11) | bit(kind.decays, 12) | bit(kind.adopted, 13) |
+         bit(kind.adopted_array, 14) | bit(kind.rebinds, 15) |
+         bit(kind.observes, 16) | bit(kind.qualifies, 17) |
+         (static_cast<std::uint64_t>(kind.converts) << 32);
+}
+
+constexpr semantics::layer_kind kind_of(std::uint64_t code,
+                                        std::uint64_t unknown_bound) {
+  semantics::layer_kind made;
+  made.owns = static_cast<semantics::owner>(code & 3u);
+  made.shares_element = bit_at(code, 2);
+  made.copyable = bit_at(code, 3);
+  made.made_from_value = bit_at(code, 4);
+  made.holds_element_only = bit_at(code, 5);
+  made.relocatable = bit_at(code, 6);
+  made.gives_element = bit_at(code, 7);
+  made.bounded = bit_at(code, 8);
+  made.may_be_empty = bit_at(code, 9);
+  made.has_empty_value = bit_at(code, 10);
+  made.adopts = bit_at(code, 11);
+  made.decays = bit_at(code, 12);
+  made.adopted = bit_at(code, 13);
+  made.adopted_array = bit_at(code, 14);
+  made.rebinds = bit_at(code, 15);
+  made.observes = bit_at(code, 16);
+  made.qualifies = bit_at(code, 17);
+  made.converts = static_cast<std::uint32_t>(code >> 32);
+  made.to_unknown_bound = static_cast<std::uint32_t>(unknown_bound);
+  return made;
+}
+
+// The context of a binding, of no universe.
+constexpr std::uint64_t context_code(const semantics::context &with) {
+  return bit(with.leaf.copyable, 0) | bit(with.leaf.movable, 1) |
+         bit(with.leaf.default_constructible, 2) |
+         bit(with.leaf.made_by_factory, 3) | bit(with.leaf.copies_volatile, 4) |
+         bit(with.scope.makes, 5) | bit(with.scope.given, 6) |
+         bit(with.scope.publishes_early, 7) | bit(with.abstract, 8) |
+         (static_cast<std::uint64_t>(with.limits) << 16);
+}
+
+constexpr semantics::context context_of(std::uint64_t code,
+                                        const semantics::universe *layers) {
+  return {{bit_at(code, 0), bit_at(code, 1), bit_at(code, 2), bit_at(code, 3),
+           bit_at(code, 4)},
+          {bit_at(code, 5), bit_at(code, 6), bit_at(code, 7)},
+          bit_at(code, 8),
+          static_cast<std::uint8_t>(code >> 16),
+          layers};
+}
+
+// A thing, in two integers.
+constexpr std::uint64_t thing_code(const semantics::thing &of) {
+  std::uint64_t made = 0;
+  for (std::size_t index = 0; index < semantics::max_layers; ++index) {
+    made |= static_cast<std::uint64_t>(of.layers[index]) << (8 * index);
+  }
+  return made | (static_cast<std::uint64_t>(of.depth) << 48) |
+         (static_cast<std::uint64_t>(of.of) << 52) |
+         (static_cast<std::uint64_t>(of.from) << 54) | bit(of.instance, 56) |
+         bit(of.unconstructed, 57) | bit(of.absent, 58) |
+         bit(of.owns_pointee, 59) | bit(of.made_layer, 60) |
+         bit(of.qualified, 61);
+}
+
+constexpr std::uint64_t thing_detail_code(const semantics::thing &of) {
+  std::uint64_t made = 0;
+  for (std::size_t index = 0; index <= semantics::max_layers; ++index) {
+    made |= static_cast<std::uint64_t>(of.lifetimes[index]) << (2 * index);
+    made |= static_cast<std::uint64_t>(of.quals[index] & 15u)
+            << (14 + 4 * index);
+  }
+  return made | (static_cast<std::uint64_t>(of.contained) << 42) |
+         (static_cast<std::uint64_t>(of.full & 15u) << 50);
+}
+
+constexpr semantics::thing thing_of(std::uint64_t code, std::uint64_t detail) {
+  semantics::thing made;
+  for (std::size_t index = 0; index < semantics::max_layers; ++index) {
+    made.layers[index] = static_cast<semantics::layer>(code >> (8 * index));
+  }
+  made.depth = static_cast<std::uint8_t>((code >> 48) & 15u);
+  made.of = static_cast<semantics::element>((code >> 52) & 3u);
+  made.from = static_cast<semantics::origin>((code >> 54) & 3u);
+  made.instance = bit_at(code, 56);
+  made.unconstructed = bit_at(code, 57);
+  made.absent = bit_at(code, 58);
+  made.owns_pointee = bit_at(code, 59);
+  made.made_layer = bit_at(code, 60);
+  made.qualified = bit_at(code, 61);
+  for (std::size_t index = 0; index <= semantics::max_layers; ++index) {
+    made.lifetimes[index] =
+        static_cast<semantics::lifetime>((detail >> (2 * index)) & 3u);
+    made.quals[index] =
+        static_cast<std::uint8_t>((detail >> (14 + 4 * index)) & 15u);
+  }
+  made.contained = static_cast<semantics::layer>((detail >> 42) & 255u);
+  made.full = static_cast<std::uint8_t>((detail >> 50) & 15u);
+  return made;
+}
+
+constexpr shape_code shape_code_of(const semantics::context &with,
+                                   const semantics::thing &start) {
+  shape_code made;
+  made.at[made.count++] = context_code(with);
+  made.at[made.count++] = thing_code(start);
+  made.at[made.count++] = thing_detail_code(start);
+  made.at[made.count++] = with.layers->count;
+  for (std::size_t index = 0; index < with.layers->count; ++index) {
+    made.at[made.count++] = kind_code(with.layers->kinds[index]);
+    made.at[made.count++] = with.layers->kinds[index].to_unknown_bound;
+  }
+  return made;
+}
+
+// The semantics of a binding of a shape: what it publishes, and the layer
+// sources of it closed under every step a request takes but a wrap, in the
+// layers the binding knows, which a request reaches from.
+template <std::uint64_t... Code> struct binding_shape {
+  static constexpr std::uint64_t code[] = {Code...};
+  static constexpr semantics::universe make_universe() {
+    semantics::universe made;
+    made.count = static_cast<std::size_t>(code[3]);
+    for (std::size_t index = 0; index < made.count; ++index) {
+      made.kinds[index] = kind_of(code[4 + 2 * index], code[5 + 2 * index]);
+    }
+    return made;
+  }
+  static constexpr semantics::universe universe = make_universe();
+  static constexpr semantics::context context = context_of(code[0], &universe);
+  static constexpr semantics::thing start = thing_of(code[1], code[2]);
+  static constexpr semantics::search sources =
+      semantics::layer_sources(start, context);
+  static constexpr semantics::search closed =
+      semantics::closed_layer_sources(sources, context);
+};
+
 // What a binding of a stored object publishes, planned as the code compiles,
 // of no request: the layer sources of its stored object, in a universe of the
 // layers it takes steps into, those it stores and those of the handles a
@@ -879,14 +1172,27 @@ struct binding_plan {
     return made;
   }
 
-  // What the binding publishes for a request of the leaf, and for one of its
-  // abstract interface. Each is made once, and is whole: a stored object of
-  // more layer sources than a search of them holds does not compile.
+  // The shape of the binding, for a request of the leaf, and for one of its
+  // abstract interface.
+  template <bool Abstract, std::size_t... I>
+  static auto shape_of(std::index_sequence<I...>)
+      -> binding_shape<shape_code_of(context(Abstract), start()).at[I]...>;
   template <bool Abstract>
-  static constexpr semantics::search sources =
-      semantics::layer_sources(start(), context(Abstract));
+  using shape = decltype(shape_of<Abstract>(
+      std::make_index_sequence<
+          shape_code_of(context(Abstract), start()).count>{}));
+
+  // What the binding publishes for a request of the leaf, and for one of its
+  // abstract interface, of its shape. Each is whole: a stored object of more
+  // layer sources than a search of them holds does not compile.
+  template <bool Abstract>
+  static constexpr const semantics::search &sources = shape<Abstract>::sources;
+  // The layer sources closed under every step a request takes but a wrap,
+  // in the layers the binding knows, which a request reaches from.
+  template <bool Abstract>
+  static constexpr const semantics::search &closed = shape<Abstract>::closed;
   template <bool Abstract> static constexpr bool whole() {
-    static_assert(!sources<Abstract>.overflow,
+    static_assert(!sources<Abstract>.overflow && !closed<Abstract>.overflow,
                   "the stored object publishes more layer sources than "
                   "semantics::max_states");
     return true;
@@ -946,7 +1252,8 @@ struct request_plan {
       static_assert(binding::template whole<abstract>());
       constexpr semantics::context with = context();
       const semantics::search found = semantics::reach_from(
-          binding::template sources<abstract>, with, goal());
+          binding::template closed<abstract>,
+          binding::context(abstract).layers->count, with, goal());
       return semantics::plan_of(
           found,
           semantics::satisfy(found, goal(), category::value, needed, with));
@@ -1055,11 +1362,21 @@ struct program_run {
     }
   }
 
+  // What the program reaches, before the request takes its value.
+  template <std::size_t Index = 0, typename Carrier, typename Store>
+  static auto reach(Carrier from, Store &store) {
+    if constexpr (Index == Program.count) {
+      return from;
+    } else {
+      return reach<Index + 1>(apply<Index>(from, store), store);
+    }
+  }
+
   template <std::size_t Index, typename T, bool Owned, typename Store>
   static auto apply(carrier<T, Owned> from, Store &store) {
     constexpr instruction Each = Program.at[Index];
     constexpr semantics::thing reached = Plan.things[Each.last + 1];
-    auto &kept =
+    auto &&kept =
         store_of<reached.lifetimes[0] == semantics::lifetime::stable>(store);
     if constexpr (Each.kind == semantics::step::wrap) {
       using made_type = typename wrapped_as<T, Index>::type;

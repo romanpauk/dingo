@@ -415,6 +415,12 @@ struct transitions_list {
     items[count++] = {kind, reached};
   }
 
+  // It takes a step of every kind, of every outer layer and qualifier.
+  constexpr bool takes(step, layer, std::size_t) const { return true; }
+  constexpr bool takes_quals(std::size_t, std::uint8_t, std::size_t) const {
+    return true;
+  }
+
   constexpr void operator()(step kind, const thing &reached) {
     add(kind, reached);
   }
@@ -495,7 +501,8 @@ constexpr void qualify_levels(const thing &of, const context &with, thing &made,
   }
   const std::uint8_t got = of.quals[level];
   for (std::uint8_t wanted = 0; wanted < 4; ++wanted) {
-    if ((got & ~wanted) || (wanted != got && !may_gain)) {
+    if ((got & ~wanted) || (wanted != got && !may_gain) ||
+        !out.takes_quals(level, wanted, of.depth)) {
       continue;
     }
     const bool below =
@@ -515,7 +522,7 @@ constexpr void qualify_levels(const thing &of, const context &with, thing &made,
 template <typename Sink>
 constexpr void qualify_steps(const thing &of, const context &with, Sink &out) {
   if (!of.depth || !with.kind(of.layers[0]).qualifies || of.qualified ||
-      of.owns_pointee) {
+      of.owns_pointee || !out.takes(step::qualify, of.layers[0], of.depth)) {
     return;
   }
   const bool moved = owned(of.from) && can_move(of, with);
@@ -554,7 +561,8 @@ constexpr void unknown_bound_steps(const thing &of, const context &with,
     return;
   }
   for (std::size_t index = 0; index < with.layers->count; ++index) {
-    if (targets & (std::uint32_t{1} << index)) {
+    if ((targets & (std::uint32_t{1} << index)) &&
+        out.takes(step::unknown_bound, static_cast<layer>(index), of.depth)) {
       thing made = of;
       made.layers[0] = static_cast<layer>(index);
       made.layers[1] = array_layer;
@@ -571,6 +579,15 @@ constexpr void unknown_bound_steps(const thing &of, const context &with,
 // outer layer makes one not converted to a more qualified element.
 template <typename Sink> struct unqualified_sink {
   Sink &out;
+  // It takes the steps what it passes them to takes.
+  constexpr bool takes(step kind, layer outer, std::size_t depth) const {
+    return out.takes(kind, outer, depth);
+  }
+  constexpr bool takes_quals(std::size_t level, std::uint8_t quals,
+                             std::size_t depth) const {
+    return out.takes_quals(level, quals, depth);
+  }
+
   constexpr void operator()(step kind, const thing &reached) {
     if (reached.qualified && kind != step::qualify) {
       thing made = reached;
@@ -611,7 +628,8 @@ constexpr void each_transition_of(const thing &of, const context &with,
       // that owns nothing either: a new object, which points to what the
       // pointer does.
       for (std::size_t index = 0; index < with.layers->count; ++index) {
-        if (with.layers->kinds[index].observes) {
+        if (with.layers->kinds[index].observes &&
+            out.takes(step::observe, static_cast<layer>(index), of.depth)) {
           const layer to = static_cast<layer>(index);
           thing observer = restacked(of, &to, 1, 1, &request);
           observer.from = origin::made;
@@ -621,12 +639,15 @@ constexpr void each_transition_of(const thing &of, const context &with,
       }
     }
     if (kind.decays) {
-      thing decayed = restacked(of, &array_pointer_layer, 1, 1, &request);
-      decayed.quals[1] = held_quals(of, kind);
-      decayed.owns_pointee = of.from == origin::made;
-      decayed.made_layer = false;
-      out(step::decay, decayed);
-      if (of.from == origin::made) {
+      if (out.takes(step::decay, array_pointer_layer, of.depth)) {
+        thing decayed = restacked(of, &array_pointer_layer, 1, 1, &request);
+        decayed.quals[1] = held_quals(of, kind);
+        decayed.owns_pointee = of.from == origin::made;
+        decayed.made_layer = false;
+        out(step::decay, decayed);
+      }
+      if (of.from == origin::made &&
+          out.takes(step::hand_over, pointer_layer, of.depth + 1u)) {
         thing handed = wrapped(of, pointer_layer, request);
         handed.owns_pointee = true;
         handed.made_layer = false;
@@ -634,7 +655,9 @@ constexpr void each_transition_of(const thing &of, const context &with,
       }
     } else if (kind.adopted && of.owns_pointee) {
       for (std::size_t index = 0; index < with.layers->count; ++index) {
-        if (!with.layers->kinds[index].adopts) {
+        if (!with.layers->kinds[index].adopts ||
+            !out.takes(step::adopt, static_cast<layer>(index),
+                       of.depth + (kind.adopted_array ? 1u : 0u))) {
           continue;
         }
         const layer front[] = {static_cast<layer>(index), array_layer};
@@ -646,7 +669,8 @@ constexpr void each_transition_of(const thing &of, const context &with,
         adopted.made_layer = true;
         out(step::adopt, adopted);
       }
-    } else if (kind.gives_element && !of.full && !of.qualified) {
+    } else if (kind.gives_element && !of.full && !of.qualified &&
+               out.takes(step::element, outer, of.depth)) {
       // A layer the derivation wrapped a value in is not taken apart: its
       // element is what it was made of, as it was; nor is one it converted
       // to a more qualified element: its element is that of what it was
@@ -673,14 +697,16 @@ constexpr void each_transition_of(const thing &of, const context &with,
     // nor one it converted to a more qualified element.
     if (owned(of.from) && !of.quals[0] && !of.made_layer && !of.qualified) {
       for (std::size_t index = 0; index < with.layers->count; ++index) {
-        if (kind.converts & (std::uint32_t{1} << index)) {
+        if ((kind.converts & (std::uint32_t{1} << index)) &&
+            out.takes(step::convert, static_cast<layer>(index), of.depth)) {
           const layer to = static_cast<layer>(index);
           out(step::convert, restacked(of, &to, 1, 1, &request));
         }
       }
     }
   }
-  if (of.of == element::leaf && with.abstract) {
+  if (of.of == element::leaf && with.abstract &&
+      out.takes(step::upcast, no_layer, of.depth)) {
     const layer_kind *outer = of.depth ? &with.kind(of.layers[0]) : nullptr;
     thing upcast = of;
     upcast.of = element::interface;
@@ -728,7 +754,9 @@ constexpr void each_transition_of(const thing &of, const context &with,
   }
   // A conversion to a more qualified element is not copied: what it converts
   // is.
-  if (can_copy(of, with) && !of.qualified) {
+  if (!of.qualified &&
+      out.takes(step::copy, of.depth ? of.layers[0] : no_layer, of.depth) &&
+      can_copy(of, with)) {
     out(step::copy, copied(of, with));
   }
   qualify_steps(of, with, out);
@@ -750,7 +778,8 @@ constexpr void each_transition_of(const thing &of, const context &with,
     for (std::size_t index = 0; index < with.layers->count; ++index) {
       const layer_kind &kind = with.layers->kinds[index];
       if (!kind.made_from_value || (kind.holds_element_only && of.depth) ||
-          (slices(of) && !kind.shares_element)) {
+          (slices(of) && !kind.shares_element) ||
+          !out.takes(step::wrap, static_cast<layer>(index), of.depth + 1u)) {
         continue;
       }
       thing made = wrapped(inner, static_cast<layer>(index), outer);
@@ -778,6 +807,15 @@ template <typename Sink> struct unblocked {
   const thing &from;
   const context &with;
   Sink &out;
+
+  // It takes the steps what it passes them to takes.
+  constexpr bool takes(step kind, layer outer, std::size_t depth) const {
+    return out.takes(kind, outer, depth);
+  }
+  constexpr bool takes_quals(std::size_t level, std::uint8_t quals,
+                             std::size_t depth) const {
+    return out.takes_quals(level, quals, depth);
+  }
 
   constexpr void operator()(step kind, const thing &reached) {
     if (kind == step::element_pointer && from.from == origin::copied &&
@@ -928,6 +966,34 @@ constexpr bool may_become(const thing &of, const request &goal,
           (std::uint32_t{1} << goal.layers[offset])) != 0;
 }
 
+// Whether a request may still reach its goal from a thing by its steps. Each
+// adds an outer layer or converts the outermost, and the conversion to an
+// array of unknown bound converts the one below it too, so a thing is of no
+// use when it has more layers than the request, but for a raw pointer to
+// what the request is, which a request of a pointer takes, or an array that
+// decays to one; or when a layer below its outermost two is not the
+// request's at the same depth.
+constexpr bool leads_to(const thing &of, const request &goal,
+                        const context &with) {
+  if (of.depth > goal.depth + 1 ||
+      (of.depth == goal.depth + 1 && !with.kind(of.layers[0]).adopted &&
+       !with.kind(of.layers[0]).decays)) {
+    return false;
+  }
+  // The layer of the request below a layer of the thing at an index past the
+  // outermost: the thing has at most one layer more.
+  const std::size_t offset = goal.depth + 1 - of.depth;
+  for (std::size_t index = 1; index < of.depth; ++index) {
+    const layer wanted = goal.layers[offset + index - 1];
+    if (of.layers[index] != wanted &&
+        !(index == 1 && with.kind(of.layers[1]).bounded &&
+          wanted == array_layer)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 inline constexpr std::uint16_t no_state = 0xFFFF;
 
 // A thing a derivation reaches, with the copies and the moves of the leaf of
@@ -985,8 +1051,22 @@ struct search {
   // Whether there were more states than the search holds: its answer is not
   // to be trusted.
   bool overflow = false;
+  // How many of the first states are the closed layer sources of a binding
+  // the search reached from, if any.
+  std::size_t closed = 0;
   // The states by their hash, open addressed: an index, or none.
   std::uint16_t slots[search_slots] = {};
+
+  // Holds no state again. A state past the count is never read, so only the
+  // count and the slots are reset.
+  constexpr void clear() {
+    count = 0;
+    overflow = false;
+    closed = 0;
+    for (std::uint16_t &slot : slots) {
+      slot = 0;
+    }
+  }
 
   // Adds a state, unless one of its thing and of no greater cost is found
   // already.
@@ -1050,6 +1130,23 @@ struct reached_sink {
   const request &goal;
   const context &with;
 
+  // A wrap or an observer is taken only as the layer of the request at its
+  // depth, which it is asked before the step is made.
+  constexpr bool takes(step kind, layer outer, std::size_t depth) const {
+    if (kind != step::wrap && kind != step::observe) {
+      return true;
+    }
+    return depth <= goal.depth && outer == goal.layers[goal.depth - depth];
+  }
+
+  // A conversion to a more qualified element is taken only to the
+  // qualifiers of the request at each level.
+  constexpr bool takes_quals(std::size_t level, std::uint8_t quals,
+                             std::size_t depth) const {
+    return depth <= goal.depth &&
+           quals == goal.quals[goal.depth - depth + level];
+  }
+
   constexpr void operator()(step kind, const thing &reached) {
     if ((kind == step::wrap || kind == step::observe) &&
         !(may_become(reached, goal, with) &&
@@ -1070,6 +1167,12 @@ template <typename Search> struct any_sink {
   const state &from;
   std::uint16_t index;
   const context &with;
+
+  // It takes a step of every kind, of every outer layer and qualifier.
+  constexpr bool takes(step, layer, std::size_t) const { return true; }
+  constexpr bool takes_quals(std::size_t, std::uint8_t, std::size_t) const {
+    return true;
+  }
 
   constexpr void operator()(step kind, const thing &reached) {
     found.add({reached, stepped(from.made, kind, from.reached, reached, with),
@@ -1246,15 +1349,16 @@ struct affected_cost {
 };
 
 template <typename Finish>
-constexpr answer satisfy_by(const search &found, const request &goal,
-                            category taken, lifetime needed,
-                            const context &with, Finish finish) {
+constexpr answer satisfy_by(const state *states, std::size_t count,
+                            bool overflow, const request &goal, category taken,
+                            lifetime needed, const context &with,
+                            Finish finish) {
   answer result;
-  result.overflow = found.overflow;
+  result.overflow = overflow;
   if (refers(taken)) {
     const std::uint8_t referable = referable_quals(goal, taken);
-    for (std::size_t index = 0; index < found.count; ++index) {
-      const state &each = found.states[index];
+    for (std::size_t index = 0; index < count; ++index) {
+      const state &each = states[index];
       const thing &of = each.reached;
       // A reference adds qualifiers only to what it refers to; a pointer
       // converts as C++ converts one.
@@ -1274,8 +1378,8 @@ constexpr answer satisfy_by(const search &found, const request &goal,
       return result;
     }
     const bool referred = result.found;
-    for (std::size_t index = 0; index < found.count; ++index) {
-      const state &each = found.states[index];
+    for (std::size_t index = 0; index < count; ++index) {
+      const state &each = states[index];
       if (each.reached.of == goal.of &&
           points_to(each.reached, goal, needed, with, referable, referred)) {
         consider(result, finish(each.made, effect::none, each.reached), index,
@@ -1284,8 +1388,8 @@ constexpr answer satisfy_by(const search &found, const request &goal,
     }
     return result;
   }
-  for (std::size_t index = 0; index < found.count; ++index) {
-    const state &each = found.states[index];
+  for (std::size_t index = 0; index < count; ++index) {
+    const state &each = states[index];
     const thing &of = each.reached;
     if (of.of != goal.of || !has_shape(of, goal)) {
       continue;
@@ -1315,9 +1419,27 @@ constexpr answer satisfy_by(const search &found, const request &goal,
   return result;
 }
 
+// What satisfies a request of what a search reached: of the closed layer
+// sources it reached from alone, when they satisfy it, as no plan through a
+// wrap is cheaper than one of them; of every state otherwise.
+template <typename Finish>
+constexpr answer satisfy_closed_by(const search &found, const request &goal,
+                                   category taken, lifetime needed,
+                                   const context &with, Finish finish) {
+  if (found.closed != 0) {
+    const answer closed = satisfy_by(found.states, found.closed, found.overflow,
+                                     goal, taken, needed, with, finish);
+    if (closed.found) {
+      return closed;
+    }
+  }
+  return satisfy_by(found.states, found.count, found.overflow, goal, taken,
+                    needed, with, finish);
+}
+
 constexpr answer satisfy(const search &found, const request &goal,
                          category taken, lifetime needed, const context &with) {
-  return satisfy_by(found, goal, taken, needed, with, affected_cost{});
+  return satisfy_closed_by(found, goal, taken, needed, with, affected_cost{});
 }
 
 constexpr answer fewest(const thing &start, const context &with,
@@ -1427,6 +1549,15 @@ template <typename Sink> struct binding_steps_sink {
   const context &with;
   Sink &out;
 
+  // It takes the steps what it passes them to takes.
+  constexpr bool takes(step kind, layer outer, std::size_t depth) const {
+    return out.takes(kind, outer, depth);
+  }
+  constexpr bool takes_quals(std::size_t level, std::uint8_t quals,
+                             std::size_t depth) const {
+    return out.takes_quals(level, quals, depth);
+  }
+
   constexpr void operator()(step kind, const thing &reached) {
     if (binding_kind(kind)) {
       out(kind, reached);
@@ -1445,6 +1576,14 @@ template <typename Sink> struct binding_steps_sink {
 
   struct released_sink {
     Sink &out;
+    // It passes on the element of a handle alone.
+    constexpr bool takes(step kind, layer, std::size_t) const {
+      return kind == step::element;
+    }
+    constexpr bool takes_quals(std::size_t, std::uint8_t, std::size_t) const {
+      return false;
+    }
+
     constexpr void operator()(step kind, const thing &reached) {
       if (kind == step::element) {
         out(step::release, reached);
@@ -1467,6 +1606,16 @@ constexpr void each_binding_step(const thing &of, const thing &stored,
 template <typename Sink> struct request_steps_sink {
   const thing &from;
   Sink &out;
+  // It takes no step a binding takes, and of the others those what it passes
+  // them to takes.
+  constexpr bool takes(step kind, layer outer, std::size_t depth) const {
+    return !binding_kind(kind) && out.takes(kind, outer, depth);
+  }
+  constexpr bool takes_quals(std::size_t level, std::uint8_t quals,
+                             std::size_t depth) const {
+    return out.takes_quals(level, quals, depth);
+  }
+
   constexpr void operator()(step kind, const thing &reached) {
     if (!binding_kind(kind) && !(kind == step::wrap && slices(from))) {
       out(kind, reached);
@@ -1507,32 +1656,162 @@ constexpr search layer_sources(const thing &start, const context &with) {
   return found;
 }
 
+// What the closure of layer sources passes a step to: every step a request
+// takes but a wrap, to the search.
+template <typename Search> struct unwrapped_sink {
+  Search &found;
+  const state &from;
+  std::uint16_t index;
+  const context &with;
+
+  constexpr bool takes(step kind, layer, std::size_t) const {
+    return kind != step::wrap;
+  }
+  constexpr bool takes_quals(std::size_t, std::uint8_t, std::size_t) const {
+    return true;
+  }
+
+  constexpr void operator()(step kind, const thing &reached) {
+    if (kind != step::wrap) {
+      found.add({reached, stepped(from.made, kind, from.reached, reached, with),
+                 index, kind});
+    }
+  }
+};
+
+// What a binding publishes, closed: its layer sources, and what a request
+// reaches from them by every step but a wrap, of the layers the binding
+// knows. None of it depends on the request, so the binding reaches it once,
+// as the code compiles; a request then reaches from it only by a wrap, or by
+// a step into a layer the binding does not know.
+template <typename Search>
+constexpr void close_layer_sources(Search &found, const context &with) {
+  for (std::size_t next = 0; next < found.count; ++next) {
+    const state from = found.states[next];
+    unwrapped_sink<Search> sink{found, from, static_cast<std::uint16_t>(next),
+                                with};
+    each_request_step(from.reached, with, sink);
+  }
+}
+
+constexpr search closed_layer_sources(const search &sources,
+                                      const context &with) {
+  search found = sources;
+  close_layer_sources(found, with);
+  return found;
+}
+
+// What a sink of the steps a request takes from a closed state passes on: a
+// wrap, or a step into a layer the binding does not know, which those of the
+// request may be; any other step reaches what the closure holds.
+struct unclosed_sink {
+  reached_sink &out;
+  // The layers the binding knows: those of a lower index.
+  std::size_t known;
+
+  constexpr bool takes(step kind, layer outer, std::size_t depth) const {
+    switch (kind) {
+    case step::wrap:
+      return out.takes(kind, outer, depth);
+    case step::observe:
+    case step::adopt:
+    case step::convert:
+    case step::unknown_bound:
+      return outer >= known && out.takes(kind, outer, depth);
+    default:
+      return false;
+    }
+  }
+  constexpr bool takes_quals(std::size_t, std::uint8_t, std::size_t) const {
+    return false;
+  }
+
+  constexpr void operator()(step kind, const thing &reached) {
+    out(kind, reached);
+  }
+};
+
+// What a sink of the steps a request takes from what it made of the closure
+// passes on: another wrap, a conversion of the outer layer it made to a more
+// qualified element or of an array of a known bound to one of unknown bound,
+// or a step into a layer the binding does not know. These the request makes
+// itself, of the types it spells.
+struct made_sink {
+  reached_sink &out;
+  std::size_t known;
+
+  constexpr bool takes(step kind, layer outer, std::size_t depth) const {
+    switch (kind) {
+    case step::wrap:
+    case step::qualify:
+    case step::unknown_bound:
+      return out.takes(kind, outer, depth);
+    case step::observe:
+    case step::adopt:
+    case step::convert:
+      return outer >= known && out.takes(kind, outer, depth);
+    default:
+      return false;
+    }
+  }
+  constexpr bool takes_quals(std::size_t level, std::uint8_t quals,
+                             std::size_t depth) const {
+    return out.takes_quals(level, quals, depth);
+  }
+
+  constexpr void operator()(step kind, const thing &reached) {
+    out(kind, reached);
+  }
+};
+
 // What a request reaches from layer sources, by the steps it takes. The
 // sources may be of a universe the request's extends: a binding's, of the
 // layers it stores and of the handles a pointer may be taken over by, which
 // the layers of the request follow.
 // The steps a request takes, from every state a search holds and from every
 // state they reach, added to it.
-constexpr void reach_into(search &found, const context &with,
-                          const request &goal) {
+// The states below closed are closed layer sources, of a binding that knows
+// the layers below known: a request steps from them only by a wrap or into a
+// layer the binding does not know.
+constexpr void reach_into(search &found, std::size_t closed, std::size_t known,
+                          const context &with, const request &goal) {
+  const bool foreign = with.layers->count > known;
   for (std::size_t next = 0; next < found.count; ++next) {
-    const state from = found.states[next];
+    const state &at = found.states[next];
+    // A closed state steps only by a wrap, which makes a layer more, of a
+    // thing of fewer than the request, or into a layer the binding does not
+    // know.
+    if ((next < closed && !foreign && at.reached.depth >= goal.depth) ||
+        !leads_to(at.reached, goal, with)) {
+      continue;
+    }
+    const state from = at;
     reached_sink sink{found, from, static_cast<std::uint16_t>(next), goal,
                       with};
-    each_request_step(from.reached, with, sink);
+    if (next >= closed) {
+      made_sink made{sink, known};
+      each_request_step(from.reached, with, made);
+    } else {
+      unclosed_sink unclosed{sink, known};
+      each_request_step(from.reached, with, unclosed);
+    }
   }
 }
 
-constexpr search reach_from(const search &sources, const context &with,
-                            const request &goal) {
-  search found = sources;
-  reach_into(found, with, goal);
+// What a request reaches from the closed layer sources of a binding that
+// knows the layers below known.
+constexpr search reach_from(const search &closed, std::size_t known,
+                            const context &with, const request &goal) {
+  search found = closed;
+  found.closed = closed.count;
+  reach_into(found, closed.count, known, with, goal);
   return found;
 }
 
 constexpr search reach_split(const thing &start, const context &with,
                              const request &goal) {
-  return reach_from(layer_sources(start, with), with, goal);
+  return reach_from(closed_layer_sources(layer_sources(start, with), with),
+                    with.layers->count, with, goal);
 }
 // Where a request stands: itself, the dependency of an unregistered class,
 // or the dependency of a class a shared or a cyclical scope keeps.
@@ -1694,9 +1973,9 @@ constexpr answer resolve(const thing &start, const context &with,
       (through == entry::resolve || through == entry::construct) &&
       taken == category::rvalue_reference;
   const search found = searched ? *searched : reach_split(start, with, goal);
-  answer result =
-      satisfy_by(found, goal, taken, required_lifetime(rules.at, through), with,
-                 handed_cost{returned, rules.runtime, &with});
+  answer result = satisfy_closed_by(
+      found, goal, taken, required_lifetime(rules.at, through), with,
+      handed_cost{returned, rules.runtime, &with});
   if (result.found || found.overflow) {
     return result;
   }

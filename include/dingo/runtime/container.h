@@ -474,9 +474,9 @@ protected:
   // What a registration commits to a lookup: its value, and the
   // descriptors that name the registration if the lookup rejects it.
   struct lookup_registration {
-    type_descriptor interface_type;
-    type_descriptor storage;
-    type_descriptor key_type;
+    const type_descriptor *interface_type;
+    const type_descriptor *storage;
+    const type_descriptor *key_type;
   };
 
   // Inserts a binding into a lookup. It is of the lookup and its key, not of
@@ -498,8 +498,8 @@ protected:
         check_lookup_commit(replace_lookup<LookupEntry>(transaction, state,
                                                         handle, key_arg,
                                                         std::move(value)),
-                            registration.interface_type, registration.storage,
-                            registration.key_type);
+                            *registration.interface_type, *registration.storage,
+                            *registration.key_type);
       }
     } else {
       auto handle = index.emplace(key_arg, std::move(value));
@@ -876,9 +876,8 @@ protected:
 
 private:
   template <typename... TypeArgs, typename Arg, typename... KeyValueArgs>
-  // Registration is cold; keep its type-specific setup out of callers.
   // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
-  DINGO_NOINLINE auto prepare_binding(Arg &&arg, KeyValueArgs &&...key_values) {
+  auto prepare_binding(Arg &&arg, KeyValueArgs &&...key_values) {
     using registration =
         std::conditional_t<!is_none_v<std::decay_t<Arg>>,
                            type_registration<TypeArgs..., factory<Arg>>,
@@ -915,13 +914,12 @@ private:
     }
   }
 
-  // The transaction of a registration, with its scratch memory, made and
-  // destroyed out of line, once for a container, not for every registration.
+  // The transaction of a registration, with its scratch memory.
   class registration_frame {
   public:
-    DINGO_NOINLINE explicit registration_frame(runtime_type &runtime)
+    explicit registration_frame(runtime_type &runtime)
         : transaction_(runtime, scratch_) {}
-    DINGO_NOINLINE ~registration_frame() = default;
+    ~registration_frame() = default;
     registration_frame(const registration_frame &) = delete;
     registration_frame &operator=(const registration_frame &) = delete;
 
@@ -987,7 +985,7 @@ private:
     std::size_t binding;
     const lookup_operations *lookup;
     const void *key;
-    type_descriptor key_type;
+    const type_descriptor *key_type;
   };
 
   // The lookups of an interface of a registration: of the static key of the
@@ -1015,7 +1013,7 @@ private:
       using route = lookup_index_route<TypeInterface, key_type>;
       using route_key = std::decay_t<decltype(route::key(lookup_key))>;
       *out++ = {Index, &route_operations<TypeInterface, key_type>(), static_key,
-                detail::registration_key_type<route_key>(lookup_key)};
+                &detail::registration_key_type<route_key>(lookup_key)};
     } else {
       (void)static_key;
       check_required_keys<entries, std::decay_t<KeyValueArgs>...>();
@@ -1025,7 +1023,7 @@ private:
         using key_arg = std::decay_t<decltype(key)>;
         *out++ = {Index, &lookup_operations_v<entry, key_arg>::value,
                   std::addressof(key),
-                  detail::registration_key_type<key_arg>(lookup_key)};
+                  &detail::registration_key_type<key_arg>(lookup_key)};
       });
     }
   }
@@ -1085,7 +1083,7 @@ private:
   // record, its header, its cell, and the binding of each of its interfaces,
   // and inserts each binding into the lookups of its interface. It is of no
   // registration type.
-  DINGO_NOINLINE container_proxy commit_record(
+  DINGO_ALWAYS_INLINE container_proxy commit_record(
       const registration_node &node, const lookup_insert *inserts,
       std::size_t count, void (*make_cell)(void *, void *), void *arg) {
     registration_frame frame(runtime());
@@ -1108,7 +1106,7 @@ private:
           state, transaction,
           runtime_lookup_value(binding_address(node, *header, insert.binding)),
           insert.key,
-          {node.interfaces[insert.binding], node.storage, insert.key_type});
+          {&node.interfaces[insert.binding], &node.storage, insert.key_type});
     }
     transaction.commit();
     return container_proxy(header, this);
@@ -1133,39 +1131,12 @@ private:
   // its normalized interface, whether it is selected by its exact interface
   // first, and whether it falls back to its normalized interface when its
   // exact interface binds nothing.
-  struct lookup_request {
-    const lookup_operations *exact;
-    const void *exact_key;
-    const lookup_operations *value;
-    const void *value_key;
-    bool exact_first;
-    bool falls_back;
-  };
-
-  // Selects the binding of a request of its data. It is of no request type.
-  runtime_selection select_record(const lookup_request &request) {
-    auto *state = runtime_bindings();
-    if (state == nullptr) {
-      return runtime_selection::miss();
-    }
-    if (!request.exact_first) {
-      return request.value->find(*state, request.value_key);
-    }
-    using lookup_target = std::pair<const lookup_operations *, const void *>;
-    return detail::select_exact_first(
-        [&](const lookup_target &at) {
-          return at.first->find(*state, at.second);
-        },
-        lookup_target(request.exact, request.exact_key),
-        lookup_target(request.value, request.value_key), request.falls_back);
-  }
-
   // Selects a request in the levels, of its data, while its keys exist: the
   // lookups its interfaces are routed to, as the container declares them. A
   // static key selects the exact interface first, and the normalized one when
   // the exact one binds nothing. A key value selects by the exact interface
   // only when it has a lookup of its own, falling back to the normalized one
-  // when that has one too.
+  // when that has one too. The lookups are of the types of the request.
   template <typename Request, typename LookupKey>
   level_selection select_request(const LookupKey &key) {
     static_assert(!std::is_const_v<typename Request::value_type>);
@@ -1177,10 +1148,15 @@ private:
     if constexpr (detail::is_static_lookup_key_definition_v<key_type>) {
       decltype(auto) exact_key = exact_route::key(key);
       decltype(auto) value_key = value_route::key(key);
-      return select_levels(lookup_request{
-          &route_operations<exact, key_type>(), std::addressof(exact_key),
-          &route_operations<value, key_type>(), std::addressof(value_key), true,
-          !std::is_same_v<value, exact>});
+      return select_levels([&](runtime_bindings_state &state) {
+        return detail::select_exact_first(
+            [&](bool exact_lookup) {
+              return exact_lookup
+                         ? find_routed<exact, key_type>(state, exact_key)
+                         : find_routed<value, key_type>(state, value_key);
+            },
+            true, false, !std::is_same_v<value, exact>);
+      });
     } else if constexpr (!std::is_same_v<value, exact> &&
                          exact_route::has_explicit_lookup &&
                          !std::is_same_v<typename exact_route::entry,
@@ -1188,21 +1164,40 @@ private:
       decltype(auto) exact_key = exact_route::key(key);
       if constexpr (value_route::has_explicit_lookup) {
         decltype(auto) value_key = value_route::key(key);
-        return select_levels(lookup_request{
-            &route_operations<exact, key_type>(), std::addressof(exact_key),
-            &route_operations<value, key_type>(), std::addressof(value_key),
-            true, true});
+        return select_levels([&](runtime_bindings_state &state) {
+          return detail::select_exact_first(
+              [&](bool exact_lookup) {
+                return exact_lookup
+                           ? find_routed<exact, key_type>(state, exact_key)
+                           : find_routed<value, key_type>(state, value_key);
+              },
+              true, false, true);
+        });
       } else {
-        return select_levels(lookup_request{
-            &route_operations<exact, key_type>(), std::addressof(exact_key),
-            nullptr, nullptr, true, false});
+        return select_levels([&](runtime_bindings_state &state) {
+          return find_routed<exact, key_type>(state, exact_key);
+        });
       }
     } else {
       decltype(auto) value_key = value_route::key(key);
-      return select_levels(
-          lookup_request{nullptr, nullptr, &route_operations<value, key_type>(),
-                         std::addressof(value_key), false, false});
+      return select_levels([&](runtime_bindings_state &state) {
+        return find_routed<value, key_type>(state, value_key);
+      });
     }
+  }
+
+  // The selection of a key of an interface, by the lookup it is routed to.
+  template <typename Interface, typename LookupKey, typename Key>
+  static runtime_selection find_routed(runtime_bindings_state &state,
+                                       const Key &key) {
+    using route = lookup_index_route<Interface, LookupKey>;
+    static_assert(!std::is_void_v<typename route::entry>,
+                  "keyed registration or request has no matching "
+                  "dingo lookup definition for interface/key");
+    using key_type =
+        std::decay_t<decltype(route::key(std::declval<const LookupKey &>()))>;
+    return select_lookup<typename route::entry>(
+        state, static_cast<const key_type &>(key));
   }
 
   // The binding of a selection resolves the request, through the cache of
@@ -1293,10 +1288,13 @@ private:
   // Selects a request of its data in the container, and in the levels of
   // local bindings it falls back to: the first level that binds it,
   // ambiguously or not, or else the last one. It is of no request type.
-  DINGO_NOINLINE level_selection select_levels(const lookup_request &request) {
+  template <typename Select>
+  level_selection select_levels(const Select &select) {
     self_type *level = this;
     for (;;) {
-      auto selection = level->select_record(request);
+      auto *state = level->runtime_bindings();
+      const runtime_selection selection =
+          state == nullptr ? runtime_selection::miss() : select(*state);
       self_type *owner = level->owner_level();
       if (!detail::falls_back(selection.status) || owner == nullptr) {
         return {selection, level};
@@ -1325,11 +1323,12 @@ private:
   // Resolves a request of its selection in a transaction of the container,
   // which its frame opens and ends, out of line of the entry.
   template <typename Request, typename R, typename LookupKey>
-  DINGO_NOINLINE R resolve_transacted(const level_selection &found,
-                                      LookupKey &key) {
+  R resolve_transacted(const level_selection &found, LookupKey &key) {
     detail::transaction_frame<runtime_type> frame(this->runtime());
-    return detail::request_resolution::resolve_level<Request, R>(
-        found, entry_scope(caller_scope), frame.context(), *this, key);
+    return frame.run([&](runtime_context_type &context) -> R {
+      return detail::request_resolution::resolve_level<Request, R>(
+          found, entry_scope(caller_scope), context, *this, key);
+    });
   }
 
   // A request that may be cached reads the cache of its selected binding

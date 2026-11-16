@@ -34,14 +34,17 @@ namespace detail {
 template <typename Context>
 class context_store final : public execution::runtime_store {
 public:
+  // The types a failure names are those of the request and of the binding,
+  // which live as long as the program.
   context_store(Context &context, construction_scope scope, retention *retained,
-                type_descriptor requested, type_descriptor registered) noexcept
+                const type_descriptor &requested,
+                const type_descriptor &registered) noexcept
       : context_(context), scope_(scope), retained_(retained),
-        requested_(requested), registered_(registered) {}
+        requested_(&requested), registered_(&registered) {}
 
   // Rejects a request of what an empty layer does not hold.
   [[noreturn]] void absent() override {
-    throw_type_not_convertible(requested_, registered_, context_);
+    throw_type_not_convertible(*requested_, *registered_, context_);
   }
 
   // Keeps an object of a layout, which construct constructs of make: with
@@ -59,12 +62,51 @@ public:
     return context_.place(scope_, layout, construct_at);
   }
 
+  // The same, of a type a typed route names: what lives as long as the
+  // request, in the context, of this store; what lives as long as the
+  // container, with the binding, of at<true>(). Each is placed by the layout
+  // of its type, as an erased one is, so that a type a route keeps adds no
+  // code of the context of its own.
+  template <typename T, typename Make> T &keep(Make &&make) {
+    return *static_cast<T *>(
+        context_.place(scope_, object_layout_v<T>, [&](void *at) {
+          ::new (at) T(std::forward<Make>(make)());
+        }));
+  }
+
+  struct stable_store {
+    context_store &store;
+    [[noreturn]] void absent() { store.absent(); }
+    template <typename T, typename Make> T &keep(Make &&make) {
+      assert(store.retained_ != nullptr);
+      return *static_cast<T *>(store.retained_->keep(
+          &object_layout_v<T>, store.context_, object_layout_v<T>,
+          [&](void *at) { ::new (at) T(std::forward<Make>(make)()); }));
+    }
+  };
+
+  template <bool Stable> auto at() {
+    if constexpr (Stable) {
+      return stable_store{*this};
+    } else {
+      return transient_store{*this};
+    }
+  }
+
+  struct transient_store {
+    context_store &store;
+    [[noreturn]] void absent() { store.absent(); }
+    template <typename T, typename Make> T &keep(Make &&make) {
+      return store.template keep<T>(std::forward<Make>(make));
+    }
+  };
+
 private:
   Context &context_;
   construction_scope scope_;
   retention *retained_;
-  type_descriptor requested_;
-  type_descriptor registered_;
+  const type_descriptor *requested_;
+  const type_descriptor *registered_;
 };
 
 // The plans of a request type, made once for each binding that resolves it:
@@ -102,8 +144,8 @@ public:
         return *at;
       }
     }
-    auto *made = new entry{binding, make(semantics::lifetime::stable),
-                           make(semantics::lifetime::request), head};
+    execution::runtime_plans plans = make();
+    auto *made = new entry{binding, plans.stable, plans.transient, head};
     while (!head_.compare_exchange_weak(made->next, made,
                                         std::memory_order_release,
                                         std::memory_order_acquire)) {
@@ -121,8 +163,12 @@ private:
 struct runtime_request {
   type_descriptor requested;
   // The interface the request names, which only a binding of it resolves.
-  type_descriptor interface;
+  // The key of the interface the request names, which only a binding of it
+  // resolves.
+  const void *interface;
   bool modeled;
+  // The key of the type the request is of, without its own qualifiers.
+  const void *shape;
   execution::request_layout layout;
   plan_cache *plans;
 };
@@ -133,7 +179,7 @@ struct runtime_request {
 // made of the object. A value whose last step the request makes is made of
 // what the plan reached before it.
 inline resolved_address finish_request(execution::erased_carrier reached,
-                                       const execution::runtime_plan &plan) {
+                                       const execution::plan_run &plan) {
   using access = resolved_address::access_kind;
   using made_kind = resolved_address::made_kind;
   switch (plan.last) {
@@ -184,15 +230,17 @@ template <typename T> inline plan_cache runtime_plans;
 template <typename T> constexpr runtime_request make_runtime_request() {
   using of = request_execution<T>;
   if constexpr (!of::modeled) {
-    return {described_type_v<T>, {}, false, {}, nullptr};
+    return {described_type_v<T>, nullptr, false, nullptr, {}, nullptr};
   } else {
     using tables = execution::request_tables<T, typename of::element_type>;
-    return {described_type_v<T>,
-            described_type_v<execution::interface_of_t<typename of::shape>>,
-            true,
-            {of::layers::value, of::layers::count, of::goal(),
-             of::category::value, tables::value.value},
-            &runtime_plans<T>};
+    return {
+        described_type_v<T>,
+        &execution::shape_key<execution::interface_of_t<typename of::shape>>,
+        true,
+        &execution::shape_key<std::remove_cv_t<typename of::shape>>,
+        {of::layers::value, of::layers::count, of::goal(), of::category::value,
+         tables::value.value},
+        &runtime_plans<T>};
   }
 }
 

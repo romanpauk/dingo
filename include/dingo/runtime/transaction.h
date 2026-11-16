@@ -179,7 +179,7 @@ public:
 
   bool outermost() const noexcept { return parent_ == nullptr; }
 
-  DINGO_NOINLINE void commit() noexcept {
+  void commit() noexcept {
     if (runtime_ == nullptr) {
       return;
     }

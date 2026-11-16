@@ -144,31 +144,62 @@ private:
 
 namespace detail {
 // The frame of a transaction a request opens: its scratch memory, the
-// transaction, the context of the request, and the guard that commits the
-// transaction unless an exception leaves the request. It is made and
-// destroyed out of line, once for a runtime, not for every request.
+// transaction and the context of the request. The request commits the
+// transaction once it is resolved; one an exception leaves is rolled back as
+// the frame ends.
 template <typename Runtime> class transaction_frame {
 public:
   using allocator_type = typename Runtime::allocator_type;
   using context_type = runtime_context<allocator_type>;
   using transaction_type = runtime_transaction<allocator_type>;
 
-  DINGO_NOINLINE explicit transaction_frame(Runtime &runtime)
-      : transaction_(runtime, scratch_), context_(scratch_, transaction_),
-        commit_(transaction_, runtime) {}
+  explicit transaction_frame(Runtime &runtime)
+      : runtime_(runtime), transaction_(runtime, scratch_),
+        context_(scratch_, transaction_) {}
 
-  DINGO_NOINLINE ~transaction_frame() = default;
+  ~transaction_frame() = default;
 
   transaction_frame(const transaction_frame &) = delete;
   transaction_frame &operator=(const transaction_frame &) = delete;
 
   context_type &context() noexcept { return context_; }
 
+  // Commits the transaction of a request that resolved, and seals the
+  // runtime when it is the outermost one.
+  void commit() noexcept {
+    const bool outermost = transaction_.outermost();
+    transaction_.commit();
+    if (outermost) {
+      runtime_.seal();
+    }
+  }
+
+  // Runs fn of the context, and commits the transaction once it returns
+  // what it makes, which is returned as it is made: an exception that leaves
+  // fn leaves the transaction to roll back as the frame ends.
+  template <typename Fn> decltype(auto) run(Fn &&fn) {
+    struct committing {
+      transaction_frame &frame;
+      bool armed = true;
+      ~committing() {
+        if (armed) {
+          frame.commit();
+        }
+      }
+    } on_return{*this};
+    try {
+      return std::forward<Fn>(fn)(context_);
+    } catch (...) {
+      on_return.armed = false;
+      throw;
+    }
+  }
+
 private:
+  Runtime &runtime_;
   inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch_;
   transaction_type transaction_;
   context_type context_;
-  transaction_commit_guard<transaction_type, Runtime> commit_;
 };
 
 // The frame of a request of a runtime in the context of a request: a
@@ -211,7 +242,7 @@ private:
 template <typename Runtime, typename Fn>
 DINGO_NOINLINE decltype(auto) execute_transaction(Runtime &runtime, Fn &&fn) {
   detail::transaction_frame<Runtime> frame(runtime);
-  return std::forward<Fn>(fn)(frame.context());
+  return frame.run(std::forward<Fn>(fn));
 }
 
 #ifdef _MSC_VER
