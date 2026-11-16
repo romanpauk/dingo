@@ -86,7 +86,8 @@ uses its `user_type`, `lookup_type`, `interface_type`, `value_type`, and
 
 Both containers resolve a request with the algorithm in
 [include/dingo/resolution/algorithm.h](../../include/dingo/resolution/algorithm.h).
-The sequence is:
+[Shared Core](shared-core.md) follows a request through each container. The
+sequence is:
 
 1. For a reference or pointer request, the runtime container first reads the
    request cache of the selected binding.

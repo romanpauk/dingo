@@ -9,6 +9,8 @@ Read these pages in this order:
 - [Containers](containers.md): the public entry points, the include layout, and
   the runtime and static containers.
 - [Overview](overview.md): the main data flow and the main owners.
+- [Shared Core](shared-core.md): what both containers share, and how a request
+  goes from `resolve<T>()` to a binding and back in each.
 - [Registration And Resolution](registration-and-resolution.md): runtime and
   compile-time registration, and the shared path to `resolve<T>()`.
 - [Handles, Leaf Types, And Lookup](handles-leaf-types-and-lookup.md): wrapper
@@ -32,11 +34,14 @@ Two registration modes feed one resolution flow:
 
 ```text
 register_type / bindings -> type_registration -> binding_model -> binding cell
-resolve<T> -> request_type -> binding selection -> binding activation -> conversion -> T
+resolve<T> -> request_type -> binding selection -> plan -> binding activation -> program -> T
 ```
 
-The shared binding and resolution code for this flow is in
-`include/dingo/binding/`.
+Both containers share the code of this flow: the algorithm in
+`include/dingo/resolution/`, the bindings in `include/dingo/binding/`, the
+semantics in `include/dingo/semantics/` and the steps and programs in
+`include/dingo/request/execution.h`. They differ in how they select a binding
+and how they run a program.
 
 The code of each container is in its own directory:
 
@@ -56,6 +61,7 @@ The main owners are:
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
 - [include/dingo/type/shape.h](../../include/dingo/type/shape.h)
+- [include/dingo/semantics/model.h](../../include/dingo/semantics/model.h)
 - [include/dingo/request/execution.h](../../include/dingo/request/execution.h)
 - [include/dingo/runtime/execution.h](../../include/dingo/runtime/execution.h)
 - [include/dingo/runtime/request.h](../../include/dingo/runtime/request.h)

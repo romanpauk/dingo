@@ -2,10 +2,14 @@
 
 Dingo has four concerns:
 
-- registration deduction
-- lookup shape normalization
-- storage and factory ownership
-- conversion and wrapper adaptation
+- registration deduction: a declaration becomes a complete policy set
+- binding selection: a request selects the binding of its type and key
+- storage and factory ownership: a binding cell keeps or makes its instance
+- the plan of a request: the steps from what a binding stores to what the
+  request asks for, which the [layered semantics](layered-semantics.md) choose
+
+Both containers share one core for all four. [Shared Core](shared-core.md) says
+what it is, and how a request goes through it in each container.
 
 ## Header Layers
 
@@ -18,12 +22,14 @@ From the bottom:
 
 00. `base/`: configuration, `none`, `selected`, exceptions, `type_list`, type
     descriptors
-01. `memory/`, `rtti/`, `type/`: allocators and object stores, rtti providers,
-    type traits, keys, annotations
-02. `conversion/`, `lookup/`: the conversion paths, the routes from a source to
-    a target and their application, lookup indexes
-03. `request/`: what a request is, how a request that a binding does not publish
-    is derived or composed, collection requests
+01. `memory/`, `rtti/`, `semantics/`, `type/`: allocators, object stores and
+    object layouts, rtti providers, the semantics of plans (constant expressions
+    of no C++ type), type traits, keys, annotations
+02. `conversion/`, `lookup/`: the source a storage gives a binding, lookup
+    indexes and their backends
+03. `request/`: what a request is (`decomposition.h`), what the semantics know
+    of a C++ type (`classification.h`), collection requests, and the steps, the
+    programs and the plans of `execution.h`
 04. `factory/`: constructors, callables, constructor detection, factory traits
 05. `context/`: resolution context base and recursion guard
 06. `storage/`: storage tags, scope policies, storage exposure traits
@@ -92,7 +98,6 @@ reduces a `register_type<...>()` declaration to a complete policy set:
 - `storage_type`
 - `factory_type`
 - `interface_type`
-- `conversions_type`
 
 This deduction is the boundary between the public registration syntax and the
 internal binding code.
@@ -137,26 +142,30 @@ static container selects it at compile time. A runtime binding matches the
 requested type descriptor at run time.
 
 [include/dingo/request/execution.h](../../include/dingo/request/execution.h)
-applies the plan of a request: the steps from the stored source to the requested
-target, which the [layered semantics](layered-semantics.md) choose.
+compiles the plan of a request into a program and runs it: the steps from the
+stored source to the requested target, which the
+[layered semantics](layered-semantics.md) choose.
 
-A request passes through four folders that both containers share:
+A request passes through five folders that both containers share:
 
 - [include/dingo/resolution/](../../include/dingo/resolution): how a container
   runs a request. `entry_points.h` holds the requests a container answers, and
   `algorithm.h` the algorithm both containers run.
 - [include/dingo/binding/](../../include/dingo/binding): what a binding is and
   how it answers a request. `model.h` holds what a registration declares,
-  `selection.h` how a request selects a binding, `activation.h` the cell of a
-  binding, and `resolution.h` how a binding resolves a request.
+  `selection.h` how a request selects a binding, `activation.h` and
+  `materialization.h` the cell of a binding and how its source is made, and
+  `resolution.h` where the plan of a request starts.
 - [include/dingo/request/](../../include/dingo/request): what a request is.
-  `decomposition.h` takes a request apart, and `derivation.h` and
-  `composition.h` say how a request that a binding does not publish is derived
-  or composed.
-- [include/dingo/conversion/](../../include/dingo/conversion): the conversion of
-  the stored source to the requested target. `paths.h` holds the conversion
-  paths, `available.h` the routes a stored type publishes, and `apply.h` their
-  application.
+  `decomposition.h` takes a request apart, `classification.h` says what the
+  semantics know of a C++ type, and `execution.h` holds the steps, the programs
+  and the plans of a binding and of a request.
+- [include/dingo/semantics/](../../include/dingo/semantics): the semantics of
+  plans, of no C++ type: what a binding publishes, which steps reach a request,
+  and how many copies and moves of the leaf each takes.
+- [include/dingo/conversion/](../../include/dingo/conversion): the source a
+  storage gives a binding: a value it owns, an object it borrows, a pointer, or
+  an array it made.
 
 The code of each container is in:
 
@@ -172,13 +181,15 @@ Dingo runs this sequence:
    path normalizes `bindings<...>` into a validated static source.
 3. `resolve<T>()` converts `T` into `request_type<T>` and a lookup key.
 4. The container selects the matching runtime or static binding.
-5. A runtime container passes an `instance_request` to the binding. The request
-   holds the lookup type and the requested type descriptor. The binding matches
-   the descriptor against the requests it publishes. A static container selects
-   the resolution at compile time.
+5. The binding plans the request: as the code compiles in a static container, at
+   the first request of its type in a runtime container, which passes the
+   binding the description of the request (`runtime_request`) and keeps the
+   plan.
 6. The binding activation gets or builds the stored instance through its
    storage.
-7. The selected resolution operation converts the source into the requested `T`.
+7. The program of the plan applies its steps to the stored instance and gives
+   the requested `T`: inline in a static container, through tables of erased
+   operations in a runtime container.
 
 Registration child bindings and static local bindings take precedence over the
 container they extend, for singular and collection requests.
@@ -198,3 +209,4 @@ To read the core path in source order, start here:
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
 - [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)
 - [include/dingo/request/execution.h](../../include/dingo/request/execution.h)
+- [include/dingo/runtime/execution.h](../../include/dingo/runtime/execution.h)

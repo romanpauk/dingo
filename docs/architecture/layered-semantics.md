@@ -395,22 +395,22 @@ other code.
    of a `std::shared_ptr<T *>` to a `std::shared_ptr<const T * const>`, would
    take a conversion for every qualifier of every level.
 
-   **Measured.** A runtime type costs about 0.32 G instructions, 12.4 KB of code
-   and 5.7 MB of compiler memory, against 12.5 KB and 5.1 MB of the published
-   resolutions; a static type 0.30 G, 10.5 KB and 5.3 MB. The rest of the memory
-   is the compile-time search of the layer sources of each binding, which the
-   static container makes too.
+   **Measured.** With GCC at `-O0`, five runtime registrations of a shared
+   handle compile to 179 KB of code, and to 243 KB when each is requested as a
+   reference and as a shared handle. One static registration requested ten times
+   compiles to 53 KB. Most of what a runtime registration emits does not depend
+   on its type: of the code the first registration of a program adds, about a
+   sixth is of the registered type.
 
 8. **Tests.** The model checks become a cover of the composition, and the full
    model run a regression.
 
 ## The Cost
 
-A search evaluated as the code compiles takes about 14 million instructions with
-GCC and 37 million with clang. That is about 5% of what a type registered in a
-static container costs, which makes few requests of it. A program that makes
-thousands of requests, as the conversion check does, would double its time. A
-search depends only on its values, and in a program most requests share them: a
-variable template of the values, encoded as integers, makes each search once for
-a translation unit. The runtime container searches as it resolves, with one
+A search evaluated as the code compiles is constant evaluation, which clang does
+element by element: a search holds `semantics::max_states` states, sized after
+the largest search of the semantics domains, which reaches 83. A search depends
+only on its values, and in a program most requests share them: a variable
+template of the values, encoded as integers, makes each search once for a
+translation unit. The runtime container searches as it resolves, with one
 function of no type, which is compiled once.

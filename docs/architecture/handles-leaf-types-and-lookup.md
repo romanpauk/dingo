@@ -72,7 +72,8 @@ case for each wrapper combination. Dingo divides the problem into:
 
 - wrapper semantics in `type_traits`
 - storage exposure in `scope_traits`
-- the operation that the matched `resolution` carries
+- the plan of a request, which the [layered semantics](layered-semantics.md)
+  choose, and the steps that apply it
 
 The rebinding utilities let these three layers work together.
 
