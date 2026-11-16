@@ -151,10 +151,16 @@ template <typename Request, typename InterfaceBinding> struct static_execution {
                                        scope.makes, scope.publishes_early>;
   using interface_type = typename plan::interface_type;
 
+  // The plan of a request for a lifetime: whole, as a request that reaches
+  // more states than a search holds does not compile.
   template <bool Stable> static constexpr const semantics::plan &planned() {
     if constexpr (Stable) {
+      static_assert(!plan::stable.overflow, "a request reaches more states "
+                                            "than semantics::max_states");
       return plan::stable;
     } else {
+      static_assert(!plan::transient.overflow, "a request reaches more states "
+                                               "than semantics::max_states");
       return plan::transient;
     }
   }

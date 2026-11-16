@@ -941,9 +941,9 @@ inline runtime_plan plan_runtime(const binding_layout &binding,
 // qualifiers and its origin, and a step into a state is the first step of its
 // kind between their classes.
 struct state_classes {
-  std::uint16_t of[semantics::max_sources] = {};
-  std::uint16_t edge_of[semantics::max_sources] = {};
-  std::uint16_t edges[semantics::max_sources] = {};
+  std::uint16_t of[semantics::max_states] = {};
+  std::uint16_t edge_of[semantics::max_states] = {};
+  std::uint16_t edges[semantics::max_states] = {};
   std::size_t edge_count = 0;
 };
 
@@ -982,7 +982,7 @@ constexpr std::uint32_t type_hash(const semantics::thing &of) {
 // request takes: in a context that requests the interface, a request takes
 // nothing of what holds the leaf, which is only on the way to what holds
 // the interface.
-constexpr void used_states(const semantics::source_search &found, bool abstract,
+constexpr void used_states(const semantics::search &found, bool abstract,
                            bool *used) {
   for (std::size_t at = 0; at < found.count; ++at) {
     used[at] = !abstract;
@@ -998,20 +998,19 @@ constexpr void used_states(const semantics::source_search &found, bool abstract,
   }
 }
 
-constexpr state_classes classes_of(const semantics::source_search &found,
+constexpr state_classes classes_of(const semantics::search &found,
                                    bool abstract = false) {
   state_classes made;
-  std::uint16_t types[semantics::source_search::slot_count] = {};
-  std::uint16_t steps[semantics::source_search::slot_count] = {};
-  bool used[semantics::max_sources] = {};
+  std::uint16_t types[semantics::search_slots] = {};
+  std::uint16_t steps[semantics::search_slots] = {};
+  bool used[semantics::max_states] = {};
   used_states(found, abstract, used);
   for (std::size_t at = 0; at < found.count; ++at) {
     const semantics::state &each = found.states[at];
-    std::size_t slot =
-        type_hash(each.reached) % semantics::source_search::slot_count;
+    std::size_t slot = type_hash(each.reached) % semantics::search_slots;
     while (types[slot] != 0 &&
            !same_type(found.states[types[slot] - 1].reached, each.reached)) {
-      slot = (slot + 1) % semantics::source_search::slot_count;
+      slot = (slot + 1) % semantics::search_slots;
     }
     if (types[slot] == 0) {
       types[slot] = static_cast<std::uint16_t>(at + 1);
@@ -1023,7 +1022,7 @@ constexpr state_classes classes_of(const semantics::source_search &found,
     const std::uint16_t from = made.of[each.parent];
     const std::uint16_t to = made.of[at];
     slot = ((from * 31u + to) * 31u + static_cast<unsigned>(each.via)) %
-           semantics::source_search::slot_count;
+           semantics::search_slots;
     while (steps[slot] != 0) {
       const std::uint16_t edge = made.edges[steps[slot] - 1];
       const semantics::state &other = found.states[edge];
@@ -1031,7 +1030,7 @@ constexpr state_classes classes_of(const semantics::source_search &found,
           other.via == each.via) {
         break;
       }
-      slot = (slot + 1) % semantics::source_search::slot_count;
+      slot = (slot + 1) % semantics::search_slots;
     }
     if (steps[slot] == 0) {
       made.edges[made.edge_count++] = static_cast<std::uint16_t>(at);
@@ -1068,18 +1067,17 @@ constexpr std::uint32_t request_kinds(const semantics::thing &of,
   return sink.kinds;
 }
 
-template <typename Plan, const semantics::source_search &Sources,
-          typename Identities, typename Stored, typename Leaf,
-          typename Interface>
+template <typename Plan, const semantics::search &Sources, typename Identities,
+          typename Stored, typename Leaf, typename Interface>
 struct binding_sources {
   static constexpr bool abstract = !std::is_same_v<Leaf, Interface>;
   static_assert(Plan::template whole<abstract>());
   static constexpr state_classes classes = classes_of(Sources, abstract);
 
   struct used_list {
-    bool value[semantics::max_sources] = {};
-    std::uint16_t index[semantics::max_sources] = {};
-    std::uint16_t states[semantics::max_sources] = {};
+    bool value[semantics::max_states] = {};
+    std::uint16_t index[semantics::max_states] = {};
+    std::uint16_t states[semantics::max_states] = {};
     std::size_t count = 0;
   };
   static constexpr used_list make_used() {
@@ -1130,7 +1128,7 @@ struct binding_sources {
   // bound they name, which a request may bring into the universe: of every
   // source that is one.
   struct mask_list {
-    std::uint32_t of[semantics::max_sources] = {};
+    std::uint32_t of[semantics::max_states] = {};
   };
   static constexpr mask_list make_masks() {
     mask_list made;
