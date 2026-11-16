@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <dingo/base/config.h>
+
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -93,6 +95,18 @@ class arena
     block_head_ = head;
   }
 
+  // Allocates in a new block, which holds the size at the alignment.
+  DINGO_NOINLINE void *allocate_in_block(intptr_t size, intptr_t alignment) {
+    if (std::numeric_limits<intptr_t>::max() - (alignment - 1) < size ||
+        !request_block(size + (alignment - 1))) {
+      return nullptr;
+    }
+    const intptr_t ptr = (block_head_->ptr + (alignment - 1)) & -alignment;
+    assert(size <= block_end(block_head_) - ptr);
+    block_head_->ptr = ptr + size;
+    return reinterpret_cast<void *>(ptr);
+  }
+
   void deallocate_block(block *ptr) {
     assert(ptr->owned);
     allocator_traits_type::deallocate(*this, reinterpret_cast<uint8_t *>(ptr),
@@ -160,25 +174,17 @@ public:
 
   ~arena() { deallocate_blocks(nullptr); }
 
+  // Allocates in the block at the head when it has room, else in a new block.
   void *allocate(intptr_t size, intptr_t alignment) {
     assert((alignment & (alignment - 1)) == 0);
-    intptr_t padding =
-        block_head_ != nullptr ? -block_head_->ptr & (alignment - 1) : 0;
-    intptr_t capacity = block_head_ != nullptr ? block_end(block_head_) -
-                                                     block_head_->ptr - padding
-                                               : 0;
-    if (capacity < size) {
-      if (std::numeric_limits<intptr_t>::max() - (alignment - 1) < size)
-        return nullptr;
-      if (!request_block(size + (alignment - 1)))
-        return nullptr;
-      padding = -block_head_->ptr & (alignment - 1);
-      assert(size <= block_end(block_head_) - block_head_->ptr - padding);
+    if (block_head_ != nullptr) {
+      const intptr_t ptr = (block_head_->ptr + (alignment - 1)) & -alignment;
+      if (ptr <= block_end(block_head_) - size) {
+        block_head_->ptr = ptr + size;
+        return reinterpret_cast<void *>(ptr);
+      }
     }
-    intptr_t ptr = block_head_->ptr + padding;
-    assert((ptr & (alignment - 1)) == 0);
-    block_head_->ptr = ptr + size;
-    return reinterpret_cast<void *>(ptr);
+    return allocate_in_block(size, alignment);
   }
 
   void deallocate(void *, std::size_t) {}
