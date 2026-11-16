@@ -104,7 +104,7 @@ template <typename RTTI, typename Context> struct runtime_binding_engine {
                                    const request_type &request,
                                    const void *cache_key) {
     if (node.layout == nullptr || !request.modeled ||
-        request.interface != node.interface) {
+        request.interface_key != node.interface_key) {
       throw make_type_not_convertible_exception(request.requested,
                                                 node.registered, context);
     }
@@ -268,7 +268,7 @@ private:
            const typename node_type::request_type &request,
            const void *cache_key) {
     if (node.layout == nullptr || !request.modeled ||
-        request.interface != node.interface) {
+        request.interface_key != node.interface_key) {
       throw detail::make_type_not_convertible_exception(
           request.requested, node.registered, context);
     }

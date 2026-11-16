@@ -91,10 +91,9 @@ template <typename RTTI, typename Context> struct runtime_binding_node {
   type_descriptor registered;
   // The leaf of what the binding stores, which its recursion guard names.
   type_descriptor leaf;
-  // The interface of the binding, which a request it resolves names.
   // The key of the interface of the binding, which a request it resolves
   // names.
-  const void *interface;
+  const void *interface_key;
   // The layer sources of what the binding stores, which every request of it
   // is planned from; none when C++ says of its type what the semantics do
   // not model.

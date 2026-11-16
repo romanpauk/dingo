@@ -336,9 +336,10 @@ template <> struct step<semantics::step::upcast> {
             typename Store>
   static auto apply(carrier<T, Owned> from, Store &store) {
     if constexpr (std::is_same_v<std::remove_cv_t<T>, Leaf>) {
-      using interface = qualified_as_t<T, Interface>;
-      return carrier<interface, Owned>{static_cast<interface *>(from.object),
-                                       from.owner, from.release};
+      using qualified_interface = qualified_as_t<T, Interface>;
+      return carrier<qualified_interface, Owned>{
+          static_cast<qualified_interface *>(from.object), from.owner,
+          from.release};
     } else if constexpr (std::is_pointer_v<T>) {
       // A pointer of the interface, to the same object: a pointer the request
       // owns stays owned, and still releases what it was taken out of.
@@ -852,7 +853,8 @@ constexpr void place_layers(semantics::layer *layers, type_list<Tags...>) {
 }
 
 constexpr semantics::element element_of_stack(stack_element of) {
-  return of == stack_element::interface ? semantics::element::interface : semantics::element::leaf;
+  return of == stack_element::abstract ? semantics::element::abstract
+                                       : semantics::element::leaf;
 }
 
 // A plan as both containers run it: a program of instructions, each of the
@@ -1222,7 +1224,7 @@ struct request_plan {
   using interface_type = innermost_t<shape, Leaf>;
 
   static constexpr bool abstract =
-      request_stack::element == stack_element::interface;
+      request_stack::element == stack_element::abstract;
 
   static constexpr bool modeled =
       category::modeled && stored_stack::element != stack_element::other &&

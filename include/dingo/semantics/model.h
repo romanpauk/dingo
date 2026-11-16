@@ -177,7 +177,7 @@ enum class origin : std::uint8_t { borrowed, made, copied };
 constexpr bool owned(origin of) { return of != origin::borrowed; }
 
 // The element of a stack of layers.
-enum class element : std::uint8_t { leaf, interface };
+enum class element : std::uint8_t { leaf, abstract };
 
 // The known gaps of the library, which the expectations apply on top of the
 // rules.
@@ -320,7 +320,7 @@ constexpr bool makes_leaf_anew(const thing &of, const context &with,
 // Whether a new object of a thing would slice the leaf: the interface
 // without a layer is the base the leaf is.
 constexpr bool slices(const thing &of) {
-  return of.of == element::interface && of.depth == 0;
+  return of.of == element::abstract && of.depth == 0;
 }
 
 // The qualifiers of the element of the outer layer of a thing: as the layer
@@ -482,7 +482,7 @@ constexpr void empty_safe_steps(const thing &of, const thing &inner,
 // pointer. A handle of the interface is one the binding made of the leaf and
 // upcast, which a request converts.
 constexpr bool made_at_once(const thing &of) {
-  return of.made_layer && !(of.of == element::interface && of.depth == 1);
+  return of.made_layer && !(of.of == element::abstract && of.depth == 1);
 }
 
 // The things a pointer or a handle converts to of a more qualified element,
@@ -709,7 +709,7 @@ constexpr void each_transition_of(const thing &of, const context &with,
       out.takes(step::upcast, no_layer, of.depth)) {
     const layer_kind *outer = of.depth ? &with.kind(of.layers[0]) : nullptr;
     thing upcast = of;
-    upcast.of = element::interface;
+    upcast.of = element::abstract;
     if (outer != nullptr && !outer->gives_element) {
       // The pointer to the first element of an array is a pointer to that
       // element as the interface, not to an array of the interface: the

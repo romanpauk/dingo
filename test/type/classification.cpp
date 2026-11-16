@@ -18,10 +18,10 @@
 
 namespace dingo {
 namespace {
-struct interface {
-  virtual ~interface() = default;
+struct abstract_interface {
+  virtual ~abstract_interface() = default;
 };
-struct leaf : interface {};
+struct leaf : abstract_interface {};
 struct other {};
 
 using detail::array_layer_tag;
@@ -38,14 +38,14 @@ inline constexpr bool layers_are_v =
 template <typename T>
 inline constexpr stack_element element_of_v = stack_of_t<T, leaf>::element;
 
-// The stack of a type: its layers around the leaf, its abstract interface or
-// another type.
+// The stack of a type: its layers around the leaf, its abstract
+// abstract_interface or another type.
 static_assert(layers_are_v<leaf> && element_of_v<leaf> == stack_element::leaf);
 static_assert(layers_are_v<const leaf>);
-static_assert(element_of_v<interface> == stack_element::interface);
+static_assert(element_of_v<abstract_interface> == stack_element::abstract);
 static_assert(element_of_v<other> == stack_element::other);
-static_assert(layers_are_v<interface *, pointer_layer_tag> &&
-              element_of_v<interface *> == stack_element::interface);
+static_assert(layers_are_v<abstract_interface *, pointer_layer_tag> &&
+              element_of_v<abstract_interface *> == stack_element::abstract);
 static_assert(layers_are_v<leaf[2], bounded_array_layer_tag>);
 static_assert(layers_are_v<std::shared_ptr<leaf>,
                            wrapper_layer_tag<std::shared_ptr<leaf>>>);
@@ -56,11 +56,12 @@ static_assert(layers_are_v<std::shared_ptr<leaf[2]>,
                            wrapper_layer_tag<std::shared_ptr<leaf[2]>>,
                            bounded_array_layer_tag>);
 static_assert(
-    layers_are_v<std::optional<std::shared_ptr<interface>>,
-                 wrapper_layer_tag<std::optional<std::shared_ptr<interface>>>,
-                 wrapper_layer_tag<std::shared_ptr<interface>>> &&
-    element_of_v<std::optional<std::shared_ptr<interface>>> ==
-        stack_element::interface);
+    layers_are_v<
+        std::optional<std::shared_ptr<abstract_interface>>,
+        wrapper_layer_tag<std::optional<std::shared_ptr<abstract_interface>>>,
+        wrapper_layer_tag<std::shared_ptr<abstract_interface>>> &&
+    element_of_v<std::optional<std::shared_ptr<abstract_interface>>> ==
+        stack_element::abstract);
 static_assert(
     layers_are_v<
         std::variant<leaf, other>,
@@ -118,10 +119,11 @@ static_assert(custom::value.kinds[5].converts == (1u << 4));
 // The same layer met twice is one layer of the universe.
 using twice = detail::layer_universe<
     type_list<wrapper_layer_tag<std::shared_ptr<leaf>>, pointer_layer_tag,
-              wrapper_layer_tag<std::shared_ptr<interface>>>>;
+              wrapper_layer_tag<std::shared_ptr<abstract_interface>>>>;
 static_assert(twice::value.count == 5);
-static_assert(twice::index<wrapper_layer_tag<std::shared_ptr<interface>>>() ==
-              4);
+static_assert(
+    twice::index<wrapper_layer_tag<std::shared_ptr<abstract_interface>>>() ==
+    4);
 static_assert(twice::index<pointer_layer_tag>() == semantics::pointer_layer);
 
 TEST(classification_test, standard_layers_are_possible) {

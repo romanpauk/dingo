@@ -266,7 +266,7 @@ template <typename Wrapper> constexpr bool converts_to_unknown_bound() {
 
 // What a stack ends in: the leaf, the abstract interface of the leaf, or
 // another type, which the semantics do not reach.
-enum class stack_element { leaf, interface, other };
+enum class stack_element { leaf, abstract, other };
 
 // The layers around the element of a type, outermost first, as tags.
 template <typename Layers, stack_element Element> struct type_stack {
@@ -342,7 +342,7 @@ template <typename T, typename Leaf> struct stack_of {
       return stacked_t<alternative_layer_tag<T, typename held::alternative>,
                        typename held::type>{};
     } else if constexpr (std::is_base_of_v<T, Leaf>) {
-      return type_stack<type_list<>, stack_element::interface>{};
+      return type_stack<type_list<>, stack_element::abstract>{};
     } else {
       return type_stack<type_list<>, stack_element::other>{};
     }

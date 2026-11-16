@@ -162,10 +162,9 @@ private:
 // and the address it is satisfied with of what a plan reaches.
 struct runtime_request {
   type_descriptor requested;
-  // The interface the request names, which only a binding of it resolves.
   // The key of the interface the request names, which only a binding of it
   // resolves.
-  const void *interface;
+  const void *interface_key;
   bool modeled;
   // The key of the type the request is of, without its own qualifiers.
   const void *shape;

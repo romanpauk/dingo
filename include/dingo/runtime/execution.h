@@ -964,7 +964,7 @@ inline runtime_plans plan_runtime(const binding_layout &binding,
     goal.layers[index] = mapped[goal.layers[index]];
   }
   goal.of =
-      with.abstract ? semantics::element::interface : semantics::element::leaf;
+      with.abstract ? semantics::element::abstract : semantics::element::leaf;
 
   // The search of a thread, cleared rather than made: what makes one is its
   // states, which a search reads only once it added them. Planning runs no
@@ -1143,7 +1143,7 @@ constexpr void used_states(const semantics::search &found, bool abstract,
   }
   for (std::size_t at = found.count; at-- > 0;) {
     const semantics::state &each = found.states[at];
-    if (each.reached.of == semantics::element::interface) {
+    if (each.reached.of == semantics::element::abstract) {
       used[at] = true;
     }
     if (used[at] && each.parent != semantics::no_state) {
