@@ -67,25 +67,57 @@ private:
   BindingInterface *binding_;
 };
 
+// The allocator of the lookups of a runtime container: the allocator of the
+// container, which every storage rebinds, and the arena of its persistent
+// objects, of which a storage that allocates each value alone takes its
+// nodes. An insert a transaction rolls back is erased before the arena is
+// rewound, and nothing else moves a node.
+template <typename Allocator> class lookup_allocator : public Allocator {
+public:
+  using arena_type = typename runtime_memory<Allocator>::arena_type;
+  using base_allocator = Allocator;
+
+  template <typename T> using node_allocator = arena_allocator<T, arena_type>;
+
+  lookup_allocator(const Allocator &allocator, arena_type &persistent)
+      : Allocator(allocator), persistent_(&persistent) {}
+
+  template <typename T> operator node_allocator<T>() const {
+    return node_allocator<T>(*persistent_);
+  }
+
+private:
+  arena_type *persistent_;
+};
+
 template <typename LookupEntries, typename BindingInterface, typename Allocator>
 struct runtime_bindings_state {
   using value_type = runtime_lookup_value<BindingInterface>;
+  using allocator_type = lookup_allocator<Allocator>;
 
-  explicit runtime_bindings_state(Allocator &allocator)
-      : lookup_indexes(allocator) {}
+  runtime_bindings_state(
+      Allocator &allocator,
+      typename runtime_memory<Allocator>::arena_type &persistent)
+      : runtime_bindings_state(allocator_type(allocator, persistent)) {}
 
-  lookup_index<LookupEntries, value_type, Allocator> lookup_indexes;
+  lookup_index<LookupEntries, value_type, allocator_type> lookup_indexes;
   // The bindings of interfaces that are not their normalized interface: while
   // there are none, a request selects by its normalized interface only. A
   // rolled back registration leaves its count, which only keeps the exact
   // lookup.
   std::size_t exact_interfaces = 0;
+
+private:
+  explicit runtime_bindings_state(allocator_type &&allocator)
+      : lookup_indexes(allocator) {}
 };
 
 template <typename BindingsState> struct runtime_scope_state {
   template <typename Allocator>
-  runtime_scope_state(Allocator &allocator, void *parent)
-      : bindings(allocator), registration_parent(parent) {}
+  runtime_scope_state(
+      Allocator &allocator,
+      typename runtime_memory<Allocator>::arena_type &persistent, void *parent)
+      : bindings(allocator, persistent), registration_parent(parent) {}
 
   BindingsState bindings;
   void *registration_parent = nullptr;
@@ -98,7 +130,7 @@ struct runtime_registry_data {
       Allocator>::template rebind_alloc<scope_state_type *>;
 
   explicit runtime_registry_data(Allocator &allocator)
-      : runtime(allocator), bindings(allocator),
+      : runtime(allocator), bindings(allocator, runtime.persistent_arena()),
         scope_states(scope_pointer_allocator(allocator)) {}
 
   std::size_t create_scope(scope_state_type *state) {

@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <new>
 
 namespace dingo {
 
@@ -22,7 +23,12 @@ template <typename T> struct arena_allocator_traits : std::allocator_traits<T> {
   static constexpr intptr_t header_size() { return sizeof(uintptr_t) * 2; }
 };
 
-template <typename Allocator = std::allocator<uint8_t>>
+// An arena of blocks of the size it is made with, or, one that GrowsBlocks,
+// of blocks twice the size of the block it requested before, up to a limit:
+// it requests its blocks less and less often as it grows. A block made for
+// an allocation larger than that size does not change it.
+template <typename Allocator = std::allocator<uint8_t>,
+          bool GrowsBlocks = false>
 class arena
     : arena_allocator_traits<Allocator>::template rebind_alloc<uint8_t> {
   using allocator_type = typename arena_allocator_traits<
@@ -37,7 +43,10 @@ class arena
   };
 
   block *block_head_ = nullptr;
-  intptr_t initial_block_size_ = 0;
+  // The size of the next block.
+  intptr_t block_size_ = 0;
+
+  static constexpr intptr_t max_grown_block_size = intptr_t{1} << 16;
 
   static intptr_t block_begin(block *head) {
     return reinterpret_cast<intptr_t>(head) + sizeof(block);
@@ -54,14 +63,14 @@ class arena
   }
 
   bool request_block(intptr_t bytes) {
-    assert(initial_block_size_ > 0);
+    assert(block_size_ > 0);
     if (bytes > std::numeric_limits<intptr_t>::max() -
                     static_cast<intptr_t>(sizeof(block))) {
       return false;
     }
 
-    intptr_t size =
-        std::max<intptr_t>(initial_block_size_, sizeof(block) + bytes);
+    intptr_t size = std::max<intptr_t>(block_size_, sizeof(block) + bytes);
+    [[maybe_unused]] const bool regular = size == block_size_;
     const auto header_size = allocator_traits_type::header_size();
     const auto page_size = allocator_traits_type::page_size();
     assert((page_size & (page_size - 1)) == 0);
@@ -79,6 +88,11 @@ class arena
     head->size = size;
     head->owned = true;
     push_block(head);
+    if constexpr (GrowsBlocks) {
+      if (regular && block_size_ < max_grown_block_size) {
+        block_size_ *= 2;
+      }
+    }
     return true;
   }
 
@@ -140,13 +154,11 @@ public:
     intptr_t ptr;
   };
 
-  arena(std::size_t block_size)
-      : initial_block_size_(checked_block_size(block_size)) {}
+  arena(std::size_t block_size) : block_size_(checked_block_size(block_size)) {}
 
   template <typename AllocatorT>
   arena(std::size_t block_size, const AllocatorT &alloc)
-      : allocator_type(alloc),
-        initial_block_size_(checked_block_size(block_size)) {}
+      : allocator_type(alloc), block_size_(checked_block_size(block_size)) {}
 
   template <typename T, std::size_t N>
   arena(T (&buffer)[N], std::size_t block_size = N * sizeof(T))
@@ -247,12 +259,15 @@ public:
       : arena_(other.arena_) {}
 
   value_type *allocate(std::size_t n) {
-    if (std::numeric_limits<intptr_t>::max() / sizeof(T) < n)
-      return nullptr;
-
     static_assert(alignment >= alignof(T));
-    return reinterpret_cast<value_type *>(
-        arena_->allocate(sizeof(T) * n, alignment));
+    void *memory = std::numeric_limits<intptr_t>::max() / sizeof(T) < n
+                       ? nullptr
+                       : arena_->allocate(static_cast<intptr_t>(sizeof(T) * n),
+                                          static_cast<intptr_t>(alignment));
+    if (memory == nullptr) {
+      throw std::bad_alloc();
+    }
+    return static_cast<value_type *>(memory);
   }
 
   void deallocate(value_type *ptr, std::size_t n) noexcept {

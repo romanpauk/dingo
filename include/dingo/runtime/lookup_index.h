@@ -88,6 +88,32 @@ private:
   storage_type values_;
 };
 
+// Whether a backend allocates each value in a node of its own, which no
+// insert or erase moves.
+template <typename Backend, typename = void>
+struct is_node_based_backend : std::false_type {};
+
+template <typename Backend>
+struct is_node_based_backend<Backend,
+                             std::void_t<decltype(Backend::node_based)>>
+    : std::bool_constant<Backend::node_based> {};
+
+// The allocator a backend is made with: the allocator of the lookups, for a
+// backend that is node based, else the allocator of the container it is
+// made of.
+template <typename Backend, typename Allocator, typename = void>
+struct backend_allocator {
+  using type = Allocator;
+};
+
+template <typename Backend, typename Allocator>
+struct backend_allocator<Backend, Allocator,
+                         std::void_t<typename Allocator::base_allocator>> {
+  using type =
+      std::conditional_t<is_node_based_backend<Backend>::value, Allocator,
+                         typename Allocator::base_allocator>;
+};
+
 template <typename BackendKey, typename Backend, typename Value,
           typename Cardinality, typename Allocator>
 struct lookup_backend_storage_type {
@@ -110,9 +136,15 @@ template <typename Interface, typename KeyDefinition, typename Cardinality,
 struct lookup_backend_storage<
     lookup_entry<Interface, KeyDefinition, Cardinality, Backend>, Value,
     Allocator> {
+  using allocator_type = typename backend_allocator<
+      std::conditional_t<
+          std::is_same_v<typename KeyDefinition::backend_key_type,
+                         ::dingo::none_t>,
+          void, Backend>,
+      Allocator>::type;
   using type = typename lookup_backend_storage_type<
       typename KeyDefinition::backend_key_type, Backend, Value, Cardinality,
-      Allocator>::type;
+      allocator_type>::type;
 };
 
 template <typename Entry, typename Value, typename Allocator>
@@ -120,10 +152,13 @@ class lookup_backend
     : public lookup_backend_storage<Entry, Value, Allocator>::type {
   using base_type =
       typename lookup_backend_storage<Entry, Value, Allocator>::type;
+  using allocator_type =
+      typename lookup_backend_storage<Entry, Value, Allocator>::allocator_type;
 
 public:
   explicit lookup_backend(Allocator &allocator)
-      : base_type(make_lookup_storage<base_type>(allocator)) {}
+      : base_type(make_lookup_storage<base_type>(
+            static_cast<allocator_type &>(allocator))) {}
 };
 
 template <typename Entry, typename Value, typename Allocator>

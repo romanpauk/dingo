@@ -16,6 +16,25 @@ template <typename Value, typename Allocator>
 using lookup_storage_allocator_t =
     typename std::allocator_traits<Allocator>::template rebind_alloc<Value>;
 
+// The allocator of the nodes of a storage that allocates each of its values
+// in a node of its own: the allocator of the lookups names one of its own,
+// or else it is rebound.
+template <typename Value, typename Allocator, typename = void>
+struct lookup_node_allocator {
+  using type = lookup_storage_allocator_t<Value, Allocator>;
+};
+
+template <typename Value, typename Allocator>
+struct lookup_node_allocator<
+    Value, Allocator,
+    std::void_t<typename Allocator::template node_allocator<Value>>> {
+  using type = typename Allocator::template node_allocator<Value>;
+};
+
+template <typename Value, typename Allocator>
+using lookup_node_allocator_t =
+    typename lookup_node_allocator<Value, Allocator>::type;
+
 template <typename StorageAllocator, typename Allocator>
 StorageAllocator make_lookup_storage_allocator(Allocator &allocator) {
   return StorageAllocator(allocator);

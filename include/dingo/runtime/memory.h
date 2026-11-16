@@ -25,7 +25,12 @@ template <typename Allocator> class runtime_transaction;
 // their destructors, and the transaction a resolution or a registration runs
 // in. A transaction rolls the memory back to a checkpoint when it fails.
 template <typename Allocator> class runtime_memory {
-  using arena_type = arena<Allocator>;
+public:
+  // The persistent objects live as long as the container: its arena grows
+  // its blocks, as a container that registers more allocates more.
+  using arena_type = arena<Allocator, true>;
+
+private:
   using store_type = detail::object_store<arena_type>;
 
   friend class runtime_transaction<Allocator>;
@@ -54,6 +59,9 @@ public:
   }
 
   checkpoint mark() const { return checkpoint{arena_.mark(), store_.mark()}; }
+
+  // The arena of the persistent objects, which a rollback rewinds.
+  arena_type &persistent_arena() noexcept { return arena_; }
 
   void *allocate(std::size_t size, std::size_t alignment) {
     return store_.allocate(arena_, size, alignment);

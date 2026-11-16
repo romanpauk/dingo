@@ -767,7 +767,8 @@ protected:
     auto &data = shared_runtime_data();
     auto *state =
         transaction.template construct_persistent<runtime_scope_state>(
-            get_allocator(), static_cast<void *>(this));
+            get_allocator(), data.runtime.persistent_arena(),
+            static_cast<void *>(this));
     runtime_data_.scope_id(data.create_scope(state));
     try {
       transaction.defer_rollback(
