@@ -247,6 +247,17 @@ instructions and memory, much of a time. A cache of the results made by one run,
 as of the main branch, is the baseline of the next. It fails only when a
 scenario does not compile.
 
+To compare with another checkout, such as the main branch, run the script with
+the headers of that checkout and a work directory of its own, and then with
+these headers and `--compare` of its output:
+
+```bash
+uv run spec/footprint.py build/master.json --work build/footprint-master \
+  --compiler g++ "--flags=-std=c++17 -O0 -I../master/include"
+uv run spec/footprint.py build/this.json --work build/footprint/work \
+  --compiler g++ "--flags=-std=c++17 -O0 -Iinclude" --compare build/master.json
+```
+
 ## Code Size Tests
 
 The lit suite compiles the code-generation probes of
