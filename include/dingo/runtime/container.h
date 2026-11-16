@@ -1422,15 +1422,15 @@ private:
     }
   }
 
-  // A request in a context of another runtime opens a transaction of this one.
+  // A request in a context of another runtime opens a transaction of this one,
+  // which its frame does.
   template <typename Request, typename R, typename Origin, typename LookupKey>
   DINGO_ALWAYS_INLINE R resolve_request(construction_scope scope,
                                         runtime_context_type &context,
                                         Origin &origin, LookupKey key) {
-    if (context.owns(this->runtime())) {
-      return resolve_local<Request, R>(scope, context, origin, std::move(key));
-    }
-    return resolve_nested<Request, R>(scope, context, origin, std::move(key));
+    detail::nested_transaction_frame<runtime_type, Allocator> frame(
+        this->runtime(), context);
+    return resolve_local<Request, R>(scope, context, origin, std::move(key));
   }
   // A request in the context of a static container, which a static child
   // passes to this parent, opens a transaction of this container: the parent
@@ -1445,16 +1445,6 @@ private:
       return detail::request_resolution::resolve<Request, R>(
           *this, construction_scope(scope), context, origin, std::move(key));
     });
-  }
-
-  template <typename Request, typename R, typename Origin, typename LookupKey>
-  DINGO_NOINLINE R resolve_nested(construction_scope scope,
-                                  runtime_context_type &context, Origin &origin,
-                                  LookupKey key) {
-    assert(!context.owns(this->runtime()));
-    detail::nested_transaction_frame<runtime_type, Allocator> frame(
-        this->runtime(), context);
-    return resolve_local<Request, R>(scope, context, origin, std::move(key));
   }
 
 public:

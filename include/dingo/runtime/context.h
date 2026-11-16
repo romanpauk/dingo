@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <exception>
 #include <memory>
+#include <optional>
 #include <type_traits>
 #include <utility>
 
@@ -170,18 +171,20 @@ private:
   transaction_commit_guard<transaction_type, Runtime> commit_;
 };
 
-// The frame of a transaction a request opens in the context of a request of
-// another runtime: the context uses the transaction while the frame lives.
+// The frame of a request of a runtime in the context of a request: a
+// transaction of the runtime, which the context uses while the frame lives,
+// when the context is of another runtime; none when it is of this one.
 template <typename Runtime, typename Allocator> class nested_transaction_frame {
 public:
   using context_type = runtime_context<Allocator>;
   using transaction_type = runtime_transaction<Allocator>;
 
   DINGO_NOINLINE nested_transaction_frame(Runtime &runtime,
-                                          context_type &context)
-      : transaction_(runtime, scratch_),
-        scope_(context.use_transaction(transaction_)),
-        commit_(transaction_, runtime) {}
+                                          context_type &context) {
+    if (!context.owns(runtime)) {
+      nested_.emplace(runtime, context);
+    }
+  }
 
   DINGO_NOINLINE ~nested_transaction_frame() = default;
 
@@ -190,10 +193,18 @@ public:
   operator=(const nested_transaction_frame &) = delete;
 
 private:
-  inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch_;
-  transaction_type transaction_;
-  typename runtime_context_backend<Allocator>::transaction_scope scope_;
-  transaction_commit_guard<transaction_type, Runtime> commit_;
+  struct nested {
+    nested(Runtime &runtime, context_type &context)
+        : transaction_(runtime, scratch_),
+          scope_(context.use_transaction(transaction_)),
+          commit_(transaction_, runtime) {}
+
+    inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch_;
+    transaction_type transaction_;
+    typename runtime_context_backend<Allocator>::transaction_scope scope_;
+    transaction_commit_guard<transaction_type, Runtime> commit_;
+  };
+  std::optional<nested> nested_;
 };
 } // namespace detail
 
