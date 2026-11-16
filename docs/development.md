@@ -283,16 +283,20 @@ instructions and memory, much of a time. A cache of the results made by one run,
 as of the main branch, is the baseline of the next. It fails only when a
 scenario does not compile.
 
-To compare with another checkout, such as the main branch, run the script with
-the headers of that checkout and a work directory of its own, and then with
-these headers and `--compare` of its output:
+To compare with another checkout, such as the main branch, and with each
+compiler, run the same measurements under
+[nbench](https://github.com/romanpauk/nbench) with
+[`benchmark/nbench_conf.py`](../benchmark/nbench_conf.py): each checkout and
+compiler is a variant, compared with this checkout under the same compiler,
+with the costs of each and the instructions the containers run.
 
 ```bash
-uv run spec/footprint.py build/master.json --work build/footprint-master \
-  --compiler g++ "--flags=-std=c++17 -O0 -I../master/include"
-uv run spec/footprint.py build/this.json --work build/footprint/work \
-  --compiler g++ "--flags=-std=c++17 -O0 -Iinclude" --compare build/master.json
+uv run --with nbench@git+https://github.com/romanpauk/nbench \
+  nbench run -C benchmark/nbench_conf.py -v this=. -v main=git:main -s 'footprint|ran'
 ```
+
+The report is in `build/nbench/reports/`. The same config runs the container
+benchmarks of `build/benchmark/dingo_benchmark` under this checkout.
 
 ## Code Size Tests
 

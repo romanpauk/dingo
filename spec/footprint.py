@@ -347,27 +347,6 @@ def changes(before, now):
     return found
 
 
-def compared(other, found):
-    """The costs and the instructions run of another run beside those of
-    this one, where both have them: of another checkout, as of a main
-    branch, or of another compiler."""
-    lines = ["costs (code bytes, compiler instructions), other -> this:"]
-    for what, value in found["costs"].items():
-        before = other.get("costs", {}).get(what)
-        if before and "code" in before and "code" in value:
-            lines.append(
-                f"  {what:40} {before['code']:>8} -> {value['code']:<8} "
-                f"{before.get('instructions', 0):>14} -> "
-                f"{value.get('instructions', 0)}")
-    lines.append("instructions run, other -> this:")
-    for name, value in found["ran"].items():
-        before = other.get("ran", {}).get(name, {}).get("operations", {})
-        for operation, count in value.get("operations", {}).items():
-            lines.append(f"  {name:22} {operation:44} "
-                         f"{before.get(operation, '-'):>8} -> {count}")
-    return lines
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("output", type=Path,
@@ -380,10 +359,6 @@ def main():
     parser.add_argument("--only", default="",
                         help="measure only the scenarios whose name matches "
                         "this regular expression")
-    parser.add_argument("--compare", type=Path,
-                        help="the output of another run, printed beside this "
-                        "one: of the headers of another checkout, given by "
-                        "--flags with a --work of its own")
     options = parser.parse_args()
     options.work.mkdir(parents=True, exist_ok=True)
     driver.open_cache(options.work / "programs")
@@ -438,9 +413,6 @@ def main():
         print(f"{len(changed)} metrics changed since the last run:")
         for path, previous, value in changed[:60]:
             print(f"  {'/'.join(map(str, path))}: {previous} -> {value}")
-    if options.compare:
-        print("\n".join(compared(json.loads(options.compare.read_text()),
-                                  found)))
     if not options.only:
         latest.parent.mkdir(parents=True, exist_ok=True)
         latest.write_text(json.dumps(found, sort_keys=True))
