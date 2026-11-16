@@ -75,6 +75,11 @@ struct runtime_bindings_state {
       : lookup_indexes(allocator) {}
 
   lookup_index<LookupEntries, value_type, Allocator> lookup_indexes;
+  // The bindings of interfaces that are not their normalized interface: while
+  // there are none, a request selects by its normalized interface only. A
+  // rolled back registration leaves its count, which only keeps the exact
+  // lookup.
+  std::size_t exact_interfaces = 0;
 };
 
 template <typename BindingsState> struct runtime_scope_state {

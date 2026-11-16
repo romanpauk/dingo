@@ -151,13 +151,14 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
   if constexpr (sizeof(void *) == 8) {
     // Root owners carry the dense table of lazily allocated child lookup
     // states. A level of the local bindings of a registration is a container
-    // of the same type, which borrows the runtime data of its root.
+    // of the same type, which borrows the runtime data of its root. The
+    // bindings state counts the bindings only an exact lookup selects.
     expect_size_at_most<container<>>("container<>", 120);
-    expect_size_at_most<size_instance_container>("registration container", 120);
+    expect_size_at_most<size_instance_container>("registration container", 128);
     expect_size_at_most<size_probe_registry::runtime_bindings_state>(
-        "runtime bindings state", 48);
+        "runtime bindings state", 56);
     expect_size_at_most<size_probe_registry::runtime_scope_state>(
-        "runtime scope state", 56);
+        "runtime scope state", 64);
     expect_size_at_most<
         runtime_memory<typename size_registry_type::allocator_type>>(
         "container runtime", 32);

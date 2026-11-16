@@ -944,6 +944,9 @@ private:
     const type_descriptor *interfaces;
     std::size_t count;
     type_descriptor storage;
+    // The interfaces that are not their normalized interface, which only an
+    // exact lookup selects.
+    std::size_t exact_interfaces;
   };
 
   // Constructs the cell of a registration in its record, from the registered
@@ -972,7 +975,10 @@ private:
         nodes,
         interfaces,
         sizeof...(TypeInterfaces),
-        detail::described_type_v<typename TypeStorage::type>};
+        detail::described_type_v<typename TypeStorage::type>,
+        (std::size_t{!std::is_same_v<TypeInterfaces,
+                                     normalized_type_t<TypeInterfaces>>} +
+         ... + 0)};
   };
 
   using lookup_operations = lookup_operations;
@@ -1108,6 +1114,7 @@ private:
           insert.key,
           {&node.interfaces[insert.binding], &node.storage, insert.key_type});
     }
+    state.exact_interfaces += node.exact_interfaces;
     transaction.commit();
     return container_proxy(header, this);
   }
@@ -1146,16 +1153,21 @@ private:
     using exact_route = lookup_index_route<exact, key_type>;
     using value_route = lookup_index_route<value, key_type>;
     if constexpr (detail::is_static_lookup_key_definition_v<key_type>) {
-      decltype(auto) exact_key = exact_route::key(key);
       decltype(auto) value_key = value_route::key(key);
       return select_levels([&](runtime_bindings_state &state) {
-        return detail::select_exact_first(
-            [&](bool exact_lookup) {
-              return exact_lookup
-                         ? find_routed<exact, key_type>(state, exact_key)
-                         : find_routed<value, key_type>(state, value_key);
-            },
-            true, false, !std::is_same_v<value, exact>);
+        if constexpr (!std::is_same_v<value, exact>) {
+          // Only a binding of an interface that is not its normalized
+          // interface binds an exact interface that is not normalized.
+          if (std::is_same_v<exact, normalized_type_t<exact>> ||
+              state.exact_interfaces != 0) {
+            auto selection =
+                find_routed<exact, key_type>(state, exact_route::key(key));
+            if (!detail::selects_normalized_interface(selection.status)) {
+              return selection;
+            }
+          }
+        }
+        return find_routed<value, key_type>(state, value_key);
       });
     } else if constexpr (!std::is_same_v<value, exact> &&
                          exact_route::has_explicit_lookup &&
