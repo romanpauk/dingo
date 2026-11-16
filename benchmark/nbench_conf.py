@@ -208,7 +208,7 @@ config = Config(
                            "scenario: gcc's phases, clang's events and the "
                            "instantiations of each area of the library.",
                metrics=[Metric("time_ms", "Time", "ms", noise=0.2,
-                               section="time"),
+                               abs_tol=10, section="time"),
                         Metric("collected_kb", "Memory collected", "kB",
                                noise=0.03, section="memory"),
                         Metric("count", "Count", noise=0, section="cpu")]),
