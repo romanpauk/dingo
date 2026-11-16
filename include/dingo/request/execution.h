@@ -552,10 +552,11 @@ struct adopt_step {
     using made_type = adopting_handle_t<Target, pointee, Array>;
     // A handle of an array takes over a pointer to the whole array as the
     // pointer to its first element.
-    constexpr bool whole =
-        !Array && is_array_like_type_v<Target> && std::is_array_v<pointee>;
+    // A type, as MSVC does not take a constant of the function in a lambda.
+    using whole = std::bool_constant<!Array && is_array_like_type_v<Target> &&
+                                     std::is_array_v<pointee>>;
     auto &made = store.template keep<made_type>(
-        [&] { return made_type(adopted_pointer<whole>(*from.object)); });
+        [&] { return made_type(adopted_pointer<whole::value>(*from.object)); });
     // The handle owns what the pointer points to now.
     from.released();
     return carrier<made_type, true>{std::addressof(made)};
@@ -1126,6 +1127,18 @@ template <std::uint64_t... Code> struct binding_shape {
       semantics::closed_layer_sources(sources, context);
 };
 
+// The shape of a binding of a plan, for a request of its leaf or of its
+// abstract interface. It is made outside the plan, which is complete by the
+// time it is: MSVC does not evaluate a function of a class in the
+// declarations of the class.
+template <typename Plan, bool Abstract> struct shape_of_plan {
+  static constexpr shape_code code =
+      shape_code_of(Plan::context(Abstract), Plan::start());
+  template <std::size_t... I>
+  static auto make(std::index_sequence<I...>) -> binding_shape<code.at[I]...>;
+  using type = decltype(make(std::make_index_sequence<code.count>{}));
+};
+
 // What a binding of a stored object publishes, planned as the code compiles,
 // of no request: the layer sources of its stored object, in a universe of the
 // layers it takes steps into, those it stores and those of the handles a
@@ -1176,13 +1189,8 @@ struct binding_plan {
 
   // The shape of the binding, for a request of the leaf, and for one of its
   // abstract interface.
-  template <bool Abstract, std::size_t... I>
-  static auto shape_of(std::index_sequence<I...>)
-      -> binding_shape<shape_code_of(context(Abstract), start()).at[I]...>;
   template <bool Abstract>
-  using shape = decltype(shape_of<Abstract>(
-      std::make_index_sequence<
-          shape_code_of(context(Abstract), start()).count>{}));
+  using shape = typename shape_of_plan<binding_plan, Abstract>::type;
 
   // What the binding publishes for a request of the leaf, and for one of its
   // abstract interface, of its shape. Each is whole: a stored object of more

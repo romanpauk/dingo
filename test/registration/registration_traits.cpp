@@ -1157,8 +1157,8 @@ template <typename Container> void check_kept(Container &container) {
       container.template resolve<std::optional<std::shared_ptr<const T>>>();
   ASSERT_TRUE(held.has_value());
   EXPECT_EQ(held->get(), stored.get());
-  auto interface = container.template resolve<std::shared_ptr<const I>>();
-  EXPECT_EQ(interface.get(), static_cast<I *>(stored.get()));
+  auto abstract = container.template resolve<std::shared_ptr<const I>>();
+  EXPECT_EQ(abstract.get(), static_cast<I *>(stored.get()));
 }
 
 // A handle a request makes of a value is made of a const element at once.

@@ -34,6 +34,9 @@ template <> class rtti<typeid_provider> {
 
   // The type_info of a type and its hash, as constants.
   struct type_record {
+    constexpr type_record(const std::type_info *type, std::size_t name_hash)
+        : info(type), hash(name_hash) {}
+
     const std::type_info *info;
     std::size_t hash;
   };

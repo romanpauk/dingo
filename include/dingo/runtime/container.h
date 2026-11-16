@@ -626,9 +626,9 @@ protected:
 
     static void insert(runtime_bindings_state &state,
                        runtime_transaction_type &transaction,
-                       runtime_lookup_value value, const void *key,
+                       runtime_lookup_value inserted, const void *key,
                        const lookup_registration &registration) {
-      insert_lookup<LookupEntry>(state, transaction, std::move(value),
+      insert_lookup<LookupEntry>(state, transaction, std::move(inserted),
                                  *static_cast<const Key *>(key), registration);
     }
 
@@ -1167,8 +1167,11 @@ private:
         if constexpr (!std::is_same_v<value, exact>) {
           // Only a binding of an interface that is not its normalized
           // interface binds an exact interface that is not normalized.
-          if (std::is_same_v<exact, normalized_type_t<exact>> ||
-              state.exact_interfaces != 0) {
+          bool exact_lookup = true;
+          if constexpr (!std::is_same_v<exact, normalized_type_t<exact>>) {
+            exact_lookup = state.exact_interfaces != 0;
+          }
+          if (exact_lookup) {
             auto selection =
                 find_routed<exact, key_type>(state, exact_route::key(key));
             if (!detail::selects_normalized_interface(selection.status)) {

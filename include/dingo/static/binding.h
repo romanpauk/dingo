@@ -475,17 +475,17 @@ public:
     static_assert(is_lookup_key_v<LookupKey>);
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
-    using interface_bindings = typename registry_type::template bindings<
+    using collected_bindings = typename registry_type::template bindings<
         normalized_type_t<resolve_type>, LookupKey>;
 
     static_assert(collection_type::is_collection,
                   "missing collection_traits specialization for type T");
 
-    dingo::for_each(interface_bindings{}, [&](auto binding_iterator) {
+    dingo::for_each(collected_bindings{}, [&](auto binding_iterator) {
       using binding = typename decltype(binding_iterator)::type;
       fn(results, resolve<binding, resolve_type>(scope, host, context));
     });
-    return type_list_size_v<interface_bindings>;
+    return type_list_size_v<collected_bindings>;
   }
 
   template <typename T, typename LookupKey, typename Host, typename Context,

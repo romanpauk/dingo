@@ -263,19 +263,19 @@ private:
   // code compiled it, when it answers the request; else by the plan of the
   // request, made once, from what the binding publishes.
   static resolved_address
-  dispatch(const node_type &node, interface_base &binding,
+  dispatch(const node_type &binding_node, interface_base &binding,
            construction_scope scope, runtime_context_type &context,
            const typename node_type::request_type &request,
            const void *cache_key) {
-    if (node.layout == nullptr || !request.modeled ||
-        request.interface_key != node.interface_key) {
+    if (binding_node.layout == nullptr || !request.modeled ||
+        request.interface_key != binding_node.interface_key) {
       throw detail::make_type_not_convertible_exception(
-          request.requested, node.registered, context);
+          request.requested, binding_node.registered, context);
     }
     if constexpr (!execution_type::modeled) {
       return {};
     } else {
-      const detail::execution::binding_layout &layout = *node.layout;
+      const detail::execution::binding_layout &layout = *binding_node.layout;
       // What a request passes to the caller lives as long as the container.
       const bool stable = scope.is_caller();
       for (std::size_t group = 0; group < layout.group_count; ++group) {
@@ -289,21 +289,22 @@ private:
               stable ? answers.stable : answers.transient;
           if (answer.found) {
             return resolve_closed(binding, scope, context, request, answer,
-                                  layout, node.caches ? cache_key : nullptr);
+                                  layout,
+                                  binding_node.caches ? cache_key : nullptr);
           }
           break;
         }
       }
-      const auto &plans = request.plans->find(&node, [&] {
+      const auto &plans = request.plans->find(&binding_node, [&] {
         return detail::execution::plan_runtime(layout, request.layout);
       });
       const auto &plan = stable ? plans.stable : plans.transient;
       if (!plan.found) {
         throw detail::make_type_not_convertible_exception(
-            request.requested, node.registered, context);
+            request.requested, binding_node.registered, context);
       }
       return resolve(binding, scope, context, request, plan,
-                     node.caches ? cache_key : nullptr);
+                     binding_node.caches ? cache_key : nullptr);
     }
   }
 

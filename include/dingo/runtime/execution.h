@@ -1722,7 +1722,9 @@ struct binding_sources {
   template <std::size_t State, bool Published = (State < used.count)>
   struct closed_carrier {
     static constexpr bool possible = true;
-    using type = typename carrier_of<classes.of[used.states[State]]>::type;
+    // MSVC does not parse a subscript in a subscript of a template argument.
+    static constexpr std::size_t state = used.states[State];
+    using type = typename carrier_of<classes.of[state]>::type;
   };
   template <std::size_t State> struct closed_carrier<State, false> {
     using parent = closed_carrier<closure.states[State].parent>;

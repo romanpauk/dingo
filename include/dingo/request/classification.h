@@ -432,15 +432,15 @@ template <typename... Tags> struct layer_universe<type_list<Tags...>> {
     semantics::layer_kind kind = wrapper_kind_v<Identity>;
     using target = typename shared_layer<Identity>::type;
     if constexpr (!std::is_void_v<target>) {
-      const semantics::layer to = index_of<target>(identities{});
-      if (to != semantics::no_layer) {
+      constexpr semantics::layer to = index_of<target>(identities{});
+      if constexpr (to != semantics::no_layer) {
         kind.converts |= std::uint32_t{1} << to;
       }
     }
     if constexpr (converts_to_unknown_bound<Identity>()) {
-      const semantics::layer to =
+      constexpr semantics::layer to =
           index_of<typename unknown_bound_layer<Identity>::type>(identities{});
-      if (to != semantics::no_layer) {
+      if constexpr (to != semantics::no_layer) {
         kind.to_unknown_bound |= std::uint32_t{1} << to;
       }
     }
