@@ -287,16 +287,19 @@ To compare with another checkout, such as the main branch, and with each
 compiler, run the same measurements under
 [nbench](https://github.com/romanpauk/nbench) with
 [`benchmark/nbench_conf.py`](../benchmark/nbench_conf.py): each checkout and
-compiler is a variant, compared with this checkout under the same compiler,
-with the costs of each and the instructions the containers run.
+compiler is a variant, compared with this checkout under the same compiler.
+Its suites are the scenarios (`footprint`), their differences (`costs`),
+where the compiler spent its work (`compiler`: a phase, an event or an area of
+the library per case), the code-generation probes (`probes`), the
+instructions of each operation of the containers (`operations`) and the
+container benchmarks of this checkout's build (`containers`).
 
 ```bash
 uv run --with nbench@git+https://github.com/romanpauk/nbench \
-  nbench run -C benchmark/nbench_conf.py -v this=. -v main=git:main -s 'footprint|ran'
+  nbench run -C benchmark/nbench_conf.py -v this=. -v main=git:main
 ```
 
-The report is in `build/nbench/reports/`. The same config runs the container
-benchmarks of `build/benchmark/dingo_benchmark` under this checkout.
+The report is in `build/nbench/reports/`, with `explorer.html` of every run.
 
 ## Code Size Tests
 
