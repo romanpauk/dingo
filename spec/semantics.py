@@ -66,6 +66,10 @@ class Layer:
     adopted_with: tuple = None
     # Whether a handle of it takes over a raw pointer the request owns.
     adopts: bool = False
+    # Whether a handle of it takes over one to an array of a known bound,
+    # which it deletes as an array: a std::shared_ptr<T[N]> does, a
+    # std::unique_ptr<T[N]> deletes it as an object.
+    adopts_bounded: bool = False
     # Whether a registration bound only to the abstract interface stores a
     # layer of the leaf as one of the interface.
     rebinds: bool = False
@@ -96,9 +100,9 @@ LAYERS = {layer.name: layer for layer in (
           made_from_value=False, adopted_with=(), rebinds=True,
           may_be_empty=True, qualifies=True),
     Layer("shared_ptr", Owner.SHARED, shares_element=True, copyable=True,
-          made_from_value=True, adopts=True, rebinds=True,
-          constructs_in_place=True, may_be_empty=True, qualifies=True,
-          unknown_bound_to=("shared_ptr",)),
+          made_from_value=True, adopts=True, adopts_bounded=True,
+          rebinds=True, constructs_in_place=True, may_be_empty=True,
+          qualifies=True, unknown_bound_to=("shared_ptr",)),
     Layer("unique_ptr", Owner.SOLE, shares_element=True, copyable=False,
           made_from_value=True, converts_to=("shared_ptr",), adopts=True,
           rebinds=True, may_be_empty=True, qualifies=True),
@@ -136,8 +140,9 @@ def possible(layer):
     it: a copy of it holds the same one. A layer that owns its element alone
     and shares it with a copy cannot be copied: the copy would share what one
     of them owns. A layer that owns nothing is not made of a value and takes
-    over no pointer. A layer that takes over a pointer holds the element
-    apart from it, and so does a layer the leaf is rebound to the interface
+    over no pointer, and only one that takes over a pointer takes over one to
+    an array of a known bound. A layer that takes over a pointer holds the
+    element apart from it, and so does a layer the leaf is rebound to the interface
     in, and a layer that converts to one of a more qualified element, as a
     pointer to the element does, or to one of an array of unknown bound. An empty value is a value only of a layer
     that may be empty."""
@@ -149,6 +154,8 @@ def possible(layer):
     if layer.owner is Owner.NONE and (layer.made_from_value or layer.adopts):
         return False
     if layer.adopts and not layer.shares_element:
+        return False
+    if layer.adopts_bounded and not layer.adopts:
         return False
     # A layer the leaf is rebound to the interface in holds it apart, and so
     # does one that converts to one of a more qualified element or of an
@@ -553,8 +560,11 @@ def thing_transitions(thing, context):
             # A raw pointer the request owns, not a copy of one the scope
             # keeps, owns its element: it is handed over as a pointer, or
             # taken over by a handle, of an array when it points to one.
+            held = layer.adopted_with + below
             for handle in (name for name in context.universe
-                           if LAYERS[name].adopts):
+                           if LAYERS[name].adopts and
+                           (not held or not LAYERS[held[0]].bounded or
+                            LAYERS[name].adopts_bounded)):
                 yield "adopt", replace(
                     thing, layers=(handle,) + layer.adopted_with + below,
                     lifetimes=(Lifetime.REQUEST,) *

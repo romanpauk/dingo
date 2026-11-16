@@ -85,6 +85,10 @@ struct layer_kind {
   // to, holding the same array as one of unknown bound, as a mask of their
   // indices.
   std::uint32_t to_unknown_bound = 0;
+  // Whether a handle of it takes over a raw pointer to an array of a known
+  // bound, which it deletes as an array. It is last, as the layers of C++
+  // itself list the properties before it.
+  bool adopts_bounded = false;
 };
 
 // Whether a type can be a layer of these properties, as spec/semantics.py
@@ -92,16 +96,18 @@ struct layer_kind {
 // an element that lives apart from it: a copy of it holds the same one. A
 // layer that owns its element alone and shares it with a copy cannot be
 // copied: the copy would share what one of them owns. A layer that owns
-// nothing is not made of a value and takes over no pointer. A layer that
-// takes over a pointer holds the element apart from it, and so do a layer the
-// leaf is rebound to the interface in and a layer that converts to one of a
-// more qualified element or of an array of unknown bound. An empty value is a
-// value only of a layer that may be empty.
+// nothing is not made of a value and takes over no pointer, and only one that
+// takes over a pointer takes over one to an array of a known bound. A layer
+// that takes over a pointer holds the element apart from it, and so do a
+// layer the leaf is rebound to the interface in and a layer that converts to
+// one of a more qualified element or of an array of unknown bound. An empty
+// value is a value only of a layer that may be empty.
 constexpr bool possible(const layer_kind &kind) {
   return (kind.owns == owner::sole || kind.shares_element) &&
          !(kind.owns == owner::sole && kind.shares_element && kind.copyable) &&
          !(kind.owns == owner::none && (kind.made_from_value || kind.adopts)) &&
          (!kind.adopts || kind.shares_element) &&
+         (!kind.adopts_bounded || kind.adopts) &&
          (!kind.rebinds || kind.shares_element) &&
          (!kind.qualifies || kind.shares_element) &&
          (!kind.to_unknown_bound || kind.shares_element) &&
@@ -655,7 +661,12 @@ constexpr void each_transition_of(const thing &of, const context &with,
       }
     } else if (kind.adopted && of.owns_pointee) {
       for (std::size_t index = 0; index < with.layers->count; ++index) {
+        // A handle that does not delete an array of a known bound as an
+        // array takes over no pointer to one.
+        const bool bounded = !kind.adopted_array && of.depth > 1 &&
+                             with.kind(of.layers[1]).bounded;
         if (!with.layers->kinds[index].adopts ||
+            (bounded && !with.layers->kinds[index].adopts_bounded) ||
             !out.takes(step::adopt, static_cast<layer>(index),
                        of.depth + (kind.adopted_array ? 1u : 0u))) {
           continue;

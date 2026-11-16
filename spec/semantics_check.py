@@ -188,11 +188,12 @@ using namespace dingo::model;
 
 namespace {
 void print_kind(const dingo::semantics::layer_kind &kind) {
-  std::printf("%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d",
+  std::printf("%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d",
               static_cast<int>(kind.owns), kind.shares_element, kind.copyable,
               kind.made_from_value, kind.holds_element_only, kind.relocatable,
               kind.gives_element, kind.bounded, kind.may_be_empty,
-              kind.has_empty_value, kind.adopts, kind.decays, kind.adopted,
+              kind.has_empty_value, kind.adopts, kind.adopts_bounded,
+              kind.decays, kind.adopted,
               kind.adopted_array, kind.rebinds, kind.observes,
               kind.qualifies);
 }
@@ -284,7 +285,8 @@ def properties(layer, universe, of_object=False):
             int(layer.holds_element_only), int(layer.relocatable),
             int(layer.gives_element), int(layer.bounded),
             int(layer.may_be_empty), int(layer.has_empty_value),
-            int(layer.adopts), int(bool(layer.decays_to)),
+            int(layer.adopts), int(layer.adopts_bounded),
+            int(bool(layer.decays_to)),
             int(layer.adopted_with is not None),
             int(bool(layer.adopted_with)), int(layer.rebinds),
             int(layer.observes), int(layer.qualifies), converts, unknown_bound]
@@ -340,19 +342,23 @@ def made_layers():
     is possible, as semantics.possible says. One that converts to the layer of
     an array of unknown bound converts to itself."""
     emptiness = ((False, False), (True, False), (True, True))
+    # A layer takes over a pointer to an array of a known bound only if it
+    # takes over pointers.
+    adoption = ((False, False), (True, False), (True, True))
     for index, (owner, shares, copyable, made, holds, relocatable, empty,
                 adopts, rebinds, observes, qualifies, unknown_bound) in enumerate(
                     itertools.product(
                         semantics.Owner, (False, True), (False, True),
                         (False, True), (False, True), (False, True),
-                        emptiness, (False, True), (False, True),
+                        emptiness, adoption, (False, True),
                         (False, True), (False, True), (False, True))):
         name = f"made{index}"
         layer = semantics.Layer(
             name, owner, shares_element=shares, copyable=copyable,
             made_from_value=made, holds_element_only=holds,
             relocatable=relocatable, may_be_empty=empty[0],
-            has_empty_value=empty[1], adopts=adopts, rebinds=rebinds,
+            has_empty_value=empty[1], adopts=adopts[0],
+            adopts_bounded=adopts[1], rebinds=rebinds,
             observes=observes, qualifies=qualifies,
             unknown_bound_to=(name,) if unknown_bound else ())
         if semantics.possible(layer):

@@ -683,11 +683,14 @@ struct step_result<adopt_step<Target, Array, Quals>, Leaf, Interface, T, Owned,
     static constexpr bool possible = false;
     using type = void;
   };
+  // A handle its type traits do not know, as of an array they do not say
+  // how it deletes, is not made.
   template <typename U>
   struct made<U, std::void_t<adopting_handle_t<Target, U, Array>>> {
     using made_type = adopting_handle_t<Target, U, Array>;
     static constexpr bool possible =
-        std::is_constructible_v<made_type, pointer>;
+        std::conjunction_v<std::bool_constant<type_traits<made_type>::enabled>,
+                           std::is_constructible<made_type, pointer>>;
     using type = carrier<made_type, true>;
   };
   static constexpr bool possible = made<pointee>::possible;
@@ -993,6 +996,7 @@ constexpr std::uint64_t kind_code(const semantics::layer_kind &kind) {
          bit(kind.adopts, 11) | bit(kind.decays, 12) | bit(kind.adopted, 13) |
          bit(kind.adopted_array, 14) | bit(kind.rebinds, 15) |
          bit(kind.observes, 16) | bit(kind.qualifies, 17) |
+         bit(kind.adopts_bounded, 18) |
          (static_cast<std::uint64_t>(kind.converts) << 32);
 }
 
@@ -1016,6 +1020,7 @@ constexpr semantics::layer_kind kind_of(std::uint64_t code,
   made.rebinds = bit_at(code, 15);
   made.observes = bit_at(code, 16);
   made.qualifies = bit_at(code, 17);
+  made.adopts_bounded = bit_at(code, 18);
   made.converts = static_cast<std::uint32_t>(code >> 32);
   made.to_unknown_bound = static_cast<std::uint32_t>(unknown_bound);
   return made;

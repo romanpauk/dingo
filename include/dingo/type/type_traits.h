@@ -97,6 +97,10 @@ struct alternative_value {
 //   share_t<U>     for a sole owner: the sharing handle of the element U
 //   release(w)     optional, for a sole owner: gives up its element, which
 //                  the caller then owns, and returns its address
+//   adopts_bounded_array
+//                  optional, false by default: for an owning handle, whether
+//                  it takes over a raw pointer to an array of a known bound,
+//                  which it then deletes as an array
 //   extent         optional, 0 by default: for an owning handle of an array,
 //                  its bound, when the handle holds an array of a known one
 //   unknown_bound_t<U>   optional, for a handle of an array of a known bound:
@@ -117,6 +121,18 @@ template <typename T, typename = void> struct type_traits {
   static constexpr bool is_pointer_like = false;
   static constexpr bool is_owning_handle = false;
 };
+
+namespace detail {
+// Whether an owning handle takes over a raw pointer to an array of a known
+// bound, as its type_traits say; not unless they say so.
+template <typename Handle, typename = void>
+inline constexpr bool adopts_bounded_array_v = false;
+
+template <typename Handle>
+inline constexpr bool adopts_bounded_array_v<
+    Handle, std::void_t<decltype(type_traits<Handle>::adopts_bounded_array)>> =
+    type_traits<Handle>::adopts_bounded_array;
+} // namespace detail
 
 template <typename T> struct type_traits<const T> : type_traits<T> {};
 
@@ -490,6 +506,8 @@ struct type_traits<
     : semantics::shared_owner {
   using value_type = std::remove_extent_t<Array>;
   template <typename U> using rebind_t = std::shared_ptr<U[]>;
+  // It deletes an array of a known bound it takes over as an array.
+  static constexpr bool adopts_bounded_array = true;
 
   static auto *get(const std::shared_ptr<Array> &wrapper) {
     return wrapper.get();
@@ -522,6 +540,8 @@ struct type_traits<
     : semantics::shared_owner {
   using value_type = std::remove_extent_t<Array>;
   static constexpr std::size_t extent = std::extent_v<Array, 0>;
+  // It deletes an array of a known bound it takes over as an array.
+  static constexpr bool adopts_bounded_array = true;
   template <typename U>
   using rebind_t = std::shared_ptr<U[std::extent_v<Array, 0>]>;
   template <typename U> using unknown_bound_t = std::shared_ptr<U[]>;
@@ -552,6 +572,8 @@ struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>>
     : semantics::shared_owner {
   using value_type = T;
   template <typename U> using rebind_t = std::shared_ptr<U>;
+  // It deletes an array of a known bound it takes over as an array.
+  static constexpr bool adopts_bounded_array = true;
   static constexpr bool emplaces_element = true;
 
   static T *get(const std::shared_ptr<T> &wrapper) { return wrapper.get(); }

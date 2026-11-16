@@ -56,7 +56,7 @@ bool read_quals(std::uint8_t *quals, std::size_t depth) {
 }
 
 bool read_kind(layer_kind &kind) {
-  unsigned values[19] = {};
+  unsigned values[20] = {};
   for (unsigned &value : values) {
     if (!read(value)) {
       return false;
@@ -68,14 +68,15 @@ bool read_kind(layer_kind &kind) {
                    &kind.relocatable,     &kind.gives_element,
                    &kind.bounded,         &kind.may_be_empty,
                    &kind.has_empty_value, &kind.adopts,
-                   &kind.decays,          &kind.adopted,
-                   &kind.adopted_array,   &kind.rebinds,
-                   &kind.observes,        &kind.qualifies};
-  for (unsigned index = 0; index < 16; ++index) {
+                   &kind.adopts_bounded,  &kind.decays,
+                   &kind.adopted,         &kind.adopted_array,
+                   &kind.rebinds,         &kind.observes,
+                   &kind.qualifies};
+  for (unsigned index = 0; index < 17; ++index) {
     *flags[index] = values[index + 1] != 0;
   }
-  kind.converts = values[17];
-  kind.to_unknown_bound = values[18];
+  kind.converts = values[18];
+  kind.to_unknown_bound = values[19];
   return true;
 }
 
@@ -86,10 +87,11 @@ bool same(const layer_kind &a, const layer_kind &b) {
          a.relocatable == b.relocatable && a.gives_element == b.gives_element &&
          a.bounded == b.bounded && a.may_be_empty == b.may_be_empty &&
          a.has_empty_value == b.has_empty_value && a.adopts == b.adopts &&
-         a.decays == b.decays && a.adopted == b.adopted &&
-         a.adopted_array == b.adopted_array && a.rebinds == b.rebinds &&
-         a.observes == b.observes && a.qualifies == b.qualifies &&
-         a.converts == b.converts && a.to_unknown_bound == b.to_unknown_bound;
+         a.adopts_bounded == b.adopts_bounded && a.decays == b.decays &&
+         a.adopted == b.adopted && a.adopted_array == b.adopted_array &&
+         a.rebinds == b.rebinds && a.observes == b.observes &&
+         a.qualifies == b.qualifies && a.converts == b.converts &&
+         a.to_unknown_bound == b.to_unknown_bound;
 }
 
 // Whether a plan replays: each of its steps is a step the semantics take

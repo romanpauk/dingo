@@ -152,6 +152,9 @@ template <typename Wrapper> constexpr semantics::layer_kind wrapper_kind() {
     kind.relocatable = std::is_move_constructible_v<movable>;
     kind.adopts = traits::is_owning_handle &&
                   std::is_constructible_v<copyable, copyable_probe *>;
+    // A handle takes over a pointer to an array of a known bound when its
+    // type traits say it deletes one as an array.
+    kind.adopts_bounded = kind.adopts && adopts_bounded_array_v<Wrapper>;
     // A pointer-like wrapper of the leaf is rebound to one of its interface.
     kind.rebinds = traits::is_pointer_like;
     // An observer is made of a raw pointer to its element.
