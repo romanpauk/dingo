@@ -52,7 +52,7 @@ public:
   // request otherwise.
   void *keep(bool stable, const object_layout &layout,
              execution::construct_function construct, void *make) override {
-    auto place_made = [&](void *at) { construct(at, make); };
+    auto place_made = [&](void *place) { construct(place, make); };
     if (stable) {
       // A binding that keeps no instance is planned to keep nothing made of
       // it.
@@ -69,8 +69,8 @@ public:
   // code of the context of its own.
   template <typename T, typename Make> T &keep(Make &&make) {
     return *static_cast<T *>(
-        context_.place(scope_, object_layout_v<T>, [&](void *at) {
-          ::new (at) T(std::forward<Make>(make)());
+        context_.place(scope_, object_layout_v<T>, [&](void *place) {
+          ::new (place) T(std::forward<Make>(make)());
         }));
   }
 
@@ -81,11 +81,11 @@ public:
       assert(store.retained_ != nullptr);
       return *static_cast<T *>(store.retained_->keep(
           &object_layout_v<T>, store.context_, object_layout_v<T>,
-          [&](void *at) { ::new (at) T(std::forward<Make>(make)()); }));
+          [&](void *place) { ::new (place) T(std::forward<Make>(make)()); }));
     }
   };
 
-  template <bool Stable> auto at() {
+  template <bool Stable> auto part() {
     if constexpr (Stable) {
       return stable_store{*this};
     } else {
@@ -129,19 +129,19 @@ public:
   plan_cache(const plan_cache &) = delete;
   plan_cache &operator=(const plan_cache &) = delete;
   ~plan_cache() {
-    entry *at = head_.load(std::memory_order_acquire);
-    while (at != nullptr) {
-      entry *next = at->next;
-      delete at;
-      at = next;
+    entry *current = head_.load(std::memory_order_acquire);
+    while (current != nullptr) {
+      entry *next = current->next;
+      delete current;
+      current = next;
     }
   }
 
   template <typename Make> const entry &find(const void *binding, Make &&make) {
     entry *head = head_.load(std::memory_order_acquire);
-    for (entry *at = head; at != nullptr; at = at->next) {
-      if (at->binding == binding) {
-        return *at;
+    for (entry *current = head; current != nullptr; current = current->next) {
+      if (current->binding == binding) {
+        return *current;
       }
     }
     execution::runtime_plans plans = make();
@@ -227,18 +227,19 @@ template <typename T> struct request_execution {
 template <typename T> inline plan_cache runtime_plans;
 
 template <typename T> constexpr runtime_request make_runtime_request() {
-  using of = request_execution<T>;
-  if constexpr (!of::modeled) {
+  using executed = request_execution<T>;
+  if constexpr (!executed::modeled) {
     return {type_descriptor_v<T>, nullptr, false, nullptr, {}, nullptr};
   } else {
-    using tables = execution::request_tables<T, typename of::element_type>;
+    using tables =
+        execution::request_tables<T, typename executed::element_type>;
     return {type_descriptor_v<T>,
             &execution::shape_key<
-                execution::request_interface_t<typename of::shape>>,
+                execution::request_interface_t<typename executed::shape>>,
             true,
-            &execution::shape_key<std::remove_cv_t<typename of::shape>>,
-            {of::layers::value, of::layers::count, of::goal(),
-             of::category::value, tables::value.value},
+            &execution::shape_key<std::remove_cv_t<typename executed::shape>>,
+            {executed::layers::value, executed::layers::count, executed::goal(),
+             executed::category::value, tables::value.value},
             &runtime_plans<T>};
   }
 }
@@ -253,9 +254,10 @@ namespace detail {
 template <typename T, typename Element, typename Types, std::size_t K>
 T wrap_nested(void *address) {
   // The value is moved into what holds it of the qualifiers it needs.
-  using of = std::remove_cv_t<typename Types::template nested<K>::type>;
+  using nested_type =
+      std::remove_cv_t<typename Types::template nested<K>::type>;
   return execution::wrap_value<Element, Element, T>(
-      std::move(*static_cast<of *>(address)));
+      std::move(*static_cast<nested_type *>(address)));
 }
 
 // A value of T made of the run of wraps the plan left to it: the makers of
@@ -298,11 +300,11 @@ template <typename T> T returned_value(resolved_address result) {
         return value_type(*static_cast<const value_type *>(result.address));
       }
     }
-    using of = request_execution<T>;
-    using types = execution::request_types<T, typename of::element_type>;
+    using executed = request_execution<T>;
+    using types = execution::request_types<T, typename executed::element_type>;
     if constexpr (types::depth != 0) {
       if (result.made == made_kind::run) {
-        return wrap_result<value_type, typename of::element_type, types>(
+        return wrap_result<value_type, typename executed::element_type, types>(
             result, std::make_index_sequence<types::depth>{});
       }
     }

@@ -194,11 +194,11 @@ private:
         plan_type::context(abstract),
         layers::value,
         layers::count,
-        sources::closed_tables.at,
-        sources::route_finishes.at,
-        sources::groups.at,
+        sources::closed_tables.entries,
+        sources::route_finishes.entries,
+        sources::groups.entries,
         sources::shapes.count,
-        sources::answers.at};
+        sources::answers.entries};
   };
 
   static constexpr const detail::execution::binding_layout *layout() {

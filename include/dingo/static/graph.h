@@ -126,10 +126,10 @@ constexpr void graph_write_bindings(void *, std::array<std::size_t, Edges> &,
 template <typename Universe, typename... Dependencies, std::size_t Edges>
 constexpr void graph_write_bindings(type_list<Dependencies...> *,
                                     std::array<std::size_t, Edges> &edges,
-                                    std::size_t at) {
-  ((edges[at++] = graph_type_position<Dependencies, Universe>::value), ...);
+                                    std::size_t index) {
+  ((edges[index++] = graph_type_position<Dependencies, Universe>::value), ...);
   (void)edges;
-  (void)at;
+  (void)index;
 }
 
 template <typename Host, typename Universe, typename Binding,

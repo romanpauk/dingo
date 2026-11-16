@@ -22,13 +22,6 @@ template <typename Enum> class flags {
 public:
   constexpr flags() = default;
 
-  // The set of the values given.
-  template <typename... Values> static constexpr flags of(Values... values) {
-    flags set;
-    (set.set(values), ...);
-    return set;
-  }
-
   // Adds a value, where it holds.
   constexpr flags &set(Enum value, bool holds = true) {
     if (holds) {

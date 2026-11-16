@@ -159,7 +159,7 @@ struct keeps_apart : std::false_type {};
 
 template <typename Store>
 struct keeps_apart<
-    Store, std::void_t<decltype(std::declval<Store &>().template at<true>())>>
+    Store, std::void_t<decltype(std::declval<Store &>().template part<true>())>>
     : std::true_type {};
 
 // A step of a kind, to the layer Target where it makes one.
@@ -171,7 +171,7 @@ template <semantics::step Kind, typename Target = void> struct step;
 // pointer is to the first element of one.
 template <typename T, bool Array> struct released_pointer {
   T *pointer;
-  explicit released_pointer(T *of) : pointer(of) {}
+  explicit released_pointer(T *owned) : pointer(owned) {}
   released_pointer(const released_pointer &) = delete;
   released_pointer &operator=(const released_pointer &) = delete;
   ~released_pointer() {
@@ -186,15 +186,15 @@ template <typename T, bool Array> struct released_pointer {
 template <bool Array> struct release_step {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
-  static auto apply(carrier<T, Owned> from, Store &store) {
+  static auto apply(carrier<T, Owned> source, Store &store) {
     static_assert(Owned && std::is_pointer_v<T>,
                   "only a pointer the request owns is released");
     using pointee = std::remove_pointer_t<T>;
-    T pointer = *from.object;
+    T pointer = *source.object;
     store.template keep<released_pointer<pointee, Array>>(
         [&] { return released_pointer<pointee, Array>(pointer); });
     // What it points to is released from what it was taken out of.
-    from.released();
+    source.released();
     return carrier<pointee, true>{pointer};
   }
 };
@@ -204,16 +204,16 @@ template <bool Array> struct release_step {
 template <> struct step<semantics::step::element> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
-  static auto apply(carrier<T, Owned> from, Store &store) {
+  static auto apply(carrier<T, Owned> source, Store &store) {
     using element = held_element_t<T, Leaf>;
     carrier<element, Owned && owns_alone<T>()> reached{
-        element_address<T, Leaf>(*from.object), from.owner, from.release};
+        element_address<T, Leaf>(*source.object), source.owner, source.release};
     if (reached.object == nullptr) {
       store.absent();
     }
     if constexpr (Owned && releases_element_v<T>) {
       // The element of a handle the request owns is handed over with it.
-      reached.owner = from.object;
+      reached.owner = source.object;
       reached.release = &release_element<T>;
     }
     return reached;
@@ -225,11 +225,12 @@ template <> struct step<semantics::step::element> {
 template <> struct step<semantics::step::element_pointer> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
-  static auto apply(carrier<T, Owned> from, Store &store) {
+  static auto apply(carrier<T, Owned> source, Store &store) {
     using element = held_element_t<T, Leaf>;
     using pointer = std::add_pointer_t<std::remove_extent_t<element>>;
     auto &made = store.template keep<pointer>([&] {
-      return reinterpret_cast<pointer>(element_address<T, Leaf>(*from.object));
+      return reinterpret_cast<pointer>(
+          element_address<T, Leaf>(*source.object));
     });
     return carrier<pointer, false>{std::addressof(made)};
   }
@@ -240,10 +241,10 @@ template <> struct step<semantics::step::element_pointer> {
 template <> struct step<semantics::step::element_or_empty> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
-  static auto apply(carrier<T, Owned> from, Store &store) {
+  static auto apply(carrier<T, Owned> source, Store &store) {
     using element = held_element_t<T, Leaf>;
     constexpr bool owned = Owned && owns_alone<T>();
-    if (auto *held = element_address<T, Leaf>(*from.object)) {
+    if (auto *held = element_address<T, Leaf>(*source.object)) {
       return carrier<element, owned>{held};
     }
     using value_type = std::remove_cv_t<element>;
@@ -257,9 +258,9 @@ template <> struct step<semantics::step::element_or_empty> {
 template <> struct step<semantics::step::element_or_empty_copy> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
-  static auto apply(carrier<T, Owned> from, Store &store) {
+  static auto apply(carrier<T, Owned> source, Store &store) {
     using element = std::remove_cv_t<held_element_t<T, Leaf>>;
-    auto *held = element_address<T, Leaf>(*from.object);
+    auto *held = element_address<T, Leaf>(*source.object);
     auto &made = store.template keep<element>([held]() -> element {
       if (held) {
         return *held;
@@ -275,12 +276,12 @@ template <> struct step<semantics::step::element_or_empty_copy> {
 template <> struct step<semantics::step::convert> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
-  static auto apply(carrier<T, Owned> from, Store &store) {
+  static auto apply(carrier<T, Owned> source, Store &store) {
     static_assert(Owned, "only an owned value converts");
     using made_type = typename type_traits<T>::template share_t<
         typename type_traits<T>::value_type>;
     auto &made = store.template keep<made_type>(
-        [&] { return made_type(std::move(*from.object)); });
+        [&] { return made_type(std::move(*source.object)); });
     return carrier<made_type, true>{std::addressof(made)};
   }
 };
@@ -291,15 +292,15 @@ template <> struct step<semantics::step::convert> {
 template <> struct step<semantics::step::unknown_bound> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
-  static auto apply(carrier<T, Owned> from, Store &store) {
+  static auto apply(carrier<T, Owned> source, Store &store) {
     using type = std::remove_cv_t<T>;
     using made_type = typename type_traits<type>::template unknown_bound_t<
         typename type_traits<type>::value_type>;
     auto &made = store.template keep<made_type>([&] {
       if constexpr (Owned) {
-        return made_type(std::move(*from.object));
+        return made_type(std::move(*source.object));
       } else {
-        return made_type(*from.object);
+        return made_type(*source.object);
       }
     });
     return carrier<made_type, true>{std::addressof(made)};
@@ -334,20 +335,20 @@ template <typename T, typename Leaf, typename Interface> struct upcast_type {
 template <> struct step<semantics::step::upcast> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
-  static auto apply(carrier<T, Owned> from, Store &store) {
+  static auto apply(carrier<T, Owned> source, Store &store) {
     if constexpr (std::is_same_v<std::remove_cv_t<T>, Leaf>) {
       using qualified_interface = qualified_like_t<T, Interface>;
       return carrier<qualified_interface, Owned>{
-          static_cast<qualified_interface *>(from.object), from.owner,
-          from.release};
+          static_cast<qualified_interface *>(source.object), source.owner,
+          source.release};
     } else if constexpr (std::is_pointer_v<T>) {
       // A pointer of the interface, to the same object: a pointer the request
       // owns stays owned, and still releases what it was taken out of.
       using made_type = typename upcast_type<T, Leaf, Interface>::type;
       auto &made = store.template keep<made_type>(
-          [&] { return made_type(*from.object); });
-      return carrier<made_type, Owned>{std::addressof(made), from.owner,
-                                       from.release};
+          [&] { return made_type(*source.object); });
+      return carrier<made_type, Owned>{std::addressof(made), source.owner,
+                                       source.release};
     } else {
       // A handle, or a stack of layers, of the interface: converted of the
       // one the request owns, which is moved, or copied, as a new object the
@@ -355,9 +356,9 @@ template <> struct step<semantics::step::upcast> {
       using made_type = typename upcast_type<T, Leaf, Interface>::type;
       auto &made = store.template keep<made_type>([&]() -> made_type {
         if constexpr (Owned) {
-          return made_type(std::move(*from.object));
+          return made_type(std::move(*source.object));
         } else {
-          return made_type(*from.object);
+          return made_type(*source.object);
         }
       });
       return carrier<made_type, Owned || std::is_copy_constructible_v<T>>{
@@ -370,10 +371,10 @@ template <> struct step<semantics::step::upcast> {
 template <> struct step<semantics::step::copy> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
-  static auto apply(carrier<T, Owned> from, Store &store) {
+  static auto apply(carrier<T, Owned> source, Store &store) {
     using made_type = std::remove_cv_t<T>;
     auto &made = store.template keep<made_type>(
-        [object = from.object]() -> made_type { return made_type(*object); });
+        [object = source.object]() -> made_type { return made_type(*object); });
     return carrier<made_type, true>{std::addressof(made)};
   }
 };
@@ -383,10 +384,10 @@ template <> struct step<semantics::step::copy> {
 template <typename Target> struct step<semantics::step::wrap, Target> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
-  static auto apply(carrier<T, Owned> from, Store &store) {
+  static auto apply(carrier<T, Owned> source, Store &store) {
     using made_type = wrapped_t<Leaf, Interface, T>;
     auto &made = store.template keep<made_type>(
-        [&] { return wrapped<Leaf, Interface>(std::move(*from.object)); });
+        [&] { return wrapped<Leaf, Interface>(std::move(*source.object)); });
     return carrier<made_type, true>{std::addressof(made)};
   }
 
@@ -425,14 +426,14 @@ template <typename Target> struct step<semantics::step::wrap, Target> {
 template <> struct step<semantics::step::decay> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
-  static auto apply(carrier<T, Owned> from, Store &store) {
+  static auto apply(carrier<T, Owned> source, Store &store) {
     using pointer = std::add_pointer_t<std::remove_extent_t<T>>;
     auto &made = store.template keep<pointer>(
-        [&] { return reinterpret_cast<pointer>(from.object); });
+        [&] { return reinterpret_cast<pointer>(source.object); });
     if constexpr (Owned) {
       // The pointer of an array the request owns owns it: it is given up by
       // what it was taken out of.
-      from.released();
+      source.released();
     }
     return carrier<pointer, Owned>{std::addressof(made)};
   }
@@ -442,10 +443,10 @@ template <> struct step<semantics::step::decay> {
 template <> struct step<semantics::step::hand_over> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
-  static auto apply(carrier<T, Owned> from, Store &store) {
-    auto &made = store.template keep<T *>([&] { return from.object; });
+  static auto apply(carrier<T, Owned> source, Store &store) {
+    auto &made = store.template keep<T *>([&] { return source.object; });
     // The pointer owns the array now.
-    from.released();
+    source.released();
     return carrier<T *, Owned>{std::addressof(made)};
   }
 };
@@ -500,11 +501,11 @@ template <typename Target, std::uint8_t Quals = made_quals>
 struct observe_step {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
-  static auto apply(carrier<T, Owned> from, Store &store) {
+  static auto apply(carrier<T, Owned> source, Store &store) {
     using pointee = held_t<std::remove_pointer_t<std::remove_cv_t<T>>, Quals>;
     using made_type = typename type_traits<Target>::template rebind_t<pointee>;
-    auto &made =
-        store.template keep<made_type>([&] { return made_type(*from.object); });
+    auto &made = store.template keep<made_type>(
+        [&] { return made_type(*source.object); });
     return carrier<made_type, true>{std::addressof(made)};
   }
 };
@@ -544,7 +545,7 @@ template <typename Target, bool Array, std::uint8_t Quals = made_quals>
 struct adopt_step {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
-  static auto apply(carrier<T, Owned> from, Store &store) {
+  static auto apply(carrier<T, Owned> source, Store &store) {
     using pointee = held_t<std::remove_pointer_t<T>, Quals>;
     using made_type = adopting_handle_t<Target, pointee, Array>;
     // A handle of an array takes over a pointer to the whole array as the
@@ -552,10 +553,11 @@ struct adopt_step {
     // A type, as MSVC does not take a constant of the function in a lambda.
     using whole = std::bool_constant<!Array && is_array_like_type_v<Target> &&
                                      std::is_array_v<pointee>>;
-    auto &made = store.template keep<made_type>(
-        [&] { return made_type(adopted_pointer<whole::value>(*from.object)); });
+    auto &made = store.template keep<made_type>([&] {
+      return made_type(adopted_pointer<whole::value>(*source.object));
+    });
     // The handle owns what the pointer points to now.
-    from.released();
+    source.released();
     return carrier<made_type, true>{std::addressof(made)};
   }
 };
@@ -565,13 +567,13 @@ struct adopt_step {
 template <std::uint8_t Quals> struct qualify_step {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
-  static auto apply(carrier<T, Owned> from, Store &store) {
+  static auto apply(carrier<T, Owned> source, Store &store) {
     using made_type = requalified_t<T, Quals>;
     auto &made = store.template keep<made_type>([&]() -> made_type {
       if constexpr (Owned) {
-        return made_type(std::move(*from.object));
+        return made_type(std::move(*source.object));
       } else {
-        return made_type(*from.object);
+        return made_type(*source.object);
       }
     });
     return carrier<made_type, true>{std::addressof(made)};
@@ -718,7 +720,7 @@ struct step_result<qualify_step<Quals>, Leaf, Interface, T, Owned,
 // request: a store that keeps them apart gives each with at<Stable>().
 template <bool Stable, typename Store> decltype(auto) store_of(Store &store) {
   if constexpr (keeps_apart<Store>::value) {
-    return store.template at<Stable>();
+    return store.template part<Stable>();
   } else {
     return (store);
   }
@@ -855,9 +857,9 @@ constexpr void place_layers(semantics::layer *layers, type_list<Tags...>) {
   ((layers[index++] = Universe::template index<Tags>()), ...);
 }
 
-constexpr semantics::element semantic_element(stack_element of) {
-  return of == stack_element::abstract ? semantics::element::abstract
-                                       : semantics::element::leaf;
+constexpr semantics::element semantic_element(stack_element element) {
+  return element == stack_element::abstract ? semantics::element::abstract
+                                            : semantics::element::leaf;
 }
 
 // A plan as both containers run it: a program of instructions, each of the
@@ -894,7 +896,7 @@ struct instruction {
 };
 
 struct program {
-  instruction at[semantics::max_plan] = {};
+  instruction entries[semantics::max_plan] = {};
   std::size_t count = 0;
   finish last = finish::satisfy;
   // The wraps of a run the request makes last.
@@ -916,17 +918,17 @@ constexpr program compile_program(const semantics::plan &plan,
   auto binding_takes = [&](std::size_t index) {
     return plan.states[index + 1] < source_count;
   };
-  std::size_t at = 0;
-  while (at < plan.count) {
-    const step kind = plan.steps[at];
-    std::size_t last = at;
+  std::size_t index = 0;
+  while (index < plan.count) {
+    const step kind = plan.steps[index];
+    std::size_t last = index;
     while (kind == step::wrap && last + 1 < plan.count &&
            plan.steps[last + 1] == step::wrap &&
-           binding_takes(last + 1) == binding_takes(at)) {
+           binding_takes(last + 1) == binding_takes(index)) {
       ++last;
     }
     const auto wraps =
-        static_cast<std::uint8_t>(kind == step::wrap ? last - at + 1 : 0);
+        static_cast<std::uint8_t>(kind == step::wrap ? last - index + 1 : 0);
     bool qualified = false;
     if ((kind == step::wrap || kind == step::adopt || kind == step::observe) &&
         last + 1 < plan.count && plan.steps[last + 1] == step::qualify &&
@@ -937,19 +939,19 @@ constexpr program compile_program(const semantics::plan &plan,
     const bool binding = binding_takes(last);
     if (last + 1 == plan.count && value) {
       if (binding && kind == step::element_or_empty_copy) {
-        made.at[made.count++] = {step::element_or_empty,
-                                 static_cast<std::uint8_t>(at),
-                                 static_cast<std::uint8_t>(last),
-                                 true,
-                                 0,
-                                 false};
+        made.entries[made.count++] = {step::element_or_empty,
+                                      static_cast<std::uint8_t>(index),
+                                      static_cast<std::uint8_t>(last),
+                                      true,
+                                      0,
+                                      false};
         made.last = finish::copy;
-        made.quals = plan.objects[at].quals[1];
+        made.quals = plan.objects[index].quals[1];
         return made;
       }
       if (!binding && kind == step::copy) {
         made.last = finish::copy;
-        made.quals = plan.objects[at].quals[0];
+        made.quals = plan.objects[index].quals[0];
         return made;
       }
       if (!binding && kind == step::wrap && !qualified) {
@@ -958,13 +960,13 @@ constexpr program compile_program(const semantics::plan &plan,
         return made;
       }
     }
-    made.at[made.count++] = {kind,
-                             static_cast<std::uint8_t>(at),
-                             static_cast<std::uint8_t>(last),
-                             binding,
-                             wraps,
-                             qualified};
-    at = last + 1;
+    made.entries[made.count++] = {kind,
+                                  static_cast<std::uint8_t>(index),
+                                  static_cast<std::uint8_t>(last),
+                                  binding,
+                                  wraps,
+                                  qualified};
+    index = last + 1;
   }
   return made;
 }
@@ -975,15 +977,15 @@ constexpr program compile_program(const semantics::plan &plan,
 // a constant expression of them is evaluated once for every shape, not for
 // every type of it.
 struct shape_code {
-  std::uint64_t at[4 + 2 * semantics::max_kinds] = {};
+  std::uint64_t entries[4 + 2 * semantics::max_kinds] = {};
   std::size_t count = 0;
 };
 
-constexpr std::uint64_t bit(bool value, unsigned at) {
-  return static_cast<std::uint64_t>(value) << at;
+constexpr std::uint64_t bit(bool value, unsigned index) {
+  return static_cast<std::uint64_t>(value) << index;
 }
-constexpr bool test_bit(std::uint64_t code, unsigned at) {
-  return ((code >> at) & 1u) != 0;
+constexpr bool test_bit(std::uint64_t code, unsigned index) {
+  return ((code >> index) & 1u) != 0;
 }
 
 constexpr std::uint64_t encode_kind(const semantics::layer_kind &kind) {
@@ -1026,13 +1028,14 @@ constexpr semantics::layer_kind decode_kind(std::uint64_t code,
 }
 
 // The context of a binding, of no universe.
-constexpr std::uint64_t encode_context(const semantics::context &with) {
-  return bit(with.leaf.copyable, 0) | bit(with.leaf.movable, 1) |
-         bit(with.leaf.default_constructible, 2) |
-         bit(with.leaf.factory_made, 3) | bit(with.leaf.copies_volatile, 4) |
-         bit(with.scope.makes, 5) | bit(with.scope.given, 6) |
-         bit(with.scope.publishes_early, 7) | bit(with.abstract, 8) |
-         (static_cast<std::uint64_t>(with.limits) << 16);
+constexpr std::uint64_t encode_context(const semantics::context &context) {
+  return bit(context.leaf.copyable, 0) | bit(context.leaf.movable, 1) |
+         bit(context.leaf.default_constructible, 2) |
+         bit(context.leaf.factory_made, 3) |
+         bit(context.leaf.copies_volatile, 4) | bit(context.scope.makes, 5) |
+         bit(context.scope.given, 6) | bit(context.scope.publishes_early, 7) |
+         bit(context.abstract, 8) |
+         (static_cast<std::uint64_t>(context.limits) << 16);
 }
 
 constexpr semantics::context decode_context(std::uint64_t code,
@@ -1046,28 +1049,28 @@ constexpr semantics::context decode_context(std::uint64_t code,
 }
 
 // An object, in two integers.
-constexpr std::uint64_t encode_object(const semantics::object &of) {
+constexpr std::uint64_t encode_object(const semantics::object &object) {
   std::uint64_t made = 0;
   for (std::size_t index = 0; index < semantics::max_layers; ++index) {
-    made |= static_cast<std::uint64_t>(of.layers[index]) << (8 * index);
+    made |= static_cast<std::uint64_t>(object.layers[index]) << (8 * index);
   }
-  return made | (static_cast<std::uint64_t>(of.depth) << 48) |
-         (static_cast<std::uint64_t>(of.of) << 52) |
-         (static_cast<std::uint64_t>(of.from) << 54) | bit(of.instance, 56) |
-         bit(of.unconstructed, 57) | bit(of.absent, 58) |
-         bit(of.owns_pointee, 59) | bit(of.made_layer, 60) |
-         bit(of.qualified, 61);
+  return made | (static_cast<std::uint64_t>(object.depth) << 48) |
+         (static_cast<std::uint64_t>(object.element) << 52) |
+         (static_cast<std::uint64_t>(object.origin) << 54) |
+         bit(object.instance, 56) | bit(object.unconstructed, 57) |
+         bit(object.absent, 58) | bit(object.owns_pointee, 59) |
+         bit(object.made_layer, 60) | bit(object.qualified, 61);
 }
 
-constexpr std::uint64_t encode_object_detail(const semantics::object &of) {
+constexpr std::uint64_t encode_object_detail(const semantics::object &object) {
   std::uint64_t made = 0;
   for (std::size_t index = 0; index <= semantics::max_layers; ++index) {
-    made |= static_cast<std::uint64_t>(of.lifetimes[index]) << (2 * index);
-    made |= static_cast<std::uint64_t>(of.quals[index] & 15u)
+    made |= static_cast<std::uint64_t>(object.lifetimes[index]) << (2 * index);
+    made |= static_cast<std::uint64_t>(object.quals[index] & 15u)
             << (14 + 4 * index);
   }
-  return made | (static_cast<std::uint64_t>(of.contained) << 42) |
-         (static_cast<std::uint64_t>(of.full & 15u) << 50);
+  return made | (static_cast<std::uint64_t>(object.contained) << 42) |
+         (static_cast<std::uint64_t>(object.full & 15u) << 50);
 }
 
 constexpr semantics::object decode_object(std::uint64_t code,
@@ -1077,8 +1080,8 @@ constexpr semantics::object decode_object(std::uint64_t code,
     made.layers[index] = static_cast<semantics::layer>(code >> (8 * index));
   }
   made.depth = static_cast<std::uint8_t>((code >> 48) & 15u);
-  made.of = static_cast<semantics::element>((code >> 52) & 3u);
-  made.from = static_cast<semantics::origin>((code >> 54) & 3u);
+  made.element = static_cast<semantics::element>((code >> 52) & 3u);
+  made.origin = static_cast<semantics::origin>((code >> 54) & 3u);
   made.instance = test_bit(code, 56);
   made.unconstructed = test_bit(code, 57);
   made.absent = test_bit(code, 58);
@@ -1096,16 +1099,17 @@ constexpr semantics::object decode_object(std::uint64_t code,
   return made;
 }
 
-constexpr shape_code encode_shape(const semantics::context &with,
+constexpr shape_code encode_shape(const semantics::context &context,
                                   const semantics::object &start) {
   shape_code made;
-  made.at[made.count++] = encode_context(with);
-  made.at[made.count++] = encode_object(start);
-  made.at[made.count++] = encode_object_detail(start);
-  made.at[made.count++] = with.layers->count;
-  for (std::size_t index = 0; index < with.layers->count; ++index) {
-    made.at[made.count++] = encode_kind(with.layers->kinds[index]);
-    made.at[made.count++] = with.layers->kinds[index].converts_unknown_bound;
+  made.entries[made.count++] = encode_context(context);
+  made.entries[made.count++] = encode_object(start);
+  made.entries[made.count++] = encode_object_detail(start);
+  made.entries[made.count++] = context.layers->count;
+  for (std::size_t index = 0; index < context.layers->count; ++index) {
+    made.entries[made.count++] = encode_kind(context.layers->kinds[index]);
+    made.entries[made.count++] =
+        context.layers->kinds[index].converts_unknown_bound;
   }
   return made;
 }
@@ -1141,7 +1145,8 @@ template <typename Plan, bool Abstract> struct plan_shape {
   static constexpr shape_code code =
       encode_shape(Plan::context(Abstract), Plan::start());
   template <std::size_t... I>
-  static auto make(std::index_sequence<I...>) -> binding_shape<code.at[I]...>;
+  static auto make(std::index_sequence<I...>)
+      -> binding_shape<code.entries[I]...>;
   using type = decltype(make(std::make_index_sequence<code.count>{}));
 };
 
@@ -1179,13 +1184,13 @@ struct binding_plan {
     place_layers<universe_type>(made.layers, typename stored_stack::layers{});
     made.depth = static_cast<std::uint8_t>(
         type_list_size_v<typename stored_stack::layers>);
-    made.of = semantic_element(stored_stack::element);
+    made.element = semantic_element(stored_stack::element);
     stack_quals<Stored, Leaf>::fill(made.quals);
     for (std::size_t index = 0; index <= made.depth; ++index) {
       made.lifetimes[index] =
           Makes ? semantics::lifetime::request : semantics::lifetime::stable;
     }
-    made.from = Makes ? semantics::origin::made : semantics::origin::borrowed;
+    made.origin = Makes ? semantics::origin::made : semantics::origin::borrowed;
     made.instance = true;
     // A pointer a scope makes owns what it points to.
     made.owns_pointee =
@@ -1245,9 +1250,9 @@ struct request_plan {
       request_stack::element != stack_element::other;
 
   static constexpr semantics::context context() {
-    semantics::context with = binding::context(abstract);
-    with.layers = &universe_type::value;
-    return with;
+    semantics::context context = binding::context(abstract);
+    context.layers = &universe_type::value;
+    return context;
   }
 
   static constexpr semantics::request goal() {
@@ -1255,7 +1260,7 @@ struct request_plan {
     place_layers<universe_type>(made.layers, typename request_stack::layers{});
     made.depth = static_cast<std::uint8_t>(
         type_list_size_v<typename request_stack::layers>);
-    made.of = semantic_element(request_stack::element);
+    made.element = semantic_element(request_stack::element);
     stack_quals<shape, Leaf>::fill(made.quals);
     return made;
   }
@@ -1266,13 +1271,13 @@ struct request_plan {
       return {};
     } else {
       static_assert(binding::template whole<abstract>());
-      constexpr semantics::context with = context();
+      constexpr semantics::context closed_context = context();
       const semantics::search found = semantics::reach_closed(
           binding::template closed<abstract>,
-          binding::context(abstract).layers->count, with, goal());
+          binding::context(abstract).layers->count, closed_context, goal());
       return semantics::answer_plan(
-          found,
-          semantics::satisfy(found, goal(), category::value, needed, with));
+          found, semantics::satisfy(found, goal(), category::value, needed,
+                                    closed_context));
     }
   }
 
@@ -1291,11 +1296,11 @@ struct request_plan {
       compile_program(transient, source_count);
 };
 
-// The C++ step of a step of the semantics, from the object At::from() to the
-// object At::reached(), to the layers of a universe of identities.
-template <typename Identities, typename At> struct typed_step {
-  static constexpr semantics::step kind = At::kind;
-  static constexpr semantics::object reached = At::reached();
+// The C++ step of a step of the semantics, from the object Semantic::source()
+// to the object Semantic::reached(), to the layers of a universe of identities.
+template <typename Identities, typename Semantic> struct typed_step {
+  static constexpr semantics::step kind = Semantic::kind;
+  static constexpr semantics::object reached = Semantic::reached();
 
   template <semantics::layer Layer>
   using layer_type = type_list_element_t<Layer - 4, Identities>;
@@ -1306,7 +1311,7 @@ template <typename Identities, typename At> struct typed_step {
     } else if constexpr (kind == semantics::step::release) {
       // The pointer is to the first element of an array when the step
       // before decayed or handed over an array.
-      return release_step<At::from().layers[0] ==
+      return release_step<Semantic::source().layers[0] ==
                           semantics::array_pointer_layer>{};
     } else if constexpr (kind == semantics::step::adopt) {
       return adopt_step<layer_type<reached.layers[0]>,
@@ -1325,7 +1330,7 @@ template <typename Identities, typename At> struct typed_step {
 // The step at an index of a plan.
 template <const semantics::plan &Plan, std::size_t Index> struct plan_step {
   static constexpr semantics::step kind = Plan.steps[Index];
-  static constexpr semantics::object from() { return Plan.objects[Index]; }
+  static constexpr semantics::object source() { return Plan.objects[Index]; }
   static constexpr semantics::object reached() {
     return Plan.objects[Index + 1];
   }
@@ -1335,7 +1340,7 @@ template <const semantics::plan &Plan, std::size_t Index> struct plan_step {
 template <const semantics::search &Search, std::size_t State>
 struct search_step {
   static constexpr semantics::step kind = Search.states[State].via;
-  static constexpr semantics::object from() {
+  static constexpr semantics::object source() {
     return Search.states[Search.states[State].parent].reached;
   }
   static constexpr semantics::object reached() {
@@ -1373,55 +1378,56 @@ template <const semantics::plan &Plan, const program &Program,
 struct program_run {
   template <typename Request, std::size_t Index = 0, typename Carrier,
             typename Store>
-  static Request run(Carrier from, Store &store) {
+  static Request run(Carrier source, Store &store) {
     if constexpr (Index == Program.count) {
-      return finished<Request>(from);
+      return finished<Request>(source);
     } else {
-      return run<Request, Index + 1>(apply<Index>(from, store), store);
+      return run<Request, Index + 1>(apply<Index>(source, store), store);
     }
   }
 
   // What the program reaches, before the request takes its value.
   template <std::size_t Index = 0, typename Carrier, typename Store>
-  static auto reach(Carrier from, Store &store) {
+  static auto reach(Carrier source, Store &store) {
     if constexpr (Index == Program.count) {
-      return from;
+      return source;
     } else {
-      return reach<Index + 1>(apply<Index>(from, store), store);
+      return reach<Index + 1>(apply<Index>(source, store), store);
     }
   }
 
   template <std::size_t Index, typename T, bool Owned, typename Store>
-  static auto apply(carrier<T, Owned> from, Store &store) {
-    constexpr instruction Each = Program.at[Index];
+  static auto apply(carrier<T, Owned> source, Store &store) {
+    constexpr instruction Each = Program.entries[Index];
     constexpr semantics::object reached = Plan.objects[Each.last + 1];
     auto &&kept =
         store_of<reached.lifetimes[0] == semantics::lifetime::stable>(store);
     if constexpr (Each.kind == semantics::step::wrap) {
       using made_type = typename layer_wrapper<T, Index>::type;
       auto &made = kept.template keep<made_type>([&] {
-        return wrap_value<Leaf, Interface, made_type>(std::move(*from.object));
+        return wrap_value<Leaf, Interface, made_type>(
+            std::move(*source.object));
       });
       return carrier<made_type, true>{std::addressof(made)};
     } else if constexpr (Each.qualified) {
       using step_type =
           typename holding_step<plan_step_t<Plan, Identities, Each.first>,
                                 reached.quals[1]>::type;
-      return step_type::template apply<Leaf, Interface>(from, kept);
+      return step_type::template apply<Leaf, Interface>(source, kept);
     } else if constexpr (Each.kind == Plan.steps[Each.first]) {
       return plan_step_t<Plan, Identities,
-                         Each.first>::template apply<Leaf, Interface>(from,
+                         Each.first>::template apply<Leaf, Interface>(source,
                                                                       kept);
     } else {
       // A step the program takes in place of the plan's.
-      return step<Each.kind>::template apply<Leaf, Interface>(from, kept);
+      return step<Each.kind>::template apply<Leaf, Interface>(source, kept);
     }
   }
 
   // The type a run of wraps makes of a value of T, of the qualifiers its
   // element needs when a conversion to them ends it.
   template <typename T, std::size_t Index> struct layer_wrapper {
-    static constexpr instruction Each = Program.at[Index];
+    static constexpr instruction Each = Program.entries[Index];
     using wrapped = typename wrapped_run<Plan, Identities, Leaf, Interface, T,
                                          Each.first, Each.wraps>::type;
     template <typename U> struct tag {

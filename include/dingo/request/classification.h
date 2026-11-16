@@ -117,24 +117,28 @@ template <typename Traits, typename Element> struct rebound {
 // The properties of the layer of a wrapper.
 template <typename Wrapper> constexpr semantics::layer_kind wrapper_kind() {
   using traits = type_traits<Wrapper>;
-  using of = typename traits::semantics;
+  using wrapper_semantics = typename traits::semantics;
   semantics::layer_kind kind;
-  if constexpr (is_semantics_v<of, ::dingo::semantics::observer>) {
+  if constexpr (is_semantics_v<wrapper_semantics,
+                               ::dingo::semantics::observer>) {
     kind.owns = semantics::owner::none;
     kind.shares_element = true;
-  } else if constexpr (is_semantics_v<of, ::dingo::semantics::sole_owner>) {
+  } else if constexpr (is_semantics_v<wrapper_semantics,
+                                      ::dingo::semantics::sole_owner>) {
     kind.owns = semantics::owner::sole;
     kind.shares_element = true;
     kind.wraps_value = true;
-  } else if constexpr (is_semantics_v<of, ::dingo::semantics::shared_owner>) {
+  } else if constexpr (is_semantics_v<wrapper_semantics,
+                                      ::dingo::semantics::shared_owner>) {
     kind.owns = semantics::owner::shared;
     kind.shares_element = true;
     kind.wraps_value = true;
   } else {
-    static_assert(is_semantics_v<of, ::dingo::semantics::optional_value>,
-                  "a wrapper derives from one of the semantics of "
-                  "type_traits; an alternative type is a layer by the "
-                  "alternative that holds the element");
+    static_assert(
+        is_semantics_v<wrapper_semantics, ::dingo::semantics::optional_value>,
+        "a wrapper derives from one of the semantics of "
+        "type_traits; an alternative type is a layer by the "
+        "alternative that holds the element");
     kind.owns = semantics::owner::sole;
     kind.wraps_value = true;
     kind.has_empty_value = true;
@@ -435,17 +439,18 @@ template <typename... Tags> struct layer_universe<type_list<Tags...>> {
     semantics::layer_kind kind = wrapper_kind_v<Identity>;
     using target = typename shared_layer<Identity>::type;
     if constexpr (!std::is_void_v<target>) {
-      constexpr semantics::layer to = layer_index<target>(identities{});
-      if constexpr (to != semantics::no_layer) {
-        kind.converts |= std::uint32_t{1} << to;
+      constexpr semantics::layer shared_index =
+          layer_index<target>(identities{});
+      if constexpr (shared_index != semantics::no_layer) {
+        kind.converts |= std::uint32_t{1} << shared_index;
       }
     }
     if constexpr (converts_unknown_bound<Identity>()) {
-      constexpr semantics::layer to =
+      constexpr semantics::layer unknown_bound_index =
           layer_index<typename unknown_bound_layer<Identity>::type>(
               identities{});
-      if constexpr (to != semantics::no_layer) {
-        kind.converts_unknown_bound |= std::uint32_t{1} << to;
+      if constexpr (unknown_bound_index != semantics::no_layer) {
+        kind.converts_unknown_bound |= std::uint32_t{1} << unknown_bound_index;
       }
     }
     made.add(kind);

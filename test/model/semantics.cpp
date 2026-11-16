@@ -226,14 +226,14 @@ int main(int count, char **arguments) {
       std::fprintf(stderr, "malformed request\n");
       return 1;
     }
-    start.of = static_cast<element>(start_element);
+    start.element = static_cast<element>(start_element);
     for (std::size_t index = 0; index <= start.depth; ++index) {
       start.lifetimes[index] = static_cast<lifetime>(start_lifetime);
     }
-    start.from = static_cast<origin>(start_origin);
+    start.origin = static_cast<origin>(start_origin);
     start.owns_pointee = start_owns != 0;
     start.instance = true;
-    goal.of = static_cast<element>(goal_element);
+    goal.element = static_cast<element>(goal_element);
     goal.shape_depth = static_cast<std::uint8_t>(shape_depth);
     const context with{{copyable != 0, movable != 0, constructible != 0, false,
                         copies_volatile != 0},

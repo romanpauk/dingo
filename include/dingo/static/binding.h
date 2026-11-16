@@ -204,7 +204,7 @@ public:
 
   [[noreturn]] void absent() { transient_.absent(); }
 
-  template <bool Stable> auto &at() {
+  template <bool Stable> auto &part() {
     if constexpr (Stable) {
       return stable_;
     } else {
