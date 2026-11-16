@@ -230,6 +230,15 @@ differences give the costs it prints: of the runtime container, and of a first
 registration, a further registration and a request type of each shape in each
 container.
 
+Where the processor counts the instructions of a process for its user, as `perf`
+tells, each container and each shape is also a program that runs, optimized as
+the code-generation probes are. It counts, with `perf_event_open`, the
+instructions of what the containers run: each of two registrations in the
+runtime container, the first resolution of each request type, which plans it,
+and the mean of a thousand resolutions after it. A count differs by an
+instruction or two between runs of one program. Where the processor counts no
+instructions, these programs are not run.
+
 The measurements are kept results, in `programs/` of its work directory, and the
 last of each scenario for each compiler beside them, in `programs/latest/`. A
 run tells which measurements changed since the one before, past what changes
