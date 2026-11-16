@@ -50,19 +50,19 @@ template <typename T, auto... Values>
 inline constexpr bool is_brace_constructible_v =
     is_brace_constructible_impl<T, void, Values...>::value;
 
-// To with the const and volatile qualifiers of From.
-template <typename From, typename To> struct copy_cv {
+// Target with the const and volatile qualifiers of Source.
+template <typename Source, typename Target> struct copy_cv {
 private:
-  using const_type =
-      std::conditional_t<std::is_const_v<From>, std::add_const_t<To>, To>;
+  using const_type = std::conditional_t<std::is_const_v<Source>,
+                                        std::add_const_t<Target>, Target>;
 
 public:
-  using type = std::conditional_t<std::is_volatile_v<From>,
+  using type = std::conditional_t<std::is_volatile_v<Source>,
                                   std::add_volatile_t<const_type>, const_type>;
 };
 
-template <typename From, typename To>
-using copy_cv_t = typename copy_cv<From, To>::type;
+template <typename Source, typename Target>
+using copy_cv_t = typename copy_cv<Source, Target>::type;
 
 } // namespace detail
 } // namespace dingo

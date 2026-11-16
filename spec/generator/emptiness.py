@@ -93,7 +93,7 @@ def probed_requests(unit):
     return tuple(unit.probed())
 
 
-def with_probed(units, jobs):
+def probed_units(units, jobs):
     """The units that probe a request, each with the requests it probes,
     which the specification tells in processes at once."""
     with multiprocessing.Pool(jobs) as pool:
@@ -115,7 +115,7 @@ def compile_units(compiler, flags, directory, name, batch):
         "emptiness.cpp.j2", units=batch,
         headers=driver.program_headers({unit.scope for unit in batch},
                                        {unit.container for unit in batch}))
-    records, stderr, crash = driver.build_and_run(compiler, flags, directory,
+    records, stderr, crash = driver.run_program(compiler, flags, directory,
                                                   name, source)
     if stderr is None and crash is None:
         return records

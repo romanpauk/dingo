@@ -419,7 +419,7 @@ struct binding_activation {
           });
       auto source = lvalue_source<source_type>(value);
       return std::forward<Fn>(fn)(source);
-    } else if constexpr (placement == source_placement::in_context) {
+    } else if constexpr (placement == source_placement::context_source) {
       // What an rvalue request refers to lives in the context: so does the
       // source it is converted from.
       auto &source = materialization_traits::materialize_context_source(

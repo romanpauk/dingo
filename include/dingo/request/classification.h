@@ -102,8 +102,8 @@ template <typename Wrapper, typename Alternative> struct alternative_layer_tag {
   using identity = alternative_identity<Wrapper, Alternative>;
 };
 
-template <typename Semantics, typename Of>
-inline constexpr bool is_semantics_v = std::is_same_v<Semantics, Of>;
+template <typename Semantics, typename Expected>
+inline constexpr bool is_semantics_v = std::is_same_v<Semantics, Expected>;
 
 // A type, named without being formed until type is asked for: the wrapper
 // Traits rebinds to an element.
@@ -371,14 +371,15 @@ template <typename Identities, typename... Tags> struct wrapper_identities {
 
 template <typename... Identities, typename Tag, typename... Tags>
 struct wrapper_identities<type_list<Identities...>, Tag, Tags...> {
-  template <typename Of> static auto next() {
-    if constexpr (is_language_tag_v<Of>) {
+  template <typename Added> static auto next() {
+    if constexpr (is_language_tag_v<Added>) {
       return type_list<Identities...>{};
-    } else if constexpr ((std::is_same_v<typename Of::identity, Identities> ||
+    } else if constexpr ((std::is_same_v<typename Added::identity,
+                                         Identities> ||
                           ...)) {
       return type_list<Identities...>{};
     } else {
-      return type_list<Identities..., typename Of::identity>{};
+      return type_list<Identities..., typename Added::identity>{};
     }
   }
   using type =

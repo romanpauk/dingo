@@ -176,8 +176,8 @@ class Limitation:
     shapes: frozenset
     categories: frozenset
     selections: frozenset
-    misdetected_by: frozenset
-    made_differently_by: frozenset
+    misdetected: frozenset
+    made_differently: frozenset
 
     def holds(self, selection, shape, category):
         return (selection in self.selections and shape in self.shapes and
@@ -216,12 +216,12 @@ def limitations(unit, probe):
              if known.holds(unit.selection, request.shape, request.category)]
     if isinstance(operation, Detect):
         return [known for known in found
-                if operation.detection in known.misdetected_by]
+                if operation.detection in known.misdetected]
     return [known for known in found
-            if operation.construction in known.made_differently_by]
+            if operation.construction in known.made_differently]
 
 
-def probes_of(units):
+def valid_probes(units):
     """Each valid probe of the units, by its cell."""
     return {unit.cell(probe): (unit, probe) for unit in units
             for probe, invalid in unit.probes() if not invalid}
@@ -231,7 +231,7 @@ def apply_limitations(cells, units):
     """Records a misdetection a known limitation says as limited, and a
     detection a known limitation says is misdetected as a stale
     limitation."""
-    probes = probes_of(units)
+    probes = valid_probes(units)
     for cell in cells:
         unit, probe = probes.get(cell["cell"], (None, None))
         if probe is None or not isinstance(probe.operation, Detect):
@@ -254,7 +254,7 @@ def disagreements(cells, units):
     the explicit one."""
     outcomes = {cell["cell"]: cell["outcome"] for cell in cells}
     found = []
-    for cell, (unit, probe) in probes_of(units).items():
+    for cell, (unit, probe) in valid_probes(units).items():
         operation = probe.operation
         # A class a known limitation makes differently is not made as the
         # explicit constructor makes it.

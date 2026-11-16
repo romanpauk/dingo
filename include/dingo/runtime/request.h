@@ -263,7 +263,7 @@ T wrap_nested(void *address) {
 // A value of T made of the run of wraps the plan left to it: the makers of
 // the depths a run of wraps makes T of.
 template <typename T, typename Element, typename Types, std::size_t K>
-constexpr T (*maker_of())(void *) {
+constexpr T (*nested_maker())(void *) {
   if constexpr (execution::layer_types<T, Element,
                                        Element>::template runs<K>()) {
     return &wrap_nested<T, Element, Types, K>;
@@ -275,7 +275,7 @@ constexpr T (*maker_of())(void *) {
 template <typename T, typename Element, typename Types, std::size_t... K>
 T wrap_result(resolved_address result, std::index_sequence<K...>) {
   using maker = T (*)(void *);
-  constexpr maker makers[] = {maker_of<T, Element, Types, K + 1>()...};
+  constexpr maker makers[] = {nested_maker<T, Element, Types, K + 1>()...};
   return makers[result.depth - 1](result.address);
 }
 

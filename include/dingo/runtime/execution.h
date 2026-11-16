@@ -320,8 +320,7 @@ struct table_maker : layer_types<T, Leaf, Interface> {
       return false;
     } else {
       return Kind == step::copy || Kind == step::element_pointer ||
-             Kind == step::element_or_empty ||
-             Kind == step::element_or_empty_copy ||
+             Kind == step::maybe_element || Kind == step::maybe_element_copy ||
              (Kind == step::element && !releases_element_v<T>);
     }
   }
@@ -392,12 +391,11 @@ struct table_maker : layer_types<T, Leaf, Interface> {
     index(step::element) = both<step::element>();
     index(step::element_pointer) = both<step::element_pointer>();
     if constexpr (has_empty_value<std::remove_cv_t<element_type>>::value) {
-      index(step::element_or_empty) = both<step::element_or_empty>();
+      index(step::maybe_element) = both<step::maybe_element>();
       if constexpr (!std::is_pointer_v<type> &&
                     facts::template copyable<element_type>() &&
                     !std::is_array_v<element_type>) {
-        index(step::element_or_empty_copy) =
-            both<step::element_or_empty_copy>();
+        index(step::maybe_element_copy) = both<step::maybe_element_copy>();
       }
     }
   }
@@ -422,8 +420,8 @@ struct table_maker : layer_types<T, Leaf, Interface> {
       }
     }
     if constexpr (wants(step::element) || wants(step::element_pointer) ||
-                  wants(step::element_or_empty) ||
-                  wants(step::element_or_empty_copy)) {
+                  wants(step::maybe_element) ||
+                  wants(step::maybe_element_copy)) {
       if constexpr (facts::layer()) {
         elements(made);
       }
@@ -1086,7 +1084,7 @@ inline runtime_plan make_runtime_plan(const semantics::plan &plan,
 // kind between their classes.
 struct state_classes {
   std::uint16_t state_class[semantics::max_states] = {};
-  std::uint16_t edge_of[semantics::max_states] = {};
+  std::uint16_t state_edge[semantics::max_states] = {};
   std::uint16_t edges[semantics::max_states] = {};
   std::size_t edge_count = 0;
 };
@@ -1166,13 +1164,13 @@ constexpr state_classes classify_states(const semantics::search &found,
     }
     const std::uint16_t source = made.state_class[each.parent];
     const std::uint16_t target = made.state_class[index];
-    slot = ((source * 31u + target) * 31u + static_cast<unsigned>(each.via)) %
+    slot = ((source * 31u + target) * 31u + static_cast<unsigned>(each.step)) %
            semantics::search_slots;
     while (steps[slot] != 0) {
       const std::uint16_t edge = made.edges[steps[slot] - 1];
       const semantics::state &other = found.states[edge];
       if (made.state_class[other.parent] == source &&
-          made.state_class[edge] == target && other.via == each.via) {
+          made.state_class[edge] == target && other.step == each.step) {
         break;
       }
       slot = (slot + 1) % semantics::search_slots;
@@ -1181,7 +1179,7 @@ constexpr state_classes classify_states(const semantics::search &found,
       made.edges[made.edge_count++] = static_cast<std::uint16_t>(index);
       steps[slot] = static_cast<std::uint16_t>(made.edge_count);
     }
-    made.edge_of[index] = static_cast<std::uint16_t>(steps[slot] - 1);
+    made.state_edge[index] = static_cast<std::uint16_t>(steps[slot] - 1);
   }
   return made;
 }
@@ -1274,20 +1272,20 @@ template <typename Shape> struct closed_semantics {
       if (state == 0) {
         continue;
       }
-      if (step_makes(each.via)) {
+      if (step_makes(each.step)) {
         made.state_mask[classes.state_class[state]] |= makers_mask;
-      } else if (each.via == semantics::step::release &&
+      } else if (each.step == semantics::step::release &&
                  Sources.states[each.parent].reached.layers[0] ==
                      semantics::array_pointer_layer) {
         made.state_mask[classes.state_class[each.parent]] |= release_array_mask;
       } else {
         made.state_mask[classes.state_class[each.parent]] |=
-            step_mask(each.via);
-        // A request makes the copy of what element_or_empty gives where it
+            step_mask(each.step);
+        // A request makes the copy of what maybe_element gives where it
         // takes it.
-        if (each.via == semantics::step::element_or_empty_copy) {
+        if (each.step == semantics::step::maybe_element_copy) {
           made.state_mask[classes.state_class[each.parent]] |=
-              step_mask(semantics::step::element_or_empty);
+              step_mask(semantics::step::maybe_element);
         }
       }
     }
@@ -1298,7 +1296,7 @@ template <typename Shape> struct closed_semantics {
   // not one.
   static constexpr std::size_t run_length(std::size_t state) {
     std::size_t run = 0;
-    while (Sources.states[state].via == semantics::step::wrap) {
+    while (Sources.states[state].step == semantics::step::wrap) {
       ++run;
       state = Sources.states[state].parent;
     }
@@ -1611,11 +1609,11 @@ struct binding_sources {
     using type = U;
   };
 
-  // The carrier a step into a state makes of the carrier From.
-  template <std::size_t State, typename From>
+  // The carrier a step into a state makes of the carrier Source.
+  template <std::size_t State, typename Source>
   using reached_t =
       decltype(reaching_step<State>::template apply<Leaf, Interface>(
-          std::declval<From>(), std::declval<store_view &>()));
+          std::declval<Source>(), std::declval<store_view &>()));
 
   // The carrier of a class of states.
   template <std::size_t Class> struct class_carrier {
@@ -1650,14 +1648,14 @@ struct binding_sources {
               reached_t<State, source_carrier>,
               typename class_carrier<classes.state_class[State]>::type>,
           "a step into a state makes the type of its class");
-      if constexpr (step_makes(target.via)) {
+      if constexpr (step_makes(target.step)) {
         using made = typename table_t<State>::maker;
         constexpr const semantics::object &reached =
             Sources.states[State].reached;
-        static_assert(target.via == semantics::step::wrap
+        static_assert(target.step == semantics::step::wrap
                           ? made::full.wrap_runs[run_length(State)].owned !=
                                 nullptr
-                      : target.via == semantics::step::observe
+                      : target.step == semantics::step::observe
                           ? has(made::full.observing)
                           : has(reached.depth > 1 && reached.layers[1] ==
                                                          semantics::array_layer
@@ -1667,12 +1665,12 @@ struct binding_sources {
       } else {
         using parent = table_t<target.parent>;
         constexpr operation step =
-            target.via == semantics::step::release &&
+            target.step == semantics::step::release &&
                     Sources.states[target.parent].reached.layers[0] ==
                         semantics::array_pointer_layer
                 ? parent::maker::full.release_array
                 : parent::maker::full
-                      .steps[static_cast<std::size_t>(target.via)];
+                      .steps[static_cast<std::size_t>(target.step)];
         static_assert((source_carrier::owned ? step.owned : step.borrowed) !=
                           nullptr,
                       "the table of a type has every step from it");
@@ -1777,7 +1775,8 @@ struct binding_sources {
       constexpr std::uint16_t first = plan.states[each.first + 1];
       constexpr semantics::object reached = plan.objects[each.last + 1];
       auto &&kept =
-          store_of<reached.lifetimes[0] == semantics::lifetime::stable>(store);
+          lifetime_store<reached.lifetimes[0] == semantics::lifetime::stable>(
+              store);
       auto reached_before = reach_state<before, false, Store>(source, store);
       if constexpr (each.qualified) {
         using step_type =

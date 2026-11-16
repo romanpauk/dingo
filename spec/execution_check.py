@@ -25,12 +25,12 @@ from spec import semantics_check as check  # noqa: E402
 from spec.generator import driver  # noqa: E402
 from spec.generator.model import spell_shape, spell_stored  # noqa: E402
 from spec.generator.registrations import (LEAF_TYPES,  # noqa: E402
-                                          interface_of)
+                                          bound_interface)
 from spec.vocabulary import Category, InterfaceSet, Scope, StoredForm  # noqa: E402
 
 # The kinds of step, in the order of semantics::step.
 STEPS = ("release", "decay", "hand_over", "adopt", "element",
-         "element_pointer", "element_or_empty", "element_or_empty_copy",
+         "element_pointer", "maybe_element", "maybe_element_copy",
          "convert", "upcast", "copy", "wrap", "observe", "qualify", "unknown_bound")
 SATISFACTIONS = ("refer", "point", "take", "move", "copy")
 # The identity of a standard layer, which a step makes a layer of.
@@ -160,7 +160,7 @@ def cell(name, scope, form, leaf, layers, element, quals, category,
     stored = spell_stored(form).replace("L", leaf_type)
     if stored.endswith("&"):
         stored = stored[:-1].strip()
-    interface = interface_of(semantics.Bound((), element), leaf).spelled
+    interface = bound_interface(semantics.Bound((), element), leaf).spelled
     how, cost, *steps = planned.split(":")
     shape = spell_request(layers, element, leaf_type, interface, quals)
     request = f"{check.CATEGORY_TYPES[category]}<{shape}>"
@@ -296,7 +296,7 @@ def run_part(options, flags, index, part):
     their plans, and the program if it fails."""
     source = PROGRAM.replace("CELLS", "\n".join(code for _, code, _ in part))
     test = str(Path(__file__).parents[1] / "test")
-    returncode, stderr, stdout, status = driver.compile_and_run(
+    returncode, stderr, stdout, status = driver.make_program(
         options.compiler, [*flags, "-I" + test], options.work,
         f"execution_{index}", source)
     if returncode != 0:

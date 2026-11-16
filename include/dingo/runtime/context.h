@@ -186,11 +186,11 @@ public:
           frame.commit();
         }
       }
-    } on_return{*this};
+    } guard{*this};
     try {
       return std::forward<Fn>(fn)(context_);
     } catch (...) {
-      on_return.armed = false;
+      guard.armed = false;
       throw;
     }
   }

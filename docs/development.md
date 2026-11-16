@@ -43,6 +43,9 @@ environment provides the development tools.
   or of its own directory. See
   [Header Layers](architecture/overview.md#header-layers).
 
+- `names-check`: verifies that the names of the headers and of the specification
+  have no connecting words. See [Naming](#naming).
+
 - `includes-compile`: compiles one generated translation unit for each public
   header.
 
@@ -115,6 +118,32 @@ compiles only the programs of it again. The headers of the probes are split the
 same way: `test/model/leaves.h` has the leaf types and no container,
 `test/model/probe.h` no container and no scope, and `test/model/static.h` what a
 static container adds.
+
+## Naming
+
+A name says what a thing is or does, in the terms the library and the
+specification already use. It has no connecting word: of, with, or, and, at, as,
+by, to, from, in, into, for, on, if, per, via, then. `names-check` fails on one,
+and on a parameter, member or local named by one alone.
+
+| A name of                          | Is                                    | As                                     |
+| ---------------------------------- | ------------------------------------- | -------------------------------------- |
+| what a type gives of another type  | the noun, with `_t` or `_v`           | `held_element_t`, `leaf_traits_v`      |
+| an encoded value and its decoding  | an `encode_` and a `decode_` function | `encode_kind`, `decode_kind`           |
+| a function that builds a table     | `make_` and the table                 | `make_finishes`, `make_tables`         |
+| an element of a list               | the element                           | `plan_step`, `search_step`             |
+| a function that fills a table      | `add_` and what it adds               | `add_runs`, `add_qualified`            |
+| a function that returns an address | an `_address` name                    | `pointee_address`, `cell_address`      |
+| a predicate                        | the verb and its object               | `borrows`, `converts_unknown_layer`    |
+| a parameter, member or local       | what it holds                         | `object`, `context`, `source`, `index` |
+
+A parameter that takes the name of its type, such as `const object &object`,
+names the type in its scope as `semantics::object`. A typedef or a member type
+cannot be the name of a variable, as `-Wshadow` warns of it.
+
+A name the standard library or the public interface spells with a connecting
+word is kept, with why, in `tools/names.py`: `for_each`, the names of
+`std::in_place`, and `lookup_key_out_of_range_exception`.
 
 ## Complexity Report
 

@@ -47,7 +47,7 @@ struct materialized_request {
 // context.
 enum class source_placement {
   yielded,
-  in_context,
+  context_source,
   context_value,
 };
 
@@ -74,14 +74,14 @@ constexpr source_placement
 materialization_placement(const materialization_facts &facts,
                           materialized_request request, bool transactional) {
   if (transactional) {
-    return facts.consumes ? source_placement::in_context
+    return facts.consumes ? source_placement::context_source
                           : source_placement::yielded;
   }
   if (request.refers && facts.yields_value) {
     return source_placement::context_value;
   }
   if (facts.consumes && request.rvalue && !facts.moves_trivially) {
-    return source_placement::in_context;
+    return source_placement::context_source;
   }
   return source_placement::yielded;
 }

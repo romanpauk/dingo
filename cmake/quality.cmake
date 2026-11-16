@@ -14,6 +14,17 @@ function(configure_quality_targets out_check_targets)
   )
   list(APPEND check_targets layers-check)
 
+  # The names of the headers and of the specification have no connecting
+  # words: a name says what a thing is or does.
+  add_custom_target(names-check
+    COMMENT "Verifying names"
+    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/tools/names.py
+      --include ${PROJECT_SOURCE_DIR}/include
+      --spec ${PROJECT_SOURCE_DIR}/spec
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+  )
+  list(APPEND check_targets names-check)
+
   # The model probes: probe.py resolves every request of registrations in both
   # containers, detection.py detects and makes the classes generated around
   # them. Each writes the outcome of every cell to model-<size>/, with a

@@ -22,7 +22,7 @@ SHT_NOBITS = 8
 STT_FUNC = 2
 
 
-def kind_of(name):
+def section_kind(name):
     """The kind of a section by its name: a section of one function or one
     object, as -ffunction-sections or a template makes, is of the kind of its
     prefix."""
@@ -59,29 +59,29 @@ def read(path):
                 struct.unpack_from(order + "IIIIIIIIII", data, base))
         return name, kind, offset, size, link, entsize
 
-    def text_at(table_offset, at):
-        end = data.index(b"\0", table_offset + at)
-        return data[table_offset + at:end].decode(errors="replace")
+    def string_text(table_offset, offset):
+        end = data.index(b"\0", table_offset + offset)
+        return data[table_offset + offset:end].decode(errors="replace")
 
     names_offset = section(shstrndx)[2]
     sizes = {}
     functions = {}
     for index in range(shnum):
-        name_at, kind, offset, size, link, entsize = section(index)
-        name = text_at(names_offset, name_at)
-        measured = kind_of(name)
+        name_offset, kind, offset, size, link, entsize = section(index)
+        name = string_text(names_offset, name_offset)
+        measured = section_kind(name)
         if measured is not None:
             sizes[measured] = sizes.get(measured, 0) + size
         if kind == SHT_SYMTAB and entsize:
             strings_offset = section(link)[2]
-            for at in range(offset, offset + size, entsize):
+            for position in range(offset, offset + size, entsize):
                 if wide:
                     symbol_name, info, _, shndx, _, symbol_size = (
-                        struct.unpack_from(order + "IBBHQQ", data, at))
+                        struct.unpack_from(order + "IBBHQQ", data, position))
                 else:
                     symbol_name, _, symbol_size, info, _, shndx = (
-                        struct.unpack_from(order + "IIIBBH", data, at))
+                        struct.unpack_from(order + "IIIBBH", data, position))
                 if info & 0xF == STT_FUNC and shndx != 0 and symbol_size:
-                    functions[text_at(strings_offset, symbol_name)] = (
+                    functions[string_text(strings_offset, symbol_name)] = (
                         symbol_size)
     return {"sections": sizes, "functions": functions}

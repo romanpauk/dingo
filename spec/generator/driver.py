@@ -250,7 +250,7 @@ def close_cache(prune):
                 path.unlink()
 
 
-def compile_and_run(compiler, flags, directory, name, source):
+def make_program(compiler, flags, directory, name, source):
     """Compiles a program and runs it, unless compiled only; returns
     (returncode, stderr, stdout, status): how the compile ended and what it
     reported, and what the program printed and how it exited. Every result
@@ -299,7 +299,7 @@ def render(template, **context):
     return TEMPLATES.get_template(template).render(**context)
 
 
-def owners_of(source, probes):
+def line_owners(source, probes):
     """The probe each line of a program belongs to, by line number."""
     owners = {}
     owner = None
@@ -331,11 +331,11 @@ def run_compiler(command):
         return process.returncode, errors.read()
 
 
-def build_and_run(compiler, flags, directory, name, source):
+def run_program(compiler, flags, directory, name, source):
     """Compiles and runs one program; returns (records, stderr, crash): the
     records it printed, the compiler output when it did not compile, and how
     it exited when it crashed."""
-    returncode, stderr, stdout, status = compile_and_run(
+    returncode, stderr, stdout, status = make_program(
         compiler, flags, directory, name, source)
     if returncode != 0:
         if EXHAUSTED.search(stderr):
@@ -418,9 +418,9 @@ def compile_probes(compiler, flags, directory, unit, name, probes):
     """Renders, compiles and runs probes in one program; returns
     (records, stderr, crash, owners)."""
     source = unit.render(probes)
-    records, stderr, crash = build_and_run(compiler, flags, directory, name,
+    records, stderr, crash = run_program(compiler, flags, directory, name,
                                            source)
-    return records, stderr, crash, owners_of(source, probes)
+    return records, stderr, crash, line_owners(source, probes)
 
 
 def fitting(probes):
@@ -434,7 +434,7 @@ def out_of_memory(unit, probes):
     return [failure(unit, probe, OUT_OF_MEMORY) for probe in probes]
 
 
-def in_parts(make, compiler, flags, directory, unit, name, parts):
+def make_parts(make, compiler, flags, directory, unit, name, parts):
     """The outcomes of making each part of probes in programs of its own,
     concurrently, named after the one they are parts of."""
     return [outcome for found in concurrently([
@@ -463,7 +463,7 @@ def probe_group(compiler, flags, directory, unit, name, probes):
     Probes that do not fit in one program are made in parts that do."""
     parts = fitting(probes)
     if len(parts) > 1:
-        return in_parts(probe_group, compiler, flags, directory, unit, name,
+        return make_parts(probe_group, compiler, flags, directory, unit, name,
                         parts)
     outcomes = []
     while probes:
@@ -486,7 +486,7 @@ def probe_group(compiler, flags, directory, unit, name, probes):
         # Halves, each made as a group: the half without a failure compiles
         # at once, and the failures of the other are told apart in fewer
         # probes.
-        return outcomes + in_parts(probe_group, compiler, flags, directory,
+        return outcomes + make_parts(probe_group, compiler, flags, directory,
                                    unit, name, split(probes,
                                                      -(-len(probes) // 2)))
     for alone in concurrently([
@@ -510,7 +510,7 @@ def probe_shared(compiler, flags, directory, unit, name, probes):
         return []
     parts = fitting(probes)
     if len(parts) > 1:
-        return in_parts(probe_shared, compiler, flags, directory, unit, name,
+        return make_parts(probe_shared, compiler, flags, directory, unit, name,
                         parts)
     records, stderr, crash, owners = compile_probes(
         compiler, flags, directory, unit, name, probes)
@@ -703,7 +703,7 @@ def compiler_family(compiler):
     return None
 
 
-def drilldown_of(compiler, flags, cpp, obj):
+def compiler_drilldown(compiler, flags, cpp, obj):
     """Where the compiler spends its work on a program, as it reports it, of
     a compile of its own, which the report would slow: GCC's phases, clang's
     events; None for another compiler."""
@@ -760,7 +760,7 @@ def measure(compiler, flags, directory, name, source):
                     "named": {function: size for function, size
                               in found["functions"].items()
                               if not function.startswith("_Z")}}
-            result["drilldown"] = drilldown_of(compiler, flags, cpp, obj)
+            result["drilldown"] = compiler_drilldown(compiler, flags, cpp, obj)
     if key is not None:
         store_result(key, result)
     return result

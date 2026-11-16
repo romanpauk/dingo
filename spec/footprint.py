@@ -260,7 +260,7 @@ def performance(compiler, flags, directory):
 
     def run(container, shape):
         name = f"run/{container}/{shape}"
-        records, stderr, crash = driver.build_and_run(
+        records, stderr, crash = driver.run_program(
             compiler, base + OPTIMIZED, directory, name.replace("/", "__"),
             performance_program(container, shape))
         if stderr or crash:

@@ -91,16 +91,16 @@ traits of any other.
 The steps of the specification and the code that takes them. Each is in
 [include/dingo/request/execution.h](../../include/dingo/request/execution.h):
 
-| Step                                                                      | Who takes it | Code                                                   |
-| ------------------------------------------------------------------------- | ------------ | ------------------------------------------------------ |
-| `element`, `element_pointer`, `element_or_empty`, `element_or_empty_copy` | binding      | `step<element>` and the others of the same name        |
-| `upcast`, `convert`, `unknown_bound`                                      | binding      | `step<upcast>`, `step<convert>`, `step<unknown_bound>` |
-| `release`                                                                 | binding      | `release_step`                                         |
-| `copy`, `decay`, `hand_over`                                              | binding      | `step<copy>`, `step<decay>`, `step<hand_over>`         |
-| `wrap`                                                                    | request      | `step<wrap, Target>`; a run of wraps is `wrap_value`   |
-| `adopt`                                                                   | request      | `adopt_step`                                           |
-| `observe`                                                                 | request      | `observe_step`                                         |
-| `qualify`                                                                 | request      | `qualify_step`                                         |
+| Step                                                                | Who takes it | Code                                                   |
+| ------------------------------------------------------------------- | ------------ | ------------------------------------------------------ |
+| `element`, `element_pointer`, `maybe_element`, `maybe_element_copy` | binding      | `step<element>` and the others of the same name        |
+| `upcast`, `convert`, `unknown_bound`                                | binding      | `step<upcast>`, `step<convert>`, `step<unknown_bound>` |
+| `release`                                                           | binding      | `release_step`                                         |
+| `copy`, `decay`, `hand_over`                                        | binding      | `step<copy>`, `step<decay>`, `step<hand_over>`         |
+| `wrap`                                                              | request      | `step<wrap, Target>`; a run of wraps is `wrap_value`   |
+| `adopt`                                                             | request      | `adopt_step`                                           |
+| `observe`                                                           | request      | `observe_step`                                         |
+| `qualify`                                                           | request      | `qualify_step`                                         |
 
 A step belongs to the side that knows the type it is applied to (see phase 7). A
 request takes the others through the tables of the binding.

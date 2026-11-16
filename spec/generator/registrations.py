@@ -33,7 +33,7 @@ def spell(bound, leaf, namespace):
     return spelled
 
 
-def interface_of(bound, leaf):
+def bound_interface(bound, leaf):
     return Interface(spell(bound, leaf, ""),
                      spell(bound, leaf, "dingo::model::"),
                      abstract=bound == semantics.INTERFACE,
@@ -90,7 +90,7 @@ class Registration:
 
     def interfaces(self):
         """The interfaces the specification says the registration binds."""
-        return tuple(interface_of(bound, self.leaf)
+        return tuple(bound_interface(bound, self.leaf)
                      for bound in semantics.bound_interfaces(
                          self.form, self.interfaces_declared, self.selection))
 
@@ -308,8 +308,8 @@ class Group:
         # The scopes of the registrations, and of the classes a kept position
         # registers to take a request.
         scopes = {registration.scope for registration, _ in runs}
-        scopes |= {member.operation.position.kept_by for member in members
-                   if member.operation.position.kept_by is not None}
+        scopes |= {member.operation.position.keeping_scope for member in members
+                   if member.operation.position.keeping_scope is not None}
         containers = {registration.container for registration, _ in runs}
         return driver.render("probe.cpp.j2", parts=parts,
                              headers=driver.program_headers(scopes,
@@ -326,7 +326,7 @@ def registration_outcome(compiler, flags, directory, registration, name,
     could not tell the error of the registration they share apart."""
     group = Group((registration,))
     if expected is Answer.NOT_REGISTRABLE:
-        records, stderr, crash = driver.build_and_run(
+        records, stderr, crash = driver.run_program(
             compiler, flags, directory, f"{name}__registrable",
             group.render([Member(registration, probes[0])]))
         if (stderr is None and crash is None and len(records) == 1 and
@@ -335,7 +335,7 @@ def registration_outcome(compiler, flags, directory, registration, name,
                      "outcome": Outcome.NOT_REGISTRABLE.value}
                     for probe in probes]
         return None
-    _, stderr, _ = driver.build_and_run(
+    _, stderr, _ = driver.run_program(
         compiler, flags + [driver.COMPILE_ONLY], directory,
         f"{name}__registers", group.render([], registers=True))
     if stderr is None or stderr == driver.OUT_OF_MEMORY:
@@ -415,15 +415,15 @@ def probe_registrations(compiler, flags, directory, tasks, selected, map):
     # and position only, as their errors are recorded.
     rejected = [found for _, _, found in planned if found]
 
-    def group_of(part):
+    def part_group(part):
         return Group(tuple(dict.fromkeys(
             member.registration for member in part)))
 
     calls = [lambda index=index, part=part: driver.probe_shared(
-        compiler, flags, directory, group_of(part), f"probes_{index}", part)
+        compiler, flags, directory, part_group(part), f"probes_{index}", part)
         for index, part in enumerate(packed(members))]
     calls += [lambda index=index, part=part: driver.probe_expecting_rejection(
-        compiler, flags, directory, group_of(part), f"rejected_{index}", part)
+        compiler, flags, directory, part_group(part), f"rejected_{index}", part)
         for index, part in enumerate(rejected)]
     for found in map(lambda call: call(), calls):
         outcomes += found
@@ -436,13 +436,13 @@ def apply_semantics(cells, units):
     resolving is recorded as limited, one that resolves although a limitation
     says it does not as a stale limitation, and any other outcome than the
     expected one as unexpected."""
-    expected_of = {unit.cell(probe): (unit, probe) for unit in units
+    expected_cells = {unit.cell(probe): (unit, probe) for unit in units
                    for probe, invalid in unit.probes() if not invalid}
     for cell in cells:
-        if (cell["cell"] not in expected_of or
+        if (cell["cell"] not in expected_cells or
                 Outcome(cell["outcome"]).is_defect):
             continue
-        unit, probe = expected_of[cell["cell"]]
+        unit, probe = expected_cells[cell["cell"]]
         expected, limitations = unit.expectation(probe)
         reasons = ", ".join(limitation.value for limitation in limitations)
         if limitations and cell["outcome"] == Outcome.RESOLVED:

@@ -60,19 +60,19 @@ class LayerSourcesTest(unittest.TestCase):
     def test_requests_resolve_from_layer_sources(self):
         cells = [(unit, request) for unit in units()
                  for request in unit.requests()]
-        from_stored = answers(cells)
+        stored_answers = answers(cells)
         reachable = semantics.reachable
         semantics.reachable = semantics.requested
         try:
-            from_sources = answers(cells)
+            source_answers = answers(cells)
         finally:
             semantics.reachable = reachable
         differing = [
             f"{unit.base}/{request.interface.name}/{request.name}: "
             f"{stored} from the stored object, {sources} from the layer "
             "sources"
-            for (unit, request), stored, sources in zip(cells, from_stored,
-                                                        from_sources)
+            for (unit, request), stored, sources in zip(cells, stored_answers,
+                                                        source_answers)
             if stored != sources]
         if differing:
             self.fail(f"{len(differing)} cells differ:\n" +

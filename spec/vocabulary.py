@@ -143,7 +143,7 @@ class Shape(Dimension):
     def wrappers(self):
         """The wrappers the shape composes, outermost first; none of an
         array or of the interface itself."""
-        return () if self.is_array else _wrappers_of(self)
+        return () if self.is_array else _shape_wrappers(self)
 
     @property
     def depth(self):
@@ -178,7 +178,7 @@ class Shape(Dimension):
 
 
 @functools.cache
-def _wrappers_of(shape):
+def _shape_wrappers(shape):
     names = []
     rest = shape.value
     while rest not in ("I", "const I"):
@@ -189,7 +189,7 @@ def _wrappers_of(shape):
     return tuple(names)
 
 
-def shape_of(wrappers):
+def composed_shape(wrappers):
     """The shape that composes the wrappers, outermost first."""
     return Shape(_spelled(wrappers, "I"))
 
@@ -197,8 +197,8 @@ def shape_of(wrappers):
 # The shapes a stored form of two wrappers is requested as: its own, and that
 # of the shared handle a unique handle of it converts to.
 NESTED_SHAPES = {
-    form: (shape_of(form.wrappers),) + (
-        (shape_of(("shared",) + form.wrappers[1:]),)
+    form: (composed_shape(form.wrappers),) + (
+        (composed_shape(("shared",) + form.wrappers[1:]),)
         if form.wrappers[0] == "unique" else ())
     for form in StoredForm if form.wrappers
 }
@@ -232,7 +232,7 @@ class Position(Dimension):
     CYCLICAL = "cyclical"
 
     @property
-    def kept_by(self):
+    def keeping_scope(self):
         """The scope that keeps the class whose dependency the request is."""
         return {Position.SHARED: Scope.SHARED,
                 Position.CYCLICAL: Scope.SHARED_CYCLICAL}.get(self)

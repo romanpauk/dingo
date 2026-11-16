@@ -770,11 +770,11 @@ def empty_safe_steps(object, element, context):
         owns_pointee=False)
     if inner is not None and inner.has_empty_value and not element.unconstructed:
         if element.origin.owned:
-            yield "element_or_empty", replace(element, absent=object.absent)
+            yield "maybe_element", replace(element, absent=object.absent)
         else:
             for kind, copied in transitions(element, context):
                 if kind == "copy":
-                    yield "element_or_empty_copy", replace(
+                    yield "maybe_element_copy", replace(
                         copied, absent=object.absent)
 
 
@@ -787,7 +787,7 @@ class Gap:
     at a kind of step from one object to another, or at a reference or a
     pointer to an object."""
     limitation: "Limitation"
-    at: str
+    site: str
     applies: object
 
 
@@ -800,13 +800,13 @@ class Limitation(Enum):
     # registration declared, and give the caller an owning raw pointer
     # instead. The caller requests the holder; a pointer a call or a kept
     # class takes points into a holder kept in the context.
-    POINTER_OUT_OF_MADE_HOLDER = "pointer_out_of_made_holder"
+    MADE_HOLDER_HANDOVER = "made_holder_handover"
     # A pointer into a copy a binding converts of what it stores, such as the
     # std::shared_ptr<I> * into the std::optional<std::shared_ptr<I>> a
     # binding of I converts of a kept std::optional<std::shared_ptr<T>>. The
     # library points to the handle it converts of the element instead, which
     # fails when the stored optional is empty.
-    POINTER_INTO_CONVERTED_COPY = "pointer_into_converted_copy"
+    CONVERTED_COPY_POINTER = "converted_copy_pointer"
     # A pointer or a handle converted to one more qualified below its
     # element, such as the std::shared_ptr<const L * const> of a
     # std::shared_ptr<L *>. The library converts the qualifiers of the
@@ -816,9 +816,9 @@ class Limitation(Enum):
 
 
 GAPS = (
-    Gap(Limitation.POINTER_OUT_OF_MADE_HOLDER, "point",
+    Gap(Limitation.MADE_HOLDER_HANDOVER, "point",
         lambda context, category, object: object.contained is not None),
-    Gap(Limitation.POINTER_INTO_CONVERTED_COPY, "element_pointer",
+    Gap(Limitation.CONVERTED_COPY_POINTER, "element_pointer",
         lambda context, object, following: object.origin is Origin.COPIED),
     Gap(Limitation.QUALIFIED_BELOW_ELEMENT, "qualify",
         lambda context, object, following:
@@ -826,9 +826,9 @@ GAPS = (
 )
 
 
-def blocked(context, at, *event):
+def blocked(context, site, *event):
     """Whether a limitation the context applies blocks an event."""
-    return any(gap.at == at and gap.limitation in context.limits and
+    return any(gap.site == site and gap.limitation in context.limits and
                gap.applies(context, *event) for gap in GAPS)
 
 
@@ -856,7 +856,7 @@ def makes_leaf_anew(layers):
 
 def step_effect(kind, object):
     """What a step from an object does to its leaf: "copy", "move" or None."""
-    if kind == "element_or_empty_copy":
+    if kind == "maybe_element_copy":
         return "copy" if makes_leaf_anew(object.layers[1:]) else None
     if kind in ("copy", "wrap") and makes_leaf_anew(object.layers):
         return "copy" if kind == "copy" else "move"
@@ -894,7 +894,7 @@ def handed_over(cost, effect, container):
 # The steps that make a new object: an upcast makes one of all but the leaf
 # itself, which is the base it is.
 MAKES_OBJECT = frozenset({"decay", "hand_over", "adopt", "observe",
-                          "element_pointer", "element_or_empty_copy",
+                          "element_pointer", "maybe_element_copy",
                           "convert", "copy", "wrap", "release", "qualify",
                           "unknown_bound"})
 
@@ -980,8 +980,8 @@ def reachable(start, context):
 # may reach more by steps a binding and a request take in turn, which no
 # container takes.
 
-BINDING_STEPS = frozenset({"element", "element_pointer", "element_or_empty",
-                           "element_or_empty_copy", "upcast"})
+BINDING_STEPS = frozenset({"element", "element_pointer", "maybe_element",
+                           "maybe_element_copy", "upcast"})
 
 
 def names_leaf(object, context):
@@ -1053,7 +1053,7 @@ def requested(start, context):
     return {object: frozenset(costs) for object, costs in found.items()}
 
 
-def by_shape(reached):
+def shape_candidates(reached):
     """The objects reached that may satisfy a request of an element and its
     layers, by (element, layers): those of the layers, then the raw pointers
     to them, which a pointer request may take. satisfactions of them is that
@@ -1070,11 +1070,11 @@ def by_shape(reached):
 
 
 @functools.lru_cache(maxsize=16)
-def requested_by_shape(start, context):
+def requested_candidates(start, context):
     """What requests reach from the layer sources of a stored object, and
-    its by_shape."""
+    its shape_candidates."""
     reached = requested(start, context)
-    return reached, by_shape(reached)
+    return reached, shape_candidates(reached)
 
 
 # What a request asks of the objects.
@@ -1089,7 +1089,7 @@ def required_lifetime(position, entry):
     used while the call runs; one a class takes that a shared or a cyclical
     scope keeps is kept with it: either may refer to what is made for the
     request too."""
-    if position.kept_by is not None or entry is Entry.INVOKE:
+    if position.keeping_scope is not None or entry is Entry.INVOKE:
         return Lifetime.REQUEST
     return Lifetime.STABLE
 
@@ -1134,15 +1134,15 @@ def satisfactions(objects, category, lifetime, layers, context, quals=None):
     if quals is None:
         quals = (0,) * (len(layers) + 1)
     outer = quals[0] | (CONST if category in CONST_CATEGORIES else 0)
-    of_shape = [object for object in objects if object.layers == layers and
+    same_shape = [object for object in objects if object.layers == layers and
                 matches(object.quals[1:], quals[1:])]
     if category in REFERENCES:
         # A reference or a pointer refers to the instance, or to a layer of
         # it, that lives long enough. A reference adds qualifiers only to
         # what it refers to; a pointer converts as C++ converts one.
-        def qualified(got, of):
+        def qualified(got, held_layers):
             if category in POINTERS:
-                return converts_quals(got, quals, of, outer)
+                return converts_quals(got, quals, held_layers, outer)
             return matches(got[1:], quals[1:]) and not got[0] & ~outer
         referred = [(object, None) for object in objects
                     if object.layers == layers and object.instance and
@@ -1168,11 +1168,11 @@ def satisfactions(objects, category, lifetime, layers, context, quals=None):
         return referred + [(object, None) for object in objects if points(object)]
     if category is Category.RVALUE_REFERENCE:
         # The object the request moves from: one it made.
-        return [(object, None) for object in of_shape
+        return [(object, None) for object in same_shape
                 if object.origin is Origin.MADE and can_move(object, context)]
     # A value: an owned object moved, or any object copied.
     found = []
-    for object in of_shape:
+    for object in same_shape:
         anew = makes_leaf_anew(object.layers)
         if slices(object) or object.unconstructed:
             continue
@@ -1216,7 +1216,7 @@ def request_entry(entry, position, selection, category):
     return entry
 
 
-def fewest_of(answers, defined):
+def least_cost(answers, defined):
     """The fewest copies and moves of answers, each of them with whether what
     it satisfies the request with may be absent; with defined, as the fewest
     with whether one of so few is defined when a layer is empty. None when
@@ -1243,10 +1243,10 @@ def converted(scope, form, leaf, bound, shape, category, limits=frozenset(),
                       limits)
     if not makes_storage(form, context):
         return None
-    reached, candidates = requested_by_shape(
+    reached, candidates = requested_candidates(
         source(scope, form, interfaces), context)
     objects = candidates.get((element, layers), ())
-    return fewest_of(
+    return least_cost(
         [(affected(cost, effect), object.absent)
          for object, effect in satisfactions(
              objects, category, Lifetime.REQUEST, layers, context,
@@ -1276,7 +1276,7 @@ def fewest(scope, form, leaf, bound, shape, category, position, entry,
                       limits)
     if not makes_storage(form, context):
         return None
-    reached, candidates = requested_by_shape(
+    reached, candidates = requested_candidates(
         source(scope, form, interfaces), context)
     objects = candidates.get((element, layers), ())
     direct = position is Position.DIRECT
@@ -1297,7 +1297,7 @@ def fewest(scope, form, leaf, bound, shape, category, position, entry,
                    layers, context, shape_quals(shape, bound))
                for cost in reached[object]]
     if answers:
-        return fewest_of(answers, defined)
+        return least_cost(answers, defined)
     # construct<T>() of a value it cannot resolve makes T of the leaf the
     # container resolves by value: a new handle, optional or array of it,
     # the rest of a bounded array value-initialized. The value is moved into

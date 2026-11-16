@@ -16,7 +16,7 @@ def survey(compiler, flags, work, registrations):
         "survey.cpp.j2", registrations=list(keyed.values()),
         headers=driver.program_headers(
             {registration.scope for registration in keyed.values()}))
-    records, stderr, crash = driver.build_and_run(compiler, flags, work,
+    records, stderr, crash = driver.run_program(compiler, flags, work,
                                                   "survey", source)
     if stderr is not None or crash is not None:
         sys.exit(f"the survey failed: {stderr or crash}")

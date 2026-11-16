@@ -190,8 +190,8 @@ enum class element : std::uint8_t { leaf, abstract };
 // The known gaps of the library, which the expectations apply on top of the
 // rules.
 enum class limitation : std::uint8_t {
-  pointer_out_of_made_holder = 1 << 0,
-  pointer_into_converted_copy = 1 << 1,
+  made_holder_handover = 1 << 0,
+  converted_copy_pointer = 1 << 1,
   qualified_below_element = 1 << 2,
 };
 
@@ -402,8 +402,8 @@ enum class step : std::uint8_t {
   adopt,
   element,
   element_pointer,
-  element_or_empty,
-  element_or_empty_copy,
+  maybe_element,
+  maybe_element_copy,
   convert,
   upcast,
   copy,
@@ -488,11 +488,11 @@ constexpr void empty_safe_steps(const semantics::object &object,
     if (owned(inner.origin)) {
       semantics::object same = inner;
       same.absent = object.absent;
-      out(step::element_or_empty, same);
+      out(step::maybe_element, same);
     } else if (can_copy(inner, context)) {
       semantics::object copy = copied(inner, context);
       copy.absent = object.absent;
-      out(step::element_or_empty_copy, copy);
+      out(step::maybe_element_copy, copy);
     }
   }
 }
@@ -862,7 +862,7 @@ template <typename Sink> struct unblocked {
 
   constexpr void operator()(step kind, const object &reached) {
     if (kind == step::element_pointer && source.origin == origin::copied &&
-        context.limited(limitation::pointer_into_converted_copy)) {
+        context.limited(limitation::converted_copy_pointer)) {
       return;
     }
     if (kind == step::qualify &&
@@ -934,7 +934,7 @@ enum class effect : std::uint8_t { none, copy, move };
 
 constexpr effect step_effect(step kind, const semantics::object &object,
                              const semantics::context &context) {
-  if (kind == step::element_or_empty_copy) {
+  if (kind == step::maybe_element_copy) {
     return makes_leaf_anew(object, context, 1) ? effect::copy : effect::none;
   }
   if ((kind == step::copy || kind == step::wrap) &&
@@ -963,7 +963,7 @@ constexpr cost stepped(cost before, step kind, const semantics::object &object,
                        const semantics::object &reached,
                        const semantics::context &context) {
   cost made = affected(before, step_effect(kind, object, context));
-  const bool makes = kind != step::element && kind != step::element_or_empty &&
+  const bool makes = kind != step::element && kind != step::maybe_element &&
                      !(kind == step::upcast && object.depth == 0) &&
                      !(kind == step::qualify && made_whole(object));
   if (makes) {
@@ -1052,7 +1052,7 @@ struct state {
   object reached;
   cost made;
   std::uint16_t parent = no_state;
-  step via = step::decay;
+  semantics::step step = step::decay;
 };
 
 // The states a search holds. The code compiles a search of the layer sources
@@ -1342,9 +1342,8 @@ constexpr bool pointer_satisfies(const semantics::object &object,
     return false;
   }
   if (object.owns_pointee) {
-    return !referred &&
-           !(context.limited(limitation::pointer_out_of_made_holder) &&
-             object.contained != no_layer);
+    return !referred && !(context.limited(limitation::made_holder_handover) &&
+                          object.contained != no_layer);
   }
   return static_cast<int>(object.lifetimes[1]) >= static_cast<int>(needed);
 }
@@ -1558,7 +1557,7 @@ constexpr plan answer_plan(const search &found, const answer &result) {
     made.objects[index] = each.reached;
     made.states[index] = static_cast<std::uint16_t>(path[length - 1 - index]);
     if (index) {
-      made.steps[index - 1] = each.via;
+      made.steps[index - 1] = each.step;
     }
   }
   made.how = result.how;
@@ -1575,8 +1574,8 @@ constexpr plan answer_plan(const search &found, const answer &result) {
 // step from them, each of which adds a layer or converts one.
 constexpr bool binding_kind(step kind) {
   return kind == step::element || kind == step::element_pointer ||
-         kind == step::element_or_empty ||
-         kind == step::element_or_empty_copy || kind == step::upcast;
+         kind == step::maybe_element || kind == step::maybe_element_copy ||
+         kind == step::upcast;
 }
 
 constexpr bool names_leaf(const semantics::object &object,

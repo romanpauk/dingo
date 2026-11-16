@@ -167,7 +167,7 @@ def main():
     tasks = sorted(((unit, position) for unit in units
                     for position in Position),
                    key=lambda task: (task[0].container is not Container.RUNTIME,
-                                     task[1].kept_by is None))
+                                     task[1].keeping_scope is None))
     driver.set_jobs(options.jobs)
     expect_all(units, selected, options.jobs)
     with concurrent.futures.ThreadPoolExecutor(options.jobs) as executor:

@@ -30,7 +30,7 @@ AREAS = (
 )
 
 
-def area_of(name):
+def library_area(name):
     """The area of the library a template is of, by its name."""
     for area, pattern in AREAS:
         if re.search(pattern, name):
@@ -106,7 +106,7 @@ def clang_trace(path):
         kind["milliseconds"] += duration / 1000
         if event["name"].startswith("Instantiate"):
             area = areas.setdefault(
-                area_of(template_name(event.get("args", {}).get("detail", ""))),
+                library_area(template_name(event.get("args", {}).get("detail", ""))),
                 {"count": 0, "milliseconds": 0})
             area["count"] += 1
             area["milliseconds"] += duration / 1000

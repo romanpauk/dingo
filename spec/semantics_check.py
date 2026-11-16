@@ -105,7 +105,7 @@ def classification(compiler, flags, work):
     compared with the layers the specification says the type is made of; and
     the traits of the leaves. Returns the entries and those that differ."""
     from spec.generator.model import grammar, spell_shape, spell_stored
-    from spec.generator.registrations import LEAF_TYPES, interface_of
+    from spec.generator.registrations import LEAF_TYPES, bound_interface
     leaves = [(leaf, f"dingo::model::{LEAF_TYPES[leaf]}")
               for leaf in semantics.LEAVES]
     entries = []
@@ -131,7 +131,7 @@ def classification(compiler, flags, work):
                 f"print_stack<std::remove_reference_t<{stored}>, {spelled}>()",
                 classified_stack(layers, "leaf")))
         for bound in bounds():
-            interface = interface_of(bound, leaf)
+            interface = bound_interface(bound, leaf)
             # A shape C++ cannot spell of the interface in any category, as
             # the grammar says, is no type to classify.
             requests = [request for request in grammar(
@@ -269,7 +269,7 @@ ENTRIES
 """
 
 
-def properties(layer, universe, of_object=False):
+def properties(layer, universe, object_layer=False):
     """A layer as the program reads it: its properties, the layers of the
     universe an owned value of it converts to, and those it converts to of an
     array of unknown bound, each as a mask. A layer of an object converts to
@@ -277,7 +277,7 @@ def properties(layer, universe, of_object=False):
     known bound as a layer of its own."""
     converts = sum(1 << universe.index(name) for name in layer.converts
                    if name in universe)
-    unknown_bound = 0 if of_object else sum(
+    unknown_bound = 0 if object_layer else sum(
         1 << universe.index(name) for name in layer.converts_unknown_bound
         if name in universe)
     return [OWNERS[layer.owner], int(layer.shares_element),
@@ -630,11 +630,11 @@ def expected(reached, context, layers, element, quals=None,
     """The answers of the specification for a request, by its search of
     every object the stored object reaches."""
     if candidates is None:
-        candidates = semantics.by_shape(reached)
+        candidates = semantics.shape_candidates(reached)
     objects = candidates.get((element, layers), ())
     answers = []
     for category in Category:
-        for lifetime_of in LIFETIMES:
+        for planned_lifetime in LIFETIMES:
             # The cheapest, as the plan is chosen: the copies and the moves
             # of the leaf, whether it may be absent, the objects kept and
             # made.
@@ -642,7 +642,7 @@ def expected(reached, context, layers, element, quals=None,
                      (int(object.absent),) +
                      semantics.affected(cost, effect)[2:]
                      for object, effect in semantics.satisfactions(
-                         objects, category, lifetime_of, layers, context,
+                         objects, category, planned_lifetime, layers, context,
                          quals)
                      for cost in reached[object]]
             answers.append("%d,%d,%d,%d,%d" % min(costs) if costs else "-")
@@ -683,7 +683,7 @@ def header():
     standard_layers = [str(len(universe) - len(LANGUAGE))]
     for name in universe[len(LANGUAGE):]:
         standard_layers += map(str, properties(semantics.LAYERS[name],
-                                               universe, of_object=True))
+                                               universe, object_layer=True))
     return [" ".join(language), " ".join(standard_layers)]
 
 
@@ -697,7 +697,7 @@ def domain_cases(domain, mode=None, kept=None):
         reached = (None if kept is not None else
                    semantics.requested(start, context) if mode == "split"
                    else semantics.reachable(start, context))
-        candidates = (semantics.by_shape(reached) if reached is not None
+        candidates = (semantics.shape_candidates(reached) if reached is not None
                       else None)
         for layers, element, goal, *qualified in goals:
             quals = qualified[0] if qualified else None

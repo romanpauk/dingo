@@ -181,7 +181,7 @@ def compile_units(compiler, flags, directory, name, batch):
     source = driver.render(
         "conversion.cpp.j2", units=batch, none=None,
         headers=driver.program_headers({unit.scope for unit in batch}))
-    records, stderr, crash = driver.build_and_run(compiler, flags, directory,
+    records, stderr, crash = driver.run_program(compiler, flags, directory,
                                                   name, source)
     if stderr is None and crash is None:
         return records
@@ -223,13 +223,13 @@ def check_cell(cell, unit, request):
     expected = unit.expectation(request)
     if expected is None:
         return
-    anywhere, for_caller = expected
+    anywhere, caller_expected = expected
     outcome = Outcome(cell["outcome"])
     if outcome in (Outcome.PUBLISHED, Outcome.PLACED) and not anywhere:
         cell.update(outcome=Outcome.UNEXPECTED.value,
                     error=f"{outcome.value}, which the specification "
                     "resolves nowhere")
-    elif outcome in (Outcome.UNPUBLISHED, Outcome.PLACED) and for_caller:
+    elif outcome in (Outcome.UNPUBLISHED, Outcome.PLACED) and caller_expected:
         cell.update(outcome=Outcome.UNEXPECTED.value,
                     error=f"{outcome.value}, which the specification "
                     "resolves for the caller")

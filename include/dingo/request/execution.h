@@ -238,7 +238,7 @@ template <> struct step<semantics::step::element_pointer> {
 
 // The element of a layer that may be empty, which holds a value that may be
 // empty itself: that value, or an empty one when the layer is empty.
-template <> struct step<semantics::step::element_or_empty> {
+template <> struct step<semantics::step::maybe_element> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -254,8 +254,8 @@ template <> struct step<semantics::step::element_or_empty> {
   }
 };
 
-// A copy of what element_or_empty gives.
-template <> struct step<semantics::step::element_or_empty_copy> {
+// A copy of what maybe_element gives.
+template <> struct step<semantics::step::maybe_element_copy> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -717,8 +717,9 @@ struct step_result<qualify_step<Quals>, Leaf, Interface, T, Owned,
 };
 
 // The store of what lives as long as the container, or as long as the
-// request: a store that keeps them apart gives each with at<Stable>().
-template <bool Stable, typename Store> decltype(auto) store_of(Store &store) {
+// request: a store that keeps them apart gives each with part<Stable>().
+template <bool Stable, typename Store>
+decltype(auto) lifetime_store(Store &store) {
   if constexpr (keeps_apart<Store>::value) {
     return store.template part<Stable>();
   } else {
@@ -876,7 +877,7 @@ constexpr semantics::element semantic_element(stack_element element) {
 // - A value a request takes is made where it takes it when the last step
 //   makes it: a copy or a run of wraps the request makes is left to it; and a
 //   copy of the element of a layer that may be empty, which the binding
-//   makes, is made by the request of what element_or_empty gives.
+//   makes, is made by the request of what maybe_element gives.
 
 // How a request takes the value of what a program reaches: as the plan
 // satisfies it, or by making it of what the program reached, a copy of it or
@@ -938,8 +939,8 @@ constexpr program compile_program(const semantics::plan &plan,
     }
     const bool binding = binding_takes(last);
     if (last + 1 == plan.count && value) {
-      if (binding && kind == step::element_or_empty_copy) {
-        made.entries[made.count++] = {step::element_or_empty,
+      if (binding && kind == step::maybe_element_copy) {
+        made.entries[made.count++] = {step::maybe_element,
                                       static_cast<std::uint8_t>(index),
                                       static_cast<std::uint8_t>(last),
                                       true,
@@ -1166,17 +1167,17 @@ struct binding_plan {
   using universe_type = layer_universe<layers>;
 
   static constexpr semantics::context context(bool abstract) {
-    return {leaf_traits_v<Leaf>(),
-            {Makes, false, Early},
-            abstract,
-            static_cast<std::uint8_t>(
-                static_cast<unsigned>(
-                    semantics::limitation::pointer_out_of_made_holder) |
-                static_cast<unsigned>(
-                    semantics::limitation::pointer_into_converted_copy) |
-                static_cast<unsigned>(
-                    semantics::limitation::qualified_below_element)),
-            &universe_type::value};
+    return {
+        leaf_traits_v<Leaf>(),
+        {Makes, false, Early},
+        abstract,
+        static_cast<std::uint8_t>(
+            static_cast<unsigned>(semantics::limitation::made_holder_handover) |
+            static_cast<unsigned>(
+                semantics::limitation::converted_copy_pointer) |
+            static_cast<unsigned>(
+                semantics::limitation::qualified_below_element)),
+        &universe_type::value};
   }
 
   static constexpr semantics::object start() {
@@ -1339,7 +1340,7 @@ template <const semantics::plan &Plan, std::size_t Index> struct plan_step {
 // The step into a state of a search.
 template <const semantics::search &Search, std::size_t State>
 struct search_step {
-  static constexpr semantics::step kind = Search.states[State].via;
+  static constexpr semantics::step kind = Search.states[State].step;
   static constexpr semantics::object source() {
     return Search.states[Search.states[State].parent].reached;
   }
@@ -1401,7 +1402,8 @@ struct program_run {
     constexpr instruction Each = Program.entries[Index];
     constexpr semantics::object reached = Plan.objects[Each.last + 1];
     auto &&kept =
-        store_of<reached.lifetimes[0] == semantics::lifetime::stable>(store);
+        lifetime_store<reached.lifetimes[0] == semantics::lifetime::stable>(
+            store);
     if constexpr (Each.kind == semantics::step::wrap) {
       using made_type = typename layer_wrapper<T, Index>::type;
       auto &made = kept.template keep<made_type>([&] {
