@@ -1794,8 +1794,9 @@ struct binding_sources {
   // Runs the route of a state, of a value when Value: the routes are
   // compiled in place, chosen among by the state.
   template <bool Value, typename Store, std::size_t... I>
-  static erased_carrier run_route(std::size_t state, start_carrier from,
-                                  Store &store, std::index_sequence<I...>) {
+  DINGO_ALWAYS_INLINE static erased_carrier
+  run_route(std::size_t state, start_carrier from, Store &store,
+            std::index_sequence<I...>) {
     erased_carrier reached;
     using fn = void (*)(start_carrier, Store &, erased_carrier &);
     static constexpr fn at[] = {&run_route_at<I, Value, Store>...};
@@ -1812,8 +1813,8 @@ struct binding_sources {
     }
   }
   template <bool Value, typename Store>
-  static erased_carrier run_route(std::size_t state, start_carrier from,
-                                  Store &store) {
+  DINGO_ALWAYS_INLINE static erased_carrier
+  run_route(std::size_t state, start_carrier from, Store &store) {
     return run_route<Value>(state, from, store,
                             std::make_index_sequence<closure.count>{});
   }

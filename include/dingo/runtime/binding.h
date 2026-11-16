@@ -310,7 +310,7 @@ private:
   // Resolves a request the closure of the binding answers: runs the route of
   // the answer, compiled for the types of the binding, and takes what it
   // reaches as the answer says.
-  static resolved_address
+  DINGO_ALWAYS_INLINE static resolved_address
   resolve_closed(interface_base &binding, construction_scope scope,
                  runtime_context_type &context,
                  const typename node_type::request_type &request,
