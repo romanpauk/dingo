@@ -13,7 +13,6 @@
 #include <dingo/lookup/tags.h>
 
 #include <cstddef>
-#include <tuple>
 #include <type_traits>
 
 namespace dingo {
@@ -38,8 +37,10 @@ template <typename Rtti> struct base_lookup_key {
   type_index key_type;
 
   bool operator<(const base_lookup_key &other) const {
-    return std::tie(interface_type, key_type) <
-           std::tie(other.interface_type, other.key_type);
+    if (interface_type != other.interface_type) {
+      return interface_type < other.interface_type;
+    }
+    return key_type < other.key_type;
   }
 
   bool operator==(const base_lookup_key &other) const {
