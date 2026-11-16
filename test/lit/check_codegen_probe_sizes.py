@@ -1,134 +1,13 @@
 #!/usr/bin/env python3
 
-import os
-import platform
+"""Checks that a resolution from the static container compiles to no more
+code than the same resolution from the runtime container. The sizes of the
+probes themselves are tracked by the footprint check, against its last run."""
+
 import re
 import sys
 from pathlib import Path
 
-
-PROBE_LIMITS = {
-    "probe_static_resolution_consumer_read": {
-        "default": 0x10,
-        "gcc": 0x50,
-        "gcc_arm64": 0x60,
-    },
-    "probe_runtime_resolution_consumer_read": {
-        "default": None,
-    },
-    # The resolution can throw, from make_shared: the static container keeps
-    # what rolls back the shared cell it resolves first. GCC inlines the release
-    # of the shared_ptr into it unless other code in the file calls it often.
-    "probe_static_resolution_shared_config": {
-        "default": 0x150,
-        "clang": 0x190,
-        "clang_arm64": 0x1A0,
-        "gcc14": 0xC8,
-        "gcc14_arm64": 0xE8,
-    },
-    "probe_runtime_resolution_shared_config": {
-        "default": None,
-    },
-    "probe_static_resolution_shared_value_config": {
-        "default": 0x10,
-        "gcc": 0x50,
-        "gcc_arm64": 0x60,
-    },
-    "probe_runtime_resolution_shared_value_config": {
-        "default": None,
-    },
-    "probe_static_resolution_shared_reference_config": {
-        "default": 0x10,
-        "gcc": 0x50,
-        "gcc_arm64": 0x60,
-    },
-    "probe_runtime_resolution_shared_reference_config": {
-        "default": None,
-    },
-    "probe_static_resolution_optional_config": {
-        "default": 0x60,
-    },
-    "probe_runtime_resolution_optional_config": {
-        "default": None,
-    },
-    "probe_static_resolution_unique_value_config": {
-        "default": 0x10,
-        "gcc": 0x50,
-        "gcc_arm64": 0x60,
-    },
-    "probe_runtime_resolution_unique_value_config": {
-        "default": None,
-    },
-    "probe_static_resolution_unique_rvalue_config": {
-        "default": 0x10,
-        "gcc": 0x50,
-        "gcc_arm64": 0x60,
-    },
-    "probe_runtime_resolution_unique_rvalue_config": {
-        "default": None,
-    },
-    "probe_static_resolution_unique_wrapper_config": {
-        "default": 0x10,
-        "gcc": 0x50,
-        "gcc_arm64": 0x60,
-    },
-    "probe_runtime_resolution_unique_wrapper_config": {
-        "default": None,
-    },
-    # GCC 16 inlines more into the static probes of this file when its
-    # runtime probes instantiate less: they then have the size they have
-    # compiled alone.
-    "probe_static_resolution_interface_handle": {
-        "default": 0x180,
-        "gcc16": 0x1B0,
-        "clang": 0x1a0,
-        "clang_arm64": 0x1d0,
-    },
-    "probe_runtime_resolution_interface_handle": {
-        "default": None,
-    },
-    # The resolution can throw, from the vector: the static container keeps
-    # what rolls back the shared cells it resolves first.
-    "probe_static_resolution_collection_sum": {
-        "default": 0x500,
-        "gcc16": 0x6D8,
-    },
-    "probe_runtime_resolution_collection_sum": {
-        "default": None,
-    },
-    "probe_runtime_resolution_external_value_storage": {
-        "default": 0x300,
-        "clang": 0x420,
-        "clang_arm64": 0x350,
-        "gcc": 0x310,
-        "gcc13": 0x540,
-        "gcc14": 0x590,
-        "gcc15": 0x590,
-        "gcc16": 0x590,
-        "gcc_arm64": 0x590,
-    },
-    "probe_runtime_resolution_external_reference_storage": {
-        "default": 0x300,
-        "clang": 0x440,
-        "clang_arm64": 0x370,
-        "gcc": 0x330,
-        "gcc13": 0x550,
-        "gcc14": 0x5a0,
-        "gcc15": 0x5a0,
-        "gcc16": 0x5a0,
-        "gcc_arm64": 0x5a0,
-    },
-    "probe_runtime_resolution_external_wrapper_storage": {
-        "default": 0x420,
-        "clang": 0x940,
-        "clang_arm64": 0x740,
-        "gcc": 0x750,
-        "gcc13": 0x750,
-        "gcc14": 0x750,
-        "gcc15": 0x750,
-        "gcc_arm64": 0x750,
-    },
-}
 
 # The bytes a static probe may exceed its runtime probe by. The static
 # interface handle rolls the container back when the operation fails: a
@@ -218,63 +97,6 @@ SYMBOL_RE = re.compile(
 )
 
 
-def expected_max_for_environment() -> dict[str, int]:
-    compiler_id = os.environ.get("DINGO_CXX_ID", "")
-    compiler_family = os.environ.get("DINGO_CXX_FAMILY", "")
-    compiler_major = os.environ.get("DINGO_CXX_VERSION_MAJOR", "")
-    machine = platform.machine().lower()
-    is_clang = compiler_family == "clang" or "clang" in compiler_id
-    is_gcc = compiler_family == "gcc" or ("g++" in compiler_id and not is_clang)
-    is_arm64 = machine in ("aarch64", "arm64")
-
-    columns = ["default"]
-    if is_clang:
-        columns.append("clang")
-        if is_arm64:
-            columns.append("clang_arm64")
-    if (
-        compiler_major == "18"
-        or "clang++-18" in compiler_id
-        or "clang-18" in compiler_id
-    ):
-        columns.append("clang18")
-    if (
-        compiler_major == "19"
-        or "clang++-19" in compiler_id
-        or "clang-19" in compiler_id
-    ):
-        columns.append("clang19")
-    if (
-        compiler_major == "20"
-        or "clang++-20" in compiler_id
-        or "clang-20" in compiler_id
-    ):
-        columns.append("clang20")
-    if is_gcc:
-        columns.append("gcc")
-    if compiler_major == "13" or "g++-13" in compiler_id:
-        columns.append("gcc13")
-    if compiler_major == "14" or "g++-14" in compiler_id:
-        columns.append("gcc14")
-    if compiler_major == "15" or "g++-15" in compiler_id:
-        columns.append("gcc15")
-    if compiler_major == "16" or "g++-16" in compiler_id:
-        columns.append("gcc16")
-    if is_gcc and is_arm64:
-        columns.append("gcc_arm64")
-        if compiler_major == "14" or "g++-14" in compiler_id:
-            columns.append("gcc14_arm64")
-
-    expected_max: dict[str, int] = {}
-    for symbol, limits in PROBE_LIMITS.items():
-        limit = limits["default"]
-        for column in columns[1:]:
-            limit = limits.get(column, limit)
-        if limit is not None:
-            expected_max[symbol] = limit
-    return expected_max
-
-
 def load_sizes(path: Path) -> dict[str, int]:
     sizes: dict[str, int] = {}
     for line in path.read_text().splitlines():
@@ -291,38 +113,12 @@ def main() -> int:
         return 2
 
     sizes = load_sizes(Path(sys.argv[1]))
-    unexpected_limits = sorted(PROBE_LIMITS.keys() - EXPECTED_SYMBOLS)
-    missing_limits = sorted(EXPECTED_SYMBOLS - PROBE_LIMITS.keys())
-    if unexpected_limits or missing_limits:
-        if unexpected_limits:
-            print(
-                f"unexpected probe limits: {', '.join(unexpected_limits)}",
-                file=sys.stderr,
-            )
-        if missing_limits:
-            print(
-                f"missing probe limits: {', '.join(missing_limits)}",
-                file=sys.stderr,
-            )
-        return 1
-
     missing = sorted(EXPECTED_SYMBOLS - sizes.keys())
     if missing:
         print(f"missing probe symbols: {', '.join(missing)}", file=sys.stderr)
         return 1
 
-    expected_max = expected_max_for_environment()
-
     failed = False
-    for symbol, max_size in expected_max.items():
-        size = sizes[symbol]
-        if size > max_size:
-            print(
-                f"{symbol} regressed: size 0x{size:x} exceeds 0x{max_size:x}",
-                file=sys.stderr,
-            )
-            failed = True
-
     for faster_symbol, slower_symbol in EXPECTED_FASTER_THAN_RUNTIME:
         margin = RUNTIME_PATH_MARGIN.get(faster_symbol, 0)
         if sizes[faster_symbol] > sizes[slower_symbol] + margin:

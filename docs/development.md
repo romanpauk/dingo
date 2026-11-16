@@ -240,10 +240,13 @@ scenario does not compile.
 
 ## Code Size Tests
 
-The lit suite contains code-generation probes in
-[`test/lit/codegen-static-probes.cpp`](../test/lit/codegen-static-probes.cpp).
-They compile representative static and runtime resolution paths. They inspect
-symbol sizes with `nm` and selected small static probes with `objdump`.
+The lit suite compiles the code-generation probes of
+[`test/lit/codegen-static-probes.cpp`](../test/lit/codegen-static-probes.cpp) at
+`-O2`. They check that a resolution from the static container is no larger than
+the same resolution from the runtime container, by the symbol sizes `nm` gives,
+and that the small static probes compile to one instruction and a return, by
+`objdump`, with compilers that reliably compile them so. The size of each probe
+is tracked by `footprint-check`.
 
 [`test/lit/check_codegen_probe_sizes.py`](../test/lit/check_codegen_probe_sizes.py)
 and
