@@ -7,6 +7,7 @@
 
 #include <dingo/binding/cache.h>
 #include <dingo/container.h>
+#include <dingo/registration/constructor.h>
 #include <dingo/static_container.h>
 #include <dingo/storage/retention.h>
 #include <dingo/storage/shared.h>
@@ -323,6 +324,38 @@ TEST(cache_test, rollback_clears_cache_replaced_by_another_request_shape) {
 
   EXPECT_EQ(std::addressof(container.resolve<int &>()),
             std::addressof(committed));
+}
+
+struct counted_dependency {
+  DINGO_CONSTRUCTOR(counted_dependency()) { ++constructed; }
+  static inline int constructed = 0;
+};
+
+struct failing_counted_consumer {
+  explicit failing_counted_consumer(counted_dependency &) {
+    throw std::runtime_error("resolution failed");
+  }
+};
+
+// A dependency made in a failed resolution is cached by the reset of its
+// cell: the rollback that resets the cell clears the cache, and the next
+// request makes it again.
+TEST(cache_test, rollback_clears_cache_of_dependency_made_in_it) {
+  counted_dependency::constructed = 0;
+  dingo::container<> container;
+  container.register_type<scope<shared>, storage<counted_dependency>>();
+  container.register_type<scope<shared>, storage<failing_counted_consumer>,
+                          dependencies<counted_dependency &>>();
+
+  EXPECT_THROW((container.resolve<failing_counted_consumer &>()),
+               std::runtime_error);
+  EXPECT_EQ(counted_dependency::constructed, 1);
+
+  auto &made = container.resolve<counted_dependency &>();
+  EXPECT_EQ(counted_dependency::constructed, 2);
+  EXPECT_EQ(std::addressof(container.resolve<counted_dependency &>()),
+            std::addressof(made));
+  EXPECT_EQ(counted_dependency::constructed, 2);
 }
 
 } // namespace

@@ -322,8 +322,12 @@ private:
     auto &cell = detail::runtime_cell<cell_type>(binding.header());
     detail::binding_activation<cell_type, Container &> activation{
         cell, detail::resolution_container<Container>(binding.header()), scope};
-    const resolved_address result = activation.template use_source<void>(
-        context, [&](auto &&source) -> resolved_address {
+    // A reset of the cell this request registers clears the cache too.
+    const bool registers_reset =
+        activation.template registers_reset<runtime_context_type>();
+    const resolved_address result = activation.use_source(
+        context, cached_cell_access{{cell}, binding.cache_slot()},
+        [&](auto &&source) -> resolved_address {
           store_type store(
               context, scope, retained(binding), request.requested,
               detail::described_type_v<detail::registered_type_t<Storage>>);
@@ -353,10 +357,28 @@ private:
         });
     if (cache_key != nullptr && answer.stable_address &&
         result.access == access::borrow) {
-      binding.publish_cache(context, cache_key, result.address);
+      if (registers_reset) {
+        *binding.cache_slot() = {cache_key, result.address};
+      } else {
+        binding.publish_cache(context, cache_key, result.address);
+      }
     }
     return result;
   }
+
+  // The access of a cell whose reset, as a transaction rolls back, clears
+  // the cache of its record, which may hold an address in it.
+  struct cached_cell_access : detail::cell_access<cell_type> {
+    detail::cache::entry *cache;
+
+    auto rollback() const noexcept { return &rollback_cell; }
+    void *rollback_argument() const noexcept { return cache; }
+
+    static void rollback_cell(void *cell, void *cache) noexcept {
+      static_cast<cell_type *>(cell)->reset();
+      *static_cast<detail::cache::entry *>(cache) = {};
+    }
+  };
 
   // Resolves a request by a plan the closure of the binding does not answer:
   // runs the route of the plan, compiled for the types of the binding, and

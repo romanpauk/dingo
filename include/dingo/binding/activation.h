@@ -348,18 +348,7 @@ struct binding_activation {
     constexpr bool may_guard =
         materialization.guards_always || materialization.guards_unresolved;
     if constexpr (is_runtime_context_v<Context>) {
-      return run_materialization<may_guard, materialization.retains_unresolved>(
-          materialization, cell_access<Cell>{cell}, construction_scope(scope),
-          context,
-          [&](construction_scope construction,
-              auto &materialized) -> decltype(auto) {
-            return use_runtime_source(
-                construction, context, [&](auto &&source) -> decltype(auto) {
-                  materialized();
-                  return std::forward<Fn>(fn)(
-                      std::forward<decltype(source)>(source));
-                });
-          });
+      return use_source(context, cell_access<Cell>{cell}, std::forward<Fn>(fn));
     } else if constexpr (!may_guard) {
       // A binding that is never guarded or retained materializes its source
       // where its placement puts it.
@@ -372,6 +361,39 @@ struct binding_activation {
           context, [&](construction_scope, auto &) -> decltype(auto) {
             return use_placed_source<Request>(context, std::forward<Fn>(fn));
           });
+    }
+  }
+
+  // Materializes the storage in a transaction and passes its source to fn,
+  // through an access to the cell, which tells how a rollback resets it.
+  template <typename Context, typename Access, typename Fn>
+  decltype(auto) use_source(Context &context, const Access &access, Fn &&fn) {
+    static_assert(is_runtime_context_v<Context>);
+    constexpr materialization_facts materialization = facts<Context>();
+    constexpr bool may_guard =
+        materialization.guards_always || materialization.guards_unresolved;
+    return run_materialization<may_guard, materialization.retains_unresolved>(
+        materialization, access, construction_scope(scope), context,
+        [&](construction_scope construction,
+            auto &materialized) -> decltype(auto) {
+          return use_runtime_source(
+              construction, context, [&](auto &&source) -> decltype(auto) {
+                materialized();
+                return std::forward<Fn>(fn)(
+                    std::forward<decltype(source)>(source));
+              });
+        });
+  }
+
+  // Whether a materialization in a transaction registers the reset of the
+  // cell: the storage retains its source and is not resolved.
+  template <typename Context> bool registers_reset() const noexcept {
+    constexpr materialization_facts materialization = facts<Context>();
+    if constexpr (materialization.retains_unresolved) {
+      return materialization_retains(materialization,
+                                     storage_resolved(cell.storage()), true);
+    } else {
+      return false;
     }
   }
 
