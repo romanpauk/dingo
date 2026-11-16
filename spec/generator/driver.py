@@ -30,6 +30,7 @@ import threading
 
 import jinja2
 
+from . import drilldown, objects
 from .dimensions import Outcome
 from .model import spell_request, spell_shape, spell_stored
 
@@ -632,3 +633,134 @@ def precompiled_header_current():
     """Whether every file the precompiled header read is as it was."""
     return all(file_stamp(name) == found
                for name, found in PRECOMPILED_HEADER_FILES.items())
+
+
+# Whether the system counts the instructions of a process for its user, by
+# perf, found once; None until it is asked.
+COUNTS_INSTRUCTIONS = None
+
+
+def counts_instructions():
+    """Whether perf counts the instructions of a process this user runs."""
+    global COUNTS_INSTRUCTIONS
+    if COUNTS_INSTRUCTIONS is None:
+        try:
+            counted = subprocess.run(
+                ["perf", "stat", "-x,", "-e", "instructions:u", "--", "true"],
+                capture_output=True, text=True, timeout=60)
+            COUNTS_INSTRUCTIONS = (counted.returncode == 0 and
+                                   ",instructions" in counted.stderr and
+                                   "<not" not in counted.stderr)
+        except (OSError, subprocess.SubprocessError):
+            COUNTS_INSTRUCTIONS = False
+    return COUNTS_INSTRUCTIONS
+
+
+def measured_compile(command, directory, name):
+    """Runs a compile; returns (returncode, stderr, measured): the processor
+    seconds and the peak memory in KiB of the compiler and what it runs, and
+    the instructions they ran, where the system tells them."""
+    errors = directory / f"{name}.stderr"
+    counted = directory / f"{name}.counted"
+    prefix = (["perf", "stat", "-x,", "-e", "instructions:u", "-o",
+               str(counted), "--"] if counts_instructions() else [])
+    measured = {}
+    with open(errors, "w") as error_file:
+        process = subprocess.Popen(prefix + command,
+                                   stdout=subprocess.DEVNULL,
+                                   stderr=error_file)
+        if hasattr(os, "wait4"):
+            _, status, usage = os.wait4(process.pid, 0)
+            process.returncode = os.waitstatus_to_exitcode(status)
+            # macOS tells the peak memory in bytes, Linux in KiB.
+            memory = usage.ru_maxrss
+            if os.uname().sysname == "Darwin":
+                memory //= 1024
+            measured["cpu"] = round(usage.ru_utime + usage.ru_stime, 2)
+            measured["memory"] = memory
+        else:
+            process.wait()
+    stderr = errors.read_text(errors="replace")
+    errors.unlink()
+    if counted.exists():
+        for line in counted.read_text().splitlines():
+            fields = line.split(",")
+            if len(fields) > 2 and fields[2].startswith("instructions"):
+                if fields[0].isdigit():
+                    measured["instructions"] = int(fields[0])
+        counted.unlink()
+    return process.returncode, stderr, measured
+
+
+def compiler_family(compiler):
+    """The compiler a command runs, as what tells its work apart: clang or
+    gcc, by what it says of itself; None for another."""
+    version = compiler_identity(compiler)[1]
+    if "clang" in version:
+        return "clang"
+    if "GCC" in version or "Free Software Foundation" in version:
+        return "gcc"
+    return None
+
+
+def drilldown_of(compiler, flags, cpp, obj):
+    """Where the compiler spends its work on a program, as it reports it, of
+    a compile of its own, which the report would slow: GCC's phases, clang's
+    events; None for another compiler."""
+    family = compiler_family(compiler)
+    if family == "gcc":
+        returncode, stderr = run_compiler(compiler_command(
+            compiler, *flags, "-ftime-report", "-c", str(cpp), "-o", str(obj)))
+        obj.unlink(missing_ok=True)
+        return ({"phases": drilldown.gcc_report(stderr)}
+                if returncode == 0 else None)
+    if family == "clang":
+        returncode, _ = run_compiler(compiler_command(
+            compiler, *flags, "-ftime-trace", "-ftime-trace-granularity=0",
+            "-c", str(cpp), "-o", str(obj)))
+        trace = obj.with_suffix(".json")
+        found = (drilldown.clang_trace(trace)
+                 if returncode == 0 and trace.exists() else None)
+        obj.unlink(missing_ok=True)
+        trace.unlink(missing_ok=True)
+        return found
+    return None
+
+
+def measure(compiler, flags, directory, name, source):
+    """Compiles a program to an object and measures it: how the compile
+    ended and what it reported, what the compiler took, the sections of the
+    object, its functions and the sizes of those of no mangled name, and
+    where the compiler spent its work. What is found is kept as the result of
+    the program: the same program and the same compiler take the same
+    work."""
+    cpp = directory / f"{name}.cpp"
+    obj = directory / f"{name}.o"
+    cpp.write_text(source)
+    key = (program_key(compiler, flags, directory, name, cpp)
+           if CACHE is not None else None)
+    kept = load_result(key) if key is not None else None
+    if kept is not None:
+        return kept
+    with CACHE_LOCK:
+        COMPILED.append(key)
+    with COMPILES:
+        returncode, stderr, measured = measured_compile(
+            compiler_command(compiler, *flags, "-c", str(cpp), "-o", str(obj)),
+            directory, name)
+        result = {"returncode": returncode, "stderr": stderr[-4000:],
+                  **measured}
+        if returncode == 0:
+            found = objects.read(obj)
+            obj.unlink(missing_ok=True)
+            if found is not None:
+                result["object"] = {
+                    "sections": found["sections"],
+                    "functions": len(found["functions"]),
+                    "named": {function: size for function, size
+                              in found["functions"].items()
+                              if not function.startswith("_Z")}}
+            result["drilldown"] = drilldown_of(compiler, flags, cpp, obj)
+    if key is not None:
+        store_result(key, result)
+    return result

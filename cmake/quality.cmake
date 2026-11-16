@@ -167,9 +167,35 @@ function(configure_quality_targets out_check_targets)
     )
     add_custom_target(${layer}-check DEPENDS ${layer_dir}/checked)
   endforeach()
+  # The footprint: what the library costs the compiler and the code it emits,
+  # of scenario programs of each container, with the costs of a file, a
+  # container, a registration and a request type of them. It keeps its
+  # measurements with the programs, and the last of each scenario for each
+  # compiler, and tells what changed since the run before. It fails when a
+  # scenario does not compile.
+  set(footprint_dir ${PROJECT_BINARY_DIR}/footprint)
+  set(footprint_flags "-std=c++17 -O0 -I${PROJECT_SOURCE_DIR}/include")
+  set(footprint_configuration ${footprint_dir}/configuration.txt)
+  file(CONFIGURE OUTPUT ${footprint_configuration} CONTENT
+    "${CMAKE_CXX_COMPILER} ${CMAKE_CXX_COMPILER_VERSION}\n${footprint_flags}\n")
+  add_custom_command(
+    OUTPUT ${footprint_dir}/checked
+    COMMENT "Measuring the footprint of the library"
+    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/spec/footprint.py
+      ${footprint_dir}/footprint.json --work ${footprint_dir}/work
+      --compiler ${CMAKE_CXX_COMPILER} "--flags=${footprint_flags}"
+    COMMAND ${CMAKE_COMMAND} -E touch ${footprint_dir}/checked
+    DEPENDS ${model_inputs} ${footprint_configuration}
+      ${PROJECT_SOURCE_DIR}/test/lit/codegen-static-probes.cpp
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    USES_TERMINAL
+    VERBATIM
+  )
+  add_custom_target(footprint-check DEPENDS ${footprint_dir}/checked)
+
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     list(APPEND check_targets semantics-check conversion-check emptiness-check
-      storage-check resolution-check model-check-small)
+      storage-check resolution-check model-check-small footprint-check)
   endif()
 
   # A report, not a check: it ranks the headers and never fails.

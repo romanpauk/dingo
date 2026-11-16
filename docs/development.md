@@ -83,16 +83,20 @@ environment provides the development tools.
   probes of the [Specification](specification.md). See
   [Model Checks](#model-checks).
 
+- `footprint-check`: measures what the library costs the compiler and the code
+  it emits, and tells what changed since the run before. See
+  [Footprint](#footprint).
+
 With GCC and clang, `check` includes `semantics-check`, `conversion-check`,
-`emptiness-check`, `storage-check`, `resolution-check` and `model-check-small`.
-`includes-tidy` and `includes-check` are not available on Windows. The
-`sources-format*`, `includes-tidy` and `includes-check` targets need
-`DINGO_CLANG_TOOLS_ENABLED=ON` (the default).
+`emptiness-check`, `storage-check`, `resolution-check`, `model-check-small` and
+`footprint-check`. `includes-tidy` and `includes-check` are not available on
+Windows. The `sources-format*`, `includes-tidy` and `includes-check` targets
+need `DINGO_CLANG_TOOLS_ENABLED=ON` (the default).
 
 ### Kept Results
 
 The checks that compile programs (`conversion-check`, `emptiness-check`,
-`storage-check`, `resolution-check`, the model checks and
+`storage-check`, `resolution-check`, the model checks, `footprint-check` and
 `spec/execution_check.py`) keep the result of each program in `programs/` of
 their work directory, compressed with zstd. As ccache does, a result is kept
 under a key of the compiler, the flags, the name of the program and the source
@@ -200,6 +204,39 @@ cover, one test for each behavior. A test is in the directory of what it tests:
 - `test/factory`: the kinds of factory and constructor detection.
 - `test/resolution`: wrappers, callables and identity across requests.
 - `test/runtime`: regressions of the runtime container.
+
+## Footprint
+
+`footprint-check` ([`spec/footprint.py`](../spec/footprint.py)) compiles
+scenario programs of the library with the compiler CMake is configured with, and
+measures each:
+
+- the code, the constants, the data and the unwind tables of its object, read
+  from its ELF sections, its functions, and the size of each function of no
+  mangled name, such as the probes of
+  [`test/lit/codegen-static-probes.cpp`](../test/lit/codegen-static-probes.cpp)
+  at `-O2`
+- the peak memory and the processor time of the compiler, and the instructions
+  it ran where `perf` counts them
+- where the compiler spent its work, as it reports it in a compile of its own:
+  GCC the time and the collected memory of each phase of `-ftime-report`, clang
+  the events of `-ftime-trace` by kind and the templates it instantiated by the
+  area of the library they are of
+
+The scenarios are the headers of each container alone, an empty runtime
+container, and one or five registrations of a shared handle, a unique value and
+an interface, requested twice or not at all, in each container. Their
+differences give the costs it prints: of the runtime container, and of a first
+registration, a further registration and a request type of each shape in each
+container.
+
+The measurements are kept results, in `programs/` of its work directory, and the
+last of each scenario for each compiler beside them, in `programs/latest/`. A
+run tells which measurements changed since the one before, past what changes
+between runs of the same program: nothing of a size or a count, a little of
+instructions and memory, much of a time. A cache of the results made by one run,
+as of the main branch, is the baseline of the next. It fails only when a
+scenario does not compile.
 
 ## Code Size Tests
 
