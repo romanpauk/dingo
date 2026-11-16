@@ -119,10 +119,9 @@ template <typename RTTI, typename Context> struct runtime_binding_engine {
     }
     const resolved_address result = run_materialization<true, true>(
         node.materialization, node_access{node, binding}, scope, context,
-        [&](construction_scope construction,
-            const materialized_hook &materialized) {
+        [&](construction_scope construction, auto &materialized) {
           return node.run(binding, scope, construction, context, plan, request,
-                          materialized);
+                          erase_hook(materialized));
         });
     if (cache_key != nullptr && node.caches && plan.stable_address &&
         result.access == resolved_address::access_kind::borrow) {

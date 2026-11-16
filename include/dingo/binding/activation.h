@@ -205,7 +205,10 @@ template <> constexpr materialized_request materialized<void>() {
 // rollback, which runs the last registered first, resets the cell before
 // what it refers to. A cell that fails as it resolves, or as its reset is
 // registered, is reset at once. materialize materializes the source in a
-inline void no_hook(void *) {}
+// What a materialization tells where nothing is to be told.
+struct no_materialized_hook {
+  void operator()() const noexcept {}
+};
 
 // construction scope and applies to it what the caller does with it.
 // materialize(construction, materialized) tells materialized() once the
@@ -216,7 +219,7 @@ template <bool MayGuard, bool MayRetain, typename Access, typename Context,
 auto run_materialization(const materialization_facts &facts,
                          const Access &access, construction_scope scope,
                          Context &context, Materialize &&materialize)
-    -> decltype(materialize(scope, materialized_hook{})) {
+    -> decltype(materialize(scope, std::declval<no_materialized_hook &>())) {
   [[maybe_unused]] const bool resolved =
       (MayGuard || MayRetain) && access.resolved();
   [[maybe_unused]] auto guard = [&] {
@@ -238,8 +241,6 @@ auto run_materialization(const materialization_facts &facts,
           }
         }
       } reset{access};
-      using result_type = decltype(materialize(
-          construction_scope(persistent_scope), materialized_hook{}));
       struct registration {
         Context &context;
         const Access &access;
@@ -255,16 +256,16 @@ auto run_materialization(const materialization_facts &facts,
                                            access.reset());
           }
         }
-        static void call(void *self) { (*static_cast<registration *>(self))(); }
       } registered{context, access, reset};
-      const materialized_hook hook{&registration::call, &registered};
+      using result_type = decltype(materialize(
+          construction_scope(persistent_scope), registered));
       if constexpr (std::is_void_v<result_type>) {
-        materialize(construction_scope(persistent_scope), hook);
+        materialize(construction_scope(persistent_scope), registered);
         registered();
         return;
       } else {
         result_type result =
-            materialize(construction_scope(persistent_scope), hook);
+            materialize(construction_scope(persistent_scope), registered);
         registered();
         if constexpr (std::is_reference_v<result_type>) {
           return std::forward<result_type>(result);
@@ -274,7 +275,8 @@ auto run_materialization(const materialization_facts &facts,
       }
     }
   }
-  return materialize(scope, materialized_hook{&no_hook, nullptr});
+  no_materialized_hook none;
+  return materialize(scope, none);
 }
 
 // The typed access of a cell to its materialization, which the static
@@ -350,7 +352,7 @@ struct binding_activation {
           materialization, cell_access<Cell>{cell}, construction_scope(scope),
           context,
           [&](construction_scope construction,
-              const materialized_hook &materialized) -> decltype(auto) {
+              auto &materialized) -> decltype(auto) {
             return use_runtime_source(
                 construction, context, [&](auto &&source) -> decltype(auto) {
                   materialized();
@@ -367,8 +369,7 @@ struct binding_activation {
       // the request, known as the code compiles where it is.
       return run_materialization<may_guard, false>(
           materialization, cell_access<Cell>{cell}, construction_scope(scope),
-          context,
-          [&](construction_scope, const materialized_hook &) -> decltype(auto) {
+          context, [&](construction_scope, auto &) -> decltype(auto) {
             return use_placed_source<Request>(context, std::forward<Fn>(fn));
           });
     }

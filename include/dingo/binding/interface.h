@@ -47,6 +47,11 @@ struct materialized_hook {
   void operator()() const { fn(self); }
 };
 
+// The hook of what a materialization tells, of no type.
+template <typename Fn> materialized_hook erase_hook(Fn &fn) {
+  return {[](void *self) { (*static_cast<Fn *>(self))(); }, &fn};
+}
+
 class retention;
 
 struct runtime_request;
