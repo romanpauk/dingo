@@ -41,7 +41,8 @@ public:
   object_store(const object_store &) = delete;
   object_store &operator=(const object_store &) = delete;
 
-  void *allocate(Arena &arena, std::size_t size, std::size_t alignment) {
+  DINGO_ALWAYS_INLINE void *allocate(Arena &arena, std::size_t size,
+                                     std::size_t alignment) {
     assert(size <=
            static_cast<std::size_t>(std::numeric_limits<intptr_t>::max()));
     assert(alignment <=
@@ -104,8 +105,8 @@ public:
     return instance;
   }
 
-  void add_destructor(Arena &arena, void *instance,
-                      void (*dtor)(void *) noexcept) {
+  DINGO_ALWAYS_INLINE void add_destructor(Arena &arena, void *instance,
+                                          void (*dtor)(void *) noexcept) {
     tail_ =
         new (allocate(arena, sizeof(destructor_node), alignof(destructor_node)))
             destructor_node{tail_, instance, dtor};
