@@ -218,7 +218,7 @@ template <typename Tag> void print_layer() {
     print_target<typename dingo::detail::shared_layer<identity>::type>();
     std::printf(" > ");
     print_target<std::conditional_t<
-        dingo::detail::converts_to_unknown_bound<identity>(),
+        dingo::detail::converts_unknown_bound<identity>(),
         typename dingo::detail::unknown_bound_layer<identity>::type, void>>();
   }
   std::printf(" | ");
@@ -235,7 +235,7 @@ struct printer<dingo::detail::type_stack<dingo::type_list<Tags...>, Element>> {
 };
 
 template <typename T, typename Leaf> void print_stack() {
-  printer<dingo::detail::stack_of_t<T, Leaf>>::print();
+  printer<dingo::detail::stack_t<T, Leaf>>::print();
 }
 
 template <typename X> using value_of = X;
@@ -257,7 +257,7 @@ template <typename Tag> void print_scope() {
 
 template <typename Leaf> void print_leaf() {
   constexpr dingo::semantics::leaf_traits traits =
-      dingo::detail::leaf_traits_of<Leaf>();
+      dingo::detail::leaf_traits_v<Leaf>();
   std::printf("%d %d %d %d\\n", traits.copyable, traits.movable,
               traits.default_constructible, traits.made_by_factory);
 }

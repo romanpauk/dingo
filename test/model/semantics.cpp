@@ -279,7 +279,7 @@ int main(int count, char **arguments) {
       for (unsigned taken = 0; taken < 7; ++taken) {
         const answer result = satisfy(found, goal, static_cast<category>(taken),
                                       lifetime::request, with);
-        const plan made = plan_of(found, result);
+        const plan made = answer_plan(found, result);
         if (!made.found) {
           std::printf("- ");
           continue;
@@ -302,7 +302,8 @@ int main(int count, char **arguments) {
       for (lifetime needed : {lifetime::request, lifetime::stable}) {
         const answer result =
             satisfy(found, goal, static_cast<category>(taken), needed, with);
-        if (result.found && !replays(plan_of(found, result), with, result)) {
+        if (result.found &&
+            !replays(answer_plan(found, result), with, result)) {
           std::printf("replay ");
         } else if (result.found) {
           std::printf("%u,%u,%u,%u,%u ", result.fewest.copies,

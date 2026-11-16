@@ -61,7 +61,7 @@ class storage_instance<external, Type, StoredType, void> {
 
   template <typename T> static held_type hold(T &&instance) {
     if constexpr (converts) {
-      return execution::made_as<StoredType>(std::forward<T>(instance));
+      return execution::make_value<StoredType>(std::forward<T>(instance));
     } else {
       return std::forward<T>(instance);
     }

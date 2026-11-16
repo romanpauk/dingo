@@ -246,13 +246,13 @@ public:
     if constexpr (is_runtime_context_v<Context>) {
       context_origin<Origin, Context> child{origin, context};
       forwarded_context<Context> own(context, persistent_memory());
-      return as_operation([&]() -> R {
+      return run_operation([&]() -> R {
         return request_resolution::resolve<Request, R>(*this, scope, own, child,
                                                        std::move(key));
       });
     } else {
       if (is_forwarded(origin)) {
-        return as_operation([&]() -> R {
+        return run_operation([&]() -> R {
           if constexpr (has_persistent_memory_slot<Context>::value &&
                         has_persistent_memory_v) {
             persistent_memory_scope memory(context, persistent_memory());
@@ -313,7 +313,7 @@ public:
 
   template <typename Fn> DINGO_ALWAYS_INLINE decltype(auto) transact(Fn &&fn) {
     context_type context(persistent_memory());
-    return as_operation(
+    return run_operation(
         [&]() -> decltype(auto) { return std::forward<Fn>(fn)(context); });
   }
 
@@ -321,7 +321,7 @@ public:
   // resolved first are reset, the last first, before its exception leaves
   // the container.
   template <typename Fn>
-  DINGO_ALWAYS_INLINE decltype(auto) as_operation(Fn &&fn) {
+  DINGO_ALWAYS_INLINE decltype(auto) run_operation(Fn &&fn) {
     using result_type = decltype(std::forward<Fn>(fn)());
     if constexpr (std::is_reference_v<result_type>) {
       // A reference is kept while the guard is released: a cleanup costs
@@ -427,14 +427,14 @@ private:
                   "request it by value, or as a dependency");
     if constexpr (minimal_context<Request, R, LookupKey>()) {
       no_dependency_context context;
-      return as_operation([&]() -> R {
+      return run_operation([&]() -> R {
         return resolve_bound<typename request_type<typename Request::user_type,
                                                    true>::lookup_type,
                              R, LookupKey>(caller_scope, context);
       });
     } else {
       context_type context(persistent_memory());
-      return as_operation([&]() -> R {
+      return run_operation([&]() -> R {
         return request_resolution::resolve<Request, R>(*this, caller_scope,
                                                        context, *this, key);
       });
@@ -490,7 +490,7 @@ private:
     static_assert(dependent_false_v<Request, Context>,
                   "static_container cannot resolve an ambiguously bound type");
     throw_type_ambiguous(
-        detail::described_type_v<typename Request::lookup_type>, context);
+        detail::type_descriptor_v<typename Request::lookup_type>, context);
   }
 
   template <typename Lookup, typename LookupKey>

@@ -52,14 +52,14 @@ public:
   // request otherwise.
   void *keep(bool stable, const object_layout &layout,
              execution::construct_function construct, void *make) override {
-    auto construct_at = [&](void *at) { construct(at, make); };
+    auto place_made = [&](void *at) { construct(at, make); };
     if (stable) {
       // A binding that keeps no instance is planned to keep nothing made of
       // it.
       assert(retained_ != nullptr);
-      return retained_->keep(&layout, context_, layout, construct_at);
+      return retained_->keep(&layout, context_, layout, place_made);
     }
-    return context_.place(scope_, layout, construct_at);
+    return context_.place(scope_, layout, place_made);
   }
 
   // The same, of a type a typed route names: what lives as long as the
@@ -178,7 +178,7 @@ struct runtime_request {
 // made of the object. A value whose last step the request makes is made of
 // what the plan reached before it.
 inline resolved_address finish_request(execution::erased_carrier reached,
-                                       const execution::plan_run &plan) {
+                                       const execution::runtime_plan &plan) {
   using access = resolved_address::access_kind;
   using made_kind = resolved_address::made_kind;
   switch (plan.last) {
@@ -207,7 +207,7 @@ template <typename T> struct request_execution {
   // The innermost type of the request: what a binding of its interface
   // stores the leaf of, or is the leaf as its interface.
   using element_type = execution::innermost_t<shape, void>;
-  using stack = stack_of_t<shape, element_type>;
+  using stack = stack_t<shape, element_type>;
   using universe_type = layer_universe<typename stack::layers>;
   using layers = execution::runtime_layers<typename universe_type::identities>;
   static constexpr bool modeled =
@@ -219,7 +219,7 @@ template <typename T> struct request_execution {
                                            typename stack::layers{});
     made.depth =
         static_cast<std::uint8_t>(type_list_size_v<typename stack::layers>);
-    quals_of<shape, element_type>::fill(made.quals);
+    stack_quals<shape, element_type>::fill(made.quals);
     return made;
   }
 };
@@ -229,17 +229,17 @@ template <typename T> inline plan_cache runtime_plans;
 template <typename T> constexpr runtime_request make_runtime_request() {
   using of = request_execution<T>;
   if constexpr (!of::modeled) {
-    return {described_type_v<T>, nullptr, false, nullptr, {}, nullptr};
+    return {type_descriptor_v<T>, nullptr, false, nullptr, {}, nullptr};
   } else {
     using tables = execution::request_tables<T, typename of::element_type>;
-    return {
-        described_type_v<T>,
-        &execution::shape_key<execution::interface_of_t<typename of::shape>>,
-        true,
-        &execution::shape_key<std::remove_cv_t<typename of::shape>>,
-        {of::layers::value, of::layers::count, of::goal(), of::category::value,
-         tables::value.value},
-        &runtime_plans<T>};
+    return {type_descriptor_v<T>,
+            &execution::shape_key<
+                execution::request_interface_t<typename of::shape>>,
+            true,
+            &execution::shape_key<std::remove_cv_t<typename of::shape>>,
+            {of::layers::value, of::layers::count, of::goal(),
+             of::category::value, tables::value.value},
+            &runtime_plans<T>};
   }
 }
 
@@ -251,10 +251,10 @@ namespace detail {
 // A value of T made of the value at an address, of the type the request
 // spells at a depth K, moved into all the layers above it at once.
 template <typename T, typename Element, typename Types, std::size_t K>
-T made_of_nested(void *address) {
+T wrap_nested(void *address) {
   // The value is moved into what holds it of the qualifiers it needs.
   using of = std::remove_cv_t<typename Types::template nested<K>::type>;
-  return execution::made_of<Element, Element, T>(
+  return execution::wrap_value<Element, Element, T>(
       std::move(*static_cast<of *>(address)));
 }
 
@@ -264,14 +264,14 @@ template <typename T, typename Element, typename Types, std::size_t K>
 constexpr T (*maker_of())(void *) {
   if constexpr (execution::layer_types<T, Element,
                                        Element>::template runs<K>()) {
-    return &made_of_nested<T, Element, Types, K>;
+    return &wrap_nested<T, Element, Types, K>;
   } else {
     return nullptr;
   }
 }
 
 template <typename T, typename Element, typename Types, std::size_t... K>
-T made_by_run(resolved_address result, std::index_sequence<K...>) {
+T wrap_result(resolved_address result, std::index_sequence<K...>) {
   using maker = T (*)(void *);
   constexpr maker makers[] = {maker_of<T, Element, Types, K + 1>()...};
   return makers[result.depth - 1](result.address);
@@ -302,7 +302,7 @@ template <typename T> T returned_value(resolved_address result) {
     using types = execution::request_types<T, typename of::element_type>;
     if constexpr (types::depth != 0) {
       if (result.made == made_kind::run) {
-        return made_by_run<value_type, typename of::element_type, types>(
+        return wrap_result<value_type, typename of::element_type, types>(
             result, std::make_index_sequence<types::depth>{});
       }
     }

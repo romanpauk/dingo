@@ -286,7 +286,7 @@ template <typename Cell> struct cell_access {
 
   bool resolved() const noexcept { return storage_resolved(cell.storage()); }
   type_descriptor leaf() const noexcept {
-    return described_type_v<leaf_type_t<typename Cell::storage_type::type>>;
+    return type_descriptor_v<leaf_type_t<typename Cell::storage_type::type>>;
   }
   void *cell_address() const noexcept { return std::addressof(cell); }
 
@@ -410,7 +410,7 @@ struct binding_activation {
               scope, context, dependencies))>>;
       if constexpr (refuses_caller_address(materialization,
                                            materialized<Request>())) {
-        reject_escape<Request>(scope, detail::described_type_v<source_type>,
+        reject_escape<Request>(scope, detail::type_descriptor_v<source_type>,
                                context);
       }
       auto &value = context.template construct_made<source_type>(

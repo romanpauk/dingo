@@ -606,8 +606,8 @@ template <typename Sink> struct unqualified_sink {
 };
 
 template <typename Sink>
-constexpr void each_transition_of(const thing &of, const context &with,
-                                  Sink &out);
+constexpr void each_layer_transition(const thing &of, const context &with,
+                                     Sink &out);
 
 // The steps the semantics allow from a thing.
 // They are passed to a sink, out(kind, thing), one by one: a constant
@@ -616,12 +616,12 @@ template <typename Sink>
 constexpr void each_transition(const thing &of, const context &with,
                                Sink &out) {
   unqualified_sink<Sink> reset{out};
-  each_transition_of(of, with, reset);
+  each_layer_transition(of, with, reset);
 }
 
 template <typename Sink>
-constexpr void each_transition_of(const thing &of, const context &with,
-                                  Sink &out) {
+constexpr void each_layer_transition(const thing &of, const context &with,
+                                     Sink &out) {
   if (of.unconstructed) {
     return;
   }
@@ -984,8 +984,8 @@ constexpr bool may_become(const thing &of, const request &goal,
 // what the request is, which a request of a pointer takes, or an array that
 // decays to one; or when a layer below its outermost two is not the
 // request's at the same depth.
-constexpr bool leads_to(const thing &of, const request &goal,
-                        const context &with) {
+constexpr bool may_satisfy(const thing &of, const request &goal,
+                           const context &with) {
   if (of.depth > goal.depth + 1 ||
       (of.depth == goal.depth + 1 && !with.kind(of.layers[0]).adopted &&
        !with.kind(of.layers[0]).decays)) {
@@ -1027,7 +1027,7 @@ inline constexpr std::size_t max_states = 256;
 // The states a stored object reaches on the way to a request.
 // A hash of a thing and the copies and the moves of its leaf, which a state
 // is found by.
-constexpr std::uint32_t hash_of(const state &of) {
+constexpr std::uint32_t state_hash(const state &of) {
   const thing &t = of.reached;
   std::uint32_t hash = 2166136261u;
   auto mix = [&hash](unsigned value) { hash = (hash ^ value) * 16777619u; };
@@ -1082,7 +1082,7 @@ struct search {
   // Adds a state, unless one of its thing and of no greater cost is found
   // already.
   constexpr bool add(const state &found) {
-    std::size_t slot = hash_of(found) % search_slots;
+    std::size_t slot = state_hash(found) % search_slots;
     while (slots[slot] != 0) {
       const state &other = states[slots[slot] - 1];
       if (dominates(other.made, found.made) && other.reached == found.reached) {
@@ -1105,8 +1105,8 @@ struct search {
 // request at its depth, which takes the qualifiers of what the pointer points
 // to; and below its outermost its qualifiers are those of the request at the
 // same depth, which no later step changes.
-constexpr bool qualified_as(const thing &of, const request &goal,
-                            const context &with) {
+constexpr bool quals_satisfy(const thing &of, const request &goal,
+                             const context &with) {
   if (of.depth == 0 || of.depth > goal.depth) {
     return false;
   }
@@ -1164,7 +1164,7 @@ struct reached_sink {
           reached.layers[0] == goal.layers[goal.depth - reached.depth])) {
       return;
     }
-    if (kind == step::qualify && !qualified_as(reached, goal, with)) {
+    if (kind == step::qualify && !quals_satisfy(reached, goal, with)) {
       return;
     }
     found.add({reached, stepped(from.made, kind, from.reached, reached, with),
@@ -1290,9 +1290,9 @@ constexpr bool converts_quals(const thing &of, std::size_t from,
 // Whether a thing is a pointer value a pointer request takes: one whose
 // pointee lives long enough; or one whose pointee the request owns, which
 // hands that over, only where nothing is referred to.
-constexpr bool points_to(const thing &of, const request &goal, lifetime needed,
-                         const context &with, std::uint8_t referable,
-                         bool referred) {
+constexpr bool pointer_satisfies(const thing &of, const request &goal,
+                                 lifetime needed, const context &with,
+                                 std::uint8_t referable, bool referred) {
   if (!of.depth || !with.kind(of.layers[0]).adopted ||
       !has_layers(of, goal, 1) || !of.instance ||
       !converts_quals(of, 1, goal, referable, with)) {
@@ -1360,10 +1360,10 @@ struct affected_cost {
 };
 
 template <typename Finish>
-constexpr answer satisfy_by(const state *states, std::size_t count,
-                            bool overflow, const request &goal, category taken,
-                            lifetime needed, const context &with,
-                            Finish finish) {
+constexpr answer satisfy_states(const state *states, std::size_t count,
+                                bool overflow, const request &goal,
+                                category taken, lifetime needed,
+                                const context &with, Finish finish) {
   answer result;
   result.overflow = overflow;
   if (refers(taken)) {
@@ -1392,7 +1392,8 @@ constexpr answer satisfy_by(const state *states, std::size_t count,
     for (std::size_t index = 0; index < count; ++index) {
       const state &each = states[index];
       if (each.reached.of == goal.of &&
-          points_to(each.reached, goal, needed, with, referable, referred)) {
+          pointer_satisfies(each.reached, goal, needed, with, referable,
+                            referred)) {
         consider(result, finish(each.made, effect::none, each.reached), index,
                  satisfaction::point, each.reached.absent);
       }
@@ -1434,23 +1435,24 @@ constexpr answer satisfy_by(const state *states, std::size_t count,
 // sources it reached from alone, when they satisfy it, as no plan through a
 // wrap is cheaper than one of them; of every state otherwise.
 template <typename Finish>
-constexpr answer satisfy_closed_by(const search &found, const request &goal,
-                                   category taken, lifetime needed,
-                                   const context &with, Finish finish) {
+constexpr answer satisfy_closed(const search &found, const request &goal,
+                                category taken, lifetime needed,
+                                const context &with, Finish finish) {
   if (found.closed != 0) {
-    const answer closed = satisfy_by(found.states, found.closed, found.overflow,
-                                     goal, taken, needed, with, finish);
+    const answer closed =
+        satisfy_states(found.states, found.closed, found.overflow, goal, taken,
+                       needed, with, finish);
     if (closed.found) {
       return closed;
     }
   }
-  return satisfy_by(found.states, found.count, found.overflow, goal, taken,
-                    needed, with, finish);
+  return satisfy_states(found.states, found.count, found.overflow, goal, taken,
+                        needed, with, finish);
 }
 
 constexpr answer satisfy(const search &found, const request &goal,
                          category taken, lifetime needed, const context &with) {
-  return satisfy_closed_by(found, goal, taken, needed, with, affected_cost{});
+  return satisfy_closed(found, goal, taken, needed, with, affected_cost{});
 }
 
 constexpr answer fewest(const thing &start, const context &with,
@@ -1476,17 +1478,17 @@ struct plan {
   bool overflow = false;
 };
 
-constexpr plan plan_of(const search &found, const answer &result);
+constexpr plan answer_plan(const search &found, const answer &result);
 
 // The plan of the steps to a state of a search, which satisfies nothing.
-constexpr plan plan_to(const search &found, std::uint16_t state) {
+constexpr plan state_plan(const search &found, std::uint16_t state) {
   answer reached;
   reached.found = true;
   reached.state = state;
-  return plan_of(found, reached);
+  return answer_plan(found, reached);
 }
 
-constexpr plan plan_of(const search &found, const answer &result) {
+constexpr plan answer_plan(const search &found, const answer &result) {
   plan made;
   made.overflow = result.overflow;
   if (!result.found) {
@@ -1784,8 +1786,9 @@ struct made_sink {
 // The states below closed are closed layer sources, of a binding that knows
 // the layers below known: a request steps from them only by a wrap or into a
 // layer the binding does not know.
-constexpr void reach_into(search &found, std::size_t closed, std::size_t known,
-                          const context &with, const request &goal) {
+constexpr void extend_reach(search &found, std::size_t closed,
+                            std::size_t known, const context &with,
+                            const request &goal) {
   const bool foreign = with.layers->count > known;
   for (std::size_t next = 0; next < found.count; ++next) {
     const state &at = found.states[next];
@@ -1793,7 +1796,7 @@ constexpr void reach_into(search &found, std::size_t closed, std::size_t known,
     // thing of fewer than the request, or into a layer the binding does not
     // know.
     if ((next < closed && !foreign && at.reached.depth >= goal.depth) ||
-        !leads_to(at.reached, goal, with)) {
+        !may_satisfy(at.reached, goal, with)) {
       continue;
     }
     const state from = at;
@@ -1811,18 +1814,18 @@ constexpr void reach_into(search &found, std::size_t closed, std::size_t known,
 
 // What a request reaches from the closed layer sources of a binding that
 // knows the layers below known.
-constexpr search reach_from(const search &closed, std::size_t known,
-                            const context &with, const request &goal) {
+constexpr search reach_closed(const search &closed, std::size_t known,
+                              const context &with, const request &goal) {
   search found = closed;
   found.closed = closed.count;
-  reach_into(found, closed.count, known, with, goal);
+  extend_reach(found, closed.count, known, with, goal);
   return found;
 }
 
 constexpr search reach_split(const thing &start, const context &with,
                              const request &goal) {
-  return reach_from(closed_layer_sources(layer_sources(start, with), with),
-                    with.layers->count, with, goal);
+  return reach_closed(closed_layer_sources(layer_sources(start, with), with),
+                      with.layers->count, with, goal);
 }
 // Where a request stands: itself, the dependency of an unregistered class,
 // or the dependency of a class a shared or a cyclical scope keeps.
@@ -1873,7 +1876,7 @@ constexpr entry entry_of(entry through, position at, bool selected,
 }
 
 // The layers of a request as a thing, to ask what its stack can do.
-constexpr thing stack_of(const request &goal) {
+constexpr thing stack_type(const request &goal) {
   thing of;
   for (std::size_t index = 0; index < goal.depth; ++index) {
     of.layers[index] = goal.layers[index];
@@ -1911,12 +1914,13 @@ struct relocatable_layer {
 
 // Whether a value of the stack of a request can be copied.
 constexpr bool copyable_shape(const request &goal, const context &with) {
-  return stack_can(stack_of(goal), with, copyable_layer{}, with.leaf.copyable);
+  return stack_can(stack_type(goal), with, copyable_layer{},
+                   with.leaf.copyable);
 }
 
 // Whether a value of the stack of a request can be moved or copied.
 constexpr bool stack_relocatable(const request &goal, const context &with) {
-  return stack_can(stack_of(goal), with, relocatable_layer{},
+  return stack_can(stack_type(goal), with, relocatable_layer{},
                    with.leaf.movable) ||
          copyable_shape(goal, with);
 }
@@ -1984,9 +1988,9 @@ constexpr answer resolve(const thing &start, const context &with,
       (through == entry::resolve || through == entry::construct) &&
       taken == category::rvalue_reference;
   const search found = searched ? *searched : reach_split(start, with, goal);
-  answer result = satisfy_closed_by(
-      found, goal, taken, required_lifetime(rules.at, through), with,
-      handed_cost{returned, rules.runtime, &with});
+  answer result =
+      satisfy_closed(found, goal, taken, required_lifetime(rules.at, through),
+                     with, handed_cost{returned, rules.runtime, &with});
   if (result.found || found.overflow) {
     return result;
   }

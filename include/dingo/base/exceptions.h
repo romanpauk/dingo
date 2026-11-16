@@ -170,7 +170,7 @@ constexpr const type_descriptor *key_index(const lookup_key<Selector> &) {
   if constexpr (std::is_same_v<Selector, key_type<none_t>>) {
     return nullptr;
   } else {
-    return &described_type_v<Selector>;
+    return &type_descriptor_v<Selector>;
   }
 }
 
@@ -190,8 +190,8 @@ make_type_not_found_exception(type_descriptor request, const Context &context,
 template <typename Collection, typename ResolveType>
 type_not_found_exception make_collection_type_not_found_exception() {
   message_text message = "type not found for collection ";
-  append_text(message, detail::described_type_v<Collection>,
-              " (element type: ", detail::described_type_v<ResolveType>, ")");
+  append_text(message, detail::type_descriptor_v<Collection>,
+              " (element type: ", detail::type_descriptor_v<ResolveType>, ")");
   return type_not_found_exception(std::move(message));
 }
 
@@ -280,11 +280,11 @@ template <typename BackendKey, typename Selector>
 constexpr const type_descriptor &
 registration_key_type(const lookup_key<Selector> &) {
   if constexpr (!std::is_same_v<std::decay_t<BackendKey>, none_t>) {
-    return detail::described_type_v<std::decay_t<BackendKey>>;
+    return detail::type_descriptor_v<std::decay_t<BackendKey>>;
   } else if constexpr (std::is_same_v<Selector, key_type<none_t>>) {
-    return detail::described_type_v<none_t>;
+    return detail::type_descriptor_v<none_t>;
   } else {
-    return detail::described_type_v<Selector>;
+    return detail::type_descriptor_v<Selector>;
   }
 }
 

@@ -195,7 +195,7 @@ struct request_resolution {
           return construct_unbound<Request, R>(host, scope, context, factory);
         } else {
           throw_type_not_found(
-              detail::described_type_v<typename Request::lookup_type>, context,
+              detail::type_descriptor_v<typename Request::lookup_type>, context,
               key_index(key));
         }
       } else if constexpr (decltype(is_bound(exact))::value ||
@@ -215,7 +215,7 @@ struct request_resolution {
     using made = std::decay_t<typename Request::user_type>;
     auto &&instance = resolve<normalized, typename normalized::lookup_type>(
         host, scope, context, host, no_lookup_key());
-    return detail::execution::made_as<made>(
+    return detail::execution::make_value<made>(
         std::forward<decltype(instance)>(instance));
   }
 
@@ -245,7 +245,7 @@ struct request_resolution {
       }
     }
     throw_type_not_found(
-        detail::described_type_v<typename Request::lookup_type>, context,
+        detail::type_descriptor_v<typename Request::lookup_type>, context,
         key_index(key));
   }
 
@@ -261,7 +261,7 @@ struct request_resolution {
                                                          context);
     }
     if (selection.status == binding_status::ambiguous) {
-      throw_type_ambiguous(described_type_v<typename Request::lookup_type>,
+      throw_type_ambiguous(type_descriptor_v<typename Request::lookup_type>,
                            context);
     }
     return resolve_miss<Request, R, collection_traits<R>::is_collection>(

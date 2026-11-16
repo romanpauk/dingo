@@ -135,19 +135,19 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
       std::is_same_v<rebind_leaf_t<std::unique_ptr<const volatile A>, I>,
                      std::unique_ptr<const volatile I>>);
 
-  EXPECT_TRUE(detail::qualifies_as(describe_type<A **>(),
-                                   describe_type<const A *const *>()));
-  EXPECT_FALSE(
-      detail::qualifies_as(describe_type<A **>(), describe_type<const A **>()));
+  EXPECT_TRUE(detail::qualification_converts(
+      describe_type<A **>(), describe_type<const A *const *>()));
+  EXPECT_FALSE(detail::qualification_converts(describe_type<A **>(),
+                                              describe_type<const A **>()));
   constexpr type_descriptor optional_pointer_target =
-      detail::described_type_v<std::optional<A> *>;
-  static_assert(detail::qualifies_as(
-      optional_pointer_target, detail::described_type_v<std::optional<A> *>));
-  static_assert(
-      detail::qualifies_as(optional_pointer_target,
-                           detail::described_type_v<const std::optional<A> *>));
-  static_assert(!detail::qualifies_as(
-      optional_pointer_target, detail::described_type_v<std::optional<I> *>));
+      detail::type_descriptor_v<std::optional<A> *>;
+  static_assert(detail::qualification_converts(
+      optional_pointer_target, detail::type_descriptor_v<std::optional<A> *>));
+  static_assert(detail::qualification_converts(
+      optional_pointer_target,
+      detail::type_descriptor_v<const std::optional<A> *>));
+  static_assert(!detail::qualification_converts(
+      optional_pointer_target, detail::type_descriptor_v<std::optional<I> *>));
 }
 
 TEST(type_registration_test,

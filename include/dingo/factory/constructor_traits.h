@@ -147,16 +147,16 @@ template <typename Type, typename Selected> struct converted_constructor {
   template <typename... Args> static auto construct(Args &&...args) {
     if constexpr (std::is_pointer_v<Type>) {
       return new type(
-          execution::made_as<type>(constructor_traits<Selected>::construct(
+          execution::make_value<type>(constructor_traits<Selected>::construct(
               std::forward<Args>(args)...)));
     } else {
-      return execution::made_as<type>(
+      return execution::make_value<type>(
           constructor_traits<Selected>::construct(std::forward<Args>(args)...));
     }
   }
 
   template <typename... Args> static auto construct(void *ptr, Args &&...args) {
-    new (ptr) type(execution::made_as<type>(
+    new (ptr) type(execution::make_value<type>(
         constructor_traits<Selected>::construct(std::forward<Args>(args)...)));
   }
 };
@@ -175,7 +175,7 @@ inline constexpr bool emplaces_element_v<
 // Whether Type is emplaced of the arguments of Selected: it is Selected, or a
 // wrapper whose element is, down layers that each emplace their element. An
 // alternative type selects its alternative of the arguments instead.
-template <typename Type, typename Selected> constexpr bool emplaced_of() {
+template <typename Type, typename Selected> constexpr bool emplaces_selected() {
   if constexpr (std::is_same_v<Type, Selected>) {
     return true;
   } else if constexpr (!type_traits<Type>::enabled || std::is_pointer_v<Type> ||
@@ -186,7 +186,7 @@ template <typename Type, typename Selected> constexpr bool emplaced_of() {
     if constexpr (std::is_same_v<element, Selected>) {
       return true;
     } else if constexpr (emplaces_element_v<Type>) {
-      return emplaced_of<element, Selected>();
+      return emplaces_selected<element, Selected>();
     } else {
       return false;
     }
@@ -195,19 +195,19 @@ template <typename Type, typename Selected> constexpr bool emplaced_of() {
 
 // Whether Type is made of the Selected type a factory constructs, when it is
 // not emplaced of its arguments in place: an array is made of its elements.
-template <typename Type, typename Selected> constexpr bool made_of_selected() {
+template <typename Type, typename Selected> constexpr bool builds_selected() {
   using type = std::remove_cv_t<construction_result_t<Type>>;
-  if constexpr (emplaced_of<type, Selected>() || std::is_array_v<type>) {
+  if constexpr (emplaces_selected<type, Selected>() || std::is_array_v<type>) {
     return false;
   } else {
-    return execution::makes_as<type, Selected>();
+    return execution::makes_target<type, Selected>();
   }
 }
 
 // What constructs Type of the Selected type a factory constructs: Type made
 // of Selected where it is, else Type itself.
 template <typename Type, typename Selected> struct construction_select {
-  using type = std::conditional_t<made_of_selected<Type, Selected>(),
+  using type = std::conditional_t<builds_selected<Type, Selected>(),
                                   converted_constructor<Type, Selected>,
                                   constructor_traits<Type>>;
 };

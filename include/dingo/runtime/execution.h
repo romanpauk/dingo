@@ -115,7 +115,7 @@ inline constexpr std::size_t step_kinds =
 struct full_table {
   operation from[step_kinds] = {};
   operation release_array = {};
-  operation made_of[semantics::max_layers + 1] = {};
+  operation wrap_runs[semantics::max_layers + 1] = {};
   operation adopted = {};
   operation adopted_array = {};
   operation observing = {};
@@ -130,18 +130,18 @@ struct full_table {
 // qualifiers, by the qualifiers it adds.
 enum class slot : std::uint8_t {
   release_array = step_kinds,
-  made_of,
-  adopted = made_of + semantics::max_layers + 1,
+  wrap_runs,
+  adopted = wrap_runs + semantics::max_layers + 1,
   adopted_array,
   observing,
   qualified,
   count = qualified + 4
 };
 
-constexpr std::uint8_t slot_of(semantics::step kind) {
+constexpr std::uint8_t step_slot(semantics::step kind) {
   return static_cast<std::uint8_t>(kind);
 }
-constexpr std::uint8_t slot_of(slot at, std::size_t depth = 0) {
+constexpr std::uint8_t step_slot(slot at, std::size_t depth = 0) {
   return static_cast<std::uint8_t>(static_cast<std::size_t>(at) + depth);
 }
 
@@ -170,26 +170,27 @@ struct type_table {
 };
 
 // The operation at a slot of a full table.
-constexpr const operation &slot_in(const full_table &table, std::uint8_t at) {
+constexpr const operation &slot_operation(const full_table &table,
+                                          std::uint8_t at) {
   if (at < step_kinds) {
     return table.from[at];
   }
-  if (at == slot_of(slot::release_array)) {
+  if (at == step_slot(slot::release_array)) {
     return table.release_array;
   }
-  if (at < slot_of(slot::adopted)) {
-    return table.made_of[at - slot_of(slot::made_of)];
+  if (at < step_slot(slot::adopted)) {
+    return table.wrap_runs[at - step_slot(slot::wrap_runs)];
   }
-  if (at == slot_of(slot::adopted)) {
+  if (at == step_slot(slot::adopted)) {
     return table.adopted;
   }
-  if (at == slot_of(slot::adopted_array)) {
+  if (at == step_slot(slot::adopted_array)) {
     return table.adopted_array;
   }
-  if (at == slot_of(slot::observing)) {
+  if (at == step_slot(slot::observing)) {
     return table.observing;
   }
-  return table.qualified[at - slot_of(slot::qualified)];
+  return table.qualified[at - step_slot(slot::qualified)];
 }
 
 constexpr bool has(const operation &step) {
@@ -199,7 +200,7 @@ constexpr bool has(const operation &step) {
 // The operations a table of a binding has: a bit for each kind of step from
 // its type, one for the release of a pointer to the first element of an
 // array, and one for the steps that make an object of it.
-constexpr std::uint32_t mask_of(semantics::step kind) {
+constexpr std::uint32_t step_mask(semantics::step kind) {
   return std::uint32_t{1} << static_cast<unsigned>(kind);
 }
 inline constexpr std::uint32_t release_array_mask = std::uint32_t{1}
@@ -222,11 +223,11 @@ constexpr bool makes_transient(semantics::step kind) {
 // A run of wraps of a value the request owns: Made at once, of the T moved
 // into it.
 template <typename Made, typename Leaf, typename Interface, typename T>
-erased_carrier made_of_operation(erased_carrier from, bool stable,
-                                 runtime_store &store) {
+erased_carrier wrap_operation(erased_carrier from, bool stable,
+                              runtime_store &store) {
   store_view view{store, stable};
   auto &made = view.template keep<Made>([&] {
-    return made_of<Leaf, Interface, Made>(
+    return wrap_value<Leaf, Interface, Made>(
         std::move(*static_cast<T *>(from.object)));
   });
   return erase(carrier<Made, true>{std::addressof(made)});
@@ -277,9 +278,10 @@ erased_carrier qualified_operation(erased_carrier from, bool stable,
 // The table of a type T, toward the leaf Leaf, of the interface Interface:
 // an operation where C++ applies the step to it.
 template <typename T, typename Leaf, typename Interface, std::uint32_t Mask = 0>
-struct table_of;
+struct operation_table;
 
-// The full table of a type, of which table_of keeps the operations it has.
+// The full table of a type, of which operation_table keeps the operations it
+// has.
 template <typename T, typename Leaf, typename Interface, std::uint32_t Mask>
 struct table_maker : layer_types<T, Leaf, Interface> {
   using facts = layer_types<T, Leaf, Interface>;
@@ -309,7 +311,7 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   // moves it, nor releases what it was taken out of, nor hands its element
   // over with it. One operation is then both.
   template <semantics::step Kind, typename Step>
-  static constexpr bool owned_as_borrowed() {
+  static constexpr bool borrows() {
     using semantics::step;
     if constexpr (!std::is_same_v<reached_t<Step, true>,
                                   reached_t<Step, false>>) {
@@ -325,17 +327,17 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   // An operation of a step of a kind, for an object the request owns, for
   // one it does not, or for both, where the table has it.
   template <semantics::step Kind, typename Step, bool Owned, bool Borrowed,
-            std::uint32_t Bit = mask_of(Kind)>
-  static constexpr operation step_of() {
+            std::uint32_t Bit = step_mask(Kind)>
+  static constexpr operation step_operation() {
     operation made;
     constexpr bool transient = makes_transient(Kind);
     if constexpr ((Mask & Bit) != 0 && Borrowed) {
       made.borrowed = &apply<Step, false, transient>;
-      made.made = &table_of<made_t<Step, false>, Leaf, Interface>::value;
+      made.made = &operation_table<made_t<Step, false>, Leaf, Interface>::value;
     }
     if constexpr ((Mask & Bit) != 0 && Owned) {
       made.owned = owned_operation<Kind, Step, Borrowed, transient>();
-      made.made = &table_of<made_t<Step, true>, Leaf, Interface>::value;
+      made.made = &operation_table<made_t<Step, true>, Leaf, Interface>::value;
     }
     return made;
   }
@@ -343,7 +345,7 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   template <semantics::step Kind, typename Step, bool Borrowed, bool Transient>
   static constexpr step_function owned_operation() {
     if constexpr (Borrowed) {
-      if constexpr (owned_as_borrowed<Kind, Step>()) {
+      if constexpr (borrows<Kind, Step>()) {
         return &apply<Step, false, Transient>;
       }
     }
@@ -352,30 +354,30 @@ struct table_maker : layer_types<T, Leaf, Interface> {
 
   template <semantics::step Kind, typename Step = execution::step<Kind>>
   static constexpr operation both() {
-    return step_of<Kind, Step, true, true>();
+    return step_operation<Kind, Step, true, true>();
   }
   template <semantics::step Kind, typename Step = execution::step<Kind>,
-            std::uint32_t Bit = mask_of(Kind)>
+            std::uint32_t Bit = step_mask(Kind)>
   static constexpr operation owned() {
-    return step_of<Kind, Step, true, false, Bit>();
+    return step_operation<Kind, Step, true, false, Bit>();
   }
 
   template <std::size_t K> static constexpr operation run() {
     operation made;
     if constexpr (std::is_same_v<T, type> && facts::template runs<K>()) {
       using of = std::remove_cv_t<typename nested<K>::type>;
-      made.owned = &made_of_operation<type, Leaf, Interface, of>;
+      made.owned = &wrap_operation<type, Leaf, Interface, of>;
     }
     return made;
   }
 
   template <std::size_t... K>
-  static constexpr void runs_into(full_table &made, std::index_sequence<K...>) {
-    ((made.made_of[K + 1] = run<K + 1>()), ...);
+  static constexpr void add_runs(full_table &made, std::index_sequence<K...>) {
+    ((made.wrap_runs[K + 1] = run<K + 1>()), ...);
   }
 
   static constexpr bool wants(semantics::step kind) {
-    return (Mask & mask_of(kind)) != 0;
+    return (Mask & step_mask(kind)) != 0;
   }
 
   // The steps from a layer to its element.
@@ -437,23 +439,23 @@ struct table_maker : layer_types<T, Leaf, Interface> {
       }
     }
     if constexpr (wants(step::unknown_bound)) {
-      at(step::unknown_bound) =
-          step_of<step::unknown_bound, execution::step<step::unknown_bound>,
-                  converts_to_unknown_bound<true>(),
-                  converts_to_unknown_bound<false>()>();
+      at(step::unknown_bound) = step_operation<
+          step::unknown_bound, execution::step<step::unknown_bound>,
+          converts_unknown_bound<true>(), converts_unknown_bound<false>()>();
     }
     if constexpr (wants(step::upcast)) {
       if constexpr (upcasts<true>() || upcasts<false>()) {
-        at(step::upcast) = step_of<step::upcast, execution::step<step::upcast>,
-                                   upcasts<true>(), upcasts<false>()>();
+        at(step::upcast) =
+            step_operation<step::upcast, execution::step<step::upcast>,
+                           upcasts<true>(), upcasts<false>()>();
       }
     }
     if constexpr (std::is_same_v<T, type> && (Mask & makers_mask) != 0) {
-      runs_into(made, std::make_index_sequence<semantics::max_layers>{});
+      add_runs(made, std::make_index_sequence<semantics::max_layers>{});
       takes_pointers(made);
     }
     if constexpr (std::is_same_v<T, type> && (Mask & qualified_mask) != 0) {
-      qualified_into(made, std::index_sequence<1, 2, 3>{});
+      add_qualified(made, std::index_sequence<1, 2, 3>{});
     }
     return made;
   }
@@ -477,8 +479,8 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   }
 
   template <std::size_t... Adds>
-  static constexpr void qualified_into(full_table &made,
-                                       std::index_sequence<Adds...>) {
+  static constexpr void add_qualified(full_table &made,
+                                      std::index_sequence<Adds...>) {
     ((made.qualified[Adds] = qualified<static_cast<std::uint8_t>(Adds)>()),
      ...);
   }
@@ -515,7 +517,7 @@ struct table_maker : layer_types<T, Leaf, Interface> {
         typename type_traits<U>::value_type>;
   };
 
-  template <bool Owned> static constexpr bool converts_to_unknown_bound() {
+  template <bool Owned> static constexpr bool converts_unknown_bound() {
     if constexpr (!std::is_same_v<T, type> || std::is_pointer_v<type> ||
                   std::is_array_v<type> || !is_complete_v<type>) {
       return false;
@@ -583,7 +585,7 @@ struct table_maker : layer_types<T, Leaf, Interface> {
     } else if constexpr (std::is_pointer_v<type>) {
       return true;
     } else {
-      using made_type = typename upcast_of<T, Leaf, Interface>::type;
+      using made_type = typename upcast_type<T, Leaf, Interface>::type;
       if constexpr (Owned) {
         return std::is_constructible_v<made_type, T &&>;
       } else {
@@ -597,36 +599,32 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   static constexpr void takes_pointers(full_table &made) {
     if constexpr (type_traits<type>::enabled && !std::is_pointer_v<type> &&
                   !is_alternative_type_v<type> && is_complete_v<type>) {
-      takes_pointers_of(made);
-    }
-  }
-
-  static constexpr void takes_pointers_of(full_table &made) {
-    if constexpr (is_complete_v<std::remove_extent_t<
-                      typename type_traits<type>::value_type>>) {
-      // Of a pointer to the element of no qualifiers, which the handle holds
-      // of those it needs.
-      using of = std::remove_cv_t<typename element<>::type>;
-      if constexpr (type_traits<type>::is_owning_handle) {
-        if constexpr (std::is_array_v<of>) {
-          using pointer = std::remove_extent_t<of> *;
-          if constexpr (std::is_constructible_v<type, pointer>) {
-            made.adopted_array = {&adopted_operation<type, pointer>, nullptr,
-                                  nullptr};
-            // A handle of an array of a known bound takes over a pointer to
-            // a whole one too, as the pointer to its first element.
-            if constexpr (std::extent_v<of> != 0) {
-              made.adopted = {&adopted_operation<type, of *, true>, nullptr,
-                              nullptr};
+      if constexpr (is_complete_v<std::remove_extent_t<
+                        typename type_traits<type>::value_type>>) {
+        // Of a pointer to the element of no qualifiers, which the handle holds
+        // of those it needs.
+        using of = std::remove_cv_t<typename element<>::type>;
+        if constexpr (type_traits<type>::is_owning_handle) {
+          if constexpr (std::is_array_v<of>) {
+            using pointer = std::remove_extent_t<of> *;
+            if constexpr (std::is_constructible_v<type, pointer>) {
+              made.adopted_array = {&adopted_operation<type, pointer>, nullptr,
+                                    nullptr};
+              // A handle of an array of a known bound takes over a pointer to
+              // a whole one too, as the pointer to its first element.
+              if constexpr (std::extent_v<of> != 0) {
+                made.adopted = {&adopted_operation<type, of *, true>, nullptr,
+                                nullptr};
+              }
             }
+          } else if constexpr (std::is_constructible_v<type, of *>) {
+            made.adopted = {&adopted_operation<type, of *>, nullptr, nullptr};
           }
-        } else if constexpr (std::is_constructible_v<type, of *>) {
-          made.adopted = {&adopted_operation<type, of *>, nullptr, nullptr};
+        } else if constexpr (wrapper_kind_v<layer_identity_t<type>>.observes &&
+                             std::is_constructible_v<type, of *>) {
+          made.observing = {&observing_operation<type, of *>,
+                            &observing_operation<type, of *>, nullptr};
         }
-      } else if constexpr (wrapper_kind_v<layer_identity_t<type>>.observes &&
-                           std::is_constructible_v<type, of *>) {
-        made.observing = {&observing_operation<type, of *>,
-                          &observing_operation<type, of *>, nullptr};
       }
     }
   }
@@ -635,16 +633,16 @@ struct table_maker : layer_types<T, Leaf, Interface> {
 
   static constexpr std::size_t count() {
     std::size_t made = 0;
-    for (std::uint8_t at = 0; at < slot_of(slot::count); ++at) {
-      made += has(slot_in(full, at)) ? 1 : 0;
+    for (std::uint8_t at = 0; at < step_slot(slot::count); ++at) {
+      made += has(slot_operation(full, at)) ? 1 : 0;
     }
     return made;
   }
 
   // The slot of the n-th operation the table has.
   static constexpr std::uint8_t nth(std::size_t index) {
-    for (std::uint8_t at = 0; at < slot_of(slot::count); ++at) {
-      if (has(slot_in(full, at)) && index-- == 0) {
+    for (std::uint8_t at = 0; at < step_slot(slot::count); ++at) {
+      if (has(slot_operation(full, at)) && index-- == 0) {
         return at;
       }
     }
@@ -654,26 +652,26 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   template <std::size_t Count, std::size_t... I>
   static constexpr std::array<slot_entry, Count + 1>
   compact(std::index_sequence<I...>) {
-    return {{{nth(I), slot_in(full, nth(I))}..., {}}};
+    return {{{nth(I), slot_operation(full, nth(I))}..., {}}};
   }
 };
 
 // The address a pointer of type T points to.
-template <typename T> void *pointee_of(void *pointer) {
+template <typename T> void *pointee_address(void *pointer) {
   return const_cast<void *>(static_cast<const volatile void *>(
       *static_cast<std::remove_cv_t<T> *>(pointer)));
 }
 
 template <typename T> constexpr void *(*pointee_function())(void *) {
   if constexpr (std::is_pointer_v<std::remove_cv_t<T>>) {
-    return &pointee_of<T>;
+    return &pointee_address<T>;
   } else {
     return nullptr;
   }
 }
 
 template <typename T, typename Leaf, typename Interface, std::uint32_t Mask>
-struct table_of {
+struct operation_table {
   using maker = table_maker<T, Leaf, Interface, Mask>;
   static constexpr std::size_t count = maker::count();
   static constexpr std::array<slot_entry, count + 1> entries =
@@ -685,7 +683,7 @@ struct table_of {
 // A table of no operations: of the type of what a step makes that nothing is
 // taken of but the address a pointer points to.
 template <typename T, typename Leaf, typename Interface>
-struct table_of<T, Leaf, Interface, 0> {
+struct operation_table<T, Leaf, Interface, 0> {
   static constexpr type_table value{pointee_function<T>(), nullptr, 0};
 };
 
@@ -695,7 +693,7 @@ struct array_pointer_layer_tag {};
 
 template <typename T> inline constexpr char identity_tag_v = 0;
 
-template <typename Tag> constexpr const void *identity_of() {
+template <typename Tag> constexpr const void *identity_v() {
   if constexpr (is_language_tag_v<Tag> ||
                 std::is_same_v<Tag, array_pointer_layer_tag>) {
     return &identity_tag_v<Tag>;
@@ -722,7 +720,7 @@ struct runtime_layer {
 };
 
 // The identity tag of a layer, or none.
-template <typename Identity> constexpr const void *identity_or_none() {
+template <typename Identity> constexpr const void *layer_identity_v() {
   if constexpr (std::is_void_v<Identity>) {
     return nullptr;
   } else {
@@ -730,16 +728,16 @@ template <typename Identity> constexpr const void *identity_or_none() {
   }
 }
 
-template <typename Identity> constexpr runtime_layer runtime_layer_of() {
+template <typename Identity> constexpr runtime_layer runtime_layer_v() {
   semantics::layer_kind kind = wrapper_kind_v<Identity>;
   kind.converts = 0;
   kind.to_unknown_bound = 0;
   using unknown_bound_target =
-      std::conditional_t<converts_to_unknown_bound<Identity>(),
+      std::conditional_t<converts_unknown_bound<Identity>(),
                          typename unknown_bound_layer<Identity>::type, void>;
   return {kind, &identity_tag_v<Identity>,
-          identity_or_none<typename shared_layer<Identity>::type>(),
-          identity_or_none<unknown_bound_target>()};
+          layer_identity_v<typename shared_layer<Identity>::type>(),
+          layer_identity_v<unknown_bound_target>()};
 }
 
 // The wrapper layers of a universe, in its order.
@@ -748,7 +746,7 @@ template <typename... Identities>
 struct runtime_layers<type_list<Identities...>> {
   static constexpr std::size_t count = sizeof...(Identities);
   static constexpr runtime_layer value[count + 1] = {
-      runtime_layer_of<Identities>()..., {}};
+      runtime_layer_v<Identities>()..., {}};
 };
 
 // A request as a runtime resolution plans it: its layers in a universe of
@@ -800,7 +798,7 @@ struct closed_answers {
 // The answers of the closure for the requests of the type of the key shape:
 // of each category, of an object of each qualifiers, at
 // first + category * 4 + qualifiers.
-inline constexpr std::size_t answers_per_shape = 7 * 4;
+inline constexpr std::size_t shape_answer_count = 7 * 4;
 
 struct closed_group {
   const void *shape;
@@ -853,29 +851,6 @@ struct runtime_plan {
   call calls[semantics::max_plan] = {};
 };
 
-// What a resolution runs of a plan of a request: the route of the binding,
-// the steps the request takes after it and how the request takes what they
-// reach; of a runtime plan, or of an answer of the closure, which takes no
-// step after the route.
-struct plan_run {
-  std::uint16_t route = 0;
-  bool value_route = false;
-  bool stable_address = false;
-  semantics::satisfaction how = semantics::satisfaction::refer;
-  finish last = finish::satisfy;
-  std::uint8_t depth = 0;
-  std::uint8_t quals = 0;
-  const type_table *reached = nullptr;
-  const runtime_plan::call *calls = nullptr;
-  std::size_t count = 0;
-};
-
-inline plan_run run_of(const runtime_plan &plan) {
-  return {plan.route, plan.value_route, plan.stable_address, plan.how,
-          plan.last,  plan.depth,       plan.quals,          plan.reached,
-          plan.calls, plan.count};
-}
-
 // The plans of a request of a binding, for a request that needs what it
 // refers to to live as long as the container, and for one that needs it to
 // live as long as the request: of one search, in the universe of the
@@ -886,10 +861,10 @@ struct runtime_plans {
   runtime_plan transient;
 };
 
-inline runtime_plan runtime_plan_of(const semantics::plan &plan,
-                                    const binding_layout &binding,
-                                    const request_layout &request,
-                                    const semantics::request &goal);
+inline runtime_plan make_runtime_plan(const semantics::plan &plan,
+                                      const binding_layout &binding,
+                                      const request_layout &request,
+                                      const semantics::request &goal);
 
 inline runtime_plans plan_runtime(const binding_layout &binding,
                                   const request_layout &request) {
@@ -978,16 +953,16 @@ inline runtime_plans plan_runtime(const binding_layout &binding,
   }
   found.count = binding.state_count;
   found.closed = binding.state_count;
-  semantics::reach_into(found, binding.state_count, binding.with.layers->count,
-                        with, goal);
+  semantics::extend_reach(found, binding.state_count,
+                          binding.with.layers->count, with, goal);
   // The plans of the lifetimes differ in what satisfies the request alone.
-  made.stable = runtime_plan_of(
-      semantics::plan_of(found,
-                         semantics::satisfy(found, goal, request.category,
-                                            semantics::lifetime::stable, with)),
+  made.stable = make_runtime_plan(
+      semantics::answer_plan(
+          found, semantics::satisfy(found, goal, request.category,
+                                    semantics::lifetime::stable, with)),
       binding, request, goal);
-  made.transient = runtime_plan_of(
-      semantics::plan_of(
+  made.transient = make_runtime_plan(
+      semantics::answer_plan(
           found, semantics::satisfy(found, goal, request.category,
                                     semantics::lifetime::request, with)),
       binding, request, goal);
@@ -996,10 +971,10 @@ inline runtime_plans plan_runtime(const binding_layout &binding,
 
 // A plan as a runtime resolution runs it: compiled into the operations of
 // the tables of the types it steps through.
-inline runtime_plan runtime_plan_of(const semantics::plan &plan,
-                                    const binding_layout &binding,
-                                    const request_layout &request,
-                                    const semantics::request &goal) {
+inline runtime_plan make_runtime_plan(const semantics::plan &plan,
+                                      const binding_layout &binding,
+                                      const request_layout &request,
+                                      const semantics::request &goal) {
   runtime_plan made;
   if (!plan.found) {
     return made;
@@ -1037,31 +1012,31 @@ inline runtime_plan runtime_plan_of(const semantics::plan &plan,
     const operation *step = nullptr;
     switch (each.kind) {
     case semantics::step::wrap:
-      step = &(*maker)[slot_of(slot::made_of, each.wraps)];
+      step = &(*maker)[step_slot(slot::wrap_runs, each.wraps)];
       break;
     case semantics::step::adopt:
       step = &(*maker)[to.layers[1] == semantics::array_layer && to.depth > 1
-                           ? slot_of(slot::adopted_array)
-                           : slot_of(slot::adopted)];
+                           ? step_slot(slot::adopted_array)
+                           : step_slot(slot::adopted)];
       break;
     case semantics::step::observe:
-      step = &(*maker)[slot_of(slot::observing)];
+      step = &(*maker)[step_slot(slot::observing)];
       break;
     case semantics::step::qualify:
-      step = &(
-          *maker)[slot_of(slot::qualified, static_cast<std::uint8_t>(
-                                               to.quals[1] & ~from.quals[1]))];
+      step = &(*maker)[step_slot(
+          slot::qualified,
+          static_cast<std::uint8_t>(to.quals[1] & ~from.quals[1]))];
       break;
     case semantics::step::release:
       step = &(*table)[from.layers[0] == semantics::array_pointer_layer
-                           ? slot_of(slot::release_array)
-                           : slot_of(each.kind)];
+                           ? step_slot(slot::release_array)
+                           : step_slot(each.kind)];
       break;
     default:
       if (table == nullptr) {
         return {};
       }
-      step = &(*table)[slot_of(each.kind)];
+      step = &(*table)[step_slot(each.kind)];
       break;
     }
     made.calls[made.count++] = {step->owned, step->borrowed,
@@ -1152,8 +1127,8 @@ constexpr void used_states(const semantics::search &found, bool abstract,
   }
 }
 
-constexpr state_classes classes_of(const semantics::search &found,
-                                   bool abstract = false) {
+constexpr state_classes classify_states(const semantics::search &found,
+                                        bool abstract = false) {
   state_classes made;
   std::uint16_t types[semantics::search_slots] = {};
   std::uint16_t steps[semantics::search_slots] = {};
@@ -1201,7 +1176,7 @@ constexpr state_classes classes_of(const semantics::search &found,
 // the code compiles.
 // Whether a step makes a layer of what it is taken from, which the table of
 // what it makes has.
-constexpr bool makes_by(semantics::step kind) {
+constexpr bool step_makes(semantics::step kind) {
   return kind == semantics::step::wrap || kind == semantics::step::adopt ||
          kind == semantics::step::observe;
 }
@@ -1237,7 +1212,7 @@ template <typename Shape> struct closed_semantics {
   static constexpr const semantics::search &Sources = Shape::sources;
   static constexpr bool abstract = Shape::context.abstract;
   static constexpr semantics::context context() { return Shape::context; }
-  static constexpr state_classes classes = classes_of(Sources, abstract);
+  static constexpr state_classes classes = classify_states(Sources, abstract);
   struct used_list {
     bool value[semantics::max_states] = {};
     std::uint16_t index[semantics::max_states] = {};
@@ -1267,34 +1242,34 @@ template <typename Shape> struct closed_semantics {
   };
   static constexpr mask_list make_masks() {
     mask_list made;
-    constexpr std::uint32_t taken = mask_of(semantics::step::copy) |
-                                    mask_of(semantics::step::decay) |
-                                    mask_of(semantics::step::hand_over) |
-                                    mask_of(semantics::step::convert) |
-                                    mask_of(semantics::step::unknown_bound);
+    constexpr std::uint32_t taken = step_mask(semantics::step::copy) |
+                                    step_mask(semantics::step::decay) |
+                                    step_mask(semantics::step::hand_over) |
+                                    step_mask(semantics::step::convert) |
+                                    step_mask(semantics::step::unknown_bound);
     const semantics::context with = Shape::context;
     for (std::size_t index = 0; index < used.count; ++index) {
       const std::size_t at = used.states[index];
       const semantics::state &each = Sources.states[at];
       made.of[classes.of[at]] |= (request_kinds(each.reached, with) & taken) |
-                                 mask_of(semantics::step::convert) |
-                                 mask_of(semantics::step::unknown_bound);
+                                 step_mask(semantics::step::convert) |
+                                 step_mask(semantics::step::unknown_bound);
       if (at == 0) {
         continue;
       }
-      if (makes_by(each.via)) {
+      if (step_makes(each.via)) {
         made.of[classes.of[at]] |= makers_mask;
       } else if (each.via == semantics::step::release &&
                  Sources.states[each.parent].reached.layers[0] ==
                      semantics::array_pointer_layer) {
         made.of[classes.of[each.parent]] |= release_array_mask;
       } else {
-        made.of[classes.of[each.parent]] |= mask_of(each.via);
+        made.of[classes.of[each.parent]] |= step_mask(each.via);
         // A request makes the copy of what element_or_empty gives where it
         // takes it.
         if (each.via == semantics::step::element_or_empty_copy) {
           made.of[classes.of[each.parent]] |=
-              mask_of(semantics::step::element_or_empty);
+              step_mask(semantics::step::element_or_empty);
         }
       }
     }
@@ -1303,7 +1278,7 @@ template <typename Shape> struct closed_semantics {
   static constexpr mask_list masks = make_masks();
   // How many wraps make a state at once, down to the first step that is
   // not one.
-  static constexpr std::size_t run_of(std::size_t state) {
+  static constexpr std::size_t run_length(std::size_t state) {
     std::size_t run = 0;
     while (Sources.states[state].via == semantics::step::wrap) {
       ++run;
@@ -1357,30 +1332,30 @@ template <typename Shape> struct closed_semantics {
   }
   template <std::size_t State, bool Value>
   static constexpr semantics::plan route_plan =
-      semantics::plan_of(closure, route_answer(State, Value));
+      semantics::answer_plan(closure, route_answer(State, Value));
   template <std::size_t State, bool Value>
   static constexpr program route_program =
       compile_program(route_plan<State, Value>, used.count);
-  template <std::size_t State> static constexpr route_finish finish_of() {
+  template <std::size_t State> static constexpr route_finish route_finish_v() {
     return {route_program<State, true>.last == finish::copy,
             route_program<State, true>.quals};
   }
   template <std::size_t... I>
-  static constexpr auto finishes_of(std::index_sequence<I...>) {
+  static constexpr auto make_finishes(std::index_sequence<I...>) {
     struct list {
       route_finish at[sizeof...(I)];
     };
-    return list{{finish_of<I>()...}};
+    return list{{route_finish_v<I>()...}};
   }
   static constexpr auto route_finishes =
-      finishes_of(std::make_index_sequence<closure.count>{});
+      make_finishes(std::make_index_sequence<closure.count>{});
 };
 
 // The answers of the closure of a binding of a shape, of the states C++
 // makes of it, as the bits of Possible: of each shape of a request the
 // closure serves, of each category and qualifiers of the object it is of.
 template <typename Semantic, std::uint64_t... Possible>
-struct closed_answers_of {
+struct closed_answer_table {
   static constexpr std::uint64_t possible_bits[] = {Possible..., 0};
   static constexpr bool possible(std::size_t state) {
     return ((possible_bits[state / 64] >> (state % 64)) & 1u) != 0;
@@ -1466,10 +1441,10 @@ struct closed_answers_of {
   static constexpr shape_list shapes = make_shapes();
 
   // The answer of the closure of a request, as closed_plan makes it.
-  static constexpr closed_answer answer_of(const semantics::request &goal,
-                                           semantics::category taken,
-                                           semantics::lifetime needed) {
-    const semantics::answer result = semantics::satisfy_by(
+  static constexpr closed_answer find_answer(const semantics::request &goal,
+                                             semantics::category taken,
+                                             semantics::lifetime needed) {
+    const semantics::answer result = semantics::satisfy_states(
         closure.states, closure.count, closure.overflow, goal, taken, needed,
         Semantic::context(), semantics::affected_cost{});
     closed_answer made;
@@ -1496,7 +1471,7 @@ struct closed_answers_of {
   // qualifiers of the object a request is of, that it answers for a
   // lifetime.
   struct answer_list {
-    closed_answers at[shapes.count * answers_per_shape + 1] = {};
+    closed_answers at[shapes.count * shape_answer_count + 1] = {};
   };
   static constexpr answer_list make_answers() {
     answer_list made;
@@ -1506,9 +1481,9 @@ struct closed_answers_of {
           semantics::request goal = shapes.goals[shape];
           goal.quals[0] = quals;
           const auto category = static_cast<semantics::category>(taken);
-          made.at[shape * answers_per_shape + taken * 4 + quals] = {
-              answer_of(goal, category, semantics::lifetime::stable),
-              answer_of(goal, category, semantics::lifetime::request)};
+          made.at[shape * shape_answer_count + taken * 4 + quals] = {
+              find_answer(goal, category, semantics::lifetime::stable),
+              find_answer(goal, category, semantics::lifetime::request)};
         }
       }
     }
@@ -1540,7 +1515,7 @@ struct closed_answers_of {
   };
   static constexpr routed_list make_routed() {
     routed_list made;
-    for (std::size_t at = 0; at < shapes.count * answers_per_shape; ++at) {
+    for (std::size_t at = 0; at < shapes.count * shape_answer_count; ++at) {
       for (const closed_answer &each :
            {answers.at[at].stable, answers.at[at].transient}) {
         if (each.found) {
@@ -1563,7 +1538,7 @@ struct closed_answers_of {
   };
   static constexpr pointed_list make_pointed() {
     pointed_list made;
-    for (std::size_t at = 0; at < shapes.count * answers_per_shape; ++at) {
+    for (std::size_t at = 0; at < shapes.count * shape_answer_count; ++at) {
       for (const closed_answer &each :
            {answers.at[at].stable, answers.at[at].transient}) {
         if (each.found && each.how == semantics::satisfaction::point) {
@@ -1603,13 +1578,13 @@ struct binding_sources {
   template <std::size_t State, bool Value>
   static constexpr const program &route_program =
       semantic::template route_program<State, Value>;
-  static constexpr std::size_t run_of(std::size_t state) {
-    return semantic::run_of(state);
+  static constexpr std::size_t run_length(std::size_t state) {
+    return semantic::run_length(state);
   }
 
   template <std::size_t State>
-  using step_into =
-      typename typed_step_at<Identities, search_at<Sources, State>>::step_type;
+  using reaching_step =
+      typename typed_step<Identities, search_step<Sources, State>>::step_type;
 
   template <typename U> struct tag {
     using type = U;
@@ -1617,18 +1592,19 @@ struct binding_sources {
 
   // The carrier a step into a state makes of the carrier From.
   template <std::size_t State, typename From>
-  using reached_t = decltype(step_into<State>::template apply<Leaf, Interface>(
-      std::declval<From>(), std::declval<store_view &>()));
+  using reached_t =
+      decltype(reaching_step<State>::template apply<Leaf, Interface>(
+          std::declval<From>(), std::declval<store_view &>()));
 
   // The carrier of a class of states.
-  template <std::size_t Class> struct carrier_of {
+  template <std::size_t Class> struct class_carrier {
     static auto make() {
       if constexpr (Class == 0) {
         return tag<carrier<Stored,
                            semantics::owned(Sources.states[0].reached.from)>>{};
       } else {
         return tag<reached_t<
-            Class, typename carrier_of<
+            Class, typename class_carrier<
                        classes.of[Sources.states[Class].parent]>::type>>{};
       }
     }
@@ -1636,25 +1612,27 @@ struct binding_sources {
   };
 
   template <std::size_t State>
-  using table_t = table_of<typename carrier_of<classes.of[State]>::type::type,
-                           Leaf, Interface, masks.of[classes.of[State]]>;
+  using table_t =
+      operation_table<typename class_carrier<classes.of[State]>::type::type,
+                      Leaf, Interface, masks.of[classes.of[State]]>;
 
   // A published state, renumbered, of the table of its type; the step into
   // it is checked to be an operation of the table it is taken from.
   template <std::size_t State> static constexpr semantics::state source() {
     if constexpr (State != 0) {
       constexpr semantics::state into = Sources.states[State];
-      using from = typename carrier_of<classes.of[into.parent]>::type;
+      using from = typename class_carrier<classes.of[into.parent]>::type;
       static_assert(
           std::is_same_v<reached_t<State, from>,
-                         typename carrier_of<classes.of[State]>::type>,
+                         typename class_carrier<classes.of[State]>::type>,
           "a step into a state makes the type of its class");
-      if constexpr (makes_by(into.via)) {
+      if constexpr (step_makes(into.via)) {
         using made = typename table_t<State>::maker;
         constexpr const semantics::thing &reached =
             Sources.states[State].reached;
         static_assert(into.via == semantics::step::wrap
-                          ? made::full.made_of[run_of(State)].owned != nullptr
+                          ? made::full.wrap_runs[run_length(State)].owned !=
+                                nullptr
                       : into.via == semantics::step::observe
                           ? has(made::full.observing)
                           : has(reached.depth > 1 && reached.layers[1] ==
@@ -1675,7 +1653,7 @@ struct binding_sources {
       }
     }
     // Every step a request takes of it that its type knows.
-    using own = typename carrier_of<classes.of[State]>::type;
+    using own = typename class_carrier<classes.of[State]>::type;
     constexpr std::uint32_t kinds =
         request_kinds(Sources.states[State].reached, Plan::context(abstract));
     constexpr const full_table &table = table_t<State>::maker::full;
@@ -1724,13 +1702,13 @@ struct binding_sources {
     static constexpr bool possible = true;
     // MSVC does not parse a subscript in a subscript of a template argument.
     static constexpr std::size_t state = used.states[State];
-    using type = typename carrier_of<classes.of[state]>::type;
+    using type = typename class_carrier<classes.of[state]>::type;
   };
   template <std::size_t State> struct closed_carrier<State, false> {
     using parent = closed_carrier<closure.states[State].parent>;
     using step_type =
-        typename typed_step_at<Identities,
-                               search_at<semantic::closure, State>>::step_type;
+        typename typed_step<Identities,
+                            search_step<semantic::closure, State>>::step_type;
     template <bool Made, typename = void> struct of {
       static constexpr bool possible = false;
       using type = void;
@@ -1751,8 +1729,8 @@ struct binding_sources {
   // The step into a state of the closure.
   template <std::size_t State>
   using closed_step =
-      typename typed_step_at<Identities,
-                             search_at<semantic::closure, State>>::step_type;
+      typename typed_step<Identities,
+                          search_step<semantic::closure, State>>::step_type;
 
   // What the route of a state reaches: the last instruction of its program,
   // applied to what the route of the state it starts from reaches, so that
@@ -1773,16 +1751,16 @@ struct binding_sources {
       constexpr semantics::thing reached = plan.things[each.last + 1];
       auto &&kept =
           store_of<reached.lifetimes[0] == semantics::lifetime::stable>(store);
-      auto from_before = reach_state<before, false, Store>(from, store);
+      auto reached_before = reach_state<before, false, Store>(from, store);
       if constexpr (each.qualified) {
         using step_type =
-            typename held_as<closed_step<first>, reached.quals[1]>::type;
-        return step_type::template apply<Leaf, Interface>(from_before, kept);
+            typename holding_step<closed_step<first>, reached.quals[1]>::type;
+        return step_type::template apply<Leaf, Interface>(reached_before, kept);
       } else if constexpr (each.kind == plan.steps[each.first]) {
-        return closed_step<first>::template apply<Leaf, Interface>(from_before,
-                                                                   kept);
+        return closed_step<first>::template apply<Leaf, Interface>(
+            reached_before, kept);
       } else {
-        return step<each.kind>::template apply<Leaf, Interface>(from_before,
+        return step<each.kind>::template apply<Leaf, Interface>(reached_before,
                                                                 kept);
       }
     }
@@ -1801,13 +1779,13 @@ struct binding_sources {
             std::index_sequence<I...>) {
     erased_carrier reached;
     using fn = void (*)(start_carrier, Store &, erased_carrier &);
-    static constexpr fn at[] = {&run_route_at<I, Value, Store>...};
+    static constexpr fn at[] = {&run_state_route<I, Value, Store>...};
     at[state](from, store, reached);
     return reached;
   }
   template <std::size_t State, bool Value, typename Store>
-  static void run_route_at(start_carrier from, Store &store,
-                           erased_carrier &reached) {
+  static void run_state_route(start_carrier from, Store &store,
+                              erased_carrier &reached) {
     if constexpr (closed_carrier<State>::possible &&
                   (Value ? answer_table::routed.value[State]
                          : answer_table::routed.through[State])) {
@@ -1823,14 +1801,14 @@ struct binding_sources {
 
   // Whether C++ makes each state of the closure.
   template <std::size_t... I>
-  static constexpr auto possible_of(std::index_sequence<I...>) {
+  static constexpr auto make_possible(std::index_sequence<I...>) {
     struct list {
       bool at[sizeof...(I)];
     };
     return list{{closed_carrier<I>::possible...}};
   }
   static constexpr auto possible_states =
-      possible_of(std::make_index_sequence<closure.count>{});
+      make_possible(std::make_index_sequence<closure.count>{});
 
   // The answers of the closure, of the states C++ makes, as bits.
   static constexpr std::size_t possible_words = (closure.count + 63) / 64;
@@ -1844,10 +1822,10 @@ struct binding_sources {
     return made;
   }
   template <std::size_t... I>
-  static auto answer_table_of(std::index_sequence<I...>)
-      -> closed_answers_of<semantic, possible_word(I)...>;
+  static auto make_answer_table(std::index_sequence<I...>)
+      -> closed_answer_table<semantic, possible_word(I)...>;
   using answer_table =
-      decltype(answer_table_of(std::make_index_sequence<possible_words>{}));
+      decltype(make_answer_table(std::make_index_sequence<possible_words>{}));
   static constexpr const auto &shapes = answer_table::shapes;
   static constexpr const auto &answers = answer_table::answers;
 
@@ -1856,7 +1834,7 @@ struct binding_sources {
   // sharing one, or to one of an array of unknown bound, of a layer the
   // binding does not know. Wraps, observers and adopters are made of the
   // types the request spells.
-  template <std::size_t State> static constexpr bool converts_on() {
+  template <std::size_t State> static constexpr bool converts_unknown_layer() {
     if constexpr (!closed_carrier<State>::possible) {
       return false;
     } else {
@@ -1876,36 +1854,36 @@ struct binding_sources {
       return published.tables[State];
     } else if constexpr (!closed_carrier<State>::possible ||
                          !(answer_table::pointed.at[State] ||
-                           converts_on<State>())) {
+                           converts_unknown_layer<State>())) {
       return nullptr;
     } else {
       using own = typename closed_carrier<State>::type;
-      constexpr std::uint32_t taken = mask_of(semantics::step::copy) |
-                                      mask_of(semantics::step::decay) |
-                                      mask_of(semantics::step::hand_over) |
-                                      mask_of(semantics::step::convert) |
-                                      mask_of(semantics::step::unknown_bound);
+      constexpr std::uint32_t taken = step_mask(semantics::step::copy) |
+                                      step_mask(semantics::step::decay) |
+                                      step_mask(semantics::step::hand_over) |
+                                      step_mask(semantics::step::convert) |
+                                      step_mask(semantics::step::unknown_bound);
       constexpr std::uint32_t mask =
           (request_kinds(closure.states[State].reached,
                          Plan::context(abstract)) &
            taken) |
-          mask_of(semantics::step::convert) |
-          mask_of(semantics::step::unknown_bound);
-      return &table_of<typename own::type, Leaf, Interface, mask>::value;
+          step_mask(semantics::step::convert) |
+          step_mask(semantics::step::unknown_bound);
+      return &operation_table<typename own::type, Leaf, Interface, mask>::value;
     }
   }
   template <std::size_t... I>
-  static constexpr auto tables_of(std::index_sequence<I...>) {
+  static constexpr auto make_tables(std::index_sequence<I...>) {
     struct list {
       const type_table *at[sizeof...(I)];
     };
     return list{{closed_table<I>()...}};
   }
   static constexpr auto closed_tables =
-      tables_of(std::make_index_sequence<closure.count>{});
+      make_tables(std::make_index_sequence<closure.count>{});
 
   // The key of the type of a shape: of a state, or what it points to.
-  template <std::size_t Shape> static constexpr const void *shape_key_of() {
+  template <std::size_t Shape> static constexpr const void *shape_type_key() {
     using type = typename closed_carrier<shapes.states[Shape]>::type::type;
     if constexpr (shapes.pointee[Shape]) {
       return &shape_key<std::remove_cv_t<std::remove_pointer_t<type>>>;
@@ -1914,16 +1892,16 @@ struct binding_sources {
     }
   }
   template <std::size_t... I>
-  static constexpr auto groups_of(std::index_sequence<I...>) {
+  static constexpr auto make_groups(std::index_sequence<I...>) {
     struct list {
       closed_group at[sizeof...(I) + 1];
     };
-    return list{{{shape_key_of<I>(),
-                  static_cast<std::uint16_t>(I * answers_per_shape)}...,
+    return list{{{shape_type_key<I>(),
+                  static_cast<std::uint16_t>(I * shape_answer_count)}...,
                  {}}};
   }
   static constexpr auto groups =
-      groups_of(std::make_index_sequence<shapes.count>{});
+      make_groups(std::make_index_sequence<shapes.count>{});
 };
 
 // The types a request of Request spells, from its shape at depth 0 to its
@@ -1931,10 +1909,10 @@ struct binding_sources {
 template <typename Request, typename Element> struct request_types {
   using shape = typename requested_category<Request>::shape;
   static constexpr std::size_t depth =
-      type_list_size_v<typename stack_of_t<shape, Element>::layers>;
+      type_list_size_v<typename stack_t<shape, Element>::layers>;
 
   template <std::size_t K, typename T = shape> struct nested {
-    using type = typename nested<K - 1, element_of_t<T, Element>>::type;
+    using type = typename nested<K - 1, held_element_t<T, Element>>::type;
   };
   template <typename T> struct nested<0, T> {
     using type = T;
@@ -1968,15 +1946,16 @@ template <typename Request, typename Element> struct request_tables {
     }
   }
 
-  template <typename T> static constexpr std::uint32_t mask_for() {
+  template <typename T> static constexpr std::uint32_t type_mask() {
     return (makes<T>() ? makers_mask : 0) |
            (qualifies<T>() ? qualified_mask : 0);
   }
 
   template <std::size_t K>
   using table_t =
-      table_of<typename types::template nested<K>::type, Element, Element,
-               mask_for<typename types::template nested<K>::type>()>;
+      operation_table<typename types::template nested<K>::type, Element,
+                      Element,
+                      type_mask<typename types::template nested<K>::type>()>;
 
   // A layer the semantics make of what it holds, as a wrapper the request
   // spells is made of its element value, adopts a pointer or observes one,
@@ -2009,7 +1988,7 @@ template <typename Request, typename Element> struct request_tables {
       using of = typename types::template nested<K + 1>::type;
       return (!kind.made_from_value ||
               !layer_types<of, Element, Element>::template movable<of>() ||
-              has(maker::full.made_of[1])) &&
+              has(maker::full.wrap_runs[1])) &&
              (!kind.observes || has(maker::full.observing));
     }
   }

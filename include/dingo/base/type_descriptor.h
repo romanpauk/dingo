@@ -188,7 +188,8 @@ constexpr bool is_qualification_conversion(type_descriptor source,
                                      depth + 1, next_intermediate_const);
 }
 
-constexpr bool qualifies_as(type_descriptor source, type_descriptor target) {
+constexpr bool qualification_converts(type_descriptor source,
+                                      type_descriptor target) {
   if (!same_type_shape(source, target)) {
     return false;
   }
@@ -216,29 +217,6 @@ constexpr type_cv_flags make_type_cv_flags(bool is_const, bool is_volatile) {
 template <typename T>
 inline constexpr type_cv_flags type_cv_flags_v =
     make_type_cv_flags(std::is_const_v<T>, std::is_volatile_v<T>);
-
-// The descriptor of a type that is not a reference, as constant data of one
-// class for the type. A pointer level refers to the descriptor of its
-// pointee as data, so comparing descriptors at runtime never calls through a
-// function pointer.
-template <typename T, bool = std::is_pointer_v<T>> struct type_descriptor_of {
-  static constexpr type_descriptor value{
-      raw_type_name_v<std::remove_cv_t<T>>, &type_tag<std::remove_cv_t<T>>,
-      type_cv_flags_v<T>, type_reference_kind::none, nullptr};
-};
-
-template <typename T> struct type_descriptor_of<T, true> {
-  static constexpr type_descriptor value{
-      {},
-      nullptr,
-      type_cv_flags_v<T>,
-      type_reference_kind::none,
-      &type_descriptor_of<std::remove_pointer_t<T>>::value};
-};
-
-template <typename T>
-inline constexpr type_descriptor type_descriptor_v =
-    type_descriptor_of<T>::value;
 
 template <typename Text>
 void append_type_cv(Text &name, type_cv_flags flags,
@@ -283,26 +261,44 @@ void append_described_type_name(Text &name, type_descriptor descriptor) {
 } // namespace detail
 
 namespace detail {
-constexpr type_descriptor with_reference_kind(type_descriptor descriptor,
-                                              bool lvalue, bool rvalue) {
+constexpr type_descriptor rereferenced(type_descriptor descriptor, bool lvalue,
+                                       bool rvalue) {
   descriptor.reference = lvalue   ? type_reference_kind::lvalue
                          : rvalue ? type_reference_kind::rvalue
                                   : type_reference_kind::none;
   return descriptor;
 }
 
-// The descriptor of a type with its reference kind, made once at compile
-// time, of the descriptor of the type it refers to: a function computing it
-// would be emitted for every type a message names.
+// The descriptor of a type, as constant data made once at compile time, of
+// one class for the type: a function computing it would be emitted for every
+// type a message names. A pointer refers to the descriptor of its pointee,
+// and a reference is the descriptor of what it refers to with its reference
+// kind, so comparing descriptors at runtime never calls through a function
+// pointer.
+template <typename T, typename = void>
+inline constexpr type_descriptor type_descriptor_v{
+    raw_type_name_v<std::remove_cv_t<T>>, &type_tag<std::remove_cv_t<T>>,
+    type_cv_flags_v<T>, type_reference_kind::none, nullptr};
+
 template <typename T>
-inline constexpr type_descriptor described_type_v =
-    with_reference_kind(type_descriptor_of<std::remove_reference_t<T>>::value,
-                        std::is_lvalue_reference_v<T>,
-                        std::is_rvalue_reference_v<T>);
+inline constexpr type_descriptor
+    type_descriptor_v<T, std::enable_if_t<std::is_pointer_v<T>>>{
+        {},
+        nullptr,
+        type_cv_flags_v<T>,
+        type_reference_kind::none,
+        &type_descriptor_v<std::remove_pointer_t<T>>};
+
+template <typename T>
+inline constexpr type_descriptor
+    type_descriptor_v<T, std::enable_if_t<std::is_reference_v<T>>> =
+        rereferenced(type_descriptor_v<std::remove_reference_t<T>>,
+                     std::is_lvalue_reference_v<T>,
+                     std::is_rvalue_reference_v<T>);
 } // namespace detail
 
 template <typename T> constexpr type_descriptor describe_type() {
-  return detail::described_type_v<T>;
+  return detail::type_descriptor_v<T>;
 }
 
 // Appends the name of a type to a text that appends a std::string_view.

@@ -139,7 +139,7 @@ inline void context_path_state::append_type_path(message_text &message) const {
 }
 
 template <typename T> detail::resolving_frame context_path_state::track_type() {
-  return detail::resolving_frame(*this, detail::described_type_v<T>);
+  return detail::resolving_frame(*this, detail::type_descriptor_v<T>);
 }
 
 } // namespace detail

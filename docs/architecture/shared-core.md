@@ -20,7 +20,7 @@ they run a plan. Everything else is one implementation.
 | Activation of a cell  | `binding/activation.h`, `binding/materialization.h`                            | shared                                | shared, in a transaction                                       |
 | Semantics             | `semantics/model.h`                                                            | shared                                | shared                                                         |
 | Layer sources         | `binding_plan` in `request/execution.h`                                        | as the code compiles                  | as the code compiles                                           |
-| Plan of a request     | `semantics::satisfy`, `semantics::plan_of`                                     | as the code compiles (`request_plan`) | at the first request of its type (`plan_runtime`)              |
+| Plan of a request     | `semantics::satisfy`, `semantics::answer_plan`                                 | as the code compiles (`request_plan`) | at the first request of its type (`plan_runtime`)              |
 | Program of a plan     | `compile_program` in `request/execution.h`                                     | as the code compiles                  | at the first request of its type                               |
 | Steps                 | the steps of `request/execution.h`                                             | inline (`program_run`)                | through tables built of the same steps (`runtime/execution.h`) |
 | Store of what is made | `static_store` in `static/binding.h`, `runtime_store` in `runtime/execution.h` | typed                                 | by the layout of the type (`object_layout`)                    |

@@ -108,8 +108,8 @@ plan reached, as the static container makes it.
 ## Objects Made Of A Value
 
 A storage, a factory and `construct<T>()` make an object of a value with
-`made_as`: the object constructed of the value, a run of wraps around it, or a
-handle of an array of it that its `type_traits` emplace. A factory emplaces a
+`make_value`: the object constructed of the value, a run of wraps around it, or
+a handle of an array of it that its `type_traits` emplace. A factory emplaces a
 wrapper of what it constructs in place, down the layers that declare
 `emplaces_element`, and makes it of the constructed value only where it cannot,
 as an alternative type that selects an alternative of the value.

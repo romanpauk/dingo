@@ -425,8 +425,8 @@ private:
   template <typename Request, typename InterfaceBinding>
   [[noreturn]] static void reject_absent() {
     throw_type_not_convertible(
-        detail::described_type_v<Request>,
-        detail::described_type_v<
+        detail::type_descriptor_v<Request>,
+        detail::type_descriptor_v<
             typename InterfaceBinding::storage_type::type>);
   }
 
@@ -436,8 +436,9 @@ private:
             typename Context>
   [[noreturn]] static T not_convertible(Context &context) {
     throw_type_not_convertible(
-        detail::described_type_v<Request>,
-        detail::described_type_v<typename InterfaceBinding::storage_type::type>,
+        detail::type_descriptor_v<Request>,
+        detail::type_descriptor_v<
+            typename InterfaceBinding::storage_type::type>,
         context);
   }
 

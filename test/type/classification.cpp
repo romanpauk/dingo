@@ -28,15 +28,15 @@ using detail::array_layer_tag;
 using detail::bounded_array_layer_tag;
 using detail::pointer_layer_tag;
 using detail::stack_element;
-using detail::stack_of_t;
+using detail::stack_t;
 using detail::wrapper_layer_tag;
 
 template <typename T, typename... Tags>
 inline constexpr bool layers_are_v =
-    std::is_same_v<typename stack_of_t<T, leaf>::layers, type_list<Tags...>>;
+    std::is_same_v<typename stack_t<T, leaf>::layers, type_list<Tags...>>;
 
 template <typename T>
-inline constexpr stack_element element_of_v = stack_of_t<T, leaf>::element;
+inline constexpr stack_element element_of_v = stack_t<T, leaf>::element;
 
 // The stack of a type: its layers around the leaf, its abstract
 // abstract_interface or another type.

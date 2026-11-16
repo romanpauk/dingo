@@ -20,7 +20,7 @@ AREAS = (
                       r"resolution_context::resolve|constructor_dependency|"
                       r"request_type|runtime_request"),
     ("execution", r"execution::|semantics::|layer_universe|wrapper_kind|"
-                  r"possible_kind|stack_of|quals_of|requested_category"),
+                  r"possible_kind|stack_type|stack_quals|requested_category"),
     ("registration", r"registration|commit_|prepare_binding|lookup_|"
                      r"construct_cell|register_type|binding_model|"
                      r"materialization_facts"),

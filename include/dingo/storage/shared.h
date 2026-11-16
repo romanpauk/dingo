@@ -79,7 +79,7 @@ public:
       new (&this->buffer_) StoredType(
           Factory::template construct<Type>(scope, context, container));
     } else if constexpr (converts) {
-      new (&this->buffer_) StoredType(execution::made_as<StoredType>(
+      new (&this->buffer_) StoredType(execution::make_value<StoredType>(
           Factory::template construct<Type>(scope, context, container)));
     } else if constexpr (std::is_array_v<Type>) {
       Factory::template construct<Type>(&this->buffer_, scope, context,

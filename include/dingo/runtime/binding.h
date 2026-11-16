@@ -175,7 +175,7 @@ struct runtime_binding_edge {
 
 private:
   static constexpr type_descriptor registered_type() {
-    return detail::described_type_v<detail::registered_type_t<Storage>>;
+    return detail::type_descriptor_v<detail::registered_type_t<Storage>>;
   }
 
   // The layer sources the binding publishes, and the tables of their types.
@@ -244,7 +244,7 @@ private:
           materialized();
           store_type store(
               context, scope, retained(binding), request.requested,
-              detail::described_type_v<detail::registered_type_t<Storage>>);
+              detail::type_descriptor_v<detail::registered_type_t<Storage>>);
           detail::execution::store_view transient{store, false};
           detail::execution::erased_carrier reached = detail::execution::erase(
               detail::plan_start<stored_type, execution_type::scope.makes>(
@@ -254,8 +254,7 @@ private:
             reached = (reached.owned ? call.owned : call.borrowed)(
                 reached, call.stable, store);
           }
-          return detail::finish_request(reached,
-                                        detail::execution::run_of(plan));
+          return detail::finish_request(reached, plan);
         });
   }
 
@@ -331,7 +330,7 @@ private:
         [&](auto &&source) -> resolved_address {
           store_type store(
               context, scope, retained(binding), request.requested,
-              detail::described_type_v<detail::registered_type_t<Storage>>);
+              detail::type_descriptor_v<detail::registered_type_t<Storage>>);
           auto start =
               detail::plan_start<stored_type, execution_type::scope.makes>(
                   std::forward<decltype(source)>(source), store);
@@ -397,7 +396,7 @@ private:
         context, [&](auto &&source) -> resolved_address {
           store_type store(
               context, scope, retained(binding), request.requested,
-              detail::described_type_v<detail::registered_type_t<Storage>>);
+              detail::type_descriptor_v<detail::registered_type_t<Storage>>);
           auto start =
               detail::plan_start<stored_type, execution_type::scope.makes>(
                   std::forward<decltype(source)>(source), store);
@@ -411,8 +410,7 @@ private:
             reached = (reached.owned ? call.owned : call.borrowed)(
                 reached, call.stable, store);
           }
-          return detail::finish_request(reached,
-                                        detail::execution::run_of(plan));
+          return detail::finish_request(reached, plan);
         });
     if (cache_key != nullptr && plan.stable_address &&
         result.access == resolved_address::access_kind::borrow) {
@@ -440,8 +438,9 @@ public:
   static constexpr node_type node{
       &dispatch,
       registered_type(),
-      detail::described_type_v<leaf_type_t<typename Storage::type>>,
-      &detail::execution::shape_key<detail::execution::interface_of_t<Type>>,
+      detail::type_descriptor_v<leaf_type_t<typename Storage::type>>,
+      &detail::execution::shape_key<
+          detail::execution::request_interface_t<Type>>,
       layout(),
       detail::materialization_facts_v<Storage, runtime_context_type,
                                       Container>(),

@@ -110,7 +110,7 @@ class arena
   }
 
   // Allocates in a new block, which holds the size at the alignment.
-  DINGO_NOINLINE void *allocate_in_block(intptr_t size, intptr_t alignment) {
+  DINGO_NOINLINE void *allocate_new_block(intptr_t size, intptr_t alignment) {
     if (std::numeric_limits<intptr_t>::max() - (alignment - 1) < size ||
         !request_block(size + (alignment - 1))) {
       return nullptr;
@@ -196,7 +196,7 @@ public:
         return reinterpret_cast<void *>(ptr);
       }
     }
-    return allocate_in_block(size, alignment);
+    return allocate_new_block(size, alignment);
   }
 
   void deallocate(void *, std::size_t) {}

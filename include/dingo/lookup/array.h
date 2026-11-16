@@ -82,7 +82,7 @@ public:
   explicit array_lookup_storage(Allocator &) {}
 
   iterator find(const Key &key) {
-    const auto index = to_index(key);
+    const auto index = array_index(key);
     return index && entries_[*index].second ? iterator(&entries_[*index])
                                             : end();
   }
@@ -107,12 +107,12 @@ public:
   }
 
 private:
-  static std::optional<std::size_t> to_index(const Key &key) {
+  static std::optional<std::size_t> array_index(const Key &key) {
     return array_lookup_index(key, Size);
   }
 
   static std::size_t checked_index(const Key &key) {
-    auto index = to_index(key);
+    auto index = array_index(key);
     if (!index) {
       throw lookup_key_out_of_range_exception("array lookup key out of range");
     }
@@ -180,7 +180,7 @@ public:
   iterator end() { return iterator(this, Size, {}); }
 
   std::pair<iterator, iterator> equal_range(const Key &key) {
-    const auto index = to_index(key);
+    const auto index = array_index(key);
     if (!index) {
       return {end(), end()};
     }
@@ -202,12 +202,12 @@ public:
   void erase(iterator handle) { values_[handle.index_].erase(handle.it_); }
 
 private:
-  static std::optional<std::size_t> to_index(const Key &key) {
+  static std::optional<std::size_t> array_index(const Key &key) {
     return array_lookup_index(key, Size);
   }
 
   static std::size_t checked_index(const Key &key) {
-    auto index = to_index(key);
+    auto index = array_index(key);
     if (!index) {
       throw lookup_key_out_of_range_exception("array lookup key out of range");
     }

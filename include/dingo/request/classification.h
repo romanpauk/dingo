@@ -250,7 +250,7 @@ struct unknown_bound_layer<
 
 // Whether a handle of an array of a known bound converts to the handle its
 // type traits name: moved, and copied too when it can be copied.
-template <typename Wrapper> constexpr bool converts_to_unknown_bound() {
+template <typename Wrapper> constexpr bool converts_unknown_bound() {
   if constexpr (std::is_void_v<typename unknown_bound_layer<Wrapper>::type>) {
     return false;
   } else {
@@ -287,10 +287,10 @@ struct stacked<Tag, type_stack<type_list<Tags...>, Element>> {
 template <typename Tag, typename Stack>
 using stacked_t = typename stacked<Tag, Stack>::type;
 
-template <typename T, typename Leaf> struct stack_of;
+template <typename T, typename Leaf> struct stack_type;
 
 template <typename T, typename Leaf>
-using stack_of_t = typename stack_of<std::remove_cv_t<T>, Leaf>::type;
+using stack_t = typename stack_type<std::remove_cv_t<T>, Leaf>::type;
 
 // The stack of the first alternative of an alternative type that ends in the
 // leaf or its interface, or of none.
@@ -301,7 +301,7 @@ template <typename Leaf, typename... Alternatives> struct alternative_stack {
 
 template <typename Leaf, typename Alternative, typename... Alternatives>
 struct alternative_stack<Leaf, Alternative, Alternatives...> {
-  using candidate = stack_of_t<Alternative, Leaf>;
+  using candidate = stack_t<Alternative, Leaf>;
   using next = alternative_stack<Leaf, Alternatives...>;
   static constexpr bool holds = candidate::element != stack_element::other;
   using type = std::conditional_t<holds, candidate, typename next::type>;
@@ -315,18 +315,18 @@ template <typename Leaf, typename... Alternatives>
 struct alternatives_stack<Leaf, type_list<Alternatives...>>
     : alternative_stack<Leaf, Alternatives...> {};
 
-template <typename T, typename Leaf> struct stack_of {
+template <typename T, typename Leaf> struct stack_type {
   static auto make() {
     if constexpr (std::is_same_v<T, Leaf>) {
       return type_stack<type_list<>, stack_element::leaf>{};
     } else if constexpr (std::is_pointer_v<T>) {
       return stacked_t<pointer_layer_tag,
-                       stack_of_t<std::remove_pointer_t<T>, Leaf>>{};
+                       stack_t<std::remove_pointer_t<T>, Leaf>>{};
     } else if constexpr (std::is_array_v<T>) {
       return stacked_t<
           std::conditional_t<std::extent_v<T> == 0, array_layer_tag,
                              bounded_array_layer_tag>,
-          stack_of_t<std::remove_extent_t<T>, Leaf>>{};
+          stack_t<std::remove_extent_t<T>, Leaf>>{};
     } else if constexpr (type_traits<T>::enabled) {
       using element = typename type_traits<T>::value_type;
       // An owning handle whose element cannot be borrowed as an object holds
@@ -336,9 +336,9 @@ template <typename T, typename Leaf> struct stack_of {
                          stacked_t<std::conditional_t<handle_extent_v<T> == 0,
                                                       array_layer_tag,
                                                       bounded_array_layer_tag>,
-                                   stack_of_t<element, Leaf>>>{};
+                                   stack_t<element, Leaf>>>{};
       } else {
-        return stacked_t<wrapper_layer_tag<T>, stack_of_t<element, Leaf>>{};
+        return stacked_t<wrapper_layer_tag<T>, stack_t<element, Leaf>>{};
       }
     } else if constexpr (is_alternative_type_v<T>) {
       using held = alternatives_stack<Leaf, alternative_type_alternatives_t<T>>;
@@ -382,7 +382,7 @@ struct wrapper_identities<type_list<Identities...>, Tag, Tags...> {
 };
 
 template <typename Identity, typename... Identities>
-constexpr semantics::layer index_of(type_list<Identities...>) {
+constexpr semantics::layer layer_index(type_list<Identities...>) {
   constexpr bool matches[] = {std::is_same_v<Identity, Identities>..., true};
   std::size_t index = 0;
   while (!matches[index]) {
@@ -423,7 +423,7 @@ template <typename... Tags> struct layer_universe<type_list<Tags...>> {
     } else if constexpr (std::is_same_v<Tag, bounded_array_layer_tag>) {
       return semantics::bounded_array_layer;
     } else {
-      return index_of<typename Tag::identity>(identities{});
+      return layer_index<typename Tag::identity>(identities{});
     }
   }
 
@@ -435,14 +435,15 @@ template <typename... Tags> struct layer_universe<type_list<Tags...>> {
     semantics::layer_kind kind = wrapper_kind_v<Identity>;
     using target = typename shared_layer<Identity>::type;
     if constexpr (!std::is_void_v<target>) {
-      constexpr semantics::layer to = index_of<target>(identities{});
+      constexpr semantics::layer to = layer_index<target>(identities{});
       if constexpr (to != semantics::no_layer) {
         kind.converts |= std::uint32_t{1} << to;
       }
     }
-    if constexpr (converts_to_unknown_bound<Identity>()) {
+    if constexpr (converts_unknown_bound<Identity>()) {
       constexpr semantics::layer to =
-          index_of<typename unknown_bound_layer<Identity>::type>(identities{});
+          layer_index<typename unknown_bound_layer<Identity>::type>(
+              identities{});
       if constexpr (to != semantics::no_layer) {
         kind.to_unknown_bound |= std::uint32_t{1} << to;
       }
@@ -464,7 +465,7 @@ template <typename... Tags> struct layer_universe<type_list<Tags...>> {
 // of nothing is made by the factory its registration names.
 // A leaf is copied as the library copies it: a collection of what cannot be
 // copied cannot be either.
-template <typename Leaf> constexpr semantics::leaf_traits leaf_traits_of() {
+template <typename Leaf> constexpr semantics::leaf_traits leaf_traits_v() {
   return {is_copy_constructible_v<Leaf>, std::is_move_constructible_v<Leaf>,
           std::is_default_constructible_v<Leaf>,
           !std::is_default_constructible_v<Leaf>,
@@ -479,29 +480,29 @@ inline constexpr std::uint8_t quals_v = static_cast<std::uint8_t>(
 
 // The qualifiers of each level of the stack of T toward Leaf, as its type
 // declares them, outermost first: of T itself, then of each element.
-template <typename T, typename Leaf> struct quals_of {
+template <typename T, typename Leaf> struct stack_quals {
   static constexpr void fill(std::uint8_t *out) {
     using type = std::remove_cv_t<T>;
     out[0] = quals_v<T>;
     if constexpr (std::is_same_v<type, Leaf>) {
     } else if constexpr (std::is_pointer_v<type>) {
-      quals_of<std::remove_pointer_t<type>, Leaf>::fill(out + 1);
+      stack_quals<std::remove_pointer_t<type>, Leaf>::fill(out + 1);
     } else if constexpr (std::is_array_v<type>) {
-      quals_of<std::remove_extent_t<type>, Leaf>::fill(out + 1);
+      stack_quals<std::remove_extent_t<type>, Leaf>::fill(out + 1);
     } else if constexpr (type_traits<type>::enabled) {
       using element = typename type_traits<type>::value_type;
       if constexpr (is_array_like_type_v<type>) {
         // The array a handle holds is of the qualifiers of its element.
         out[1] = quals_v<element>;
-        quals_of<element, Leaf>::fill(out + 2);
+        stack_quals<element, Leaf>::fill(out + 2);
       } else {
-        quals_of<element, Leaf>::fill(out + 1);
+        stack_quals<element, Leaf>::fill(out + 1);
       }
     } else if constexpr (is_alternative_type_v<type>) {
       using held = typename alternatives_stack<
           Leaf, alternative_type_alternatives_t<type>>::alternative;
       if constexpr (!std::is_void_v<held>) {
-        quals_of<held, Leaf>::fill(out + 1);
+        stack_quals<held, Leaf>::fill(out + 1);
       }
     }
   }
@@ -517,28 +518,28 @@ template <typename Request> struct requested_category {
     using referred = std::remove_reference_t<Request>;
     using pointee = std::remove_pointer_t<std::remove_cv_t<Request>>;
     if constexpr (std::is_lvalue_reference_v<Request>) {
-      return category_of<std::is_const_v<referred>
-                             ? semantics::category::const_lvalue_reference
-                             : semantics::category::lvalue_reference,
-                         std::remove_const_t<referred>>{};
+      return request_category<std::is_const_v<referred>
+                                  ? semantics::category::const_lvalue_reference
+                                  : semantics::category::lvalue_reference,
+                              std::remove_const_t<referred>>{};
     } else if constexpr (std::is_rvalue_reference_v<Request>) {
-      return category_of<semantics::category::rvalue_reference, referred,
-                         !std::is_const_v<referred>>{};
+      return request_category<semantics::category::rvalue_reference, referred,
+                              !std::is_const_v<referred>>{};
     } else if constexpr (std::is_pointer_v<std::remove_cv_t<Request>>) {
-      return category_of<std::is_const_v<pointee>
-                             ? semantics::category::const_pointer
-                             : semantics::category::pointer,
-                         std::remove_const_t<pointee>>{};
+      return request_category<std::is_const_v<pointee>
+                                  ? semantics::category::const_pointer
+                                  : semantics::category::pointer,
+                              std::remove_const_t<pointee>>{};
     } else {
-      return category_of<std::is_const_v<Request>
-                             ? semantics::category::const_value
-                             : semantics::category::value,
-                         std::remove_const_t<Request>>{};
+      return request_category<std::is_const_v<Request>
+                                  ? semantics::category::const_value
+                                  : semantics::category::value,
+                              std::remove_const_t<Request>>{};
     }
   }
 
   template <semantics::category Category, typename Shape, bool Modeled = true>
-  struct category_of {
+  struct request_category {
     static constexpr semantics::category value = Category;
     using shape = Shape;
     static constexpr bool modeled = Modeled;

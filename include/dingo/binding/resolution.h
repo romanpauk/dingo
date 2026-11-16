@@ -59,8 +59,8 @@ template <typename T> T resolved_value(resolved_address result) {
   } else if constexpr (is_copy_constructible_v<value_type>) {
     return *static_cast<value_type *>(result.address);
   } else {
-    throw_type_not_convertible(detail::described_type_v<T>,
-                               detail::described_type_v<value_type>);
+    throw_type_not_convertible(detail::type_descriptor_v<T>,
+                               detail::type_descriptor_v<value_type>);
   }
 }
 
@@ -89,7 +89,7 @@ void reject_escape(Scope scope, type_descriptor registered, Context &context) {
                   "take it by value, or let a shared scope keep what refers "
                   "to it");
   } else if (scope.is_caller()) {
-    throw_type_not_convertible(described_type_v<Request>, registered, context);
+    throw_type_not_convertible(type_descriptor_v<Request>, registered, context);
   }
 }
 
@@ -199,8 +199,8 @@ template <typename Request>
 inline constexpr bool construct_normalized_request_v = [] {
   if constexpr (constructs_normalized_v<Request> &&
                 constructible_normalized_v<Request>) {
-    return detail::execution::makes_as<std::decay_t<Request>,
-                                       request_constructed_t<Request>>();
+    return detail::execution::makes_target<std::decay_t<Request>,
+                                           request_constructed_t<Request>>();
   } else {
     return false;
   }

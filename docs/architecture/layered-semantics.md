@@ -97,7 +97,7 @@ The steps of the specification and the code that takes them. Each is in
 | `upcast`, `convert`, `unknown_bound`                                      | binding      | `step<upcast>`, `step<convert>`, `step<unknown_bound>` |
 | `release`                                                                 | binding      | `release_step`                                         |
 | `copy`, `decay`, `hand_over`                                              | binding      | `step<copy>`, `step<decay>`, `step<hand_over>`         |
-| `wrap`                                                                    | request      | `step<wrap, Target>`; a run of wraps is `made_of`      |
+| `wrap`                                                                    | request      | `step<wrap, Target>`; a run of wraps is `wrap_value`   |
 | `adopt`                                                                   | request      | `adopt_step`                                           |
 | `observe`                                                                 | request      | `observe_step`                                         |
 | `qualify`                                                                 | request      | `qualify_step`                                         |
@@ -213,7 +213,7 @@ other code.
    satisfies it at the fewest copies and moves, and how: a reference or a
    pointer refers to it, a pointer request takes it as a pointer value, an
    rvalue reference takes what is made for the request, or a value is moved or
-   copied of it. `plan_of` gives the steps from the stored object to it.
+   copied of it. `answer_plan` gives the steps from the stored object to it.
    `semantics-check` replays the plan of every answer through the steps of the
    semantics, with its copies and moves.
 
@@ -373,11 +373,11 @@ other code.
    of what a retention keeps is unconditional.
 
    **Objects made of a value.** A storage, a factory and `construct<T>()` make
-   an object of a value with `made_as`: the object constructed of the value, a
-   run of wraps around it (`made_of`), or a handle of an array of it that its
-   type traits emplace. A factory emplaces a wrapper of what it constructs in
-   place, down the layers that declare `emplaces_element`, and makes it of the
-   constructed value only where it cannot.
+   an object of a value with `make_value`: the object constructed of the value,
+   a run of wraps around it (`wrap_value`), or a handle of an array of it that
+   its type traits emplace. A factory emplaces a wrapper of what it constructs
+   in place, down the layers that declare `emplaces_element`, and makes it of
+   the constructed value only where it cannot.
 
    **Values are made where they are returned.** A plan for a value ends in what
    makes the value: a copy, a move, or a run of wraps. The runtime container

@@ -975,7 +975,7 @@ private:
     static constexpr const runtime_binding_node_type *nodes[] = {
         &runtime_registration_edge_t<TypeInterfaces, TypeStorage>::node...};
     static constexpr type_descriptor interfaces[] = {
-        detail::described_type_v<TypeInterfaces>...};
+        detail::type_descriptor_v<TypeInterfaces>...};
     static constexpr registration_node value{
         {Record::size, Record::alignment, &Record::destroy},
         detail::runtime_cell_offset_v<detail::binding_cell<TypeStorage>>,
@@ -983,7 +983,7 @@ private:
         nodes,
         interfaces,
         sizeof...(TypeInterfaces),
-        detail::described_type_v<typename TypeStorage::type>,
+        detail::type_descriptor_v<typename TypeStorage::type>,
         (std::size_t{!std::is_same_v<TypeInterfaces,
                                      normalized_type_t<TypeInterfaces>>} +
          ... + 0)};
