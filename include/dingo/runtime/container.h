@@ -477,6 +477,9 @@ protected:
     const type_descriptor *interface_type;
     const type_descriptor *storage;
     const type_descriptor *key_type;
+    // Whether a failure after the insert may roll it back: not of the last
+    // insert of an outermost transaction, which only its commit follows.
+    bool rolls_back;
   };
 
   // Inserts a binding into a lookup. It is of the lookup and its key, not of
@@ -493,7 +496,9 @@ protected:
                       ::dingo::one>) {
       auto [handle, inserted] = index.try_emplace(key_arg, std::move(value));
       if (inserted) {
-        undo_lookup<LookupEntry>(transaction, state, handle, key_arg);
+        if (registration.rolls_back) {
+          undo_lookup<LookupEntry>(transaction, state, handle, key_arg);
+        }
       } else {
         check_lookup_commit(replace_lookup<LookupEntry>(transaction, state,
                                                         handle, key_arg,
@@ -503,7 +508,9 @@ protected:
       }
     } else {
       auto handle = index.emplace(key_arg, std::move(value));
-      undo_lookup<LookupEntry>(transaction, state, handle, key_arg);
+      if (registration.rolls_back) {
+        undo_lookup<LookupEntry>(transaction, state, handle, key_arg);
+      }
     }
   }
 
@@ -1112,7 +1119,8 @@ private:
           state, transaction,
           runtime_lookup_value(binding_address(node, *header, insert.binding)),
           insert.key,
-          {&node.interfaces[insert.binding], &node.storage, insert.key_type});
+          {&node.interfaces[insert.binding], &node.storage, insert.key_type,
+           index + 1 < count || !transaction.outermost()});
     }
     state.exact_interfaces += node.exact_interfaces;
     transaction.commit();
