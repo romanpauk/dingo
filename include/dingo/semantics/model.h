@@ -1792,10 +1792,10 @@ struct extending_sink {
   reached_sink &out;
   // The layers whose types the binding has: those of a lower index.
   std::size_t known;
-  extension from;
+  extension standing;
 
   constexpr bool takes(step kind, layer outer, std::size_t depth) const {
-    if (from == extension::open) {
+    if (standing == extension::open) {
       return out.takes(kind, outer, depth);
     }
     switch (kind) {
@@ -1803,7 +1803,7 @@ struct extending_sink {
     case step::qualify:
       return out.takes(kind, outer, depth);
     case step::unknown_bound:
-      return (from == extension::made || outer >= known) &&
+      return (standing == extension::made || outer >= known) &&
              out.takes(kind, outer, depth);
     case step::observe:
     case step::adopt:
@@ -1851,16 +1851,16 @@ DINGO_COLD constexpr void extend_reach(search &found, std::size_t closed,
     // A state the request reached of the closure is open when a conversion to
     // a more qualified element reached it, or a step but a wrap of an open
     // one.
-    extension from = extension::closed;
+    extension standing = extension::closed;
     if (next >= closed) {
-      from = extension::made;
+      standing = extension::made;
       for (std::size_t each = next; each >= closed;
            each = found.states[each].parent) {
         if (found.states[each].step == step::wrap) {
           break;
         }
         if (found.states[each].step == step::qualify) {
-          from = extension::open;
+          standing = extension::open;
           break;
         }
       }
@@ -1868,7 +1868,7 @@ DINGO_COLD constexpr void extend_reach(search &found, std::size_t closed,
     const state source = current;
     reached_sink sink{found, source, static_cast<std::uint16_t>(next), goal,
                       context};
-    extending_sink extending{sink, known, from};
+    extending_sink extending{sink, known, standing};
     each_request_step(source.reached, context, extending);
   }
 }
