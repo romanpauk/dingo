@@ -76,122 +76,9 @@ template <typename T> T &thread_object() {
   return *std::launder(reinterpret_cast<T *>(storage.bytes));
 }
 
-inline runtime_conversion make_runtime_conversion(
-    const semantics::derivation &derivation, const binding_layout &binding,
-    const request_layout &request, const semantics::request &goal);
-
-DINGO_COLD inline runtime_conversions
-make_runtime_conversions(const binding_layout &binding,
-                         const request_layout &request) {
-  runtime_conversions made;
-  // The layers of the request in the universe of the binding: those of the
-  // binding at their index, any other after them.
-  semantics::layer mapped[semantics::max_kinds] = {0, 1, 2, 3};
-  bool foreign = false;
-  for (std::size_t index = 0; index < request.layer_count && !foreign;
-       ++index) {
-    std::size_t binding_index = 0;
-    while (binding_index < binding.layer_count &&
-           binding.layers[binding_index].identity !=
-               request.layers[index].identity) {
-      ++binding_index;
-    }
-    foreign = binding_index == binding.layer_count;
-    mapped[4 + index] = static_cast<semantics::layer>(4 + binding_index);
-  }
-  semantics::context context = binding.context;
-  if (foreign) {
-    // Of the thread, as the search is: a universe holds the kinds of every
-    // standard layer, which making one copies.
-    semantics::universe &merged = thread_object<semantics::universe>();
-    // The universe of the binding, which the layers of the request it does
-    // not have follow, and the conversions between them all.
-    merged = *binding.context.layers;
-    const void *identities[semantics::max_kinds] = {};
-    const void *targets[semantics::max_kinds] = {};
-    const void *unknown_bound_targets[semantics::max_kinds] = {};
-    for (std::size_t index = 0; index < 4; ++index) {
-      identities[index] = language_identities[index];
-    }
-    for (std::size_t index = 0; index < binding.layer_count; ++index) {
-      identities[4 + index] = binding.layers[index].identity;
-      targets[4 + index] = binding.layers[index].sharing_identity;
-      unknown_bound_targets[4 + index] =
-          binding.layers[index].unknown_bound_identity;
-    }
-    for (std::size_t index = 0; index < request.layer_count; ++index) {
-      const runtime_layer &layer = request.layers[index];
-      std::size_t merged_index = 4;
-      while (merged_index < merged.count &&
-             identities[merged_index] != layer.identity) {
-        ++merged_index;
-      }
-      if (merged_index == merged.count) {
-        if (merged.count == semantics::max_kinds) {
-          return made;
-        }
-        identities[merged_index] = layer.identity;
-        targets[merged_index] = layer.sharing_identity;
-        unknown_bound_targets[merged_index] = layer.unknown_bound_identity;
-        merged.add(layer.kind);
-      }
-      mapped[4 + index] = static_cast<semantics::layer>(merged_index);
-    }
-    for (std::size_t index = 4; index < merged.count; ++index) {
-      merged.kinds[index].transfers = 0;
-      merged.kinds[index].converts_unknown_bound = 0;
-      for (std::size_t target = 4; target < merged.count; ++target) {
-        if (targets[index] != nullptr && identities[target] == targets[index]) {
-          merged.kinds[index].transfers |= std::uint32_t{1} << target;
-        }
-        if (unknown_bound_targets[index] != nullptr &&
-            identities[target] == unknown_bound_targets[index]) {
-          merged.kinds[index].converts_unknown_bound |= std::uint32_t{1}
-                                                        << target;
-        }
-      }
-    }
-    context.layers = &merged;
-  }
-  semantics::request goal = request.goal;
-  for (std::size_t index = 0; index < goal.depth; ++index) {
-    goal.layers[index] = mapped[goal.layers[index]];
-  }
-  goal.element = context.abstract ? semantics::element::abstract
-                                  : semantics::element::leaf;
-
-  // The search of a thread, cleared rather than made: what makes one is its
-  // states, which a search reads only once it added them. Deriving runs no
-  // code of a user, so it is never deriving already on the thread.
-  semantics::search &found = thread_object<semantics::search>();
-  found.clear();
-  // The closed states are distinct already, so they are not hashed: an object
-  // the request reaches again is only a state more.
-  for (std::size_t index = 0; index < binding.state_count; ++index) {
-    found.states[index] = binding.sources[index];
-  }
-  found.count = binding.state_count;
-  found.closed = binding.state_count;
-  semantics::extend_reach(found, binding.state_count,
-                          binding.context.layers->count, context, goal);
-  // The derivations of the lifetimes differ in what satisfies the request
-  // alone.
-  made.stable = make_runtime_conversion(
-      semantics::answer_derivation(
-          found, semantics::satisfy(found, goal, request.category,
-                                    semantics::lifetime::stable, context)),
-      binding, request, goal);
-  made.transient = make_runtime_conversion(
-      semantics::answer_derivation(
-          found, semantics::satisfy(found, goal, request.category,
-                                    semantics::lifetime::request, context)),
-      binding, request, goal);
-  return made;
-}
-
 // A conversion as a runtime resolution runs it: a derivation compiled into the
 // operations of the tables of the types it steps through.
-inline runtime_conversion make_runtime_conversion(
+DINGO_COLD inline runtime_conversion make_runtime_conversion(
     const semantics::derivation &derivation, const binding_layout &binding,
     const request_layout &request, const semantics::request &goal) {
   runtime_conversion made;
@@ -286,6 +173,103 @@ inline runtime_conversion make_runtime_conversion(
       (derivation.access == semantics::access::point
            ? reached.lifetimes[1]
            : reached.lifetimes[0]) == semantics::lifetime::stable;
+  return made;
+}
+
+DINGO_COLD inline runtime_conversions
+make_runtime_conversions(const binding_layout &binding,
+                         const request_layout &request) {
+  runtime_conversions made;
+  semantics::context context = binding.context;
+  const std::size_t known = binding.context.layers->count;
+  // The identities of the wrapper layers of the universe of the binding, which
+  // the layers of the request it does not have follow, from index 4 on; of
+  // the layer an owned value of each transfers to, and of the layer a value
+  // of each that holds an array of a known bound converts to.
+  const void *identities[semantics::max_kinds] = {};
+  const void *targets[semantics::max_kinds] = {};
+  const void *unknown_bound_targets[semantics::max_kinds] = {};
+  for (std::size_t index = 0; index < binding.layer_count; ++index) {
+    identities[4 + index] = binding.layers[index].identity;
+    targets[4 + index] = binding.layers[index].sharing_identity;
+    unknown_bound_targets[4 + index] =
+        binding.layers[index].unknown_bound_identity;
+  }
+  // The layers of the request in that universe.
+  semantics::layer mapped[semantics::max_kinds] = {0, 1, 2, 3};
+  std::size_t count = known;
+  // The universe of the binding, which the layers of the request it does not
+  // have follow, and the conversions between them all: a copy of the
+  // binding's, not made of the kinds of every standard layer first.
+  semantics::universe merged = *binding.context.layers;
+  for (std::size_t index = 0; index < request.layer_count; ++index) {
+    const runtime_layer &layer = request.layers[index];
+    std::size_t merged_index = 4;
+    while (merged_index < count && identities[merged_index] != layer.identity) {
+      ++merged_index;
+    }
+    if (merged_index == count) {
+      if (count == semantics::max_kinds) {
+        return made;
+      }
+      identities[count] = layer.identity;
+      targets[count] = layer.sharing_identity;
+      unknown_bound_targets[count] = layer.unknown_bound_identity;
+      merged.add(layer.kind);
+      ++count;
+    }
+    mapped[4 + index] = static_cast<semantics::layer>(merged_index);
+  }
+  if (count != known) {
+    for (std::size_t index = 4; index < count; ++index) {
+      semantics::layer_kind &kind = merged.kinds[index];
+      kind.transfers = 0;
+      kind.converts_unknown_bound = 0;
+      for (std::size_t target = 4; target < count; ++target) {
+        if (targets[index] != nullptr && identities[target] == targets[index]) {
+          kind.transfers |= std::uint32_t{1} << target;
+        }
+        if (unknown_bound_targets[index] != nullptr &&
+            identities[target] == unknown_bound_targets[index]) {
+          kind.converts_unknown_bound |= std::uint32_t{1} << target;
+        }
+      }
+    }
+    context.layers = &merged;
+  }
+  semantics::request goal = request.goal;
+  for (std::size_t index = 0; index < goal.depth; ++index) {
+    goal.layers[index] = mapped[goal.layers[index]];
+  }
+  goal.element = context.abstract ? semantics::element::abstract
+                                  : semantics::element::leaf;
+
+  // The search of a thread, cleared rather than made: what makes one is its
+  // states, which a search reads only once it added them. Deriving runs no
+  // code of a user, so it is never deriving already on the thread.
+  semantics::search &found = thread_object<semantics::search>();
+  found.clear();
+  // The closed states are distinct already, so they are not hashed: an object
+  // the request reaches again is only a state more.
+  for (std::size_t index = 0; index < binding.state_count; ++index) {
+    found.states[index] = binding.sources[index];
+  }
+  found.count = binding.state_count;
+  found.closed = binding.state_count;
+  semantics::extend_reach(found, binding.state_count,
+                          binding.context.layers->count, context, goal);
+  // The derivations of the lifetimes differ in what satisfies the request
+  // alone.
+  made.stable = make_runtime_conversion(
+      semantics::answer_derivation(
+          found, semantics::satisfy(found, goal, request.category,
+                                    semantics::lifetime::stable, context)),
+      binding, request, goal);
+  made.transient = make_runtime_conversion(
+      semantics::answer_derivation(
+          found, semantics::satisfy(found, goal, request.category,
+                                    semantics::lifetime::request, context)),
+      binding, request, goal);
   return made;
 }
 
