@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <dingo/base/config.h>
+
 #include <dingo/memory/arena_allocator.h>
 #include <dingo/memory/object_layout.h>
 #include <dingo/memory/object_store.h>
@@ -157,11 +159,9 @@ public:
     return instance;
   }
 
-  void defer_rollback(void (*fn)(void *, void *) noexcept, void *first,
-                      void *second = nullptr) {
-    auto &actions = shared_actions();
-    add_action(actions, actions.rollback_tail,
-               [fn, first, second]() noexcept { fn(first, second); });
+  DINGO_NOINLINE void defer_rollback(void (*fn)(void *, void *) noexcept,
+                                     void *first, void *second = nullptr) {
+    add_rollback(fn, first, second);
   }
 
   template <typename Fn> void defer_rollback(Fn &&fn) {
@@ -171,8 +171,19 @@ public:
     add_action(actions, actions.rollback_tail, std::forward<Fn>(fn));
   }
 
-  void add_runtime_destructor(void *instance, void (*dtor)(void *) noexcept) {
-    runtime_->add_destructor(instance, dtor);
+  // Defers the rollback of a cell a resolution resolved, fn(cell, argument),
+  // and resets the cell as the runtime is destroyed. A cell whose
+  // rollback cannot be deferred is reset at once.
+  DINGO_NOINLINE void defer_reset(void (*fn)(void *, void *) noexcept,
+                                  void *cell, void *argument,
+                                  void (*reset)(void *) noexcept) {
+    try {
+      add_rollback(fn, cell, argument);
+    } catch (...) {
+      reset(cell);
+      throw;
+    }
+    runtime_->add_destructor(cell, reset);
   }
 
   bool sealed() const noexcept { return runtime_->sealed(); }
@@ -212,6 +223,13 @@ private:
       dtor(instance);
       throw;
     }
+  }
+
+  void add_rollback(void (*fn)(void *, void *) noexcept, void *first,
+                    void *second) {
+    auto &actions = shared_actions();
+    add_action(actions, actions.rollback_tail,
+               [fn, first, second]() noexcept { fn(first, second); });
   }
 
   template <typename Fn>

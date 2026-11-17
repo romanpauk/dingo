@@ -147,8 +147,8 @@ template <typename T> detail::resolving_frame context_path_state::track_type() {
 // The resolution context of both containers. The backend provides the memory
 // of the instances a resolution constructs, construct_storage<T>(scope, fn),
 // and defer_rollback, the hook a transactional resolution reports to; a backend
-// without a transaction ignores it. A runtime backend also keeps the
-// destructors a resolution adds with add_runtime_destructor.
+// without a transaction ignores it. A runtime backend also resets, as it is
+// destroyed, the cells a resolution defers the reset of with defer_reset.
 template <typename Backend>
 class resolution_context : public detail::context_path_state, public Backend {
 public:

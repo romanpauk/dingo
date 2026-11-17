@@ -70,8 +70,9 @@ public:
     return transaction_scope(*this, transaction);
   }
 
-  void add_runtime_destructor(void *instance, void (*dtor)(void *) noexcept) {
-    transaction_->add_runtime_destructor(instance, dtor);
+  void defer_reset(void (*fn)(void *, void *) noexcept, void *cell,
+                   void *argument, void (*reset)(void *) noexcept) {
+    transaction_->defer_reset(fn, cell, argument, reset);
   }
 
 protected:

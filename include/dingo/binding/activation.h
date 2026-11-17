@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <dingo/base/config.h>
 #include <dingo/base/type_list.h>
 #include <dingo/binding/cache.h>
 #include <dingo/binding/materialization.h>
@@ -249,11 +250,10 @@ auto run_materialization(const materialization_facts &facts,
         void operator()() {
           if (!done) {
             done = true;
-            context.defer_rollback(access.rollback(), access.cell_address(),
-                                   access.rollback_argument());
+            // A cell whose rollback cannot be deferred is reset at once.
             reset.armed = false;
-            context.add_runtime_destructor(access.cell_address(),
-                                           access.reset());
+            context.defer_reset(access.rollback(), access.cell_address(),
+                                access.rollback_argument(), access.reset());
           }
         }
       } registered{context, access, reset};
@@ -290,12 +290,11 @@ template <typename Cell> struct cell_access {
   }
   void *cell_address() const noexcept { return std::addressof(cell); }
 
-  static void reset_cell(void *self) noexcept {
+  // The reset of the cell, once: a rollback of it calls it.
+  DINGO_NOINLINE static void reset_cell(void *self) noexcept {
     static_cast<Cell *>(self)->reset();
   }
-  static void rollback_cell(void *self, void *) noexcept {
-    static_cast<Cell *>(self)->reset();
-  }
+  static void rollback_cell(void *self, void *) noexcept { reset_cell(self); }
   auto reset() const noexcept { return &reset_cell; }
   auto rollback() const noexcept { return &rollback_cell; }
   void *rollback_argument() const noexcept { return nullptr; }

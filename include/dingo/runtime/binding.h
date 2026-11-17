@@ -298,7 +298,7 @@ private:
     void *rollback_argument() const noexcept { return cache; }
 
     static void rollback_cell(void *cell, void *cache) noexcept {
-      static_cast<cell_type *>(cell)->reset();
+      detail::cell_access<cell_type>::reset_cell(cell);
       *static_cast<detail::cache::entry *>(cache) = {};
     }
   };
