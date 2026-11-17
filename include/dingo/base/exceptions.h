@@ -175,7 +175,7 @@ constexpr const type_descriptor *key_index(const lookup_key<Selector> &) {
 }
 
 template <typename Context>
-type_not_found_exception
+DINGO_COLD type_not_found_exception
 make_type_not_found_exception(type_descriptor request, const Context &context,
                               const type_descriptor *index_type) {
   message_text message = "type not found: ";
@@ -188,7 +188,7 @@ make_type_not_found_exception(type_descriptor request, const Context &context,
 }
 
 template <typename Collection, typename ResolveType>
-type_not_found_exception make_collection_type_not_found_exception() {
+DINGO_COLD type_not_found_exception make_collection_type_not_found_exception() {
   message_text message = "type not found for collection ";
   append_text(message, detail::type_descriptor_v<Collection>,
               " (element type: ", detail::type_descriptor_v<ResolveType>, ")");
@@ -196,15 +196,15 @@ type_not_found_exception make_collection_type_not_found_exception() {
 }
 
 template <typename Context>
-type_ambiguous_exception make_type_ambiguous_exception(type_descriptor request,
-                                                       const Context &context) {
+DINGO_COLD type_ambiguous_exception
+make_type_ambiguous_exception(type_descriptor request, const Context &context) {
   message_text message = "type resolution is ambiguous: ";
   append_type_name(message, request);
   append_active_type(message, context);
   return type_ambiguous_exception(std::move(message));
 }
 
-inline type_not_convertible_exception
+DINGO_COLD inline type_not_convertible_exception
 make_type_not_convertible_exception(type_descriptor target_type,
                                     type_descriptor source_type) {
   message_text message = "type is not convertible to ";
@@ -213,7 +213,7 @@ make_type_not_convertible_exception(type_descriptor target_type,
 }
 
 template <typename Context>
-inline type_not_convertible_exception
+DINGO_COLD inline type_not_convertible_exception
 make_type_not_convertible_exception(type_descriptor target_type,
                                     type_descriptor source_type,
                                     const Context &context) {
@@ -224,8 +224,8 @@ make_type_not_convertible_exception(type_descriptor target_type,
 }
 
 template <typename Context>
-type_recursion_exception make_type_recursion_exception(type_descriptor type,
-                                                       const Context &context) {
+DINGO_COLD type_recursion_exception
+make_type_recursion_exception(type_descriptor type, const Context &context) {
   message_text message = "recursive dependency detected: ";
   if (context.has_type_path()) {
     context.append_type_path(message);
@@ -241,14 +241,14 @@ type_recursion_exception make_type_recursion_exception(type_descriptor type,
 // throws the exception, once in every function that raises it. The functions
 // are not inlined, so that a resolution that may throw stays small enough to
 // be inlined itself.
-[[noreturn]] DINGO_NOINLINE inline void
+[[noreturn]] DINGO_COLD inline void
 throw_type_not_convertible(type_descriptor target_type,
                            type_descriptor source_type) {
   throw make_type_not_convertible_exception(target_type, source_type);
 }
 
 template <typename Context>
-[[noreturn]] DINGO_NOINLINE void
+[[noreturn]] DINGO_COLD void
 throw_type_not_convertible(type_descriptor target_type,
                            type_descriptor source_type,
                            const Context &context) {
@@ -256,21 +256,21 @@ throw_type_not_convertible(type_descriptor target_type,
 }
 
 template <typename Context>
-[[noreturn]] DINGO_NOINLINE void
+[[noreturn]] DINGO_COLD void
 throw_type_not_found(type_descriptor request, const Context &context,
                      const type_descriptor *index_type) {
   throw make_type_not_found_exception(request, context, index_type);
 }
 
 template <typename Context>
-[[noreturn]] DINGO_NOINLINE void throw_type_ambiguous(type_descriptor request,
-                                                      const Context &context) {
+[[noreturn]] DINGO_COLD void throw_type_ambiguous(type_descriptor request,
+                                                  const Context &context) {
   throw make_type_ambiguous_exception(request, context);
 }
 
 template <typename Context>
-[[noreturn]] DINGO_NOINLINE void throw_type_recursion(type_descriptor type,
-                                                      const Context &context) {
+[[noreturn]] DINGO_COLD void throw_type_recursion(type_descriptor type,
+                                                  const Context &context) {
   throw make_type_recursion_exception(type, context);
 }
 
@@ -288,17 +288,16 @@ registration_key_type(const lookup_key<Selector> &) {
   }
 }
 
-inline message_text registration_message(const char *prefix,
-                                         type_descriptor interface_type,
-                                         type_descriptor storage,
-                                         type_descriptor key_type) {
+DINGO_COLD inline message_text
+registration_message(const char *prefix, type_descriptor interface_type,
+                     type_descriptor storage, type_descriptor key_type) {
   message_text message = prefix;
   append_text(message, interface_type, ", storage ", storage, ", key type ",
               key_type);
   return message;
 }
 
-inline lookup_already_registered_exception
+DINGO_COLD inline lookup_already_registered_exception
 make_lookup_already_registered_exception(type_descriptor interface_type,
                                          type_descriptor storage,
                                          type_descriptor key_type) {
@@ -307,7 +306,7 @@ make_lookup_already_registered_exception(type_descriptor interface_type,
                            interface_type, storage, key_type));
 }
 
-inline container_sealed_exception
+DINGO_COLD inline container_sealed_exception
 make_container_sealed_exception(type_descriptor interface_type,
                                 type_descriptor storage,
                                 type_descriptor key_type) {

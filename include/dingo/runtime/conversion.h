@@ -63,7 +63,7 @@ inline runtime_conversion make_runtime_conversion(
     const semantics::derivation &derivation, const binding_layout &binding,
     const request_layout &request, const semantics::request &goal);
 
-inline runtime_conversions
+DINGO_COLD inline runtime_conversions
 make_runtime_conversions(const binding_layout &binding,
                          const request_layout &request) {
   runtime_conversions made;

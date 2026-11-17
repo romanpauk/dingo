@@ -70,8 +70,9 @@ struct conversion {
 // The conversion of a found derivation of what a binding publishes, whose first
 // source_count states are its layer sources: the steps into them are the
 // binding's.
-constexpr conversion compile_conversion(const semantics::derivation &derivation,
-                                        std::size_t source_count) {
+DINGO_COLD constexpr conversion
+compile_conversion(const semantics::derivation &derivation,
+                   std::size_t source_count) {
   using semantics::step;
   conversion made;
   const bool value = derivation.access == semantics::access::move ||

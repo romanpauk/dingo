@@ -219,8 +219,8 @@ inline constexpr type_cv_flags type_cv_flags_v =
     make_type_cv_flags(std::is_const_v<T>, std::is_volatile_v<T>);
 
 template <typename Text>
-void append_type_cv(Text &name, type_cv_flags flags,
-                    std::string_view separator = " ") {
+DINGO_COLD void append_type_cv(Text &name, type_cv_flags flags,
+                               std::string_view separator = " ") {
   if (has_cv_flag(flags, type_cv_flags::is_const)) {
     name += separator;
     name += "const";
@@ -234,7 +234,8 @@ void append_type_cv(Text &name, type_cv_flags flags,
 }
 
 template <typename Text>
-void append_described_type_name(Text &name, type_descriptor descriptor) {
+DINGO_COLD void append_described_type_name(Text &name,
+                                           type_descriptor descriptor) {
   if (descriptor.pointee != nullptr) {
     append_described_type_name(name, *descriptor.pointee);
     name += "*";

@@ -628,25 +628,12 @@ template <typename Sink> struct unqualified_sink {
   }
 };
 
+// The steps of the layers of an object; each_transition below passes them on.
+// A runtime resolution takes them only as it derives a request type, once.
 template <typename Sink>
-constexpr void each_layer_transition(const semantics::object &object,
-                                     const semantics::context &context,
-                                     Sink &out);
-
-// The steps the semantics allow from an object.
-// They are passed to a sink, out(kind, object), one by one: a constant
-// expression returns no list of them, which a compiler would keep.
-template <typename Sink>
-constexpr void each_transition(const semantics::object &object,
-                               const semantics::context &context, Sink &out) {
-  unqualified_sink<Sink> reset{out};
-  each_layer_transition(object, context, reset);
-}
-
-template <typename Sink>
-constexpr void each_layer_transition(const semantics::object &object,
-                                     const semantics::context &context,
-                                     Sink &out) {
+DINGO_COLD constexpr void
+each_layer_transition(const semantics::object &object,
+                      const semantics::context &context, Sink &out) {
   if (object.unconstructed) {
     return;
   }
@@ -833,6 +820,16 @@ constexpr void each_layer_transition(const semantics::object &object,
       out(step::wrap, made);
     }
   }
+}
+
+// The steps the semantics allow from an object.
+// They are passed to a sink, out(kind, object), one by one: a constant
+// expression returns no list of them, which a compiler would keep.
+template <typename Sink>
+constexpr void each_transition(const semantics::object &object,
+                               const semantics::context &context, Sink &out) {
+  unqualified_sink<Sink> reset{out};
+  each_layer_transition(object, context, reset);
 }
 
 constexpr transitions_list transitions(const semantics::object &object,
@@ -1406,7 +1403,7 @@ struct affected_cost {
 };
 
 template <typename Finish>
-constexpr answer
+DINGO_COLD constexpr answer
 satisfy_states(const state *states, std::size_t count, bool overflow,
                const request &goal, category taken, lifetime needed,
                const semantics::context &context, Finish finish) {
@@ -1848,10 +1845,10 @@ struct made_sink {
 // The states below closed are closed layer sources, of a binding that has the
 // types of the layers below known: a request steps from them only by a wrap or
 // into a layer whose type the binding does not have.
-constexpr void extend_reach(search &found, std::size_t closed,
-                            std::size_t known,
-                            const semantics::context &context,
-                            const request &goal) {
+DINGO_COLD constexpr void extend_reach(search &found, std::size_t closed,
+                                       std::size_t known,
+                                       const semantics::context &context,
+                                       const request &goal) {
   const bool foreign = context.layers->count > known;
   for (std::size_t next = 0; next < found.count; ++next) {
     const state &current = found.states[next];

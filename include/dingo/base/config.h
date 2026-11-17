@@ -43,6 +43,22 @@
 #endif
 #endif
 
+// A function a resolution runs once of a type, at most: optimized for size
+// and kept out of line, as what runs it is not slowed by it.
+#if !defined(DINGO_COLD)
+#if defined(_MSC_VER)
+#define DINGO_COLD __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+#if defined(__clang__)
+#define DINGO_COLD __attribute__((cold, noinline, minsize))
+#else
+#define DINGO_COLD __attribute__((cold, noinline))
+#endif
+#else
+#define DINGO_COLD
+#endif
+#endif
+
 // MSVC applies the empty base optimization only to the first empty base class
 // unless the derived class opts in.
 // Whether the compiler has __type_pack_element, which selects a type of a pack
