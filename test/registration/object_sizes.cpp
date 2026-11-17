@@ -153,9 +153,11 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
     // states. A level of the local bindings of a registration is a container
     // of the same type, which borrows the runtime data of its root. The
     // bindings state counts the bindings only an exact lookup selects, and
-    // its ordered lookup takes its nodes from the arena of the container.
+    // its ordered lookup takes its nodes from the arena of the container. The
+    // runtime data holds the search a request the closure of a binding has
+    // no answer for is derived by, which the root names as it is made.
     expect_size_at_most<container<>>("container<>", 120);
-    expect_size_at_most<size_instance_container>("registration container", 136);
+    expect_size_at_most<size_instance_container>("registration container", 144);
     expect_size_at_most<size_probe_registry::runtime_bindings_state>(
         "runtime bindings state", 64);
     expect_size_at_most<size_probe_registry::runtime_scope_state>(

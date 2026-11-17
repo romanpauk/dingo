@@ -196,8 +196,8 @@ private:
       const detail::execution::runtime_conversion *derived = nullptr;
       if (answer == nullptr) {
         const auto &conversions = request.conversions->find(&binding_node, [&] {
-          return detail::execution::make_runtime_conversions(layout,
-                                                             request.layout);
+          return detail::resolution_container<Container>(binding.header())
+              .derive(layout, request.layout);
         });
         derived = stable ? &conversions.stable : &conversions.transient;
         if (!derived->found) {
