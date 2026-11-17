@@ -464,8 +464,8 @@ constexpr object copied(const semantics::object &object,
 }
 
 // What is derived of the element of a layer that may be empty without
-// failing when it is: a pointer to the element, and the optional the layer
-// holds.
+// failing when it is: a pointer to the element, but into a copy a binding
+// converts where the library limits it, and the optional the layer holds.
 template <typename Sink>
 constexpr void empty_safe_steps(const semantics::object &object,
                                 const semantics::object &inner,
@@ -483,7 +483,10 @@ constexpr void empty_safe_steps(const semantics::object &object,
   }
   pointer.origin = origin::borrowed;
   pointer.absent = object.absent;
-  out(step::element_pointer, pointer);
+  if (object.origin != origin::copied ||
+      !context.limited(limitation::converted_copy_pointer)) {
+    out(step::element_pointer, pointer);
+  }
   if (below != no_layer && context.kind(below).has_empty_value &&
       !inner.unconstructed) {
     if (owned(inner.origin)) {
@@ -510,7 +513,8 @@ constexpr bool made_whole(const semantics::object &object) {
 // The objects a pointer or a handle converts to of a more qualified element,
 // as a pointer to the element converts, from the level of the object on: each
 // level of qualifiers that may gain more, the element always, a level below
-// it only where every level above it is a raw pointer made const.
+// it only where every level above it is a raw pointer made const and the
+// library does not limit it.
 template <typename Sink>
 constexpr void qualify_levels(const semantics::object &object,
                               const semantics::context &context,
@@ -531,7 +535,8 @@ constexpr void qualify_levels(const semantics::object &object,
     const bool below = level < object.depth &&
                        context.kind(object.layers[level]).adopted &&
                        !context.kind(object.layers[level]).adopted_array &&
-                       (wanted & const_qual);
+                       (wanted & const_qual) &&
+                       !context.limited(limitation::qualified_below_element);
     made.quals[level] = wanted;
     qualify_levels(object, context, made, level + 1, may_gain && below,
                    gained || wanted != got, out);
@@ -604,39 +609,21 @@ constexpr void unknown_bound_steps(const semantics::object &object,
   }
 }
 
-// What a sink of the steps from an object passes on: a step that makes another
-// outer layer makes one not converted to a more qualified element.
-template <typename Sink> struct unqualified_sink {
-  Sink &out;
-  // It takes the steps what it passes them to takes.
-  constexpr bool takes(step kind, layer outer, std::size_t depth) const {
-    return out.takes(kind, outer, depth);
-  }
-  constexpr bool takes_quals(std::size_t level, std::uint8_t quals,
-                             std::size_t depth) const {
-    return out.takes_quals(level, quals, depth);
-  }
-
-  constexpr void operator()(step kind, const object &reached) {
-    if (reached.qualified && kind != step::qualify) {
-      object made = reached;
-      made.qualified = false;
-      out(kind, made);
-    } else {
-      out(kind, reached);
-    }
-  }
-};
-
-// The steps of the layers of an object; each_transition below passes them on.
-// A runtime resolution takes them only as it derives a request type, once.
+// The steps the library takes from an object: those the semantics allow
+// that no limitation blocks. They are passed to a sink, out(kind, object), one
+// by one: a constant expression returns no list of them, which a compiler
+// would keep. A step but a conversion to a more qualified element makes an
+// object not converted to one. A runtime resolution takes them only as it
+// derives a request type, once.
 template <typename Sink>
-DINGO_COLD constexpr void
-each_layer_transition(const semantics::object &object,
-                      const semantics::context &context, Sink &out) {
-  if (object.unconstructed) {
+DINGO_COLD constexpr void each_step(const semantics::object &given,
+                                    const semantics::context &context,
+                                    Sink &out) {
+  if (given.unconstructed) {
     return;
   }
+  semantics::object object = given;
+  object.qualified = false;
   const lifetime request = lifetime::request;
   if (object.depth) {
     const layer outer = object.layers[0];
@@ -694,7 +681,7 @@ each_layer_transition(const semantics::object &object,
         adopted.made_layer = true;
         out(step::adopt, adopted);
       }
-    } else if (kind.gives_element && !object.full && !object.qualified &&
+    } else if (kind.gives_element && !object.full && !given.qualified &&
                out.takes(step::element, outer, object.depth)) {
       // A layer the derivation wrapped a value in is not taken apart: its
       // element is what it was made of, as it was; nor is one it converted
@@ -722,7 +709,7 @@ each_layer_transition(const semantics::object &object,
     // Not a layer the derivation made, which it makes as the other at once,
     // nor one it converted to a more qualified element.
     if (owned(object.origin) && !object.quals[0] && !object.made_layer &&
-        !object.qualified) {
+        !given.qualified) {
       for (std::size_t index = 0; index < context.layers->count; ++index) {
         if ((kind.transfers & (std::uint32_t{1} << index)) &&
             out.takes(step::transfer, static_cast<layer>(index),
@@ -783,14 +770,14 @@ each_layer_transition(const semantics::object &object,
   }
   // A conversion to a more qualified element is not copied: what it converts
   // is.
-  if (!object.qualified &&
+  if (!given.qualified &&
       out.takes(step::copy, object.depth ? object.layers[0] : no_layer,
                 object.depth) &&
       can_copy(object, context)) {
     out(step::copy, copied(object, context));
   }
-  qualify_steps(object, context, out);
-  unknown_bound_steps(object, context, out);
+  qualify_steps(given, context, out);
+  unknown_bound_steps(given, context, out);
   const bool shares = object.origin == origin::copied && object.instance;
   // A raw pointer that owns what it points to is not wrapped: it is handed
   // over, or taken over by a handle.
@@ -822,67 +809,7 @@ each_layer_transition(const semantics::object &object,
   }
 }
 
-// The steps the semantics allow from an object.
-// They are passed to a sink, out(kind, object), one by one: a constant
-// expression returns no list of them, which a compiler would keep.
-template <typename Sink>
-constexpr void each_transition(const semantics::object &object,
-                               const semantics::context &context, Sink &out) {
-  unqualified_sink<Sink> reset{out};
-  each_layer_transition(object, context, reset);
-}
-
-constexpr transitions_list transitions(const semantics::object &object,
-                                       const semantics::context &context) {
-  transitions_list out;
-  each_transition(object, context, out);
-  return out;
-}
-
-// The steps from an object the library takes: those the semantics allow that no
-// limitation blocks. A pointer into a copy a binding converts is not taken,
-// nor is a pointer or a handle converted to one more qualified below its
-// element.
-// What a sink of the steps the library takes passes on: a step the
-// limitations do not block.
-template <typename Sink> struct unblocked {
-  const object &source;
-  const semantics::context &context;
-  Sink &out;
-
-  // It takes the steps what it passes them to takes.
-  constexpr bool takes(step kind, layer outer, std::size_t depth) const {
-    return out.takes(kind, outer, depth);
-  }
-  constexpr bool takes_quals(std::size_t level, std::uint8_t quals,
-                             std::size_t depth) const {
-    return out.takes_quals(level, quals, depth);
-  }
-
-  constexpr void operator()(step kind, const object &reached) {
-    if (kind == step::element_pointer && source.origin == origin::copied &&
-        context.limited(limitation::converted_copy_pointer)) {
-      return;
-    }
-    if (kind == step::qualify &&
-        context.limited(limitation::qualified_below_element)) {
-      for (std::size_t level = 2; level <= reached.depth; ++level) {
-        if (reached.quals[level] != source.quals[level]) {
-          return;
-        }
-      }
-    }
-    out(kind, reached);
-  }
-};
-
-template <typename Sink>
-constexpr void each_step(const semantics::object &object,
-                         const semantics::context &context, Sink &out) {
-  unblocked<Sink> filtered{object, context, out};
-  each_transition(object, context, filtered);
-}
-
+// The steps the library takes from an object, as a list.
 constexpr transitions_list steps(const semantics::object &object,
                                  const semantics::context &context) {
   transitions_list out;
@@ -1665,38 +1592,17 @@ constexpr void each_binding_step(const semantics::object &object,
   each_step(object, context, filtered);
 }
 
-// What a sink of the steps a request takes passes on: every step a binding
-// does not take, from what does not hold the leaf a request of the interface
-// cannot name; but no wrap of the bare interface, as only the binding names
-// the leaf it is.
-template <typename Sink> struct request_steps_sink {
-  const object &source;
-  Sink &out;
-  // It takes no step a binding takes, and of the others those what it passes
-  // them to takes.
-  constexpr bool takes(step kind, layer outer, std::size_t depth) const {
-    return !binding_kind(kind) && out.takes(kind, outer, depth);
-  }
-  constexpr bool takes_quals(std::size_t level, std::uint8_t quals,
-                             std::size_t depth) const {
-    return out.takes_quals(level, quals, depth);
-  }
-
-  constexpr void operator()(step kind, const object &reached) {
-    if (!binding_kind(kind) && !(kind == step::wrap && slices(source))) {
-      out(kind, reached);
-    }
-  }
-};
-
+// The steps a request takes from an object: every step a binding does not
+// take, which its sink takes none of, from what does not hold the leaf a
+// request of the interface cannot name. It takes none from the bare
+// interface, as only the binding names the leaf it is: no copy or move of it,
+// and no wrap of it.
 template <typename Sink>
 constexpr void each_request_step(const semantics::object &object,
                                  const semantics::context &context, Sink &out) {
-  if (names_leaf(object, context)) {
-    return;
+  if (!names_leaf(object, context) && !slices(object)) {
+    each_step(object, context, out);
   }
-  request_steps_sink<Sink> filtered{object, out};
-  each_step(object, context, filtered);
 }
 
 // What a binding publishes of its stored object: the objects its steps reach,
@@ -1725,7 +1631,8 @@ constexpr search layer_sources(const object &start,
 }
 
 // What the closure of layer sources passes a step to: every step a request
-// takes but a wrap, to the search.
+// takes but a wrap and a conversion to a more qualified element, to the
+// search.
 template <typename Search> struct unwrapped_sink {
   Search &found;
   const state &source;
@@ -1733,18 +1640,16 @@ template <typename Search> struct unwrapped_sink {
   const semantics::context &context;
 
   constexpr bool takes(step kind, layer, std::size_t) const {
-    return kind != step::wrap && kind != step::qualify;
+    return kind != step::wrap && kind != step::qualify && !binding_kind(kind);
   }
   constexpr bool takes_quals(std::size_t, std::uint8_t, std::size_t) const {
     return false;
   }
 
   constexpr void operator()(step kind, const object &reached) {
-    if (kind != step::wrap && kind != step::qualify) {
-      found.add({reached,
-                 stepped(source.made, kind, source.reached, reached, context),
-                 index, kind});
-    }
+    found.add({reached,
+               stepped(source.made, kind, source.reached, reached, context),
+               index, kind});
   }
 };
 
@@ -1779,47 +1684,47 @@ constexpr search closed_layer_sources(const search &sources,
 enum class extension : std::uint8_t { closed, made, open };
 
 // What a sink of the steps a request takes from a state of a search passes
-// on. From a closed state: a wrap, a conversion to a more qualified element,
-// or a step into a layer whose type the binding does not have, which those of
-// the request may be; any other step reaches what the closure holds. From what
-// the request made of the closure: another wrap, a conversion of the outer
-// layer it made to a more qualified element or of an array of a known bound to
-// one of unknown bound, or a step into a layer whose type the binding does not
-// have, which the request makes itself, of the types it spells. From an open
-// state: every step. One sink of all, so that the steps of an object are
-// compiled once for a runtime resolution.
-struct extending_sink {
-  reached_sink &out;
+// on to the search, as reached_sink does: no step a binding takes, and of the
+// others, from a closed state: a wrap, a conversion to a more qualified
+// element, or a step into a layer whose type the binding does not have, which
+// those of the request may be; any other step reaches what the closure holds.
+// From what the request made of the closure: another wrap, a conversion of the
+// outer layer it made to a more qualified element or of an array of a known
+// bound to one of unknown bound, or a step into a layer whose type the binding
+// does not have, which the request makes itself, of the types it spells. From
+// an open state: every step. One sink of all, so that the steps of an object
+// are compiled once for a runtime resolution.
+struct extending_sink : reached_sink {
   // The layers whose types the binding has: those of a lower index.
   std::size_t known;
   extension standing;
 
   constexpr bool takes(step kind, layer outer, std::size_t depth) const {
-    if (standing == extension::open) {
-      return out.takes(kind, outer, depth);
-    }
-    switch (kind) {
-    case step::wrap:
-    case step::qualify:
-      return out.takes(kind, outer, depth);
-    case step::unknown_bound:
-      return (standing == extension::made || outer >= known) &&
-             out.takes(kind, outer, depth);
-    case step::observe:
-    case step::adopt:
-    case step::transfer:
-      return outer >= known && out.takes(kind, outer, depth);
-    default:
+    if (binding_kind(kind)) {
       return false;
     }
-  }
-  constexpr bool takes_quals(std::size_t level, std::uint8_t quals,
-                             std::size_t depth) const {
-    return out.takes_quals(level, quals, depth);
-  }
-
-  constexpr void operator()(step kind, const object &reached) {
-    out(kind, reached);
+    if (standing != extension::open) {
+      switch (kind) {
+      case step::wrap:
+      case step::qualify:
+        break;
+      case step::unknown_bound:
+        if (standing != extension::made && outer < known) {
+          return false;
+        }
+        break;
+      case step::observe:
+      case step::adopt:
+      case step::transfer:
+        if (outer < known) {
+          return false;
+        }
+        break;
+      default:
+        return false;
+      }
+    }
+    return reached_sink::takes(kind, outer, depth);
   }
 };
 
@@ -1866,9 +1771,10 @@ DINGO_COLD constexpr void extend_reach(search &found, std::size_t closed,
       }
     }
     const state source = current;
-    reached_sink sink{found, source, static_cast<std::uint16_t>(next), goal,
-                      context};
-    extending_sink extending{sink, known, standing};
+    extending_sink extending{
+        {found, source, static_cast<std::uint16_t>(next), goal, context},
+        known,
+        standing};
     each_request_step(source.reached, context, extending);
   }
 }

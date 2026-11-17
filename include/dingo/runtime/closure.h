@@ -143,9 +143,11 @@ constexpr bool step_makes(semantics::step kind) {
 // The kinds of the steps a request takes from an object, as a mask.
 struct step_kinds_sink {
   std::uint32_t kinds = 0;
-  // It takes a step of every outer layer.
-  constexpr bool takes(semantics::step, semantics::layer, std::size_t) const {
-    return true;
+  // It takes a step of every kind a binding does not take, of every outer
+  // layer.
+  constexpr bool takes(semantics::step kind, semantics::layer,
+                       std::size_t) const {
+    return !semantics::binding_kind(kind);
   }
   constexpr bool takes_quals(std::size_t, std::uint8_t, std::size_t) const {
     return true;
