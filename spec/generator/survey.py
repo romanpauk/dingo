@@ -1,5 +1,5 @@
-"""Asks the library whether each registration binds the interfaces the
-specification expects."""
+"""Checks whether each registration binds, in the library, the interfaces the
+specification defines."""
 
 import sys
 
@@ -8,7 +8,7 @@ from . import driver
 
 def survey(compiler, flags, work, registrations):
     """The registrations the library accepts that bind other interfaces than
-    the specification expects."""
+    the specification defines."""
     keyed = {}
     for registration in registrations:
         keyed.setdefault(registration.survey_key, registration)

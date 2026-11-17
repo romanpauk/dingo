@@ -1,5 +1,5 @@
 """The constructor detection family: classes generated around every request
-of the grammar over a supported leaf, what detection says about them, and
+of the grammar over a supported leaf, what detection finds for them, and
 what constructing them does."""
 
 from dataclasses import dataclass
@@ -41,7 +41,7 @@ MAKINGS = {
 
 @dataclass(frozen=True, order=True)
 class Detect:
-    """What detection says about a class."""
+    """What detection finds for a class."""
     detection: Detection
 
     @property
@@ -77,7 +77,7 @@ class Make:
 @dataclass(frozen=True)
 class Unit:
     """The probes of one kind of class around the requests of one leaf and
-    selection: what detection says, when it has no container, or how the
+    selection: what detection finds, when it has no container, or how the
     class is made in a container over a registration of the leaf."""
     leaf: Leaf
     selection: Selection
@@ -138,7 +138,7 @@ def units(strength=None):
     """Every unit; with a strength, the units that make classes over the
     combinations of leaf, selection, kind and provider that hold every
     combination of values of `strength` of them, in both containers. What
-    detection says is probed for every class."""
+    detection finds is probed for every class."""
     covered = cover.covering(strength, list(INTERFACES), Selection, Kind,
                              PROVIDERS) if strength else None
     found = []
@@ -197,8 +197,8 @@ LIMITATIONS = (
         frozenset({Detection.SHAPE, Detection.SIGNATURE}),
         frozenset({Construction.SHAPE, Construction.SIGNATURE})),
     Limitation(
-        "an rvalue-reference parameter: detection cannot tell it from a value "
-        "one, so the argument is a value and the dependency it requests is "
+        "an rvalue-reference parameter: detection cannot distinguish it from a "
+        "value one, so the argument is a value and the dependency it requests is "
         "the value, not an rvalue; signature detection recovers the value",
         frozenset(Shape),
         frozenset({Category.RVALUE_REFERENCE}),
@@ -228,8 +228,8 @@ def valid_probes(units):
 
 
 def apply_limitations(cells, units):
-    """Records a misdetection a known limitation says as limited, and a
-    detection a known limitation says is misdetected as a stale
+    """Records a misdetection a known limitation covers as limited, and a
+    detection a known limitation lists as misdetected as a stale
     limitation."""
     probes = valid_probes(units)
     for cell in cells:

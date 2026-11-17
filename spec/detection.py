@@ -1,4 +1,4 @@
-"""Builds the constructor detection baseline: what detection says about every
+"""Builds the constructor detection baseline: what detection finds for every
 class generated around a request of the grammar, and what constructing it
 does.
 
@@ -6,9 +6,9 @@ A parameter is every shape of every supported leaf, copyable, move-only and
 an abstract interface, each plain, annotated and keyed, in every category.
 It is the parameter of a class of each kind: a constructor, an explicit
 constructor, an aggregate member and the two parameters of a constructor.
-The library answers each cell:
+Each cell has one of these outcomes in the library:
 
-- detected or misdetected: what shape and signature detection say about the
+- detected or misdetected: what shape and signature detection find for the
   class, against the constructor the generator wrote
 - resolved, type_not_found, ...: the class made through resolve, construct
   and invoke of an unregistered class and through a shared registration of

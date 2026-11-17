@@ -49,7 +49,7 @@ class Making(Dimension):
 
 
 class Outcome(Dimension):
-    """What the library answered for a cell."""
+    """The outcome of the library for a cell."""
     INVALID = "invalid"
     NOT_REGISTRABLE = "not_registrable"
     REJECTED = "rejected"
@@ -63,24 +63,24 @@ class Outcome(Dimension):
     EXCEPTION = "exception"
     DETECTED = "detected"
     MISDETECTED = "misdetected"
-    # Misdetected as a known limitation says, and a known limitation that
+    # Misdetected as a known limitation records, and a known limitation that
     # no longer occurs.
     LIMITED = "limited"
     STALE_LIMITATION = "stale_limitation"
-    # Not the outcome the semantics expect.
+    # Not the outcome the semantics define.
     UNEXPECTED = "unexpected"
     # Resolved with more copies or moves of the leaf than the specification
     # needs.
     EXCESS = "excess"
     # What a binding derives for a request: for as long as the container, only
     # for as long as the request, or not at all; a request the binding of
-    # another interface answers.
+    # another interface resolves.
     PUBLISHED = "published"
     PLACED = "placed"
     UNPUBLISHED = "unpublished"
     SELECTS_ANOTHER = "selects_another"
     # What a request of an empty stored object gives: what holds no leaf,
-    # as the specification says.
+    # as the specification defines.
     DEFINED = "defined"
 
     @property

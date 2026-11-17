@@ -1,7 +1,7 @@
 """Compares the semantics of the library with the specification, for every
 stored object and every request.
 
-The library decides what a request resolves to by dingo/semantics/model.h,
+The library determines what a request resolves to by dingo/semantics/model.h,
 of no C++ type: a layer is its properties, in the universe of the layers a
 search may make. This check gives it two domains and compares its answer for
 every category and lifetime with the answer of spec/semantics.py: the fewest
@@ -10,7 +10,7 @@ does. Both domains are finite, so the comparison is complete.
 
 - The classification of the types the model spells: every stored form and
   every request shape of every bound interface, of every leaf, classified as
-  the layers the specification says they are made of.
+  the layers the specification defines them to be made of.
 - The standard layers: every stored object the specification makes, with and
   without the known limitations, and every request of every shape of every
   interface a registration binds.
@@ -25,8 +25,8 @@ does. Both domains are finite, so the comparison is complete.
 Each domain but the pairs is compared in parts, in processes at once. The
 answers of the specification of each part are kept in the work directory and
 made again when a source of the specification or of this check changes: the
-specification answers far slower than the program, and a change of the
-library alone does not change its answers.
+specification computes its answers far slower than the program, and a change of
+the library alone does not change its answers.
 """
 
 import argparse
@@ -102,8 +102,8 @@ def classified_stack(layers, element):
 
 def classification(compiler, flags, work):
     """The stacks the library classifies the types the model spells as, each
-    compared with the layers the specification says the type is made of; and
-    the traits of the leaves. Returns the entries and those that differ."""
+    compared with the layers the specification defines the type to be made of;
+    and the traits of the leaves. Returns the entries and those that differ."""
     from spec.generator.model import grammar, spell_shape, spell_stored
     from spec.generator.registrations import LEAF_TYPES, bound_interface
     leaves = [(leaf, f"dingo::model::{LEAF_TYPES[leaf]}")
@@ -133,7 +133,7 @@ def classification(compiler, flags, work):
         for bound in bounds():
             interface = bound_interface(bound, leaf)
             # A shape C++ cannot spell of the interface in any category, as
-            # the grammar says, is no type to classify.
+            # the grammar defines, is no type to classify.
             requests = [request for request in grammar(
                 (interface,), tuple(semantics.SHAPES)) if not request.invalid]
             valid = {request.shape for request in requests}
@@ -339,8 +339,8 @@ def standard():
 def made_layers():
     """Every layer a type could define, by its properties, beside the layers
     of C++ itself: it gives its element, is no raw pointer and no array, and
-    is possible, as semantics.possible says. One that converts to the layer of
-    an array of unknown bound converts to itself."""
+    is possible, as semantics.possible defines. One that converts to the layer
+    of an array of unknown bound converts to itself."""
     emptiness = ((False, False), (True, False), (True, True))
     # A layer takes over a pointer to an array of a known bound only if it
     # takes over pointers.
@@ -371,7 +371,7 @@ def lifetime(scope):
 
 
 def makes(layers, context):
-    """Whether a scope makes a stack, as makes_storage says of a stored
+    """Whether a scope makes a stack, as makes_storage defines for a stored
     form."""
     if context.scope.given or not layers:
         return True
@@ -729,7 +729,7 @@ def compare_answers(program, mode, cases):
 
 
 # The domains compared in parts, by name: each made of no arguments, with
-# the mode the program answers it in. The rules domain is made of its
+# the mode the program resolves it in. The rules domain is made of its
 # stored objects instead.
 DOMAINS = {
     "standard": (standard, None),
@@ -776,10 +776,10 @@ def spec_answers(cache, domain, part):
     """The requests of a part of a domain, with the answers of the
     specification: those kept in the cache, a directory, while the sources of
     the specification are the same, and made again otherwise. The
-    specification answers far slower than the program, and a change of the
-    library alone does not change its answers. Only the answers are kept:
-    the names and the lines of the requests are made again, which needs no
-    search."""
+    specification computes its answers far slower than the program, and a
+    change of the library alone does not change its answers. Only the answers
+    are kept: the names and the lines of the requests are made again, which
+    needs no search."""
     directory, digest = cache
     path = directory / f"{domain}-{part}.zst"
     if path.exists():

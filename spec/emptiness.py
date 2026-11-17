@@ -1,5 +1,5 @@
 """Checks what a registration whose stored object holds no leaf gives every
-request the specification says is defined when a layer is empty.
+request the specification marks as defined when a layer is empty.
 
 A cell is container x scope x stored form x leaf x interfaces declared x
 empty layer x interface x request. The stored object is empty in its
@@ -7,7 +7,7 @@ outermost layer, or in the layer that one holds: a null handle, an empty
 optional, or an alternative type that holds the other alternative. Each
 probed request resolves through invoke:
 
-- defined: it gives what holds no leaf, as the specification says
+- defined: it gives what holds no leaf, as the specification defines
 - violated: it gives what holds a leaf
 - unexpected: it throws, which goes through an element that is absent
 - does_not_compile, crashed: defects

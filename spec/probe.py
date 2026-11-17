@@ -1,8 +1,9 @@
-"""Builds the model baseline: the outcome of every cell, asked from the library
-and compared with what the semantics expect.
+"""Builds the model baseline: the outcome of every cell in the library,
+compared with what the semantics define.
 
 A cell is container x scope x stored form x leaf x interfaces declared x
-selection x operation x interface x request. The library answers each cell:
+selection x operation x interface x request. Each cell has one of these
+outcomes in the library:
 
 - invalid: the request cannot be spelled in C++, such as an abstract type
   held by value
@@ -20,11 +21,11 @@ selection x operation x interface x request. The library answers each cell:
 - type_not_found, type_not_convertible, type_ambiguous, exception: the
   exception the request threw
 
-generator/semantics.py says what each cell should be: whether the library
+generator/semantics.py defines what each cell should be: whether the library
 accepts the registration and the interfaces it binds, whether the request
 resolves, and how it fails when it does not. A cell a known limitation of the
 library keeps from resolving is limited; one that resolves although a
-limitation says it does not is a stale limitation, and one with another
+limitation covers it is a stale limitation, and one with another
 outcome than the expected one is unexpected; both are defects. The probe fails
 when a cell is a defect or a registration binds other interfaces.
 

@@ -2,7 +2,7 @@
 as the code compiles, against the specification.
 
 A cell is scope x stored form x leaf x interfaces declared x interface x
-request. A binding answers each cell:
+request. Each cell has one of these outcomes in a binding:
 
 - published: it derives the request for as long as the container, which the
   caller may take
@@ -17,7 +17,7 @@ resolves it for the caller; both are defects. Both containers derive alike.
 Each cell also records how C++ itself builds the request from what the
 binding holds. A request C++ builds that the specification, without the
 limitations of the library, resolves nowhere is unexpected, unless the
-specification refuses it on purpose; so is one it refuses on purpose and
+specification rejects it on purpose; so is one it rejects on purpose and
 resolves.
 
 How a derivation copies and moves the leaf is what spec/execution_check.py checks.

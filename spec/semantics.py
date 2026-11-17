@@ -1,12 +1,12 @@
 """The semantics of resolution: what a registration should be able to satisfy,
 derived from what its scope keeps, what its stored type is made of and what
-a request asks for. The probe compares the library with it.
+a request names. The probe compares the library with it.
 
 A type is a stack of layers around a leaf: std::shared_ptr<L> is the layer
 shared_ptr around L. Every layer, leaf and scope is declared by its
 properties, and the rules name properties, never a stored form. A request
 resolves when its target can be derived from the source of the scope by the
-steps below. The semantics also say which registrations the library accepts,
+steps below. The semantics also define which registrations the library accepts,
 the interfaces they bind, and how a request that does not resolve fails.
 
 Known gaps of the library are not part of the rules: each is a GAP, a filter
@@ -237,7 +237,7 @@ FORMS = {
        for form in StoredForm if form.wrappers},
 }
 
-# The stack a request shape asks for around its interface.
+# The stack a request shape names around its interface.
 SHAPES = {
     Shape.SHARED_ARRAY: ("shared_ptr", "array"),
     Shape.UNIQUE_ARRAY: ("unique_ptr", "array"),
@@ -247,7 +247,7 @@ SHAPES = {
 }
 
 def shape_quals(shape, bound):
-    """The qualifiers a request of a shape of the bound interface asks of
+    """The qualifiers a request of a shape of the bound interface names for
     each level: none of the object it is of, as its category gives them, and
     of the element of the shape those the shape names, which the element of
     an array of the interface has too, as C++ declares it."""
@@ -359,25 +359,25 @@ class Object:
 CONST = 1
 VOLATILE = 2
 # A level of a pointer or a handle converted to one of a more qualified
-# element, which may gain any qualifiers a request asks of it, as matches
-# says, on top of those it is marked with.
+# element, which may gain any qualifiers a request names for it, as matches
+# defines, on top of those it is marked with.
 GAIN = 4
 
 
-def matches(got, wanted):
+def matches(got, named):
     """Whether the qualifiers of the levels of an object are those a request
-    asks: each level as it is, or of more where it may gain them, which a
+    names: each level as it is, or of more where it may gain them, which a
     level below the first that may gain only does where every level above it
     is made const, as C++ converts a pointer."""
-    for level, (quals, asked) in enumerate(zip(got, wanted)):
+    for level, (quals, request) in enumerate(zip(got, named)):
         if not quals & GAIN:
-            if quals != asked:
+            if quals != request:
                 return False
             continue
-        if quals & 3 & ~asked:
+        if quals & 3 & ~request:
             return False
         above = [index for index in range(level) if got[index] & GAIN]
-        if above and not all(wanted[index] & CONST for index in above):
+        if above and not all(named[index] & CONST for index in above):
             return False
     return True
 
@@ -399,7 +399,7 @@ def anew_quals(object):
 
 @dataclass(frozen=True)
 class Context:
-    """What a derivation knows of its registration."""
+    """The properties of its registration a derivation uses."""
     leaf: LeafTraits
     scope: ScopeTraits
     # Whether the leaf is requested as its abstract interface.
@@ -723,7 +723,7 @@ def qualify_steps(object, context):
     pointer the request owns is handed over or taken over instead, never
     converted. Its element may gain any qualifiers, and so may each level
     below it that a raw pointer holds where every level above is a raw
-    pointer made const, as matches says: each such level is marked GAIN, of
+    pointer made const, as matches defines: each such level is marked GAIN, of
     the element alone or of every level that may gain."""
     layers = object.layers
     if (not layers or not LAYERS[layers[0]].qualifies or object.qualified or
@@ -965,12 +965,12 @@ def reachable(start, context):
     return {object: frozenset(costs) for object, costs in found.items()}
 
 
-# Who takes a step. A binding knows the type it stores, a request only the
-# interface it asks for, so a request cannot name what the binding stores. The
+# Who takes a step. A binding has the type it stores, a request only the
+# interface it names, so a request cannot name what the binding stores. The
 # binding takes the steps that need the stored type, or that only go into
 # what it stores: it gives the element of a layer, rebinds the leaf to its
 # interface, and releases what a pointer it made points to. It takes every
-# step from what holds the leaf, when the request asks for the interface: a
+# step from what holds the leaf, when the request names the interface: a
 # request of the interface cannot name the leaf. What these reach are its
 # layer sources, which it publishes. A request takes every other step from
 # them: each adds a layer or converts one, so a request finds the layer
@@ -1077,7 +1077,7 @@ def requested_candidates(start, context):
     return reached, shape_candidates(reached)
 
 
-# What a request asks of the objects.
+# What a request requires of the objects.
 
 
 def required_lifetime(position, entry):
@@ -1116,7 +1116,7 @@ def converts_quals(got, wanted, layers, outer):
         through = (through and LAYERS[layers[level - 1]].adopted_layers == () and
                    bool(above & CONST))
         if got[level] & GAIN:
-            # A level a conversion marked may gain what it is asked.
+            # A level a conversion marked may gain what the request names.
             if got[level] & 3 & ~wanted[level]:
                 return False
         elif got[level] != wanted[level] and (got[level] & ~wanted[level] or
@@ -1127,10 +1127,10 @@ def converts_quals(got, wanted, layers, outer):
 
 def satisfying(objects, category, lifetime, layers, context, quals=None):
     """The objects of a request's element that satisfy it, each with what
-    satisfying it does to the leaf, as step_effect says. The request is of the
-    qualifiers quals, of the object it is of and of each layer below,
-    outermost first; a reference or a pointer may add qualifiers to the
-    object it refers to, and none other is told apart."""
+    satisfying it does to the leaf, as step_effect defines. The request is of
+    the qualifiers quals, of the object it is of and of each layer below,
+    outermost first; a reference or a pointer may add qualifiers to the object
+    it refers to, and none other is distinguished."""
     if quals is None:
         quals = (0,) * (len(layers) + 1)
     outer = quals[0] | (CONST if category in CONST_CATEGORIES else 0)
@@ -1329,8 +1329,9 @@ LIMITATIONS = frozenset(Limitation)
 
 def expected(scope, form, leaf, bound, shape, category, position, entry,
              selection=Selection.PLAIN, interfaces=InterfaceSet.DEFAULT):
-    """What the semantics say of a request, and what the library is expected
-    to do: the limitations that keep it from resolving, if it should."""
+    """What the semantics define for a request, and what the library is
+    expected to do: the limitations that keep it from resolving, if it
+    should."""
     args = (scope, form, leaf, bound, shape, category, position, entry)
 
     def under(limits):
@@ -1455,9 +1456,9 @@ def failure(container, scope, form, leaf, bound, shape, category, position,
             entry, selection=Selection.PLAIN,
             interfaces=InterfaceSet.DEFAULT):
     """How the library fails a request it does not resolve. What the types
-    of a request say it cannot be, either container rejects as it compiles:
+    of a request rule out, either container rejects as it compiles:
     a storage that cannot be made, and a value that can be neither moved nor
-    copied where one is passed. The static container knows the rest as it
+    copied where one is passed. The static container detects the rest as it
     compiles too, except which alternative an alternative type holds; the
     runtime container finds all of it out as it resolves."""
     layers, element = SHAPES[shape] + bound.layers, bound.element

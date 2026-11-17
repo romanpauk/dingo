@@ -1,6 +1,6 @@
 """Verifies that the names of the library and of its specification have no
-connecting words: a name says what a thing is or does, not how it relates to
-another, as of, with or to would.
+connecting words: a name describes what a thing is or does, not how it relates
+to another, as of, with or to would.
 
 The names of the C++ headers are every identifier of their code, without
 comments and strings, but those of the standard library, which the code

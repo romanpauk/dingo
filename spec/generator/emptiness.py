@@ -1,5 +1,5 @@
 """The emptiness family: what a registration whose stored object holds no
-leaf gives a request the specification says is defined when a layer is
+leaf gives a request the specification marks as defined when a layer is
 empty. A unit is a registration of either container, its stored object
 empty in its outermost layer, or in the layer that holds."""
 
@@ -95,7 +95,7 @@ def probed_requests(unit):
 
 def probed_units(units, jobs):
     """The units that probe a request, each with the requests it probes,
-    which the specification tells in processes at once."""
+    which the specification computes in processes at once."""
     with multiprocessing.Pool(jobs) as pool:
         found = pool.map(probed_requests, units)
     return [replace(unit, only=probed)

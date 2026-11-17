@@ -15,7 +15,7 @@ function(configure_quality_targets out_check_targets)
   list(APPEND check_targets layers-check)
 
   # The names of the headers and of the specification have no connecting
-  # words: a name says what a thing is or does.
+  # words: a name describes what a thing is or does.
   add_custom_target(names-check
     COMMENT "Verifying names"
     COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/tools/names.py
@@ -74,8 +74,8 @@ function(configure_quality_targets out_check_targets)
     add_custom_target(model-check-${size} DEPENDS ${model_dir}/checked)
   endforeach()
 
-  # The conversion check: conversion.py asks the conversion layer of every
-  # registration what it publishes for every request, as the code compiles,
+  # The conversion check: conversion.py compiles, for the conversion layer of
+  # every registration, what it publishes for every request, as the code compiles,
   # and compares it with the specification. It resolves nothing, so it
   # checks every registration; the model probes check what resolutions do.
   set(conversion_dir ${PROJECT_BINARY_DIR}/conversion)
@@ -132,7 +132,7 @@ function(configure_quality_targets out_check_targets)
   # The emptiness check: emptiness.py registers a stored object that holds
   # no leaf, a null handle, an empty optional or an alternative type that
   # holds the other alternative, and resolves every request the
-  # specification says is defined when a layer is empty: each has to give
+  # specification marks as defined when a layer is empty: each has to give
   # what holds no leaf, without failing.
   set(emptiness_dir ${PROJECT_BINARY_DIR}/emptiness)
   set(emptiness_configuration ${emptiness_dir}/configuration.txt)
@@ -182,7 +182,7 @@ function(configure_quality_targets out_check_targets)
   # of scenario programs of each container, with the costs of a file, a
   # container, a registration and a request type of them. It keeps its
   # measurements with the programs, and the last of each scenario for each
-  # compiler, and tells what changed since the run before. It fails when a
+  # compiler, and reports what changed since the run before. It fails when a
   # scenario does not compile.
   set(footprint_dir ${PROJECT_BINARY_DIR}/footprint)
   set(footprint_flags "-std=c++17 -O0 -I${PROJECT_SOURCE_DIR}/include")

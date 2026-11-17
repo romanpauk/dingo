@@ -22,7 +22,7 @@ instructions of its registrations and of its resolutions, the first of a
 request type and those after it. Where it does not, they are not measured.
 
 The measurements are kept in the cache of the programs, by what each program
-is, and the last of each scenario for each compiler beside them: a run tells
+is, and the last of each scenario for each compiler beside them: a run reports
 what changed since the one before, and the cache of one run, such as that of
 a main branch, is the baseline of another.
 """
@@ -76,7 +76,7 @@ HEADERS = """#include <dingo/registration/constructor.h>
 """
 
 # The shapes a registration and its requests are of: what it registers, and
-# what each request asks for, of a registration of the index i.
+# what each request names, of a registration of the index i.
 SHAPES = {
     "shared": ("dingo::scope<dingo::shared>, "
                "dingo::storage<std::shared_ptr<T<{i}>>>",

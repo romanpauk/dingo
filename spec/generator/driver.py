@@ -1,9 +1,9 @@
-"""Compiles and runs probe programs, and reads the library's answers.
+"""Compiles and runs probe programs, and reads their outcomes.
 
 A unit is a program of probes. It names the cell of each probe, and renders
 the program of a list of its probes from a template. The template
 marks the lines of each probe, `// probe N` before them and `// probes end`
-after the last, so that a compile error is told apart by probe: the
+after the last, so that a compile error is attributed to its probe: the
 compiler names the lines of the program an error was instantiated from.
 
 What a program does is kept, once open_cache names a directory: what it
@@ -81,7 +81,7 @@ def compiles_only(flags):
 
 
 def default_jobs():
-    """How many compilers run at once unless told: one per processor, as
+    """How many compilers run at once unless given: one per processor, as
     many as half the memory available holds at their limit."""
     available = None
     try:
@@ -158,7 +158,7 @@ def open_cache(directory):
 
 
 def compiler_identity(compiler):
-    """What tells a compiler apart: the file it runs and what it says of
+    """What distinguishes a compiler: the file it runs and what it reports of
     itself."""
     with CACHE_LOCK:
         if compiler in COMPILER_IDENTITIES:
@@ -457,10 +457,10 @@ def probe_alone(compiler, flags, directory, unit, name, probe):
 def probe_group(compiler, flags, directory, unit, name, probes):
     """Makes probes in one program, until they compile. The probes a compile
     fails for are recorded with their first error and the rest are compiled
-    again. Probes whose errors cannot be told apart, or that crash, are made
-    one at a time, concurrently, and so are the rest when a compile tells
-    apart few of them: a failure they share is reported for one at a time.
-    Probes that do not fit in one program are made in parts that do."""
+    again. Probes whose errors cannot be distinguished, or that crash, are made
+    one at a time, concurrently, and so are the rest when a compile
+    distinguishes few of them: a failure they share is reported for one at a
+    time. Probes that do not fit in one program are made in parts that do."""
     parts = fitting(probes)
     if len(parts) > 1:
         return make_parts(probe_group, compiler, flags, directory, unit, name,
@@ -484,7 +484,7 @@ def probe_group(compiler, flags, directory, unit, name, probes):
             break
     if len(probes) > 2:
         # Halves, each made as a group: the half without a failure compiles
-        # at once, and the failures of the other are told apart in fewer
+        # at once, and the failures of the other are distinguished in fewer
         # probes.
         return outcomes + make_parts(probe_group, compiler, flags, directory,
                                    unit, name, split(probes,
@@ -503,7 +503,7 @@ def probe_shared(compiler, flags, directory, unit, name, probes):
     reported for the first of them only. So when the program fails, the
     probes it reports are recorded, the operations they belong to and the
     other probes of their requests are made in a program per operation, where
-    their probes are told apart one compile after another, and the rest in
+    their probes are distinguished one compile after another, and the rest in
     one program again. Probes that do not fit in one program are made in
     parts that do."""
     if not probes:
@@ -529,7 +529,7 @@ def probe_shared(compiler, flags, directory, unit, name, probes):
                     if probe.operation in operations or
                     probe.request_key in requests]
     else:
-        # Nothing could be told apart: every probe is a suspect.
+        # Nothing could be distinguished: every probe is a suspect.
         suspects = rest
     # The programs are named after this one: a unit may be probed by several
     # programs at once, which must not write one file. They are independent,
@@ -548,7 +548,7 @@ def probe_shared(compiler, flags, directory, unit, name, probes):
 
 def probe_expecting_rejection(compiler, flags, directory, unit, name,
                               probes):
-    """Makes probes the specification expects the library to reject as they
+    """Makes probes the specification marks as rejected by the library as they
     compile, as probe_shared makes them, in programs that are only compiled:
     each probe a compile rejects is recorded with its first error. A probe no
     compile rejects is made again in programs that are run, so that what it
@@ -636,7 +636,7 @@ def precompiled_header_current():
 
 
 # Whether the system counts the instructions of a process for its user, by
-# perf, found once; None until it is asked.
+# perf, found once; None until it is queried.
 COUNTS_INSTRUCTIONS = None
 
 
@@ -659,7 +659,7 @@ def counts_instructions():
 def measured_compile(command, directory, name):
     """Runs a compile; returns (returncode, stderr, measured): the processor
     seconds and the peak memory in KiB of the compiler and what it runs, and
-    the instructions they ran, where the system tells them."""
+    the instructions they ran, where the system reports them."""
     errors = directory / f"{name}.stderr"
     counted = directory / f"{name}.counted"
     prefix = (["perf", "stat", "-x,", "-e", "instructions:u", "-o",
@@ -672,7 +672,7 @@ def measured_compile(command, directory, name):
         if hasattr(os, "wait4"):
             _, status, usage = os.wait4(process.pid, 0)
             process.returncode = os.waitstatus_to_exitcode(status)
-            # macOS tells the peak memory in bytes, Linux in KiB.
+            # macOS reports the peak memory in bytes, Linux in KiB.
             memory = usage.ru_maxrss
             if os.uname().sysname == "Darwin":
                 memory //= 1024
@@ -693,8 +693,8 @@ def measured_compile(command, directory, name):
 
 
 def compiler_family(compiler):
-    """The compiler a command runs, as what tells its work apart: clang or
-    gcc, by what it says of itself; None for another."""
+    """The compiler a command runs, as what distinguishes its work: clang or
+    gcc, by what it reports of itself; None for another."""
     version = compiler_identity(compiler)[1]
     if "clang" in version:
         return "clang"

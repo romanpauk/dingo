@@ -3,12 +3,12 @@ steps copy and move of the leaf with the derivations.
 
 The semantics of the library (dingo/semantics/model.h) derive the steps from a
 stored object to what satisfies a request; dingo/request/conversion.h applies
-them to C++ objects. This check asks the semantics the derivation of every
-conversion of the model: every stored form of every leaf, kept or made by its
-scope, requested as every shape of every bound interface in every category.
+them to C++ objects. This check takes from the semantics the derivation of
+every conversion of the model: every stored form of every leaf, kept or made by
+its scope, requested as every shape of every bound interface in every category.
 It applies each derivation to an object of the model's leaf types, which count
-their copies and moves, and compares the counts with the derivation. No container
-takes part.
+their copies and moves, and compares the counts with the derivation. No
+container takes part.
 """
 
 import argparse
@@ -156,7 +156,7 @@ def main():
 
 def cell(name, scope, form, leaf, layers, element, quals, category,
          derived):
-    """The code of a cell, and the copies and moves its derivation says."""
+    """The code of a cell, and the copies and moves its derivation gives."""
     leaf_type = f"dingo::model::{LEAF_TYPES[leaf]}"
     stored = spell_stored(form).replace("L", leaf_type)
     if stored.endswith("&"):
@@ -210,7 +210,7 @@ def qualified(spelled, quals):
 
 def spell_request(layers, element, leaf_type, interface, quals):
     """The shape of a request, around its element, as C++ spells it: each
-    level below the object of the qualifiers the request asks of it."""
+    level below the object of the qualifiers the request names for it."""
     spelled = qualified(leaf_type if element == "leaf" else interface,
                         quals[len(layers)])
     for level, name in reversed(list(enumerate(layers))):

@@ -19,7 +19,7 @@ from .registrations import LEAVES, Registration
 
 @dataclass(frozen=True)
 class Unit(Registration):
-    """A registration whose conversion layer is asked."""
+    """A registration whose conversion layer is probed."""
 
     @property
     def makes(self):
@@ -50,17 +50,17 @@ class Unit(Registration):
                 for request in self.requests()}
 
     def expectation(self, request, limits=semantics.LIMITATIONS):
-        """What the specification expects of a request under limitations,
+        """What the specification defines for a request under limitations,
         as expect_all made it of the limitations of the library, when it did."""
         name = self.prefix(request) + request.name
         if limits == semantics.LIMITATIONS and name in EXPECTATIONS:
             return EXPECTATIONS[name]
-        return self.ask_expectation(request, limits)
+        return self.compute_expectation(request, limits)
 
-    def ask_expectation(self, request, limits):
+    def compute_expectation(self, request, limits):
         """Whether the specification, under limitations, resolves a request
         at all, in a call, and for the caller, in a resolve; None when it
-        says nothing of the request. It does not of a storage that cannot be
+        defines nothing of the request. It does not of a storage that cannot be
         made, whose request lists are of its types alone, nor of the other
         alternative of an alternative type, which a probe's never holds: that
         is a copyable type of its own."""
@@ -104,10 +104,10 @@ def routes(mask):
             for bit in range(32) if mask >> bit & 1]
 
 
-# What the specification refuses on purpose, of what C++ builds of what a
-# binding holds: each is a reason and whether it refuses a route of a unit's
+# What the specification rejects on purpose, of what C++ builds of what a
+# binding holds: each is a reason and whether it rejects a route of a unit's
 # request.
-REFUSALS = (
+REJECTIONS = (
     ("a new layer does not hold a copy of an instance, nor of a value that "
      "shares nothing",
      lambda unit, request, route: route.how == WRAPS and route.value),
@@ -117,7 +117,7 @@ REFUSALS = (
      lambda unit, request, route: unit.scope is Scope.SHARED_CYCLICAL and (
          route.depth >= 2 if route.how == REFERS
          else route.depth >= 1 or route.value)),
-    ("an rvalue reference is answered by a value moved out of what the "
+    ("an rvalue reference resolves to a value moved out of what the "
      "request owns, which an immovable leaf, or an optional of one, cannot "
      "be",
      lambda unit, request, route: (
@@ -127,27 +127,27 @@ REFUSALS = (
 )
 
 
-def refused(unit, request, mask):
-    """Why the specification refuses every route C++ builds a request by,
-    or None when it refuses none or only some."""
+def rejection(unit, request, mask):
+    """Why the specification rejects every route C++ builds a request by,
+    or None when it rejects none or only some."""
     reasons = []
     for route in routes(mask):
-        found = [reason for reason, refuses in REFUSALS
-                 if refuses(unit, request, route)]
+        found = [reason for reason, rejects in REJECTIONS
+                 if rejects(unit, request, route)]
         if not found:
             return None
         reasons += [reason for reason in found if reason not in reasons]
     return "; ".join(reasons) if reasons else None
 
 
-# What the specification expects of each cell of this run under the
+# What the specification defines for each cell of this run under the
 # limitations of the library, by cell: made by expect_all in processes at once.
 EXPECTATIONS = {}
 
 
 def expect_unit(unit):
     """The expectations of the cells of a unit, in a process of its own."""
-    return {name: unit.ask_expectation(request, semantics.LIMITATIONS)
+    return {name: unit.compute_expectation(request, semantics.LIMITATIONS)
             for name, request in unit.cells().items()}
 
 
@@ -205,7 +205,7 @@ def apply_semantics(cells, units):
     resolves into the context of a call is placed there, not published. So
     is a request C++ itself builds of what the binding holds, which the
     specification without the limitations of the library resolves nowhere,
-    unless it refuses it on purpose; and one it refuses on purpose that it
+    unless it rejects it on purpose; and one it rejects on purpose that it
     resolves."""
     recorded = {cell["cell"]: cell for cell in cells}
     # A unit at a time, as the specification searches what a unit stores
@@ -219,7 +219,7 @@ def apply_semantics(cells, units):
 
 def check_cell(cell, unit, request):
     """Marks a cell unexpected where it is not what the specification
-    expects of it."""
+    defines for it."""
     expected = unit.expectation(request)
     if expected is None:
         return
@@ -241,14 +241,14 @@ def check_cell(cell, unit, request):
 
 def cpp_mismatch(unit, request, mask, anywhere):
     """What is unexpected of a request C++ builds of what the binding holds,
-    or None: that the specification resolves it nowhere although it refuses
-    it on no purpose, or resolves it although it refuses it on one."""
-    refusal = refused(unit, request, mask)
+    or None: that the specification resolves it nowhere although it rejects
+    it on no purpose, or resolves it although it rejects it on one."""
+    rejected = rejection(unit, request, mask)
     if not anywhere:
         anywhere = unit.expectation(request, frozenset())[0]
-    if not anywhere and refusal is None:
+    if not anywhere and rejected is None:
         return ("C++ builds it of what the binding holds, which the "
                 "specification resolves nowhere")
-    if anywhere and refusal is not None:
-        return f"resolved, which the specification is said to refuse: {refusal}"
+    if anywhere and rejected is not None:
+        return f"resolved, which the specification rejects: {rejected}"
     return None

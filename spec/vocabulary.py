@@ -1,6 +1,6 @@
-"""The vocabulary of the specification: the concepts of the library it speaks
-of, an enum each. The value of a member is its name where the specification
-is written out, such as in a cell of a probe."""
+"""The vocabulary of the specification: the concepts of the library it defines,
+an enum each. The value of a member is its name where the specification is
+written out, such as in a cell of a probe."""
 
 from enum import Enum
 import functools
@@ -123,7 +123,7 @@ def _composed_shapes():
 
 
 class Shape(Dimension):
-    """What a request asks of a bound interface I."""
+    """What a request names of a bound interface I."""
     PLAIN = "I"
     SHARED_PTR = "std::shared_ptr<I>"
     UNIQUE_PTR = "std::unique_ptr<I>"
@@ -246,7 +246,8 @@ class Entry(Dimension):
 
 
 class Answer(Dimension):
-    """What the library answers a request, as the specification says."""
+    """The outcome of a request in the library, as the specification defines
+    it."""
     # The library does not accept the registration.
     NOT_REGISTRABLE = "not_registrable"
     RESOLVED = "resolved"

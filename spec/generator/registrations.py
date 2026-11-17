@@ -89,7 +89,8 @@ class Registration:
                 self.selection)
 
     def interfaces(self):
-        """The interfaces the specification says the registration binds."""
+        """The interfaces the specification defines the registration to
+        bind."""
         return tuple(bound_interface(bound, self.leaf)
                      for bound in semantics.bound_interfaces(
                          self.form, self.interfaces_declared, self.selection))
@@ -132,7 +133,7 @@ class Registration:
         known limitations of the library it is expected with; as expect_all
         made it, when it did."""
         found = EXPECTATIONS.get(self.cell(probe))
-        return found[0] if found else self.ask_expectation(probe)
+        return found[0] if found else self.compute_expectation(probe)
 
     def fewest(self, probe):
         """The fewest copies and moves of the leaf the specification
@@ -140,10 +141,10 @@ class Registration:
         it did."""
         found = EXPECTATIONS.get(self.cell(probe))
         return (found[1] if found and found[1] is not None
-                else self.ask_fewest(probe))
+                else self.compute_fewest(probe))
 
-    def ask_expectation(self, probe):
-        """What the specification expects of a probe, asked of it."""
+    def compute_expectation(self, probe):
+        """What the specification defines for a probe, computed by it."""
         if not semantics.registrable(self.container, self.scope, self.form,
                                      self.leaf, self.interfaces_declared):
             return Answer.NOT_REGISTRABLE, ()
@@ -158,8 +159,8 @@ class Registration:
         return semantics.failure(self.container, *request, self.selection,
                                  self.interfaces_declared), limitations
 
-    def ask_fewest(self, probe):
-        """The fewest copies and moves of a probe, asked of the
+    def compute_fewest(self, probe):
+        """The fewest copies and moves of a probe, computed by the
         specification."""
         return semantics.fewest(
             self.scope, self.form, self.leaf, probe.request.interface.bound,
@@ -177,7 +178,7 @@ class Registration:
 
     def render_part(self, part, probes, first, registers=False):
         """The part of a program of the registration: its probes, numbered
-        from first, and the registration alone where registers says so."""
+        from first, and the registration alone where registers is true."""
         return driver.render("probe_part.cpp.j2", r=self, part=part,
                              probes=probes, first=first, registers=registers)
 
@@ -209,10 +210,10 @@ class Registration:
                 probe.request.interface.bound == semantics.LEAF)
 
 
-# What the specification answers of the probes of this run, by cell: the
-# expectation, and the fewest copies and moves of one it expects to resolve.
+# The answers of the specification for the probes of this run, by cell: the
+# expectation, and the fewest copies and moves of one it defines as resolved.
 # expect_all makes them in processes at once before the probes are made, which
-# the threads that make the probes would ask of it one at a time.
+# the threads that make the probes would query it one at a time.
 EXPECTATIONS = {}
 
 
@@ -223,8 +224,8 @@ def expect_unit(work):
     unit, probes = work
     found = {}
     for probe in probes:
-        expected = unit.ask_expectation(probe)
-        fewest = (unit.ask_fewest(probe) if expected[0] is Answer.RESOLVED
+        expected = unit.compute_expectation(probe)
+        fewest = (unit.compute_fewest(probe) if expected[0] is Answer.RESOLVED
                   and not expected[1] else None)
         found[unit.cell(probe)] = (expected, fewest)
     return found
@@ -232,7 +233,7 @@ def expect_unit(work):
 
 def expect_all(units, selected, jobs):
     """Makes the answers of the specification of the valid probes of units,
-    those selected when told which, in processes at once."""
+    those selected when given which, in processes at once."""
     work = [(unit, [probe for probe, invalid in unit.probes()
                     if not invalid and (selected is None or
                                         selected(unit, probe))])
@@ -290,7 +291,7 @@ class Group:
         """The program of members, in their order: a part for each run of
         them of one registration, a part for each registration when the
         registration alone is made. The probes are numbered across the
-        program, as the driver tells them apart by number."""
+        program, as the driver distinguishes them by number."""
         runs = []
         for member in members:
             if runs and runs[-1][0] == member.registration:
@@ -318,12 +319,12 @@ class Group:
 
 def registration_outcome(compiler, flags, directory, registration, name,
                          probes, expected):
-    """The records of probes the specification expects all to answer as their
-    registration does, of one program, or None where the program does not
-    answer so: a registration that is not registrable answers each probe so,
-    and one the library rejects as it registers it rejects each probe, with
-    its error. One program tells it, rather than one for each probe, which
-    could not tell the error of the registration they share apart."""
+    """The records of probes the specification defines all to have the outcome
+    of their registration, of one program, or None where the program does not
+    have it: a registration that is not registrable is the outcome of each
+    probe, and one the library rejects as it registers it rejects each probe,
+    with its error. One program records it, rather than one for each probe,
+    which could not distinguish the error of the registration they share."""
     group = Group((registration,))
     if expected is Answer.NOT_REGISTRABLE:
         records, stderr, crash = driver.run_program(
@@ -346,12 +347,12 @@ def registration_outcome(compiler, flags, directory, registration, name,
 
 def plan_registration(compiler, flags, directory, registration, position,
                       selected=None):
-    """The probes of a registration in a position, those selected when told
+    """The probes of a registration in a position, those selected when given
     which: (outcomes, members, rejected). Outcomes are those of the invalid
-    probes, and of all of them when the specification expects each to answer
-    as the registration does and one program tells it. The members are to be
-    made in programs of several registrations; the rejected ones, which the
-    specification expects the library to reject as they compile, apart from
+    probes, and of all of them when the specification defines each to have the
+    outcome of the registration and one program records it. The members are to
+    be made in programs of several registrations; the rejected ones, which the
+    specification marks as rejected by the library as they compile, apart from
     the others, so that a program of those compiles at once."""
     outcomes = []
     probes = []
@@ -432,9 +433,9 @@ def probe_registrations(compiler, flags, directory, tasks, selected, map):
 
 def apply_semantics(cells, units):
     """Compares each cell of the probes of the units with what the
-    specification expects of it. A cell a known limitation keeps from
+    specification defines for it. A cell a known limitation keeps from
     resolving is recorded as limited, one that resolves although a limitation
-    says it does not as a stale limitation, and any other outcome than the
+    covers it as a stale limitation, and any other outcome than the
     expected one as unexpected."""
     expected_cells = {unit.cell(probe): (unit, probe) for unit in units
                    for probe, invalid in unit.probes() if not invalid}
