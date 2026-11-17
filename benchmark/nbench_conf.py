@@ -33,6 +33,7 @@ containers run), memory within 3% and times within 20%.
 """
 
 import re
+import subprocess
 from pathlib import Path
 
 from nbench import (Config, Derive, GoogleBenchmark, Metric, Python, Variant)
@@ -149,6 +150,57 @@ def costs(results, variant, suite="footprint"):
     return footprint.costs(measured)
 
 
+# The scenarios whose code is attributed: one registration, and five with two
+# requests of each shape and container.
+ATTRIBUTED = ["runtime/shared/1/0"] + [f"{c}/{s}/5/2" for c in ("runtime", "static")
+                                       for s in footprint.SHAPES]
+
+
+def attribution(scenario, variant):
+    """The code of a scenario compiled at -O2, by the header of the library
+    each function is defined in, by the debug information: the function of
+    the scenario, probe(), is the caller, which the library inlines into;
+    the standard library and the rest are apart."""
+    source, _ = SCENARIOS[scenario]
+    directory = work(variant)
+    name = scenario.replace("/", "__") + "__attributed"
+    cpp, obj = directory / f"{name}.cpp", directory / f"{name}.o"
+    cpp.write_text(source)
+    compiled = subprocess.run(
+        [variant.values["compiler"], *flags(variant, ["-O2", "-g"]), "-c",
+         str(cpp), "-o", str(obj)], capture_output=True, text=True)
+    if compiled.returncode != 0:
+        return {"error": driver.first_error(compiled.stderr)}
+    symbols = subprocess.run(["nm", "-S", "-l", str(obj)], capture_output=True,
+                             text=True).stdout
+    obj.unlink(missing_ok=True)
+    found = {}
+    for line in symbols.splitlines():
+        fields = line.split()
+        if len(fields) < 4 or fields[2] not in "tTwW":
+            continue
+        size = int(fields[1], 16)
+        if fields[3].startswith("_Z5probev"):
+            where = "caller"
+        elif "include/dingo/" in line:
+            where = line.rsplit("include/dingo/", 1)[1].split(":")[0]
+        elif "/include/c++/" in line:
+            where = "std"
+        else:
+            where = "other"
+        found[where] = found.get(where, 0) + size
+    return {"cases": {f"{scenario}/{where}": {"code": size}
+                      for where, size in found.items()}}
+
+
+def callers(scenario, variant):
+    """The code the library inlines into the function of a scenario."""
+    found = attribution(scenario, variant)
+    if "error" in found:
+        return found
+    return {"code": found["cases"].get(f"{scenario}/caller", {}).get("code", 0)}
+
+
 def cost_params(case):
     """runtime/unique: first registration -> container, shape, part."""
     if ":" not in case:
@@ -232,6 +284,21 @@ config = Config(
                                noise=0.03, section="memory"),
                         Metric("cpu", "Compiler CPU", "s", noise=0.2,
                                section="time")]),
+        Python("callers", [s for s in SCENARIOS if s.count("/") == 3],
+               callers, title="Code in the caller", primary="code",
+               params=SCENARIO,
+               description="The code the library inlines into the function "
+                           "of each scenario, probe(), at -O2: what every "
+                           "place a user registers or resolves pays.",
+               metrics=[Metric("code", "Code", **BYTES)]),
+        Python("headers", ATTRIBUTED, attribution, title="Code by header",
+               primary="code",
+               params=r"^(?P<scenario>[a-z]+/\w+/\d+/\d+)/(?P<header>.+)$",
+               description="The code of a scenario at -O2 by the header of "
+                           "the library each function is defined in; caller "
+                           "is the function of the scenario, std the "
+                           "standard library.",
+               metrics=[Metric("code", "Code", **BYTES)]),
         Python("compiler", list(SCENARIOS), compiler_work,
                title="Compiler work", primary="time_ms",
                params=SCENARIO + r"/(?P<kind>phases|events|instantiations)/(?P<name>.+)$",
