@@ -421,6 +421,11 @@ private:
 public:
   // Scope has to be specified as there is no way how to deduce it
   using scope_type = detail::registration_scope_t<parsed_args>;
+  // interfaces<void> is the default of its role, which no argument given is
+  // taken for: it is rejected as what it is, before an argument the roles do
+  // not take.
+  static_assert((!std::is_same_v<Args, interfaces<void>> && ...),
+                "interfaces<void> is not a valid registration target");
   static_assert((detail::is_supported_registration_arg_v<Args> && ...),
                 "type_registration expects "
                 "scope/storage/factory/interfaces/key/"
