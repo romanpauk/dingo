@@ -273,7 +273,7 @@ template <> struct operation<semantics::step::maybe_element_copy> {
 
 // The sharing handle an owned sole owner converts to, taking over its
 // element: the share_t of its type traits.
-template <> struct operation<semantics::step::convert> {
+template <> struct operation<semantics::step::transfer> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -622,8 +622,8 @@ struct operation_result<operation<semantics::step::hand_over>, Leaf, Interface,
 };
 
 template <typename Leaf, typename Interface, typename T, bool Owned>
-struct operation_result<operation<semantics::step::convert>, Leaf, Interface, T,
-                        Owned,
+struct operation_result<operation<semantics::step::transfer>, Leaf, Interface,
+                        T, Owned,
                         std::void_t<typename type_traits<T>::template share_t<
                             typename type_traits<T>::value_type>>> {
   using made_type = typename type_traits<T>::template share_t<
@@ -1001,7 +1001,7 @@ constexpr std::uint64_t encode_kind(const semantics::layer_kind &kind) {
          bit(kind.adopted_array, 14) | bit(kind.rebinds, 15) |
          bit(kind.observes, 16) | bit(kind.qualifies, 17) |
          bit(kind.adopts_bounded, 18) |
-         (static_cast<std::uint64_t>(kind.converts) << 32);
+         (static_cast<std::uint64_t>(kind.transfers) << 32);
 }
 
 constexpr semantics::layer_kind decode_kind(std::uint64_t code,
@@ -1025,7 +1025,7 @@ constexpr semantics::layer_kind decode_kind(std::uint64_t code,
   made.observes = test_bit(code, 16);
   made.qualifies = test_bit(code, 17);
   made.adopts_bounded = test_bit(code, 18);
-  made.converts = static_cast<std::uint32_t>(code >> 32);
+  made.transfers = static_cast<std::uint32_t>(code >> 32);
   made.converts_unknown_bound = static_cast<std::uint32_t>(unknown_bound);
   return made;
 }

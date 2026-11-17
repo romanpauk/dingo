@@ -68,8 +68,8 @@ struct layer_kind {
   bool decays = false;
   bool adopted = false;
   bool adopted_array = false;
-  // The layers an owned value of it converts to, as a mask of their indices.
-  std::uint32_t converts = 0;
+  // The layers an owned value of it transfers to, as a mask of their indices.
+  std::uint32_t transfers = 0;
   // Whether a registration bound only to the abstract interface stores a
   // layer of the leaf as one of the interface: a binding wraps what holds the
   // leaf into it, to give the interface.
@@ -404,7 +404,7 @@ enum class step : std::uint8_t {
   element_pointer,
   maybe_element,
   maybe_element_copy,
-  convert,
+  transfer,
   upcast,
   copy,
   wrap,
@@ -736,10 +736,11 @@ constexpr void each_layer_transition(const semantics::object &object,
     if (owned(object.origin) && !object.quals[0] && !object.made_layer &&
         !object.qualified) {
       for (std::size_t index = 0; index < context.layers->count; ++index) {
-        if ((kind.converts & (std::uint32_t{1} << index)) &&
-            out.takes(step::convert, static_cast<layer>(index), object.depth)) {
+        if ((kind.transfers & (std::uint32_t{1} << index)) &&
+            out.takes(step::transfer, static_cast<layer>(index),
+                      object.depth)) {
           const layer target = static_cast<layer>(index);
-          out(step::convert, restacked(object, &target, 1, 1, &request));
+          out(step::transfer, restacked(object, &target, 1, 1, &request));
         }
       }
     }
@@ -1010,7 +1011,7 @@ constexpr bool may_become(const semantics::object &object, const request &goal,
     }
   }
   return object.depth == 0 || object.layers[0] == goal.layers[offset] ||
-         (context.kind(object.layers[0]).converts &
+         (context.kind(object.layers[0]).transfers &
           (std::uint32_t{1} << goal.layers[offset])) != 0;
 }
 
@@ -1785,7 +1786,7 @@ struct unclosed_sink {
       return out.takes(kind, outer, depth);
     case step::observe:
     case step::adopt:
-    case step::convert:
+    case step::transfer:
     case step::unknown_bound:
       return outer >= known && out.takes(kind, outer, depth);
     default:
@@ -1818,7 +1819,7 @@ struct made_sink {
       return out.takes(kind, outer, depth);
     case step::observe:
     case step::adopt:
-    case step::convert:
+    case step::transfer:
       return outer >= known && out.takes(kind, outer, depth);
     default:
       return false;

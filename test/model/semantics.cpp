@@ -75,7 +75,7 @@ bool read_kind(layer_kind &kind) {
   for (unsigned index = 0; index < 17; ++index) {
     *flags[index] = values[index + 1] != 0;
   }
-  kind.converts = values[18];
+  kind.transfers = values[18];
   kind.converts_unknown_bound = values[19];
   return true;
 }
@@ -90,7 +90,7 @@ bool same(const layer_kind &a, const layer_kind &b) {
          a.adopts_bounded == b.adopts_bounded && a.decays == b.decays &&
          a.adopted == b.adopted && a.adopted_array == b.adopted_array &&
          a.rebinds == b.rebinds && a.observes == b.observes &&
-         a.qualifies == b.qualifies && a.converts == b.converts &&
+         a.qualifies == b.qualifies && a.transfers == b.transfers &&
          a.converts_unknown_bound == b.converts_unknown_bound;
 }
 

@@ -89,7 +89,7 @@ def classified_layer(layers, index):
                 if names else "-")
     holds_bounded = (index + 1 < len(layers) and
                      semantics.LAYERS[layers[index + 1]].bounded)
-    return (f"{printed((layers[index],))} > {printed(layer.converts)} > "
+    return (f"{printed((layers[index],))} > {printed(layer.transfers)} > "
             f"{printed(layer.converts_unknown_bound if holds_bounded else ())}")
 
 
@@ -275,7 +275,7 @@ def properties(layer, universe, object_layer=False):
     array of unknown bound, each as a mask. A layer of an object converts to
     none of the latter: the library classifies the layer of an array of a
     known bound as a layer of its own."""
-    converts = sum(1 << universe.index(name) for name in layer.converts
+    transfers = sum(1 << universe.index(name) for name in layer.transfers
                    if name in universe)
     unknown_bound = 0 if object_layer else sum(
         1 << universe.index(name) for name in layer.converts_unknown_bound
@@ -289,7 +289,7 @@ def properties(layer, universe, object_layer=False):
             int(bool(layer.decay_layer)),
             int(layer.adopted_layers is not None),
             int(bool(layer.adopted_layers)), int(layer.rebinds),
-            int(layer.observes), int(layer.qualifies), converts, unknown_bound]
+            int(layer.observes), int(layer.qualifies), transfers, unknown_bound]
 
 
 def order(names):
@@ -445,7 +445,7 @@ def pairs():
         for count in range(len(ways) + 1):
             for converting in itertools.combinations(ways, count):
                 yield tuple(dataclasses.replace(
-                    layer, converts=tuple(
+                    layer, transfers=tuple(
                         target.name for source, target in converting
                         if source is layer))
                     for layer in (first, second))
@@ -494,7 +494,7 @@ def paired(universes):
                             is not None)
                         yield (f"{list(layers)}/{scope.value}/{leaf.value}/"
                                f"{'interface' if abstract else 'leaf'}/"
-                               f"{[(layer.name, layer.converts) for layer in (first, second)]}",
+                               f"{[(layer.name, layer.transfers) for layer in (first, second)]}",
                                context, start, goals)
 
 

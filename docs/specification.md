@@ -39,7 +39,7 @@ A request resolves if both conditions are true:
 
 1. A derivation reaches the request from what the scope stores. A derivation is
    a sequence of steps, such as `element` (take the element of a handle),
-   `copy`, `convert` (a `std::unique_ptr` to a `std::shared_ptr`), `upcast` (to
+   `copy`, `transfer` (a `std::unique_ptr` to a `std::shared_ptr`), `upcast` (to
    the abstract interface), or `wrap` (move a value into a new layer).
 2. Everything that the result refers to lives long enough. A result returned to
    the caller can refer only to objects that the container or the caller keeps.

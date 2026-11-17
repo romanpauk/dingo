@@ -45,9 +45,9 @@ class Layer:
     # Whether a layer of an element can be made from a value of it, moved
     # into a new object the layer holds.
     wraps_value: bool
-    # The layers an owned value of this one converts to, taking over or
+    # The layers an owned value of this one transfers to, taking over or
     # sharing its element.
-    converts: tuple = ()
+    transfers: tuple = ()
     # Whether it is made only of a bare element, as an alternative type is
     # made of one of its alternatives.
     holds_element_only: bool = False
@@ -104,7 +104,7 @@ LAYERS = {layer.name: layer for layer in (
           rebinds=True, constructs_in_place=True, may_be_empty=True,
           qualifies=True, converts_unknown_bound=("shared_ptr",)),
     Layer("unique_ptr", Owner.SOLE, shares_element=True, copyable=False,
-          wraps_value=True, converts=("shared_ptr",), adopts=True,
+          wraps_value=True, transfers=("shared_ptr",), adopts=True,
           rebinds=True, may_be_empty=True, qualifies=True),
     Layer("optional", Owner.SOLE, shares_element=False, copyable=True,
           wraps_value=True, may_be_empty=True, has_empty_value=True),
@@ -604,8 +604,8 @@ def object_transitions(object, context):
         # the other at once.
         if (object.origin.owned and not object.quals[0] and
                 not object.made_layer and not object.qualified):
-            for name in layer.converts:
-                yield "convert", replace(
+            for name in layer.transfers:
+                yield "transfer", replace(
                     object, layers=(name,) + below,
                     lifetimes=(Lifetime.REQUEST,) + object.lifetimes[1:],
                     quals=(0,) + object.quals[1:])
@@ -895,7 +895,7 @@ def handed_over(cost, effect, container):
 # itself, which is the base it is.
 MAKES_OBJECT = frozenset({"decay", "hand_over", "adopt", "observe",
                           "element_pointer", "maybe_element_copy",
-                          "convert", "copy", "wrap", "release", "qualify",
+                          "transfer", "copy", "wrap", "release", "qualify",
                           "unknown_bound"})
 
 

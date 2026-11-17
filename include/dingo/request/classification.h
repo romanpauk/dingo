@@ -443,7 +443,7 @@ template <typename... Tags> struct layer_universe<type_list<Tags...>> {
       constexpr semantics::layer shared_index =
           layer_index<target>(identities{});
       if constexpr (shared_index != semantics::no_layer) {
-        kind.converts |= std::uint32_t{1} << shared_index;
+        kind.transfers |= std::uint32_t{1} << shared_index;
       }
     }
     if constexpr (converts_unknown_bound<Identity>()) {

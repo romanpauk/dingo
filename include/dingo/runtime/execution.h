@@ -218,7 +218,8 @@ inline constexpr std::uint32_t qualified_mask = std::uint32_t{1}
 constexpr bool makes_transient(semantics::step kind) {
   return kind == semantics::step::copy || kind == semantics::step::decay ||
          kind == semantics::step::hand_over ||
-         kind == semantics::step::convert || kind == semantics::step::release ||
+         kind == semantics::step::transfer ||
+         kind == semantics::step::release ||
          kind == semantics::step::unknown_bound;
 }
 
@@ -436,9 +437,9 @@ struct table_maker : layer_types<T, Leaf, Interface> {
             owned<step::release, release_operation<true>, release_array_mask>();
       }
     }
-    if constexpr (wants(step::convert)) {
-      if constexpr (converts()) {
-        index(step::convert) = owned<step::convert>();
+    if constexpr (wants(step::transfer)) {
+      if constexpr (transfers()) {
+        index(step::transfer) = owned<step::transfer>();
       }
     }
     if constexpr (wants(step::unknown_bound)) {
@@ -539,7 +540,7 @@ struct table_maker : layer_types<T, Leaf, Interface> {
     }
   }
 
-  static constexpr bool converts() {
+  static constexpr bool transfers() {
     if constexpr (!std::is_same_v<T, type> || std::is_pointer_v<type> ||
                   std::is_array_v<type> || !is_complete_v<type>) {
       return false;
@@ -737,7 +738,7 @@ template <typename Identity> constexpr const void *layer_identity_v() {
 
 template <typename Identity> constexpr runtime_layer runtime_layer_v() {
   semantics::layer_kind kind = wrapper_kind_v<Identity>;
-  kind.converts = 0;
+  kind.transfers = 0;
   kind.converts_unknown_bound = 0;
   using unknown_bound_target =
       std::conditional_t<converts_unknown_bound<Identity>(),
@@ -930,11 +931,11 @@ make_runtime_conversions(const binding_layout &binding,
       mapped[4 + index] = static_cast<semantics::layer>(merged_index);
     }
     for (std::size_t index = 4; index < merged.count; ++index) {
-      merged.kinds[index].converts = 0;
+      merged.kinds[index].transfers = 0;
       merged.kinds[index].converts_unknown_bound = 0;
       for (std::size_t target = 4; target < merged.count; ++target) {
         if (targets[index] != nullptr && identities[target] == targets[index]) {
-          merged.kinds[index].converts |= std::uint32_t{1} << target;
+          merged.kinds[index].transfers |= std::uint32_t{1} << target;
         }
         if (unknown_bound_targets[index] != nullptr &&
             identities[target] == unknown_bound_targets[index]) {
@@ -1263,7 +1264,7 @@ template <typename Shape> struct closed_semantics {
         operation_mask(semantics::step::copy) |
         operation_mask(semantics::step::decay) |
         operation_mask(semantics::step::hand_over) |
-        operation_mask(semantics::step::convert) |
+        operation_mask(semantics::step::transfer) |
         operation_mask(semantics::step::unknown_bound);
     const semantics::context context = Shape::context;
     for (std::size_t index = 0; index < used.count; ++index) {
@@ -1271,7 +1272,7 @@ template <typename Shape> struct closed_semantics {
       const semantics::state &each = Sources.states[state];
       made.state_mask[classes.state_class[state]] |=
           (request_kinds(each.reached, context) & taken) |
-          operation_mask(semantics::step::convert) |
+          operation_mask(semantics::step::transfer) |
           operation_mask(semantics::step::unknown_bound);
       if (state == 0) {
         continue;
@@ -1691,7 +1692,7 @@ struct binding_sources {
     static_assert(known<own>(table, kinds, semantics::step::copy) &&
                       known<own>(table, kinds, semantics::step::decay) &&
                       known<own>(table, kinds, semantics::step::hand_over) &&
-                      known<own>(table, kinds, semantics::step::convert) &&
+                      known<own>(table, kinds, semantics::step::transfer) &&
                       known<own>(table, kinds, semantics::step::unknown_bound),
                   "the table of a source has every step a request takes of it");
     semantics::state made = Sources.states[State];
@@ -1875,7 +1876,7 @@ struct binding_sources {
       return false;
     } else {
       using own = typename closed_carrier<State>::type;
-      return operation_result<operation<semantics::step::convert>, Leaf,
+      return operation_result<operation<semantics::step::transfer>, Leaf,
                               Interface, typename own::type, true>::possible ||
              operation_result<operation<semantics::step::unknown_bound>, Leaf,
                               Interface, typename own::type,
@@ -1899,13 +1900,13 @@ struct binding_sources {
           operation_mask(semantics::step::copy) |
           operation_mask(semantics::step::decay) |
           operation_mask(semantics::step::hand_over) |
-          operation_mask(semantics::step::convert) |
+          operation_mask(semantics::step::transfer) |
           operation_mask(semantics::step::unknown_bound);
       constexpr std::uint32_t mask =
           (request_kinds(closure.states[State].reached,
                          Semantics::context(abstract)) &
            taken) |
-          operation_mask(semantics::step::convert) |
+          operation_mask(semantics::step::transfer) |
           operation_mask(semantics::step::unknown_bound);
       return &operation_table<typename own::type, Leaf, Interface, mask>::value;
     }

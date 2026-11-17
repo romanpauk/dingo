@@ -104,8 +104,9 @@ static_assert(standard::value.kinds[6].has_empty_value &&
 static_assert(standard::value.kinds[7].holds_element_only);
 // A sole owner converts to the sharing handle of its family when it is in
 // the universe, and to nothing when it is not.
-static_assert(standard::value.kinds[5].converts == (1u << 4));
-static_assert(universe_of<std::unique_ptr<leaf>>::value.kinds[4].converts == 0);
+static_assert(standard::value.kinds[5].transfers == (1u << 4));
+static_assert(universe_of<std::unique_ptr<leaf>>::value.kinds[4].transfers ==
+              0);
 
 // A wrapper a user defines is a layer by its type traits alone, as the
 // standard one of the same semantics is.
@@ -114,7 +115,7 @@ using custom =
 static_assert(same_kind(custom::value.kinds[4], standard::value.kinds[4]));
 static_assert(same_kind(custom::value.kinds[5], standard::value.kinds[5]));
 static_assert(same_kind(custom::value.kinds[6], standard::value.kinds[6]));
-static_assert(custom::value.kinds[5].converts == (1u << 4));
+static_assert(custom::value.kinds[5].transfers == (1u << 4));
 
 // The same layer met twice is one layer of the universe.
 using twice = detail::layer_universe<
