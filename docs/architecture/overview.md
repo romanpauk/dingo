@@ -28,8 +28,9 @@ From the bottom:
 02. `conversion/`, `lookup/`: the source a storage gives a binding, lookup
     indexes and their backends
 03. `request/`: what a request is (`decomposition.h`), what the semantics know
-    of a C++ type (`classification.h`), collection requests, and the steps, the
-    conversions and the derivations of `execution.h`
+    of a C++ type (`classification.h`), collection requests, the operations
+    (`operation.h`), the semantics of a binding (`binding_semantics.h`) and the
+    conversions (`conversion.h`)
 04. `factory/`: constructors, callables, constructor detection, factory traits
 05. `context/`: resolution context base and recursion guard
 06. `storage/`: storage tags, scope policies, storage exposure traits
@@ -141,7 +142,7 @@ The containers differ only in how they select the resolution of a request. A
 static container selects it at compile time. A runtime binding matches the
 requested type descriptor at run time.
 
-[include/dingo/request/execution.h](../../include/dingo/request/execution.h)
+[include/dingo/request/conversion.h](../../include/dingo/request/conversion.h)
 compiles the derivation of a request into a conversion and runs it: the steps
 from the stored source to the requested target, which the
 [layered semantics](layered-semantics.md) choose.
@@ -158,8 +159,9 @@ A request passes through five folders that both containers share:
   `resolution.h` where the derivation of a request starts.
 - [include/dingo/request/](../../include/dingo/request): what a request is.
   `decomposition.h` takes a request apart, `classification.h` says what the
-  semantics know of a C++ type, and `execution.h` holds the steps, the
-  conversions and the derivations of a binding and of a request.
+  semantics know of a C++ type, `operation.h` holds the operations,
+  `binding_semantics.h` the semantics of a binding, and `conversion.h` the
+  conversions and the derivation of a request.
 - [include/dingo/semantics/](../../include/dingo/semantics): the semantics of
   derivations, of no C++ type: what a binding publishes, which steps reach a
   request, and how many copies and moves of the leaf each takes.
@@ -208,5 +210,7 @@ To read the core path in source order, start here:
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
 - [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)
-- [include/dingo/request/execution.h](../../include/dingo/request/execution.h)
-- [include/dingo/runtime/execution.h](../../include/dingo/runtime/execution.h)
+- [include/dingo/request/operation.h](../../include/dingo/request/operation.h)
+- [include/dingo/request/conversion.h](../../include/dingo/request/conversion.h)
+- [include/dingo/runtime/conversion.h](../../include/dingo/runtime/conversion.h)
+- [include/dingo/runtime/route.h](../../include/dingo/runtime/route.h)

@@ -39,9 +39,9 @@ resolve<T> -> request_type -> binding selection -> derivation -> binding activat
 
 Both containers share the code of this flow: the algorithm in
 `include/dingo/resolution/`, the bindings in `include/dingo/binding/`, the
-semantics in `include/dingo/semantics/` and the steps and conversions in
-`include/dingo/request/execution.h`. They differ in how they select a binding
-and how they run a conversion.
+semantics in `include/dingo/semantics/` and the operations and conversions in
+`include/dingo/request/`. They differ in how they select a binding and how they
+run a conversion.
 
 The code of each container is in its own directory:
 
@@ -62,6 +62,9 @@ The main owners are:
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
 - [include/dingo/type/shape.h](../../include/dingo/type/shape.h)
 - [include/dingo/semantics/model.h](../../include/dingo/semantics/model.h)
-- [include/dingo/request/execution.h](../../include/dingo/request/execution.h)
-- [include/dingo/runtime/execution.h](../../include/dingo/runtime/execution.h)
+- [include/dingo/request/operation.h](../../include/dingo/request/operation.h)
+- [include/dingo/request/conversion.h](../../include/dingo/request/conversion.h)
+- [include/dingo/runtime/operation_table.h](../../include/dingo/runtime/operation_table.h)
+- [include/dingo/runtime/conversion.h](../../include/dingo/runtime/conversion.h)
+- [include/dingo/runtime/route.h](../../include/dingo/runtime/route.h)
 - [include/dingo/runtime/request.h](../../include/dingo/runtime/request.h)

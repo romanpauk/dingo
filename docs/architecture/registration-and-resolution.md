@@ -138,10 +138,10 @@ binding cell. The caller cannot get a reference into the context.
 The static container derives a request with `static_execution` in
 [include/dingo/static/binding.h](../../include/dingo/static/binding.h) and
 applies the conversion through the typed operations of
-[include/dingo/request/execution.h](../../include/dingo/request/execution.h),
+[include/dingo/request/operation.h](../../include/dingo/request/operation.h),
 which the compiler inlines. The runtime container applies the same steps through
 tables of erased operations
-([include/dingo/runtime/execution.h](../../include/dingo/runtime/execution.h)):
+([include/dingo/runtime/operation_table.h](../../include/dingo/runtime/operation_table.h)):
 a binding has one table for each C++ type of its layer sources
 (`binding_sources`), and a request one for each of its nested types
 (`request_tables`).

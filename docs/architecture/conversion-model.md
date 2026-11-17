@@ -22,8 +22,8 @@ them. This page tells where each part is in the code.
   reads them).
 - The semantics derive a request of these facts, with no C++ type
   ([include/dingo/semantics/model.h](../../include/dingo/semantics/model.h)).
-- The steps apply a conversion to C++ types
-  ([include/dingo/request/execution.h](../../include/dingo/request/execution.h)).
+- The operations apply a conversion to C++ types
+  ([include/dingo/request/operation.h](../../include/dingo/request/operation.h)).
 
 A type converts to another only as C++ converts it, or as the `type_traits` of
 its layers say. A conversion is not an extension point of its own.
@@ -53,7 +53,7 @@ long as the request, for a dependency.
 ## Conversions
 
 Both containers run a derivation as a conversion
-([include/dingo/request/execution.h](../../include/dingo/request/execution.h)).
+([include/dingo/request/conversion.h](../../include/dingo/request/conversion.h)).
 `compile_conversion` turns a derivation into instructions, and takes the
 decisions of how to run it in one place:
 
@@ -80,8 +80,8 @@ A runtime binding derives a request at its first use, and keeps the conversion
 in the conversion cache of the request type
 ([include/dingo/runtime/request.h](../../include/dingo/runtime/request.h)). The
 conversion of the derivation is run through tables of erased operations
-([include/dingo/runtime/execution.h](../../include/dingo/runtime/execution.h)).
-`plan_runtime` maps each instruction to an operation of a table:
+([include/dingo/runtime/operation_table.h](../../include/dingo/runtime/operation_table.h)).
+`make_runtime_conversion` maps each instruction to an operation of a table:
 
 - A binding has one table for each C++ type of its layer sources and of what a
   step makes of them (`binding_sources`). Each operation of a table names the
@@ -99,8 +99,8 @@ request that no derivation satisfies throws `type_not_convertible_exception`.
 The operations keep what they make through `runtime_store`, an interface of no
 context. It keeps an object by its layout (`object_layout`: size, alignment and
 destructor) and one function that constructs it. The tables, the conversions and
-`plan_runtime` do not depend on the context, and keeping is not instantiated for
-each type.
+`make_runtime_conversions` do not depend on the context, and keeping is not
+instantiated for each type.
 
 A runtime resolution returns a `resolved_address`: the erased address and the
 access of the result. A value is made where the call returns it, of what the

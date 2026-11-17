@@ -10,20 +10,20 @@ request.
 The containers differ in two things only: how they select a binding, and how
 they run a conversion. Everything else is one implementation.
 
-| Part                       | Code                                                                           | Static container                            | Runtime container                                              |
-| -------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------- | -------------------------------------------------------------- |
-| Request decomposition      | `request/decomposition.h`, `request/classification.h`                          | as the code compiles                        | as the code compiles                                           |
-| Entry points               | `resolution/entry_points.h` (`container_requests`)                             | shared                                      | shared                                                         |
-| Resolution algorithm       | `resolution/algorithm.h` (`request_resolution`)                                | shared, branches on a selection type        | shared, branches on a selection value                          |
-| Selection rules            | `binding/selection.h`                                                          | over its bindings, as a type                | over its lookups, as a value                                   |
-| Binding model              | `binding/model.h`, `registration/type_registration.h`                          | shared                                      | shared                                                         |
-| Activation of a cell       | `binding/activation.h`, `binding/materialization.h`                            | shared                                      | shared, in a transaction                                       |
-| Semantics                  | `semantics/model.h`                                                            | shared                                      | shared                                                         |
-| Layer sources              | `binding_semantics` in `request/execution.h`                                   | as the code compiles                        | as the code compiles                                           |
-| Derivation of a request    | `semantics::satisfy`, `semantics::answer_derivation`                           | as the code compiles (`request_derivation`) | at the first request of its type (`plan_runtime`)              |
-| Conversion of a derivation | `compile_conversion` in `request/execution.h`                                  | as the code compiles                        | at the first request of its type                               |
-| Steps                      | the operations of `request/execution.h`                                        | inline (`execute_conversion`)               | through tables built of the same steps (`runtime/execution.h`) |
-| Store of what is made      | `static_store` in `static/binding.h`, `runtime_store` in `runtime/execution.h` | typed                                       | by the layout of the type (`object_layout`)                    |
+| Part                       | Code                                                                                 | Static container                            | Runtime container                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------- |
+| Request decomposition      | `request/decomposition.h`, `request/classification.h`                                | as the code compiles                        | as the code compiles                                                      |
+| Entry points               | `resolution/entry_points.h` (`container_requests`)                                   | shared                                      | shared                                                                    |
+| Resolution algorithm       | `resolution/algorithm.h` (`request_resolution`)                                      | shared, branches on a selection type        | shared, branches on a selection value                                     |
+| Selection rules            | `binding/selection.h`                                                                | over its bindings, as a type                | over its lookups, as a value                                              |
+| Binding model              | `binding/model.h`, `registration/type_registration.h`                                | shared                                      | shared                                                                    |
+| Activation of a cell       | `binding/activation.h`, `binding/materialization.h`                                  | shared                                      | shared, in a transaction                                                  |
+| Semantics                  | `semantics/model.h`                                                                  | shared                                      | shared                                                                    |
+| Layer sources              | `binding_semantics` in `request/binding_semantics.h`                                 | as the code compiles                        | as the code compiles                                                      |
+| Derivation of a request    | `semantics::satisfy`, `semantics::answer_derivation`                                 | as the code compiles (`request_derivation`) | at the first request of its type (`make_runtime_conversions`)             |
+| Conversion of a derivation | `compile_conversion` in `request/conversion.h`                                       | as the code compiles                        | at the first request of its type                                          |
+| Steps                      | the operations of `request/operation.h`                                              | inline (`execute_conversion`)               | through tables built of the same operations (`runtime/operation_table.h`) |
+| Store of what is made      | `static_store` in `static/binding.h`, `runtime_store` in `runtime/operation_table.h` | typed                                       | by the layout of the type (`object_layout`)                               |
 
 The semantics are constant expressions of no C++ type: what a binding publishes,
 which steps reach a request, and how many copies and moves of the leaf each
@@ -43,8 +43,8 @@ resolve<T>()                        container_requests        resolution/entry_p
         static_binding::resolve     the derivation of the request   static/binding.h
           activation.use_source     the source of the cell    binding/activation.h
           conversion_start          the stored object         binding/resolution.h
-          typed_conversion::execute<R>    the steps, inline         request/execution.h
-          typed_conversion::finished      the value of R            request/execution.h
+          typed_conversion::execute<R>    the steps, inline         request/conversion.h
+          typed_conversion::finished      the value of R            request/conversion.h
 ```
 
 1. `resolve<T>()` makes `request_type<T>` and a lookup key, and calls the entry
@@ -81,11 +81,11 @@ resolve<T>()                        container_requests        resolution/entry_p
         resolve_selected            the selected binding      runtime/container.h
           runtime_binding_engine::dispatch                    runtime/binding.h
             conversion_cache::find        the derivation of the request   runtime/request.h
-              plan_runtime          at its first request      runtime/execution.h
+              make_runtime_conversions  at its first request  runtime/conversion.h
             run_materialization     guard and rollback        binding/materialization.h
               runtime_binding_edge::run                       runtime/binding.h
                 conversion_start    the stored object         binding/resolution.h
-                the calls of the conversion, through erased tables  runtime/execution.h
+                the calls of the conversion, through erased tables  runtime/operation_table.h
                 finish_request      a resolved_address        runtime/request.h
         returned_value<T>           the value of T            runtime/request.h
 ```

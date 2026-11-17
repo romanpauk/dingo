@@ -89,7 +89,7 @@ pointer and no array, 1,520 are possible. The classification rejects the type
 traits of any other.
 
 The steps of the specification and the code that takes them. Each is in
-[include/dingo/request/execution.h](../../include/dingo/request/execution.h):
+[include/dingo/request/operation.h](../../include/dingo/request/operation.h):
 
 | Step                                                                | Who takes it | Code                                                                   |
 | ------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------- |
@@ -107,13 +107,13 @@ request takes the others through the tables of the binding.
 
 ## The Headers
 
-| Layer          | Headers                                                                                                                                                                                                             |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Classification | `type/type_traits.h`, `type/shape.h`, `type/annotated.h`, `request/decomposition.h`, `request/classification.h`, `factory/constructor_detection.hpp`, `base/type_descriptor.h`                                      |
-| Semantics      | `semantics/model.h`, `binding/materialization.h`, `storage/scope_traits.h`, `binding/selection.h`                                                                                                                   |
-| Steps          | the operations of `request/execution.h`, the storages of `storage/`, `factory/`                                                                                                                                     |
-| Execution      | the conversions of `request/execution.h`, the tables of `runtime/execution.h`, `runtime/request.h`, `binding/activation.h`, `runtime/binding.h`, `static_execution` of `static/binding.h`, `resolution/algorithm.h` |
-| Plumbing       | `lookup/`, `memory/`, the registries and the transactions of `runtime/` and `static/`, `context/`                                                                                                                   |
+| Layer          | Headers                                                                                                                                                                                                                                               |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Classification | `type/type_traits.h`, `type/shape.h`, `type/annotated.h`, `request/decomposition.h`, `request/classification.h`, `factory/constructor_detection.hpp`, `base/type_descriptor.h`                                                                        |
+| Semantics      | `semantics/model.h`, `binding/materialization.h`, `storage/scope_traits.h`, `binding/selection.h`                                                                                                                                                     |
+| Steps          | the operations of `request/operation.h`, the storages of `storage/`, `factory/`                                                                                                                                                                       |
+| Execution      | the conversions of `request/conversion.h` and `runtime/conversion.h`, the tables of `runtime/operation_table.h`, `runtime/request.h`, `binding/activation.h`, `runtime/binding.h`, `static_execution` of `static/binding.h`, `resolution/algorithm.h` |
+| Plumbing       | `lookup/`, `memory/`, the registries and the transactions of `runtime/` and `static/`, `context/`                                                                                                                                                     |
 
 The plumbing does not decide what a request resolves to. It is tested as any
 other code.
@@ -218,9 +218,9 @@ other code.
    steps of the semantics, with its copies and moves.
 
 5. **Steps.** Done for derivations known as the code compiles.
-   [include/dingo/request/execution.h](../../include/dingo/request/execution.h)
-   has one step for each kind of step of the semantics, by the type traits of
-   its layers and by C++ itself, and the conversion that a derivation is
+   [include/dingo/request/operation.h](../../include/dingo/request/operation.h)
+   has one operation for each kind of step of the semantics, by the type traits
+   of its layers and by C++ itself, and the conversion that a derivation is
    compiled into, which applies the steps of a derivation one after another. A
    run of wraps makes its outermost layer at once, in place, and the last run is
    made where the request needs it, so that the leaf is moved once. What a step
