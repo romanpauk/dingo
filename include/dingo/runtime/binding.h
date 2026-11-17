@@ -177,6 +177,7 @@ private:
       const detail::execution::binding_layout &layout = *binding_node.layout;
       // What a request passes to the caller lives as long as the container.
       const bool stable = scope.is_caller();
+      const detail::execution::closed_answer *answer = nullptr;
       for (std::size_t group = 0; group < layout.group_count; ++group) {
         if (layout.groups[group].shape == request.shape) {
           const detail::execution::closed_answers &answers =
@@ -184,41 +185,44 @@ private:
                              static_cast<std::size_t>(request.layout.category) *
                                  4 +
                              request.layout.goal.quals[0]];
-          const detail::execution::closed_answer &answer =
+          const detail::execution::closed_answer &found =
               stable ? answers.stable : answers.transient;
-          if (answer.found) {
-            return resolve_closed(binding, scope, context, request, answer,
-                                  layout,
-                                  binding_node.caches ? cache_key : nullptr);
+          if (found.found) {
+            answer = &found;
           }
           break;
         }
       }
-      const auto &conversions = request.conversions->find(&binding_node, [&] {
-        return detail::execution::make_runtime_conversions(layout,
-                                                           request.layout);
-      });
-      const auto &conversion =
-          stable ? conversions.stable : conversions.transient;
-      if (!conversion.found) {
-        throw detail::make_type_not_convertible_exception(
-            request.requested, binding_node.registered, context);
+      const detail::execution::runtime_conversion *derived = nullptr;
+      if (answer == nullptr) {
+        const auto &conversions = request.conversions->find(&binding_node, [&] {
+          return detail::execution::make_runtime_conversions(layout,
+                                                             request.layout);
+        });
+        derived = stable ? &conversions.stable : &conversions.transient;
+        if (!derived->found) {
+          throw detail::make_type_not_convertible_exception(
+              request.requested, binding_node.registered, context);
+        }
       }
-      return resolve(binding, scope, context, request, conversion,
+      return resolve(binding, scope, context, request, answer, derived, layout,
                      binding_node.caches ? cache_key : nullptr);
     }
   }
 
-  // Resolves a request the closure of the binding has an answer for: runs the
-  // route of the answer, compiled for the types of the binding, and takes what
-  // it reaches as the answer records.
+  // Resolves a request of the binding in one materialization of its source:
+  // by the answer of its closure, the route of the answer, compiled for the
+  // types of the binding, and what it reaches taken as the answer records;
+  // else by the conversion derived of the request, its route, and the calls
+  // the request takes after it.
   DINGO_ALWAYS_INLINE static resolved_address
-  resolve_closed(interface_base &binding, construction_scope scope,
-                 runtime_context_type &context,
-                 const typename node_type::request_type &request,
-                 const detail::execution::closed_answer &answer,
-                 const detail::execution::binding_layout &layout,
-                 const void *cache_key) {
+  resolve(interface_base &binding, construction_scope scope,
+          runtime_context_type &context,
+          const typename node_type::request_type &request,
+          const detail::execution::closed_answer *answer,
+          const detail::execution::runtime_conversion *derived,
+          const detail::execution::binding_layout &layout,
+          const void *cache_key) {
     using access = resolved_address::access_kind;
     using sources = typename published::sources;
     auto &cell = detail::runtime_cell<cell_type>(binding.header());
@@ -236,19 +240,34 @@ private:
           auto start = detail::conversion_start<stored_type,
                                                 execution_type::scope.makes>(
               std::forward<decltype(source)>(source), store);
+          if (derived != nullptr) {
+            // The closure covers a conversion of a value of no step after
+            // its route: a conversion takes steps after it.
+            assert(!derived->value_route);
+            detail::execution::erased_carrier reached =
+                sources::template run_route<false>(derived->route, start,
+                                                   store);
+            for (std::size_t index = 0; index < derived->count; ++index) {
+              const auto &call = derived->calls[index];
+              reached = (reached.owned ? call.owned : call.borrowed)(
+                  reached, call.stable, store);
+            }
+            return detail::finish_request(reached, *derived);
+          }
           if constexpr (sources::answer_table::any_value) {
-            if (answer.value_route) {
+            if (answer->value_route) {
               const detail::execution::erased_carrier reached =
-                  sources::template run_route<true>(answer.route, start, store);
+                  sources::template run_route<true>(answer->route, start,
+                                                    store);
               return {reached.object, access::borrow,
-                      resolved_address::made_kind::copy, 0, answer.quals};
+                      resolved_address::made_kind::copy, 0, answer->quals};
             }
           }
           const detail::execution::erased_carrier reached =
-              sources::template run_route<false>(answer.route, start, store);
-          switch (answer.access) {
+              sources::template run_route<false>(answer->route, start, store);
+          switch (answer->access) {
           case semantics::access::point:
-            return {layout.tables[answer.route]->pointee(reached.object),
+            return {layout.tables[answer->route]->pointee(reached.object),
                     access::borrow};
           case semantics::access::take:
           case semantics::access::move:
@@ -257,7 +276,9 @@ private:
             return {reached.object, access::borrow};
           }
         });
-    if (cache_key != nullptr && answer.stable_address &&
+    const bool stable_address =
+        derived != nullptr ? derived->stable_address : answer->stable_address;
+    if (cache_key != nullptr && stable_address &&
         result.access == access::borrow) {
       if (registers_reset) {
         *binding.cache_slot() = {cache_key, result.address};
@@ -281,46 +302,6 @@ private:
       *static_cast<detail::cache::entry *>(cache) = {};
     }
   };
-
-  // Resolves a request by a conversion the closure of the binding has no
-  // answer for: runs the route of the conversion, compiled for the types of the
-  // binding, and the steps the request takes after it.
-  static resolved_address
-  resolve(interface_base &binding, construction_scope scope,
-          runtime_context_type &context,
-          const typename node_type::request_type &request,
-          const detail::execution::runtime_conversion &conversion,
-          const void *cache_key) {
-    using sources = typename published::sources;
-    auto &cell = detail::runtime_cell<cell_type>(binding.header());
-    detail::binding_activation<cell_type, Container &> activation{
-        cell, detail::resolution_container<Container>(binding.header()), scope};
-    const resolved_address result = activation.template use_source<
-        void>(context, [&](auto &&source) -> resolved_address {
-      store_type store(
-          context, scope, retained(binding), request.requested,
-          detail::type_descriptor_v<detail::registered_type_t<Storage>>);
-      auto start =
-          detail::conversion_start<stored_type, execution_type::scope.makes>(
-              std::forward<decltype(source)>(source), store);
-      // The closure covers a conversion of a value of no step after its
-      // route: a conversion takes steps after it.
-      assert(!conversion.value_route);
-      detail::execution::erased_carrier reached =
-          sources::template run_route<false>(conversion.route, start, store);
-      for (std::size_t index = 0; index < conversion.count; ++index) {
-        const auto &call = conversion.calls[index];
-        reached = (reached.owned ? call.owned
-                                 : call.borrowed)(reached, call.stable, store);
-      }
-      return detail::finish_request(reached, conversion);
-    });
-    if (cache_key != nullptr && conversion.stable_address &&
-        result.access == resolved_address::access_kind::borrow) {
-      binding.publish_cache(context, cache_key, result.address);
-    }
-    return result;
-  }
 
 #ifdef _MSC_VER
 #pragma warning(pop)
