@@ -37,12 +37,6 @@ template <typename Tag> constexpr const void *identity_v() {
   }
 }
 
-// The identities of the layers of C++, at their places in every universe.
-inline constexpr const void *language_identities[4] = {
-    &identity_tag_v<pointer_layer_tag>,
-    &identity_tag_v<array_pointer_layer_tag>, &identity_tag_v<array_layer_tag>,
-    &identity_tag_v<bounded_array_layer_tag>};
-
 // A wrapper layer of a universe as a runtime resolution merges it with
 // another: what it is, its identity, the identity of the layer an owned value
 // of it converts to, and that of the layer it converts to of an array of
