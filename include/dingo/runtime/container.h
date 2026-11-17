@@ -1356,9 +1356,10 @@ private:
   }
 
   // A request that may be cached reads the cache of its selected binding
-  // before it enters a transaction.
+  // before it enters a transaction. One function of each request type, which
+  // every place that resolves it calls, rather than a copy in each.
   template <typename Request, typename R, typename LookupKey>
-  R resolve_entry(LookupKey key) {
+  DINGO_NOINLINE R resolve_entry(LookupKey key) {
     using interface_type = typename Request::interface_type;
     if constexpr (!collection_traits<R>::is_collection) {
       const level_selection found = select_request<Request>(key);

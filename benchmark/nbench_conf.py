@@ -194,11 +194,24 @@ def attribution(scenario, variant):
 
 
 def callers(scenario, variant):
-    """The code the library inlines into the function of a scenario."""
-    found = attribution(scenario, variant)
-    if "error" in found:
-        return found
-    return {"code": found["cases"].get(f"{scenario}/caller", {}).get("code", 0)}
+    """The code a place that resolves adds: of the scenario with each of its
+    requests resolved twice, less the scenario, at -O2, by the requests. A
+    function called once is inlined into its caller, so the size of the
+    caller is not what another place pays."""
+    source, _ = SCENARIOS[scenario]
+    twice = re.sub(r"(?m)^(\s*\(void\)c\.resolve<.*)$", r"\1\n\1", source)
+    requests = len(re.findall(r"(?m)^\s*\(void\)c\.resolve<", source))
+    if not requests:
+        return {"error": "no request"}
+    code = []
+    for name, text in ((scenario, source), (scenario + "/twice", twice)):
+        found = driver.measure(variant.values["compiler"],
+                               flags(variant, ["-O2"]), work(variant),
+                               name.replace("/", "__") + "__callers", text)
+        if found.get("returncode"):
+            return {"error": driver.first_error(found.get("stderr", ""))}
+        code.append(found.get("object", {}).get("sections", {}).get("code"))
+    return {"code": round((code[1] - code[0]) / requests)}
 
 
 def cost_params(case):
@@ -284,12 +297,13 @@ config = Config(
                                noise=0.03, section="memory"),
                         Metric("cpu", "Compiler CPU", "s", noise=0.2,
                                section="time")]),
-        Python("callers", [s for s in SCENARIOS if s.count("/") == 3],
-               callers, title="Code in the caller", primary="code",
-               params=SCENARIO,
-               description="The code the library inlines into the function "
-                           "of each scenario, probe(), at -O2: what every "
-                           "place a user registers or resolves pays.",
+        Python("callers", [s for s in SCENARIOS
+                           if s.count("/") == 3 and not s.endswith("/0")],
+               callers, title="Code of a place that resolves",
+               primary="code", params=SCENARIO,
+               description="The code another place that resolves a request "
+                           "adds, at -O2: of each request of a scenario "
+                           "resolved twice, less once, by the requests.",
                metrics=[Metric("code", "Code", **BYTES)]),
         Python("headers", ATTRIBUTED, attribution, title="Code by header",
                primary="code",
