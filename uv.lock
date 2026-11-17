@@ -522,6 +522,16 @@ name = "nbench"
 version = "0.1.0"
 source = { editable = "tools/nbench" }
 
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "coverage", specifier = "==7.10.7" },
+    { name = "mypy", specifier = "==1.18.2" },
+    { name = "pre-commit", specifier = "==4.3.0" },
+    { name = "ruff", specifier = "==0.14.5" },
+]
+
 [[package]]
 name = "nh3"
 version = "0.3.6"
