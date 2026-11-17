@@ -207,6 +207,55 @@ finish_request(execution::erased_carrier reached,
   }
 }
 
+// The conversion a request of a binding is resolved by: the answer of the
+// closure of the binding, as the code compiled it, when it has one for the
+// request; else the conversion of the request derived of what the binding
+// publishes.
+struct selected_conversion {
+  const execution::closed_answer *answer;
+  const execution::runtime_conversion *derived;
+
+  bool stable_address() const noexcept {
+    return derived != nullptr ? derived->stable_address
+                              : answer->stable_address;
+  }
+};
+
+// The address of what satisfies a request of a derived conversion, of what
+// its route reached: after the calls the conversion takes after the route, as
+// finish_request takes it.
+DINGO_NOINLINE inline resolved_address
+finish_derived(execution::erased_carrier reached,
+               const execution::runtime_conversion &derived,
+               execution::runtime_store &store) {
+  // The closure covers a conversion of a value of no step after its route:
+  // a conversion takes steps after it.
+  assert(!derived.value_route);
+  for (std::size_t index = 0; index < derived.count; ++index) {
+    const auto &call = derived.calls[index];
+    reached = (reached.owned ? call.owned : call.borrowed)(reached, call.stable,
+                                                           store);
+  }
+  return finish_request(reached, derived);
+}
+
+// The address of what satisfies a request of an answer of a closure, of the
+// object the route of the answer reached, as the answer records it.
+inline resolved_address finish_answer(void *reached,
+                                      const execution::closed_answer &answer,
+                                      const execution::binding_layout &layout) {
+  using access = resolved_address::access_kind;
+  switch (answer.access) {
+  case semantics::access::point:
+    return {layout.tables[answer.route]->pointee(reached), access::borrow};
+  case semantics::access::take:
+  case semantics::access::move:
+    return {reached, access::consume};
+  default:
+    return {reached, access::borrow};
+  }
+}
+
 // The C++ properties of a request type, as a runtime resolution converts it.
 template <typename T> struct request_execution {
   using category = requested_category<T>;

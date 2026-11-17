@@ -57,6 +57,46 @@ Container &resolution_container(runtime_binding_header &header) noexcept {
                                                            : header.container);
 }
 
+// Selects the conversion a request of a binding is resolved by: the answer
+// of the closure of the binding for the request, of what lives as long as the
+// container when stable, when it has one; else the conversion of the request,
+// derived once, by the container the binding resolves in. A request the
+// binding does not convert to is rejected.
+template <typename Container, typename Node, typename Context>
+DINGO_NOINLINE selected_conversion
+select_conversion(const Node &node, runtime_binding_header &header, bool stable,
+                  Context &context, const runtime_request &request) {
+  if (node.layout == nullptr || !request.modeled ||
+      request.interface_key != node.interface_key) {
+    throw_type_not_convertible(request.requested, node.registered, context);
+  }
+  const execution::binding_layout &layout = *node.layout;
+  for (std::size_t group = 0; group < layout.group_count; ++group) {
+    if (layout.groups[group].shape == request.shape) {
+      const execution::closed_answers &answers =
+          layout.answers[layout.groups[group].first +
+                         static_cast<std::size_t>(request.layout.category) * 4 +
+                         request.layout.goal.quals[0]];
+      const execution::closed_answer &found =
+          stable ? answers.stable : answers.transient;
+      if (found.found) {
+        return {&found, nullptr};
+      }
+      break;
+    }
+  }
+  const auto &conversions = request.conversions->find(&node, [&] {
+    return resolution_container<Container>(header).derive(layout,
+                                                          request.layout);
+  });
+  const execution::runtime_conversion &derived =
+      stable ? conversions.stable : conversions.transient;
+  if (!derived.found) {
+    throw_type_not_convertible(request.requested, node.registered, context);
+  }
+  return {nullptr, &derived};
+}
+
 // The record of a registration, in one allocation: the header the bindings
 // of its interfaces share, the cell of its storage, and the binding of each
 // of its interfaces. Only the edge of a binding has the type of the cell.
@@ -158,135 +198,74 @@ private:
     }
   }
 
-  // Resolves a request of the binding: by the answer of its closure, as the
-  // code compiled it, when it has one for the request; else by the conversion
-  // of the request, made once, from what the binding publishes.
+  // Resolves a request of the binding, by the conversion selected for it, in
+  // one materialization of its source: the route of the conversion, compiled
+  // for the types of the binding, and what the conversion takes after it.
   static resolved_address
   dispatch(const node_type &binding_node, interface_base &binding,
            construction_scope scope, runtime_context_type &context,
            const typename node_type::request_type &request,
            const void *cache_key) {
-    if (binding_node.layout == nullptr || !request.modeled ||
-        request.interface_key != binding_node.interface_key) {
-      throw detail::make_type_not_convertible_exception(
-          request.requested, binding_node.registered, context);
-    }
+    // What a request passes to the caller lives as long as the container.
+    const detail::selected_conversion selected =
+        detail::select_conversion<Container>(binding_node, binding.header(),
+                                             scope.is_caller(), context,
+                                             request);
     if constexpr (!execution_type::modeled) {
+      (void)selected;
+      (void)cache_key;
       return {};
     } else {
+      using access = resolved_address::access_kind;
+      using sources = typename published::sources;
       const detail::execution::binding_layout &layout = *binding_node.layout;
-      // What a request passes to the caller lives as long as the container.
-      const bool stable = scope.is_caller();
-      const detail::execution::closed_answer *answer = nullptr;
-      for (std::size_t group = 0; group < layout.group_count; ++group) {
-        if (layout.groups[group].shape == request.shape) {
-          const detail::execution::closed_answers &answers =
-              layout.answers[layout.groups[group].first +
-                             static_cast<std::size_t>(request.layout.category) *
-                                 4 +
-                             request.layout.goal.quals[0]];
-          const detail::execution::closed_answer &found =
-              stable ? answers.stable : answers.transient;
-          if (found.found) {
-            answer = &found;
-          }
-          break;
+      auto &cell = detail::runtime_cell<cell_type>(binding.header());
+      detail::binding_activation<cell_type, Container &> activation{
+          cell, detail::resolution_container<Container>(binding.header()),
+          scope};
+      // A reset of the cell this request registers clears the cache too.
+      const bool registers_reset =
+          activation.template registers_reset<runtime_context_type>();
+      const resolved_address result = activation.use_source(
+          context, cached_cell_access{{cell}, binding.cache_slot()},
+          [&](auto &&source) -> resolved_address {
+            store_type store(
+                context, scope, retained(binding), request.requested,
+                detail::type_descriptor_v<detail::registered_type_t<Storage>>);
+            auto start = detail::conversion_start<stored_type,
+                                                  execution_type::scope.makes>(
+                std::forward<decltype(source)>(source), store);
+            if (selected.derived != nullptr) {
+              return detail::finish_derived(
+                  sources::template run_route<false>(selected.derived->route,
+                                                     start, store),
+                  *selected.derived, store);
+            }
+            const detail::execution::closed_answer &answer = *selected.answer;
+            if constexpr (sources::answer_table::any_value) {
+              if (answer.value_route) {
+                const detail::execution::erased_carrier reached =
+                    sources::template run_route<true>(answer.route, start,
+                                                      store);
+                return {reached.object, access::borrow,
+                        resolved_address::made_kind::copy, 0, answer.quals};
+              }
+            }
+            return detail::finish_answer(
+                sources::template run_route<false>(answer.route, start, store)
+                    .object,
+                answer, layout);
+          });
+      if (cache_key != nullptr && binding_node.caches &&
+          selected.stable_address() && result.access == access::borrow) {
+        if (registers_reset) {
+          *binding.cache_slot() = {cache_key, result.address};
+        } else {
+          binding.publish_cache(context, cache_key, result.address);
         }
       }
-      const detail::execution::runtime_conversion *derived = nullptr;
-      if (answer == nullptr) {
-        const auto &conversions = request.conversions->find(&binding_node, [&] {
-          return detail::resolution_container<Container>(binding.header())
-              .derive(layout, request.layout);
-        });
-        derived = stable ? &conversions.stable : &conversions.transient;
-        if (!derived->found) {
-          throw detail::make_type_not_convertible_exception(
-              request.requested, binding_node.registered, context);
-        }
-      }
-      return resolve(binding, scope, context, request, answer, derived, layout,
-                     binding_node.caches ? cache_key : nullptr);
+      return result;
     }
-  }
-
-  // Resolves a request of the binding in one materialization of its source:
-  // by the answer of its closure, the route of the answer, compiled for the
-  // types of the binding, and what it reaches taken as the answer records;
-  // else by the conversion derived of the request, its route, and the calls
-  // the request takes after it.
-  DINGO_ALWAYS_INLINE static resolved_address
-  resolve(interface_base &binding, construction_scope scope,
-          runtime_context_type &context,
-          const typename node_type::request_type &request,
-          const detail::execution::closed_answer *answer,
-          const detail::execution::runtime_conversion *derived,
-          const detail::execution::binding_layout &layout,
-          const void *cache_key) {
-    using access = resolved_address::access_kind;
-    using sources = typename published::sources;
-    auto &cell = detail::runtime_cell<cell_type>(binding.header());
-    detail::binding_activation<cell_type, Container &> activation{
-        cell, detail::resolution_container<Container>(binding.header()), scope};
-    // A reset of the cell this request registers clears the cache too.
-    const bool registers_reset =
-        activation.template registers_reset<runtime_context_type>();
-    const resolved_address result = activation.use_source(
-        context, cached_cell_access{{cell}, binding.cache_slot()},
-        [&](auto &&source) -> resolved_address {
-          store_type store(
-              context, scope, retained(binding), request.requested,
-              detail::type_descriptor_v<detail::registered_type_t<Storage>>);
-          auto start = detail::conversion_start<stored_type,
-                                                execution_type::scope.makes>(
-              std::forward<decltype(source)>(source), store);
-          if (derived != nullptr) {
-            // The closure covers a conversion of a value of no step after
-            // its route: a conversion takes steps after it.
-            assert(!derived->value_route);
-            detail::execution::erased_carrier reached =
-                sources::template run_route<false>(derived->route, start,
-                                                   store);
-            for (std::size_t index = 0; index < derived->count; ++index) {
-              const auto &call = derived->calls[index];
-              reached = (reached.owned ? call.owned : call.borrowed)(
-                  reached, call.stable, store);
-            }
-            return detail::finish_request(reached, *derived);
-          }
-          if constexpr (sources::answer_table::any_value) {
-            if (answer->value_route) {
-              const detail::execution::erased_carrier reached =
-                  sources::template run_route<true>(answer->route, start,
-                                                    store);
-              return {reached.object, access::borrow,
-                      resolved_address::made_kind::copy, 0, answer->quals};
-            }
-          }
-          const detail::execution::erased_carrier reached =
-              sources::template run_route<false>(answer->route, start, store);
-          switch (answer->access) {
-          case semantics::access::point:
-            return {layout.tables[answer->route]->pointee(reached.object),
-                    access::borrow};
-          case semantics::access::take:
-          case semantics::access::move:
-            return {reached.object, access::consume};
-          default:
-            return {reached.object, access::borrow};
-          }
-        });
-    const bool stable_address =
-        derived != nullptr ? derived->stable_address : answer->stable_address;
-    if (cache_key != nullptr && stable_address &&
-        result.access == access::borrow) {
-      if (registers_reset) {
-        *binding.cache_slot() = {cache_key, result.address};
-      } else {
-        binding.publish_cache(context, cache_key, result.address);
-      }
-    }
-    return result;
   }
 
   // The access of a cell whose reset, as a transaction rolls back, clears
