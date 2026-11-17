@@ -321,8 +321,9 @@ defect too.
 
 Another outcome is `unexpected`. The check fails on an `unexpected` cell and on
 a registration that does not compile. The [Model Probe](#model-probe) checks
-what resolving a request does, and `spec/execution_check.py` the copies and the
-moves of each derivation.
+what resolving a request does, and
+[`spec/execution_check.py`](../spec/execution_check.py) the copies and the moves
+of each derivation.
 
 ## Emptiness Check
 
@@ -396,20 +397,25 @@ records what detection reports for every class.
 
 The checks share [`spec/generator/`](../spec/generator):
 
-- `dimensions.py`: an enum for each dimension that only the checks have, next to
-  the vocabulary. The value of a member is its name in a cell.
-  `Outcome.is_defect` tells which outcomes are defects.
-- `model.py`: the interfaces that the library names, the requests of the grammar
-  (a shape and a category of an interface), the rules for requests that are not
-  valid C++, and a probe of a request.
-- `registrations.py`, `conversions.py` and `detection.py`: the units of each
-  check and their cells, without any C++, and their comparison with the
-  specification.
-- `cover.py`: the covering arrays.
-- `templates/`: the Jinja templates that spell the units in C++. `macros.j2`
-  spells the dimensions, `registration.j2` a registration.
-- `driver.py`: compiles and runs the programs, and finds the probe of each
-  compile error. A template marks the lines of each probe with `// probe N`.
-  Each compiler can use at most 1 GiB; a program that does not fit is split.
-- `survey.py` and `report.py`: the survey of the interfaces that a registration
-  binds, and the baseline with its defects and disagreements.
+- [`dimensions.py`](../spec/generator/dimensions.py): an enum for each dimension
+  that only the checks have, next to the vocabulary. The value of a member is
+  its name in a cell. `Outcome.is_defect` tells which outcomes are defects.
+- [`model.py`](../spec/generator/model.py): the interfaces that the library
+  names, the requests of the grammar (a shape and a category of an interface),
+  the rules for requests that are not valid C++, and a probe of a request.
+- [`registrations.py`](../spec/generator/registrations.py),
+  [`conversions.py`](../spec/generator/conversions.py) and
+  [`detection.py`](../spec/generator/detection.py): the units of each check and
+  their cells, without any C++, and their comparison with the specification.
+- [`cover.py`](../spec/generator/cover.py): the covering arrays.
+- `templates/`: the Jinja templates that spell the units in C++.
+  [`macros.j2`](../spec/generator/templates/macros.j2) spells the dimensions,
+  [`registration.j2`](../spec/generator/templates/registration.j2) a
+  registration.
+- [`driver.py`](../spec/generator/driver.py): compiles and runs the programs,
+  and finds the probe of each compile error. A template marks the lines of each
+  probe with `// probe N`. Each compiler can use at most 1 GiB; a program that
+  does not fit is split.
+- [`survey.py`](../spec/generator/survey.py) and
+  [`report.py`](../spec/generator/report.py): the survey of the interfaces that
+  a registration binds, and the baseline with its defects and disagreements.

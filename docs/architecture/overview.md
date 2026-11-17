@@ -27,10 +27,16 @@ From the bottom:
     expressions of no C++ type), type traits, keys, annotations
 02. `conversion/`, `lookup/`: the source a storage gives a binding, lookup
     indexes and their backends
-03. `request/`: what a request is (`decomposition.h`), what the semantics know
-    of a C++ type (`classification.h`), collection requests, the operations
-    (`operation.h`), the semantics of a binding (`binding_semantics.h`) and the
-    conversions (`conversion.h`)
+03. `request/`: what a request is
+    ([`decomposition.h`](../../include/dingo/request/decomposition.h)), what the
+    semantics know of a C++ type
+    ([`classification.h`](../../include/dingo/request/classification.h)),
+    collection requests, the operations
+    ([`operation.h`](../../include/dingo/request/operation.h)), the semantics of
+    a binding
+    ([`binding_semantics.h`](../../include/dingo/request/binding_semantics.h))
+    and the conversions
+    ([`conversion.h`](../../include/dingo/request/conversion.h))
 04. `factory/`: constructors, callables, constructor detection, factory traits
 05. `context/`: resolution context base and recursion guard
 06. `storage/`: storage tags, scope policies, storage exposure traits
@@ -150,18 +156,30 @@ from the stored source to the requested target, which the
 A request passes through five folders that both containers share:
 
 - [include/dingo/resolution/](../../include/dingo/resolution): how a container
-  runs a request. `entry_points.h` holds the requests a container answers, and
-  `algorithm.h` the algorithm both containers run.
+  runs a request.
+  [`entry_points.h`](../../include/dingo/resolution/entry_points.h) holds the
+  requests a container answers, and
+  [`algorithm.h`](../../include/dingo/resolution/algorithm.h) the algorithm both
+  containers run.
 - [include/dingo/binding/](../../include/dingo/binding): what a binding is and
-  how it answers a request. `model.h` holds what a registration declares,
-  `selection.h` how a request selects a binding, `activation.h` and
-  `materialization.h` the cell of a binding and how its source is made, and
-  `resolution.h` where the derivation of a request starts.
+  how it answers a request. [`model.h`](../../include/dingo/binding/model.h)
+  holds what a registration declares,
+  [`selection.h`](../../include/dingo/binding/selection.h) how a request selects
+  a binding, [`activation.h`](../../include/dingo/binding/activation.h) and
+  [`materialization.h`](../../include/dingo/binding/materialization.h) the cell
+  of a binding and how its source is made, and
+  [`resolution.h`](../../include/dingo/binding/resolution.h) where the
+  derivation of a request starts.
 - [include/dingo/request/](../../include/dingo/request): what a request is.
-  `decomposition.h` takes a request apart, `classification.h` says what the
-  semantics know of a C++ type, `operation.h` holds the operations,
-  `binding_semantics.h` the semantics of a binding, and `conversion.h` the
-  conversions and the derivation of a request.
+  [`decomposition.h`](../../include/dingo/request/decomposition.h) takes a
+  request apart,
+  [`classification.h`](../../include/dingo/request/classification.h) says what
+  the semantics know of a C++ type,
+  [`operation.h`](../../include/dingo/request/operation.h) holds the operations,
+  [`binding_semantics.h`](../../include/dingo/request/binding_semantics.h) the
+  semantics of a binding, and
+  [`conversion.h`](../../include/dingo/request/conversion.h) the conversions and
+  the derivation of a request.
 - [include/dingo/semantics/](../../include/dingo/semantics): the semantics of
   derivations, of no C++ type: what a binding publishes, which steps reach a
   request, and how many copies and moves of the leaf each takes.

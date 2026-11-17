@@ -65,15 +65,16 @@ true:
 - the interface is a class with a virtual destructor
 - the storage is a pointer-like handle that can be rebound to the interface
 
-The rule is `stores_interface_leaf_v` in `storage/interface_storage_traits.h`.
+The rule is `stores_interface_leaf_v` in
+[`storage/interface_storage_traits.h`](../../include/dingo/storage/interface_storage_traits.h).
 The rewrite keeps the stored object close to the interface shape and avoids
 temporary conversions.
 
 ## Resolution
 
 Both containers derive the public `resolve<T>()` from `container_requests` in
-`resolution/entry_points.h`. It calls `resolve_entry` of the container, for
-example in
+[`resolution/entry_points.h`](../../include/dingo/resolution/entry_points.h). It
+calls `resolve_entry` of the container, for example in
 [include/dingo/runtime/container.h](../../include/dingo/runtime/container.h). At
 this boundary Dingo normalizes two independent request descriptions:
 

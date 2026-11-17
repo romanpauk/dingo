@@ -12,16 +12,16 @@ The top-level include set is small:
   the static container, `static_container<bindings<...>>`
 - [include/dingo/container.h](../../include/dingo/container.h): both
 
-Each container keeps its implementation in its own directory. Both directories
-use the same file names:
+Each container keeps its implementation in its own directory, in headers of the
+same parts:
 
-| File                 | Contents               |
-| -------------------- | ---------------------- |
-| `container.h`        | the container          |
-| `registry.h`         | its bindings           |
-| `binding.h`          | one binding            |
-| `context.h`          | its resolution context |
-| `container_traits.h` | its traits             |
+| Contents               | Runtime                                                                        | Static                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| the container          | [`runtime/container.h`](../../include/dingo/runtime/container.h)               | [`static/container.h`](../../include/dingo/static/container.h)               |
+| its bindings           | [`runtime/registry_store.h`](../../include/dingo/runtime/registry_store.h)     | [`static/registry.h`](../../include/dingo/static/registry.h)                 |
+| one binding            | [`runtime/binding.h`](../../include/dingo/runtime/binding.h)                   | [`static/binding.h`](../../include/dingo/static/binding.h)                   |
+| its resolution context | [`runtime/context.h`](../../include/dingo/runtime/context.h)                   | [`static/context.h`](../../include/dingo/static/context.h)                   |
+| its traits             | [`runtime/container_traits.h`](../../include/dingo/runtime/container_traits.h) | [`static/container_traits.h`](../../include/dingo/static/container_traits.h) |
 
 All other headers are implementation detail or shared core.
 

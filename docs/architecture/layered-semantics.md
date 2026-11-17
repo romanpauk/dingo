@@ -107,13 +107,13 @@ request takes the others through the tables of the binding.
 
 ## The Headers
 
-| Layer          | Headers                                                                                                                                                                                                                                               |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Classification | `type/type_traits.h`, `type/shape.h`, `type/annotated.h`, `request/decomposition.h`, `request/classification.h`, `factory/constructor_detection.hpp`, `base/type_descriptor.h`                                                                        |
-| Semantics      | `semantics/model.h`, `binding/materialization.h`, `storage/scope_traits.h`, `binding/selection.h`                                                                                                                                                     |
-| Steps          | the operations of `request/operation.h`, the storages of `storage/`, `factory/`                                                                                                                                                                       |
-| Execution      | the conversions of `request/conversion.h` and `runtime/conversion.h`, the tables of `runtime/operation_table.h`, `runtime/request.h`, `binding/activation.h`, `runtime/binding.h`, `static_execution` of `static/binding.h`, `resolution/algorithm.h` |
-| Plumbing       | `lookup/`, `memory/`, the registries and the transactions of `runtime/` and `static/`, `context/`                                                                                                                                                     |
+| Layer          | Headers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Classification | [`type/type_traits.h`](../../include/dingo/type/type_traits.h), [`type/shape.h`](../../include/dingo/type/shape.h), [`type/annotated.h`](../../include/dingo/type/annotated.h), [`request/decomposition.h`](../../include/dingo/request/decomposition.h), [`request/classification.h`](../../include/dingo/request/classification.h), [`factory/constructor_detection.h`](../../include/dingo/factory/constructor_detection.h), [`base/type_descriptor.h`](../../include/dingo/base/type_descriptor.h)                                                                                                             |
+| Semantics      | [`semantics/model.h`](../../include/dingo/semantics/model.h), [`binding/materialization.h`](../../include/dingo/binding/materialization.h), [`storage/scope_traits.h`](../../include/dingo/storage/scope_traits.h), [`binding/selection.h`](../../include/dingo/binding/selection.h)                                                                                                                                                                                                                                                                                                                               |
+| Steps          | the operations of [`request/operation.h`](../../include/dingo/request/operation.h), the storages of `storage/`, `factory/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Execution      | the conversions of [`request/conversion.h`](../../include/dingo/request/conversion.h) and [`runtime/conversion.h`](../../include/dingo/runtime/conversion.h), the tables of [`runtime/operation_table.h`](../../include/dingo/runtime/operation_table.h), [`runtime/request.h`](../../include/dingo/runtime/request.h), [`binding/activation.h`](../../include/dingo/binding/activation.h), [`runtime/binding.h`](../../include/dingo/runtime/binding.h), `static_execution` of [`static/binding.h`](../../include/dingo/static/binding.h), [`resolution/algorithm.h`](../../include/dingo/resolution/algorithm.h) |
+| Plumbing       | `lookup/`, `memory/`, the registries and the transactions of `runtime/` and `static/`, `context/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 The plumbing does not decide what a request resolves to. It is tested as any
 other code.
@@ -226,15 +226,15 @@ other code.
    made where the request needs it, so that the leaf is moved once. What a step
    makes for the request is kept by a store. A step that takes over what a
    pointer points to releases the handle it was taken out of, by the `release`
-   of its type traits. `execution_check.py` asks the semantics the derivation of
-   every conversion of the model, applies each to the leaf types of the model,
-   which count their copies and moves, and compares the counts with the
-   derivation, without a container: 60,694 cells, all equal. It found three
-   defects, each fixed: a handle a pointer was taken out of released it too; a
-   wrapper emplaced of its own element type moved the leaf twice; and the
-   pointer to the first element of an array was upcast to an array of the
-   interface, which the specification and the semantics then both allowed the
-   request to take over.
+   of its type traits. [`execution_check.py`](../../spec/execution_check.py)
+   asks the semantics the derivation of every conversion of the model, applies
+   each to the leaf types of the model, which count their copies and moves, and
+   compares the counts with the derivation, without a container: 60,694 cells,
+   all equal. It found three defects, each fixed: a handle a pointer was taken
+   out of released it too; a wrapper emplaced of its own element type moved the
+   leaf twice; and the pointer to the first element of an array was upcast to an
+   array of the interface, which the specification and the semantics then both
+   allowed the request to take over.
 
 6. **Request rules.** Done. `resolve` in
    [include/dingo/semantics/model.h](../../include/dingo/semantics/model.h)

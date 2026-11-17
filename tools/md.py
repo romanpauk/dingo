@@ -175,6 +175,103 @@ def parse_link_target(target):
     return path_part, anchor
 
 
+# A code span that names a file: path characters and a suffix of a file the
+# repository has.
+FILE_SPAN = re.compile(
+    r"`([A-Za-z0-9_./-]+\.(?:h|hpp|cpp|py|md|cmake|txt|j2|json|yaml|yml|toml|lock))`"
+)
+# The files the build makes, which the repository does not have: they are
+# named, not linked.
+GENERATED = frozenset({
+    "compile_commands.json", "probe.json", "probe.md", "detection.json",
+    "detection.md",
+})
+LINK = re.compile(r"(?<!!)\[(?:[^\[\]]|`[^`]*`)*\]\([^)]*\)")
+
+
+def repository_root():
+    return Path(__file__).resolve().parent.parent
+
+
+def repository_files():
+    """The files of the repository, relative to its root."""
+    found = subprocess.run(
+        ["git", "ls-files"], cwd=repository_root(), stdout=subprocess.PIPE,
+        text=True, check=True).stdout.split()
+    return [Path(name) for name in found]
+
+
+def resolve_file(name, source, files):
+    """The files of the repository a name of one names: by its path from the
+    root, from include/dingo or from the Markdown file, or else every file
+    whose path ends with it."""
+    root = repository_root()
+    for base in (root, root / "include" / "dingo", source.resolve().parent):
+        candidate = (base / name).resolve()
+        if candidate.is_file() and root in candidate.parents:
+            return [candidate.relative_to(root)]
+    return [path for path in files
+            if path.as_posix() == name or path.as_posix().endswith("/" + name)]
+
+
+def unlinked_file_spans(line):
+    """The code spans of a line that name a file, outside the text of a
+    link, with where they are."""
+    linked = [m.span() for m in LINK.finditer(line)]
+    for match in FILE_SPAN.finditer(line):
+        if match.group(1) in GENERATED:
+            continue
+        if not any(start <= match.start() < end for start, end in linked):
+            yield match
+
+
+def link_files(text, source, files):
+    """The text with each code span that names one file of the repository
+    made a link to it."""
+    lines = text.split("\n")
+    non_code = {lineno for lineno, _ in iter_non_code_lines(
+        [line + "\n" for line in lines])}
+    for index, line in enumerate(lines):
+        if index + 1 not in non_code:
+            continue
+        for match in reversed(list(unlinked_file_spans(line))):
+            found = resolve_file(match.group(1), source, files)
+            if len(found) != 1:
+                continue
+            target = os.path.relpath(repository_root() / found[0],
+                                     source.resolve().parent)
+            line = "{}[{}]({}){}".format(line[:match.start()], match.group(0),
+                                        Path(target).as_posix(),
+                                        line[match.end():])
+        lines[index] = line
+    return "\n".join(lines)
+
+
+def verify_file_mentions(filenames):
+    """Every code span that names a file names one the repository has, and
+    is a link to it."""
+    files = repository_files()
+    errors = []
+    for filename in filenames:
+        source = Path(filename)
+        with open(source, "r") as f:
+            for lineno, line in iter_non_code_lines(f.readlines()):
+                for match in unlinked_file_spans(line):
+                    name = match.group(1)
+                    found = resolve_file(name, source, files)
+                    if not found:
+                        errors.append("{}:{}: no file '{}' in the repository"
+                                      .format(source, lineno, name))
+                    elif len(found) > 1:
+                        errors.append("{}:{}: '{}' names {} files; give its "
+                                      "path".format(source, lineno, name,
+                                                    len(found)))
+                    else:
+                        errors.append("{}:{}: the file '{}' is to be a link"
+                                      .format(source, lineno, name))
+    return errors
+
+
 def verify_links(filenames):
     link_re = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
     anchor_cache = {}
@@ -222,6 +319,7 @@ def verify_links(filenames):
                             )
                         )
 
+    errors += verify_file_mentions(filenames)
     if errors:
         for error in errors:
             print(error)
@@ -239,12 +337,15 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    files = repository_files() if args.mode == "update" else None
     for file in args.filenames:
         CURRENT_MARKDOWN_FILE = file
         with open(file, "r") as f:
             content = f.readlines()
 
         result = format(process(content))
+        if args.mode == "update":
+            result = format(link_files(result, Path(file), files))
         if result != "".join(content):
             if args.mode == "update":
                 with open(file, "w") as f:

@@ -29,10 +29,11 @@ Examples:
 The workflow:
 
 1. Validates `version`, `source_ref` and `release_line` with
-   `tools/release_flow.py`, run through `uv` in the locked environment.
+   [`tools/release_flow.py`](../tools/release_flow.py), run through `uv` in the
+   locked environment.
 2. Switches to `releases/x.y`. For a new release line, it creates the branch
    from `master` if the branch does not exist.
-3. Sets the release version in `CMakeLists.txt`.
+3. Sets the release version in [`CMakeLists.txt`](../CMakeLists.txt).
 4. Creates the release commit if the version changed.
 5. Runs the `check` target (`check-base`) and the CI build matrix (`build-base`)
    on the release source.
@@ -76,7 +77,8 @@ Process:
 Result:
 
 - `releases/0.3` exists, created from `master` if it was missing.
-- `CMakeLists.txt` on `releases/0.3` contains the release version.
+- [`CMakeLists.txt`](../CMakeLists.txt) on `releases/0.3` contains the release
+  version.
 - `releases/0.3` points to the release commit.
 - Tag `v0.3.0` exists.
 - GitHub Release `v0.3.0` exists.
@@ -100,7 +102,8 @@ Process:
 
 Result:
 
-- `CMakeLists.txt` on `releases/0.3` contains the release version.
+- [`CMakeLists.txt`](../CMakeLists.txt) on `releases/0.3` contains the release
+  version.
 - `releases/0.3` points to the release commit.
 - Tag `v0.3.1` exists.
 - GitHub Release `v0.3.1` exists.

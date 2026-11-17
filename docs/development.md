@@ -32,10 +32,15 @@ environment provides the development tools.
 
 - `sources-format-check`: verifies the same C++ files.
 
-- `markdown-format`: formats `README.md` and the Markdown files under `docs` and
-  `docker`.
+- `markdown-format`: formats [`README.md`](../README.md) and the Markdown files
+  under `docs` and `docker`, and makes each file a code span names a link to it,
+  where it names one file of the repository.
 
-- `markdown-format-check`: verifies the same Markdown files.
+- `markdown-format-check`: verifies the same Markdown files: their format, the
+  targets of their links, and that each file a code span names, by a suffix of a
+  file, is one file of the repository and a link to it. The files the build
+  makes are named, not linked, and are kept in `GENERATED` of
+  [`tools/md.py`](../tools/md.py).
 
 - `format-check`: runs `sources-format-check` and `markdown-format-check`.
 
@@ -100,24 +105,25 @@ need `DINGO_CLANG_TOOLS_ENABLED=ON` (the default).
 
 The checks that compile programs (`conversion-check`, `emptiness-check`,
 `storage-check`, `resolution-check`, the model checks, `footprint-check` and
-`spec/execution_check.py`) keep the result of each program in `programs/` of
-their work directory, compressed with zstd. As ccache does, a result is kept
-under a key of the compiler, the flags, the name of the program and the source
-the preprocessor makes of it. A program is compiled again only when one of them
-changes: a header changed, added or removed changes the preprocessed source of
-the programs that read it, and a change of comments only changes none. A result
-is not kept when a header the precompiled header read changed after it was
-compiled, as the compiler took that header as it was. The key holds no path of
-the checkout, so a cache made in one checkout serves another. A run of every
-program of a check removes the results it did not use, and each run prints how
-many programs it compiled and how many results it used.
+[`spec/execution_check.py`](../spec/execution_check.py)) keep the result of each
+program in `programs/` of their work directory, compressed with zstd. As ccache
+does, a result is kept under a key of the compiler, the flags, the name of the
+program and the source the preprocessor makes of it. A program is compiled again
+only when one of them changes: a header changed, added or removed changes the
+preprocessed source of the programs that read it, and a change of comments only
+changes none. A result is not kept when a header the precompiled header read
+changed after it was compiled, as the compiler took that header as it was. The
+key holds no path of the checkout, so a cache made in one checkout serves
+another. A run of every program of a check removes the results it did not use,
+and each run prints how many programs it compiled and how many results it used.
 
 A program includes only the container and the scopes of its cells, and holds
 cells of one container and one scope, so a change of one scope or one container
 compiles only the programs of it again. The headers of the probes are split the
-same way: `test/model/leaves.h` has the leaf types and no container,
-`test/model/probe.h` no container and no scope, and `test/model/static.h` what a
-static container adds.
+same way: [`test/model/leaves.h`](../test/model/leaves.h) has the leaf types and
+no container, [`test/model/probe.h`](../test/model/probe.h) no container and no
+scope, and [`test/model/static.h`](../test/model/static.h) what a static
+container adds.
 
 ## Naming
 
@@ -142,8 +148,8 @@ names the type in its scope as `semantics::object`. A typedef or a member type
 cannot be the name of a variable, as `-Wshadow` warns of it.
 
 A name the standard library or the public interface spells with a connecting
-word is kept, with why, in `tools/names.py`: `for_each`, the names of
-`std::in_place`, and `lookup_key_out_of_range_exception`.
+word is kept, with why, in [`tools/names.py`](../tools/names.py): `for_each`,
+the names of `std::in_place`, and `lookup_key_out_of_range_exception`.
 
 ## Complexity Report
 
@@ -208,9 +214,10 @@ A model check fails on a defect. It reads the diagnostics of GCC and clang.
 headers, the specification, the probe headers, the locked environment, or the
 compiler and flags.
 
-When you run `spec/probe.py` directly, `--cover pairs|triples|all` selects the
-[cover](specification.md#model-probe). `--only <regex>` probes only the
-registrations with a name that matches the expression.
+When you run [`spec/probe.py`](../spec/probe.py) directly,
+`--cover pairs|triples|all` selects the [cover](specification.md#model-probe).
+`--only <regex>` probes only the registrations with a name that matches the
+expression.
 
 The probes limit the memory of the compilers:
 
