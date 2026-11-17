@@ -64,24 +64,24 @@ public:
 
   // The same, of a type a typed route names: what lives as long as the
   // request, in the context, of this store; what lives as long as the
-  // container, with the binding, of at<true>(). Each is placed by the layout
-  // of its type, as an erased one is, so that a type a route keeps adds no
-  // code of the context of its own.
+  // container, with the binding, of part<true>(). Each is kept as an erased
+  // one is, by the layout of its type and a function that constructs it, so
+  // that a type a route keeps adds no code of the store of its own.
+  template <bool Stable, typename T, typename Make> T &keep_made(Make &make) {
+    return *static_cast<T *>(keep(
+        Stable, object_layout_v<T>,
+        &execution::construct_made<T, std::remove_reference_t<Make>>,
+        const_cast<void *>(static_cast<const void *>(std::addressof(make)))));
+  }
   template <typename T, typename Make> T &keep(Make &&make) {
-    return *static_cast<T *>(
-        context_.place(scope_, object_layout_v<T>, [&](void *place) {
-          ::new (place) T(std::forward<Make>(make)());
-        }));
+    return keep_made<false, T>(make);
   }
 
   struct stable_store {
     context_store &store;
     [[noreturn]] void absent() { store.absent(); }
     template <typename T, typename Make> T &keep(Make &&make) {
-      assert(store.retained_ != nullptr);
-      return *static_cast<T *>(store.retained_->keep(
-          &object_layout_v<T>, store.context_, object_layout_v<T>,
-          [&](void *place) { ::new (place) T(std::forward<Make>(make)()); }));
+      return store.template keep_made<true, T>(make);
     }
   };
 

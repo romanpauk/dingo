@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <new>
 #include <type_traits>
 #include <utility>
 
@@ -59,6 +60,22 @@ struct runtime_conversions {
   runtime_conversion transient;
 };
 
+// An object of the thread, made at its first use on the thread: kept in
+// storage of no initializer, so that a program holds no image of it, which
+// every thread it starts would copy.
+template <typename T> T &thread_object() {
+  static_assert(std::is_trivially_destructible_v<T>);
+  thread_local struct {
+    alignas(T) unsigned char bytes[sizeof(T)];
+    bool made;
+  } storage;
+  if (!storage.made) {
+    ::new (static_cast<void *>(storage.bytes)) T();
+    storage.made = true;
+  }
+  return *std::launder(reinterpret_cast<T *>(storage.bytes));
+}
+
 inline runtime_conversion make_runtime_conversion(
     const semantics::derivation &derivation, const binding_layout &binding,
     const request_layout &request, const semantics::request &goal);
@@ -86,7 +103,7 @@ make_runtime_conversions(const binding_layout &binding,
   if (foreign) {
     // Of the thread, as the search is: a universe holds the kinds of every
     // standard layer, which making one copies.
-    thread_local semantics::universe merged;
+    semantics::universe &merged = thread_object<semantics::universe>();
     // The universe of the binding, which the layers of the request it does
     // not have follow, and the conversions between them all.
     merged = *binding.context.layers;
@@ -146,7 +163,7 @@ make_runtime_conversions(const binding_layout &binding,
   // The search of a thread, cleared rather than made: what makes one is its
   // states, which a search reads only once it added them. Deriving runs no
   // code of a user, so it is never deriving already on the thread.
-  thread_local semantics::search found;
+  semantics::search &found = thread_object<semantics::search>();
   found.clear();
   // The closed states are distinct already, so they are not hashed: an object
   // the request reaches again is only a state more.

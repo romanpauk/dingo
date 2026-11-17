@@ -433,9 +433,6 @@ private:
     }
   }
 
-  static void reset_cell(void *cell) noexcept {
-    static_cast<cell_type *>(cell)->reset();
-  }
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
@@ -455,7 +452,7 @@ public:
       detail::runtime_cell_offset_v<cell_type>,
       &retained,
       &is_resolved,
-      &reset_cell};
+      &detail::cell_access<cell_type>::reset_cell};
 };
 
 } // namespace dingo
