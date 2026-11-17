@@ -1733,14 +1733,14 @@ template <typename Search> struct unwrapped_sink {
   const semantics::context &context;
 
   constexpr bool takes(step kind, layer, std::size_t) const {
-    return kind != step::wrap;
+    return kind != step::wrap && kind != step::qualify;
   }
   constexpr bool takes_quals(std::size_t, std::uint8_t, std::size_t) const {
-    return true;
+    return false;
   }
 
   constexpr void operator()(step kind, const object &reached) {
-    if (kind != step::wrap) {
+    if (kind != step::wrap && kind != step::qualify) {
       found.add({reached,
                  stepped(source.made, kind, source.reached, reached, context),
                  index, kind});
@@ -1771,53 +1771,40 @@ constexpr search closed_layer_sources(const search &sources,
   return found;
 }
 
-// What a sink of the steps a request takes from a closed state passes on: a
-// wrap, or a step into a layer whose type the binding does not have, which
-// those of the
-// request may be; any other step reaches what the closure holds.
-struct unclosed_sink {
+// Where a state of a search extending a closure stands: in the closure; made
+// by the request of what it holds by a wrap, or by a step into a layer whose
+// type the binding does not have; or open, reached by a conversion to a more
+// qualified element, which the closure leaves to the request, and by any step
+// after it but a wrap, as the closure would hold it.
+enum class extension : std::uint8_t { closed, made, open };
+
+// What a sink of the steps a request takes from a state of a search passes
+// on. From a closed state: a wrap, a conversion to a more qualified element,
+// or a step into a layer whose type the binding does not have, which those of
+// the request may be; any other step reaches what the closure holds. From what
+// the request made of the closure: another wrap, a conversion of the outer
+// layer it made to a more qualified element or of an array of a known bound to
+// one of unknown bound, or a step into a layer whose type the binding does not
+// have, which the request makes itself, of the types it spells. From an open
+// state: every step. One sink of all, so that the steps of an object are
+// compiled once for a runtime resolution.
+struct extending_sink {
   reached_sink &out;
   // The layers whose types the binding has: those of a lower index.
   std::size_t known;
+  extension from;
 
   constexpr bool takes(step kind, layer outer, std::size_t depth) const {
-    switch (kind) {
-    case step::wrap:
+    if (from == extension::open) {
       return out.takes(kind, outer, depth);
-    case step::observe:
-    case step::adopt:
-    case step::transfer:
-    case step::unknown_bound:
-      return outer >= known && out.takes(kind, outer, depth);
-    default:
-      return false;
     }
-  }
-  constexpr bool takes_quals(std::size_t, std::uint8_t, std::size_t) const {
-    return false;
-  }
-
-  constexpr void operator()(step kind, const object &reached) {
-    out(kind, reached);
-  }
-};
-
-// What a sink of the steps a request takes from what it made of the closure
-// passes on: another wrap, a conversion of the outer layer it made to a more
-// qualified element or of an array of a known bound to one of unknown bound,
-// or a step into a layer whose type the binding does not have. These the
-// request makes
-// itself, of the types it spells.
-struct made_sink {
-  reached_sink &out;
-  std::size_t known;
-
-  constexpr bool takes(step kind, layer outer, std::size_t depth) const {
     switch (kind) {
     case step::wrap:
     case step::qualify:
-    case step::unknown_bound:
       return out.takes(kind, outer, depth);
+    case step::unknown_bound:
+      return (from == extension::made || outer >= known) &&
+             out.takes(kind, outer, depth);
     case step::observe:
     case step::adopt:
     case step::transfer:
@@ -1853,22 +1840,36 @@ DINGO_COLD constexpr void extend_reach(search &found, std::size_t closed,
   for (std::size_t next = 0; next < found.count; ++next) {
     const state &current = found.states[next];
     // A closed state steps only by a wrap, which makes a layer more, of a
-    // object of fewer than the request, or into a layer whose type the binding
-    // does not have.
-    if ((next < closed && !foreign && current.reached.depth >= goal.depth) ||
+    // object of fewer than the request, by a conversion to a more qualified
+    // element, or into a layer whose type the binding does not have.
+    if ((next < closed && !foreign && current.reached.depth > goal.depth &&
+         !(current.reached.depth &&
+           context.kind(current.reached.layers[0]).qualifies)) ||
         !may_satisfy(current.reached, goal, context)) {
       continue;
+    }
+    // A state the request reached of the closure is open when a conversion to
+    // a more qualified element reached it, or a step but a wrap of an open
+    // one.
+    extension from = extension::closed;
+    if (next >= closed) {
+      from = extension::made;
+      for (std::size_t each = next; each >= closed;
+           each = found.states[each].parent) {
+        if (found.states[each].step == step::wrap) {
+          break;
+        }
+        if (found.states[each].step == step::qualify) {
+          from = extension::open;
+          break;
+        }
+      }
     }
     const state source = current;
     reached_sink sink{found, source, static_cast<std::uint16_t>(next), goal,
                       context};
-    if (next >= closed) {
-      made_sink made{sink, known};
-      each_request_step(source.reached, context, made);
-    } else {
-      unclosed_sink unclosed{sink, known};
-      each_request_step(source.reached, context, unclosed);
-    }
+    extending_sink extending{sink, known, from};
+    each_request_step(source.reached, context, extending);
   }
 }
 
