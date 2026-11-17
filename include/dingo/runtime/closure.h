@@ -190,49 +190,26 @@ template <typename Shape> struct closed_semantics {
     return made;
   }
   static constexpr used_list used = make_used();
-  // The operations each class of states needs: the steps the binding takes
-  // from it, the steps a request may take from it, and the wraps that make
-  // it. A sole owner converts to the sharing handle its type traits name, and
-  // a handle of an array of a known bound to the handle of an array of unknown
-  // bound they name, which a request may bring into the universe: of every
-  // source that is one.
+  // The operations a runtime conversion calls of each class of states: a
+  // sole owner converted to the sharing handle its type traits name, and a
+  // handle of an array of a known bound to the handle of an array of unknown
+  // bound they name, which a request may bring into the universe; and the
+  // wraps that make it, which a request may make it by. Every other step
+  // from a state of the closure is the closure's, which its routes take, as
+  // the code compiles: a table holds none of them.
   struct mask_list {
     std::uint32_t state_mask[semantics::max_states] = {};
   };
   static constexpr mask_list make_masks() {
     mask_list made;
-    constexpr std::uint32_t taken =
-        operation_mask(semantics::step::copy) |
-        operation_mask(semantics::step::decay) |
-        operation_mask(semantics::step::hand_over) |
-        operation_mask(semantics::step::transfer) |
-        operation_mask(semantics::step::unknown_bound);
-    const semantics::context context = Shape::context;
     for (std::size_t index = 0; index < used.count; ++index) {
       const std::size_t state = used.states[index];
       const semantics::state &each = Sources.states[state];
       made.state_mask[classes.state_class[state]] |=
-          (request_kinds(each.reached, context) & taken) |
           operation_mask(semantics::step::transfer) |
           operation_mask(semantics::step::unknown_bound);
-      if (state == 0) {
-        continue;
-      }
-      if (step_makes(each.step)) {
+      if (state != 0 && step_makes(each.step)) {
         made.state_mask[classes.state_class[state]] |= makers_mask;
-      } else if (each.step == semantics::step::release &&
-                 Sources.states[each.parent].reached.layers[0] ==
-                     semantics::array_pointer_layer) {
-        made.state_mask[classes.state_class[each.parent]] |= release_array_mask;
-      } else {
-        made.state_mask[classes.state_class[each.parent]] |=
-            operation_mask(each.step);
-        // A request makes the copy of what maybe_element gives where it
-        // takes it.
-        if (each.step == semantics::step::maybe_element_copy) {
-          made.state_mask[classes.state_class[each.parent]] |=
-              operation_mask(semantics::step::maybe_element);
-        }
       }
     }
     return made;

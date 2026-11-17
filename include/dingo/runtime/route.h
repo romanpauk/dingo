@@ -109,36 +109,34 @@ struct binding_sources {
                                     ? made::full.adopted_array
                                     : made::full.adopted),
                       "the type a binding makes a layer of is made so");
-      } else {
-        using parent = table_t<target.parent>;
-        constexpr erased_operation operation =
-            target.step == semantics::step::release &&
-                    Sources.states[target.parent].reached.layers[0] ==
-                        semantics::array_pointer_layer
-                ? parent::maker::full.release_array
-                : parent::maker::full
-                      .operations[static_cast<std::size_t>(target.step)];
-        static_assert((source_carrier::owned ? operation.owned
-                                             : operation.borrowed) != nullptr,
-                      "the table of a type has every step from it");
       }
     }
-    // Every step a request takes of it that its type has an operation for.
+    // Every step a request takes of it C++ makes of its type: the closure's,
+    // which its routes take, and those of its table.
     using own = typename class_carrier<classes.state_class[State]>::type;
     constexpr std::uint32_t kinds = request_kinds(Sources.states[State].reached,
                                                   Semantics::context(abstract));
     constexpr const full_table &table = table_t<State>::maker::full;
-    static_assert(known<own>(table, kinds, semantics::step::copy) &&
-                      known<own>(table, kinds, semantics::step::decay) &&
-                      known<own>(table, kinds, semantics::step::hand_over) &&
-                      known<own>(table, kinds, semantics::step::transfer) &&
-                      known<own>(table, kinds, semantics::step::unknown_bound),
-                  "the table of a source has every step a request takes of it");
+    static_assert(
+        makes<own, semantics::step::copy>(kinds) &&
+            makes<own, semantics::step::decay>(kinds) &&
+            makes<own, semantics::step::hand_over>(kinds) &&
+            known<own>(table, kinds, semantics::step::transfer) &&
+            known<own>(table, kinds, semantics::step::unknown_bound),
+        "the type of a source makes every step a request takes of it");
     semantics::state made = Sources.states[State];
     if (made.parent != semantics::no_state) {
       made.parent = used.index[made.parent];
     }
     return made;
+  }
+
+  // Whether C++ makes a step of a kind of a mask of the carrier Own.
+  template <typename Own, semantics::step Kind>
+  static constexpr bool makes(std::uint32_t kinds) {
+    return !(kinds & (std::uint32_t{1} << static_cast<unsigned>(Kind))) ||
+           operation_result<operation<Kind>, Leaf, Interface,
+                            typename Own::type, Own::owned>::possible;
   }
 
   // Whether a table has a step of a kind of a mask, for the carrier Own.
@@ -335,16 +333,8 @@ struct binding_sources {
       return nullptr;
     } else {
       using own = typename closed_carrier<State>::type;
-      constexpr std::uint32_t taken =
-          operation_mask(semantics::step::copy) |
-          operation_mask(semantics::step::decay) |
-          operation_mask(semantics::step::hand_over) |
-          operation_mask(semantics::step::transfer) |
-          operation_mask(semantics::step::unknown_bound);
+      // A step from a state of the closure into another is the closure's.
       constexpr std::uint32_t mask =
-          (request_kinds(closure.states[State].reached,
-                         Semantics::context(abstract)) &
-           taken) |
           operation_mask(semantics::step::transfer) |
           operation_mask(semantics::step::unknown_bound);
       return &operation_table<typename own::type, Leaf, Interface, mask>::value;
