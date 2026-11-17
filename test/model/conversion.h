@@ -131,15 +131,15 @@ template <typename Model, typename Interface, typename Request, typename Leaf,
 DINGO_ALWAYS_INLINE void publication(const char *prefix, const char *name) {
   using type = unannotated_t<Interface>;
   using binding = detail::binding<type, Model>;
-  using planning = detail::static_execution<Request, binding>;
+  using resolved = detail::static_execution<Request, binding>;
   using stored = typename Model::registered_storage_type;
   constexpr bool owned = !std::is_reference_v<stored> && Makes;
   (void)sizeof(Leaf);
   if constexpr (!selects_v<Request, type>) {
     record(prefix, name, "selects_another", nullptr);
   } else {
-    const char *outcome = planning::template planned<true>().found ? "published"
-                          : planning::template planned<false>().found
+    const char *outcome = resolved::template derived<true>().found ? "published"
+                          : resolved::template derived<false>().found
                               ? "placed"
                               : "unpublished";
     std::printf("{\"cell\": \"");
