@@ -915,8 +915,8 @@ constexpr conversion compile_conversion(const semantics::derivation &derivation,
                                         std::size_t source_count) {
   using semantics::step;
   conversion made;
-  const bool value = derivation.how == semantics::satisfaction::move ||
-                     derivation.how == semantics::satisfaction::copy;
+  const bool value = derivation.access == semantics::access::move ||
+                     derivation.access == semantics::access::copy;
   // Whether the binding takes the derivation step at an index.
   auto binding_takes = [&](std::size_t index) {
     return derivation.states[index + 1] < source_count;
@@ -1460,7 +1460,7 @@ struct typed_conversion {
   // The request of what the conversion reached.
   template <typename Request, typename T, bool Owned>
   static Request finished(carrier<T, Owned> reached) {
-    using semantics::satisfaction;
+    using semantics::access;
     if constexpr (Conversion.last == finish::copy) {
       return Request(*reached.object);
     } else if constexpr (Conversion.last == finish::run) {
@@ -1470,17 +1470,17 @@ struct typed_conversion {
                                Conversion.depth>::type;
       return static_cast<Request>(
           wrap_value<Leaf, Interface, made_type>(std::move(*reached.object)));
-    } else if constexpr (Derivation.how == satisfaction::refer) {
+    } else if constexpr (Derivation.access == access::refer) {
       if constexpr (std::is_pointer_v<Request>) {
         return reached.object;
       } else {
         return static_cast<Request>(*reached.object);
       }
-    } else if constexpr (Derivation.how == satisfaction::point) {
+    } else if constexpr (Derivation.access == access::point) {
       return *reached.object;
-    } else if constexpr (Derivation.how == satisfaction::take) {
+    } else if constexpr (Derivation.access == access::take) {
       return static_cast<Request>(std::move(*reached.object));
-    } else if constexpr (Derivation.how == satisfaction::move) {
+    } else if constexpr (Derivation.access == access::move) {
       return Request(std::move(*reached.object));
     } else {
       return Request(*reached.object);

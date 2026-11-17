@@ -641,7 +641,7 @@ def expected(reached, context, layers, element, quals=None,
             costs = [semantics.affected(cost, effect)[:2] +
                      (int(object.absent),) +
                      semantics.affected(cost, effect)[2:]
-                     for object, effect in semantics.satisfactions(
+                     for object, effect in semantics.satisfying(
                          objects, category, planned_lifetime, layers, context,
                          quals)
                      for cost in reached[object]]

@@ -181,7 +181,7 @@ constexpr bool refers_stored() {
   constexpr const semantics::derivation &derivation =
       static_execution<Request, InterfaceBinding>::derivation::stable;
   return derivation.found && derivation.count == 0 &&
-         derivation.how == semantics::satisfaction::refer;
+         derivation.access == semantics::access::refer;
 }
 
 // Whether an rvalue request of a binding is of a value the binding makes
@@ -194,7 +194,7 @@ constexpr bool returns_made_value() {
                                 InterfaceBinding>::derivation;
   return static_execution<Request, InterfaceBinding>::resolves &&
          value_derivation::stable.found &&
-         value_derivation::stable.how == semantics::satisfaction::move;
+         value_derivation::stable.access == semantics::access::move;
 }
 
 // What a static resolution makes for a request: kept with the binding when

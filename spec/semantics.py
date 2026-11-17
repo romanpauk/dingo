@@ -1056,8 +1056,8 @@ def requested(start, context):
 def shape_candidates(reached):
     """The objects reached that may satisfy a request of an element and its
     layers, by (element, layers): those of the layers, then the raw pointers
-    to them, which a pointer request may take. satisfactions of them is that
-    of every object reached, of far fewer."""
+    to them, which a pointer request may take. satisfying of them is that of
+    every object reached, of far fewer."""
     found = {}
     for object in reached:
         found.setdefault((object.element, object.layers), []).append(object)
@@ -1125,7 +1125,7 @@ def converts_quals(got, wanted, layers, outer):
     return True
 
 
-def satisfactions(objects, category, lifetime, layers, context, quals=None):
+def satisfying(objects, category, lifetime, layers, context, quals=None):
     """The objects of a request's element that satisfy it, each with what
     satisfying it does to the leaf, as step_effect says. The request is of the
     qualifiers quals, of the object it is of and of each layer below,
@@ -1248,7 +1248,7 @@ def converted(scope, form, leaf, bound, shape, category, limits=frozenset(),
     objects = candidates.get((element, layers), ())
     return least_cost(
         [(affected(cost, effect), object.absent)
-         for object, effect in satisfactions(
+         for object, effect in satisfying(
              objects, category, Lifetime.REQUEST, layers, context,
              shape_quals(shape, bound))
          for cost in reached[object]], defined)
@@ -1292,7 +1292,7 @@ def fewest(scope, form, leaf, bound, shape, category, position, entry,
                             "move" if returned and
                             makes_leaf_anew(object.layers) else effect,
                             container), object.absent)
-               for object, effect in satisfactions(
+               for object, effect in satisfying(
                    objects, category, required_lifetime(position, entry),
                    layers, context, shape_quals(shape, bound))
                for cost in reached[object]]

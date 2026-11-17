@@ -193,11 +193,11 @@ finish_request(execution::erased_carrier reached,
   default:
     break;
   }
-  switch (conversion.how) {
-  case semantics::satisfaction::point:
+  switch (conversion.access) {
+  case semantics::access::point:
     return {conversion.reached->pointee(reached.object), access::borrow};
-  case semantics::satisfaction::take:
-  case semantics::satisfaction::move:
+  case semantics::access::take:
+  case semantics::access::move:
     return {reached.object, access::consume};
   default:
     return {reached.object, access::borrow};

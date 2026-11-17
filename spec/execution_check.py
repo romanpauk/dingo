@@ -182,7 +182,7 @@ def cell(name, scope, form, leaf, layers, element, quals, category,
     // {name}
     using derivation = {derivation};
     static_assert(derivation::transient.found);
-    static_assert(static_cast<int>(derivation::transient.how) == {how});
+    static_assert(static_cast<int>(derivation::transient.access) == {how});
     store kept;
     auto &stored = {"kept.keep<" + stored + ">([] { return " + make + "; })" if make else source};
     counting_on();

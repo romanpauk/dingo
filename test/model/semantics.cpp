@@ -122,9 +122,9 @@ bool replays(const derivation &made, const context &with,
   }
   const object &last = made.objects[made.count];
   const bool anew = makes_leaf_anew(last, with);
-  if (made.how == satisfaction::move) {
+  if (made.access == access::move) {
     so_far = affected(so_far, anew ? effect::move : effect::none);
-  } else if (made.how == satisfaction::copy) {
+  } else if (made.access == access::copy) {
     so_far = affected(so_far, anew ? effect::copy : effect::none);
   }
   return so_far == result.fewest;
@@ -285,7 +285,7 @@ int main(int count, char **arguments) {
           std::printf("- ");
           continue;
         }
-        std::printf("%u:%u,%u", static_cast<unsigned>(made.how),
+        std::printf("%u:%u,%u", static_cast<unsigned>(made.access),
                     made.fewest.copies, made.fewest.moves);
         for (std::size_t index = 0; index < made.count; ++index) {
           const object &next = made.objects[index + 1];

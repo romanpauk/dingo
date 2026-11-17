@@ -348,12 +348,12 @@ private:
           }
           const detail::execution::erased_carrier reached =
               sources::template run_route<false>(answer.route, start, store);
-          switch (answer.how) {
-          case semantics::satisfaction::point:
+          switch (answer.access) {
+          case semantics::access::point:
             return {layout.tables[answer.route]->pointee(reached.object),
                     access::borrow};
-          case semantics::satisfaction::take:
-          case semantics::satisfaction::move:
+          case semantics::access::take:
+          case semantics::access::move:
             return {reached.object, access::consume};
           default:
             return {reached.object, access::borrow};

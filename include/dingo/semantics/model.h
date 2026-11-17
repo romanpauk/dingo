@@ -1349,20 +1349,21 @@ constexpr bool pointer_satisfies(const semantics::object &object,
   return static_cast<int>(object.lifetimes[1]) >= static_cast<int>(needed);
 }
 
-// How an object satisfies a request: a reference or a pointer refers to it, a
-// pointer request takes it as the pointer value it is, an rvalue reference
-// takes what is made for the request, or a value is moved or copied of it.
-enum class satisfaction : std::uint8_t { refer, point, take, move, copy };
+// How a request has the object that satisfies it: a reference or a pointer
+// refers to it, a pointer request takes it as the pointer value it is, an
+// rvalue reference takes what is made for the request, or a value is moved or
+// copied of it.
+enum class access : std::uint8_t { refer, point, take, move, copy };
 
 // The fewest copies and moves of the leaf of what satisfies a request, as the
-// specification's satisfactions give it, or none; the state of the search
-// that satisfies it at that cost, the first one found, and how.
+// specification's satisfying gives it, or none; the state of the search
+// that satisfies it at that cost, the first one found, and its access.
 struct answer {
   bool found = false;
   cost fewest;
   bool overflow = false;
   std::uint16_t state = no_state;
-  satisfaction how = satisfaction::refer;
+  semantics::access access = semantics::access::refer;
   // Whether what satisfies it may not exist, as the element of a layer that
   // may be empty: the request fails when it does not.
   bool absent = false;
@@ -1384,12 +1385,12 @@ constexpr bool cheaper(cost made, bool absent, cost other, bool other_absent) {
 // The answer of what satisfies a request at the least cost, as the
 // specification's fewest prefers it.
 constexpr void consider(answer &result, cost made, std::size_t index,
-                        satisfaction how, bool absent) {
+                        semantics::access access, bool absent) {
   if (!result.found || cheaper(made, absent, result.fewest, result.absent)) {
     result.found = true;
     result.fewest = made;
     result.state = static_cast<std::uint16_t>(index);
-    result.how = how;
+    result.access = access;
     result.absent = absent;
   }
 }
@@ -1425,7 +1426,7 @@ satisfy_states(const state *states, std::size_t count, bool overflow,
       if (object.element == goal.element && qualified && object.instance &&
           static_cast<int>(object.life()) >= static_cast<int>(needed)) {
         consider(result, finish(each.made, effect::none, object), index,
-                 satisfaction::refer, object.absent);
+                 access::refer, object.absent);
       }
     }
     // A pointer value satisfies a pointer request besides what it refers
@@ -1440,7 +1441,7 @@ satisfy_states(const state *states, std::size_t count, bool overflow,
           pointer_satisfies(each.reached, goal, needed, context, referable,
                             referred)) {
         consider(result, finish(each.made, effect::none, each.reached), index,
-                 satisfaction::point, each.reached.absent);
+                 access::point, each.reached.absent);
       }
     }
     return result;
@@ -1454,7 +1455,7 @@ satisfy_states(const state *states, std::size_t count, bool overflow,
     if (taken == category::rvalue_reference) {
       if (object.origin == origin::made && can_move(object, context)) {
         consider(result, finish(each.made, effect::none, object), index,
-                 satisfaction::take, object.absent);
+                 access::take, object.absent);
       }
       continue;
     }
@@ -1465,12 +1466,12 @@ satisfy_states(const state *states, std::size_t count, bool overflow,
     if (owned(object.origin) && can_move(object, context)) {
       consider(result,
                finish(each.made, anew ? effect::move : effect::none, object),
-               index, satisfaction::move, object.absent);
+               index, access::move, object.absent);
     }
     if (can_copy(object, context)) {
       consider(result,
                finish(each.made, anew ? effect::copy : effect::none, object),
-               index, satisfaction::copy, object.absent);
+               index, access::copy, object.absent);
     }
   }
   return result;
@@ -1518,7 +1519,7 @@ struct derivation {
   // The state of the search each object is.
   std::uint16_t states[max_steps + 1] = {};
   std::size_t count = 0;
-  satisfaction how = satisfaction::refer;
+  semantics::access access = semantics::access::refer;
   cost fewest;
   // Whether the search held fewer states than it reached: the derivation is not
   // to be trusted.
@@ -1564,7 +1565,7 @@ constexpr derivation answer_derivation(const search &found,
       made.steps[index - 1] = each.step;
     }
   }
-  made.how = result.how;
+  made.access = result.access;
   made.fewest = result.fewest;
   return made;
 }

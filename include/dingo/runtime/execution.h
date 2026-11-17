@@ -793,7 +793,7 @@ struct closed_answer {
   bool value_route = false;
   bool stable_address = false;
   std::uint16_t route = 0;
-  semantics::satisfaction how = semantics::satisfaction::refer;
+  semantics::access access = semantics::access::refer;
   std::uint8_t quals = 0;
 };
 
@@ -848,7 +848,7 @@ struct runtime_conversion {
   // closure, and whether it is the one of a value.
   std::uint16_t route = 0;
   bool value_route = false;
-  semantics::satisfaction how = semantics::satisfaction::refer;
+  semantics::access access = semantics::access::refer;
   finish last = finish::satisfy;
   std::uint8_t depth = 0;
   std::uint8_t quals = 0;
@@ -1073,10 +1073,10 @@ inline runtime_conversion make_runtime_conversion(
   made.quals = compiled.quals;
   made.found = true;
   made.reached = table;
-  made.how = derivation.how;
+  made.access = derivation.access;
   const semantics::object &reached = derivation.objects[derivation.count];
   made.stable_address =
-      (derivation.how == semantics::satisfaction::point
+      (derivation.access == semantics::access::point
            ? reached.lifetimes[1]
            : reached.lifetimes[0]) == semantics::lifetime::stable;
   return made;
@@ -1347,8 +1347,7 @@ template <typename Shape> struct closed_semantics {
     semantics::answer made;
     made.found = true;
     made.state = static_cast<std::uint16_t>(state);
-    made.how =
-        value ? semantics::satisfaction::copy : semantics::satisfaction::refer;
+    made.access = value ? semantics::access::copy : semantics::access::refer;
     return made;
   }
   template <std::size_t State, bool Value>
@@ -1474,15 +1473,15 @@ struct closed_answer_table {
     }
     made.found = true;
     made.route = result.state;
-    made.how = result.how;
+    made.access = result.access;
     const route_finish finished = route_finishes.entries[result.state];
-    made.value_route = (result.how == semantics::satisfaction::move ||
-                        result.how == semantics::satisfaction::copy) &&
+    made.value_route = (result.access == semantics::access::move ||
+                        result.access == semantics::access::copy) &&
                        finished.copies;
     made.quals = finished.quals;
     const semantics::object &reached = closure.states[result.state].reached;
     made.stable_address =
-        (result.how == semantics::satisfaction::point
+        (result.access == semantics::access::point
              ? reached.lifetimes[1]
              : reached.lifetimes[0]) == semantics::lifetime::stable;
     return made;
@@ -1565,7 +1564,7 @@ struct closed_answer_table {
          ++index) {
       for (const closed_answer &each :
            {answers.entries[index].stable, answers.entries[index].transient}) {
-        if (each.found && each.how == semantics::satisfaction::point) {
+        if (each.found && each.access == semantics::access::point) {
           made.entries[each.route] = true;
         }
       }

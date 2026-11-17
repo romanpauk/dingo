@@ -51,12 +51,12 @@ an origin, and what it is of the instance. `transitions` gives the steps from a
 object, and `reachable` gives every object a stored object reaches, with the
 copies and the moves of the leaf. A binding takes the steps that need the type
 it stores (`binding_steps`); a request takes the others (`request_steps`).
-`satisfactions` tells which objects satisfy a request.
+`satisfying` tells which objects satisfy a request.
 
 The library computes the same: one implementation of the steps, the reachable
-objects and the satisfactions, as constant expressions over these values. Its
-results are compared with the specification for every starting object and every
-request.
+objects and what satisfies a request, as constant expressions over these values.
+Its results are compared with the specification for every starting object and
+every request.
 
 ## A Layer Is Its Properties
 
@@ -122,7 +122,7 @@ other code.
 
 1. **Semantics as values.** Done.
    [include/dingo/semantics/model.h](../../include/dingo/semantics/model.h)
-   ports the steps, the search and the satisfactions of the specification to
+   ports the steps, the search and the satisfying of the specification to
    constant expressions over layers, objects and requests. It includes no other
    part of the library. The port does not search every object a stored object
    reaches: up to 2859 of them, 468 on average. It searches the objects on the
