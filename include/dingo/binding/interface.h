@@ -39,19 +39,6 @@ struct resolved_address {
 };
 
 namespace detail {
-// What a materialization calls once the source it materializes exists:
-// fn(self).
-struct materialized_hook {
-  void (*fn)(void *self);
-  void *self;
-  void operator()() const { fn(self); }
-};
-
-// The hook a materialization calls, of no type.
-template <typename Fn> materialized_hook erase_hook(Fn &fn) {
-  return {[](void *self) { (*static_cast<Fn *>(self))(); }, &fn};
-}
-
 class retention;
 
 struct runtime_request;
@@ -74,23 +61,20 @@ struct runtime_binding_header {
 };
 
 // A runtime binding as the runtime container resolves it: what it is, as
-// constant data, and the functions of its type. Everything else is the engine
-// of the container, which dispatches every binding by its node.
+// constant data, and the function of its type that resolves a request of
+// it.
 template <typename RTTI, typename Context> struct runtime_binding_node {
   using interface_type = runtime_binding_interface<RTTI, Context>;
   using request_type = detail::runtime_request;
   using conversion_type = detail::execution::runtime_conversion;
 
-  // The engine: resolves a request of a binding, of its node. It is one
-  // function for every binding of a container.
+  // Resolves a request of the binding, of its node.
   resolved_address (*dispatch)(const runtime_binding_node &node,
                                interface_type &binding,
                                construction_scope scope, Context &context,
                                const request_type &request,
                                const void *cache_key);
   type_descriptor registered;
-  // The leaf of what the binding stores, which its recursion guard names.
-  type_descriptor leaf;
   // The key of the interface of the binding, which a request it resolves
   // names.
   const void *interface_key;
@@ -98,25 +82,10 @@ template <typename RTTI, typename Context> struct runtime_binding_node {
   // is derived from; none when its type has C++ properties the semantics
   // do not model.
   const detail::execution::binding_layout *layout;
-  // How the source of the binding is materialized, which the static
-  // container also branches on.
-  detail::materialization_facts materialization;
   // Whether the binding caches the addresses it resolves.
   bool caches;
-  // Materializes the source of the binding, in the construction scope,
-  // calls materialized once it is, and runs a conversion of a request of it, in
-  // the scope of the request.
-  resolved_address (*run)(interface_type &binding, construction_scope scope,
-                          construction_scope construction, Context &context,
-                          const conversion_type &conversion,
-                          const request_type &request,
-                          const detail::materialized_hook &materialized);
   // Where the cell of the binding lies in its record, after its header.
   std::size_t cell_offset;
-  // What the binding keeps of its instance, or none.
-  detail::retention *(*retained)(interface_type &binding) noexcept;
-  bool (*resolved)(void *cell) noexcept;
-  void (*reset)(void *cell) noexcept;
 };
 
 template <typename RTTI, typename Context> class runtime_binding_interface {

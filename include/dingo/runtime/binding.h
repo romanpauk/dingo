@@ -86,80 +86,11 @@ struct runtime_binding_record {
 namespace detail {
 template <typename Storage> using registered_type_t = typename Storage::type;
 
-// The engine of the runtime bindings of a container. It derives a request of a
-// binding once, from what the binding publishes, and runs the conversion of the
-// lifetime the request needs: one function for every binding of the
-// container.
-template <typename RTTI, typename Context> struct runtime_binding_engine {
-  using node_type = runtime_binding_node<RTTI, Context>;
-  using interface_type = typename node_type::interface_type;
-  using request_type = typename node_type::request_type;
-
-  // Converts a request, guards the binding against recursion, retains the
-  // source an unresolved storage retains in the transaction, which resets
-  // the cell if it fails, and publishes an address that lives as long as the
-  // container in the request cache under its key, if it has one.
-  static resolved_address dispatch(const node_type &node,
-                                   interface_type &binding,
-                                   construction_scope scope, Context &context,
-                                   const request_type &request,
-                                   const void *cache_key) {
-    if (node.layout == nullptr || !request.modeled ||
-        request.interface_key != node.interface_key) {
-      throw make_type_not_convertible_exception(request.requested,
-                                                node.registered, context);
-    }
-    const auto &conversions = request.conversions->find(&node, [&] {
-      return execution::make_runtime_conversions(*node.layout, request.layout);
-    });
-    // What a request passes to the caller lives as long as the container.
-    const auto &conversion =
-        scope.is_caller() ? conversions.stable : conversions.transient;
-    if (!conversion.found) {
-      throw make_type_not_convertible_exception(request.requested,
-                                                node.registered, context);
-    }
-    const resolved_address result = run_materialization<true, true>(
-        node.materialization, node_access{node, binding}, scope, context,
-        [&](construction_scope construction, auto &materialized) {
-          return node.run(binding, scope, construction, context, conversion,
-                          request, erase_hook(materialized));
-        });
-    if (cache_key != nullptr && node.caches && conversion.stable_address &&
-        result.access == resolved_address::access_kind::borrow) {
-      binding.publish_cache(context, cache_key, result.address);
-    }
-    return result;
-  }
-
-  // The access of a binding to its materialization, through its node.
-  struct node_access {
-    const node_type &node;
-    interface_type &binding;
-
-    bool resolved() const noexcept { return node.resolved(cell_address()); }
-    type_descriptor leaf() const noexcept { return node.leaf; }
-    void *cell_address() const noexcept {
-      return reinterpret_cast<unsigned char *>(&binding.header()) +
-             node.cell_offset;
-    }
-    auto reset() const noexcept { return node.reset; }
-    auto rollback() const noexcept { return &rollback_cell; }
-    void *rollback_argument() const noexcept {
-      return const_cast<void *>(static_cast<const void *>(&node));
-    }
-
-    static void rollback_cell(void *cell, void *node) noexcept {
-      static_cast<const node_type *>(node)->reset(cell);
-    }
-  };
-};
-
 } // namespace detail
 
 // The edge of the runtime binding of an interface and a storage: its node,
 // and the functions of its type the node points to, of the record of the
-// registration. Everything else is the engine of the container.
+// registration.
 template <typename Container, typename Type, typename Storage>
 struct runtime_binding_edge {
   using runtime_context_type =
@@ -225,40 +156,6 @@ private:
       (void)binding;
       return nullptr;
     }
-  }
-
-  // Materializes the source of the binding in a construction scope, through
-  // the container its factory resolves in, and runs a conversion of a request
-  // of it, in the scope of the request.
-  static resolved_address
-  run(interface_base &binding, construction_scope scope,
-      construction_scope construction, runtime_context_type &context,
-      const typename node_type::conversion_type &conversion,
-      const typename node_type::request_type &request,
-      const detail::materialized_hook &materialized) {
-    using activation_type = detail::binding_activation<cell_type, Container &>;
-    activation_type activation{
-        detail::runtime_cell<cell_type>(binding.header()),
-        detail::resolution_container<Container>(binding.header()), scope};
-    return activation.use_runtime_source(
-        construction, context, [&](auto &&source) -> resolved_address {
-          // What the conversion keeps is undone before the cell is reset.
-          materialized();
-          store_type store(
-              context, scope, retained(binding), request.requested,
-              detail::type_descriptor_v<detail::registered_type_t<Storage>>);
-          detail::execution::store_view transient{store, false};
-          detail::execution::erased_carrier reached = detail::execution::erase(
-              detail::conversion_start<stored_type,
-                                       execution_type::scope.makes>(
-                  std::forward<decltype(source)>(source), transient));
-          for (std::size_t index = 0; index < conversion.count; ++index) {
-            const auto &call = conversion.calls[index];
-            reached = (reached.owned ? call.owned : call.borrowed)(
-                reached, call.stable, store);
-          }
-          return detail::finish_request(reached, conversion);
-        });
   }
 
   // Resolves a request of the binding: by the answer of its closure, as the
@@ -425,14 +322,6 @@ private:
     return result;
   }
 
-  static bool is_resolved([[maybe_unused]] void *cell) noexcept {
-    if constexpr (detail::storage_can_reset<Storage>::value) {
-      return static_cast<cell_type *>(cell)->storage().is_resolved();
-    } else {
-      return true;
-    }
-  }
-
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
@@ -441,18 +330,11 @@ public:
   static constexpr node_type node{
       &dispatch,
       registered_type(),
-      detail::type_descriptor_v<leaf_type_t<typename Storage::type>>,
       &detail::execution::shape_key<
           detail::execution::request_interface_t<Type>>,
       layout(),
-      detail::materialization_facts_v<Storage, runtime_context_type,
-                                      Container>(),
       detail::cache::is_stable_storage_v<Storage>,
-      &run,
-      detail::runtime_cell_offset_v<cell_type>,
-      &retained,
-      &is_resolved,
-      &detail::cell_access<cell_type>::reset_cell};
+      detail::runtime_cell_offset_v<cell_type>};
 };
 
 } // namespace dingo
