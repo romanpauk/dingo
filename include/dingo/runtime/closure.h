@@ -384,17 +384,18 @@ struct closed_answer_table {
       }
       add_shape(made, goal, static_cast<std::uint16_t>(state), false);
       if (object.depth && context.kind(object.layers[0]).adopted) {
-        semantics::request pointed;
-        pointed.depth = static_cast<std::uint8_t>(object.depth - 1);
-        pointed.element = object.element;
-        pointed.shape_depth = pointed.depth;
+        semantics::request pointed_request;
+        pointed_request.depth = static_cast<std::uint8_t>(object.depth - 1);
+        pointed_request.element = object.element;
+        pointed_request.shape_depth = pointed_request.depth;
         for (std::size_t index = 1; index < object.depth; ++index) {
-          pointed.layers[index - 1] = object.layers[index];
+          pointed_request.layers[index - 1] = object.layers[index];
         }
         for (std::size_t index = 2; index <= object.depth; ++index) {
-          pointed.quals[index - 1] = object.quals[index];
+          pointed_request.quals[index - 1] = object.quals[index];
         }
-        add_shape(made, pointed, static_cast<std::uint16_t>(state), true);
+        add_shape(made, pointed_request, static_cast<std::uint16_t>(state),
+                  true);
       }
     }
     return made;

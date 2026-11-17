@@ -32,26 +32,26 @@ template <typename T, typename Leaf> struct innermost {
     using type = U;
   };
   static auto make() {
-    using type = std::remove_cv_t<T>;
-    if constexpr (std::is_same_v<type, Leaf>) {
+    using bare = std::remove_cv_t<T>;
+    if constexpr (std::is_same_v<bare, Leaf>) {
       return tag<Leaf>{};
-    } else if constexpr (std::is_pointer_v<type>) {
-      return tag<typename innermost<std::remove_pointer_t<type>, Leaf>::type>{};
-    } else if constexpr (std::is_array_v<type>) {
-      return tag<typename innermost<std::remove_extent_t<type>, Leaf>::type>{};
-    } else if constexpr (type_traits<type>::enabled) {
-      return tag<typename innermost<typename type_traits<type>::value_type,
+    } else if constexpr (std::is_pointer_v<bare>) {
+      return tag<typename innermost<std::remove_pointer_t<bare>, Leaf>::type>{};
+    } else if constexpr (std::is_array_v<bare>) {
+      return tag<typename innermost<std::remove_extent_t<bare>, Leaf>::type>{};
+    } else if constexpr (type_traits<bare>::enabled) {
+      return tag<typename innermost<typename type_traits<bare>::value_type,
                                     Leaf>::type>{};
-    } else if constexpr (is_alternative_type_v<type>) {
+    } else if constexpr (is_alternative_type_v<bare>) {
       using held = typename alternatives_stack<
-          Leaf, alternative_type_alternatives_t<type>>::alternative;
+          Leaf, alternative_type_alternatives_t<bare>>::alternative;
       if constexpr (std::is_void_v<held>) {
-        return tag<type>{};
+        return tag<bare>{};
       } else {
         return tag<typename innermost<held, Leaf>::type>{};
       }
     } else {
-      return tag<type>{};
+      return tag<bare>{};
     }
   }
   using type = typename decltype(make())::type;
@@ -68,17 +68,17 @@ template <typename T> struct request_interface {
     using type = U;
   };
   static auto make() {
-    using type = std::remove_cv_t<T>;
-    if constexpr (std::is_array_v<type>) {
-      return tag<std::remove_cv_t<type>>{};
-    } else if constexpr (std::is_pointer_v<type>) {
+    using bare = std::remove_cv_t<T>;
+    if constexpr (std::is_array_v<bare>) {
+      return tag<std::remove_cv_t<bare>>{};
+    } else if constexpr (std::is_pointer_v<bare>) {
       return tag<
-          typename request_interface<std::remove_pointer_t<type>>::type>{};
-    } else if constexpr (type_traits<type>::enabled) {
+          typename request_interface<std::remove_pointer_t<bare>>::type>{};
+    } else if constexpr (type_traits<bare>::enabled) {
       return tag<typename request_interface<
-          typename type_traits<type>::value_type>::type>{};
+          typename type_traits<bare>::value_type>::type>{};
     } else {
-      return tag<type>{};
+      return tag<bare>{};
     }
   }
   using type = typename decltype(make())::type;
