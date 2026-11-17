@@ -435,23 +435,41 @@ struct closed_answer_table {
   struct answer_list {
     closed_answers entries[shapes.count * shape_answer_count + 1] = {};
   };
-  static constexpr answer_list make_answers() {
+  // The answers of a shape for a category, of each qualifiers of the object a
+  // request is of. Each is a constant of its own: the answers of a whole
+  // closure take more steps than a compiler evaluates in one constant.
+  struct category_answers {
+    closed_answers entries[4] = {};
+  };
+  static constexpr category_answers make_category_answers(std::size_t shape,
+                                                          unsigned taken) {
+    category_answers made;
+    const auto category = static_cast<semantics::category>(taken);
+    for (std::uint8_t quals = 0; quals < 4; ++quals) {
+      semantics::request goal = shapes.goals[shape];
+      goal.quals[0] = quals;
+      made.entries[quals] = {
+          find_answer(goal, category, semantics::lifetime::stable),
+          find_answer(goal, category, semantics::lifetime::request)};
+    }
+    return made;
+  }
+  template <std::size_t Index>
+  static constexpr category_answers category_answers_v =
+      make_category_answers(Index / 7, Index % 7);
+  template <std::size_t... I>
+  static constexpr answer_list make_answers(std::index_sequence<I...>) {
     answer_list made;
-    for (std::size_t shape = 0; shape < shapes.count; ++shape) {
-      for (unsigned taken = 0; taken < 7; ++taken) {
-        for (std::uint8_t quals = 0; quals < 4; ++quals) {
-          semantics::request goal = shapes.goals[shape];
-          goal.quals[0] = quals;
-          const auto category = static_cast<semantics::category>(taken);
-          made.entries[shape * shape_answer_count + taken * 4 + quals] = {
-              find_answer(goal, category, semantics::lifetime::stable),
-              find_answer(goal, category, semantics::lifetime::request)};
-        }
+    const category_answers *each[] = {&category_answers_v<I>..., nullptr};
+    for (std::size_t index = 0; index < sizeof...(I); ++index) {
+      for (std::size_t quals = 0; quals < 4; ++quals) {
+        made.entries[index * 4 + quals] = each[index]->entries[quals];
       }
     }
     return made;
   }
-  static constexpr answer_list answers = make_answers();
+  static constexpr answer_list answers =
+      make_answers(std::make_index_sequence<shapes.count * 7>{});
 
   // Whether a step a request takes of what the binding does not know may
   // start from a state: a wrap of what it owns, a handle made of a raw
