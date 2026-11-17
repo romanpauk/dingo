@@ -463,6 +463,37 @@ constexpr object copied(const semantics::object &object,
   return made;
 }
 
+// Whether the outer layer of an object gives its element: not a raw pointer
+// the request owns or an array that decays, which take other steps; nor a
+// layer the derivation wrapped a value in, whose element is what it was made
+// of, as it was; nor one it converted to a more qualified element, whose
+// element is that of what it was converted of.
+constexpr bool gives_element(const semantics::object &object,
+                             const layer_kind &kind) {
+  return kind.gives_element && !kind.decays &&
+         !(kind.adopted && object.owns_pointee) && !object.full &&
+         !object.qualified;
+}
+
+// The element of the outer layer of an object that gives it.
+constexpr object element_object(const semantics::object &object,
+                                const semantics::context &context) {
+  const layer outer = object.layers[0];
+  const layer_kind &kind = context.kind(outer);
+  semantics::object inner = restacked(object, nullptr, 0, 1, nullptr);
+  inner.origin = kind.owns == owner::sole ? object.origin : origin::borrowed;
+  inner.contained = object.contained != no_layer ? object.contained
+                    : object.lifetimes[1] == lifetime::request ? outer
+                                                               : no_layer;
+  inner.unconstructed =
+      context.scope.publishes_early && object.instance && object.depth > 1;
+  inner.absent = object.absent || kind.may_be_empty;
+  inner.quals[0] = held_quals(object, kind);
+  inner.owns_pointee = false;
+  inner.made_layer = false;
+  return inner;
+}
+
 // What is derived of the element of a layer that may be empty without
 // failing when it is: a pointer to the element, but into a copy a binding
 // converts where the library limits it, and the optional the layer holds.
@@ -681,28 +712,12 @@ DINGO_COLD constexpr void each_step(const semantics::object &given,
         adopted.made_layer = true;
         out(step::adopt, adopted);
       }
-    } else if (kind.gives_element && !object.full && !given.qualified &&
-               out.takes(step::element, outer, object.depth)) {
-      // A layer the derivation wrapped a value in is not taken apart: its
-      // element is what it was made of, as it was; nor is one it converted
-      // to a more qualified element: its element is that of what it was
-      // converted of.
-      const bool made = object.lifetimes[1] == lifetime::request;
-      semantics::object inner = restacked(object, nullptr, 0, 1, nullptr);
-      inner.origin =
-          kind.owns == owner::sole ? object.origin : origin::borrowed;
-      inner.contained = object.contained != no_layer ? object.contained
-                        : made                       ? outer
-                                                     : no_layer;
-      inner.unconstructed =
-          context.scope.publishes_early && object.instance && object.depth > 1;
-      inner.absent = object.absent || (kind.may_be_empty && !object.full);
-      inner.full = static_cast<std::uint8_t>(object.full ? object.full - 1 : 0);
-      inner.quals[0] = held_quals(object, kind);
-      inner.owns_pointee = false;
-      inner.made_layer = false;
+    }
+    if (gives_element(given, kind) &&
+        out.takes(step::element, outer, object.depth)) {
+      const semantics::object inner = element_object(object, context);
       out(step::element, inner);
-      if (kind.may_be_empty && !object.full && !kind.adopted) {
+      if (kind.may_be_empty && !kind.adopted) {
         empty_safe_steps(object, inner, context, out);
       }
     }
@@ -809,10 +824,12 @@ DINGO_COLD constexpr void each_step(const semantics::object &given,
   }
 }
 
-// The steps the library takes from an object, as a list.
-constexpr transitions_list steps(const semantics::object &object,
-                                 const semantics::context &context) {
-  transitions_list out;
+// The steps the library takes from an object, as a list. It is a template,
+// so that only a file that lists them instantiates the steps into a list.
+template <typename List = transitions_list>
+constexpr List steps(const semantics::object &object,
+                     const semantics::context &context) {
+  List out;
   each_step(object, context, out);
   return out;
 }
@@ -1158,14 +1175,17 @@ template <typename Search> struct any_sink {
   }
 };
 
+// What a request reaches from a stored object by every step, as the
+// specification searches it. It is a template, so that only a file that
+// searches so instantiates the steps into its sink.
+template <typename Sink = reached_sink>
 constexpr search reach(const object &start, const semantics::context &context,
                        const request &goal) {
   search found;
   found.add({start, {}, no_state, step::decay});
   for (std::size_t next = 0; next < found.count; ++next) {
     const state source = found.states[next];
-    reached_sink sink{found, source, static_cast<std::uint16_t>(next), goal,
-                      context};
+    Sink sink{found, source, static_cast<std::uint16_t>(next), goal, context};
     each_step(source.reached, context, sink);
   }
   return found;
@@ -1428,11 +1448,6 @@ constexpr answer satisfy(const search &found, const request &goal,
   return satisfy_closed(found, goal, taken, needed, context, affected_cost{});
 }
 
-constexpr answer fewest(const object &start, const semantics::context &context,
-                        const request &goal, category taken, lifetime needed) {
-  return satisfy(reach(start, context, goal), goal, taken, needed, context);
-}
-
 inline constexpr std::size_t max_steps = 16;
 
 // The steps from a stored object to what satisfies a request, and the objects
@@ -1540,48 +1555,36 @@ template <typename Sink> struct binding_steps_sink {
   const semantics::context &context;
   Sink &out;
 
-  // It takes the steps what it passes them to takes.
+  // It takes the steps it passes on, and a handle a pointer is taken over
+  // by that owns it alone, whose element it releases, of those what it
+  // passes them to takes.
   constexpr bool takes(step kind, layer outer, std::size_t depth) const {
-    return out.takes(kind, outer, depth);
+    return (passes(kind, outer) ||
+            (kind == step::adopt && context.kind(outer).owns == owner::sole)) &&
+           out.takes(kind, outer, depth);
   }
-  constexpr bool takes_quals(std::size_t level, std::uint8_t quals,
-                             std::size_t depth) const {
-    return out.takes_quals(level, quals, depth);
+  constexpr bool takes_quals(std::size_t, std::uint8_t, std::size_t) const {
+    return false;
+  }
+
+  constexpr bool passes(step kind, layer outer) const {
+    return binding_kind(kind) ||
+           (kind != step::qualify && names_leaf(source, context) &&
+            (kind != step::wrap ||
+             (source.depth == 0 && context.kind(outer).rebinds) ||
+             holds_stored(source, stored)));
   }
 
   constexpr void operator()(step kind, const object &reached) {
-    if (binding_kind(kind)) {
-      out(kind, reached);
-    } else if (kind != step::qualify && names_leaf(source, context) &&
-               (kind != step::wrap ||
-                (source.depth == 0 &&
-                 context.kind(reached.layers[0]).rebinds) ||
-                holds_stored(source, stored))) {
+    if (passes(kind, reached.layers[0])) {
       out(kind, reached);
     }
-    if (kind == step::adopt &&
-        context.kind(reached.layers[0]).owns == owner::sole) {
-      released_sink released{out};
-      each_step(reached, context, released);
+    if (kind == step::adopt && !reached.unconstructed &&
+        context.kind(reached.layers[0]).owns == owner::sole &&
+        gives_element(reached, context.kind(reached.layers[0]))) {
+      out(step::release, element_object(reached, context));
     }
   }
-
-  struct released_sink {
-    Sink &out;
-    // It passes on the element of a handle alone.
-    constexpr bool takes(step kind, layer, std::size_t) const {
-      return kind == step::element;
-    }
-    constexpr bool takes_quals(std::size_t, std::uint8_t, std::size_t) const {
-      return false;
-    }
-
-    constexpr void operator()(step kind, const object &reached) {
-      if (kind == step::element) {
-        out(step::release, reached);
-      }
-    }
-  };
 };
 
 template <typename Sink>
