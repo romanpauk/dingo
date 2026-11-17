@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <dingo/base/config.h>
+
 #include <dingo/base/construction_scope.h>
 #include <dingo/base/type_descriptor.h>
 #include <dingo/binding/interface.h>
@@ -50,8 +52,9 @@ public:
   // Keeps an object of a layout, which construct constructs of make: with
   // the binding when it is stable, in the context in the scope of the
   // request otherwise.
-  void *keep(bool stable, const object_layout &layout,
-             execution::construct_function construct, void *make) override {
+  DINGO_NOINLINE void *keep(bool stable, const object_layout &layout,
+                            execution::construct_function construct,
+                            void *make) override {
     auto place_made = [&](void *place) { construct(place, make); };
     if (stable) {
       // A binding that keeps no instance is converted to keep nothing made of
