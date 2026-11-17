@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 //
 
-// What one container answers across different requests of one binding, and
+// What one container resolves across different requests of one binding, and
 // the requests the model probe in spec/ does not make: cv-qualified ones, a
 // second interface at an offset, a concrete interface by value, typed keys,
 // multi-dimensional arrays and a variant made by a constructor of one of its

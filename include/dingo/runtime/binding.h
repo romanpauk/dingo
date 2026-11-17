@@ -59,7 +59,7 @@ Container &resolution_container(runtime_binding_header &header) noexcept {
 
 // The record of a registration, in one allocation: the header the bindings
 // of its interfaces share, the cell of its storage, and the binding of each
-// of its interfaces. Only the edge of a binding knows the type of the cell.
+// of its interfaces. Only the edge of a binding has the type of the cell.
 template <typename Cell, typename Binding, std::size_t Interfaces>
 struct runtime_binding_record {
   static constexpr std::size_t bindings_offset =
@@ -262,8 +262,8 @@ private:
   }
 
   // Resolves a request of the binding: by the answer of its closure, as the
-  // code compiled it, when it answers the request; else by the conversion of
-  // the request, made once, from what the binding publishes.
+  // code compiled it, when it has one for the request; else by the conversion
+  // of the request, made once, from what the binding publishes.
   static resolved_address
   dispatch(const node_type &binding_node, interface_base &binding,
            construction_scope scope, runtime_context_type &context,
@@ -312,9 +312,9 @@ private:
     }
   }
 
-  // Resolves a request the closure of the binding answers: runs the route of
-  // the answer, compiled for the types of the binding, and takes what it
-  // reaches as the answer says.
+  // Resolves a request the closure of the binding has an answer for: runs the
+  // route of the answer, compiled for the types of the binding, and takes what
+  // it reaches as the answer records.
   DINGO_ALWAYS_INLINE static resolved_address
   resolve_closed(interface_base &binding, construction_scope scope,
                  runtime_context_type &context,
@@ -385,8 +385,8 @@ private:
     }
   };
 
-  // Resolves a request by a conversion the closure of the binding does not
-  // answer: runs the route of the conversion, compiled for the types of the
+  // Resolves a request by a conversion the closure of the binding has no
+  // answer for: runs the route of the conversion, compiled for the types of the
   // binding, and the steps the request takes after it.
   static resolved_address
   resolve(interface_base &binding, construction_scope scope,
@@ -406,8 +406,8 @@ private:
       auto start =
           detail::conversion_start<stored_type, execution_type::scope.makes>(
               std::forward<decltype(source)>(source), store);
-      // The closure answers what a conversion of a value of no step after its
-      // route is: a conversion takes steps after it.
+      // The closure covers a conversion of a value of no step after its
+      // route: a conversion takes steps after it.
       assert(!conversion.value_route);
       detail::execution::erased_carrier reached =
           sources::template run_route<false>(conversion.route, start, store);

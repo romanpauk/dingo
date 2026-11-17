@@ -69,7 +69,7 @@ using shared_element =
                 dingo::interfaces<element_interface>, Key...>;
 
 // A runtime container takes several unkeyed or key_a bindings of an interface
-// only when its lookups say so.
+// only when its lookups allow it.
 struct collection_traits : dingo::runtime_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::collection<element_interface>,

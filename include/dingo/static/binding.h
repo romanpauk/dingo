@@ -105,7 +105,7 @@ template <typename LocalStorage, typename Host> struct local_binding_router {
         return static_collection_binding_count<LocalBindings, R, LookupKey>() !=
                0;
       } else {
-        // A level of local bindings answers what it binds, also ambiguously,
+        // A level of local bindings resolves what it binds, also ambiguously,
         // by the rule of the runtime container.
         return !falls_back(
             LocalBindings::template selection<R, LookupKey>::status);
@@ -403,7 +403,7 @@ private:
   };
 
   // A static container resolves its bindings in a static context, also
-  // what a runtime child asks it for, so that it resets them itself.
+  // what a runtime child requests of it, so that it resets them itself.
   template <typename Host, typename Context>
   auto ordered(Host &host, Context &) {
     static_assert(!is_runtime_context_v<Context>);

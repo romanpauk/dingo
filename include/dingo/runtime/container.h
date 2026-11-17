@@ -51,7 +51,7 @@
 namespace dingo {
 
 // The resolve front-end of a runtime container. It is the root runtime
-// registry and adds what a root answers beyond its bindings: the parent
+// registry and adds what a root resolves beyond its bindings: the parent
 // fallback, auto-construction, and the transaction and cache of a request.
 template <typename ContainerTraits, typename Allocator,
           typename ParentContainer>
@@ -850,7 +850,7 @@ protected:
   }
 
   // The level of the local bindings of a registration, made as it is first
-  // asked for.
+  // requested.
   class container_proxy {
   public:
     using container_type = self_type;
@@ -1263,9 +1263,9 @@ public:
                          detail::container_implementation_t<ParentContainer>>;
 
 private:
-  // The parent answers only the lookups it declares.
+  // The parent resolves only the lookups it declares.
   template <typename Lookup, typename LookupKey>
-  static constexpr bool parent_serves() {
+  static constexpr bool parent_declares() {
     static_assert(detail::is_lookup_key_v<LookupKey>);
     return detail::has_lookup<parent_container_type, Lookup, LookupKey>();
   }
@@ -1298,7 +1298,7 @@ public:
   runtime_container_impl(const self_type &) = delete;
   runtime_container_impl(self_type &&) = delete;
   // The container destroys the runtime data it owns as it is destroyed,
-  // while it can still tell whether it is its own root.
+  // while it can still determine whether it is its own root.
   ~runtime_container_impl() { runtime_data_.destroy(owns_data()); }
   self_type &operator=(const self_type &) = delete;
   self_type &operator=(self_type &&) = delete;
@@ -1415,8 +1415,8 @@ public:
     using request = request_type<Request>;
     auto key = detail::make_lookup_key(std::forward<IdType>(id));
     const level_selection found = this->template select_request<request>(key);
-    if constexpr (parent_serves<typename request::lookup_type,
-                                decltype(key)>()) {
+    if constexpr (parent_declares<typename request::lookup_type,
+                                  decltype(key)>()) {
       auto *parent = found.level->parent_;
       if (parent && found.status == detail::binding_status::not_found) {
         return parent->template binding_status<Request>(key);

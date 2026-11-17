@@ -27,9 +27,9 @@ struct external;
 
 template <class T> struct collection_traits;
 
-// The wrapper semantics a type_traits specialization names. The library knows
-// a wrapper only by its semantics and by the operations of its type_traits; the
-// standard wrappers are described below as a user's wrapper is.
+// The wrapper semantics a type_traits specialization names. The library uses
+// a wrapper only through its semantics and the operations of its type_traits;
+// the standard wrappers are described below as a user's wrapper is.
 namespace semantics {
 // A handle to an object it does not own, such as a raw pointer.
 struct observer {
@@ -124,7 +124,7 @@ template <typename T, typename = void> struct type_traits {
 
 namespace detail {
 // Whether an owning handle takes over a raw pointer to an array of a known
-// bound, as its type_traits say; not unless they say so.
+// bound, as its type_traits declare; not unless they declare it.
 template <typename Handle, typename = void>
 inline constexpr bool adopts_bounded_array_v = false;
 
@@ -469,7 +469,7 @@ struct type_traits<std::unique_ptr<T, Deleter>,
     return *wrapper;
   }
   // A consumed handle gives its element away, as it owns it alone; one with
-  // a deleter of its own keeps it, as its deleter may expect to find it.
+  // a deleter of its own keeps it, as its deleter may require it.
   template <
       typename D = Deleter,
       typename = std::enable_if_t<std::is_same_v<D, std::default_delete<T>>>>

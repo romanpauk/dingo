@@ -373,7 +373,7 @@ struct table_maker : layer_types<T, Leaf, Interface> {
     ((made.wrap_runs[K + 1] = run<K + 1>()), ...);
   }
 
-  static constexpr bool wants(semantics::step kind) {
+  static constexpr bool mask_has(semantics::step kind) {
     return (Mask & operation_mask(kind)) != 0;
   }
 
@@ -403,26 +403,26 @@ struct table_maker : layer_types<T, Leaf, Interface> {
       return made.operations[static_cast<std::size_t>(kind)];
     };
     // Each operation the mask has, where C++ applies its step to the type.
-    if constexpr (wants(step::copy)) {
+    if constexpr (mask_has(step::copy)) {
       if constexpr (facts::template copyable<T>()) {
         index(step::copy) = both<step::copy>();
       }
     }
-    if constexpr (wants(step::decay) || wants(step::hand_over)) {
+    if constexpr (mask_has(step::decay) || mask_has(step::hand_over)) {
       if constexpr (std::is_array_v<type> &&
                     is_complete_v<std::remove_extent_t<type>>) {
         index(step::decay) = both<step::decay>();
         index(step::hand_over) = owned<step::hand_over>();
       }
     }
-    if constexpr (wants(step::element) || wants(step::element_pointer) ||
-                  wants(step::maybe_element) ||
-                  wants(step::maybe_element_copy)) {
+    if constexpr (mask_has(step::element) || mask_has(step::element_pointer) ||
+                  mask_has(step::maybe_element) ||
+                  mask_has(step::maybe_element_copy)) {
       if constexpr (facts::layer()) {
         elements(made);
       }
     }
-    if constexpr (wants(step::release) || (Mask & release_array_mask) != 0) {
+    if constexpr (mask_has(step::release) || (Mask & release_array_mask) != 0) {
       if constexpr (std::is_pointer_v<type> &&
                     std::is_object_v<std::remove_pointer_t<type>> &&
                     is_complete_v<std::remove_pointer_t<type>>) {
@@ -431,17 +431,17 @@ struct table_maker : layer_types<T, Leaf, Interface> {
             owned<step::release, release_operation<true>, release_array_mask>();
       }
     }
-    if constexpr (wants(step::transfer)) {
+    if constexpr (mask_has(step::transfer)) {
       if constexpr (transfers()) {
         index(step::transfer) = owned<step::transfer>();
       }
     }
-    if constexpr (wants(step::unknown_bound)) {
+    if constexpr (mask_has(step::unknown_bound)) {
       index(step::unknown_bound) = erase_operation<
           step::unknown_bound, execution::operation<step::unknown_bound>,
           converts_unknown_bound<true>(), converts_unknown_bound<false>()>();
     }
-    if constexpr (wants(step::upcast)) {
+    if constexpr (mask_has(step::upcast)) {
       if constexpr (upcasts<true>() || upcasts<false>()) {
         index(step::upcast) =
             erase_operation<step::upcast, execution::operation<step::upcast>,

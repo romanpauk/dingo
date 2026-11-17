@@ -13,8 +13,8 @@ struct reader {
   int value;
 };
 
-// A static container knows the reader is returned to the caller, which a
-// reference to the unique instance would outlive.
+// A static container detects, as it compiles, that the reader is returned to
+// the caller, which a reference to the unique instance would outlive.
 int main() {
   dingo::static_container<dingo::bindings<
       dingo::bind<dingo::scope<dingo::unique>, dingo::storage<A>>,

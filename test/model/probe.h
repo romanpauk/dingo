@@ -58,19 +58,20 @@ template <typename Base, typename... Interfaces> struct keyed_traits : Base {
 };
 
 // Whether a static container constructs the storage and the factory of a
-// binding of a model itself; model/static.h tells.
+// binding of a model itself; model/static.h defines it.
 template <typename Model> struct statically_constructible;
 
 // A container with a binding more: a static container binds it in its type,
 // which binds_in_type is true of; a runtime container is the same, and
-// registers it once it is made. model/static.h tells of a static container.
+// registers it once it is made. model/static.h defines it for a static
+// container.
 template <typename Container, typename Binding> struct with_binding {
   using type = Container;
   static constexpr bool binds_in_type = false;
 };
 
 // Whether the library accepts registering Registration. A registration it
-// rejects does not compile, so the probe asks before registering.
+// rejects does not compile, so the probe checks before registering.
 // A static container also constructs the storage and the factory of a
 // binding itself.
 template <typename Registration, bool Static> constexpr bool registrable() {
@@ -147,7 +148,7 @@ constexpr bool binds_exactly(type_list<Bound...> *) {
 }
 
 // Prints whether a registration the library accepts binds exactly the
-// interfaces the specification expects.
+// interfaces the specification defines.
 template <typename Registration, typename... Expected>
 void survey(const char *registration) {
   using model = detail::binding_model<Registration>;

@@ -16,7 +16,7 @@
 #include <type_traits>
 #include <utility>
 
-// What a runtime resolution knows of a binding and of a request: the layers
+// What a runtime resolution records of a binding and of a request: the layers
 // of each in a universe, the answers of the closure of a binding, and the
 // types and tables of a request.
 
@@ -85,7 +85,7 @@ struct runtime_layers<type_list<Identities...>> {
 };
 
 // A request as a runtime resolution converts it: its layers in a universe of
-// its own, whose wrapper layers it gives, what it asks for, and the table of
+// its own, whose wrapper layers it gives, what it names, and the table of
 // each type it spells, from its shape to its element, which make the layers
 // it makes.
 struct request_layout {
@@ -254,7 +254,7 @@ template <typename Request, typename Element> struct request_tables {
     static_assert((checked<K>() && ...),
                   "a request has the operation that makes each layer it makes, "
                   "and that converts each pointer or handle to the qualifiers "
-                  "it asks");
+                  "it names");
     struct table {
       const type_table *value[sizeof...(K)];
     };

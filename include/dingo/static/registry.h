@@ -120,7 +120,7 @@ struct binding_lookup_index_entry {
                                 typename InterfaceBinding::key_type>);
 };
 
-// The overload set of the bindings answers a lookup by overload resolution: a
+// The overload set of the bindings resolves a lookup by overload resolution: a
 // unique binding is the exact match, no binding falls through to the ellipsis,
 // and several bindings of the same interface and key are ambiguous.
 template <typename InterfaceBindings, typename Indexes>
@@ -223,7 +223,7 @@ struct dependency_bindings<void, InterfaceBindings> {
   using type = void;
 };
 
-// The bindings that answer a dependency: one, or void when none or several
+// The bindings that match a dependency: one, or void when none or several
 // do, and every binding of the element of a collection.
 template <typename Dependency, typename InterfaceBindings,
           typename Collection =
@@ -344,7 +344,7 @@ private:
                          binding_lookup_key_t<Interface, LookupKey>,
                          interface_bindings>;
 
-  // A request is answered by the bindings of its exact interface, or else by
+  // A request is resolved by the bindings of its exact interface, or else by
   // those of its normalized interface.
   template <typename Interface, typename LookupKey,
             typename Exact = exact_bindings_t<Interface, LookupKey>,

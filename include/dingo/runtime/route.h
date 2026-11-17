@@ -123,7 +123,7 @@ struct binding_sources {
                       "the table of a type has every step from it");
       }
     }
-    // Every step a request takes of it that its type knows.
+    // Every step a request takes of it that its type has an operation for.
     using own = typename class_carrier<classes.state_class[State]>::type;
     constexpr std::uint32_t kinds = request_kinds(Sources.states[State].reached,
                                                   Semantics::context(abstract));
@@ -307,9 +307,9 @@ struct binding_sources {
 
   // Whether a request converts what a state of the closure reaches by an
   // operation of its type, after the route of the state: a handle to the
-  // sharing one, or to one of an array of unknown bound, of a layer the
-  // binding does not know. Wraps, observers and adopters are made of the
-  // types the request spells.
+  // sharing one, or to one of an array of unknown bound, of a layer whose
+  // type the binding does not have. Wraps, observers and adopters are made of
+  // the types the request spells.
   template <std::size_t State> static constexpr bool converts_unknown_layer() {
     if constexpr (!closed_carrier<State>::possible) {
       return false;

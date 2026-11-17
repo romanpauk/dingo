@@ -23,13 +23,13 @@
 
 namespace dingo {
 
-// A specialization may also declare how detection sees the type:
+// A specialization may also declare how detection treats the type:
 //
 //   arguments            the type_list of the arguments it is constructed of
 //                        when it has one fixed signature, which detection
 //                        takes instead of searching for a constructor
 //   initializable<Args>  whether it is list-initialized of Args, where probing
-//                        T{args...} would not tell, as for a nested array
+//                        T{args...} would give no result, as for a nested array
 //
 // The overloads that construct in place are declared with a deduced `auto`
 // return type, which is `void`. A deduced return type is instantiated at the

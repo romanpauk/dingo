@@ -11,7 +11,7 @@
 #include <type_traits>
 
 namespace dingo::detail {
-// The layout of a type, as memory that places an object of it knows it: its
+// The layout of a type, as memory that places an object of it uses it: its
 // size, its alignment, and its destructor, none where it has none.
 struct object_layout {
   std::size_t size;

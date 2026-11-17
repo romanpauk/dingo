@@ -86,7 +86,8 @@ materialization_placement(const materialization_facts &facts,
   return source_placement::yielded;
 }
 
-// Whether the caller is refused an address into what a source is placed as:
+// Whether an address into what a source is placed as is rejected for the
+// caller:
 // a value the storage yields lives only as long as the context, which ends
 // before the caller uses an address into it. An address of what the value
 // owns apart from itself is the caller's only as the derivation takes it over.

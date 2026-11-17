@@ -21,7 +21,7 @@
 
 // The semantics of a binding of the types of what it stores: the stack of a
 // type in a universe of layers, and the shape of a binding as the semantics
-// know it, of no C++ type, which every type of the shape shares.
+// model it, of no C++ type, which every type of the shape shares.
 
 namespace dingo::detail::execution {
 
@@ -112,7 +112,7 @@ constexpr semantics::element semantic_element(stack_element element) {
                                             : semantics::element::leaf;
 }
 
-// The shape of a binding as the semantics know it, of no C++ type: its
+// The shape of a binding as the semantics model it, of no C++ type: its
 // context, the universe of its layers and its stored object, encoded as
 // integers. The semantics of a binding are a template of its shape, so that
 // a constant expression of them is evaluated once for every shape, not for
@@ -257,7 +257,7 @@ constexpr shape_code encode_shape(const semantics::context &context,
 
 // The semantics of a binding of a shape: what it publishes, and the layer
 // sources of it closed under every step a request takes but a wrap, in the
-// layers the binding knows, which a request reaches from.
+// layers whose types the binding has, which a request reaches from.
 template <std::uint64_t... Code> struct binding_shape {
   static constexpr std::uint64_t code[] = {Code...};
   static constexpr semantics::universe make_universe() {
@@ -350,7 +350,8 @@ struct binding_semantics {
   template <bool Abstract>
   static constexpr const semantics::search &sources = shape<Abstract>::sources;
   // The layer sources closed under every step a request takes but a wrap,
-  // in the layers the binding knows, which a request reaches from.
+  // in the layers whose types the binding has, which a request reaches
+  // from.
   template <bool Abstract>
   static constexpr const semantics::search &closed = shape<Abstract>::closed;
   template <bool Abstract> static constexpr bool whole() {

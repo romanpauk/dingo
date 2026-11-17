@@ -302,7 +302,8 @@ struct runtime_retained_source_pointer_dependency {
 int runtime_retained_source_pointer_dependency::live_count = 0;
 
 // Makes a new object for each request: a unique scope of a raw pointer owns
-// what it points to, which the resolution deletes when what it serves ends.
+// what it points to, which the resolution deletes when the request it is made
+// for ends.
 struct runtime_retained_source_pointer_factory {
   template <typename Type, typename Context, typename Container>
   Type construct(construction_scope, Context &, Container &) const {

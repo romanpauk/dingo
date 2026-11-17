@@ -22,8 +22,8 @@ namespace detail {
 // What a binding keeps of what it converts or composes of what it keeps, so
 // that a reference or a pointer to it lives as long as the binding: one
 // object per type, under the key of the type, made the first time it is
-// asked for. The objects of a runtime container are made in its persistent
-// memory and forgotten when the transaction that made them rolls back; those
+// requested. The objects of a runtime container are made in its persistent
+// memory and removed when the transaction that made them rolls back; those
 // of a static container, which may have no persistent memory, are owned here.
 class retention {
 public:
@@ -74,7 +74,7 @@ public:
     return object;
   }
 
-  // Forgets what is kept, and destroys what is owned here.
+  // Clears what is kept, and destroys what is owned here.
   void clear() noexcept {
     while (head_ != nullptr) {
       node *entry = head_;

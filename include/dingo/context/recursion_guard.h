@@ -49,7 +49,7 @@ inline constexpr bool recursion_guard_enabled_v =
             factory_without_dependencies_v<Factory>);
 
 // A guard of the materialization of a binding: it tracks the type in the
-// path of the resolution, and refuses to enter a binding that a resolution of
+// path of the resolution, and rejects a binding that a resolution of
 // this thread is already in. It is of no type: the guards of a thread form one
 // stack, and a binding is of one type.
 class recursion_guard {

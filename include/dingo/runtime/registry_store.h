@@ -161,7 +161,7 @@ struct runtime_registry_data {
 // The runtime data of a registry: the data a container owns, or, for a level
 // of the local bindings of a registration, which borrows the data of its
 // root, the scope of its bindings in that data and the level it falls back
-// to. A level holds only one of them, and its registry knows which: a
+// to. A level holds only one of them, and its registry records which: a
 // container is its own root.
 template <typename Data, typename Level> class runtime_data_holder {
 public:

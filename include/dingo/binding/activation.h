@@ -190,12 +190,12 @@ template <> constexpr materialized_request materialized<void>() {
 
 // The materialization of the source of a binding, which both containers run:
 // the static container through the typed access of its binding, the runtime
-// engine through the node of its binding. The access tells whether the
+// engine through the node of its binding. The access returns whether the
 // binding is resolved, the leaf it stores, its cell, which the recursion guard
 // names the binding by, and how the cell is reset: when a transaction rolls
 // back (rollback, of the cell and of rollback_argument) and as the runtime is
-// destroyed (reset). MayGuard and MayRetain are what the facts may decide, as
-// the code compiles: a static binding that is never guarded or never retains
+// destroyed (reset). MayGuard and MayRetain are what the facts may determine,
+// as the code compiles: a static binding that is never guarded or never retains
 // has no code for it.
 //
 // It guards the binding against recursion, and an unresolved storage that
@@ -205,13 +205,13 @@ template <> constexpr materialized_request materialized<void>() {
 // rollback, which runs the last registered first, resets the cell before
 // what it refers to. A cell that fails as it resolves, or as its reset is
 // registered, is reset at once. materialize materializes the source in a
-// What a materialization tells where nothing is to be told.
+// The hook a materialization calls where nothing is to be done.
 struct no_materialized_hook {
   void operator()() const noexcept {}
 };
 
 // construction scope and applies to it what the caller does with it.
-// materialize(construction, materialized) tells materialized() once the
+// materialize(construction, materialized) calls materialized() once the
 // source exists, before it applies anything to it: a cell it retains is reset
 // as a transaction rolls back after what is kept of it is undone.
 template <bool MayGuard, bool MayRetain, typename Access, typename Context,
@@ -365,7 +365,7 @@ struct binding_activation {
   }
 
   // Materializes the storage in a transaction and passes its source to fn,
-  // through an access to the cell, which tells how a rollback resets it.
+  // through an access to the cell, which defines how a rollback resets it.
   template <typename Context, typename Access, typename Fn>
   decltype(auto) use_source(Context &context, const Access &access, Fn &&fn) {
     static_assert(is_runtime_context_v<Context>);

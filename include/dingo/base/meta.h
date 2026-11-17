@@ -7,7 +7,7 @@
 
 #pragma once
 
-// Metafunctions of the language, which know nothing of the library.
+// Metafunctions of the language, which use nothing of the library.
 
 #include <cstddef>
 #include <type_traits>

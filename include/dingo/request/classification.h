@@ -17,16 +17,16 @@
 #include <cstddef>
 #include <type_traits>
 
-// The classification of C++ types: what the semantics (dingo/semantics/
-// model.h) know of a type. A layer of a type is its properties, which its
-// type_traits give: the semantics the specialization derives from, and what
-// C++ says of the wrapper of an element that can be copied, and of one that
-// can only be moved. The layers of C++ itself, a pointer and an array, are
+// The classification of C++ types: the semantic properties (dingo/semantics/
+// model.h) of a type. A layer of a type is its properties, which its
+// type_traits give: the semantics the specialization derives from, and the
+// C++ properties of the wrapper of an element that can be copied, and of one
+// that can only be moved. The layers of C++ itself, a pointer and an array, are
 // those of the semantics. No wrapper is named here.
 
 namespace dingo::detail {
 
-// The elements a wrapper is asked about.
+// The elements a wrapper is probed with.
 struct copyable_probe {};
 
 struct movable_probe {
@@ -105,7 +105,7 @@ template <typename Wrapper, typename Alternative> struct alternative_layer_tag {
 template <typename Semantics, typename Expected>
 inline constexpr bool is_semantics_v = std::is_same_v<Semantics, Expected>;
 
-// A type, named without being formed until type is asked for: the wrapper
+// A type, named without being formed until type is instantiated: the wrapper
 // Traits rebinds to an element.
 template <typename T> struct type_identity {
   using type = T;
@@ -147,7 +147,7 @@ template <typename Wrapper> constexpr semantics::layer_kind wrapper_kind() {
   if constexpr (rebinds_element<Wrapper>::value) {
     using copyable = typename traits::template rebind_t<copyable_probe>;
     // A pointer-like wrapper copies and moves as it does whatever its
-    // element is: the wrapper of a copyable element is asked about both.
+    // element is: the wrapper of a copyable element is probed for both.
     using movable =
         typename std::conditional_t<traits::is_pointer_like,
                                     type_identity<copyable>,
@@ -157,7 +157,7 @@ template <typename Wrapper> constexpr semantics::layer_kind wrapper_kind() {
     kind.adopts = traits::is_owning_handle &&
                   std::is_constructible_v<copyable, copyable_probe *>;
     // A handle takes over a pointer to an array of a known bound when its
-    // type traits say it deletes one as an array.
+    // type traits declare that it deletes one as an array.
     kind.adopts_bounded = kind.adopts && adopts_bounded_array_v<Wrapper>;
     // A pointer-like wrapper of the leaf is rebound to one of its interface.
     kind.rebinds = traits::is_pointer_like;
@@ -467,7 +467,7 @@ template <typename... Tags> struct layer_universe<type_list<Tags...>> {
   static constexpr semantics::universe value = make(identities{});
 };
 
-// What the leaf can do, as C++ says of it. A leaf that cannot be constructed
+// What the leaf can do, as C++ defines it. A leaf that cannot be constructed
 // of nothing is made by the factory its registration names.
 // A leaf is copied as the library copies it: a collection of what cannot be
 // copied cannot be either.
@@ -478,7 +478,7 @@ template <typename Leaf> constexpr semantics::leaf_traits leaf_traits_v() {
           std::is_constructible_v<Leaf, const volatile Leaf &>};
 }
 
-// The qualifiers of a type, as the semantics know them.
+// The qualifiers of a type, as the semantics model them.
 template <typename T>
 inline constexpr std::uint8_t quals_v = static_cast<std::uint8_t>(
     (std::is_const_v<T> ? semantics::const_qual : 0) |
@@ -514,10 +514,10 @@ template <typename T, typename Leaf> struct stack_quals {
   }
 };
 
-// How a request takes the shape it asks for: its outer reference or pointer,
+// How a request takes the shape it names: its outer reference or pointer,
 // and whether that is const. A pointer is always the category of a request,
 // as no request shape begins with one; a registration that binds a pointer
-// type itself is told apart by the binding a request selects. A request the
+// type itself is distinguished by the binding a request selects. A request the
 // semantics do not model, an rvalue reference to const, is not modeled.
 template <typename Request> struct requested_category {
   static auto make() {

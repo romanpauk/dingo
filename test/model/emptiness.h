@@ -8,7 +8,7 @@
 #pragma once
 
 // What the emptiness check probes: a registration whose stored object holds
-// no leaf, and a request the specification says is defined when a layer of
+// no leaf, and a request the specification marks as defined when a layer of
 // it is empty, which has to give what holds no leaf, without failing.
 
 #include "model/probe.h"

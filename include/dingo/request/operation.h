@@ -18,8 +18,8 @@
 
 // The operation C++ does for each kind of step of the semantics
 // (dingo/semantics/model.h), by the type traits of its layers and by C++
-// itself, what it makes of a type, and what C++ says of a type as the steps
-// apply to it.
+// itself, what it makes of a type, and the C++ properties of a type as the
+// steps apply to it.
 
 namespace dingo::detail::execution {
 
@@ -544,8 +544,8 @@ struct operation_result<adopt_operation<Target, Array, Quals>, Leaf, Interface,
     static constexpr bool possible = false;
     using type = void;
   };
-  // A handle its type traits do not know, as of an array they do not say
-  // how it deletes, is not made.
+  // A handle its type traits do not describe, as of an array whose deletion
+  // they do not declare, is not made.
   template <typename U>
   struct made<U, std::void_t<adopting_handle_t<Target, U, Array>>> {
     using made_type = adopting_handle_t<Target, U, Array>;
@@ -643,7 +643,7 @@ struct holding_operation<adopt_operation<Target, Array, Given>, Quals> {
 // the binding, under a key of its type.
 template <typename T> inline constexpr char retained_key = 0;
 
-// What C++ says of a type T toward the leaf Leaf, of the interface
+// The C++ properties of a type T toward the leaf Leaf, of the interface
 // Interface, as the steps of the semantics apply to it.
 template <typename T, typename Leaf, typename Interface> struct layer_types {
   using type = std::remove_cv_t<T>;

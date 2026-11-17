@@ -39,7 +39,7 @@ inline constexpr bool type_keyed_v = [] {
   }
 }();
 
-// The requests a container answers: resolve, construct, invoke and the
+// The requests a container resolves: resolve, construct, invoke and the
 // collections. A container derives from it and provides
 // resolve_entry<Request, R>(lookup_key), construct_collection<T>(fn,
 // lookup_key), count_collection<T>(lookup_key) and transact(fn), which

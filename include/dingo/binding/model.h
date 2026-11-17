@@ -111,7 +111,7 @@ using binding_model = binding_model_impl<
     binding_is_stored<Registration>()>;
 
 // Checks a registration as both containers do, with the same message for
-// the same mistake, and tells whether it is valid: an interface it declares,
+// the same mistake, and returns whether it is valid: an interface it declares,
 // its scope, whether the scope stores its type, and the requirements of its
 // storage and its interfaces.
 template <typename... TypeArgs>

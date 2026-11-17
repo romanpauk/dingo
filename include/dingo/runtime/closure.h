@@ -249,7 +249,8 @@ template <typename Shape> struct closed_semantics {
     return run;
   }
   // The published states closed under every step a request takes but a
-  // wrap, in the layers the binding knows: what a request reaches from. The
+  // wrap, in the layers whose types the binding has: what a request reaches
+  // from. The
   // binding has the tables of the layer sources alone: a type a step of a
   // request makes is one the request spells, and C++ may not make every one
   // the semantics allow of a type it never spells.
@@ -314,7 +315,7 @@ template <typename Shape> struct closed_semantics {
 
 // The answers of the closure of a binding of a shape, of the states C++
 // makes of it, as the bits of Possible: of each shape of a request the
-// closure serves, of each category and qualifiers of the object it is of.
+// closure covers, of each category and qualifiers of the object it is of.
 template <typename Semantic, std::uint64_t... Possible>
 struct closed_answer_table {
   static constexpr std::uint64_t possible_bits[] = {Possible..., 0};
@@ -323,7 +324,7 @@ struct closed_answer_table {
   }
   static constexpr const semantics::search &closure = Semantic::closure;
   static constexpr const auto &route_finishes = Semantic::route_finishes;
-  // The shapes the closure serves a request of: that of each state C++
+  // The request shapes the closure covers: that of each state C++
   // makes, and what each raw pointer of them points to, of the qualifiers of
   // every level below the object; with a state of the shape, and whether it
   // is the pointer to it.
@@ -402,7 +403,7 @@ struct closed_answer_table {
   }
   static constexpr shape_list shapes = make_shapes();
 
-  // The answer of the closure of a request, as closed_plan makes it.
+  // The answer of the closure of a request, as satisfy_states finds it.
   static constexpr closed_answer find_answer(const semantics::request &goal,
                                              semantics::category taken,
                                              semantics::lifetime needed) {
@@ -429,9 +430,8 @@ struct closed_answer_table {
     return made;
   }
 
-  // The answers of every shape the closure serves, of each category and
-  // qualifiers of the object a request is of, that it answers for a
-  // lifetime.
+  // The answers of every shape the closure covers, of each category and
+  // qualifiers of the object a request is of, for each lifetime.
   struct answer_list {
     closed_answers entries[shapes.count * shape_answer_count + 1] = {};
   };
@@ -471,7 +471,7 @@ struct closed_answer_table {
   static constexpr answer_list answers =
       make_answers(std::make_index_sequence<shapes.count * 7>{});
 
-  // Whether a step a request takes of what the binding does not know may
+  // Whether a step a request takes of what the binding has no type of may
   // start from a state: a wrap of what it owns, a handle made of a raw
   // pointer, or a handle it owns converted.
   static constexpr bool starts_steps(const semantics::object &object) {

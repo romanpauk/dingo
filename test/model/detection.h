@@ -9,7 +9,7 @@
 
 // Support for the generated constructor detection probes: the classes whose
 // constructor the library detects, generated around a parameter type P, and
-// the records of what detection says and what a construction does.
+// the records of what detection finds and what a construction does.
 
 #include "model/probe.h"
 
@@ -94,7 +94,7 @@ template <typename P> struct reading<pair<P>> {
   }
 };
 
-// What detection says about Class in Mode, against the parameters of the
+// What detection finds for Class in Mode, against the parameters of the
 // constructor the generator wrote: detected, or misdetected with what it
 // found.
 template <typename Class, typename Mode>

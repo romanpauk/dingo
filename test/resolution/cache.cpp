@@ -270,7 +270,7 @@ TEST(cache_test, static_binding_keeps_composed_wrapper) {
 }
 
 // A wrapper a unique scope makes is the request's: a reference to it is
-// refused to the caller.
+// rejected for the caller.
 TEST(cache_test, unique_binding_keeps_no_composed_wrapper) {
   dingo::container<> container;
   container.register_type<

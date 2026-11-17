@@ -79,7 +79,8 @@ decltype(auto) consume_resolved(Instance &&instance, Fn &&fn) {
 
 namespace detail {
 // A reference into the context ends before the caller uses what a resolution
-// returns: the caller is refused it, as a static container's compiles.
+// returns: it is rejected at run time, as it is at compile time in a static
+// container.
 template <typename Request, typename Scope, typename Context>
 void reject_escape(Scope scope, type_descriptor registered, Context &context) {
   if constexpr (is_fixed_caller_scope_v<Scope>) {
@@ -118,7 +119,7 @@ struct bound_leaf<Leaf, Interface,
 // both containers: the leaf it stores, the element of its interface, the
 // stored object its storage gives, made for the request by a scope that
 // makes its instance or kept, of the qualifiers it is kept of, and whether a
-// request of the interface asks for the leaf as its abstract interface.
+// request of the interface names the leaf as its abstract interface.
 template <typename Storage, typename Interface> struct binding_execution {
   // The leaf, and the element of the interface, of no qualifiers: those of
   // what the binding stores are of each level of it.
@@ -183,7 +184,7 @@ inline constexpr bool constructs_normalized_v =
     !std::is_same_v<normalized_type_t<Request>, std::decay_t<Request>>;
 
 // Whether the normalized value of a request is an object that can be built.
-// An rvalue request is not one: it asks the routed storage to publish a
+// An rvalue request is not one: it requires the routed storage to publish a
 // movable result, and is rejected rather than degraded to the normalized value.
 // Nor is a bounded array: a pointer to a new one cannot be made with new, and
 // a handle of one only decays it.

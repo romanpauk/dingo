@@ -92,7 +92,7 @@ struct layer_kind {
 };
 
 // Whether a type can be a layer of these properties, as spec/semantics.py
-// says of a layer. A layer that owns nothing, or shares what it owns, holds
+// defines a layer. A layer that owns nothing, or shares what it owns, holds
 // an element that lives apart from it: a copy of it holds the same one. A
 // layer that owns its element alone and shares it with a copy cannot be
 // copied: the copy would share what one of them owns. A layer that owns
@@ -195,7 +195,8 @@ enum class limitation : std::uint8_t {
   qualified_below_element = 1 << 2,
 };
 
-// What a derivation knows of its registration, and the layers it may make.
+// The properties of its registration a derivation uses, and the layers it
+// may make.
 struct context {
   leaf_traits leaf;
   scope_traits scope;
@@ -977,7 +978,7 @@ constexpr cost stepped(cost before, step kind, const semantics::object &object,
   return made;
 }
 
-// What a request asks for: the layers around its element, of which the
+// What a request names: the layers around its element, of which the
 // outer shape_depth are of the shape of the request and the rest of the
 // interface it is of.
 struct request {
@@ -1182,7 +1183,7 @@ struct reached_sink {
   const semantics::context &context;
 
   // A wrap or an observer is taken only as the layer of the request at its
-  // depth, which it is asked before the step is made.
+  // depth, which is checked before the step is made.
   constexpr bool takes(step kind, layer outer, std::size_t depth) const {
     if (kind != step::wrap && kind != step::observe) {
       return true;
@@ -1246,7 +1247,7 @@ constexpr search reach(const object &start, const semantics::context &context,
   return found;
 }
 
-// How a request takes the layers it asks for.
+// How a request takes the layers it names.
 enum class category : std::uint8_t {
   value,
   const_value,
@@ -1383,7 +1384,7 @@ constexpr bool cheaper(cost made, bool absent, cost other, bool other_absent) {
 }
 
 // The answer of what satisfies a request at the least cost, as the
-// specification's fewest prefers it.
+// specification's fewest ranks it.
 constexpr void consider(answer &result, cost made, std::size_t index,
                         semantics::access access, bool absent) {
   if (!result.found || cheaper(made, absent, result.fewest, result.absent)) {
@@ -1570,10 +1571,10 @@ constexpr derivation answer_derivation(const search &found,
   return made;
 }
 
-// Who takes a step, as the specification splits them. A binding knows the
-// type it stores, a request only the interface it asks for: the binding takes
+// Who takes a step, as the specification splits them. A binding has the
+// type it stores, a request only the interface it names: the binding takes
 // the steps that need the type it stores, which go into what it stores, and
-// every step from what holds the leaf, when the request asks for the
+// every step from what holds the leaf, when the request names the
 // interface, which a request cannot name. What they reach are its layer
 // sources, which it publishes, of no request. A request takes every other
 // step from them, each of which adds a layer or converts one.
@@ -1751,10 +1752,10 @@ template <typename Search> struct unwrapped_sink {
 };
 
 // What a binding publishes, closed: its layer sources, and what a request
-// reaches from them by every step but a wrap, of the layers the binding
-// knows. None of it depends on the request, so the binding reaches it once,
-// as the code compiles; a request then reaches from it only by a wrap, or by
-// a step into a layer the binding does not know.
+// reaches from them by every step but a wrap, of the layers whose types the
+// binding has. None of it depends on the request, so the binding reaches it
+// once, as the code compiles; a request then reaches from it only by a wrap, or
+// by a step into a layer whose type the binding does not have.
 template <typename Search>
 constexpr void close_layer_sources(Search &found,
                                    const semantics::context &context) {
@@ -1774,11 +1775,12 @@ constexpr search closed_layer_sources(const search &sources,
 }
 
 // What a sink of the steps a request takes from a closed state passes on: a
-// wrap, or a step into a layer the binding does not know, which those of the
+// wrap, or a step into a layer whose type the binding does not have, which
+// those of the
 // request may be; any other step reaches what the closure holds.
 struct unclosed_sink {
   reached_sink &out;
-  // The layers the binding knows: those of a lower index.
+  // The layers whose types the binding has: those of a lower index.
   std::size_t known;
 
   constexpr bool takes(step kind, layer outer, std::size_t depth) const {
@@ -1806,7 +1808,8 @@ struct unclosed_sink {
 // What a sink of the steps a request takes from what it made of the closure
 // passes on: another wrap, a conversion of the outer layer it made to a more
 // qualified element or of an array of a known bound to one of unknown bound,
-// or a step into a layer the binding does not know. These the request makes
+// or a step into a layer whose type the binding does not have. These the
+// request makes
 // itself, of the types it spells.
 struct made_sink {
   reached_sink &out;
@@ -1842,9 +1845,9 @@ struct made_sink {
 // the layers of the request follow.
 // The steps a request takes, from every state a search holds and from every
 // state they reach, added to it.
-// The states below closed are closed layer sources, of a binding that knows
-// the layers below known: a request steps from them only by a wrap or into a
-// layer the binding does not know.
+// The states below closed are closed layer sources, of a binding that has the
+// types of the layers below known: a request steps from them only by a wrap or
+// into a layer whose type the binding does not have.
 constexpr void extend_reach(search &found, std::size_t closed,
                             std::size_t known,
                             const semantics::context &context,
@@ -1853,8 +1856,8 @@ constexpr void extend_reach(search &found, std::size_t closed,
   for (std::size_t next = 0; next < found.count; ++next) {
     const state &current = found.states[next];
     // A closed state steps only by a wrap, which makes a layer more, of a
-    // object of fewer than the request, or into a layer the binding does not
-    // know.
+    // object of fewer than the request, or into a layer whose type the binding
+    // does not have.
     if ((next < closed && !foreign && current.reached.depth >= goal.depth) ||
         !may_satisfy(current.reached, goal, context)) {
       continue;
@@ -1873,7 +1876,7 @@ constexpr void extend_reach(search &found, std::size_t closed,
 }
 
 // What a request reaches from the closed layer sources of a binding that
-// knows the layers below known.
+// has the types of the layers below known.
 constexpr search reach_closed(const search &closed, std::size_t known,
                               const semantics::context &context,
                               const request &goal) {
@@ -1897,7 +1900,7 @@ enum class position : std::uint8_t { direct, consumer, shared, cyclical };
 // The entry point a request is made through.
 enum class entry : std::uint8_t { resolve, invoke, construct };
 
-// What a request is, beside what it asks for: where it stands, the entry
+// What a request is, beside what it names: where it stands, the entry
 // point it is made through, whether a key or an annotation selects it, and
 // whether the runtime container resolves it.
 struct request_rules {
@@ -1940,7 +1943,7 @@ constexpr entry request_entry(entry through, semantics::position position,
   return through;
 }
 
-// The layers of a request as an object, to ask what its stack can do.
+// The layers of a request as an object, to query what its stack can do.
 constexpr object stack_type(const request &goal) {
   semantics::object object;
   for (std::size_t index = 0; index < goal.depth; ++index) {

@@ -119,14 +119,16 @@ struct default_factory_constructs<Request, R, true> {
 // - resolve_selected<Request, R>(selection, scope, context)
 // - ambiguous<Request>(context): rejects an ambiguous selection the host
 //   makes as it compiles; one it makes as it runs is rejected here
-// - parent_serves<Lookup, LookupKey>() and parent(): the parent that answers
+// - parent_declares<Lookup, LookupKey>() and parent(): whether the parent
+// declares
+//   the lookup, and the parent, which resolves
 //   requests the host does not bind
 // - count_collection<R>(key) and construct_request_collection<R>(scope,
 //   context, key), for hosts that construct collections
 // - resolve_normalizing<Request, R>(selection, scope, context): the
 //   request itself if its binding publishes it, otherwise resolve_normalized
 //
-// The origin of a request is the container it entered through; it answers the
+// The origin of a request is the container it entered through; it resolves the
 // requests that no container of the chain binds.
 //
 // A static selection and a static collection count carry their value in their
@@ -138,7 +140,7 @@ struct default_factory_constructs<Request, R, true> {
 struct request_resolution {
   // A no-key collection that is bound as a type resolves as that binding.
   // Otherwise the collection is constructed from the bindings of its element,
-  // and a host without any is answered by the parent or the origin. Any other
+  // and a host without any is resolved by the parent or the origin. Any other
   // request resolves the binding the host selects: one function, as a static
   // dependency chain instantiates it once per link. A miss of a collection
   // request constructs the collection when the host constructs collections.
@@ -250,7 +252,7 @@ struct request_resolution {
   }
 
   // Resolves a runtime selection in the level it was made in: the binding it
-  // found, or else what a miss of that level is answered with.
+  // found, or else what a miss of that level is resolved with.
   template <typename Request, typename R, typename Selection, typename Context,
             typename Origin, typename LookupKey, typename Scope>
   static R resolve_level(const Selection &selection, Scope scope,
@@ -268,7 +270,7 @@ struct request_resolution {
         level, scope, context, origin, key);
   }
 
-  // A request no binding of the host answers: a collection is constructed
+  // A request no binding of the host matches: a collection is constructed
   // of what the host binds, anything else is missing.
   template <typename Request, typename R, bool Collection, typename Host,
             typename Context, typename Origin, typename LookupKey,
@@ -349,14 +351,14 @@ private:
     }
   }
 
-  // The parent answers a miss only when it declares the lookup; the origin
-  // answers the misses of the whole chain.
+  // The parent resolves a miss only when it declares the lookup; the origin
+  // resolves the misses of the whole chain.
   template <typename Request, typename R, bool MayAutoConstruct,
             typename Lookup, typename Host, typename Context, typename Origin,
             typename LookupKey, typename Scope>
   static R fall_back(Host &host, Scope scope, Context &context, Origin &origin,
                      LookupKey &key) {
-    if constexpr (Host::template parent_serves<Lookup, LookupKey>()) {
+    if constexpr (Host::template parent_declares<Lookup, LookupKey>()) {
       if (auto *parent = host.parent()) {
         return parent->template resolve<typename Request::user_type,
                                         Request::removes_rvalue_references>(

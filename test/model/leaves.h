@@ -25,9 +25,9 @@
 
 namespace dingo::model {
 
-// Keeps the leaves alive, so that a probe sees what it leaks and what it
+// Keeps the leaves alive, so that a probe detects what it leaks and what it
 // refers to after it is gone. A leaf moved from loses its value, so that a
-// probe sees a kept leaf moved out of. Counts the copies and the moves of
+// probe detects a kept leaf moved out of. Counts the copies and the moves of
 // leaves while a probe counts them.
 struct leaf_interface {
   leaf_interface() { born(this); }

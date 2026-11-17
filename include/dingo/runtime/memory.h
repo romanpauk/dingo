@@ -77,7 +77,7 @@ public:
   }
 
   // Set once the first resolve succeeds. Registrations that would replace a
-  // lookup are refused from then on.
+  // lookup are rejected from then on.
   bool sealed() const noexcept { return (state_ & sealed_bit) != 0; }
 
   void seal() noexcept { state_ |= sealed_bit; }

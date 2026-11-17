@@ -39,7 +39,7 @@ struct resolved_address {
 };
 
 namespace detail {
-// What a materialization is told once the source it materializes exists:
+// What a materialization calls once the source it materializes exists:
 // fn(self).
 struct materialized_hook {
   void (*fn)(void *self);
@@ -47,7 +47,7 @@ struct materialized_hook {
   void operator()() const { fn(self); }
 };
 
-// The hook of what a materialization tells, of no type.
+// The hook a materialization calls, of no type.
 template <typename Fn> materialized_hook erase_hook(Fn &fn) {
   return {[](void *self) { (*static_cast<Fn *>(self))(); }, &fn};
 }
@@ -95,16 +95,16 @@ template <typename RTTI, typename Context> struct runtime_binding_node {
   // names.
   const void *interface_key;
   // The layer sources of what the binding stores, which every request of it
-  // is derived from; none when C++ says of its type what the semantics do
-  // not model.
+  // is derived from; none when its type has C++ properties the semantics
+  // do not model.
   const detail::execution::binding_layout *layout;
   // How the source of the binding is materialized, which the static
-  // container decides by too.
+  // container also branches on.
   detail::materialization_facts materialization;
   // Whether the binding caches the addresses it resolves.
   bool caches;
   // Materializes the source of the binding, in the construction scope,
-  // tells materialized once it is, and runs a conversion of a request of it, in
+  // calls materialized once it is, and runs a conversion of a request of it, in
   // the scope of the request.
   resolved_address (*run)(interface_type &binding, construction_scope scope,
                           construction_scope construction, Context &context,

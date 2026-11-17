@@ -827,7 +827,7 @@ TEST(type_registration_test, runtime_request_keyed_by_type) {
 }
 
 namespace kept_dependency_test {
-// Counts the parts alive, so that a test sees whether a service refers to one
+// Counts the parts alive, so that a test checks whether a service refers to one
 // that is gone.
 struct part {
   part() { ++alive; }
@@ -883,7 +883,7 @@ TEST(type_registration_test, kept_instance_keeps_unique_dependency) {
 }
 
 // A binding publishes only the requests that select it: a bounded array binds
-// its rows and itself, and each of them serves its own requests.
+// its rows and itself, and each of them resolves its own requests.
 TEST(type_registration_test, binding_publishes_only_requests_it_selects) {
   struct A {};
   using model =
@@ -1114,7 +1114,7 @@ struct A {
 } // namespace construct_rvalue_test
 
 // construct<T &&>() resolves the request, as resolve<T &&>() does: it moves
-// out of an instance made for it, and is refused one the container keeps.
+// out of an instance made for it, and is not given one the container keeps.
 TEST(type_registration_test, construct_of_rvalue_reference_resolves_it) {
   using construct_rvalue_test::A;
 

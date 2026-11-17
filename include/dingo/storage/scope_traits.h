@@ -26,7 +26,7 @@
 #include <utility>
 
 // A storage scope is a tag type and one specialization of scope_traits, which
-// says how the scope stores an instance and which requests it publishes for
+// declares how the scope stores an instance and which requests it publishes for
 // it. From it this header derives the request lists and the materialization
 // behavior of the scope.
 //
@@ -263,7 +263,7 @@ public:
   }
 };
 
-// What the semantics (dingo/semantics/model.h) know of a scope, of its
+// The semantic properties (dingo/semantics/model.h) of a scope, from its
 // scope_traits: it makes a new instance for each request when it consumes
 // what it resolves; it is given its instance when it can hold a reference,
 // which only such a scope can; it publishes its instance before constructing

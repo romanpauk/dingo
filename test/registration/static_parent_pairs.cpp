@@ -192,7 +192,7 @@ inline void exercise_runtime_child_static_parent() {
   ASSERT_EQ(local[0]->value, 2);
 }
 
-// A static parent resolves what a runtime child asks for in a context of its
+// A static parent resolves what a runtime child requests in a context of its
 // own. A value it makes for the request alone lives in the context of the
 // child, as long as the child needs it; one it keeps a reference to lives in
 // its own memory, after the child is gone.

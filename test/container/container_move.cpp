@@ -129,7 +129,7 @@ protected:
   }
 
   // Builds a new container where the moved-from one lived, so anything still
-  // pointing at the old container sees different bindings.
+  // pointing at the old container finds different bindings.
   void replace(std::optional<Container> &container) {
     container.reset();
     container = make();

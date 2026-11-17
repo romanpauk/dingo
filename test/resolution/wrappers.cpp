@@ -71,7 +71,7 @@ struct service_impl : service {
 };
 
 // The marker of the leaf a composition holds; -1 when a layer is empty. The
-// overloads are members so that each layer sees all of them.
+// overloads are members so that name lookup in each layer finds all of them.
 struct leaf {
   template <typename T>
   static auto marker(const T &value) -> decltype(value.marker()) {

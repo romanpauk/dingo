@@ -159,7 +159,7 @@ private:
 };
 
 // A request of type T as a runtime resolution converts it: the interface it
-// names, its layers, what it asks for and the tables of the types it spells,
+// names, its layers, what it names and the tables of the types it spells,
 // and the address it is satisfied with of what a conversion reaches.
 struct runtime_request {
   type_descriptor requested;
@@ -204,7 +204,7 @@ finish_request(execution::erased_carrier reached,
   }
 }
 
-// What C++ says of a request type, as a runtime resolution converts it.
+// The C++ properties of a request type, as a runtime resolution converts it.
 template <typename T> struct request_execution {
   using category = requested_category<T>;
   using shape = typename category::shape;

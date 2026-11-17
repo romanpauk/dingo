@@ -8,8 +8,8 @@
 // What a binding derives for a request, without resolving it: whether it
 // derives the request for as long as the container, which the caller may take,
 // only for as long as the request, or not at all. Both containers derive a
-// request alike, so one answer is of both. Nothing of a container is
-// instantiated, so many registrations are answered in one program.
+// request alike, so one result holds for both. Nothing of a container is
+// instantiated, so many registrations are resolved in one program.
 
 #pragma once
 
@@ -120,10 +120,10 @@ constexpr unsigned routes_through() {
 }
 
 // Records the outcome of a request of Interface the binding of a
-// registration answers, as the code compiles: published when it derives the
+// registration resolves, as the code compiles: published when it derives the
 // request for as long as the container, placed when only for as long as the
 // request, unpublished when not at all. A request the lookup sends to the
-// binding of another interface is answered there. Records too the ways C++
+// binding of another interface resolves there. Records too the ways C++
 // itself builds the request of what the binding holds, which the request
 // owns when its scope Makes it for the request alone.
 template <typename Model, typename Interface, typename Request, typename Leaf,

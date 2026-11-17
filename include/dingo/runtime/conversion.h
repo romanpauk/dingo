@@ -67,8 +67,8 @@ inline runtime_conversions
 make_runtime_conversions(const binding_layout &binding,
                          const request_layout &request) {
   runtime_conversions made;
-  // The layers of the request in the universe of the binding: those it
-  // knows by their index, any other after them.
+  // The layers of the request in the universe of the binding: those of the
+  // binding at their index, any other after them.
   semantics::layer mapped[semantics::max_kinds] = {0, 1, 2, 3};
   bool foreign = false;
   for (std::size_t index = 0; index < request.layer_count && !foreign;
@@ -88,7 +88,7 @@ make_runtime_conversions(const binding_layout &binding,
     // standard layer, which making one copies.
     thread_local semantics::universe merged;
     // The universe of the binding, which the layers of the request it does
-    // not know follow, and the conversions between them all.
+    // not have follow, and the conversions between them all.
     merged = *binding.context.layers;
     const void *identities[semantics::max_kinds] = {};
     const void *targets[semantics::max_kinds] = {};

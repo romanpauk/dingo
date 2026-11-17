@@ -67,7 +67,7 @@ class static_container_impl;
 // Whether the resolutions of a container carry persistent memory: those of a
 // static container that has some, or whose static parent's resolutions do.
 // The origin of a request a runtime child forwards to a static container,
-// with the context of the child: the origin answers what no container of the
+// with the context of the child: the origin resolves what no container of the
 // chain binds, which a runtime container does in its own context.
 template <typename Origin, typename Context> struct context_origin {
   Origin &origin;
@@ -130,7 +130,7 @@ private:
 
   // Whether a request of the caller is served from a value placed in the
   // context, which ends before the caller uses it. Only an address request of
-  // a scope that does not keep its instance asks for the type its storage
+  // a scope that does not keep its instance requests the type its storage
   // yields: that instantiates the factory, and so the dependency chain.
   template <typename Request, typename Result, typename LookupKey>
   static constexpr bool escapes_context() {
@@ -238,7 +238,7 @@ public:
   // container, as a runtime context would make what this container keeps in
   // the memory of the child, and reset it with the child. What only the
   // request refers to is placed in the context of the child, which also
-  // answers what no container of the chain binds.
+  // resolves what no container of the chain binds.
   template <typename Request, typename R, typename Context, typename Origin,
             typename LookupKey, typename Scope>
   R resolve_request(Scope scope, Context &context, Origin &origin,
@@ -494,7 +494,7 @@ private:
   }
 
   template <typename Lookup, typename LookupKey>
-  static constexpr bool parent_serves() {
+  static constexpr bool parent_declares() {
     return has_parent_v;
   }
 

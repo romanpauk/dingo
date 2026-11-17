@@ -133,9 +133,9 @@ constexpr conversion compile_conversion(const semantics::derivation &derivation,
   return made;
 }
 
-// A request of a stored object, derived as the code compiles: what C++ says
-// of the stored type Stored, of the request type Request and of the leaf
-// Leaf, classified as the semantics know them, and the derivation of the
+// A request of a stored object, derived as the code compiles: the C++
+// properties of the stored type Stored, of the request type Request and of the
+// leaf Leaf, classified as the semantics model them, and the derivation of the
 // request for each lifetime it may need: as long as the container, when what it
 // refers to is passed to the caller, or as long as the request. The request
 // is derived from what the binding publishes, in a universe of the layers of

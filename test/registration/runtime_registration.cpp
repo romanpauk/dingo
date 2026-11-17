@@ -758,7 +758,7 @@ TEST(type_registration_test, registration_constructs_its_container_on_demand) {
       container.register_type<scope<unique>, storage<service>>();
 
   // The level of the local bindings of the registration is made as it is
-  // first asked for, and is the same one afterwards.
+  // first requested, and is the same one afterwards.
   auto &level = registration.get();
   EXPECT_EQ(std::addressof(level), std::addressof(registration.get()));
   EXPECT_NE(static_cast<void *>(std::addressof(level)),

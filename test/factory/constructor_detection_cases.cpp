@@ -122,8 +122,8 @@ TEST(constructor_detection_cases, parameter_categories_are_recovered) {
                 copy_only, move_only>{}));
 }
 
-// Known limitation: detection cannot tell an rvalue reference from a value,
-// so the dependency requested is the value.
+// Known limitation: detection cannot distinguish an rvalue reference from a
+// value, so the dependency requested is the value.
 TEST(constructor_detection_cases, rvalue_reference_is_recovered_as_a_value) {
   static_assert(detects<takes<leaf &&>, constructor_kind::concrete, 1,
                         type_list<leaf>>());
