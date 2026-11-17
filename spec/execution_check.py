@@ -76,10 +76,10 @@ def step_type(kind, layer, leaf_type):
                       f"{leaf_type}, dingo::model::other>, {leaf_type}>")
         else:
             target = IDENTITIES[name]
-        return f"{prefix}step<dingo::semantics::step::wrap, {target}>"
+        return f"{prefix}operation<dingo::semantics::step::wrap, {target}>"
     if kind == "adopt":
-        return f"{prefix}adopt_step<{IDENTITIES[name]}, ARRAY>"
-    return f"{prefix}step<dingo::semantics::step::{kind}>"
+        return f"{prefix}adopt_operation<{IDENTITIES[name]}, ARRAY>"
+    return f"{prefix}operation<dingo::semantics::step::{kind}>"
 
 
 def main():

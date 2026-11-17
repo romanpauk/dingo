@@ -163,7 +163,7 @@ struct keeps_apart<
     : std::true_type {};
 
 // A step of a kind, to the layer Target where it makes one.
-template <semantics::step Kind, typename Target = void> struct step;
+template <semantics::step Kind, typename Target = void> struct operation;
 
 // The element of a layer.
 // What a pointer the request owns points to, released: the request owns it,
@@ -183,7 +183,7 @@ template <typename T, bool Array> struct released_pointer {
   }
 };
 
-template <bool Array> struct release_step {
+template <bool Array> struct release_operation {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -201,7 +201,7 @@ template <bool Array> struct release_step {
 
 // The element of a layer. A request of the element of an empty layer
 // fails: the store rejects it.
-template <> struct step<semantics::step::element> {
+template <> struct operation<semantics::step::element> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -222,7 +222,7 @@ template <> struct step<semantics::step::element> {
 
 // A pointer to the element of a layer, null when it holds none: to its first
 // element when it is an array.
-template <> struct step<semantics::step::element_pointer> {
+template <> struct operation<semantics::step::element_pointer> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -238,7 +238,7 @@ template <> struct step<semantics::step::element_pointer> {
 
 // The element of a layer that may be empty, which holds a value that may be
 // empty itself: that value, or an empty one when the layer is empty.
-template <> struct step<semantics::step::maybe_element> {
+template <> struct operation<semantics::step::maybe_element> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -255,7 +255,7 @@ template <> struct step<semantics::step::maybe_element> {
 };
 
 // A copy of what maybe_element gives.
-template <> struct step<semantics::step::maybe_element_copy> {
+template <> struct operation<semantics::step::maybe_element_copy> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -273,7 +273,7 @@ template <> struct step<semantics::step::maybe_element_copy> {
 
 // The sharing handle an owned sole owner converts to, taking over its
 // element: the share_t of its type traits.
-template <> struct step<semantics::step::convert> {
+template <> struct operation<semantics::step::convert> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -289,7 +289,7 @@ template <> struct step<semantics::step::convert> {
 // The handle of an array of unknown bound a handle of an array of a known
 // bound converts to, holding the same array: the unknown_bound_t of its type
 // traits, moved out of one the request owns or copied of another.
-template <> struct step<semantics::step::unknown_bound> {
+template <> struct operation<semantics::step::unknown_bound> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -332,7 +332,7 @@ template <typename T, typename Leaf, typename Interface> struct upcast_type {
 
 // The leaf as its interface: the base it is, or a pointer, a handle or a
 // stack of them of the interface, converted of the stack of the leaf.
-template <> struct step<semantics::step::upcast> {
+template <> struct operation<semantics::step::upcast> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -368,7 +368,7 @@ template <> struct step<semantics::step::upcast> {
 };
 
 // A copy: a new object the request owns, of no qualifiers.
-template <> struct step<semantics::step::copy> {
+template <> struct operation<semantics::step::copy> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -381,7 +381,7 @@ template <> struct step<semantics::step::copy> {
 
 // A new layer of the layer Target holding what the request owns, moved into
 // it.
-template <typename Target> struct step<semantics::step::wrap, Target> {
+template <typename Target> struct operation<semantics::step::wrap, Target> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -423,7 +423,7 @@ template <typename Target> struct step<semantics::step::wrap, Target> {
 };
 
 // An array decayed to the pointer to its first element.
-template <> struct step<semantics::step::decay> {
+template <> struct operation<semantics::step::decay> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -440,7 +440,7 @@ template <> struct step<semantics::step::decay> {
 };
 
 // An array the request owns, handed over as the pointer that owns it.
-template <> struct step<semantics::step::hand_over> {
+template <> struct operation<semantics::step::hand_over> {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -498,7 +498,7 @@ using held_t = std::conditional_t<Quals == made_quals, T,
                                   qualified_t<std::remove_cv_t<T>, Quals & 3>>;
 
 template <typename Target, std::uint8_t Quals = made_quals>
-struct observe_step {
+struct observe_operation {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -542,7 +542,7 @@ template <bool Whole, typename Pointer> auto adopted_pointer(Pointer pointer) {
 // A raw pointer the request owns, taken over by a handle of the layer
 // Target: of an array when it points to the first element of one.
 template <typename Target, bool Array, std::uint8_t Quals = made_quals>
-struct adopt_step {
+struct adopt_operation {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -564,7 +564,7 @@ struct adopt_step {
 
 // A pointer or a handle converted to one of an element of the qualifiers
 // Quals: a new object, moved out of one the request owns, copied of another.
-template <std::uint8_t Quals> struct qualify_step {
+template <std::uint8_t Quals> struct qualify_operation {
   template <typename Leaf, typename Interface, typename T, bool Owned,
             typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
@@ -586,7 +586,7 @@ template <std::uint8_t Quals> struct qualify_step {
 // and a binding makes only what its types do.
 template <typename Step, typename Leaf, typename Interface, typename T,
           bool Owned, typename = void>
-struct step_result {
+struct operation_result {
   static constexpr bool possible = false;
   using type = void;
 };
@@ -599,8 +599,8 @@ inline constexpr bool
         true;
 
 template <typename Leaf, typename Interface, typename T, bool Owned>
-struct step_result<
-    step<semantics::step::copy>, Leaf, Interface, T, Owned,
+struct operation_result<
+    operation<semantics::step::copy>, Leaf, Interface, T, Owned,
     std::enable_if_t<std::is_object_v<T> && !std::is_array_v<T>>> {
   using made_type = std::remove_cv_t<T>;
   static constexpr bool possible = std::is_constructible_v<made_type, T &>;
@@ -608,23 +608,24 @@ struct step_result<
 };
 
 template <typename Leaf, typename Interface, typename T, bool Owned>
-struct step_result<step<semantics::step::decay>, Leaf, Interface, T, Owned,
-                   std::enable_if_t<std::is_array_v<T>>> {
+struct operation_result<operation<semantics::step::decay>, Leaf, Interface, T,
+                        Owned, std::enable_if_t<std::is_array_v<T>>> {
   static constexpr bool possible = true;
   using type = carrier<std::add_pointer_t<std::remove_extent_t<T>>, Owned>;
 };
 
 template <typename Leaf, typename Interface, typename T, bool Owned>
-struct step_result<step<semantics::step::hand_over>, Leaf, Interface, T,
-                   Owned> {
+struct operation_result<operation<semantics::step::hand_over>, Leaf, Interface,
+                        T, Owned> {
   static constexpr bool possible = true;
   using type = carrier<T *, Owned>;
 };
 
 template <typename Leaf, typename Interface, typename T, bool Owned>
-struct step_result<step<semantics::step::convert>, Leaf, Interface, T, Owned,
-                   std::void_t<typename type_traits<T>::template share_t<
-                       typename type_traits<T>::value_type>>> {
+struct operation_result<operation<semantics::step::convert>, Leaf, Interface, T,
+                        Owned,
+                        std::void_t<typename type_traits<T>::template share_t<
+                            typename type_traits<T>::value_type>>> {
   using made_type = typename type_traits<T>::template share_t<
       typename type_traits<T>::value_type>;
   static constexpr bool possible =
@@ -633,8 +634,8 @@ struct step_result<step<semantics::step::convert>, Leaf, Interface, T, Owned,
 };
 
 template <typename Leaf, typename Interface, typename T, bool Owned>
-struct step_result<
-    step<semantics::step::unknown_bound>, Leaf, Interface, T, Owned,
+struct operation_result<
+    operation<semantics::step::unknown_bound>, Leaf, Interface, T, Owned,
     std::void_t<
         typename type_traits<std::remove_cv_t<T>>::template unknown_bound_t<
             typename type_traits<std::remove_cv_t<T>>::value_type>>> {
@@ -649,8 +650,8 @@ struct step_result<
 
 template <typename Target, std::uint8_t Quals, typename Leaf,
           typename Interface, typename T, bool Owned>
-struct step_result<
-    observe_step<Target, Quals>, Leaf, Interface, T, Owned,
+struct operation_result<
+    observe_operation<Target, Quals>, Leaf, Interface, T, Owned,
     std::enable_if_t<
         std::is_pointer_v<std::remove_cv_t<T>> &&
         std::is_object_v<std::remove_pointer_t<std::remove_cv_t<T>>>>> {
@@ -672,8 +673,8 @@ struct step_result<
 
 template <typename Target, bool Array, std::uint8_t Quals, typename Leaf,
           typename Interface, typename T, bool Owned>
-struct step_result<adopt_step<Target, Array, Quals>, Leaf, Interface, T, Owned,
-                   std::enable_if_t<std::is_pointer_v<T>>> {
+struct operation_result<adopt_operation<Target, Array, Quals>, Leaf, Interface,
+                        T, Owned, std::enable_if_t<std::is_pointer_v<T>>> {
   using pointee = held_t<std::remove_pointer_t<T>, Quals>;
   static constexpr bool whole =
       !Array && is_array_like_type_v<Target> && std::is_array_v<pointee>;
@@ -698,9 +699,10 @@ struct step_result<adopt_step<Target, Array, Quals>, Leaf, Interface, T, Owned,
 
 template <std::uint8_t Quals, typename Leaf, typename Interface, typename T,
           bool Owned>
-struct step_result<qualify_step<Quals>, Leaf, Interface, T, Owned,
-                   std::enable_if_t<std::is_pointer_v<std::remove_cv_t<T>> ||
-                                    has_value_type_v<std::remove_cv_t<T>>>> {
+struct operation_result<
+    qualify_operation<Quals>, Leaf, Interface, T, Owned,
+    std::enable_if_t<std::is_pointer_v<std::remove_cv_t<T>> ||
+                     has_value_type_v<std::remove_cv_t<T>>>> {
   template <typename U, typename = void> struct made {
     static constexpr bool possible = false;
     using type = void;
@@ -766,14 +768,14 @@ Made wrap_value(T &&value) {
 // The step that makes a layer of a pointer, holding its element of the
 // qualifiers Quals: of a layer a request makes of the qualifiers its element
 // needs at once.
-template <typename Step, std::uint8_t Quals> struct holding_step;
+template <typename Step, std::uint8_t Quals> struct holding_operation;
 template <typename Target, std::uint8_t Given, std::uint8_t Quals>
-struct holding_step<observe_step<Target, Given>, Quals> {
-  using type = observe_step<Target, Quals>;
+struct holding_operation<observe_operation<Target, Given>, Quals> {
+  using type = observe_operation<Target, Quals>;
 };
 template <typename Target, bool Array, std::uint8_t Given, std::uint8_t Quals>
-struct holding_step<adopt_step<Target, Array, Given>, Quals> {
-  using type = adopt_step<Target, Array, Quals>;
+struct holding_operation<adopt_operation<Target, Array, Given>, Quals> {
+  using type = adopt_operation<Target, Array, Quals>;
 };
 
 // The innermost type of a stack toward Leaf: the leaf, the base of it the
@@ -1300,7 +1302,7 @@ struct request_derivation {
 
 // The C++ step of a step of the semantics, from the object Semantic::source()
 // to the object Semantic::reached(), to the layers of a universe of identities.
-template <typename Identities, typename Semantic> struct typed_step {
+template <typename Identities, typename Semantic> struct step_operation {
   static constexpr semantics::step kind = Semantic::kind;
   static constexpr semantics::object reached = Semantic::reached();
 
@@ -1309,24 +1311,24 @@ template <typename Identities, typename Semantic> struct typed_step {
 
   static auto make() {
     if constexpr (kind == semantics::step::wrap) {
-      return step<semantics::step::wrap, layer_type<reached.layers[0]>>{};
+      return operation<semantics::step::wrap, layer_type<reached.layers[0]>>{};
     } else if constexpr (kind == semantics::step::release) {
       // The pointer is to the first element of an array when the step
       // before decayed or handed over an array.
-      return release_step<Semantic::source().layers[0] ==
-                          semantics::array_pointer_layer>{};
+      return release_operation<Semantic::source().layers[0] ==
+                               semantics::array_pointer_layer>{};
     } else if constexpr (kind == semantics::step::adopt) {
-      return adopt_step<layer_type<reached.layers[0]>,
-                        reached.layers[1] == semantics::array_layer>{};
+      return adopt_operation<layer_type<reached.layers[0]>,
+                             reached.layers[1] == semantics::array_layer>{};
     } else if constexpr (kind == semantics::step::observe) {
-      return observe_step<layer_type<reached.layers[0]>>{};
+      return observe_operation<layer_type<reached.layers[0]>>{};
     } else if constexpr (kind == semantics::step::qualify) {
-      return qualify_step<reached.quals[1]>{};
+      return qualify_operation<reached.quals[1]>{};
     } else {
-      return step<kind>{};
+      return operation<kind>{};
     }
   }
-  using step_type = decltype(make());
+  using operation_type = decltype(make());
 };
 
 // The step at an index of a derivation.
@@ -1357,8 +1359,8 @@ struct search_step {
 template <const semantics::derivation &Derivation, typename Identities,
           std::size_t Index>
 using derivation_step_t =
-    typename typed_step<Identities,
-                        derivation_step<Derivation, Index>>::step_type;
+    typename step_operation<Identities,
+                            derivation_step<Derivation, Index>>::operation_type;
 
 // The type a run of Count wraps of a derivation, from the derivation step
 // First, makes of a value of T.
@@ -1420,16 +1422,17 @@ struct typed_conversion {
       });
       return carrier<made_type, true>{std::addressof(made)};
     } else if constexpr (Each.qualified) {
-      using step_type = typename holding_step<
+      using operation_type = typename holding_operation<
           derivation_step_t<Derivation, Identities, Each.first>,
           reached.quals[1]>::type;
-      return step_type::template apply<Leaf, Interface>(source, kept);
+      return operation_type::template apply<Leaf, Interface>(source, kept);
     } else if constexpr (Each.kind == Derivation.steps[Each.first]) {
       return derivation_step_t<Derivation, Identities, Each.first>::
           template apply<Leaf, Interface>(source, kept);
     } else {
       // A step the conversion takes in place of the derivation's.
-      return step<Each.kind>::template apply<Leaf, Interface>(source, kept);
+      return operation<Each.kind>::template apply<Leaf, Interface>(source,
+                                                                   kept);
     }
   }
 

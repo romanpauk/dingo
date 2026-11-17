@@ -89,12 +89,12 @@ conversion of the derivation is run through tables of erased operations
 - A request has one table for each of its nested types, with the operations that
   make the type of the one below (`request_tables`).
 
-Both are built from the typed steps of the static container, so the containers
-apply one implementation of each step. A step that does the same to an object
-that the request owns as to one that it does not has one operation for both.
-Each table is checked as the code compiles against the steps that the semantics
-allow from its type, so a derivation meets no missing operation. A request that
-no derivation satisfies throws `type_not_convertible_exception`.
+Both are built from the typed operations of the static container, so the
+containers apply one implementation of each step. A step that does the same to
+an object that the request owns as to one that it does not has one operation for
+both. Each table is checked as the code compiles against the steps that the
+semantics allow from its type, so a derivation meets no missing operation. A
+request that no derivation satisfies throws `type_not_convertible_exception`.
 
 The operations keep what they make through `runtime_store`, an interface of no
 context. It keeps an object by its layout (`object_layout`: size, alignment and

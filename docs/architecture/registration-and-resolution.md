@@ -137,7 +137,7 @@ binding cell. The caller cannot get a reference into the context.
 
 The static container derives a request with `static_execution` in
 [include/dingo/static/binding.h](../../include/dingo/static/binding.h) and
-applies the conversion through the typed steps of
+applies the conversion through the typed operations of
 [include/dingo/request/execution.h](../../include/dingo/request/execution.h),
 which the compiler inlines. The runtime container applies the same steps through
 tables of erased operations

@@ -91,16 +91,16 @@ traits of any other.
 The steps of the specification and the code that takes them. Each is in
 [include/dingo/request/execution.h](../../include/dingo/request/execution.h):
 
-| Step                                                                | Who takes it | Code                                                   |
-| ------------------------------------------------------------------- | ------------ | ------------------------------------------------------ |
-| `element`, `element_pointer`, `maybe_element`, `maybe_element_copy` | binding      | `step<element>` and the others of the same name        |
-| `upcast`, `convert`, `unknown_bound`                                | binding      | `step<upcast>`, `step<convert>`, `step<unknown_bound>` |
-| `release`                                                           | binding      | `release_step`                                         |
-| `copy`, `decay`, `hand_over`                                        | binding      | `step<copy>`, `step<decay>`, `step<hand_over>`         |
-| `wrap`                                                              | request      | `step<wrap, Target>`; a run of wraps is `wrap_value`   |
-| `adopt`                                                             | request      | `adopt_step`                                           |
-| `observe`                                                           | request      | `observe_step`                                         |
-| `qualify`                                                           | request      | `qualify_step`                                         |
+| Step                                                                | Who takes it | Code                                                                  |
+| ------------------------------------------------------------------- | ------------ | --------------------------------------------------------------------- |
+| `element`, `element_pointer`, `maybe_element`, `maybe_element_copy` | binding      | `operation<element>` and the others of the same name                  |
+| `upcast`, `convert`, `unknown_bound`                                | binding      | `operation<upcast>`, `operation<convert>`, `operation<unknown_bound>` |
+| `release`                                                           | binding      | `release_operation`                                                   |
+| `copy`, `decay`, `hand_over`                                        | binding      | `operation<copy>`, `operation<decay>`, `operation<hand_over>`         |
+| `wrap`                                                              | request      | `operation<wrap, Target>`; a run of wraps is `wrap_value`             |
+| `adopt`                                                             | request      | `adopt_operation`                                                     |
+| `observe`                                                           | request      | `observe_operation`                                                   |
+| `qualify`                                                           | request      | `qualify_operation`                                                   |
 
 A step belongs to the side that knows the type it is applied to (see phase 7). A
 request takes the others through the tables of the binding.
@@ -111,7 +111,7 @@ request takes the others through the tables of the binding.
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Classification | `type/type_traits.h`, `type/shape.h`, `type/annotated.h`, `request/decomposition.h`, `request/classification.h`, `factory/constructor_detection.hpp`, `base/type_descriptor.h`                                      |
 | Semantics      | `semantics/model.h`, `binding/materialization.h`, `storage/scope_traits.h`, `binding/selection.h`                                                                                                                   |
-| Steps          | the steps of `request/execution.h`, the storages of `storage/`, `factory/`                                                                                                                                          |
+| Steps          | the operations of `request/execution.h`, the storages of `storage/`, `factory/`                                                                                                                                     |
 | Execution      | the conversions of `request/execution.h`, the tables of `runtime/execution.h`, `runtime/request.h`, `binding/activation.h`, `runtime/binding.h`, `static_execution` of `static/binding.h`, `resolution/algorithm.h` |
 | Plumbing       | `lookup/`, `memory/`, the registries and the transactions of `runtime/` and `static/`, `context/`                                                                                                                   |
 
@@ -345,8 +345,8 @@ other code.
      array, the hand-over of an array, the conversion of a sole owner to its
      sharing handle, the release of what a pointer owns, and the upcast to the
      interface. Each operation names the table of the type it makes. The tables
-     are built from the typed steps of the static container, so both containers
-     apply one implementation of each step.
+     are built from the typed operations of the static container, so both
+     containers apply one implementation of each step.
 
    - A request knows the types it spells. It has a table for each of its nested
      types, with the operations that make that type of the one below: a run of

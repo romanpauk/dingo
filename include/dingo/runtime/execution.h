@@ -89,17 +89,18 @@ struct store_view {
 };
 
 // An operation of a runtime resolution, of no type.
-using step_function = erased_carrier (*)(erased_carrier source, bool stable,
-                                         runtime_store &store);
+using operation_function = erased_carrier (*)(erased_carrier source,
+                                              bool stable,
+                                              runtime_store &store);
 
 struct type_table;
 
 // An operation on an object of a type: for one the request owns and for one
 // it does not, none where C++ does not apply it, and the table of the type
 // of what it makes.
-struct operation {
-  step_function owned = nullptr;
-  step_function borrowed = nullptr;
+struct erased_operation {
+  operation_function owned = nullptr;
+  operation_function borrowed = nullptr;
   const type_table *made = nullptr;
 };
 
@@ -115,13 +116,13 @@ inline constexpr std::size_t step_kinds =
 // pointer to its element it does not own; and of a pointer or a handle of
 // its element of fewer qualifiers, by the qualifiers it lacks.
 struct full_table {
-  operation steps[step_kinds] = {};
-  operation release_array = {};
-  operation wrap_runs[semantics::max_layers + 1] = {};
-  operation adopted = {};
-  operation adopted_array = {};
-  operation observing = {};
-  operation qualified[4] = {};
+  erased_operation operations[step_kinds] = {};
+  erased_operation release_array = {};
+  erased_operation wrap_runs[semantics::max_layers + 1] = {};
+  erased_operation adopted = {};
+  erased_operation adopted_array = {};
+  erased_operation observing = {};
+  erased_operation qualified[4] = {};
 };
 
 // Where an operation is in a table: a kind of step from the type, the
@@ -140,16 +141,16 @@ enum class slot : std::uint8_t {
   count = qualified + 4
 };
 
-constexpr std::uint8_t step_slot(semantics::step kind) {
+constexpr std::uint8_t operation_slot(semantics::step kind) {
   return static_cast<std::uint8_t>(kind);
 }
-constexpr std::uint8_t step_slot(slot index, std::size_t depth = 0) {
+constexpr std::uint8_t operation_slot(slot index, std::size_t depth = 0) {
   return static_cast<std::uint8_t>(static_cast<std::size_t>(index) + depth);
 }
 
 struct slot_entry {
   std::uint8_t slot;
-  operation step;
+  erased_operation operation;
 };
 
 // A table as a runtime resolution keeps it: the operations it has, as many
@@ -160,49 +161,49 @@ struct type_table {
   std::size_t count;
 
   // The operation at a slot, or one of no function.
-  const operation &operator[](std::uint8_t slot) const {
+  const erased_operation &operator[](std::uint8_t slot) const {
     for (std::size_t index = 0; index < count; ++index) {
       if (entries[index].slot == slot) {
-        return entries[index].step;
+        return entries[index].operation;
       }
     }
-    static constexpr operation none{};
+    static constexpr erased_operation none{};
     return none;
   }
 };
 
 // The operation at a slot of a full table.
-constexpr const operation &slot_operation(const full_table &table,
-                                          std::uint8_t index) {
+constexpr const erased_operation &slot_operation(const full_table &table,
+                                                 std::uint8_t index) {
   if (index < step_kinds) {
-    return table.steps[index];
+    return table.operations[index];
   }
-  if (index == step_slot(slot::release_array)) {
+  if (index == operation_slot(slot::release_array)) {
     return table.release_array;
   }
-  if (index < step_slot(slot::adopted)) {
-    return table.wrap_runs[index - step_slot(slot::wrap_runs)];
+  if (index < operation_slot(slot::adopted)) {
+    return table.wrap_runs[index - operation_slot(slot::wrap_runs)];
   }
-  if (index == step_slot(slot::adopted)) {
+  if (index == operation_slot(slot::adopted)) {
     return table.adopted;
   }
-  if (index == step_slot(slot::adopted_array)) {
+  if (index == operation_slot(slot::adopted_array)) {
     return table.adopted_array;
   }
-  if (index == step_slot(slot::observing)) {
+  if (index == operation_slot(slot::observing)) {
     return table.observing;
   }
-  return table.qualified[index - step_slot(slot::qualified)];
+  return table.qualified[index - operation_slot(slot::qualified)];
 }
 
-constexpr bool has(const operation &step) {
-  return step.owned != nullptr || step.borrowed != nullptr;
+constexpr bool has(const erased_operation &operation) {
+  return operation.owned != nullptr || operation.borrowed != nullptr;
 }
 
 // The operations a table of a binding has: a bit for each kind of step from
 // its type, one for the release of a pointer to the first element of an
 // array, and one for the steps that make an object of it.
-constexpr std::uint32_t step_mask(semantics::step kind) {
+constexpr std::uint32_t operation_mask(semantics::step kind) {
   return std::uint32_t{1} << static_cast<unsigned>(kind);
 }
 inline constexpr std::uint32_t release_array_mask = std::uint32_t{1}
@@ -328,9 +329,9 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   // An operation of a step of a kind, for an object the request owns, for
   // one it does not, or for both, where the table has it.
   template <semantics::step Kind, typename Step, bool Owned, bool Borrowed,
-            std::uint32_t Bit = step_mask(Kind)>
-  static constexpr operation step_operation() {
-    operation made;
+            std::uint32_t Bit = operation_mask(Kind)>
+  static constexpr erased_operation erase_operation() {
+    erased_operation made;
     constexpr bool transient = makes_transient(Kind);
     if constexpr ((Mask & Bit) != 0 && Borrowed) {
       made.borrowed = &apply<Step, false, transient>;
@@ -344,7 +345,7 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   }
 
   template <semantics::step Kind, typename Step, bool Borrowed, bool Transient>
-  static constexpr step_function owned_operation() {
+  static constexpr operation_function owned_operation() {
     if constexpr (Borrowed) {
       if constexpr (borrows<Kind, Step>()) {
         return &apply<Step, false, Transient>;
@@ -353,18 +354,18 @@ struct table_maker : layer_types<T, Leaf, Interface> {
     return &apply<Step, true, Transient>;
   }
 
-  template <semantics::step Kind, typename Step = execution::step<Kind>>
-  static constexpr operation both() {
-    return step_operation<Kind, Step, true, true>();
+  template <semantics::step Kind, typename Step = execution::operation<Kind>>
+  static constexpr erased_operation both() {
+    return erase_operation<Kind, Step, true, true>();
   }
-  template <semantics::step Kind, typename Step = execution::step<Kind>,
-            std::uint32_t Bit = step_mask(Kind)>
-  static constexpr operation owned() {
-    return step_operation<Kind, Step, true, false, Bit>();
+  template <semantics::step Kind, typename Step = execution::operation<Kind>,
+            std::uint32_t Bit = operation_mask(Kind)>
+  static constexpr erased_operation owned() {
+    return erase_operation<Kind, Step, true, false, Bit>();
   }
 
-  template <std::size_t K> static constexpr operation run() {
-    operation made;
+  template <std::size_t K> static constexpr erased_operation run() {
+    erased_operation made;
     if constexpr (std::is_same_v<T, type> && facts::template runs<K>()) {
       using nested_type = std::remove_cv_t<typename nested<K>::type>;
       made.owned = &wrap_operation<type, Leaf, Interface, nested_type>;
@@ -378,15 +379,15 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   }
 
   static constexpr bool wants(semantics::step kind) {
-    return (Mask & step_mask(kind)) != 0;
+    return (Mask & operation_mask(kind)) != 0;
   }
 
   // The steps from a layer to its element.
   static constexpr void elements(full_table &made) {
     using semantics::step;
     using element_type = typename element<>::type;
-    auto index = [&](step kind) -> operation & {
-      return made.steps[static_cast<std::size_t>(kind)];
+    auto index = [&](step kind) -> erased_operation & {
+      return made.operations[static_cast<std::size_t>(kind)];
     };
     index(step::element) = both<step::element>();
     index(step::element_pointer) = both<step::element_pointer>();
@@ -403,8 +404,8 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   static constexpr full_table make() {
     full_table made;
     using semantics::step;
-    auto index = [&](step kind) -> operation & {
-      return made.steps[static_cast<std::size_t>(kind)];
+    auto index = [&](step kind) -> erased_operation & {
+      return made.operations[static_cast<std::size_t>(kind)];
     };
     // Each operation the mask has, where C++ applies its step to the type.
     if constexpr (wants(step::copy)) {
@@ -430,9 +431,9 @@ struct table_maker : layer_types<T, Leaf, Interface> {
       if constexpr (std::is_pointer_v<type> &&
                     std::is_object_v<std::remove_pointer_t<type>> &&
                     is_complete_v<std::remove_pointer_t<type>>) {
-        index(step::release) = owned<step::release, release_step<false>>();
+        index(step::release) = owned<step::release, release_operation<false>>();
         made.release_array =
-            owned<step::release, release_step<true>, release_array_mask>();
+            owned<step::release, release_operation<true>, release_array_mask>();
       }
     }
     if constexpr (wants(step::convert)) {
@@ -441,15 +442,15 @@ struct table_maker : layer_types<T, Leaf, Interface> {
       }
     }
     if constexpr (wants(step::unknown_bound)) {
-      index(step::unknown_bound) = step_operation<
-          step::unknown_bound, execution::step<step::unknown_bound>,
+      index(step::unknown_bound) = erase_operation<
+          step::unknown_bound, execution::operation<step::unknown_bound>,
           converts_unknown_bound<true>(), converts_unknown_bound<false>()>();
     }
     if constexpr (wants(step::upcast)) {
       if constexpr (upcasts<true>() || upcasts<false>()) {
         index(step::upcast) =
-            step_operation<step::upcast, execution::step<step::upcast>,
-                           upcasts<true>(), upcasts<false>()>();
+            erase_operation<step::upcast, execution::operation<step::upcast>,
+                            upcasts<true>(), upcasts<false>()>();
       }
     }
     if constexpr (std::is_same_v<T, type> && (Mask & makers_mask) != 0) {
@@ -464,8 +465,8 @@ struct table_maker : layer_types<T, Leaf, Interface> {
 
   // The pointer or the handle the type is, made of one of an element of
   // fewer qualifiers: the qualifiers of its element without Adds.
-  template <std::uint8_t Adds> static constexpr operation qualified() {
-    operation made;
+  template <std::uint8_t Adds> static constexpr erased_operation qualified() {
+    erased_operation made;
     constexpr std::uint8_t quals = element_quals<type>();
     if constexpr ((quals & Adds) == Adds) {
       using source =
@@ -637,7 +638,7 @@ struct table_maker : layer_types<T, Leaf, Interface> {
 
   static constexpr std::size_t count() {
     std::size_t made = 0;
-    for (std::uint8_t slot_index = 0; slot_index < step_slot(slot::count);
+    for (std::uint8_t slot_index = 0; slot_index < operation_slot(slot::count);
          ++slot_index) {
       made += has(slot_operation(full, slot_index)) ? 1 : 0;
     }
@@ -646,7 +647,7 @@ struct table_maker : layer_types<T, Leaf, Interface> {
 
   // The slot of the n-th operation the table has.
   static constexpr std::uint8_t nth(std::size_t index) {
-    for (std::uint8_t slot_index = 0; slot_index < step_slot(slot::count);
+    for (std::uint8_t slot_index = 0; slot_index < operation_slot(slot::count);
          ++slot_index) {
       if (has(slot_operation(full, slot_index)) && index-- == 0) {
         return slot_index;
@@ -837,8 +838,8 @@ struct binding_layout {
 // of lives as long as the container.
 struct runtime_conversion {
   struct call {
-    step_function owned;
-    step_function borrowed;
+    operation_function owned;
+    operation_function borrowed;
     bool stable;
   };
   bool found = false;
@@ -1022,35 +1023,35 @@ inline runtime_conversion make_runtime_conversion(
     const type_table *maker = tabled
                                   ? binding.tables[state]
                                   : request.tables[goal.depth - target.depth];
-    const operation *step = nullptr;
+    const erased_operation *step = nullptr;
     switch (each.kind) {
     case semantics::step::wrap:
-      step = &(*maker)[step_slot(slot::wrap_runs, each.wraps)];
+      step = &(*maker)[operation_slot(slot::wrap_runs, each.wraps)];
       break;
     case semantics::step::adopt:
       step = &(
           *maker)[target.layers[1] == semantics::array_layer && target.depth > 1
-                      ? step_slot(slot::adopted_array)
-                      : step_slot(slot::adopted)];
+                      ? operation_slot(slot::adopted_array)
+                      : operation_slot(slot::adopted)];
       break;
     case semantics::step::observe:
-      step = &(*maker)[step_slot(slot::observing)];
+      step = &(*maker)[operation_slot(slot::observing)];
       break;
     case semantics::step::qualify:
-      step = &(*maker)[step_slot(
+      step = &(*maker)[operation_slot(
           slot::qualified,
           static_cast<std::uint8_t>(target.quals[1] & ~source.quals[1]))];
       break;
     case semantics::step::release:
       step = &(*table)[source.layers[0] == semantics::array_pointer_layer
-                           ? step_slot(slot::release_array)
-                           : step_slot(each.kind)];
+                           ? operation_slot(slot::release_array)
+                           : operation_slot(each.kind)];
       break;
     default:
       if (table == nullptr) {
         return {};
       }
-      step = &(*table)[step_slot(each.kind)];
+      step = &(*table)[operation_slot(each.kind)];
       break;
     }
     made.calls[made.count++] = {step->owned, step->borrowed,
@@ -1258,19 +1259,20 @@ template <typename Shape> struct closed_semantics {
   };
   static constexpr mask_list make_masks() {
     mask_list made;
-    constexpr std::uint32_t taken = step_mask(semantics::step::copy) |
-                                    step_mask(semantics::step::decay) |
-                                    step_mask(semantics::step::hand_over) |
-                                    step_mask(semantics::step::convert) |
-                                    step_mask(semantics::step::unknown_bound);
+    constexpr std::uint32_t taken =
+        operation_mask(semantics::step::copy) |
+        operation_mask(semantics::step::decay) |
+        operation_mask(semantics::step::hand_over) |
+        operation_mask(semantics::step::convert) |
+        operation_mask(semantics::step::unknown_bound);
     const semantics::context context = Shape::context;
     for (std::size_t index = 0; index < used.count; ++index) {
       const std::size_t state = used.states[index];
       const semantics::state &each = Sources.states[state];
       made.state_mask[classes.state_class[state]] |=
           (request_kinds(each.reached, context) & taken) |
-          step_mask(semantics::step::convert) |
-          step_mask(semantics::step::unknown_bound);
+          operation_mask(semantics::step::convert) |
+          operation_mask(semantics::step::unknown_bound);
       if (state == 0) {
         continue;
       }
@@ -1282,12 +1284,12 @@ template <typename Shape> struct closed_semantics {
         made.state_mask[classes.state_class[each.parent]] |= release_array_mask;
       } else {
         made.state_mask[classes.state_class[each.parent]] |=
-            step_mask(each.step);
+            operation_mask(each.step);
         // A request makes the copy of what maybe_element gives where it
         // takes it.
         if (each.step == semantics::step::maybe_element_copy) {
           made.state_mask[classes.state_class[each.parent]] |=
-              step_mask(semantics::step::maybe_element);
+              operation_mask(semantics::step::maybe_element);
         }
       }
     }
@@ -1606,8 +1608,9 @@ struct binding_sources {
   }
 
   template <std::size_t State>
-  using reaching_step =
-      typename typed_step<Identities, search_step<Sources, State>>::step_type;
+  using reaching_operation =
+      typename step_operation<Identities,
+                              search_step<Sources, State>>::operation_type;
 
   template <typename U> struct tag {
     using type = U;
@@ -1616,7 +1619,7 @@ struct binding_sources {
   // The carrier a step into a state makes of the carrier Source.
   template <std::size_t State, typename Source>
   using reached_t =
-      decltype(reaching_step<State>::template apply<Leaf, Interface>(
+      decltype(reaching_operation<State>::template apply<Leaf, Interface>(
           std::declval<Source>(), std::declval<store_view &>()));
 
   // The carrier of a class of states.
@@ -1668,15 +1671,15 @@ struct binding_sources {
                       "the type a binding makes a layer of is made so");
       } else {
         using parent = table_t<target.parent>;
-        constexpr operation step =
+        constexpr erased_operation operation =
             target.step == semantics::step::release &&
                     Sources.states[target.parent].reached.layers[0] ==
                         semantics::array_pointer_layer
                 ? parent::maker::full.release_array
                 : parent::maker::full
-                      .steps[static_cast<std::size_t>(target.step)];
-        static_assert((source_carrier::owned ? step.owned : step.borrowed) !=
-                          nullptr,
+                      .operations[static_cast<std::size_t>(target.step)];
+        static_assert((source_carrier::owned ? operation.owned
+                                             : operation.borrowed) != nullptr,
                       "the table of a type has every step from it");
       }
     }
@@ -1705,8 +1708,9 @@ struct binding_sources {
     if (!(kinds & (std::uint32_t{1} << static_cast<unsigned>(kind)))) {
       return true;
     }
-    const operation &step = table.steps[static_cast<std::size_t>(kind)];
-    return (Own::owned ? step.owned : step.borrowed) != nullptr;
+    const erased_operation &operation =
+        table.operations[static_cast<std::size_t>(kind)];
+    return (Own::owned ? operation.owned : operation.borrowed) != nullptr;
   }
 
   template <std::size_t... I>
@@ -1734,17 +1738,16 @@ struct binding_sources {
   };
   template <std::size_t State> struct closed_carrier<State, false> {
     using parent = closed_carrier<closure.states[State].parent>;
-    using step_type =
-        typename typed_step<Identities,
-                            search_step<semantic::closure, State>>::step_type;
+    using operation_type = typename step_operation<
+        Identities, search_step<semantic::closure, State>>::operation_type;
     template <bool Made, typename = void> struct reached_carrier {
       static constexpr bool possible = false;
       using type = void;
     };
     template <typename Unused> struct reached_carrier<true, Unused> {
       using result =
-          step_result<step_type, Leaf, Interface, typename parent::type::type,
-                      parent::type::owned>;
+          operation_result<operation_type, Leaf, Interface,
+                           typename parent::type::type, parent::type::owned>;
       static constexpr bool possible = result::possible;
       using type = typename result::type;
     };
@@ -1757,9 +1760,8 @@ struct binding_sources {
 
   // The step into a state of the closure.
   template <std::size_t State>
-  using closed_step =
-      typename typed_step<Identities,
-                          search_step<semantic::closure, State>>::step_type;
+  using closed_step = typename step_operation<
+      Identities, search_step<semantic::closure, State>>::operation_type;
 
   // What the route of a state reaches: the last instruction of its conversion,
   // applied to what the route of the state it starts from reaches, so that
@@ -1784,15 +1786,17 @@ struct binding_sources {
               store);
       auto reached_before = reach_state<before, false, Store>(source, store);
       if constexpr (each.qualified) {
-        using step_type =
-            typename holding_step<closed_step<first>, reached.quals[1]>::type;
-        return step_type::template apply<Leaf, Interface>(reached_before, kept);
+        using operation_type =
+            typename holding_operation<closed_step<first>,
+                                       reached.quals[1]>::type;
+        return operation_type::template apply<Leaf, Interface>(reached_before,
+                                                               kept);
       } else if constexpr (each.kind == derivation.steps[each.first]) {
         return closed_step<first>::template apply<Leaf, Interface>(
             reached_before, kept);
       } else {
-        return step<each.kind>::template apply<Leaf, Interface>(reached_before,
-                                                                kept);
+        return operation<each.kind>::template apply<Leaf, Interface>(
+            reached_before, kept);
       }
     }
   }
@@ -1871,10 +1875,11 @@ struct binding_sources {
       return false;
     } else {
       using own = typename closed_carrier<State>::type;
-      return step_result<step<semantics::step::convert>, Leaf, Interface,
-                         typename own::type, true>::possible ||
-             step_result<step<semantics::step::unknown_bound>, Leaf, Interface,
-                         typename own::type, own::owned>::possible;
+      return operation_result<operation<semantics::step::convert>, Leaf,
+                              Interface, typename own::type, true>::possible ||
+             operation_result<operation<semantics::step::unknown_bound>, Leaf,
+                              Interface, typename own::type,
+                              own::owned>::possible;
     }
   }
 
@@ -1890,17 +1895,18 @@ struct binding_sources {
       return nullptr;
     } else {
       using own = typename closed_carrier<State>::type;
-      constexpr std::uint32_t taken = step_mask(semantics::step::copy) |
-                                      step_mask(semantics::step::decay) |
-                                      step_mask(semantics::step::hand_over) |
-                                      step_mask(semantics::step::convert) |
-                                      step_mask(semantics::step::unknown_bound);
+      constexpr std::uint32_t taken =
+          operation_mask(semantics::step::copy) |
+          operation_mask(semantics::step::decay) |
+          operation_mask(semantics::step::hand_over) |
+          operation_mask(semantics::step::convert) |
+          operation_mask(semantics::step::unknown_bound);
       constexpr std::uint32_t mask =
           (request_kinds(closure.states[State].reached,
                          Semantics::context(abstract)) &
            taken) |
-          step_mask(semantics::step::convert) |
-          step_mask(semantics::step::unknown_bound);
+          operation_mask(semantics::step::convert) |
+          operation_mask(semantics::step::unknown_bound);
       return &operation_table<typename own::type, Leaf, Interface, mask>::value;
     }
   }

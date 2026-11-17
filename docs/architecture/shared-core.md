@@ -22,7 +22,7 @@ they run a conversion. Everything else is one implementation.
 | Layer sources              | `binding_semantics` in `request/execution.h`                                   | as the code compiles                        | as the code compiles                                           |
 | Derivation of a request    | `semantics::satisfy`, `semantics::answer_derivation`                           | as the code compiles (`request_derivation`) | at the first request of its type (`plan_runtime`)              |
 | Conversion of a derivation | `compile_conversion` in `request/execution.h`                                  | as the code compiles                        | at the first request of its type                               |
-| Steps                      | the steps of `request/execution.h`                                             | inline (`execute_conversion`)               | through tables built of the same steps (`runtime/execution.h`) |
+| Steps                      | the operations of `request/execution.h`                                        | inline (`execute_conversion`)               | through tables built of the same steps (`runtime/execution.h`) |
 | Store of what is made      | `static_store` in `static/binding.h`, `runtime_store` in `runtime/execution.h` | typed                                       | by the layout of the type (`object_layout`)                    |
 
 The semantics are constant expressions of no C++ type: what a binding publishes,
