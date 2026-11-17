@@ -179,28 +179,38 @@ struct request_derivation {
     return made;
   }
 
-  static constexpr semantics::derivation make(semantics::lifetime needed) {
+  // The derivations of a request that needs what it refers to to live as long
+  // as the container, and as long as the request, of one search: they differ
+  // in what satisfies the request alone.
+  struct derivations {
+    semantics::derivation stable;
+    semantics::derivation transient;
+  };
+
+  static constexpr derivations make() {
     if constexpr (!modeled) {
-      (void)needed;
       return {};
     } else {
       static_assert(binding::template whole<abstract>());
       constexpr semantics::context closed_context = context();
+      const semantics::request request = goal();
       const semantics::search found = semantics::reach_closed(
           binding::template closed<abstract>,
-          binding::context(abstract).layers->count, closed_context, goal());
-      return semantics::answer_derivation(
-          found, semantics::satisfy(found, goal(), category::value, needed,
-                                    closed_context));
+          binding::context(abstract).layers->count, closed_context, request);
+      return {semantics::answer_derivation(
+                  found, semantics::satisfy(found, request, category::value,
+                                            semantics::lifetime::stable,
+                                            closed_context)),
+              semantics::answer_derivation(
+                  found, semantics::satisfy(found, request, category::value,
+                                            semantics::lifetime::request,
+                                            closed_context))};
     }
   }
 
-  // The derivations of a request that needs what it refers to to live as long
-  // as the container, and as long as the request.
-  static constexpr semantics::derivation stable =
-      make(semantics::lifetime::stable);
-  static constexpr semantics::derivation transient =
-      make(semantics::lifetime::request);
+  static constexpr derivations derived = make();
+  static constexpr semantics::derivation stable = derived.stable;
+  static constexpr semantics::derivation transient = derived.transient;
 
   // The conversions of the derivations.
   static constexpr std::size_t source_count =
