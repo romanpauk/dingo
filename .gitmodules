@@ -1,0 +1,3 @@
+[submodule "tools/nbench"]
+	path = tools/nbench
+	url = ../nbench.git

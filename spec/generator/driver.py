@@ -200,7 +200,7 @@ def program_key(compiler, flags, directory, name, cpp):
     if run.returncode != 0:
         return None
     return hashlib.sha256(json.dumps(
-        [compiler_identity(compiler), MEMORY_LIMIT,
+        [compiler_identity(compiler), MEMORY_LIMIT, MEASUREMENT,
          [portable_flag(flag) for flag in flags],
          portable_text(os.path.abspath(directory)), name,
          hashlib.sha256(run.stdout).hexdigest()]).encode()).hexdigest()
@@ -656,14 +656,27 @@ def counts_instructions():
     return COUNTS_INSTRUCTIONS
 
 
+# A process forked of this one starts with its peak memory, and keeps it
+# through exec: the peak a wait reports of a compile is at least that of the
+# Python process that started it. /usr/bin/time, a process of its own, reports
+# that of the compile alone.
+TIME = "/usr/bin/time"
+# How a compile is measured, in the key of what is kept of it: a change of
+# it makes the results kept before it stale.
+MEASUREMENT = 2
+
+
 def measured_compile(command, directory, name):
     """Runs a compile; returns (returncode, stderr, measured): the processor
     seconds and the peak memory in KiB of the compiler and what it runs, and
     the instructions they ran, where the system reports them."""
     errors = directory / f"{name}.stderr"
     counted = directory / f"{name}.counted"
+    peak = directory / f"{name}.peak"
     prefix = (["perf", "stat", "-x,", "-e", "instructions:u", "-o",
                str(counted), "--"] if counts_instructions() else [])
+    if os.path.exists(TIME) and os.uname().sysname == "Linux":
+        prefix = [TIME, "-f", "%M", "-o", str(peak)] + prefix
     measured = {}
     with open(errors, "w") as error_file:
         process = subprocess.Popen(prefix + command,
@@ -682,6 +695,11 @@ def measured_compile(command, directory, name):
             process.wait()
     stderr = errors.read_text(errors="replace")
     errors.unlink()
+    if peak.exists():
+        lines = peak.read_text().split()
+        if lines and lines[-1].isdigit():
+            measured["memory"] = int(lines[-1])
+        peak.unlink()
     if counted.exists():
         for line in counted.read_text().splitlines():
             fields = line.split(",")
