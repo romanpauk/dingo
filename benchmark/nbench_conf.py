@@ -140,12 +140,12 @@ def operations(case, variant):
                       {"instructions": r["instructions"]} for r in records}}
 
 
-def costs(results, variant):
-    """footprint.costs of the measured scenarios."""
+def costs(results, variant, suite="footprint"):
+    """footprint.costs of the scenarios a suite measured."""
     measured = {case: {"object": {"sections": {"code": m.get("code")}},
                        "instructions": m.get("instructions"),
-                       "memory": m.get("memory")}
-                for case, m in results.get("footprint", {}).items()}
+                       "memory": m.get("memory"), "cpu": m.get("cpu")}
+                for case, m in results.get(suite, {}).items()}
     return footprint.costs(measured)
 
 
@@ -184,6 +184,13 @@ def benchmark_params(name):
 SCENARIO = r"^(?P<scenario>headers/\w+|runtime/empty|codegen|(?P<container>runtime|static)/(?P<shape>\w+)/(?P<registrations>\d+)/(?P<requests>\d+))"
 OPERATIONS = [f"{c}/{s}" for c in ("runtime", "static") for s in footprint.SHAPES]
 BYTES = dict(unit="B", noise=0, section="memory")
+COST_METRICS = [Metric("code", "Code", **BYTES),
+                Metric("instructions", "Compiler instructions", noise=0.01,
+                       section="cpu"),
+                Metric("memory", "Compiler peak memory", "KiB", noise=0.03,
+                       section="memory"),
+                Metric("cpu", "Compiler CPU", "s", noise=0.2, abs_tol=0.05,
+                       section="time")]
 
 config = Config(
     name="dingo",
@@ -260,9 +267,12 @@ config = Config(
                    description="Differences of the footprint scenarios: a "
                                "container, a first and a further "
                                "registration and a request type.",
-                   metrics=[Metric("code", "Code", **BYTES),
-                            Metric("instructions", "Compiler instructions",
-                                   noise=0.01, section="cpu"),
-                            Metric("memory", "Compiler peak memory", "KiB",
-                                   noise=0.03, section="memory")])],
+                   metrics=COST_METRICS),
+            Derive("release-costs",
+                   lambda results, variant: costs(results, variant, "release"),
+                   title="Release costs", primary="code", params=cost_params,
+                   description="The costs of the release footprint: a "
+                               "container, a first and a further "
+                               "registration and a request type, at -O2.",
+                   metrics=COST_METRICS)],
 )

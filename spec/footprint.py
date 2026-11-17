@@ -277,17 +277,19 @@ def performance(compiler, flags, directory):
 
 def costs(measured):
     """The costs of the parts of the library, of the differences of the
-    scenarios: code bytes and compiler instructions."""
+    scenarios: code bytes, compiler instructions, peak memory and processor
+    seconds."""
     found = {}
 
     def difference(what, later, earlier, count=1):
         for name, path in (("code", ("object", "sections", "code")),
                            ("instructions", ("instructions",)),
-                           ("memory", ("memory",))):
+                           ("memory", ("memory",)), ("cpu", ("cpu",))):
             a = metric(measured.get(earlier), *path)
             b = metric(measured.get(later), *path)
             if a is not None and b is not None:
-                found.setdefault(what, {})[name] = round((b - a) / count)
+                found.setdefault(what, {})[name] = round(
+                    (b - a) / count, 2 if name == "cpu" else None)
 
     difference("runtime container", "runtime/empty", "headers/runtime")
     for container in ("runtime", "static"):
