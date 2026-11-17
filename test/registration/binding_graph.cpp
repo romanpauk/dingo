@@ -103,7 +103,7 @@ TEST(static_graph_test,
   static_assert(!detail::graph_model<typename source::type>::resolvable);
 }
 
-// What a binding plans for a request, as the code compiles.
+// What a binding derives for a request, as the code compiles.
 template <typename Request, typename Binding>
 inline constexpr bool plans_v =
     detail::static_execution<Request, Binding>::resolves;

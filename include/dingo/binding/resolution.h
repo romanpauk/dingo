@@ -114,7 +114,7 @@ struct bound_leaf<Leaf, Interface,
                          leaf_type_t<Interface>, Leaf>;
 };
 
-// What a binding of an interface and a storage plans its requests by, in
+// What a binding of an interface and a storage derives its requests by, in
 // both containers: the leaf it stores, the element of its interface, the
 // stored object its storage gives, made for the request by a scope that
 // makes its instance or kept, of the qualifiers it is kept of, and whether a
@@ -138,18 +138,19 @@ template <typename Storage, typename Interface> struct binding_execution {
                              Storage>::consumed_type>,
                          std::remove_reference_t<typename storage_source_traits<
                              Storage>::borrowed_type>>>;
-  using plan = execution::binding_plan<stored_type, leaf_type, scope.makes,
-                                       scope.publishes_early>;
+  using semantics_type =
+      execution::binding_semantics<stored_type, leaf_type, scope.makes,
+                                   scope.publishes_early>;
   static constexpr bool abstract = !std::is_same_v<leaf_type, interface_type>;
   static constexpr bool modeled =
-      plan::stored_stack::element != stack_element::other;
+      semantics_type::stored_stack::element != stack_element::other;
 };
 
-// The stored object a source gives, where a plan starts: a value made for
+// The stored object a source gives, where a conversion starts: a value made for
 // the request, which it owns, or the object or the pointer the storage
 // keeps, which it borrows.
 template <typename Stored, bool Makes, typename Source, typename Store>
-auto plan_start(Source &&source, Store &store) {
+auto conversion_start(Source &&source, Store &store) {
   using source_type = remove_cvref_t<Source>;
   if constexpr (is_array_owner_v<remove_cvref_t<decltype(*source)>>) {
     // The array a scope made, which the request owns until a step takes it

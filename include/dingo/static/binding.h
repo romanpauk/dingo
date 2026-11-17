@@ -136,7 +136,7 @@ struct static_dependencies<Host, static_registry<LocalRegistrations...>> {
       local_binding_router<static_bindings_state<LocalRegistrations...>, Host>;
 };
 
-// The plan of a request of a static binding, as the code compiles: of the
+// The derivation of a request of a static binding, as the code compiles: of the
 // stored object its storage gives, borrowed or made for the request, and of
 // the request. A request needs what it refers to to live as long as the
 // container when it is passed to the caller.
@@ -147,36 +147,41 @@ template <typename Request, typename InterfaceBinding> struct static_execution {
   using leaf_type = typename binding::leaf_type;
   static constexpr semantics::scope_traits scope = binding::scope;
   using stored_type = typename binding::stored_type;
-  using plan = execution::request_plan<stored_type, Request, leaf_type,
-                                       scope.makes, scope.publishes_early>;
-  using interface_type = typename plan::interface_type;
+  using derivation =
+      execution::request_derivation<stored_type, Request, leaf_type,
+                                    scope.makes, scope.publishes_early>;
+  using interface_type = typename derivation::interface_type;
 
-  // The plan of a request for a lifetime: whole, as a request that reaches
-  // more states than a search holds does not compile.
-  template <bool Stable> static constexpr const semantics::plan &planned() {
+  // The derivation of a request for a lifetime: whole, as a request that
+  // reaches more states than a search holds does not compile.
+  template <bool Stable>
+  static constexpr const semantics::derivation &derived() {
     if constexpr (Stable) {
-      static_assert(!plan::stable.overflow, "a request reaches more states "
-                                            "than semantics::max_states");
-      return plan::stable;
+      static_assert(!derivation::stable.overflow,
+                    "a request reaches more states "
+                    "than semantics::max_states");
+      return derivation::stable;
     } else {
-      static_assert(!plan::transient.overflow, "a request reaches more states "
-                                               "than semantics::max_states");
-      return plan::transient;
+      static_assert(!derivation::transient.overflow,
+                    "a request reaches more states "
+                    "than semantics::max_states");
+      return derivation::transient;
     }
   }
 
   // Whether the binding resolves the request at all, for some lifetime.
-  static constexpr bool resolves = plan::transient.found || plan::stable.found;
+  static constexpr bool resolves =
+      derivation::transient.found || derivation::stable.found;
 };
 
 // Whether a request of a binding refers to the stored object itself, as
 // the code compiles: no step makes anything of it.
 template <typename Request, typename InterfaceBinding>
 constexpr bool refers_stored() {
-  constexpr const semantics::plan &plan =
-      static_execution<Request, InterfaceBinding>::plan::stable;
-  return plan.found && plan.count == 0 &&
-         plan.how == semantics::satisfaction::refer;
+  constexpr const semantics::derivation &derivation =
+      static_execution<Request, InterfaceBinding>::derivation::stable;
+  return derivation.found && derivation.count == 0 &&
+         derivation.how == semantics::satisfaction::refer;
 }
 
 // Whether an rvalue request of a binding is of a value the binding makes
@@ -184,11 +189,12 @@ constexpr bool refers_stored() {
 // it.
 template <typename Request, typename InterfaceBinding>
 constexpr bool returns_made_value() {
-  using value_plan = typename static_execution<std::remove_reference_t<Request>,
-                                               InterfaceBinding>::plan;
+  using value_derivation =
+      typename static_execution<std::remove_reference_t<Request>,
+                                InterfaceBinding>::derivation;
   return static_execution<Request, InterfaceBinding>::resolves &&
-         value_plan::stable.found &&
-         value_plan::stable.how == semantics::satisfaction::move;
+         value_derivation::stable.found &&
+         value_derivation::stable.how == semantics::satisfaction::move;
 }
 
 // What a static resolution makes for a request: kept with the binding when
@@ -279,29 +285,29 @@ public:
     }
   }
 
-  // Resolves a request by its plan, from the stored object the activation
+  // Resolves a request by its derivation, from the stored object the activation
   // of the binding materializes. A request the binding does not resolve for
   // the lifetime it needs is rejected: as the code compiles where the
   // lifetime is known then.
   template <typename InterfaceBinding, typename Request, typename Host,
             typename Context, typename Scope>
   Request resolve(Scope scope, Host &host, Context &context) {
-    using planning = static_execution<Request, InterfaceBinding>;
+    using resolved = static_execution<Request, InterfaceBinding>;
     if constexpr (is_fixed_construction_scope<Scope>::value) {
       constexpr bool stable =
           Scope::lifetime_value == construction_lifetime::caller;
-      if constexpr (planning::template planned<stable>().found) {
+      if constexpr (resolved::template derived<stable>().found) {
         return run<InterfaceBinding, Request, stable>(scope, host, context);
       } else {
-        check_planned<Request, InterfaceBinding, Context, Scope, stable>();
+        check_derived<Request, InterfaceBinding, Context, Scope, stable>();
         return not_convertible<Request, InterfaceBinding, Request>(context);
       }
-    } else if constexpr (!planning::resolves) {
-      check_planned<Request, InterfaceBinding, Context, Scope, false>();
+    } else if constexpr (!resolved::resolves) {
+      check_derived<Request, InterfaceBinding, Context, Scope, false>();
       return not_convertible<Request, InterfaceBinding, Request>(context);
     } else {
       // The lifetime a request needs is known as it runs.
-      if constexpr (planning::template planned<true>().found) {
+      if constexpr (resolved::template derived<true>().found) {
         if (scope.is_caller()) {
           return run<InterfaceBinding, Request, true>(scope, host, context);
         }
@@ -310,7 +316,7 @@ public:
           not_convertible<Request, InterfaceBinding>(context);
         }
       }
-      if constexpr (planning::template planned<false>().found) {
+      if constexpr (resolved::template derived<false>().found) {
         return run<InterfaceBinding, Request, false>(scope, host, context);
       } else {
         return not_convertible<Request, InterfaceBinding, Request>(context);
@@ -326,11 +332,11 @@ private:
   // rejects late rejects it as it runs.
   template <typename Request, typename InterfaceBinding, typename Context,
             typename Scope, bool Stable>
-  static constexpr void check_planned() {
-    using planning = static_execution<Request, InterfaceBinding>;
+  static constexpr void check_derived() {
+    using resolved = static_execution<Request, InterfaceBinding>;
     if constexpr (!rejects_late_v<Context> &&
-                  !planning::template planned<Stable>().found) {
-      if constexpr (Stable && planning::plan::transient.found) {
+                  !resolved::template derived<Stable>().found) {
+      if constexpr (Stable && resolved::derivation::transient.found) {
         static_assert(!is_fixed_caller_scope_v<Scope>,
                       "a reference or a pointer to an instance the resolution "
                       "makes would dangle in what is returned to the caller; "
@@ -351,11 +357,11 @@ private:
     }
   }
 
-  // Runs the plan of a request of the stored object.
+  // Runs the conversion of a request of the stored object.
   template <typename InterfaceBinding, typename Request, bool Stable,
             typename Host, typename Context, typename Scope>
   Request run(Scope scope, Host &host, Context &context) {
-    using planning = static_execution<Request, InterfaceBinding>;
+    using resolved = static_execution<Request, InterfaceBinding>;
     [[maybe_unused]] auto order = ordered(host, context);
     static_store<Context, Scope,
                  std::remove_reference_t<decltype(cell_.retained())>>
@@ -363,12 +369,12 @@ private:
               &reject_absent<Request, InterfaceBinding>);
     return activation(scope, host)
         .template use_source<Request>(context, [&](auto &&source) -> Request {
-          return execution::planned_run<typename planning::plan, Stable>::
-              template run<Request>(
-                  plan_start<typename planning::stored_type,
-                             planning::scope.makes>(
-                      std::forward<decltype(source)>(source), store),
-                  store);
+          return execution::execute_conversion<
+              Request, typename resolved::derivation, Stable>(
+              conversion_start<typename resolved::stored_type,
+                               resolved::scope.makes>(
+                  std::forward<decltype(source)>(source), store),
+              store);
         });
   }
 

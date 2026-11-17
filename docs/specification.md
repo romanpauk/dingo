@@ -234,7 +234,7 @@ every registration that the library accepts:
   `&&` through `invoke` from a scope that makes it. Only the storage copies or
   moves the leaf here, and the specification needs none.
 - [`spec/execution_check.py`](../spec/execution_check.py) counts the copies and
-  the moves of the plan of every conversion of the model.
+  the moves of the derivation of every conversion of the model.
 - `probe.py --layer resolution` requests the leaf of a plain registration,
   stored as `L` with no interfaces declared. No conversion copies or moves it.
   It covers every category, operation, scope, selection and container, and every
@@ -259,19 +259,19 @@ library does not accept resolves nothing, so it covers nothing.
 ## Conversion Check
 
 [`spec/conversion.py`](../spec/conversion.py) asks the binding of each
-registration what it plans for every request of up to three wrappers, and of
+registration what it derives for every request of up to three wrappers, and of
 each array shape. The answer comes from compilation only
 ([`test/model/conversion.h`](../test/model/conversion.h)). No container is made
 and nothing resolves, so the check covers every registration of the runtime
-container that the library accepts, several in one program. Both containers plan
-a request alike, so one answer is of both.
+container that the library accepts, several in one program. Both containers
+derive a request alike, so one answer is of both.
 
-| Outcome           | Meaning                                                        |
-| ----------------- | -------------------------------------------------------------- |
-| `published`       | The binding plans the request for as long as the container.    |
-| `placed`          | The binding plans the request only for as long as the request. |
-| `unpublished`     | The binding plans the request not at all.                      |
-| `selects_another` | The request selects the binding of another interface.          |
+| Outcome           | Meaning                                                          |
+| ----------------- | ---------------------------------------------------------------- |
+| `published`       | The binding derives the request for as long as the container.    |
+| `placed`          | The binding derives the request only for as long as the request. |
+| `unpublished`     | The binding derives the request not at all.                      |
+| `selects_another` | The request selects the binding of another interface.            |
 
 The check compares each outcome with the specification, with the limitations of
 the library:
@@ -322,7 +322,7 @@ defect too.
 Another outcome is `unexpected`. The check fails on an `unexpected` cell and on
 a registration that does not compile. The [Model Probe](#model-probe) checks
 what resolving a request does, and `spec/execution_check.py` the copies and the
-moves of each plan.
+moves of each derivation.
 
 ## Emptiness Check
 

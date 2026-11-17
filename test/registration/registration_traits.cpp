@@ -23,7 +23,7 @@ inline constexpr bool plans_v =
 
 // A volatile reference is reached only through volatile references, and
 // copied as a value.
-TEST(type_registration_test, volatile_binding_plans_volatile_access) {
+TEST(type_registration_test, volatile_binding_derives_volatile_access) {
   using volatile_model = detail::binding_model<
       type_registration<scope<external>, storage<volatile int &>>>;
   using volatile_binding = detail::binding<int, volatile_model>;
@@ -487,7 +487,7 @@ TEST(type_registration_test,
      multidimensional_array_storage_preserves_exact_and_row_shapes) {
   using model = detail::binding_model<
       type_registration<scope<shared>, storage<int[2][3]>>>;
-  // Each shape is planned by the interface it selects: the whole array by
+  // Each shape is derived by the interface it selects: the whole array by
   // itself, its rows by the row type.
   static_assert(plans_v<int (&)[2][3], detail::binding<int[2][3], model>>);
   static_assert(plans_v<int (*)[2][3], detail::binding<int[2][3], model>>);

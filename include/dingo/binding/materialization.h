@@ -89,7 +89,7 @@ materialization_placement(const materialization_facts &facts,
 // Whether the caller is refused an address into what a source is placed as:
 // a value the storage yields lives only as long as the context, which ends
 // before the caller uses an address into it. An address of what the value
-// owns apart from itself is the caller's only as the plan takes it over.
+// owns apart from itself is the caller's only as the derivation takes it over.
 constexpr bool refuses_caller_address(const materialization_facts &facts,
                                       materialized_request request) {
   return facts.yields_value && !facts.owns_pointee && request.refers;

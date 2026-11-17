@@ -1056,7 +1056,7 @@ struct state {
 };
 
 // The states a search holds. The code compiles a search of the layer sources
-// of every binding and of every request a static container plans, which a
+// of every binding and of every request a static container derives, which a
 // compiler may evaluate element by element: the searches of the semantics
 // domains reach at most 83 states. One the code compiles that reaches more
 // does not compile; a runtime resolution that reaches more fails.
@@ -1476,8 +1476,8 @@ satisfy_states(const state *states, std::size_t count, bool overflow,
 }
 
 // What satisfies a request of what a search reached: of the closed layer
-// sources it reached from alone, when they satisfy it, as no plan through a
-// wrap is cheaper than one of them; of every state otherwise.
+// sources it reached from alone, when they satisfy it, as no derivation through
+// a wrap is cheaper than one of them; of every state otherwise.
 template <typename Finish>
 constexpr answer satisfy_closed(const search &found, const request &goal,
                                 category taken, lifetime needed,
@@ -1506,46 +1506,49 @@ constexpr answer fewest(const object &start, const semantics::context &context,
   return satisfy(reach(start, context, goal), goal, taken, needed, context);
 }
 
-inline constexpr std::size_t max_plan = 16;
+inline constexpr std::size_t max_steps = 16;
 
 // The steps from a stored object to what satisfies a request, and the objects
 // they reach, the first the stored object; and how the last satisfies it.
-struct plan {
+struct derivation {
   bool found = false;
-  step steps[max_plan] = {};
-  object objects[max_plan + 1] = {};
+  step steps[max_steps] = {};
+  object objects[max_steps + 1] = {};
   // The state of the search each object is.
-  std::uint16_t states[max_plan + 1] = {};
+  std::uint16_t states[max_steps + 1] = {};
   std::size_t count = 0;
   satisfaction how = satisfaction::refer;
   cost fewest;
-  // Whether the search held fewer states than it reached: the plan is not to
-  // be trusted.
+  // Whether the search held fewer states than it reached: the derivation is not
+  // to be trusted.
   bool overflow = false;
 };
 
-constexpr plan answer_plan(const search &found, const answer &result);
+constexpr derivation answer_derivation(const search &found,
+                                       const answer &result);
 
-// The plan of the steps to a state of a search, which satisfies nothing.
-constexpr plan state_plan(const search &found, std::uint16_t state) {
+// The derivation of the steps to a state of a search, which satisfies nothing.
+constexpr derivation state_derivation(const search &found,
+                                      std::uint16_t state) {
   answer reached;
   reached.found = true;
   reached.state = state;
-  return answer_plan(found, reached);
+  return answer_derivation(found, reached);
 }
 
-constexpr plan answer_plan(const search &found, const answer &result) {
-  plan made;
+constexpr derivation answer_derivation(const search &found,
+                                       const answer &result) {
+  derivation made;
   made.overflow = result.overflow;
   if (!result.found) {
     return made;
   }
-  std::size_t path[max_plan + 1] = {};
+  std::size_t path[max_steps + 1] = {};
   std::size_t length = 0;
   for (std::uint16_t index = result.state; index != no_state;
        index = found.states[index].parent) {
-    if (length == max_plan + 1) {
-      // A plan longer than a plan holds is none.
+    if (length == max_steps + 1) {
+      // A derivation longer than a derivation holds is none.
       return made;
     }
     path[length++] = index;
@@ -2036,8 +2039,8 @@ struct handed_cost {
 };
 
 // The fewest copies and moves of the leaf a request resolves with, as
-// spec/semantics.py's fewest gives it, and the plan of it; none when it does
-// not resolve. construct<T>() of a value it cannot resolve makes T of the
+// spec/semantics.py's fewest gives it, and the derivation of it; none when it
+// does not resolve. construct<T>() of a value it cannot resolve makes T of the
 // leaf the container resolves by value: a new handle, optional or array of
 // it, the rest of a bounded array value-initialized. The value is moved into
 // it once it is resolved.

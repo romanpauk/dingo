@@ -85,8 +85,8 @@ struct runtime_binding_record {
 namespace detail {
 template <typename Storage> using registered_type_t = typename Storage::type;
 
-// The engine of the runtime bindings of a container. It plans a request of a
-// binding once, from what the binding publishes, and runs the plan of the
+// The engine of the runtime bindings of a container. It derives a request of a
+// binding once, from what the binding publishes, and runs the conversion of the
 // lifetime the request needs: one function for every binding of the
 // container.
 template <typename RTTI, typename Context> struct runtime_binding_engine {
@@ -94,7 +94,7 @@ template <typename RTTI, typename Context> struct runtime_binding_engine {
   using interface_type = typename node_type::interface_type;
   using request_type = typename node_type::request_type;
 
-  // Plans a request, guards the binding against recursion, retains the
+  // Converts a request, guards the binding against recursion, retains the
   // source an unresolved storage retains in the transaction, which resets
   // the cell if it fails, and publishes an address that lives as long as the
   // container in the request cache under its key, if it has one.
@@ -108,22 +108,23 @@ template <typename RTTI, typename Context> struct runtime_binding_engine {
       throw make_type_not_convertible_exception(request.requested,
                                                 node.registered, context);
     }
-    const auto &plans = request.plans->find(&node, [&] {
-      return execution::plan_runtime(*node.layout, request.layout);
+    const auto &conversions = request.conversions->find(&node, [&] {
+      return execution::make_runtime_conversions(*node.layout, request.layout);
     });
     // What a request passes to the caller lives as long as the container.
-    const auto &plan = scope.is_caller() ? plans.stable : plans.transient;
-    if (!plan.found) {
+    const auto &conversion =
+        scope.is_caller() ? conversions.stable : conversions.transient;
+    if (!conversion.found) {
       throw make_type_not_convertible_exception(request.requested,
                                                 node.registered, context);
     }
     const resolved_address result = run_materialization<true, true>(
         node.materialization, node_access{node, binding}, scope, context,
         [&](construction_scope construction, auto &materialized) {
-          return node.run(binding, scope, construction, context, plan, request,
-                          erase_hook(materialized));
+          return node.run(binding, scope, construction, context, conversion,
+                          request, erase_hook(materialized));
         });
-    if (cache_key != nullptr && node.caches && plan.stable_address &&
+    if (cache_key != nullptr && node.caches && conversion.stable_address &&
         result.access == resolved_address::access_kind::borrow) {
       binding.publish_cache(context, cache_key, result.address);
     }
@@ -170,7 +171,7 @@ struct runtime_binding_edge {
   using store_type = detail::context_store<runtime_context_type>;
   using execution_type =
       detail::binding_execution<Storage, std::remove_cv_t<Type>>;
-  using plan_type = typename execution_type::plan;
+  using semantics_type = typename execution_type::semantics_type;
   using stored_type = typename execution_type::stored_type;
 
 private:
@@ -179,19 +180,19 @@ private:
   }
 
   // The layer sources the binding publishes, and the tables of their types.
-  struct planned {
+  struct published {
     static constexpr bool abstract = execution_type::abstract;
-    using identities = typename plan_type::universe_type::identities;
+    using identities = typename semantics_type::universe_type::identities;
     using sources = detail::execution::binding_sources<
-        plan_type, plan_type::template shape<abstract>::sources, identities,
-        stored_type, typename execution_type::leaf_type,
+        semantics_type, semantics_type::template shape<abstract>::sources,
+        identities, stored_type, typename execution_type::leaf_type,
         typename execution_type::interface_type>;
     using layers = detail::execution::runtime_layers<identities>;
     static constexpr detail::execution::binding_layout value{
         sources::closed.states,
         sources::used.count,
         sources::closure.count,
-        plan_type::context(abstract),
+        semantics_type::context(abstract),
         layers::value,
         layers::count,
         sources::closed_tables.entries,
@@ -203,7 +204,7 @@ private:
 
   static constexpr const detail::execution::binding_layout *layout() {
     if constexpr (execution_type::modeled) {
-      return &planned::value;
+      return &published::value;
     } else {
       return nullptr;
     }
@@ -213,8 +214,8 @@ private:
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-  // What the binding keeps of its instance, which what a plan makes may be
-  // kept with; none when it keeps no instance.
+  // What the binding keeps of its instance, which what a conversion makes may
+  // be kept with; none when it keeps no instance.
   static detail::retention *retained(interface_base &binding) noexcept {
     if constexpr (cell_type::keeps_conversions) {
       return std::addressof(
@@ -226,41 +227,42 @@ private:
   }
 
   // Materializes the source of the binding in a construction scope, through
-  // the container its factory resolves in, and runs a plan of a request of
-  // it, in the scope of the request.
-  static resolved_address run(interface_base &binding, construction_scope scope,
-                              construction_scope construction,
-                              runtime_context_type &context,
-                              const typename node_type::plan_type &plan,
-                              const typename node_type::request_type &request,
-                              const detail::materialized_hook &materialized) {
+  // the container its factory resolves in, and runs a conversion of a request
+  // of it, in the scope of the request.
+  static resolved_address
+  run(interface_base &binding, construction_scope scope,
+      construction_scope construction, runtime_context_type &context,
+      const typename node_type::conversion_type &conversion,
+      const typename node_type::request_type &request,
+      const detail::materialized_hook &materialized) {
     using activation_type = detail::binding_activation<cell_type, Container &>;
     activation_type activation{
         detail::runtime_cell<cell_type>(binding.header()),
         detail::resolution_container<Container>(binding.header()), scope};
     return activation.use_runtime_source(
         construction, context, [&](auto &&source) -> resolved_address {
-          // What the plan keeps is undone before the cell is reset.
+          // What the conversion keeps is undone before the cell is reset.
           materialized();
           store_type store(
               context, scope, retained(binding), request.requested,
               detail::type_descriptor_v<detail::registered_type_t<Storage>>);
           detail::execution::store_view transient{store, false};
           detail::execution::erased_carrier reached = detail::execution::erase(
-              detail::plan_start<stored_type, execution_type::scope.makes>(
+              detail::conversion_start<stored_type,
+                                       execution_type::scope.makes>(
                   std::forward<decltype(source)>(source), transient));
-          for (std::size_t index = 0; index < plan.count; ++index) {
-            const auto &call = plan.calls[index];
+          for (std::size_t index = 0; index < conversion.count; ++index) {
+            const auto &call = conversion.calls[index];
             reached = (reached.owned ? call.owned : call.borrowed)(
                 reached, call.stable, store);
           }
-          return detail::finish_request(reached, plan);
+          return detail::finish_request(reached, conversion);
         });
   }
 
   // Resolves a request of the binding: by the answer of its closure, as the
-  // code compiled it, when it answers the request; else by the plan of the
-  // request, made once, from what the binding publishes.
+  // code compiled it, when it answers the request; else by the conversion of
+  // the request, made once, from what the binding publishes.
   static resolved_address
   dispatch(const node_type &binding_node, interface_base &binding,
            construction_scope scope, runtime_context_type &context,
@@ -294,15 +296,17 @@ private:
           break;
         }
       }
-      const auto &plans = request.plans->find(&binding_node, [&] {
-        return detail::execution::plan_runtime(layout, request.layout);
+      const auto &conversions = request.conversions->find(&binding_node, [&] {
+        return detail::execution::make_runtime_conversions(layout,
+                                                           request.layout);
       });
-      const auto &plan = stable ? plans.stable : plans.transient;
-      if (!plan.found) {
+      const auto &conversion =
+          stable ? conversions.stable : conversions.transient;
+      if (!conversion.found) {
         throw detail::make_type_not_convertible_exception(
             request.requested, binding_node.registered, context);
       }
-      return resolve(binding, scope, context, request, plan,
+      return resolve(binding, scope, context, request, conversion,
                      binding_node.caches ? cache_key : nullptr);
     }
   }
@@ -318,7 +322,7 @@ private:
                  const detail::execution::binding_layout &layout,
                  const void *cache_key) {
     using access = resolved_address::access_kind;
-    using sources = typename planned::sources;
+    using sources = typename published::sources;
     auto &cell = detail::runtime_cell<cell_type>(binding.header());
     detail::binding_activation<cell_type, Container &> activation{
         cell, detail::resolution_container<Container>(binding.header()), scope};
@@ -331,9 +335,9 @@ private:
           store_type store(
               context, scope, retained(binding), request.requested,
               detail::type_descriptor_v<detail::registered_type_t<Storage>>);
-          auto start =
-              detail::plan_start<stored_type, execution_type::scope.makes>(
-                  std::forward<decltype(source)>(source), store);
+          auto start = detail::conversion_start<stored_type,
+                                                execution_type::scope.makes>(
+              std::forward<decltype(source)>(source), store);
           if constexpr (sources::answer_table::any_value) {
             if (answer.value_route) {
               const detail::execution::erased_carrier reached =
@@ -380,39 +384,40 @@ private:
     }
   };
 
-  // Resolves a request by a plan the closure of the binding does not answer:
-  // runs the route of the plan, compiled for the types of the binding, and
-  // the steps the request takes after it.
+  // Resolves a request by a conversion the closure of the binding does not
+  // answer: runs the route of the conversion, compiled for the types of the
+  // binding, and the steps the request takes after it.
   static resolved_address
   resolve(interface_base &binding, construction_scope scope,
           runtime_context_type &context,
           const typename node_type::request_type &request,
-          const detail::execution::runtime_plan &plan, const void *cache_key) {
-    using sources = typename planned::sources;
+          const detail::execution::runtime_conversion &conversion,
+          const void *cache_key) {
+    using sources = typename published::sources;
     auto &cell = detail::runtime_cell<cell_type>(binding.header());
     detail::binding_activation<cell_type, Container &> activation{
         cell, detail::resolution_container<Container>(binding.header()), scope};
-    const resolved_address result = activation.template use_source<void>(
-        context, [&](auto &&source) -> resolved_address {
-          store_type store(
-              context, scope, retained(binding), request.requested,
-              detail::type_descriptor_v<detail::registered_type_t<Storage>>);
-          auto start =
-              detail::plan_start<stored_type, execution_type::scope.makes>(
-                  std::forward<decltype(source)>(source), store);
-          // The closure answers what a plan of a value of no step after its
-          // route is: a plan takes steps after it.
-          assert(!plan.value_route);
-          detail::execution::erased_carrier reached =
-              sources::template run_route<false>(plan.route, start, store);
-          for (std::size_t index = 0; index < plan.count; ++index) {
-            const auto &call = plan.calls[index];
-            reached = (reached.owned ? call.owned : call.borrowed)(
-                reached, call.stable, store);
-          }
-          return detail::finish_request(reached, plan);
-        });
-    if (cache_key != nullptr && plan.stable_address &&
+    const resolved_address result = activation.template use_source<
+        void>(context, [&](auto &&source) -> resolved_address {
+      store_type store(
+          context, scope, retained(binding), request.requested,
+          detail::type_descriptor_v<detail::registered_type_t<Storage>>);
+      auto start =
+          detail::conversion_start<stored_type, execution_type::scope.makes>(
+              std::forward<decltype(source)>(source), store);
+      // The closure answers what a conversion of a value of no step after its
+      // route is: a conversion takes steps after it.
+      assert(!conversion.value_route);
+      detail::execution::erased_carrier reached =
+          sources::template run_route<false>(conversion.route, start, store);
+      for (std::size_t index = 0; index < conversion.count; ++index) {
+        const auto &call = conversion.calls[index];
+        reached = (reached.owned ? call.owned
+                                 : call.borrowed)(reached, call.stable, store);
+      }
+      return detail::finish_request(reached, conversion);
+    });
+    if (cache_key != nullptr && conversion.stable_address &&
         result.access == resolved_address::access_kind::borrow) {
       binding.publish_cache(context, cache_key, result.address);
     }

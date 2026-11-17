@@ -865,7 +865,7 @@ def step_effect(kind, object):
 
 # The cost of a derivation: the copies and the moves of the leaf, the objects
 # it keeps as long as the container, and the objects it makes for the
-# request. A plan is the cheapest of these in this order, with what may not
+# request. A derivation is the cheapest of these in this order, with what may not
 # exist when a layer is empty after the leaf.
 NO_COST = (0, 0, 0, 0)
 

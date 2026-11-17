@@ -113,29 +113,31 @@ sequence is:
 4. A collection request without a key first resolves a binding of the collection
    type. If there is none, Dingo constructs the collection from the bindings of
    its element. A container without such bindings falls back as in step 3.
-5. The selected binding plans the request and applies the plan through a binding
-   activation. A static binding plans it as the code compiles. A runtime binding
-   plans it at the first request of its type and keeps the plan.
+5. The selected binding derives the request and applies its conversion through a
+   binding activation. A static binding derives it as the code compiles. A
+   runtime binding derives it at the first request of its type and keeps the
+   conversion.
 
-### Plans
+### Derivations
 
-Both containers plan a request by the [layered semantics](layered-semantics.md):
-the steps from what the binding stores to the request, at the fewest copies and
-moves of the leaf, then at the fewest objects kept and made. A request that no
-plan satisfies is not convertible.
+Both containers derive a request by the
+[layered semantics](layered-semantics.md): the steps from what the binding
+stores to the request, at the fewest copies and moves of the leaf, then at the
+fewest objects kept and made. A request that no derivation satisfies is not
+convertible.
 
 The binding takes the steps that need the types it stores: the element of a
 wrapper, the upcast to its interface, a copy, the decay of an array, and the
 hand-over or the release of what a pointer it makes points to. The request takes
 the steps that make its own layers: a wrap, the adoption of a pointer it owns,
 and an observer of a pointer. A wrapper of wrappers is made at once of its
-value, which is moved once. What a plan makes for the request lives in the
+value, which is moved once. What a conversion makes for the request lives in the
 context. What it keeps as long as the container lives in the retention of the
 binding cell. The caller cannot get a reference into the context.
 
-The static container plans a request with `static_execution` in
+The static container derives a request with `static_execution` in
 [include/dingo/static/binding.h](../../include/dingo/static/binding.h) and
-applies the plan through the typed steps of
+applies the conversion through the typed steps of
 [include/dingo/request/execution.h](../../include/dingo/request/execution.h),
 which the compiler inlines. The runtime container applies the same steps through
 tables of erased operations
@@ -205,17 +207,17 @@ runtime binding is a typed edge and constant data:
   it resolves.
 - The edge is a few functions of the type of the binding, which the node points
   to: materialize the source of the storage in a construction scope and run a
-  plan on it, what the binding keeps of its instance, whether its storage is
-  resolved, and the reset of its cell.
+  derivation on it, what the binding keeps of its instance, whether its storage
+  is resolved, and the reset of its cell.
 
 The engine (`runtime_binding_engine` in
 [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)) is one
-function for every binding of a container. It plans a request of the binding at
-its first use and keeps the plans in the plan cache of the request type, for
-each lifetime a request needs. It guards the binding against recursion, retains
-the source of an unresolved storage in the transaction and resets the cell if
-the transaction fails, gives the caller only what lives as long as the
-container, and publishes a borrowed address in the request cache.
+function for every binding of a container. It derives a request of the binding
+at its first use and keeps the conversions in the conversion cache of the
+request type, for each lifetime a request needs. It guards the binding against
+recursion, retains the source of an unresolved storage in the transaction and
+resets the cell if the transaction fails, gives the caller only what lives as
+long as the container, and publishes a borrowed address in the request cache.
 
 Each lookup the container declares, and its base lookup, have a table of
 operations of no binding or request type (`lookup_operations` in

@@ -17,7 +17,7 @@ Read these pages in this order:
   algebra, `leaf_type_t`, `rebind_leaf_t` and binding lookup.
 - [Extending Dingo](extending-dingo.md): which trait to specialize for a new
   wrapper or storage scope.
-- [Conversion Model](conversion-model.md): how Dingo plans and applies value,
+- [Conversion Model](conversion-model.md): how Dingo derives and applies value,
   reference, pointer, and wrapper conversions.
 - [Layered Semantics](layered-semantics.md): the design that makes resolution
   correct by construction.
@@ -34,14 +34,14 @@ Two registration modes feed one resolution flow:
 
 ```text
 register_type / bindings -> type_registration -> binding_model -> binding cell
-resolve<T> -> request_type -> binding selection -> plan -> binding activation -> program -> T
+resolve<T> -> request_type -> binding selection -> derivation -> binding activation -> conversion -> T
 ```
 
 Both containers share the code of this flow: the algorithm in
 `include/dingo/resolution/`, the bindings in `include/dingo/binding/`, the
-semantics in `include/dingo/semantics/` and the steps and programs in
+semantics in `include/dingo/semantics/` and the steps and conversions in
 `include/dingo/request/execution.h`. They differ in how they select a binding
-and how they run a program.
+and how they run a conversion.
 
 The code of each container is in its own directory:
 

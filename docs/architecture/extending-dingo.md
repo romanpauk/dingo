@@ -129,7 +129,7 @@ same kind of specialization. The specialization declares:
 | `allows_cycles`                      | optional: whether the bindings of the scope can be part of a dependency cycle                                                                                                                                       |
 
 Dingo derives from it the semantics of the scope (`scope_semantics_v`), of which
-a binding plans its requests, and the materialization of the scope.
+a binding derives its requests, and the materialization of the scope.
 [test/registration/custom_scope.cpp](../../test/registration/custom_scope.cpp)
 defines a scope outside the library and registers it with both containers.
 

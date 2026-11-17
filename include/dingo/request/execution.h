@@ -20,19 +20,19 @@
 #include <type_traits>
 #include <utility>
 
-// The execution of a plan of the semantics (dingo/semantics/model.h) on C++
-// objects: one step for each kind of step of the semantics, each by the type
-// traits of its layers and by C++ itself; the program a plan is compiled
-// into, which both containers run; and the run of a program as the code
-// compiles, which applies its steps one after another, then satisfies the
+// The execution of a derivation of the semantics (dingo/semantics/model.h) on
+// C++ objects: one step for each kind of step of the semantics, each by the
+// type traits of its layers and by C++ itself; the conversion a derivation is
+// compiled into, which both containers run; and the run of a conversion as the
+// code compiles, which applies its steps one after another, then satisfies the
 // request of what they reach. What a step makes for the request is kept by a
 // store, which constructs it in place of what makes it and keeps it while
 // the request lives: keep<T>(make) returns a T & of T(make()).
 
 namespace dingo::detail::execution {
 
-// The object a plan reached, of type T, and whether the request owns it; and
-// the nearest handle it was taken out of that owns it alone, with how to
+// The object a derivation reached, of type T, and whether the request owns it;
+// and the nearest handle it was taken out of that owns it alone, with how to
 // release it, which a step that takes the object over does.
 template <typename T, bool Owned> struct carrier {
   using type = T;
@@ -863,11 +863,11 @@ constexpr semantics::element semantic_element(stack_element element) {
                                             : semantics::element::leaf;
 }
 
-// A plan as both containers run it: a program of instructions, each of the
-// plan steps from first to last, which it takes at once, with whether the
-// binding takes them or the request; and how the request takes the value of
-// what the last of them reaches. The containers take the decisions of how to
-// run a plan here alone:
+// A conversion: a derivation as both containers run it, of instructions, each
+// of the derivation steps from first to last, which it takes at once, with
+// whether the binding takes them or the request; and how the request takes the
+// value of what the last of them reaches. The containers take the decisions of
+// how to run a derivation here alone:
 //
 // - A run of wraps is one instruction, made at once of the value it wraps,
 //   of the steps of one side.
@@ -879,13 +879,13 @@ constexpr semantics::element semantic_element(stack_element element) {
 //   copy of the element of a layer that may be empty, which the binding
 //   makes, is made by the request of what maybe_element gives.
 
-// How a request takes the value of what a program reaches: as the plan
-// satisfies it, or by making it of what the program reached, a copy of it or
+// How a request takes the value of what a conversion reaches: as the derivation
+// satisfies it, or by making it of what the conversion reached, a copy of it or
 // the value a run of wraps makes of it.
 enum class finish : std::uint8_t { satisfy, copy, run };
 
-// An instruction of a program: the plan steps from first to last, the kind
-// it takes, and whether the binding takes it; the wraps of a run of wraps,
+// An instruction of a conversion: the derivation steps from first to last, the
+// kind it takes, and whether the binding takes it; the wraps of a run of wraps,
 // and whether a conversion to a more qualified element ends it.
 struct instruction {
   semantics::step kind = semantics::step::copy;
@@ -896,35 +896,35 @@ struct instruction {
   bool qualified = false;
 };
 
-struct program {
-  instruction entries[semantics::max_plan] = {};
+struct conversion {
+  instruction entries[semantics::max_steps] = {};
   std::size_t count = 0;
   finish last = finish::satisfy;
   // The wraps of a run the request makes last.
   std::uint8_t depth = 0;
-  // The qualifiers of what the program reaches, which a copy is made of.
+  // The qualifiers of what the conversion reaches, which a copy is made of.
   std::uint8_t quals = 0;
 };
 
-// The program of a found plan of what a binding publishes, whose first
+// The conversion of a found derivation of what a binding publishes, whose first
 // source_count states are its layer sources: the steps into them are the
 // binding's.
-constexpr program compile_program(const semantics::plan &plan,
-                                  std::size_t source_count) {
+constexpr conversion compile_conversion(const semantics::derivation &derivation,
+                                        std::size_t source_count) {
   using semantics::step;
-  program made;
-  const bool value = plan.how == semantics::satisfaction::move ||
-                     plan.how == semantics::satisfaction::copy;
-  // Whether the binding takes the plan step at an index.
+  conversion made;
+  const bool value = derivation.how == semantics::satisfaction::move ||
+                     derivation.how == semantics::satisfaction::copy;
+  // Whether the binding takes the derivation step at an index.
   auto binding_takes = [&](std::size_t index) {
-    return plan.states[index + 1] < source_count;
+    return derivation.states[index + 1] < source_count;
   };
   std::size_t index = 0;
-  while (index < plan.count) {
-    const step kind = plan.steps[index];
+  while (index < derivation.count) {
+    const step kind = derivation.steps[index];
     std::size_t last = index;
-    while (kind == step::wrap && last + 1 < plan.count &&
-           plan.steps[last + 1] == step::wrap &&
+    while (kind == step::wrap && last + 1 < derivation.count &&
+           derivation.steps[last + 1] == step::wrap &&
            binding_takes(last + 1) == binding_takes(index)) {
       ++last;
     }
@@ -932,13 +932,13 @@ constexpr program compile_program(const semantics::plan &plan,
         static_cast<std::uint8_t>(kind == step::wrap ? last - index + 1 : 0);
     bool qualified = false;
     if ((kind == step::wrap || kind == step::adopt || kind == step::observe) &&
-        last + 1 < plan.count && plan.steps[last + 1] == step::qualify &&
-        !binding_takes(last)) {
+        last + 1 < derivation.count &&
+        derivation.steps[last + 1] == step::qualify && !binding_takes(last)) {
       ++last;
       qualified = true;
     }
     const bool binding = binding_takes(last);
-    if (last + 1 == plan.count && value) {
+    if (last + 1 == derivation.count && value) {
       if (binding && kind == step::maybe_element_copy) {
         made.entries[made.count++] = {step::maybe_element,
                                       static_cast<std::uint8_t>(index),
@@ -947,12 +947,12 @@ constexpr program compile_program(const semantics::plan &plan,
                                       0,
                                       false};
         made.last = finish::copy;
-        made.quals = plan.objects[index].quals[1];
+        made.quals = derivation.objects[index].quals[1];
         return made;
       }
       if (!binding && kind == step::copy) {
         made.last = finish::copy;
-        made.quals = plan.objects[index].quals[0];
+        made.quals = derivation.objects[index].quals[0];
         return made;
       }
       if (!binding && kind == step::wrap && !qualified) {
@@ -1138,27 +1138,27 @@ template <std::uint64_t... Code> struct binding_shape {
       semantics::closed_layer_sources(sources, context);
 };
 
-// The shape of a binding of a plan, for a request of its leaf or of its
-// abstract interface. It is made outside the plan, which is complete by the
-// time it is: MSVC does not evaluate a function of a class in the
+// The shape of the semantics of a binding, for a request of its leaf or of its
+// abstract interface. It is made outside the semantics, which are complete by
+// the time it is: MSVC does not evaluate a function of a class in the
 // declarations of the class.
-template <typename Plan, bool Abstract> struct plan_shape {
+template <typename Semantics, bool Abstract> struct encoded_shape {
   static constexpr shape_code code =
-      encode_shape(Plan::context(Abstract), Plan::start());
+      encode_shape(Semantics::context(Abstract), Semantics::start());
   template <std::size_t... I>
   static auto make(std::index_sequence<I...>)
       -> binding_shape<code.entries[I]...>;
   using type = decltype(make(std::make_index_sequence<code.count>{}));
 };
 
-// What a binding of a stored object publishes, planned as the code compiles,
+// What a binding of a stored object publishes, derived as the code compiles,
 // of no request: the layer sources of its stored object, in a universe of the
 // layers it takes steps into, those it stores and those of the handles a
 // pointer it makes may be taken over by. The stored object is made for the
 // request by a scope that makes its instance (Makes), or kept, and it is
 // published early by a scope that does (Early).
 template <typename Stored, typename Leaf, bool Makes, bool Early>
-struct binding_plan {
+struct binding_semantics {
   using stored_stack = stack_t<Stored, Leaf>;
   using layers = typename joined<
       typename stored_stack::layers,
@@ -1202,7 +1202,7 @@ struct binding_plan {
   // The shape of the binding, for a request of the leaf, and for one of its
   // abstract interface.
   template <bool Abstract>
-  using shape = typename plan_shape<binding_plan, Abstract>::type;
+  using shape = typename encoded_shape<binding_semantics, Abstract>::type;
 
   // What the binding publishes for a request of the leaf, and for one of its
   // abstract interface, of its shape. Each is whole: a stored object of more
@@ -1221,17 +1221,17 @@ struct binding_plan {
   }
 };
 
-// A request of a stored object, planned as the code compiles: what C++ says
+// A request of a stored object, derived as the code compiles: what C++ says
 // of the stored type Stored, of the request type Request and of the leaf
-// Leaf, classified as the semantics know them, and the plan of the request
-// for each lifetime it may need: as long as the container, when what it
+// Leaf, classified as the semantics know them, and the derivation of the
+// request for each lifetime it may need: as long as the container, when what it
 // refers to is passed to the caller, or as long as the request. The request
-// is planned from what the binding publishes, in a universe of the layers of
+// is derived from what the binding publishes, in a universe of the layers of
 // the binding, which those of the request follow.
 template <typename Stored, typename Request, typename Leaf, bool Makes,
           bool Early>
-struct request_plan {
-  using binding = binding_plan<Stored, Leaf, Makes, Early>;
+struct request_derivation {
+  using binding = binding_semantics<Stored, Leaf, Makes, Early>;
   using category = requested_category<Request>;
   using shape = typename category::shape;
   using stored_stack = typename binding::stored_stack;
@@ -1266,7 +1266,7 @@ struct request_plan {
     return made;
   }
 
-  static constexpr semantics::plan make(semantics::lifetime needed) {
+  static constexpr semantics::derivation make(semantics::lifetime needed) {
     if constexpr (!modeled) {
       (void)needed;
       return {};
@@ -1276,25 +1276,26 @@ struct request_plan {
       const semantics::search found = semantics::reach_closed(
           binding::template closed<abstract>,
           binding::context(abstract).layers->count, closed_context, goal());
-      return semantics::answer_plan(
+      return semantics::answer_derivation(
           found, semantics::satisfy(found, goal(), category::value, needed,
                                     closed_context));
     }
   }
 
-  // The plans of a request that needs what it refers to to live as long as
-  // the container, and as long as the request.
-  static constexpr semantics::plan stable = make(semantics::lifetime::stable);
-  static constexpr semantics::plan transient =
+  // The derivations of a request that needs what it refers to to live as long
+  // as the container, and as long as the request.
+  static constexpr semantics::derivation stable =
+      make(semantics::lifetime::stable);
+  static constexpr semantics::derivation transient =
       make(semantics::lifetime::request);
 
-  // The programs of the plans.
+  // The conversions of the derivations.
   static constexpr std::size_t source_count =
       binding::template sources<abstract>.count;
-  static constexpr program stable_program =
-      compile_program(stable, source_count);
-  static constexpr program transient_program =
-      compile_program(transient, source_count);
+  static constexpr conversion stable_conversion =
+      compile_conversion(stable, source_count);
+  static constexpr conversion transient_conversion =
+      compile_conversion(transient, source_count);
 };
 
 // The C++ step of a step of the semantics, from the object Semantic::source()
@@ -1328,12 +1329,15 @@ template <typename Identities, typename Semantic> struct typed_step {
   using step_type = decltype(make());
 };
 
-// The step at an index of a plan.
-template <const semantics::plan &Plan, std::size_t Index> struct plan_step {
-  static constexpr semantics::step kind = Plan.steps[Index];
-  static constexpr semantics::object source() { return Plan.objects[Index]; }
+// The step at an index of a derivation.
+template <const semantics::derivation &Derivation, std::size_t Index>
+struct derivation_step {
+  static constexpr semantics::step kind = Derivation.steps[Index];
+  static constexpr semantics::object source() {
+    return Derivation.objects[Index];
+  }
   static constexpr semantics::object reached() {
-    return Plan.objects[Index + 1];
+    return Derivation.objects[Index + 1];
   }
 };
 
@@ -1349,48 +1353,52 @@ struct search_step {
   }
 };
 
-// The C++ step of the step at an index of a plan.
-template <const semantics::plan &Plan, typename Identities, std::size_t Index>
-using plan_step_t =
-    typename typed_step<Identities, plan_step<Plan, Index>>::step_type;
+// The C++ step of the step at an index of a derivation.
+template <const semantics::derivation &Derivation, typename Identities,
+          std::size_t Index>
+using derivation_step_t =
+    typename typed_step<Identities,
+                        derivation_step<Derivation, Index>>::step_type;
 
-// The type a run of Count wraps of a plan, from the plan step First, makes
-// of a value of T.
-template <const semantics::plan &Plan, typename Identities, typename Leaf,
-          typename Interface, typename T, std::size_t First, std::size_t Count>
+// The type a run of Count wraps of a derivation, from the derivation step
+// First, makes of a value of T.
+template <const semantics::derivation &Derivation, typename Identities,
+          typename Leaf, typename Interface, typename T, std::size_t First,
+          std::size_t Count>
 struct wrapped_run {
-  using type =
-      typename wrapped_run<Plan, Identities, Leaf, Interface,
-                           typename plan_step_t<Plan, Identities, First>::
-                               template wrapped_t<Leaf, Interface, T>,
-                           First + 1, Count - 1>::type;
+  using type = typename wrapped_run<
+      Derivation, Identities, Leaf, Interface,
+      typename derivation_step_t<Derivation, Identities,
+                                 First>::template wrapped_t<Leaf, Interface, T>,
+      First + 1, Count - 1>::type;
 };
 
-template <const semantics::plan &Plan, typename Identities, typename Leaf,
-          typename Interface, typename T, std::size_t First>
-struct wrapped_run<Plan, Identities, Leaf, Interface, T, First, 0> {
+template <const semantics::derivation &Derivation, typename Identities,
+          typename Leaf, typename Interface, typename T, std::size_t First>
+struct wrapped_run<Derivation, Identities, Leaf, Interface, T, First, 0> {
   using type = T;
 };
 
-// A program of a plan, run as the code compiles: each instruction applies
-// its step to what the one before reached, and the request takes its value.
-template <const semantics::plan &Plan, const program &Program,
+// A conversion of a derivation, run as the code compiles: each instruction
+// applies its step to what the one before reached, and the request takes its
+// value.
+template <const semantics::derivation &Derivation, const conversion &Conversion,
           typename Identities, typename Leaf, typename Interface>
-struct program_run {
+struct typed_conversion {
   template <typename Request, std::size_t Index = 0, typename Carrier,
             typename Store>
-  static Request run(Carrier source, Store &store) {
-    if constexpr (Index == Program.count) {
+  static Request execute(Carrier source, Store &store) {
+    if constexpr (Index == Conversion.count) {
       return finished<Request>(source);
     } else {
-      return run<Request, Index + 1>(apply<Index>(source, store), store);
+      return execute<Request, Index + 1>(apply<Index>(source, store), store);
     }
   }
 
-  // What the program reaches, before the request takes its value.
+  // What the conversion reaches, before the request takes its value.
   template <std::size_t Index = 0, typename Carrier, typename Store>
   static auto reach(Carrier source, Store &store) {
-    if constexpr (Index == Program.count) {
+    if constexpr (Index == Conversion.count) {
       return source;
     } else {
       return reach<Index + 1>(apply<Index>(source, store), store);
@@ -1399,8 +1407,8 @@ struct program_run {
 
   template <std::size_t Index, typename T, bool Owned, typename Store>
   static auto apply(carrier<T, Owned> source, Store &store) {
-    constexpr instruction Each = Program.entries[Index];
-    constexpr semantics::object reached = Plan.objects[Each.last + 1];
+    constexpr instruction Each = Conversion.entries[Index];
+    constexpr semantics::object reached = Derivation.objects[Each.last + 1];
     auto &&kept =
         lifetime_store<reached.lifetimes[0] == semantics::lifetime::stable>(
             store);
@@ -1412,16 +1420,15 @@ struct program_run {
       });
       return carrier<made_type, true>{std::addressof(made)};
     } else if constexpr (Each.qualified) {
-      using step_type =
-          typename holding_step<plan_step_t<Plan, Identities, Each.first>,
-                                reached.quals[1]>::type;
+      using step_type = typename holding_step<
+          derivation_step_t<Derivation, Identities, Each.first>,
+          reached.quals[1]>::type;
       return step_type::template apply<Leaf, Interface>(source, kept);
-    } else if constexpr (Each.kind == Plan.steps[Each.first]) {
-      return plan_step_t<Plan, Identities,
-                         Each.first>::template apply<Leaf, Interface>(source,
-                                                                      kept);
+    } else if constexpr (Each.kind == Derivation.steps[Each.first]) {
+      return derivation_step_t<Derivation, Identities, Each.first>::
+          template apply<Leaf, Interface>(source, kept);
     } else {
-      // A step the program takes in place of the plan's.
+      // A step the conversion takes in place of the derivation's.
       return step<Each.kind>::template apply<Leaf, Interface>(source, kept);
     }
   }
@@ -1429,16 +1436,17 @@ struct program_run {
   // The type a run of wraps makes of a value of T, of the qualifiers its
   // element needs when a conversion to them ends it.
   template <typename T, std::size_t Index> struct layer_wrapper {
-    static constexpr instruction Each = Program.entries[Index];
-    using wrapped = typename wrapped_run<Plan, Identities, Leaf, Interface, T,
-                                         Each.first, Each.wraps>::type;
+    static constexpr instruction Each = Conversion.entries[Index];
+    using wrapped =
+        typename wrapped_run<Derivation, Identities, Leaf, Interface, T,
+                             Each.first, Each.wraps>::type;
     template <typename U> struct tag {
       using type = U;
     };
     static auto make() {
       if constexpr (Each.qualified) {
-        return tag<
-            requalified_t<wrapped, Plan.objects[Each.last + 1].quals[1]>>{};
+        return tag<requalified_t<wrapped,
+                                 Derivation.objects[Each.last + 1].quals[1]>>{};
       } else {
         return tag<wrapped>{};
       }
@@ -1446,29 +1454,30 @@ struct program_run {
     using type = typename decltype(make())::type;
   };
 
-  // The request of what the program reached.
+  // The request of what the conversion reached.
   template <typename Request, typename T, bool Owned>
   static Request finished(carrier<T, Owned> reached) {
     using semantics::satisfaction;
-    if constexpr (Program.last == finish::copy) {
+    if constexpr (Conversion.last == finish::copy) {
       return Request(*reached.object);
-    } else if constexpr (Program.last == finish::run) {
+    } else if constexpr (Conversion.last == finish::run) {
       using made_type =
-          typename wrapped_run<Plan, Identities, Leaf, Interface, T,
-                               Plan.count - Program.depth, Program.depth>::type;
+          typename wrapped_run<Derivation, Identities, Leaf, Interface, T,
+                               Derivation.count - Conversion.depth,
+                               Conversion.depth>::type;
       return static_cast<Request>(
           wrap_value<Leaf, Interface, made_type>(std::move(*reached.object)));
-    } else if constexpr (Plan.how == satisfaction::refer) {
+    } else if constexpr (Derivation.how == satisfaction::refer) {
       if constexpr (std::is_pointer_v<Request>) {
         return reached.object;
       } else {
         return static_cast<Request>(*reached.object);
       }
-    } else if constexpr (Plan.how == satisfaction::point) {
+    } else if constexpr (Derivation.how == satisfaction::point) {
       return *reached.object;
-    } else if constexpr (Plan.how == satisfaction::take) {
+    } else if constexpr (Derivation.how == satisfaction::take) {
       return static_cast<Request>(std::move(*reached.object));
-    } else if constexpr (Plan.how == satisfaction::move) {
+    } else if constexpr (Derivation.how == satisfaction::move) {
       return Request(std::move(*reached.object));
     } else {
       return Request(*reached.object);
@@ -1476,21 +1485,28 @@ struct program_run {
   }
 };
 
-// The program of the plan of a request_plan for a lifetime, run as the code
+// Executes the conversion of a request_derivation for a lifetime, as the code
 // compiles: as long as the container (Stable), or as long as the request.
-template <typename Plan, bool Stable>
-struct planned_run
-    : program_run<Plan::transient, Plan::transient_program,
-                  typename Plan::identities, typename Plan::leaf_type,
-                  typename Plan::interface_type> {};
+template <typename Request, typename Derivation, bool Stable, typename Carrier,
+          typename Store>
+Request execute_conversion(Carrier source, Store &store) {
+  if constexpr (Stable) {
+    return typed_conversion<
+        Derivation::stable, Derivation::stable_conversion,
+        typename Derivation::identities, typename Derivation::leaf_type,
+        typename Derivation::interface_type>::template execute<Request>(source,
+                                                                        store);
+  } else {
+    return typed_conversion<
+        Derivation::transient, Derivation::transient_conversion,
+        typename Derivation::identities, typename Derivation::leaf_type,
+        typename Derivation::interface_type>::template execute<Request>(source,
+                                                                        store);
+  }
+}
 
-template <typename Plan>
-struct planned_run<Plan, true>
-    : program_run<Plan::stable, Plan::stable_program, typename Plan::identities,
-                  typename Plan::leaf_type, typename Plan::interface_type> {};
-
-// What a plan makes lives as long as the container when it is kept with the
-// binding, under a key of its type.
+// What a derivation makes lives as long as the container when it is kept with
+// the binding, under a key of its type.
 template <typename T> inline constexpr char retained_key = 0;
 
 // What C++ says of a type T toward the leaf Leaf, of the interface

@@ -72,7 +72,7 @@ class Outcome(Dimension):
     # Resolved with more copies or moves of the leaf than the specification
     # needs.
     EXCESS = "excess"
-    # What a binding plans for a request: for as long as the container, only
+    # What a binding derives for a request: for as long as the container, only
     # for as long as the request, or not at all; a request the binding of
     # another interface answers.
     PUBLISHED = "published"

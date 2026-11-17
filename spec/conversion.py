@@ -1,18 +1,18 @@
-"""Checks what the binding of every registration plans for every request,
+"""Checks what the binding of every registration derives for every request,
 as the code compiles, against the specification.
 
 A cell is scope x stored form x leaf x interfaces declared x interface x
 request. A binding answers each cell:
 
-- published: it plans the request for as long as the container, which the
+- published: it derives the request for as long as the container, which the
   caller may take
-- placed: it plans it only for as long as the request
-- unpublished: it plans it not at all
+- placed: it derives it only for as long as the request
+- unpublished: it derives it not at all
 - does_not_compile: the registration does not compile, which is a defect
 
 A published or placed request the specification resolves in no position is
 unexpected, and so is one that is not published although the specification
-resolves it for the caller; both are defects. Both containers plan alike.
+resolves it for the caller; both are defects. Both containers derive alike.
 
 Each cell also records how C++ itself builds the request from what the
 binding holds. A request C++ builds that the specification, without the
@@ -20,7 +20,7 @@ limitations of the library, resolves nowhere is unexpected, unless the
 specification refuses it on purpose; so is one it refuses on purpose and
 resolves.
 
-How a plan copies and moves the leaf is what spec/execution_check.py checks.
+How a derivation copies and moves the leaf is what spec/execution_check.py checks.
 
 No container is made and nothing resolves, so every registration is checked,
 many in one program: spec/probe.py checks what resolutions do.

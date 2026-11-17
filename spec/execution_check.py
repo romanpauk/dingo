@@ -1,13 +1,13 @@
-"""Applies the plans of the semantics to C++ objects, and compares what the
-steps copy and move of the leaf with the plans.
+"""Applies the derivations of the semantics to C++ objects, and compares what the
+steps copy and move of the leaf with the derivations.
 
-The semantics of the library (dingo/semantics/model.h) plan the steps from a
+The semantics of the library (dingo/semantics/model.h) derive the steps from a
 stored object to what satisfies a request; dingo/request/execution.h applies
-them to C++ objects. This check asks the semantics the plan of every
+them to C++ objects. This check asks the semantics the derivation of every
 conversion of the model: every stored form of every leaf, kept or made by its
 scope, requested as every shape of every bound interface in every category.
-It applies each plan to an object of the model's leaf types, which count
-their copies and moves, and compares the counts with the plan. No container
+It applies each derivation to an object of the model's leaf types, which count
+their copies and moves, and compares the counts with the derivation. No container
 takes part.
 """
 
@@ -43,7 +43,7 @@ CELLS = 100
 
 
 def cases():
-    """The stored objects and requests the check plans: of every scope that
+    """The stored objects and requests the check derives: of every scope that
     does not publish its instance early, and of every stored form but an
     array a scope makes for each request, which is not a value a function
     returns."""
@@ -107,30 +107,31 @@ def main():
     for scope, form, leaf, context, start, goals in cases():
         for layers, element, goal, quals in goals:
             # A container requests the interface exactly where the context
-            # requests it, and plans through what the binding publishes.
+            # requests it, and derives through what the binding publishes.
             if (element == "interface") != context.abstract:
                 continue
             requests.append((scope, form, leaf, layers, element, goal, quals))
             lines.append(check.encode(context, start, layers, element, 0,
                                       quals))
     header = check.header()
-    run = subprocess.run([str(semantics_program), "plans"],
+    run = subprocess.run([str(semantics_program), "derivations"],
                          input="\n".join(header + lines) + "\n",
                          capture_output=True, text=True, check=True)
-    plans = run.stdout.splitlines()
-    assert len(plans) == len(requests), (len(plans), len(requests))
+    derivations = run.stdout.splitlines()
+    assert len(derivations) == len(requests), (len(derivations),
+                                               len(requests))
 
     cells = []
     for (scope, form, leaf, layers, element, goal, quals), line in zip(
-            requests, plans):
-        for category, planned in zip(Category, line.split()):
-            if planned == "-":
+            requests, derivations):
+        for category, derived in zip(Category, line.split()):
+            if derived == "-":
                 continue
             name = f"{scope.value}/{form.value}/{leaf.value}/{goal}/{category.value}"
             if options.only not in name:
                 continue
             cells.append(cell(name, scope, form, leaf, layers, element,
-                              quals, category, planned))
+                              quals, category, derived))
     parts = [cells[index:index + CELLS]
              for index in range(0, len(cells), CELLS)]
     differ = []
@@ -148,20 +149,20 @@ def main():
     for name, error in failed[:5]:
         print(f"  {name}: {error}")
     for name, want, got in differ[:20]:
-        print(f"  {name}\n    plan    {want}\n    applied {got}")
+        print(f"  {name}\n    derived {want}\n    applied {got}")
     driver.close_cache(prune=not options.only)
     return 1 if differ or failed else 0
 
 
 def cell(name, scope, form, leaf, layers, element, quals, category,
-         planned):
-    """The code of a cell, and the copies and moves its plan says."""
+         derived):
+    """The code of a cell, and the copies and moves its derivation says."""
     leaf_type = f"dingo::model::{LEAF_TYPES[leaf]}"
     stored = spell_stored(form).replace("L", leaf_type)
     if stored.endswith("&"):
         stored = stored[:-1].strip()
     interface = bound_interface(semantics.Bound((), element), leaf).spelled
-    how, cost, *steps = planned.split(":")
+    how, cost, *steps = derived.split(":")
     shape = spell_request(layers, element, leaf_type, interface, quals)
     request = f"{check.CATEGORY_TYPES[category]}<{shape}>"
     makes = "true" if semantics.SCOPES[scope].makes else "false"
@@ -172,21 +173,21 @@ def cell(name, scope, form, leaf, layers, element, quals, category,
         make = f"fresh<{stored}>::make()"
     else:
         make = f"instance<{stored}>::make()"
-    # The library classifies the types and plans the request as the code
-    # compiles; the plan has to be found, and to satisfy the request as the
+    # The library classifies the types and derives the request as the code
+    # compiles; the derivation has to be found, and to satisfy the request as the
     # semantics program's does.
-    plan = (f"dingo::detail::execution::request_plan<{stored}, {request}, "
-            f"{leaf_type}, {makes}, false>")
+    derivation = (f"dingo::detail::execution::request_derivation<{stored}, "
+                  f"{request}, {leaf_type}, {makes}, false>")
     code = f"""  {{
     // {name}
-    using plan = {plan};
-    static_assert(plan::transient.found);
-    static_assert(static_cast<int>(plan::transient.how) == {how});
+    using derivation = {derivation};
+    static_assert(derivation::transient.found);
+    static_assert(static_cast<int>(derivation::transient.how) == {how});
     store kept;
     auto &stored = {"kept.keep<" + stored + ">([] { return " + make + "; })" if make else source};
     counting_on();
     {{
-      {request} result = dingo::detail::execution::planned_run<plan, false>::template run<{request}>(dingo::detail::execution::carry<{makes}>(stored), kept);
+      {request} result = dingo::detail::execution::execute_conversion<{request}, derivation, false>(dingo::detail::execution::carry<{makes}>(stored), kept);
       (void)result;
     }}
     counted();
@@ -293,7 +294,7 @@ CELLS
 
 def run_part(options, flags, index, part):
     """Compiles and runs a part of the cells: those whose counts differ from
-    their plans, and the program if it fails."""
+    their derivations, and the program if it fails."""
     source = PROGRAM.replace("CELLS", "\n".join(code for _, code, _ in part))
     test = str(Path(__file__).parents[1] / "test")
     returncode, stderr, stdout, status = driver.make_program(

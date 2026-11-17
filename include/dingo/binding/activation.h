@@ -325,7 +325,7 @@ struct binding_activation {
 
   // Whether an address request is served from a value the storage yields,
   // which is placed in the context and lives only as long as the context: one
-  // of what the value owns apart from itself is not, as only a plan that
+  // of what the value owns apart from itself is not, as only a derivation that
   // takes it over gives it to the caller.
   template <typename Request, typename Context>
   static constexpr bool places_value =

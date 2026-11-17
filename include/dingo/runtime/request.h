@@ -23,8 +23,8 @@
 #include <utility>
 
 // A request as the runtime container resolves it: what a resolution makes and
-// keeps, the plans of a request type for each binding, and the value the
-// request takes of what a plan reached.
+// keeps, the conversions of a request type for each binding, and the value the
+// request takes of what a conversion reached.
 
 namespace dingo {
 namespace detail {
@@ -54,7 +54,7 @@ public:
              execution::construct_function construct, void *make) override {
     auto place_made = [&](void *place) { construct(place, make); };
     if (stable) {
-      // A binding that keeps no instance is planned to keep nothing made of
+      // A binding that keeps no instance is converted to keep nothing made of
       // it.
       assert(retained_ != nullptr);
       return retained_->keep(&layout, context_, layout, place_made);
@@ -109,26 +109,26 @@ private:
   const type_descriptor *registered_;
 };
 
-// The plans of a request type, made once for each binding that resolves it:
-// for a request that needs what it refers to to live as long as the
-// container, and as long as the request. A plan depends only on the types
-// of the binding and of the request, so that the plans are shared by every
-// container, and a plan made twice at once is the same.
-class plan_cache {
+// The conversions of a request type, made once for each binding that resolves
+// it: for a request that needs what it refers to to live as long as the
+// container, and as long as the request. A conversion depends only on the types
+// of the binding and of the request, so that the conversions are shared by
+// every container, and a conversion made twice at once is the same.
+class conversion_cache {
 public:
-  using plan_type = execution::runtime_plan;
+  using conversion_type = execution::runtime_conversion;
 
   struct entry {
     const void *binding;
-    plan_type stable;
-    plan_type transient;
+    conversion_type stable;
+    conversion_type transient;
     entry *next;
   };
 
-  plan_cache() = default;
-  plan_cache(const plan_cache &) = delete;
-  plan_cache &operator=(const plan_cache &) = delete;
-  ~plan_cache() {
+  conversion_cache() = default;
+  conversion_cache(const conversion_cache &) = delete;
+  conversion_cache &operator=(const conversion_cache &) = delete;
+  ~conversion_cache() {
     entry *current = head_.load(std::memory_order_acquire);
     while (current != nullptr) {
       entry *next = current->next;
@@ -144,8 +144,9 @@ public:
         return *current;
       }
     }
-    execution::runtime_plans plans = make();
-    auto *made = new entry{binding, plans.stable, plans.transient, head};
+    execution::runtime_conversions conversions = make();
+    auto *made =
+        new entry{binding, conversions.stable, conversions.transient, head};
     while (!head_.compare_exchange_weak(made->next, made,
                                         std::memory_order_release,
                                         std::memory_order_acquire)) {
@@ -157,9 +158,9 @@ private:
   std::atomic<entry *> head_{nullptr};
 };
 
-// A request of type T as a runtime resolution plans it: the interface it
+// A request of type T as a runtime resolution converts it: the interface it
 // names, its layers, what it asks for and the tables of the types it spells,
-// and the address it is satisfied with of what a plan reaches.
+// and the address it is satisfied with of what a conversion reaches.
 struct runtime_request {
   type_descriptor requested;
   // The key of the interface the request names, which only a binding of it
@@ -169,29 +170,32 @@ struct runtime_request {
   // The key of the type the request is of, without its own qualifiers.
   const void *shape;
   execution::request_layout layout;
-  plan_cache *plans;
+  conversion_cache *conversions;
 };
 
-// The address of what satisfies a request of the shape Shape, of what a plan
-// reaches: the object a request refers to, or what a pointer it reached
-// points to; what a request takes or moves, which it consumes; a copy is
-// made of the object. A value whose last step the request makes is made of
-// what the plan reached before it.
-inline resolved_address finish_request(execution::erased_carrier reached,
-                                       const execution::runtime_plan &plan) {
+// The address of what satisfies a request of the shape Shape, of what a
+// conversion reaches: the object a request refers to, or what a pointer it
+// reached points to; what a request takes or moves, which it consumes; a copy
+// is made of the object. A value whose last step the request makes is made of
+// what the conversion reached before it.
+inline resolved_address
+finish_request(execution::erased_carrier reached,
+               const execution::runtime_conversion &conversion) {
   using access = resolved_address::access_kind;
   using made_kind = resolved_address::made_kind;
-  switch (plan.last) {
+  switch (conversion.last) {
   case execution::finish::copy:
-    return {reached.object, access::borrow, made_kind::copy, 0, plan.quals};
+    return {reached.object, access::borrow, made_kind::copy, 0,
+            conversion.quals};
   case execution::finish::run:
-    return {reached.object, access::consume, made_kind::run, plan.depth, 0};
+    return {reached.object, access::consume, made_kind::run, conversion.depth,
+            0};
   default:
     break;
   }
-  switch (plan.how) {
+  switch (conversion.how) {
   case semantics::satisfaction::point:
-    return {plan.reached->pointee(reached.object), access::borrow};
+    return {conversion.reached->pointee(reached.object), access::borrow};
   case semantics::satisfaction::take:
   case semantics::satisfaction::move:
     return {reached.object, access::consume};
@@ -200,7 +204,7 @@ inline resolved_address finish_request(execution::erased_carrier reached,
   }
 }
 
-// What C++ says of a request type, as a runtime resolution plans it.
+// What C++ says of a request type, as a runtime resolution converts it.
 template <typename T> struct request_execution {
   using category = requested_category<T>;
   using shape = typename category::shape;
@@ -224,7 +228,7 @@ template <typename T> struct request_execution {
   }
 };
 
-template <typename T> inline plan_cache runtime_plans;
+template <typename T> inline conversion_cache request_conversions;
 
 template <typename T> constexpr runtime_request make_runtime_request() {
   using executed = request_execution<T>;
@@ -240,7 +244,7 @@ template <typename T> constexpr runtime_request make_runtime_request() {
             &execution::shape_key<std::remove_cv_t<typename executed::shape>>,
             {executed::layers::value, executed::layers::count, executed::goal(),
              executed::category::value, tables::value.value},
-            &runtime_plans<T>};
+            &request_conversions<T>};
   }
 }
 
@@ -260,8 +264,8 @@ T wrap_nested(void *address) {
       std::move(*static_cast<nested_type *>(address)));
 }
 
-// A value of T made of the run of wraps the plan left to it: the makers of
-// the depths a run of wraps makes T of.
+// A value of T made of the run of wraps the conversion left to it: the makers
+// of the depths a run of wraps makes T of.
 template <typename T, typename Element, typename Types, std::size_t K>
 constexpr T (*nested_maker())(void *) {
   if constexpr (execution::layer_types<T, Element,
@@ -279,8 +283,8 @@ T wrap_result(resolved_address result, std::index_sequence<K...>) {
   return makers[result.depth - 1](result.address);
 }
 
-// The value a request of T takes, of what a plan reached: made where it is
-// returned, of a copy or of a run of wraps the plan left to it, or as
+// The value a request of T takes, of what a conversion reached: made where it
+// is returned, of a copy or of a run of wraps the conversion left to it, or as
 // resolved_value gives it.
 template <typename T> T returned_value(resolved_address result) {
   using made_kind = resolved_address::made_kind;

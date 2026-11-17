@@ -27,21 +27,21 @@ each layer is.
 2. **Semantics.** Of these facts alone, with no C++ type, the layer decides
    everything: what a storage gives, what a binding publishes, how a request is
    derived of what is published, how long each object lives, and how many copies
-   and moves the leaf takes. Its output is a plan: the steps from the stored
-   object to the request. The domain is finite. It is compared with
+   and moves the leaf takes. Its output is a derivation: the steps from the
+   stored object to the request. The domain is finite. It is compared with
    [spec/semantics.py](../../spec/semantics.py) for every element of the domain.
 3. **Steps.** Each kind of step is one function template with a contract: what
    it requires of its source, what it gives, how long the result lives and what
    it copies or moves of the leaf. Each step is tested alone, over the wrapper
    kinds and the leaf kinds.
-4. **Execution.** A plan is compiled into one program, which both containers run
-   through the steps: the runtime container through tables of erased operations,
-   and the static container inline.
+4. **Execution.** A derivation is compiled into one conversion, which both
+   containers run through the steps: the runtime container through tables of
+   erased operations, and the static container inline.
 
 If the classification is right, the semantics equal the specification, each step
-keeps its contract and the program runs the plan as it is, every cell is right.
-The tests are then the sum of the layers, not their product. A cover of the
-product checks only the composition.
+keeps its contract and the conversion runs the derivation as it is, every cell
+is right. The tests are then the sum of the layers, not their product. A cover
+of the product checks only the composition.
 
 ## The Specification Is Layer 2
 
@@ -107,13 +107,13 @@ request takes the others through the tables of the binding.
 
 ## The Headers
 
-| Layer          | Headers                                                                                                                                                                                                          |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Classification | `type/type_traits.h`, `type/shape.h`, `type/annotated.h`, `request/decomposition.h`, `request/classification.h`, `factory/constructor_detection.hpp`, `base/type_descriptor.h`                                   |
-| Semantics      | `semantics/model.h`, `binding/materialization.h`, `storage/scope_traits.h`, `binding/selection.h`                                                                                                                |
-| Steps          | the steps of `request/execution.h`, the storages of `storage/`, `factory/`                                                                                                                                       |
-| Execution      | the programs of `request/execution.h`, the tables of `runtime/execution.h`, `runtime/request.h`, `binding/activation.h`, `runtime/binding.h`, `static_execution` of `static/binding.h`, `resolution/algorithm.h` |
-| Plumbing       | `lookup/`, `memory/`, the registries and the transactions of `runtime/` and `static/`, `context/`                                                                                                                |
+| Layer          | Headers                                                                                                                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Classification | `type/type_traits.h`, `type/shape.h`, `type/annotated.h`, `request/decomposition.h`, `request/classification.h`, `factory/constructor_detection.hpp`, `base/type_descriptor.h`                                      |
+| Semantics      | `semantics/model.h`, `binding/materialization.h`, `storage/scope_traits.h`, `binding/selection.h`                                                                                                                   |
+| Steps          | the steps of `request/execution.h`, the storages of `storage/`, `factory/`                                                                                                                                          |
+| Execution      | the conversions of `request/execution.h`, the tables of `runtime/execution.h`, `runtime/request.h`, `binding/activation.h`, `runtime/binding.h`, `static_execution` of `static/binding.h`, `resolution/algorithm.h` |
+| Plumbing       | `lookup/`, `memory/`, the registries and the transactions of `runtime/` and `static/`, `context/`                                                                                                                   |
 
 The plumbing does not decide what a request resolves to. It is tested as any
 other code.
@@ -208,32 +208,33 @@ other code.
    specification. A test shows that a wrapper a user defines is classified as
    the standard one of the same semantics.
 
-4. **Plans.** Done. A state of the search keeps the state and the step it
+4. **Derivations.** Done. A state of the search keeps the state and the step it
    reached its object from first. The answer to a request is the state that
    satisfies it at the fewest copies and moves, and how: a reference or a
    pointer refers to it, a pointer request takes it as a pointer value, an
    rvalue reference takes what is made for the request, or a value is moved or
-   copied of it. `answer_plan` gives the steps from the stored object to it.
-   `semantics-check` replays the plan of every answer through the steps of the
-   semantics, with its copies and moves.
+   copied of it. `answer_derivation` gives the steps from the stored object to
+   it. `semantics-check` replays the derivation of every answer through the
+   steps of the semantics, with its copies and moves.
 
-5. **Steps.** Done for plans known as the code compiles.
+5. **Steps.** Done for derivations known as the code compiles.
    [include/dingo/request/execution.h](../../include/dingo/request/execution.h)
    has one step for each kind of step of the semantics, by the type traits of
-   its layers and by C++ itself, and the program that a plan is compiled into,
-   which applies the steps of a plan one after another. A run of wraps makes its
-   outermost layer at once, in place, and the last run is made where the request
-   needs it, so that the leaf is moved once. What a step makes for the request
-   is kept by a store. A step that takes over what a pointer points to releases
-   the handle it was taken out of, by the `release` of its type traits.
-   `execution_check.py` asks the semantics the plan of every conversion of the
-   model, applies each to the leaf types of the model, which count their copies
-   and moves, and compares the counts with the plan, without a container: 60,694
-   cells, all equal. It found three defects, each fixed: a handle a pointer was
-   taken out of released it too; a wrapper emplaced of its own element type
-   moved the leaf twice; and the pointer to the first element of an array was
-   upcast to an array of the interface, which the specification and the
-   semantics then both allowed the request to take over.
+   its layers and by C++ itself, and the conversion that a derivation is
+   compiled into, which applies the steps of a derivation one after another. A
+   run of wraps makes its outermost layer at once, in place, and the last run is
+   made where the request needs it, so that the leaf is moved once. What a step
+   makes for the request is kept by a store. A step that takes over what a
+   pointer points to releases the handle it was taken out of, by the `release`
+   of its type traits. `execution_check.py` asks the semantics the derivation of
+   every conversion of the model, applies each to the leaf types of the model,
+   which count their copies and moves, and compares the counts with the
+   derivation, without a container: 60,694 cells, all equal. It found three
+   defects, each fixed: a handle a pointer was taken out of released it too; a
+   wrapper emplaced of its own element type moved the leaf twice; and the
+   pointer to the first element of an array was upcast to an array of the
+   interface, which the specification and the semantics then both allowed the
+   request to take over.
 
 6. **Request rules.** Done. `resolve` in
    [include/dingo/semantics/model.h](../../include/dingo/semantics/model.h)
@@ -247,14 +248,14 @@ other code.
    category, position, entry point, selection and container: 105,759,360
    answers, all equal.
 
-7. **Execution.** Done. The containers apply plans. The conversion paths, the
-   derivations, the request lists of the scopes and the resolutions a binding
-   published before are deleted. A static binding plans a request as the code
-   compiles (`static_execution` in
+7. **Execution.** Done. The containers apply conversions. The conversion paths,
+   the derivations, the request lists of the scopes and the resolutions a
+   binding published before are deleted. A static binding derives a request as
+   the code compiles (`static_execution` in
    [include/dingo/static/binding.h](../../include/dingo/static/binding.h)) and
-   runs the program of the plan as typed functions. The runtime container plans
-   a request of a binding at its first use, and keeps the plan for the type of
-   the request. Both are built as follows.
+   runs the conversion of the derivation as typed functions. The runtime
+   container derives a request of a binding at its first use, and keeps the
+   conversion for the type of the request. Both are built as follows.
 
    **The model.** Three additions are specified in
    [spec/semantics.py](../../spec/semantics.py) first, ported to
@@ -309,15 +310,15 @@ other code.
      long as the request needs. A layer made of a pointer it does not own may be
      empty, as the pointer may be null.
 
-   - Cost. The cost of a plan is lexicographic: the copies of the leaf, its
-     moves, whether what satisfies the request may be absent when a layer is
+   - Cost. The cost of a derivation is lexicographic: the copies of the leaf,
+     its moves, whether what satisfies the request may be absent when a layer is
      empty, the objects kept as long as the container, and the objects made for
-     the request. The cheapest plan is the fewest objects by construction, not
-     by the order of the search. A step that makes a new object counts one; one
-     kept with the binding counts as kept. A search keeps an object at a cost
-     unless it has the object at the same copies and moves of the leaf and at no
-     more objects: objects only grow along a derivation, so the search ends, and
-     no cheaper plan is dropped.
+     the request. The cheapest derivation is the fewest objects by construction,
+     not by the order of the search. A step that makes a new object counts one;
+     one kept with the binding counts as kept. A search keeps an object at a
+     cost unless it has the object at the same copies and moves of the leaf and
+     at no more objects: objects only grow along a derivation, so the search
+     ends, and no cheaper derivation is dropped.
 
    - Who makes a layer. A request makes a new layer, by a wrap, an adoption or
      an observer, only as the layer of the request at the depth it will have: a
@@ -352,14 +353,14 @@ other code.
      wraps, the adoption of a pointer it owns, and an observer of a pointer.
      Nothing else is the request's.
 
-   - A plan is compiled once, at its first use, into the operations it calls. A
-     step of a layer the request makes is found among the request's operations,
-     by the depth of the layer in the request; every other step is the operation
-     of the table of what it is applied to. Each table has, as the code
-     compiles, every operation the semantics allow from its type: each binding
-     checks its tables against the steps the semantics allow from each of its
-     sources, and each request its tables against the layers it makes. A plan
-     meets no missing operation.
+   - A derivation is compiled once, at its first use, into the operations it
+     calls. A step of a layer the request makes is found among the request's
+     operations, by the depth of the layer in the request; every other step is
+     the operation of the table of what it is applied to. Each table has, as the
+     code compiles, every operation the semantics allow from its type: each
+     binding checks its tables against the steps the semantics allow from each
+     of its sources, and each request its tables against the layers it makes. A
+     derivation meets no missing operation.
 
    **Cost as the code compiles.** The functions a binding instantiates scale
    with the distinct C++ types of its sources, not with the steps between them.
@@ -368,9 +369,9 @@ other code.
    them. The sources and the tables are emitted as many as there are.
 
    **Undo follows nesting.** A runtime binding registers the rollback of its
-   cell as soon as its source is materialized, before the plan runs. What the
-   plan keeps with the binding is undone before the cell is reset, so the undo
-   of what a retention keeps is unconditional.
+   cell as soon as its source is materialized, before the conversion runs. What
+   the conversion keeps with the binding is undone before the cell is reset, so
+   the undo of what a retention keeps is unconditional.
 
    **Objects made of a value.** A storage, a factory and `construct<T>()` make
    an object of a value with `make_value`: the object constructed of the value,
@@ -379,11 +380,11 @@ other code.
    in place, down the layers that declare `emplaces_element`, and makes it of
    the constructed value only where it cannot.
 
-   **Values are made where they are returned.** A plan for a value ends in what
-   makes the value: a copy, a move, or a run of wraps. The runtime container
-   does not apply that last step. It returns what the plan reached, and the
-   request makes its value of it in place of the value the call returns. The
-   static container makes it in place of the value it returns.
+   **Values are made where they are returned.** A derivation for a value ends in
+   what makes the value: a copy, a move, or a run of wraps. The runtime
+   container does not apply that last step. It returns what the conversion
+   reached, and the request makes its value of it in place of the value the call
+   returns. The static container makes it in place of the value it returns.
 
    **Known limitations.** An empty holder of a pointer is not mapped to an empty
    holder of an observer of it: a request through the element of an empty holder

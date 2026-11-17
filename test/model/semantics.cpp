@@ -94,10 +94,11 @@ bool same(const layer_kind &a, const layer_kind &b) {
          a.converts_unknown_bound == b.converts_unknown_bound;
 }
 
-// Whether a plan replays: each of its steps is a step the semantics take
+// Whether a derivation replays: each of its steps is a step the semantics take
 // from the object before it, to the object after it, and the cost of the steps
 // and of how the last object satisfies the request is that of the answer.
-bool replays(const plan &made, const context &with, const answer &result) {
+bool replays(const derivation &made, const context &with,
+             const answer &result) {
   if (!made.found) {
     return false;
   }
@@ -147,12 +148,12 @@ bool read_layers(layer *layers, std::uint8_t &depth) {
 } // namespace
 
 int main(int count, char **arguments) {
-  // With "plans", a line of plans for each request instead of its answers:
-  // for each category, of the lifetime of the request, how it is satisfied
-  // and each step with the layer it makes, or "-". A plan is of what the
-  // binding publishes, as the containers plan.
-  const bool plans =
-      count > 1 && arguments[1][0] == 'p' && arguments[1][1] == 'l';
+  // With "derivations", a line of derives for each request instead of
+  // its answers: for each category, of the lifetime of the request, how it
+  // is satisfied and each step with the layer it makes, or "-". A derivation
+  // is of what the binding publishes, as the containers derive it.
+  const bool derivations =
+      count > 1 && arguments[1][0] == 'd' && arguments[1][1] == 'e';
   // With "rules", for each category, position, entry point, whether the
   // request is selected and whether the runtime container resolves it, the
   // fewest copies and moves of resolve, or "-".
@@ -162,7 +163,7 @@ int main(int count, char **arguments) {
   // then of the steps the request takes from it.
   const bool split =
       count > 1 &&
-      ((arguments[1][0] == 's' && arguments[1][1] == 'p') || plans);
+      ((arguments[1][0] == 's' && arguments[1][1] == 'p') || derivations);
   const universe language;
   unsigned language_count = 0;
   if (!read(language_count) || language_count != language.count) {
@@ -275,11 +276,11 @@ int main(int count, char **arguments) {
       std::printf("overflow\n");
       continue;
     }
-    if (plans) {
+    if (derivations) {
       for (unsigned taken = 0; taken < 7; ++taken) {
         const answer result = satisfy(found, goal, static_cast<category>(taken),
                                       lifetime::request, with);
-        const plan made = answer_plan(found, result);
+        const derivation made = answer_derivation(found, result);
         if (!made.found) {
           std::printf("- ");
           continue;
@@ -303,7 +304,7 @@ int main(int count, char **arguments) {
         const answer result =
             satisfy(found, goal, static_cast<category>(taken), needed, with);
         if (result.found &&
-            !replays(answer_plan(found, result), with, result)) {
+            !replays(answer_derivation(found, result), with, result)) {
           std::printf("replay ");
         } else if (result.found) {
           std::printf("%u,%u,%u,%u,%u ", result.fewest.copies,

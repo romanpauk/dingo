@@ -5,7 +5,7 @@ Dingo has four concerns:
 - registration deduction: a declaration becomes a complete policy set
 - binding selection: a request selects the binding of its type and key
 - storage and factory ownership: a binding cell keeps or makes its instance
-- the plan of a request: the steps from what a binding stores to what the
+- the derivation of a request: the steps from what a binding stores to what the
   request asks for, which the [layered semantics](layered-semantics.md) choose
 
 Both containers share one core for all four. [Shared Core](shared-core.md) says
@@ -23,13 +23,13 @@ From the bottom:
 00. `base/`: configuration, `none`, `selected`, exceptions, `type_list`, type
     descriptors
 01. `memory/`, `rtti/`, `semantics/`, `type/`: allocators, object stores and
-    object layouts, rtti providers, the semantics of plans (constant expressions
-    of no C++ type), type traits, keys, annotations
+    object layouts, rtti providers, the semantics of derivations (constant
+    expressions of no C++ type), type traits, keys, annotations
 02. `conversion/`, `lookup/`: the source a storage gives a binding, lookup
     indexes and their backends
 03. `request/`: what a request is (`decomposition.h`), what the semantics know
     of a C++ type (`classification.h`), collection requests, and the steps, the
-    programs and the plans of `execution.h`
+    conversions and the derivations of `execution.h`
 04. `factory/`: constructors, callables, constructor detection, factory traits
 05. `context/`: resolution context base and recursion guard
 06. `storage/`: storage tags, scope policies, storage exposure traits
@@ -142,8 +142,8 @@ static container selects it at compile time. A runtime binding matches the
 requested type descriptor at run time.
 
 [include/dingo/request/execution.h](../../include/dingo/request/execution.h)
-compiles the plan of a request into a program and runs it: the steps from the
-stored source to the requested target, which the
+compiles the derivation of a request into a conversion and runs it: the steps
+from the stored source to the requested target, which the
 [layered semantics](layered-semantics.md) choose.
 
 A request passes through five folders that both containers share:
@@ -155,14 +155,14 @@ A request passes through five folders that both containers share:
   how it answers a request. `model.h` holds what a registration declares,
   `selection.h` how a request selects a binding, `activation.h` and
   `materialization.h` the cell of a binding and how its source is made, and
-  `resolution.h` where the plan of a request starts.
+  `resolution.h` where the derivation of a request starts.
 - [include/dingo/request/](../../include/dingo/request): what a request is.
   `decomposition.h` takes a request apart, `classification.h` says what the
-  semantics know of a C++ type, and `execution.h` holds the steps, the programs
-  and the plans of a binding and of a request.
+  semantics know of a C++ type, and `execution.h` holds the steps, the
+  conversions and the derivations of a binding and of a request.
 - [include/dingo/semantics/](../../include/dingo/semantics): the semantics of
-  plans, of no C++ type: what a binding publishes, which steps reach a request,
-  and how many copies and moves of the leaf each takes.
+  derivations, of no C++ type: what a binding publishes, which steps reach a
+  request, and how many copies and moves of the leaf each takes.
 - [include/dingo/conversion/](../../include/dingo/conversion): the source a
   storage gives a binding: a value it owns, an object it borrows, a pointer, or
   an array it made.
@@ -181,15 +181,15 @@ Dingo runs this sequence:
    path normalizes `bindings<...>` into a validated static source.
 3. `resolve<T>()` converts `T` into `request_type<T>` and a lookup key.
 4. The container selects the matching runtime or static binding.
-5. The binding plans the request: as the code compiles in a static container, at
-   the first request of its type in a runtime container, which passes the
+5. The binding derives the request: as the code compiles in a static container,
+   at the first request of its type in a runtime container, which passes the
    binding the description of the request (`runtime_request`) and keeps the
-   plan.
+   derivation.
 6. The binding activation gets or builds the stored instance through its
    storage.
-7. The program of the plan applies its steps to the stored instance and gives
-   the requested `T`: inline in a static container, through tables of erased
-   operations in a runtime container.
+7. The conversion of the derivation applies its steps to the stored instance and
+   gives the requested `T`: inline in a static container, through tables of
+   erased operations in a runtime container.
 
 Registration child bindings and static local bindings take precedence over the
 container they extend, for singular and collection requests.

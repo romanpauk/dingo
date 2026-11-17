@@ -635,7 +635,7 @@ def expected(reached, context, layers, element, quals=None,
     answers = []
     for category in Category:
         for planned_lifetime in LIFETIMES:
-            # The cheapest, as the plan is chosen: the copies and the moves
+            # The cheapest, as the derivation is chosen: the copies and the moves
             # of the leaf, whether it may be absent, the objects kept and
             # made.
             costs = [semantics.affected(cost, effect)[:2] +

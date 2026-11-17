@@ -48,7 +48,8 @@ rule for each wrapper combination.
 ## Binding Lookup
 
 A request selects a binding by its normalized type or by its exact type. The
-binding then plans the request (see [Plans](conversion-model.md#plans)).
+binding then derives the request (see
+[Derivations](conversion-model.md#derivations)).
 
 ## Request Type
 
@@ -72,8 +73,8 @@ case for each wrapper combination. Dingo divides the problem into:
 
 - wrapper semantics in `type_traits`
 - storage exposure in `scope_traits`
-- the plan of a request, which the [layered semantics](layered-semantics.md)
-  choose, and the steps that apply it
+- the derivation of a request, which the
+  [layered semantics](layered-semantics.md) choose, and the steps that apply it
 
 The rebinding utilities let these three layers work together.
 

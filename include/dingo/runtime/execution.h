@@ -21,16 +21,16 @@
 #include <type_traits>
 #include <utility>
 
-// The execution of plans by the runtime container: a carrier of no type, the
-// table of the operations of each type a plan steps through, the plan of a
-// request compiled into those operations as it is resolved, and the tables a
-// binding and a request give it.
+// The execution of conversions by the runtime container: a carrier of no type,
+// the table of the operations of each type a conversion steps through, the
+// conversion of a request compiled into those operations as it is resolved, and
+// the tables a binding and a request give it.
 
 namespace dingo::detail::execution {
 
 // A carrier of no type, which the runtime container passes between the
-// operations of a plan: the object, whether the request owns it, and what it
-// was taken out of, with how to release it.
+// operations of a conversion: the object, whether the request owns it, and what
+// it was taken out of, with how to release it.
 struct erased_carrier {
   void *object = nullptr;
   bool owned = false;
@@ -755,7 +755,7 @@ struct runtime_layers<type_list<Identities...>> {
       runtime_layer_v<Identities>()..., {}};
 };
 
-// A request as a runtime resolution plans it: its layers in a universe of
+// A request as a runtime resolution converts it: its layers in a universe of
 // its own, whose wrapper layers it gives, what it asks for, and the table of
 // each type it spells, from its shape to its element, which make the layers
 // it makes.
@@ -767,7 +767,7 @@ struct request_layout {
   const type_table *const *tables;
 };
 
-// A binding as a runtime resolution plans it: its layer sources, the states
+// A binding as a runtime resolution converts it: its layer sources, the states
 // of a search in its order, in a universe of its own, whose wrapper layers
 // it gives, and the table of the type of each.
 // How the route of a state of the closure of a binding gives a value the
@@ -830,19 +830,19 @@ struct binding_layout {
   const closed_answers *answers;
 };
 
-// A plan as a runtime resolution runs it: the operations of the instructions
-// of its program, each with whether what it makes lives as long as the
-// container; how it satisfies the request, how the request takes the value of
-// what it reaches, and whether what it gives the request the address of
-// lives as long as the container.
-struct runtime_plan {
+// A conversion as a runtime resolution runs it: the operations of the
+// instructions of its conversion, each with whether what it makes lives as long
+// as the container; how it satisfies the request, how the request takes the
+// value of what it reaches, and whether what it gives the request the address
+// of lives as long as the container.
+struct runtime_conversion {
   struct call {
     step_function owned;
     step_function borrowed;
     bool stable;
   };
   bool found = false;
-  // The route of the binding the plan takes first, to a state of its
+  // The route of the binding the conversion takes first, to a state of its
   // closure, and whether it is the one of a value.
   std::uint16_t route = 0;
   bool value_route = false;
@@ -851,30 +851,30 @@ struct runtime_plan {
   std::uint8_t depth = 0;
   std::uint8_t quals = 0;
   bool stable_address = false;
-  // The table of the type of what the plan reaches.
+  // The table of the type of what the conversion reaches.
   const type_table *reached = nullptr;
   std::size_t count = 0;
-  call calls[semantics::max_plan] = {};
+  call calls[semantics::max_steps] = {};
 };
 
-// The plans of a request of a binding, for a request that needs what it
+// The conversions of a request of a binding, for a request that needs what it
 // refers to to live as long as the container, and for one that needs it to
 // live as long as the request: of one search, in the universe of the
 // binding, which the layers of the request it does not have follow, from the
 // binding's layer sources.
-struct runtime_plans {
-  runtime_plan stable;
-  runtime_plan transient;
+struct runtime_conversions {
+  runtime_conversion stable;
+  runtime_conversion transient;
 };
 
-inline runtime_plan make_runtime_plan(const semantics::plan &plan,
-                                      const binding_layout &binding,
-                                      const request_layout &request,
-                                      const semantics::request &goal);
+inline runtime_conversion make_runtime_conversion(
+    const semantics::derivation &derivation, const binding_layout &binding,
+    const request_layout &request, const semantics::request &goal);
 
-inline runtime_plans plan_runtime(const binding_layout &binding,
-                                  const request_layout &request) {
-  runtime_plans made;
+inline runtime_conversions
+make_runtime_conversions(const binding_layout &binding,
+                         const request_layout &request) {
+  runtime_conversions made;
   // The layers of the request in the universe of the binding: those it
   // knows by their index, any other after them.
   semantics::layer mapped[semantics::max_kinds] = {0, 1, 2, 3};
@@ -952,8 +952,8 @@ inline runtime_plans plan_runtime(const binding_layout &binding,
                                   : semantics::element::leaf;
 
   // The search of a thread, cleared rather than made: what makes one is its
-  // states, which a search reads only once it added them. Planning runs no
-  // code of a user, so it is never planning already on the thread.
+  // states, which a search reads only once it added them. Deriving runs no
+  // code of a user, so it is never deriving already on the thread.
   thread_local semantics::search found;
   found.clear();
   // The closed states are distinct already, so they are not hashed: an object
@@ -965,55 +965,57 @@ inline runtime_plans plan_runtime(const binding_layout &binding,
   found.closed = binding.state_count;
   semantics::extend_reach(found, binding.state_count,
                           binding.context.layers->count, context, goal);
-  // The plans of the lifetimes differ in what satisfies the request alone.
-  made.stable = make_runtime_plan(
-      semantics::answer_plan(
+  // The derivations of the lifetimes differ in what satisfies the request
+  // alone.
+  made.stable = make_runtime_conversion(
+      semantics::answer_derivation(
           found, semantics::satisfy(found, goal, request.category,
                                     semantics::lifetime::stable, context)),
       binding, request, goal);
-  made.transient = make_runtime_plan(
-      semantics::answer_plan(
+  made.transient = make_runtime_conversion(
+      semantics::answer_derivation(
           found, semantics::satisfy(found, goal, request.category,
                                     semantics::lifetime::request, context)),
       binding, request, goal);
   return made;
 }
 
-// A plan as a runtime resolution runs it: compiled into the operations of
-// the tables of the types it steps through.
-inline runtime_plan make_runtime_plan(const semantics::plan &plan,
-                                      const binding_layout &binding,
-                                      const request_layout &request,
-                                      const semantics::request &goal) {
-  runtime_plan made;
-  if (!plan.found) {
+// A conversion as a runtime resolution runs it: a derivation compiled into the
+// operations of the tables of the types it steps through.
+inline runtime_conversion make_runtime_conversion(
+    const semantics::derivation &derivation, const binding_layout &binding,
+    const request_layout &request, const semantics::request &goal) {
+  runtime_conversion made;
+  if (!derivation.found) {
     return made;
   }
 
-  const program compiled = compile_program(plan, binding.source_count);
+  const conversion compiled =
+      compile_conversion(derivation, binding.source_count);
   // The instructions into states of the closure are the binding's route;
   // the rest the request takes, of the tables of the types it spells.
   std::size_t first = 0;
   while (first < compiled.count &&
-         plan.states[compiled.entries[first].last + 1] < binding.state_count) {
+         derivation.states[compiled.entries[first].last + 1] <
+             binding.state_count) {
     ++first;
   }
   if (compiled.last == finish::copy && first == compiled.count &&
-      plan.states[plan.count] < binding.state_count) {
-    made.route = plan.states[plan.count];
+      derivation.states[derivation.count] < binding.state_count) {
+    made.route = derivation.states[derivation.count];
     made.value_route = true;
   } else {
-    made.route = first ? plan.states[compiled.entries[first - 1].last + 1]
+    made.route = first ? derivation.states[compiled.entries[first - 1].last + 1]
                        : std::uint16_t{0};
   }
-  // The table of the type of what the plan reached so far: of a state of
+  // The table of the type of what the conversion reached so far: of a state of
   // the closure, only of one a step after its route takes an operation of.
   const type_table *table = binding.tables[made.route];
   for (std::size_t index = first; index < compiled.count; ++index) {
     const instruction &each = compiled.entries[index];
-    const semantics::object &source = plan.objects[each.first];
-    const semantics::object &target = plan.objects[each.last + 1];
-    const std::uint16_t state = plan.states[each.last + 1];
+    const semantics::object &source = derivation.objects[each.first];
+    const semantics::object &target = derivation.objects[each.last + 1];
+    const std::uint16_t state = derivation.states[each.last + 1];
     // The table of what an instruction makes a layer of: of a source of the
     // binding, or of a type the request spells, by its depth in the request.
     const bool tabled = state < binding.source_count;
@@ -1069,10 +1071,10 @@ inline runtime_plan make_runtime_plan(const semantics::plan &plan,
   made.quals = compiled.quals;
   made.found = true;
   made.reached = table;
-  made.how = plan.how;
-  const semantics::object &reached = plan.objects[plan.count];
+  made.how = derivation.how;
+  const semantics::object &reached = derivation.objects[derivation.count];
   made.stable_address =
-      (plan.how == semantics::satisfaction::point
+      (derivation.how == semantics::satisfaction::point
            ? reached.lifetimes[1]
            : reached.lifetimes[0]) == semantics::lifetime::stable;
   return made;
@@ -1220,8 +1222,8 @@ constexpr std::uint32_t request_kinds(const semantics::object &object,
 // The semantics of the closure of a binding of a shape, of no C++ type: the
 // classes of the states of its layer sources, those a request takes, the
 // published states closed under every step a request takes but a wrap, and
-// the plan and the program of the route of each state. Bindings of every
-// type of a shape share them.
+// the derivation and the conversion of the route of each state. Bindings of
+// every type of a shape share them.
 template <typename Shape> struct closed_semantics {
   static constexpr const semantics::search &Sources = Shape::sources;
   static constexpr bool abstract = Shape::context.abstract;
@@ -1333,9 +1335,9 @@ template <typename Shape> struct closed_semantics {
   }
   static constexpr auto closed =
       close(std::make_index_sequence<closure.count>{});
-  // The route of a state of the closure: the program of its plan from the
-  // stored object, run as the code compiles, to what it reaches; of a value
-  // the request takes (Value), which it makes of what the program reaches
+  // The route of a state of the closure: the conversion of its derivation from
+  // the stored object, run as the code compiles, to what it reaches; of a value
+  // the request takes (Value), which it makes of what the conversion reaches
   // when the step into the state is a copy.
   static constexpr semantics::answer route_answer(std::size_t state,
                                                   bool value) {
@@ -1347,14 +1349,14 @@ template <typename Shape> struct closed_semantics {
     return made;
   }
   template <std::size_t State, bool Value>
-  static constexpr semantics::plan route_plan =
-      semantics::answer_plan(closure, route_answer(State, Value));
+  static constexpr semantics::derivation route_derivation =
+      semantics::answer_derivation(closure, route_answer(State, Value));
   template <std::size_t State, bool Value>
-  static constexpr program route_program =
-      compile_program(route_plan<State, Value>, used.count);
+  static constexpr conversion route_conversion =
+      compile_conversion(route_derivation<State, Value>, used.count);
   template <std::size_t State> static constexpr route_finish route_finish_v() {
-    return {route_program<State, true>.last == finish::copy,
-            route_program<State, true>.quals};
+    return {route_conversion<State, true>.last == finish::copy,
+            route_conversion<State, true>.quals};
   }
   template <std::size_t... I>
   static constexpr auto make_finishes(std::index_sequence<I...>) {
@@ -1525,7 +1527,7 @@ struct closed_answer_table {
   }
 
   // The states a route of the binding reaches, of a value (Value) or not: of
-  // an answer, or of a plan that takes steps of the request after it.
+  // an answer, or of a derivation that takes steps of the request after it.
   struct routed_list {
     bool through[closure.count + 1] = {};
     bool value[closure.count + 1] = {};
@@ -1579,12 +1581,14 @@ struct closed_answer_table {
   static constexpr bool any_value = any_routed_value();
 };
 
-template <typename Plan, const semantics::search &Sources, typename Identities,
-          typename Stored, typename Leaf, typename Interface>
+template <typename Semantics, const semantics::search &Sources,
+          typename Identities, typename Stored, typename Leaf,
+          typename Interface>
 struct binding_sources {
   static constexpr bool abstract = !std::is_same_v<Leaf, Interface>;
-  static_assert(Plan::template whole<abstract>());
-  using semantic = closed_semantics<typename Plan::template shape<abstract>>;
+  static_assert(Semantics::template whole<abstract>());
+  using semantic =
+      closed_semantics<typename Semantics::template shape<abstract>>;
   static constexpr const state_classes &classes = semantic::classes;
   static constexpr const auto &used = semantic::used;
   static constexpr const auto &masks = semantic::masks;
@@ -1592,11 +1596,11 @@ struct binding_sources {
   static constexpr const auto &closed = semantic::closed;
   static constexpr const auto &route_finishes = semantic::route_finishes;
   template <std::size_t State, bool Value>
-  static constexpr const semantics::plan &route_plan =
-      semantic::template route_plan<State, Value>;
+  static constexpr const semantics::derivation &route_derivation =
+      semantic::template route_derivation<State, Value>;
   template <std::size_t State, bool Value>
-  static constexpr const program &route_program =
-      semantic::template route_program<State, Value>;
+  static constexpr const conversion &route_conversion =
+      semantic::template route_conversion<State, Value>;
   static constexpr std::size_t run_length(std::size_t state) {
     return semantic::run_length(state);
   }
@@ -1678,8 +1682,8 @@ struct binding_sources {
     }
     // Every step a request takes of it that its type knows.
     using own = typename class_carrier<classes.state_class[State]>::type;
-    constexpr std::uint32_t kinds =
-        request_kinds(Sources.states[State].reached, Plan::context(abstract));
+    constexpr std::uint32_t kinds = request_kinds(Sources.states[State].reached,
+                                                  Semantics::context(abstract));
     constexpr const full_table &table = table_t<State>::maker::full;
     static_assert(known<own>(table, kinds, semantics::step::copy) &&
                       known<own>(table, kinds, semantics::step::decay) &&
@@ -1757,23 +1761,24 @@ struct binding_sources {
       typename typed_step<Identities,
                           search_step<semantic::closure, State>>::step_type;
 
-  // What the route of a state reaches: the last instruction of its program,
+  // What the route of a state reaches: the last instruction of its conversion,
   // applied to what the route of the state it starts from reaches, so that
   // each state compiles one step, and the routes share what leads to them.
   // The instruction is the step into the state, or of the state before it
   // with the qualifiers of the state, when the semantics make it at once; or
-  // the step the program takes in place of it.
+  // the step the conversion takes in place of it.
   template <std::size_t State, bool Value, typename Store>
   static auto reach_state(start_carrier source, Store &store) {
-    constexpr const program &made = route_program<State, Value>;
+    constexpr const conversion &made = route_conversion<State, Value>;
     if constexpr (made.count == 0) {
       return source;
     } else {
-      constexpr const semantics::plan &plan = route_plan<State, Value>;
+      constexpr const semantics::derivation &derivation =
+          route_derivation<State, Value>;
       constexpr instruction each = made.entries[made.count - 1];
-      constexpr std::uint16_t before = plan.states[each.first];
-      constexpr std::uint16_t first = plan.states[each.first + 1];
-      constexpr semantics::object reached = plan.objects[each.last + 1];
+      constexpr std::uint16_t before = derivation.states[each.first];
+      constexpr std::uint16_t first = derivation.states[each.first + 1];
+      constexpr semantics::object reached = derivation.objects[each.last + 1];
       auto &&kept =
           lifetime_store<reached.lifetimes[0] == semantics::lifetime::stable>(
               store);
@@ -1782,7 +1787,7 @@ struct binding_sources {
         using step_type =
             typename holding_step<closed_step<first>, reached.quals[1]>::type;
         return step_type::template apply<Leaf, Interface>(reached_before, kept);
-      } else if constexpr (each.kind == plan.steps[each.first]) {
+      } else if constexpr (each.kind == derivation.steps[each.first]) {
         return closed_step<first>::template apply<Leaf, Interface>(
             reached_before, kept);
       } else {
@@ -1892,7 +1897,7 @@ struct binding_sources {
                                       step_mask(semantics::step::unknown_bound);
       constexpr std::uint32_t mask =
           (request_kinds(closure.states[State].reached,
-                         Plan::context(abstract)) &
+                         Semantics::context(abstract)) &
            taken) |
           step_mask(semantics::step::convert) |
           step_mask(semantics::step::unknown_bound);

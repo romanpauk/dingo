@@ -2,9 +2,9 @@
 
 Dingo resolves a request in two stages:
 
-1. It plans the request: the steps from what the binding stores to the requested
-   shape.
-2. It applies the plan to the source that the storage gives.
+1. It derives the request: the steps from what the binding stores to the
+   requested shape.
+2. It applies the conversion to the source that the storage gives.
 
 The [layered semantics](layered-semantics.md) give the rules and the reasons for
 them. This page tells where each part is in the code.
@@ -20,21 +20,21 @@ them. This page tells where each part is in the code.
   made of a value, made of a raw pointer, or be empty
   ([include/dingo/request/classification.h](../../include/dingo/request/classification.h)
   reads them).
-- The semantics plan a request of these facts, with no C++ type
+- The semantics derive a request of these facts, with no C++ type
   ([include/dingo/semantics/model.h](../../include/dingo/semantics/model.h)).
-- The steps apply a plan to C++ types
+- The steps apply a conversion to C++ types
   ([include/dingo/request/execution.h](../../include/dingo/request/execution.h)).
 
 A type converts to another only as C++ converts it, or as the `type_traits` of
 its layers say. A conversion is not an extension point of its own.
 
-## Plans
+## Derivations
 
-A plan is the list of steps from the stored object to what satisfies the
-request. Of all plans, Dingo takes the one with the fewest copies of the leaf,
-then the fewest moves, then one that is not absent when a layer is empty, then
-the fewest objects kept as long as the container, then the fewest objects made
-for the request.
+A derivation is the list of steps from the stored object to what satisfies the
+request. Of all derivations, Dingo takes the one with the fewest copies of the
+leaf, then the fewest moves, then one that is not absent when a layer is empty,
+then the fewest objects kept as long as the container, then the fewest objects
+made for the request.
 
 A step belongs to the side that knows the type it is applied to:
 
@@ -45,17 +45,17 @@ A step belongs to the side that knows the type it is applied to:
 - The request takes the steps that make its own layers: a wrap, the adoption of
   a pointer it owns, and an observer of a pointer that owns nothing.
 
-A request then refers to what the plan reached, takes it as a pointer value,
-moves it, or copies it. A plan is known for each lifetime a request needs: as
-long as the container, for what the caller of `resolve` takes, or as long as the
-request, for a dependency.
+A request then refers to what the conversion reached, takes it as a pointer
+value, moves it, or copies it. A derivation is known for each lifetime a request
+needs: as long as the container, for what the caller of `resolve` takes, or as
+long as the request, for a dependency.
 
-## Programs
+## Conversions
 
-Both containers run a plan as a program
+Both containers run a derivation as a conversion
 ([include/dingo/request/execution.h](../../include/dingo/request/execution.h)).
-`compile_program` turns a plan into instructions, and takes the decisions of how
-to run it in one place:
+`compile_conversion` turns a derivation into instructions, and takes the
+decisions of how to run it in one place:
 
 - A run of wraps of one side, the binding's or the request's, is one
   instruction. It makes its outermost layer at once, in place.
@@ -66,19 +66,20 @@ to run it in one place:
   step makes it: a copy or a run of wraps that the request makes, and a copy of
   the element of a layer that may be empty.
 
-## Static Plans
+## Static Derivations
 
-A static binding plans a request as the code compiles (`static_execution` in
+A static binding derives a request as the code compiles (`static_execution` in
 [include/dingo/static/binding.h](../../include/dingo/static/binding.h)). It runs
-the program of the plan as typed functions (`program_run`), which the compiler
-inlines. A request that no plan satisfies does not compile.
+the conversion of the derivation as typed functions (`execute_conversion`),
+which the compiler inlines. A request that no derivation satisfies does not
+compile.
 
-## Runtime Plans
+## Runtime Derivations
 
-A runtime binding plans a request at its first use, and keeps the plan in the
-plan cache of the request type
+A runtime binding derives a request at its first use, and keeps the conversion
+in the conversion cache of the request type
 ([include/dingo/runtime/request.h](../../include/dingo/runtime/request.h)). The
-program of the plan is run through tables of erased operations
+conversion of the derivation is run through tables of erased operations
 ([include/dingo/runtime/execution.h](../../include/dingo/runtime/execution.h)).
 `plan_runtime` maps each instruction to an operation of a table:
 
@@ -92,18 +93,18 @@ Both are built from the typed steps of the static container, so the containers
 apply one implementation of each step. A step that does the same to an object
 that the request owns as to one that it does not has one operation for both.
 Each table is checked as the code compiles against the steps that the semantics
-allow from its type, so a plan meets no missing operation. A request that no
-plan satisfies throws `type_not_convertible_exception`.
+allow from its type, so a derivation meets no missing operation. A request that
+no derivation satisfies throws `type_not_convertible_exception`.
 
 The operations keep what they make through `runtime_store`, an interface of no
 context. It keeps an object by its layout (`object_layout`: size, alignment and
-destructor) and one function that constructs it. The tables, the plans and
+destructor) and one function that constructs it. The tables, the conversions and
 `plan_runtime` do not depend on the context, and keeping is not instantiated for
 each type.
 
 A runtime resolution returns a `resolved_address`: the erased address and the
 access of the result. A value is made where the call returns it, of what the
-plan reached, as the static container makes it.
+conversion reached, as the static container makes it.
 
 ## Objects Made Of A Value
 
@@ -116,7 +117,7 @@ as an alternative type that selects an alternative of the value.
 
 ## Retention
 
-A reference or a pointer to a wrapper that a plan makes is kept or placed:
+A reference or a pointer to a wrapper that a conversion makes is kept or placed:
 
 - A binding of a scope that keeps its instance keeps the wrapper in the
   retention of its cell,

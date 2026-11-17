@@ -25,10 +25,10 @@ struct resolved_address {
     borrow,
     consume,
   } access;
-  // What the last step of the plan of a value makes, which the request makes
-  // where it takes the value: nothing, a copy of the object at the address,
-  // of its qualifiers, or the value of the type at a depth of the request at
-  // the address moved into the layers above it.
+  // What the last step of the derivation of a value makes, which the request
+  // makes where it takes the value: nothing, a copy of the object at the
+  // address, of its qualifiers, or the value of the type at a depth of the
+  // request at the address moved into the layers above it.
   enum class made_kind : std::uint8_t {
     none,
     copy,
@@ -57,7 +57,7 @@ class retention;
 struct runtime_request;
 namespace execution {
 struct binding_layout;
-struct runtime_plan;
+struct runtime_conversion;
 } // namespace execution
 } // namespace detail
 
@@ -79,7 +79,7 @@ struct runtime_binding_header {
 template <typename RTTI, typename Context> struct runtime_binding_node {
   using interface_type = runtime_binding_interface<RTTI, Context>;
   using request_type = detail::runtime_request;
-  using plan_type = detail::execution::runtime_plan;
+  using conversion_type = detail::execution::runtime_conversion;
 
   // The engine: resolves a request of a binding, of its node. It is one
   // function for every binding of a container.
@@ -95,7 +95,7 @@ template <typename RTTI, typename Context> struct runtime_binding_node {
   // names.
   const void *interface_key;
   // The layer sources of what the binding stores, which every request of it
-  // is planned from; none when C++ says of its type what the semantics do
+  // is derived from; none when C++ says of its type what the semantics do
   // not model.
   const detail::execution::binding_layout *layout;
   // How the source of the binding is materialized, which the static
@@ -104,11 +104,12 @@ template <typename RTTI, typename Context> struct runtime_binding_node {
   // Whether the binding caches the addresses it resolves.
   bool caches;
   // Materializes the source of the binding, in the construction scope,
-  // tells materialized once it is, and runs a plan of a request of it, in
+  // tells materialized once it is, and runs a conversion of a request of it, in
   // the scope of the request.
   resolved_address (*run)(interface_type &binding, construction_scope scope,
                           construction_scope construction, Context &context,
-                          const plan_type &plan, const request_type &request,
+                          const conversion_type &conversion,
+                          const request_type &request,
                           const detail::materialized_hook &materialized);
   // Where the cell of the binding lies in its record, after its header.
   std::size_t cell_offset;

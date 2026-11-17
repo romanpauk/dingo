@@ -1,7 +1,7 @@
-"""The conversion family: what the binding of every registration plans for
+"""The conversion family: what the binding of every registration derives for
 every request of the grammar, decided as the code compiles, compared with the
 specification. A unit is a registration of the runtime container, selected
-plainly: both containers plan a request of a binding alike, and selection
+plainly: both containers derive a request of a binding alike, and selection
 does not change it."""
 
 from dataclasses import dataclass
@@ -199,8 +199,8 @@ def compile_units(compiler, flags, directory, name, batch):
 
 
 def apply_semantics(cells, units):
-    """A request a binding plans that the specification resolves nowhere,
-    and one it does not plan for as long as the container that the
+    """A request a binding derives that the specification resolves nowhere,
+    and one it does not derive for as long as the container that the
     specification resolves for the caller, are unexpected: what a request
     resolves into the context of a call is placed there, not published. So
     is a request C++ itself builds of what the binding holds, which the
