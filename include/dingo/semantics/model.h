@@ -276,31 +276,24 @@ constexpr bool operator==(const object &a, const object &b) {
 // An object with its outer layers replaced: the layers of front, then those of
 // the object from below on; the lifetimes given for front, then those of the
 // object from below on.
-constexpr object restacked(const object &source, const layer *front,
-                           std::size_t count, std::size_t below,
-                           const lifetime *lives) {
+DINGO_COLD constexpr object restacked(const object &source, const layer *front,
+                                      std::size_t count, std::size_t below,
+                                      const lifetime *lives) {
   object made = source;
-  std::size_t depth = 0;
-  for (std::size_t index = 0; index < count; ++index) {
-    made.lifetimes[depth] = lives[index];
-    made.quals[depth] = 0;
-    made.layers[depth++] = front[index];
-  }
-  for (std::size_t index = below; index <= source.depth; ++index) {
-    made.lifetimes[depth] = source.lifetimes[index];
-    made.quals[depth] = source.quals[index];
-    if (index < source.depth) {
-      made.layers[depth] = source.layers[index];
+  made.depth = static_cast<std::uint8_t>(source.depth + count - below);
+  for (std::size_t index = 0; index <= max_layers; ++index) {
+    // The level of the source this level is of, past front.
+    const std::size_t level = index + below - count;
+    const bool kept = index >= count && index <= made.depth;
+    made.lifetimes[index] = index < count ? lives[index]
+                            : kept        ? source.lifetimes[level]
+                                          : lifetime{};
+    made.quals[index] = kept ? source.quals[level] : std::uint8_t{0};
+    if (index < max_layers) {
+      made.layers[index] = index < count        ? front[index]
+                           : index < made.depth ? source.layers[level]
+                                                : layer{};
     }
-    ++depth;
-  }
-  made.depth = static_cast<std::uint8_t>(depth - 1);
-  for (std::size_t index = made.depth; index < max_layers; ++index) {
-    made.layers[index] = layer{};
-  }
-  for (std::size_t index = depth; index <= max_layers; ++index) {
-    made.lifetimes[index] = lifetime{};
-    made.quals[index] = 0;
   }
   return made;
 }
@@ -547,10 +540,10 @@ constexpr bool made_whole(const semantics::object &object) {
 // it only where every level above it is a raw pointer made const and the
 // library does not limit it.
 template <typename Sink>
-constexpr void qualify_levels(const semantics::object &object,
-                              const semantics::context &context,
-                              semantics::object &made, std::size_t level,
-                              bool may_gain, bool gained, Sink &out) {
+DINGO_COLD constexpr void
+qualify_levels(const semantics::object &object,
+               const semantics::context &context, semantics::object &made,
+               std::size_t level, bool may_gain, bool gained, Sink &out) {
   if (level > object.depth || level > max_layers) {
     if (gained) {
       out(step::qualify, made);
@@ -580,8 +573,9 @@ constexpr void qualify_levels(const semantics::object &object,
 // copied of another. A pointer the request owns is handed over or taken over
 // instead, never converted.
 template <typename Sink>
-constexpr void qualify_steps(const semantics::object &object,
-                             const semantics::context &context, Sink &out) {
+DINGO_COLD constexpr void qualify_steps(const semantics::object &object,
+                                        const semantics::context &context,
+                                        Sink &out) {
   if (!object.depth || !context.kind(object.layers[0]).qualifies ||
       object.qualified || object.owns_pointee ||
       !out.takes(step::qualify, object.layers[0], object.depth)) {
@@ -608,9 +602,9 @@ constexpr void qualify_steps(const semantics::object &object,
 // qualified element is not converted again, and a pointer the request owns is
 // handed over or taken over instead.
 template <typename Sink>
-constexpr void unknown_bound_steps(const semantics::object &object,
-                                   const semantics::context &context,
-                                   Sink &out) {
+DINGO_COLD constexpr void unknown_bound_steps(const semantics::object &object,
+                                              const semantics::context &context,
+                                              Sink &out) {
   if (object.depth < 2 || !context.kind(object.layers[1]).bounded ||
       object.qualified || object.owns_pointee) {
     return;
@@ -1011,27 +1005,26 @@ inline constexpr std::size_t max_states = 256;
 constexpr std::uint32_t state_hash(const semantics::state &state) {
   const object &t = state.reached;
   std::uint32_t hash = 2166136261u;
-  auto mix = [&hash](unsigned value) { hash = (hash ^ value) * 16777619u; };
-  mix(t.depth);
-  for (std::size_t index = 0; index < t.depth; ++index) {
-    mix(t.layers[index]);
-  }
+  auto mix = [&hash](std::uint32_t value) {
+    hash = (hash ^ value) * 16777619u;
+  };
+  // Each level, then the rest of the object, and the cost.
   for (std::size_t index = 0; index <= t.depth; ++index) {
-    mix(static_cast<unsigned>(t.lifetimes[index]));
-    mix(t.quals[index]);
+    mix((index < t.depth ? t.layers[index] : no_layer) |
+        static_cast<std::uint32_t>(t.lifetimes[index]) << 8 |
+        static_cast<std::uint32_t>(t.quals[index]) << 16);
   }
-  mix(static_cast<unsigned>(t.element));
-  mix(static_cast<unsigned>(t.origin));
-  mix(t.instance);
-  mix(t.contained);
-  mix(t.unconstructed);
-  mix(t.absent);
-  mix(t.full);
-  mix(t.owns_pointee);
-  mix(t.made_layer);
-  mix(t.qualified);
-  mix(state.made.copies);
-  mix(state.made.moves);
+  mix(static_cast<std::uint32_t>(t.element) |
+      static_cast<std::uint32_t>(t.origin) << 2 |
+      static_cast<std::uint32_t>(t.instance) << 4 |
+      static_cast<std::uint32_t>(t.unconstructed) << 5 |
+      static_cast<std::uint32_t>(t.absent) << 6 |
+      static_cast<std::uint32_t>(t.owns_pointee) << 7 |
+      static_cast<std::uint32_t>(t.made_layer) << 8 |
+      static_cast<std::uint32_t>(t.qualified) << 9 |
+      static_cast<std::uint32_t>(t.full) << 10 |
+      static_cast<std::uint32_t>(t.contained) << 16);
+  mix(state.made.copies | static_cast<std::uint32_t>(state.made.moves) << 8);
   return hash;
 }
 
@@ -1062,7 +1055,7 @@ struct search {
 
   // Adds a state, unless one of its object and of no greater cost is found
   // already.
-  constexpr bool add(const state &found) {
+  DINGO_COLD constexpr bool add(const state &found) {
     std::size_t slot = state_hash(found) % search_slots;
     while (slots[slot] != 0) {
       const state &other = states[slots[slot] - 1];
@@ -1140,7 +1133,7 @@ struct reached_sink {
            quals == goal.quals[goal.depth - depth + level];
   }
 
-  constexpr void operator()(step kind, const object &reached) {
+  DINGO_COLD constexpr void operator()(step kind, const object &reached) {
     if ((kind == step::wrap || kind == step::observe) &&
         !(may_become(reached, goal, context) &&
           reached.layers[0] == goal.layers[goal.depth - reached.depth])) {
@@ -1466,47 +1459,36 @@ struct derivation {
   bool overflow = false;
 };
 
-constexpr derivation answer_derivation(const search &found,
-                                       const answer &result);
-
-// The derivation of the steps to a state of a search, which satisfies nothing.
-constexpr derivation state_derivation(const search &found,
-                                      std::uint16_t state) {
-  answer reached;
-  reached.found = true;
-  reached.state = state;
-  return answer_derivation(found, reached);
-}
-
-constexpr derivation answer_derivation(const search &found,
-                                       const answer &result) {
+// The derivation of what satisfies a request: the states of the search from
+// it back to the stored object, in their order.
+DINGO_COLD constexpr derivation answer_derivation(const search &found,
+                                                  const answer &result) {
   derivation made;
   made.overflow = result.overflow;
   if (!result.found) {
     return made;
   }
-  std::size_t path[max_steps + 1] = {};
   std::size_t length = 0;
   for (std::uint16_t index = result.state; index != no_state;
        index = found.states[index].parent) {
-    if (length == max_steps + 1) {
+    if (++length > max_steps + 1) {
       // A derivation longer than a derivation holds is none.
       return made;
     }
-    path[length++] = index;
   }
   made.found = true;
   made.count = length - 1;
-  for (std::size_t index = 0; index < length; ++index) {
-    const state &each = found.states[path[length - 1 - index]];
-    made.objects[index] = each.reached;
-    made.states[index] = static_cast<std::uint16_t>(path[length - 1 - index]);
-    if (index) {
-      made.steps[index - 1] = each.step;
-    }
-  }
   made.access = result.access;
   made.fewest = result.fewest;
+  for (std::uint16_t index = result.state; index != no_state;
+       index = found.states[index].parent) {
+    const state &each = found.states[index];
+    made.objects[--length] = each.reached;
+    made.states[length] = index;
+    if (length) {
+      made.steps[length - 1] = each.step;
+    }
+  }
   return made;
 }
 
