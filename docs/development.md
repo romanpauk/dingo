@@ -287,17 +287,30 @@ To compare with another checkout, such as the main branch, and with each
 compiler, run the same measurements under
 [nbench](https://github.com/romanpauk/nbench) with
 [`benchmark/nbench_conf.py`](../benchmark/nbench_conf.py): each checkout and
-compiler is a variant, compared with this checkout under the same compiler.
-Its suites are the scenarios (`footprint`), their differences (`costs`),
-where the compiler spent its work (`compiler`: a phase, an event or an area of
-the library per case), the code-generation probes (`probes`), the
-instructions of each operation of the containers (`operations`) and the
-container benchmarks of this checkout's build (`containers`).
+compiler is a variant, compared with this checkout under the same compiler. Its
+suites are the scenarios (`footprint`), their differences (`costs`), where the
+compiler spent its work (`compiler`: a phase, an event or an area of the library
+per case), the code-generation probes (`probes`), the instructions of each
+operation of the containers (`operations`) and the container benchmarks of a
+tree's Release build in its `build/bench` (`containers`).
+
+nbench is the submodule [`tools/nbench`](../tools/nbench), which `uv sync`
+installs. A worktree of the main branch in the build directory is a tree of its
+own:
 
 ```bash
-uv run --with nbench@git+https://github.com/romanpauk/nbench \
-  nbench run -C benchmark/nbench_conf.py -v this=. -v main=git:main
+git submodule update --init tools/nbench
+uv sync
+git worktree add --detach build/master master
+cmake -S build/master -B build/master/build/bench -DCMAKE_BUILD_TYPE=Release \
+  -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_TESTING_ENABLED=OFF
+cmake --build build/master/build/bench -t dingo_benchmark
+uv run nbench run -C benchmark/nbench_conf.py -v this=. -v master=build/master
 ```
+
+The container benchmarks of this checkout are built the same way, in
+`build/bench`. Where a benchmark of the main branch is named differently, its
+case is reported of one tree only.
 
 The report is in `build/nbench/reports/`, with `explorer.html` of every run.
 

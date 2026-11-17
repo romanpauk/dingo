@@ -48,11 +48,15 @@ driver.open_cache(WORK / "programs")
 
 
 def checkout(name, value):
-    """-v NAME=. is the working tree and its build; git:REF the commit's tree
-    ({tree}, which its worktree step makes); any other VALUE a tree."""
-    if value in ("", "."):
-        return Variant(name, tree=str(ROOT), build=str(ROOT / "build"))
-    return Variant(name, tree=value)
+    """-v NAME=. is the working tree; git:REF the commit's tree ({tree},
+    which its worktree step makes); any other VALUE a tree, such as a
+    worktree of the main branch. The container benchmarks of a tree are those
+    of its Release build in build/bench, where it has one."""
+    tree = ROOT if value in ("", ".") else Path(value).resolve()
+    bench = tree / "build" / "bench"
+    if bench.is_dir():
+        return Variant(name, tree=str(tree), build=str(bench))
+    return Variant(name, tree=str(tree))
 
 
 def work(variant):
@@ -66,19 +70,22 @@ def flags(variant, optimized):
     return base + (optimized or ["-O0"])
 
 
-def compiled(scenario, variant):
-    """driver.measure of a scenario, or an error."""
+def compiled(scenario, variant, release=False):
+    """driver.measure of a scenario, or an error: at its own flags, or at -O2
+    as a release build compiles it."""
     source, added = SCENARIOS[scenario]
-    found = driver.measure(variant.values["compiler"], flags(variant, added),
-                           work(variant), scenario.replace("/", "__"), source)
+    name = scenario.replace("/", "__") + ("__release" if release else "")
+    found = driver.measure(variant.values["compiler"],
+                           flags(variant, ["-O2"] if release else added),
+                           work(variant), name, source)
     if found.get("returncode"):
         return {"error": driver.first_error(found.get("stderr", ""))}
     return found
 
 
-def measure(scenario, variant):
+def measure(scenario, variant, release=False):
     """The object of a scenario and what the compiler took."""
-    found = compiled(scenario, variant)
+    found = compiled(scenario, variant, release)
     if "error" in found:
         return found
     sections = found.get("object", {}).get("sections", {})
@@ -123,7 +130,7 @@ def operations(case, variant):
     """The instructions of each operation of two registrations of a shape in
     a container, counted by the program, optimized: a case each."""
     container, shape = case.split("/")
-    records, stderr, crash = driver.build_and_run(
+    records, stderr, crash = driver.run_program(
         variant.values["compiler"], flags(variant, footprint.OPTIMIZED),
         work(variant), f"run__{container}__{shape}",
         footprint.performance_program(container, shape))
@@ -201,6 +208,23 @@ config = Config(
                                noise=0.03, section="memory"),
                         Metric("cpu", "Compiler CPU", "s", noise=0.2,
                                section="time")]),
+        Python("release", [s for s in SCENARIOS if s != "codegen"],
+               lambda scenario, variant: measure(scenario, variant, True),
+               title="Release footprint", primary="code", params=SCENARIO,
+               description="Each scenario compiled at -O2, as a release "
+                           "build compiles it.",
+               metrics=[Metric("code", "Code", **BYTES),
+                        Metric("constants", "Constants", **BYTES),
+                        Metric("data", "Data", **BYTES),
+                        Metric("unwind", "Unwind tables", **BYTES),
+                        Metric("functions", "Functions", noise=0,
+                               section="memory"),
+                        Metric("instructions", "Compiler instructions",
+                               noise=0.01, section="cpu"),
+                        Metric("memory", "Compiler peak memory", "KiB",
+                               noise=0.03, section="memory"),
+                        Metric("cpu", "Compiler CPU", "s", noise=0.2,
+                               section="time")]),
         Python("compiler", list(SCENARIOS), compiler_work,
                title="Compiler work", primary="time_ms",
                params=SCENARIO + r"/(?P<kind>phases|events|instantiations)/(?P<name>.+)$",
@@ -228,7 +252,8 @@ config = Config(
         GoogleBenchmark("containers", "{build}/benchmark/dingo_benchmark",
                         title="Container benchmarks", repetitions=3,
                         params=benchmark_params,
-                        variants=lambda v: v.cell["compiler"] == "g++"),
+                        variants=lambda v: (v.cell["compiler"] == "g++" and
+                                            "build" in v.values)),
     ],
     derive=[Derive("costs", costs, title="Costs", primary="code",
                    params=cost_params,
