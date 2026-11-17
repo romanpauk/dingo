@@ -7,13 +7,13 @@ Dingo resolves a request in two stages:
 2. It applies the conversion to the source that the storage gives.
 
 The [layered semantics](layered-semantics.md) give the rules and the reasons for
-them. This page tells where each part is in the code.
+them. This page lists where each part is in the code.
 
 ## Where The Rules Come From
 
-- `scope_traits` tells whether a scope stores a form of a stored type, and what
-  the scope does: whether it makes a new instance for each request, is given its
-  instance, or publishes it early (`scope_semantics_v` in
+- `scope_traits` declares whether a scope stores a form of a stored type, and
+  what the scope does: whether it makes a new instance for each request, is
+  given its instance, or publishes it early (`scope_semantics_v` in
   [include/dingo/storage/scope_traits.h](../../include/dingo/storage/scope_traits.h)).
 - `type_traits` gives the properties of each layer of a type: what it owns,
   whether a copy of it shares its element, and whether it can be copied, moved,
@@ -26,7 +26,7 @@ them. This page tells where each part is in the code.
   ([include/dingo/request/operation.h](../../include/dingo/request/operation.h)).
 
 A type converts to another only as C++ converts it, or as the `type_traits` of
-its layers say. A conversion is not an extension point of its own.
+its layers define. A conversion is not an extension point of its own.
 
 ## Derivations
 
@@ -36,7 +36,7 @@ leaf, then the fewest moves, then one that is not absent when a layer is empty,
 then the fewest objects kept as long as the container, then the fewest objects
 made for the request.
 
-A step belongs to the side that knows the type it is applied to:
+A step belongs to the side that has the C++ type it is applied to:
 
 - The binding takes the element of a wrapper, the pointer to it or its empty
   value, the upcast to the interface, the conversion of a sole owner to its
@@ -123,12 +123,13 @@ A reference or a pointer to a wrapper that a conversion makes is kept or placed:
   retention of its cell,
   [include/dingo/storage/retention.h](../../include/dingo/storage/retention.h).
   The retention holds one object for each type, under the key of the type. It
-  makes the object the first time a request asks for it. So every reference to
-  it refers to the same object while the binding lives. A runtime binding also
+  makes the object the first time it is requested. So every reference to it
+  refers to the same object while the binding lives. A runtime binding also
   publishes the address in the request cache.
 - A binding of a scope that makes an instance for each request keeps nothing. It
   places the wrapper in the context instead.
 
 A runtime container makes the retained objects in its persistent memory. It
-forgets them when the transaction that made them rolls back. A static container
-can have no persistent memory, so its retention owns the objects.
+removes them from the retention when the transaction that made them rolls back.
+A static container can have no persistent memory, so its retention owns the
+objects.

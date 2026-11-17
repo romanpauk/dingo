@@ -24,11 +24,11 @@ each layer is.
    (be copied, be moved, be made by a factory). This layer holds every rule of
    C++ the library depends on. Its domain is a few wrapper kinds by a few leaf
    kinds by the request shapes.
-2. **Semantics.** Of these facts alone, with no C++ type, the layer decides
-   everything: what a storage gives, what a binding publishes, how a request is
-   derived of what is published, how long each object lives, and how many copies
-   and moves the leaf takes. Its output is a derivation: the steps from the
-   stored object to the request. The domain is finite. It is compared with
+2. **Semantics.** These facts alone, with no C++ type, determine everything:
+   what a storage gives, what a binding publishes, how a request is derived of
+   what is published, how long each object lives, and how many copies and moves
+   the leaf takes. Its output is a derivation: the steps from the stored object
+   to the request. The domain is finite. It is compared with
    [spec/semantics.py](../../spec/semantics.py) for every element of the domain.
 3. **Steps.** Each kind of step is one function template with a contract: what
    it requires of its source, what it gives, how long the result lives and what
@@ -51,7 +51,7 @@ an origin, and what it is of the instance. `transitions` gives the steps from a
 object, and `reachable` gives every object a stored object reaches, with the
 copies and the moves of the leaf. A binding takes the steps that need the type
 it stores (`binding_steps`); a request takes the others (`request_steps`).
-`satisfying` tells which objects satisfy a request.
+`satisfying` returns the objects that satisfy a request.
 
 The library computes the same: one implementation of the steps, the reachable
 objects and what satisfies a request, as constant expressions over these values.
@@ -60,13 +60,13 @@ every request.
 
 ## A Layer Is Its Properties
 
-The rules name no wrapper. A layer is what the rules ask of it: what it owns,
-whether a copy of it holds the same element, whether it can be copied, moved,
-made of a value or be empty, whether an empty one is a value, whether it holds
-only its element, whether it takes over a raw pointer, and whether a value of it
-converts to one of a more qualified element. Whether an owned value of one layer
-converts to another is a fact of the two, given for the layers in play. So is
-whether a value of a layer that holds an array of a known bound converts to
+The rules name no wrapper. A layer is the set of properties the rules read: what
+it owns, whether a copy of it holds the same element, whether it can be copied,
+moved, made of a value or be empty, whether an empty one is a value, whether it
+holds only its element, whether it takes over a raw pointer, and whether a value
+of it converts to one of a more qualified element. Whether an owned value of one
+layer converts to another is a fact of the two, given for the layers in play. So
+is whether a value of a layer that holds an array of a known bound converts to
 another that holds the same array as one of unknown bound.
 
 The layers of C++ itself are fixed: a pointer to an object, an array of unknown
@@ -76,8 +76,8 @@ properties. A search takes the universe of its layers: those of C++ itself, and
 those of the types it is of. A user's wrapper needs no change of the rules.
 
 Not every combination of properties is a layer a type can be.
-`semantics.possible` tells which are: a layer that owns nothing, or shares what
-it owns, holds an element that lives apart from it; a layer that owns its
+`semantics.possible` defines which are: a layer that owns nothing, or shares
+what it owns, holds an element that lives apart from it; a layer that owns its
 element alone and shares it with a copy cannot be copied; a layer that owns
 nothing is not made of a value and takes over no pointer; a layer that takes
 over a pointer holds its element apart from it, and so does a layer the leaf is
@@ -102,8 +102,8 @@ The steps of the specification and the code that takes them. Each is in
 | `observe`                                                           | request      | `observe_operation`                                                    |
 | `qualify`                                                           | request      | `qualify_operation`                                                    |
 
-A step belongs to the side that knows the type it is applied to (see phase 7). A
-request takes the others through the tables of the binding.
+A step belongs to the side that has the C++ type it is applied to (see phase 7).
+A request takes the others through the tables of the binding.
 
 ## The Headers
 
@@ -115,7 +115,7 @@ request takes the others through the tables of the binding.
 | Execution      | the conversions of [`request/conversion.h`](../../include/dingo/request/conversion.h) and [`runtime/conversion.h`](../../include/dingo/runtime/conversion.h), the tables of [`runtime/operation_table.h`](../../include/dingo/runtime/operation_table.h), [`runtime/request.h`](../../include/dingo/runtime/request.h), [`binding/activation.h`](../../include/dingo/binding/activation.h), [`runtime/binding.h`](../../include/dingo/runtime/binding.h), `static_execution` of [`static/binding.h`](../../include/dingo/static/binding.h), [`resolution/algorithm.h`](../../include/dingo/resolution/algorithm.h) |
 | Plumbing       | `lookup/`, `memory/`, the registries and the transactions of `runtime/` and `static/`, `context/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
-The plumbing does not decide what a request resolves to. It is tested as any
+The plumbing does not determine what a request resolves to. It is tested as any
 other code.
 
 ## The Phases
@@ -162,13 +162,13 @@ other code.
 
 3. **Classification.** Done.
    [include/dingo/request/classification.h](../../include/dingo/request/classification.h)
-   maps a C++ type to what the semantics know of it, of its `type_traits` and of
-   what C++ says of it:
+   maps a C++ type to its semantic properties, from its `type_traits` and from
+   the standard type traits:
 
-   - The properties of the layer of a wrapper: what its semantics say it owns,
-     and whether the same wrapper of an element that can be copied, or of one
-     that can only be moved, can be copied, moved, or made of a raw pointer. The
-     type traits of a layer no type can be fail to compile.
+   - The properties of the layer of a wrapper: what its semantics declare it
+     owns, and whether the same wrapper of an element that can be copied, or of
+     one that can only be moved, can be copied, moved, or made of a raw pointer.
+     The type traits of a layer no type can be fail to compile.
 
    - The identity of a layer: the same wrapper of a probe element. Two wrappers
      of different elements are one layer.
@@ -195,18 +195,18 @@ other code.
 
    - The category of a request: its outer reference or pointer, and whether that
      is const. A pointer is always the category, as no request shape begins with
-     one. A registration that binds a pointer type itself is told apart by the
-     binding a request selects, in the execution. An rvalue reference to const
-     is not modeled.
+     one. A registration that binds a pointer type itself is distinguished by
+     the binding a request selects, in the execution. An rvalue reference to
+     const is not modeled.
 
    `semantics-check` classifies every type the model spells and compares each
-   with what the specification says of it: every stored form and every request
-   shape of every bound interface of every leaf, as the layers it is made of;
-   every valid request of the grammar, as its category and its shape; and the
-   leaves and the scopes, as their traits. That is 4,224 types, all equal. It
-   also checks that the standard wrappers are the standard layers of the
-   specification. A test shows that a wrapper a user defines is classified as
-   the standard one of the same semantics.
+   with what the specification defines for it: every stored form and every
+   request shape of every bound interface of every leaf, as the layers it is
+   made of; every valid request of the grammar, as its category and its shape;
+   and the leaves and the scopes, as their traits. That is 4,224 types, all
+   equal. It also checks that the standard wrappers are the standard layers of
+   the specification. A test shows that a wrapper a user defines is classified
+   as the standard one of the same semantics.
 
 4. **Derivations.** Done. A state of the search keeps the state and the step it
    reached its object from first. The answer to a request is the state that
@@ -227,14 +227,14 @@ other code.
    makes for the request is kept by a store. A step that takes over what a
    pointer points to releases the handle it was taken out of, by the `release`
    of its type traits. [`execution_check.py`](../../spec/execution_check.py)
-   asks the semantics the derivation of every conversion of the model, applies
-   each to the leaf types of the model, which count their copies and moves, and
-   compares the counts with the derivation, without a container: 60,694 cells,
-   all equal. It found three defects, each fixed: a handle a pointer was taken
-   out of released it too; a wrapper emplaced of its own element type moved the
-   leaf twice; and the pointer to the first element of an array was upcast to an
-   array of the interface, which the specification and the semantics then both
-   allowed the request to take over.
+   takes the derivation of every conversion of the model from the semantics,
+   applies each to the leaf types of the model, which count their copies and
+   moves, and compares the counts with the derivation, without a container:
+   60,694 cells, all equal. It found three defects, each fixed: a handle a
+   pointer was taken out of released it too; a wrapper emplaced of its own
+   element type moved the leaf twice; and the pointer to the first element of an
+   array was upcast to an array of the interface, which the specification and
+   the semantics then both allowed the request to take over.
 
 6. **Request rules.** Done. `resolve` in
    [include/dingo/semantics/model.h](../../include/dingo/semantics/model.h)
@@ -289,7 +289,7 @@ other code.
      other object. A converted layer is not taken apart, copied or converted
      again. The specification marks each level a conversion may qualify, instead
      of making an object for each qualifier, and a request is satisfied of a
-     marked level of the qualifiers it asks.
+     marked level of the qualifiers it names.
 
    - Arrays of unknown bound. A handle of an array of a known bound whose type
      traits name `unknown_bound_t` converts to that handle, which holds the same
@@ -299,7 +299,7 @@ other code.
      one it owns. A handle converted to a more qualified element is not
      converted again.
 
-   - Ownership of a pointee. An object tells whether the request owns what its
+   - Ownership of a pointee. An object records whether the request owns what its
      outer raw pointer points to: a pointer a scope makes does, a copy of it
      does too, and adopting it or releasing its element ends that. Such a
      pointer is handed over or taken over by a handle, never wrapped, and an
@@ -328,17 +328,17 @@ other code.
      the stored layers as they are stored; every other wrap of what holds the
      leaf is upcast to nothing a request takes. A layer the derivation wrapped a
      value in is not taken apart again: its element is what it was made of, and
-     taking it would only drop what tells it apart, as a copy, a const or a
+     taking it would only drop what distinguishes it, as a copy, a const or a
      limitation.
 
-   - The leaf. Whether the leaf can be copied is what the library says of it: a
-     collection of what cannot be copied cannot be either, whatever
-     `std::is_copy_constructible` says.
+   - The leaf. Whether the leaf can be copied is defined by the library: a
+     collection of what cannot be copied cannot be either, whatever the value of
+     `std::is_copy_constructible`.
 
-   **Steps by the type that knows them.** A step needs the C++ type of what it
-   is applied to. Its function belongs to the side that knows that type.
+   **Steps by the side that has their type.** A step needs the C++ type of what
+   it is applied to. Its function belongs to the side that has that type.
 
-   - A binding knows the type of each of its layer sources and of everything a
+   - A binding has the type of each of its layer sources and of everything a
      step makes of them. For each such type it has one table of erased
      operations: its size and alignment, destruction, copy, move, the address of
      its element, the pointer to it, the empty value of it, the decay of an
@@ -348,7 +348,7 @@ other code.
      are built from the typed operations of the static container, so both
      containers apply one implementation of each step.
 
-   - A request knows the types it spells. It has a table for each of its nested
+   - A request has the types it spells. It has a table for each of its nested
      types, with the operations that make that type of the one below: a run of
      wraps, the adoption of a pointer it owns, and an observer of a pointer.
      Nothing else is the request's.

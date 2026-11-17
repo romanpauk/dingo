@@ -267,7 +267,7 @@ and `std::shared_ptr<T[N]>`, also with N-D shapes.
 - The type `std::shared_ptr<T[N]>` contains the size. The default factory makes
   it in the same way as a `T[N]`, with value-initialized elements. If the
   elements cannot be value-initialized, register a factory.
-- A `std::shared_ptr<T[]>` needs a factory that knows the size.
+- A `std::shared_ptr<T[]>` needs a factory that provides the size.
 - Dingo does not support `std::unique_ptr<T[N]>`. Its default deleter would
   release the array as a single object.
 
@@ -476,7 +476,7 @@ Constructor deduction has these limits:
 
 - Detection uses compile-time constructibility checks. It does not model every
   detail of overload resolution.
-- The detector prefers the constructible shape with the highest arity. This is
+- The detector selects the constructible shape with the highest arity. This is
   not always the overload that public code should use.
 - Auto-detection rejects constructor templates and other generic catch-all
   constructors. Such types must use `factory<constructor<...>>`.
@@ -487,8 +487,8 @@ Constructor deduction has these limits:
   parameter by reference, or name the constructor.
 - Detection works for a `std::variant` parameter. Its converting constructor
   needs exactly one alternative to convert to.
-- Signature detection cannot tell a `T&&` parameter from a `T` parameter. It
-  recovers and requests `T`.
+- Signature detection cannot distinguish a `T&&` parameter from a `T` parameter.
+  It recovers and requests `T`.
 - Resolve ambiguous or unsupported cases explicitly with
   `factory<constructor<...>>`, `factory<function<...>>`, `callable(...)` or
   `callable<Signature>(...)`.
@@ -501,10 +501,10 @@ Constructor deduction has these limits:
   parent rejects at compile time a request that it can neither bind nor
   auto-construct.
 - If Dingo does not detect the construction of `T`, a static container rejects
-  `construct<T>()` at compile time. It knows that `T` is not bound. A runtime
-  container knows this only at run time. It resolves a bound `T` and throws
-  `type_not_found_exception` for an unbound `T`. Both containers reject at
-  compile time a registration of such a `T` without a factory.
+  `construct<T>()` at compile time. There, `T` is known not to be bound. A
+  runtime container detects this only at run time. It resolves a bound `T` and
+  throws `type_not_found_exception` for an unbound `T`. Both containers reject
+  at compile time a registration of such a `T` without a factory.
 - Auto-construction requires a complete `T`.
 - A runtime container resolves a forward-declared `T` that another translation
   unit registers as `T &` and `T *`. If the registration stores a

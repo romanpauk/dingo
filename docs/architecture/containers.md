@@ -82,8 +82,8 @@ The parent of a static container is a static container.
 
 A static binding can carry local `bindings<...>`. They declare a child graph for
 the dependencies of that binding. The local bindings shadow the host bindings.
-If the local bindings answer a request, singular or collection, the request does
-not reach the host.
+If the local bindings resolve a request, singular or collection, the request
+does not reach the host.
 
 ## Direct Construction
 
@@ -101,7 +101,7 @@ in which every binding uses a scope that declares `allows_cycles`, such as
 storage as a runtime `shared_cyclical` registration. Each binding in the cycle
 publishes its instance before its dependencies finish resolving.
 
-Compile-time validation sees the dependencies that a binding declares:
+Compile-time validation checks the dependencies that a binding declares:
 
 - `dependencies<...>`
 - an explicit `constructor<T(Args...)>`

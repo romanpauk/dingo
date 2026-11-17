@@ -1,17 +1,17 @@
 # Specification
 
 [`spec/`](../spec) holds an executable specification of the library and the
-checks that compare the library with it. The specification does not ask the
-library anything:
+checks that compare the library with it. The specification does not call the
+library:
 
 - [`vocabulary.py`](../spec/vocabulary.py) names the concepts of the library,
   one enum for each concept.
 - [`semantics.py`](../spec/semantics.py) takes a registration and a request. It
-  decides whether the library accepts the registration, which interfaces the
+  determines whether the library accepts the registration, which interfaces the
   registration binds, whether the request resolves, and how the request fails.
 
 The C++ headers that the checks include are in [`test/model/`](../test/model).
-[Development](development.md#model-checks) tells how to run the checks.
+[Development](development.md#model-checks) describes how to run the checks.
 
 ## Semantics
 
@@ -24,8 +24,8 @@ Terms:
   `std::shared_ptr<L[]>`, `std::shared_ptr<L[2]>`, `std::optional<L>`,
   `std::variant<L, other>`, or two of `std::shared_ptr`, `std::unique_ptr` and
   `std::optional`.
-- A _request_ asks for a _shape_ of a bound interface `I` in a _category_. A
-  shape is `I`, an array handle of `I`, or up to three of `std::shared_ptr`,
+- A _request_ names a _shape_ of a bound interface `I` in a _category_. A shape
+  is `I`, an array handle of `I`, or up to three of `std::shared_ptr`,
   `std::unique_ptr` and `std::optional` around `I`. A category is value,
   `const`, `&`, `const &`, `&&`, `*` or `const *`.
 
@@ -80,14 +80,14 @@ of it, fails when the layer is empty. Two steps from such a layer do not fail:
   when the layer is empty.
 
 Empty layers do not change whether a request resolves, or its cost. The
-semantics also tell whether the cheapest derivation of a request is defined when
-a layer is empty: it is if it reaches the request without going through an
+semantics also define whether the cheapest derivation of a request is defined
+when a layer is empty: it is if it reaches the request without going through an
 absent element.
 
 ### Layer Sources
 
-A binding knows the type that it stores. A request knows only the interface that
-it asks for. So the steps of a derivation divide between them:
+A binding has the type that it stores. A request has only the interface that it
+names. So the steps of a derivation divide between them:
 
 - The binding takes the steps that need the stored type or that only go into the
   stored object: `element`, `element_pointer`, `optional_element`, `upcast`, and
@@ -117,8 +117,8 @@ the steps and references of a derivation.
 A _cell_ is one combination of the dimensions of a check, such as one request of
 one registration. Its _outcome_ is what the library does in it. A cell that a
 limitation keeps from resolving is `limited`. A cell that resolves although a
-limitation says it does not is a `stale_limitation`. The
-[Model Probe](#model-probe) fails on a stale limitation.
+limitation covers it is a `stale_limitation`. The [Model Probe](#model-probe)
+fails on a stale limitation.
 
 The library has two limitations.
 
@@ -139,7 +139,7 @@ optional is empty: the resolution fails.
 
 ## Model Probe
 
-[`spec/probe.py`](../spec/probe.py) asks the library about every combination of
+[`spec/probe.py`](../spec/probe.py) builds a program for every combination of
 container, scope, stored form, leaf, interfaces declared, selection, operation
 and request. It compares each outcome with the specification.
 
@@ -245,7 +245,7 @@ The probe fails if one of these is true:
 - A request does not compile, other than by a `static_assert`
   (`does_not_compile`), or its probe crashes (`crashed`).
 - A resolved request is `violated` or `excess`.
-- A cell has another outcome than the specification expects (`unexpected`).
+- A cell has another outcome than the specification defines (`unexpected`).
 - A limited cell resolves (`stale_limitation`).
 - A registration binds other interfaces than the specification gives.
 
@@ -258,13 +258,13 @@ library does not accept resolves nothing, so it covers nothing.
 
 ## Conversion Check
 
-[`spec/conversion.py`](../spec/conversion.py) asks the binding of each
-registration what it derives for every request of up to three wrappers, and of
-each array shape. The answer comes from compilation only
+[`spec/conversion.py`](../spec/conversion.py) compiles, for the binding of each
+registration, what it derives for every request of up to three wrappers, and of
+each array shape. The result comes from compilation only
 ([`test/model/conversion.h`](../test/model/conversion.h)). No container is made
 and nothing resolves, so the check covers every registration of the runtime
 container that the library accepts, several in one program. Both containers
-derive a request alike, so one answer is of both.
+derive a request alike, so one result holds for both.
 
 | Outcome           | Meaning                                                          |
 | ----------------- | ---------------------------------------------------------------- |
@@ -303,20 +303,20 @@ of these ways:
 
 A request that C++ builds must resolve in some position in the specification
 without the limitations of the library. A limitation of the library is not a
-defect here. The exception is a request that the specification refuses on
+defect here. The exception is a request that the specification rejects on
 purpose, for every way that C++ builds it
 ([`spec/generator/conversions.py`](../spec/generator/conversions.py),
-`REFUSALS`):
+`REJECTIONS`):
 
 - A new layer does not hold a copy of an instance, or a copy of a value that
   shares nothing.
 - A cyclical scope publishes its instance before it constructs it. A request can
   refer to the stored object and to what the stored object holds in place. It
   can copy only a stored handle.
-- An rvalue reference is answered by a value moved out of what the request owns.
-  An immovable leaf, or an optional of one, cannot be moved.
+- An rvalue reference resolves to a value moved out of what the request owns. An
+  immovable leaf, or an optional of one, cannot be moved.
 
-A request that the specification refuses on purpose and still resolves is a
+A request that the specification rejects on purpose and still resolves is a
 defect too.
 
 Another outcome is `unexpected`. The check fails on an `unexpected` cell and on
@@ -332,7 +332,7 @@ no leaf, in each container, each scope that is given or makes its instance, and
 each stored form with a layer that may be empty. The outermost layer is empty,
 or the layer that it holds is: a null handle, an empty optional, or an
 alternative type that holds the other alternative. The check resolves through
-`invoke` each request that the specification says is defined when a layer is
+`invoke` each request that the specification marks as defined when a layer is
 empty ([`test/model/emptiness.h`](../test/model/emptiness.h)).
 
 | Outcome            | Meaning                                                   |
@@ -379,7 +379,7 @@ probe checks it only for defects. Another outcome is a disagreement, which fails
 the probe.
 
 `LIMITATIONS` in [`spec/generator/detection.py`](../spec/generator/detection.py)
-lists the known limitations of detection, with their reasons. Each says which
+lists the known limitations of detection, with their reasons. Each lists which
 detections report a class wrongly, and which detected constructions make it
 differently from its explicit constructor:
 
@@ -399,7 +399,7 @@ The checks share [`spec/generator/`](../spec/generator):
 
 - [`dimensions.py`](../spec/generator/dimensions.py): an enum for each dimension
   that only the checks have, next to the vocabulary. The value of a member is
-  its name in a cell. `Outcome.is_defect` tells which outcomes are defects.
+  its name in a cell. `Outcome.is_defect` marks the outcomes that are defects.
 - [`model.py`](../spec/generator/model.py): the interfaces that the library
   names, the requests of the grammar (a shape and a category of an interface),
   the rules for requests that are not valid C++, and a probe of a request.

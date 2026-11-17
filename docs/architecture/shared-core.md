@@ -1,7 +1,7 @@
 # Shared Core
 
-Dingo has two containers and one core. This page says what the core is, how a
-request goes from `resolve<T>()` to a binding and back in each container, and
+Dingo has two containers and one core. This page describes what the core is, how
+a request goes from `resolve<T>()` to a binding and back in each container, and
 what happens as the code compiles, at the first request of a type, and at every
 request.
 
@@ -30,7 +30,7 @@ which steps reach a request, and how many copies and moves of the leaf each
 takes. Both containers use them. The static container evaluates them as the code
 compiles. The runtime container evaluates the layer sources of a binding as the
 code compiles too, and searches a request from them at its first request, when
-it knows the binding.
+the binding is known.
 
 ## A Request In The Static Container
 
@@ -110,7 +110,7 @@ resolve<T>()                        container_requests        resolution/entry_p
    if the transaction fails. The edge of the binding, a few functions of its
    type, gives the source of its storage.
 6. The calls of the conversion apply its steps to the stored object. What a step
-   makes is kept by the store of the request, which knows only the layout of its
+   makes is kept by the store of the request, which has only the layout of its
    type. The engine returns the address of what the conversion reached, and how
    the request takes it (`resolved_address`). An address that lives as long as
    the container is published in the request cache.

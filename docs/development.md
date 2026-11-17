@@ -92,7 +92,7 @@ environment provides the development tools.
   [Model Checks](#model-checks).
 
 - `footprint-check`: measures what the library costs the compiler and the code
-  it emits, and tells what changed since the run before. See
+  it emits, and reports what changed since the run before. See
   [Footprint](#footprint).
 
 With GCC and clang, `check` includes `semantics-check`, `conversion-check`,
@@ -113,7 +113,7 @@ only when one of them changes: a header changed, added or removed changes the
 preprocessed source of the programs that read it, and a change of comments only
 changes none. A result is not kept when a header the precompiled header read
 changed after it was compiled, as the compiler took that header as it was. The
-key holds no path of the checkout, so a cache made in one checkout serves
+key holds no path of the checkout, so a cache made in one checkout is valid in
 another. A run of every program of a check removes the results it did not use,
 and each run prints how many programs it compiled and how many results it used.
 
@@ -127,7 +127,7 @@ container adds.
 
 ## Naming
 
-A name says what a thing is or does, in the terms the library and the
+A name describes what a thing is or does, in the terms the library and the
 specification already use. It has no connecting word: of, with, or, and, at, as,
 by, to, from, in, into, for, on, if, per, via, then. `names-check` fails on one,
 and on a parameter, member or local named by one alone.
@@ -267,7 +267,7 @@ registration, a further registration and a request type of each shape in each
 container.
 
 Where the processor counts the instructions of a process for its user, as `perf`
-tells, each container and each shape is also a program that runs, optimized as
+reports, each container and each shape is also a program that runs, optimized as
 the code-generation probes are. It counts, with `perf_event_open`, the
 instructions of what the containers run: each of two registrations in the
 runtime container, the first resolution of each request type, which derives it,
@@ -277,7 +277,7 @@ instructions, these programs are not run.
 
 The measurements are kept results, in `programs/` of its work directory, and the
 last of each scenario for each compiler beside them, in `programs/latest/`. A
-run tells which measurements changed since the one before, past what changes
+run reports which measurements changed since the one before, past what changes
 between runs of the same program: nothing of a size or a count, a little of
 instructions and memory, much of a time. A cache of the results made by one run,
 as of the main branch, is the baseline of the next. It fails only when a

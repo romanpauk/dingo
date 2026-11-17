@@ -48,9 +48,10 @@ dingo::static_container<app_bindings> container;
 
 [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 normalizes this source and checks each registration by `check_registration`, as
-the runtime container does, so a mistake is told by the same message in both.
-[include/dingo/static/graph.h](../../include/dingo/static/graph.h) validates its
-dependency graph. A container uses one registration mode. The modes do not mix.
+the runtime container does, so a mistake is reported by the same message in
+both. [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
+validates its dependency graph. A container uses one registration mode. The
+modes do not mix.
 
 ## Stored Type Versus Exposed Interface
 
@@ -98,7 +99,7 @@ sequence is:
    which both containers share: the bindings of the exact interface of the
    request, or, when it has none, those of its normalized interface
    (`select_exact_first`); one binding is found, none is not found, and more are
-   ambiguous (`count_status`); and a level of local bindings answers what it
+   ambiguous (`count_status`); and a level of local bindings resolves what it
    binds, also ambiguously, and falls back to the next level only when it binds
    nothing (`falls_back`). The static container applies the rules as it
    compiles, over its bindings, and its selection is a type, so its status is
@@ -108,9 +109,9 @@ sequence is:
    - one binding: it resolves the binding
    - several bindings: the request is ambiguous; a runtime container throws
      `type_ambiguous_exception`, a static container fails to compile
-   - no binding: the parent container answers if it declares the lookup;
-     otherwise the container that the request entered through answers, and it
-     can construct the type
+   - no binding: the parent container resolves the request if it declares the
+     lookup; otherwise the container that the request entered through resolves
+     it, and it can construct the type
 4. A collection request without a key first resolves a binding of the collection
    type. If there is none, Dingo constructs the collection from the bindings of
    its element. A container without such bindings falls back as in step 3.
@@ -185,7 +186,7 @@ allocation of the transaction of the registration. It holds:
   [include/dingo/binding/interface.h](../../include/dingo/binding/interface.h)):
   the request cache of the interfaces, the container the registration is made
   in, and the registration container of its local bindings, created when it is
-  first asked for
+  first requested
 - a binding cell with the storage object and its retained conversions
 - the binding of each interface: the node of the interface and the header
 

@@ -50,10 +50,10 @@ The semantics are:
 - `semantics::optional_value`: a value that holds an object or nothing, such as
   `std::optional`
 
-The semantics tell whether the wrapper is pointer-like and owns its element.
-They also select the storage form, which decides whether a scope stores the
-wrapper. The [layered semantics](layered-semantics.md) decide of these
-properties what a binding of the wrapper answers.
+The semantics declare whether the wrapper is pointer-like and owns its element.
+They also select the storage form, which determines whether a scope stores the
+wrapper. From these properties, the [layered semantics](layered-semantics.md)
+define which requests a binding of the wrapper resolves.
 
 A wrapper declares `borrow` when its element can be borrowed as an object. An
 owning handle without `borrow` holds an array. Such a handle declares `extent`,
@@ -139,12 +139,12 @@ Specialize `constructor_traits` in
 [include/dingo/factory/constructor_traits.h](../../include/dingo/factory/constructor_traits.h)
 when a type is constructed in a way that its constructors do not show. The
 specialization provides `construct(args...)` and `construct(ptr, args...)`. It
-can also declare how constructor detection sees the type:
+can also declare how constructor detection treats the type:
 
 - `arguments`: the type list of its one signature. Detection uses it and does
   not search for a constructor.
 - `initializable<Args...>`: whether the type is list-initialized from `Args`.
-  Use it where probing `T{args...}` gives no answer.
+  Use it where probing `T{args...}` gives no result.
 
 `std::array` uses both. It is made from its elements, with the braces that its
 nested array requires. MSVC does not elide these braces while probing.

@@ -325,8 +325,8 @@ See:
 
 ## Annotated Types
 
-Annotations let several implementations share one interface. A tag type tells
-them apart.
+Annotations let several implementations share one interface. A tag type
+distinguishes them.
 
 Use annotations when type-based registration is not sufficient, but runtime key
 lookups are the wrong abstraction.

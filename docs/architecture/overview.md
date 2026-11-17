@@ -6,10 +6,10 @@ Dingo has four concerns:
 - binding selection: a request selects the binding of its type and key
 - storage and factory ownership: a binding cell keeps or makes its instance
 - the derivation of a request: the steps from what a binding stores to what the
-  request asks for, which the [layered semantics](layered-semantics.md) choose
+  request names, which the [layered semantics](layered-semantics.md) define
 
-Both containers share one core for all four. [Shared Core](shared-core.md) says
-what it is, and how a request goes through it in each container.
+Both containers share one core for all four. [Shared Core](shared-core.md)
+describes what it is, and how a request goes through it in each container.
 
 ## Header Layers
 
@@ -28,8 +28,8 @@ From the bottom:
 02. `conversion/`, `lookup/`: the source a storage gives a binding, lookup
     indexes and their backends
 03. `request/`: what a request is
-    ([`decomposition.h`](../../include/dingo/request/decomposition.h)), what the
-    semantics know of a C++ type
+    ([`decomposition.h`](../../include/dingo/request/decomposition.h)), the
+    semantic properties of a C++ type
     ([`classification.h`](../../include/dingo/request/classification.h)),
     collection requests, the operations
     ([`operation.h`](../../include/dingo/request/operation.h)), the semantics of
@@ -42,9 +42,9 @@ From the bottom:
 06. `storage/`: storage tags, scope policies, storage exposure traits
 07. `registration/`: registration options, requirements
 08. `binding/`: the binding model, binding selection, the cell of a binding, and
-    how a binding answers a request
+    how a binding resolves a request
 09. `resolution/`: the resolution algorithm of both containers, and the requests
-    both containers answer
+    both containers resolve
 10. `runtime/`, `static/`: the runtime and the static container, with their
     registries, bindings, contexts and traits, and the static graph
 11. `dingo/*.h`: `runtime_container` (also named `container`),
@@ -78,13 +78,13 @@ The runtime registration path owns:
 - the parent lookup for nested containers
 - the public registration and resolution entry points
 
-The root container owns one runtime domain. This domain also serves the
-registration containers that runtime registrations create for their local
-bindings. A registration container has the type of the container the
-registration is made in, and borrows the runtime data of its root. It has its
-own lookup state, which it allocates when it registers its first local binding.
-The root keeps these states in a dense scope table. Public parent and child
-containers are independent owners.
+The root container owns one runtime domain. The registration containers that
+runtime registrations create for their local bindings use the same domain. A
+registration container has the type of the container the registration is made
+in, and borrows the runtime data of its root. It has its own lookup state, which
+it allocates when it registers its first local binding. The root keeps these
+states in a dense scope table. Public parent and child containers are
+independent owners.
 
 The compile-time binding path owns:
 
@@ -93,8 +93,8 @@ The compile-time binding path owns:
 - compile-time binding selection and static resolution state
 
 The container layer coordinates registration and resolution and does not
-construct objects. It stores or selects bindings and asks factories or static
-resolution helpers for values, references, or pointers.
+construct objects. It stores or selects bindings and obtains values, references,
+or pointers from factories or static resolution helpers.
 
 ### Type Registration
 
@@ -138,7 +138,7 @@ own the lifetime policy:
 [include/dingo/binding/activation.h](../../include/dingo/binding/activation.h)
 owns the resolution flow of both containers. A binding activation:
 
-- asks the storage to `resolve(...)` its source
+- calls `resolve(...)` of the storage for its source
 - applies the recursion guard that the `scope_traits` of the scope declare
 - places the source in the resolution context when the request needs it
 - keeps converted objects in the retention of a scope that keeps its instance
@@ -151,18 +151,18 @@ requested type descriptor at run time.
 [include/dingo/request/conversion.h](../../include/dingo/request/conversion.h)
 compiles the derivation of a request into a conversion and runs it: the steps
 from the stored source to the requested target, which the
-[layered semantics](layered-semantics.md) choose.
+[layered semantics](layered-semantics.md) define.
 
 A request passes through five folders that both containers share:
 
 - [include/dingo/resolution/](../../include/dingo/resolution): how a container
   runs a request.
   [`entry_points.h`](../../include/dingo/resolution/entry_points.h) holds the
-  requests a container answers, and
+  requests a container resolves, and
   [`algorithm.h`](../../include/dingo/resolution/algorithm.h) the algorithm both
   containers run.
 - [include/dingo/binding/](../../include/dingo/binding): what a binding is and
-  how it answers a request. [`model.h`](../../include/dingo/binding/model.h)
+  how it resolves a request. [`model.h`](../../include/dingo/binding/model.h)
   holds what a registration declares,
   [`selection.h`](../../include/dingo/binding/selection.h) how a request selects
   a binding, [`activation.h`](../../include/dingo/binding/activation.h) and
@@ -173,8 +173,8 @@ A request passes through five folders that both containers share:
 - [include/dingo/request/](../../include/dingo/request): what a request is.
   [`decomposition.h`](../../include/dingo/request/decomposition.h) takes a
   request apart,
-  [`classification.h`](../../include/dingo/request/classification.h) says what
-  the semantics know of a C++ type,
+  [`classification.h`](../../include/dingo/request/classification.h) derives the
+  semantic properties of a C++ type,
   [`operation.h`](../../include/dingo/request/operation.h) holds the operations,
   [`binding_semantics.h`](../../include/dingo/request/binding_semantics.h) the
   semantics of a binding, and
