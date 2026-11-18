@@ -1,42 +1,47 @@
 """dingo for nbench: checkouts and compilers are the variants.
 
-    uv run --with nbench@git+https://github.com/romanpauk/nbench \\
-        nbench run -C benchmark/nbench_conf.py -v this=. -v main=git:main
+    uv run nbench run -C benchmark/nbench_conf.py -v this=. -v master=build/master
     ... -s 'footprint|costs' --baseline latest   what changed since the last run
 
 A case is one measured thing, named by its parameters; a metric is a
-quantity of it:
+quantity of it. Every suite measures the scenarios of spec/footprint.py, the
+same programs of each container (runtime, arena and static) and shape:
 
-  footprint   a scenario compiled at -O0 with the variant's headers
-              (spec/footprint.py): code, constants, data and unwind bytes and
-              functions of the object; the compiler's instructions, peak
-              memory and CPU time
+  footprint   a scenario compiled at -O0 with the variant's headers: code,
+              constants, data and unwind bytes and functions of the object;
+              the compiler's instructions, peak memory and CPU time
+  release     the same at -O2, as a release build compiles it
   costs       differences of footprint scenarios: a container, a first and a
-              further registration, a request type; code bytes, compiler
+  release-costs  further registration, a request type; code bytes, compiler
               instructions and memory
+  callers     the code another place that resolves adds, at -O2
+  headers     the code of a scenario at -O2 by the header it is defined in
   compiler    where the compiler spent its work in a scenario: a phase (gcc),
               an event or the instantiations of an area of the library
               (clang); time, memory collected, count
   probes      the code-generation probes, optimized: code bytes of each
-  operations  what a container runs: an operation of a container and shape
-              (register first, resolve T<0>, the first resolution and the
-              mean of 1000 after it), counted by the program: instructions
-  containers  the container benchmarks (build/benchmark/dingo_benchmark):
-              time per operation
+  run         what a container runs, optimized, of nbench/bench.hpp:
+              constructing an empty container, registering, and the first
+              resolution of a request type and those after it; time,
+              instructions, cycles and cache misses per operation. With it,
+              the transactions of benchmark/transaction.cpp and the resolvers
+              written by hand of benchmark/reference.cpp
 
 Every variant runs in each compiler of the matrix (this[g++], this[clang++])
 and is compared with the reference of its own compiler. git:REF is the
-commit's tree, extracted into the cache; the container benchmarks run from
-the working tree's build, under "." only. Sizes and counts are exact, so any
-change of them is reported; instructions within 1% (2 for what the
-containers run), memory within 3% and times within 20%.
+commit's tree, extracted into the cache. Sizes and counts are exact, so any
+change of them is reported; instructions within 1%, memory within 3% and
+times within 20%.
 """
 
+import hashlib
+import json
 import re
 import subprocess
+import threading
 from pathlib import Path
 
-from nbench import (Config, Derive, GoogleBenchmark, Metric, Python, Variant)
+from nbench import Config, Derive, Metric, Native, Python, Variant
 from spec import footprint
 from spec.generator import driver
 
@@ -46,17 +51,16 @@ SCENARIOS = footprint.scenarios()
 # A program's results are kept by what it is (compiler and preprocessed
 # source), so a scenario of a tree is compiled once, for every suite.
 driver.open_cache(WORK / "programs")
+# Eight compilers at once, each within the driver's memory limit: within
+# 8 GB, as many as the machine the measurements run on holds beside them.
+driver.set_jobs(8)
 
 
 def checkout(name, value):
     """-v NAME=. is the working tree; git:REF the commit's tree ({tree},
     which its worktree step makes); any other VALUE a tree, such as a
-    worktree of the main branch. The container benchmarks of a tree are those
-    of its Release build in build/bench, where it has one."""
+    worktree of the main branch."""
     tree = ROOT if value in ("", ".") else Path(value).resolve()
-    bench = tree / "build" / "bench"
-    if bench.is_dir():
-        return Variant(name, tree=str(tree), build=str(bench))
     return Variant(name, tree=str(tree))
 
 
@@ -66,8 +70,20 @@ def work(variant):
     return path
 
 
+def spelling(variant):
+    """The flags that spell a scenario in a tree that names its runtime
+    container traits as the main branch did, dynamic_container_traits."""
+    tree = Path(variant.values["tree"])
+    traits = tree / "include" / "dingo" / "runtime" / "container_traits.h"
+    if traits.exists() and \
+            "struct dynamic_container_traits" in traits.read_text():
+        return ["-Druntime_container_traits=dynamic_container_traits"]
+    return []
+
+
 def flags(variant, optimized):
-    base = ["-std=c++17", f"-I{variant.values['tree']}/include"]
+    base = ["-std=c++17", f"-I{variant.values['tree']}/include",
+            *spelling(variant)]
     return base + (optimized or ["-O0"])
 
 
@@ -127,20 +143,6 @@ def probes(scenario, variant):
                       found.get("object", {}).get("named", {}).items()}}
 
 
-def operations(case, variant):
-    """The instructions of each operation of two registrations of a shape in
-    a container, counted by the program, optimized: a case each."""
-    container, shape = case.split("/")
-    records, stderr, crash = driver.run_program(
-        variant.values["compiler"], flags(variant, footprint.OPTIMIZED),
-        work(variant), f"run__{container}__{shape}",
-        footprint.performance_program(container, shape))
-    if stderr or crash:
-        return {"error": driver.first_error(stderr) if stderr else crash}
-    return {"cases": {f"{case}/{r['operation']}":
-                      {"instructions": r["instructions"]} for r in records}}
-
-
 def costs(results, variant, suite="footprint"):
     """footprint.costs of the scenarios a suite measured."""
     measured = {case: {"object": {"sections": {"code": m.get("code")}},
@@ -150,10 +152,11 @@ def costs(results, variant, suite="footprint"):
     return footprint.costs(measured)
 
 
-# The scenarios whose code is attributed: one registration, and five with two
-# requests of each shape and container.
-ATTRIBUTED = ["runtime/shared/1/0"] + [f"{c}/{s}/5/2" for c in ("runtime", "static")
-                                       for s in footprint.SHAPES]
+# The scenarios whose code is attributed: one registration of each container,
+# and five of each shape resolved by every request.
+ATTRIBUTED = [name for name in footprint.scenario_names()
+              if re.fullmatch(r"\w+/shared/1/0", name) or
+              re.fullmatch(r"\w+/\w+/5/[1-9]", name)]
 
 
 def attribution(scenario, variant):
@@ -214,6 +217,99 @@ def callers(scenario, variant):
     return {"code": round((code[1] - code[0]) / requests)}
 
 
+# The sources of the run suite besides the scenarios, and the one that holds
+# the harness's main.
+BENCHMARKS = [ROOT / "benchmark" / "transaction.cpp",
+              ROOT / "benchmark" / "reference.cpp"]
+MAIN = "#include <nbench/bench.hpp>\nNBENCH_MAIN();\n"
+# The objects of the run suite, by what the preprocessor makes of their
+# source, which every variant and run shares.
+OBJECTS = WORK / "objects"
+RUNNERS = {}
+RUNNERS_LOCK = threading.Lock()
+# The compilers that build the programs of the run suite at once, as many
+# as of the other suites.
+RUN_COMPILES = threading.BoundedSemaphore(8)
+
+
+def run_flags(variant):
+    """The flags of the run suite: those of a release build, without the
+    hardening a distribution adds, with the variant's headers and the
+    harness."""
+    return ["-std=c++17", *footprint.OPTIMIZED,
+            f"-I{variant.values['tree']}/include",
+            f"-I{ROOT}/tools/nbench/include", *spelling(variant)]
+
+
+def run_object(compiler, run_flags_, directory, name, source):
+    """The object of a source of the run suite, kept by its compiler, its
+    flags and what the preprocessor makes of it, or the error that compiling
+    it ended with."""
+    cpp = directory / f"{re.sub(r'[^A-Za-z0-9_]', '_', name)}.cpp"
+    cpp.write_text(source)
+    with RUN_COMPILES:
+        expanded = subprocess.run(driver.compiler_command(
+            compiler, *run_flags_, "-E", "-P", str(cpp)), capture_output=True)
+    if expanded.returncode != 0:
+        return None, driver.first_error(expanded.stderr.decode())
+    key = hashlib.sha256(json.dumps(
+        [driver.compiler_identity(compiler),
+         [flag for flag in run_flags_ if not flag.startswith("-I")],
+         hashlib.sha256(expanded.stdout).hexdigest()]).encode()).hexdigest()
+    obj = OBJECTS / key[:2] / f"{key}.o"
+    if obj.exists():
+        return obj, None
+    obj.parent.mkdir(parents=True, exist_ok=True)
+    made = obj.with_suffix(f".{threading.get_ident()}.o")
+    with RUN_COMPILES:
+        returncode, stderr = driver.run_compiler(driver.compiler_command(
+            compiler, *run_flags_, "-c", str(cpp), "-o", str(made)))
+    if returncode != 0:
+        made.unlink(missing_ok=True)
+        return None, driver.first_error(stderr)
+    made.replace(obj)
+    return obj, None
+
+
+def runner(variant):
+    """The program of the run suite of a variant: the cases of every scenario
+    and of BENCHMARKS, linked into one. A source the variant's headers do not
+    compile has no case in it; its error is in compile.log beside it."""
+    with RUNNERS_LOCK:
+        if variant.name in RUNNERS:
+            return RUNNERS[variant.name]
+    compiler = variant.values["compiler"]
+    directory = work(variant) / "run"
+    directory.mkdir(exist_ok=True)
+    chosen = run_flags(variant)
+    sources = {name: footprint.run_source(name)
+               for name in footprint.scenario_names()}
+    sources = {name: source for name, source in sources.items() if source}
+    sources.update({path.stem: path.read_text() for path in BENCHMARKS})
+    sources["main"] = MAIN
+    built = driver.concurrently(
+        [lambda name=name, source=source: run_object(
+            compiler, chosen, directory, name, source)
+         for name, source in sources.items()])
+    failed = {name: error for name, (obj, error) in zip(sources, built)
+              if obj is None}
+    (directory / "compile.log").write_text(
+        "".join(f"{name}: {error}\n" for name, error in failed.items()))
+    if "main" in failed:
+        raise RuntimeError(f"the harness does not compile: {failed['main']}")
+    program = directory / "runner"
+    linked = subprocess.run(
+        [compiler, "-pthread", "-o", str(program),
+         *[str(obj) for obj, _ in built if obj is not None]],
+        capture_output=True, text=True)
+    if linked.returncode != 0:
+        raise RuntimeError("the run suite does not link: " +
+                           driver.first_error(linked.stderr))
+    with RUNNERS_LOCK:
+        RUNNERS[variant.name] = str(program)
+    return str(program)
+
+
 def cost_params(case):
     """runtime/unique: first registration -> container, shape, part."""
     if ":" not in case:
@@ -224,30 +320,23 @@ def cost_params(case):
     return {"container": container, "shape": shape, "part": part}
 
 
-def benchmark_params(name):
-    """What a container benchmark is, from its name."""
-    head, _, rest = name.split("/")[0].partition("<")
-    found = {"benchmark": head}
-    found["container"] = ("fruit" if "fruit" in head else
-                          "basic" if head.startswith("basic_") else
-                          "static" if "static_container" in rest else
-                          "runtime")
-    if "container_traits<" in rest:
-        found["cache"] = "on" if "container_traits<true>" in rest else "off"
-    if "std::string" in rest or head.endswith("_string"):
-        found["type"] = "string"
-    elif rest.endswith("int>") or head.endswith("_int"):
-        found["type"] = "int"
-    if "arena" in rest:
-        found["allocator"] = "arena"
-    parts = name.split("/")
-    if len(parts) > 1 and parts[1].isdigit():
-        found["count"] = parts[1]
-    return found
+RUN_CASE = re.compile(
+    r"^(?P<container>\w+)/(?:empty|(?P<shape>\w+)/(?P<registrations>\d+)/"
+    r"(?P<requests>\d+))/(?P<operation>.+)$")
 
 
-SCENARIO = r"^(?P<scenario>headers/\w+|runtime/empty|codegen|(?P<container>runtime|static)/(?P<shape>\w+)/(?P<registrations>\d+)/(?P<requests>\d+))"
-OPERATIONS = [f"{c}/{s}" for c in ("runtime", "static") for s in footprint.SHAPES]
+def run_params(case):
+    """What a case of the run suite is, from its name: of a scenario, its
+    container, shape, registrations, requests and operation; of
+    benchmark/*.cpp, the file and what it measures."""
+    found = RUN_CASE.match(case)
+    if found and found["container"] in footprint.CONTAINERS:
+        return {k: v for k, v in found.groupdict().items() if v is not None}
+    head, _, rest = case.partition("/")
+    return {"benchmark": head, "operation": rest}
+
+
+SCENARIO = r"^(?P<scenario>headers/\w+|\w+/empty|codegen|(?P<container>\w+)/(?P<shape>\w+)/(?P<registrations>\d+)/(?P<requests>\d+))"
 BYTES = dict(unit="B", noise=0, section="memory")
 COST_METRICS = [Metric("code", "Code", **BYTES),
                 Metric("instructions", "Compiler instructions", noise=0.01,
@@ -256,6 +345,17 @@ COST_METRICS = [Metric("code", "Code", **BYTES),
                        section="memory"),
                 Metric("cpu", "Compiler CPU", "s", noise=0.2, abs_tol=0.05,
                        section="time")]
+OBJECT_METRICS = [Metric("code", "Code", **BYTES),
+                  Metric("constants", "Constants", **BYTES),
+                  Metric("data", "Data", **BYTES),
+                  Metric("unwind", "Unwind tables", **BYTES),
+                  Metric("functions", "Functions", noise=0, section="memory"),
+                  Metric("instructions", "Compiler instructions", noise=0.01,
+                         section="cpu"),
+                  Metric("memory", "Compiler peak memory", "KiB", noise=0.03,
+                         section="memory"),
+                  Metric("cpu", "Compiler CPU", "s", noise=0.2,
+                         section="time")]
 
 config = Config(
     name="dingo",
@@ -268,35 +368,13 @@ config = Config(
                primary="code", params=SCENARIO,
                description="Each scenario compiled at -O0 with the "
                            "variant's headers (spec/footprint.py).",
-               metrics=[Metric("code", "Code", **BYTES),
-                        Metric("constants", "Constants", **BYTES),
-                        Metric("data", "Data", **BYTES),
-                        Metric("unwind", "Unwind tables", **BYTES),
-                        Metric("functions", "Functions", noise=0,
-                               section="memory"),
-                        Metric("instructions", "Compiler instructions",
-                               noise=0.01, section="cpu"),
-                        Metric("memory", "Compiler peak memory", "KiB",
-                               noise=0.03, section="memory"),
-                        Metric("cpu", "Compiler CPU", "s", noise=0.2,
-                               section="time")]),
+               metrics=OBJECT_METRICS),
         Python("release", [s for s in SCENARIOS if s != "codegen"],
                lambda scenario, variant: measure(scenario, variant, True),
                title="Release footprint", primary="code", params=SCENARIO,
                description="Each scenario compiled at -O2, as a release "
                            "build compiles it.",
-               metrics=[Metric("code", "Code", **BYTES),
-                        Metric("constants", "Constants", **BYTES),
-                        Metric("data", "Data", **BYTES),
-                        Metric("unwind", "Unwind tables", **BYTES),
-                        Metric("functions", "Functions", noise=0,
-                               section="memory"),
-                        Metric("instructions", "Compiler instructions",
-                               noise=0.01, section="cpu"),
-                        Metric("memory", "Compiler peak memory", "KiB",
-                               noise=0.03, section="memory"),
-                        Metric("cpu", "Compiler CPU", "s", noise=0.2,
-                               section="time")]),
+               metrics=OBJECT_METRICS),
         Python("callers", [s for s in SCENARIOS
                            if s.count("/") == 3 and not s.endswith("/0")],
                callers, title="Code of a place that resolves",
@@ -327,21 +405,19 @@ config = Config(
         Python("probes", ["codegen"], probes, title="Code-generation probes",
                primary="code", params=r"^probe/(?P<probe>.+)$",
                metrics=[Metric("code", "Code", **BYTES)]),
-        Python("operations", OPERATIONS, operations,
-               title="Operations", primary="instructions",
-               requires=driver.counts_instructions,
-               params=r"^(?P<container>\w+)/(?P<shape>\w+)/(?P<operation>.+)$",
-               description="The instructions of each operation of two "
-                           "registrations of a shape, counted by the "
-                           "program, optimized.",
-               metrics=[Metric("instructions", "Instructions",
-                               "per operation", noise=0, abs_tol=2,
-                               section="cpu")]),
-        GoogleBenchmark("containers", "{build}/benchmark/dingo_benchmark",
-                        title="Container benchmarks", repetitions=3,
-                        params=benchmark_params,
-                        variants=lambda v: (v.cell["compiler"] == "g++" and
-                                            "build" in v.values)),
+        Native("run", runner, title="Run", min_time="0.05s", stable="2%",
+               repetitions=1,
+               params=run_params,
+               description="What each scenario runs, optimized: "
+                           "constructing an empty container, registering "
+                           "into a new one, and the first resolution of a "
+                           "request type of each registration, in a new "
+                           "container, and those after it; with the "
+                           "transactions of benchmark/transaction.cpp and "
+                           "the resolvers written by hand of "
+                           "benchmark/reference.cpp.",
+               metrics=[Metric("instructions", "Instructions", "/op",
+                               noise=0.01, section="cpu")]),
     ],
     derive=[Derive("costs", costs, title="Costs", primary="code",
                    params=cost_params,

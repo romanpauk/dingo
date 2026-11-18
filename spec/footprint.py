@@ -16,10 +16,9 @@ Differences of the scenarios give the costs of the parts of the library: of a
 file that includes it, of a container, of a registration and of a request
 type, in each container.
 
-Where the processor counts the instructions of a process for its user, each
-container and shape is also a program that runs, optimized: it counts the
-instructions of its registrations and of its resolutions, the first of a
-request type and those after it. Where it does not, they are not measured.
+Each scenario is also a set of cases of nbench/bench.hpp (run_source), which
+the run suite of benchmark/nbench_conf.py measures: constructing a container,
+registering, and the first resolution of a request type and those after it.
 
 The measurements are kept in the cache of the programs, by what each program
 is, and the last of each scenario for each compiler beside them: a run reports
@@ -75,170 +74,320 @@ HEADERS = """#include <dingo/registration/constructor.h>
 #include <vector>
 """
 
-# The shapes a registration and its requests are of: what it registers, and
-# what each request names, of a registration of the index i.
+
+class Shape:
+    """Registrations of one shape and their requests, of a registration of
+    the index i.
+
+    binds      the arguments of each bind<> (static) or register_type<>
+               (runtime) a registration makes
+    requests   the types its requests name
+    includes   the headers it includes besides HEADERS
+    types      what it declares besides LEAF
+    argument   the argument of a runtime registration, or none
+    keyed      whether a registration is under the key i: a static binding
+               names it, a runtime registration and request pass it
+    lookup     the lookups the traits of the container define, or none
+    containers the containers that hold it"""
+
+    def __init__(self, binds, requests, includes="", types="", argument="",
+                 keyed=False, lookup="",
+                 containers=("runtime", "arena", "static")):
+        self.binds, self.requests = binds, requests
+        self.includes, self.types = includes, types
+        self.argument, self.keyed, self.lookup = argument, keyed, lookup
+        self.containers = containers
+
+
 SHAPES = {
-    "shared": ("dingo::scope<dingo::shared>, "
-               "dingo::storage<std::shared_ptr<T<{i}>>>",
-               ["T<{i}> &", "std::shared_ptr<T<{i}>>"]),
-    "unique": ("dingo::scope<dingo::unique>, dingo::storage<T<{i}>>",
-               ["T<{i}>", "std::unique_ptr<T<{i}>>"]),
-    "interface": ("dingo::scope<dingo::shared>, "
-                  "dingo::storage<std::shared_ptr<U<{i}>>>, "
-                  "dingo::interfaces<I<{i}>>",
-                  ["I<{i}> &", "std::shared_ptr<I<{i}>>"]),
+    "shared": Shape(["dingo::scope<dingo::shared>, "
+                     "dingo::storage<std::shared_ptr<T<{i}>>>"],
+                    ["T<{i}> &", "std::shared_ptr<T<{i}>>",
+                     "std::shared_ptr<T<{i}>> &"]),
+    "unique": Shape(["dingo::scope<dingo::unique>, dingo::storage<T<{i}>>"],
+                    ["T<{i}>", "std::unique_ptr<T<{i}>>"]),
+    "interface": Shape(["dingo::scope<dingo::shared>, "
+                        "dingo::storage<std::shared_ptr<U<{i}>>>, "
+                        "dingo::interfaces<I<{i}>>"],
+                       ["I<{i}> &", "std::shared_ptr<I<{i}>>",
+                        "std::shared_ptr<I<{i}>> &"]),
+    # A value that owns memory, which a unique request moves out of what the
+    # container made, and destroys.
+    "string": Shape(["dingo::scope<dingo::unique>, dingo::storage<S<{i}>>"],
+                    ["S<{i}>", "std::unique_ptr<S<{i}>>"],
+                    includes="#include <string>\n",
+                    types="template <int I> struct S {\n"
+                          "  DINGO_CONSTRUCTOR(S()) {}\n"
+                          "  std::string value = \"longer than a string "
+                          "keeps in place\";\n"
+                          "};\n"),
+    # An object the code of the program owns. A static container holds no
+    # object made before it.
+    "external": Shape(["dingo::scope<dingo::external>, "
+                       "dingo::storage<T<{i}> &>"],
+                      ["T<{i}> &", "T<{i}>"],
+                      includes="#include <dingo/storage/external.h>\n",
+                      types="template <int I> T<I> owned;\n",
+                      argument="owned<{i}>",
+                      containers=("runtime", "arena")),
+    # A shared object constructed of another shared object.
+    "dependency": Shape(["dingo::scope<dingo::shared>, dingo::storage<T<{i}>>",
+                         "dingo::scope<dingo::shared>, dingo::storage<D<{i}>>"],
+                        ["D<{i}> &", "D<{i}> *"],
+                        types="template <int I> struct D {\n"
+                              "  DINGO_CONSTRUCTOR(D(T<I> &leaf)) : leaf(leaf) "
+                              "{}\n"
+                              "  T<I> &leaf;\n"
+                              "};\n"),
+    # Implementations of one interface under keys, which a request selects.
+    "indexed": Shape(["dingo::scope<dingo::shared>, "
+                      "dingo::storage<std::shared_ptr<Q<{i}>>>, "
+                      "dingo::interfaces<P>"],
+                     ["P &", "std::shared_ptr<P>", "std::shared_ptr<P> &"],
+                     includes="#include <cstddef>\n",
+                     types="struct P {\n"
+                           "  virtual ~P() = default;\n"
+                           "  virtual int get() const = 0;\n"
+                           "};\n"
+                           "template <int N> struct Q : P {\n"
+                           "  DINGO_CONSTRUCTOR(Q()) {}\n"
+                           "  int get() const override { return N; }\n"
+                           "};\n",
+                     keyed=True,
+                     lookup="dingo::lookups<dingo::associative<std::size_t, "
+                            "P>>"),
 }
 
-
-def runtime_program(shape, registrations, requested):
-    """A runtime container of registrations of a shape, each requested by
-    the first requested of its requests."""
-    registered, requests = SHAPES[shape]
-    lines = [HEADERS.format(container="runtime_container"), LEAF,
-             "void probe() {", "  dingo::container<> c;"]
-    for index in range(registrations):
-        lines.append(f"  c.register_type<{registered.format(i=index)}>();")
-    for index in range(registrations):
-        for request in requests[:requested]:
-            lines.append(f"  (void)c.resolve<{request.format(i=index)}>();")
-    lines.append("}")
-    return "\n".join(lines) + "\n"
+# The containers: the header of each, and whether it is the runtime
+# container, which the program registers into, or the static one, whose
+# bindings are its type. The arena container is the runtime one, of the
+# memory of an arena the program gives it.
+CONTAINERS = {"runtime": "runtime_container", "arena": "runtime_container",
+              "static": "static_container"}
+# The bytes of the arena of a container of an arena container.
+ARENA = 16384
 
 
-def static_program(shape, registrations, requested):
-    """A static container of registrations of a shape, each requested by the
-    first requested of its requests."""
-    registered, requests = SHAPES[shape]
-    binds = ", ".join(f"dingo::bind<{registered.format(i=index)}>"
-                      for index in range(registrations))
-    lines = [HEADERS.format(container="static_container"), LEAF,
-             f"using bound = dingo::bindings<{binds}>;",
-             "void probe() {", "  dingo::static_container<bound> c;"]
-    for index in range(registrations):
-        for request in requests[:requested]:
-            lines.append(f"  (void)c.resolve<{request.format(i=index)}>();")
-    lines.append("}")
-    return "\n".join(lines) + "\n"
+def numbered(text, index):
+    """A spelling of a registration of the index i, of the index."""
+    return text.replace("{i}", str(index))
 
 
-# What a program that counts the instructions of what it runs holds: a
-# counter of the instructions the process runs in user space, and what keeps
-# a value the optimizer would otherwise drop.
-COUNTER = r"""#include <cstdio>
-#include <cstdlib>
-#include <linux/perf_event.h>
-#include <sys/ioctl.h>
-#include <sys/syscall.h>
-#include <unistd.h>
-
-namespace footprint {
-class counter {
-public:
-  counter() {
-    perf_event_attr attributes{};
-    attributes.type = PERF_TYPE_HARDWARE;
-    attributes.size = sizeof(attributes);
-    attributes.config = PERF_COUNT_HW_INSTRUCTIONS;
-    attributes.disabled = 1;
-    attributes.exclude_kernel = 1;
-    attributes.exclude_hv = 1;
-    descriptor_ = static_cast<int>(
-        syscall(SYS_perf_event_open, &attributes, 0, -1, -1, 0));
-    if (descriptor_ < 0) {
-      std::perror("perf_event_open");
-      std::exit(2);
-    }
-    // What counting costs itself, which every count is without.
-    start();
-    own_ = stop();
-  }
-  void start() {
-    ioctl(descriptor_, PERF_EVENT_IOC_RESET, 0);
-    ioctl(descriptor_, PERF_EVENT_IOC_ENABLE, 0);
-  }
-  long long stop() {
-    ioctl(descriptor_, PERF_EVENT_IOC_DISABLE, 0);
-    long long count = 0;
-    if (read(descriptor_, &count, sizeof(count)) != sizeof(count)) {
-      std::exit(2);
-    }
-    return count - own_;
-  }
-
-  // Counts what fn runs, once, or the mean of times runs of it.
-  template <typename Fn>
-  void count(const char *operation, Fn &&fn, long long times = 1) {
-    start();
-    for (long long index = 0; index < times; ++index) {
-      fn();
-    }
-    const long long count = stop();
-    std::printf("{\"operation\": \"%s\", \"instructions\": %lld}\n",
-                operation, count / times);
-  }
-
-private:
-  int descriptor_ = -1;
-  long long own_ = 0;
-};
-
-template <typename T> void keep(T &&value) {
-  asm volatile("" : : "g"(&value) : "memory");
-}
-} // namespace footprint
-"""
-
-# The times a resolution after the first of its request type is run, whose
-# instructions are counted as their mean.
-REPEATED = 1000
+def family(container):
+    return "static" if container == "static" else "runtime"
 
 
-def performance_program(container, shape):
-    """A program of two registrations of a shape in a container, which
-    counts the instructions of each registration, and of the first and the
-    following resolutions of each request of the first."""
-    registered, requests = SHAPES[shape]
-    lines = [HEADERS.format(container=f"{container}_container"), COUNTER, LEAF]
-    if container == "static":
-        binds = ", ".join(f"dingo::bind<{registered.format(i=index)}>"
-                          for index in range(2))
-        lines += [f"using bound = dingo::bindings<{binds}>;", "int main() {",
-                  "  footprint::counter counter;",
-                  "  dingo::static_container<bound> c;"]
-    else:
-        lines += ["int main() {", "  footprint::counter counter;",
-                  "  dingo::container<> c;"]
-        for index, name in ((0, "register first"), (1, "register second")):
-            lines.append(f'  counter.count("{name}", [&] {{ '
-                         f"c.register_type<{registered.format(i=index)}>(); }});")
-    for request in requests:
-        spelled = request.format(i=0)
-        lines.append(f'  counter.count("resolve first {spelled}", [&] {{ '
-                     f"footprint::keep(c.resolve<{spelled}>()); }});")
-        lines.append(f'  counter.count("resolve {spelled}", [&] {{ '
-                     f"footprint::keep(c.resolve<{spelled}>()); }}, {REPEATED});")
-    lines += ["  return 0;", "}"]
-    return "\n".join(lines) + "\n"
+class Program:
+    """A scenario as code: what it declares, how a function makes its
+    container c, what registers into it, and each request of each
+    registration, as an expression."""
+
+    def __init__(self, container, shape=None, registrations=0):
+        found = SHAPES[shape] if shape else Shape([], [])
+        self.container = container
+        includes = [HEADERS.format(container=CONTAINERS[container])]
+        if container == "arena":
+            includes.append("#include <dingo/memory/arena_allocator.h>\n")
+        includes.append(found.includes)
+        self.includes = "".join(includes)
+        lines = [LEAF, found.types]
+        traits = f"dingo::{family(container)}_container_traits"
+        if found.lookup:
+            lines.append(f"struct traits : {traits} {{\n"
+                         f"  using lookup_definition_type = {found.lookup};\n"
+                         "};\n")
+            traits = "traits"
+        if container == "static":
+            key = (", dingo::key_type<std::size_t, {i}>" if found.keyed
+                   else "")
+            binds = ", ".join(numbered(f"dingo::bind<{bind}{key}>", index)
+                              for index in range(registrations)
+                              for bind in found.binds)
+            lines.append(f"using bound = dingo::bindings<{binds}>;")
+            self.type = (f"dingo::static_container<bound, {traits}>"
+                         if found.lookup else
+                         "dingo::static_container<bound>")
+        elif container == "arena":
+            self.type = (f"dingo::container<{traits}, "
+                         "dingo::arena_allocator<char>>")
+        else:
+            self.type = ("dingo::container<traits>" if found.lookup else
+                         "dingo::container<>")
+        self.types = "\n".join(line for line in lines if line)
+        argument = ("dingo::key_value{std::size_t({i})}" if found.keyed
+                    else found.argument)
+        self.registers = [] if container == "static" else [
+            numbered(f"c.register_type<{bind}>({argument})", index)
+            for index in range(registrations) for bind in found.binds]
+        self.requests = []
+        for request in found.requests:
+            if found.keyed and container == "static":
+                spelled = [f"c.resolve<dingo::dependency<{request}, "
+                           f"dingo::key_type<std::size_t, {index}>>>()"
+                           for index in range(registrations)]
+            elif found.keyed:
+                spelled = [f"c.resolve<{request}>(std::size_t({index}))"
+                           for index in range(registrations)]
+            else:
+                spelled = [f"c.resolve<{numbered(request, index)}>()"
+                           for index in range(registrations)]
+            self.requests.append((request.replace("{i}", "i"), spelled))
+
+    def made(self, indent):
+        """The lines that make the container c in a function."""
+        if self.container != "arena":
+            return [f"{indent}{self.type} c;"]
+        return [f"{indent}unsigned char buffer[{ARENA}];",
+                f"{indent}dingo::arena<> arena(buffer);",
+                f"{indent}dingo::arena_allocator<char> allocator(arena);",
+                f"{indent}{self.type} c(allocator);"]
+
+    def compiled(self, requested):
+        """The program the compile suites measure: a function that makes the
+        container, registers into it and resolves the first requested of the
+        requests of each registration."""
+        lines = [self.includes + self.types, "void probe() {",
+                 *self.made("  ")]
+        lines += [f"  {register};" for register in self.registers]
+        count = len(self.requests[0][1]) if self.requests else 0
+        for index in range(count):
+            for _, spelled in self.requests[:requested]:
+                lines.append(f"  (void){spelled[index]};")
+        lines.append("}")
+        return "\n".join(lines) + "\n"
+
+    def run(self, scenario, requested):
+        """The cases the run suite measures, of nbench/bench.hpp, in a
+        namespace of the scenario: constructing an empty container;
+        registering into a new container; the first resolution of a request
+        of each registration, in a new container; and the resolutions after
+        it. Those of a new container are of a batch of containers made, and
+        destroyed, apart from what is measured, a fixed number of times: the
+        instructions of each are the same, and a time of a new container is
+        of its first use, which repeating does not make steadier."""
+        space = "scenario_" + re.sub(r"\W", "_", scenario)
+        lines = ["#include <nbench/bench.hpp>", self.includes,
+                 f"namespace {space} {{", self.types, "struct instance {"]
+        if self.container == "arena":
+            lines += [f"  unsigned char buffer[{ARENA}];",
+                      "  dingo::arena<> arena{buffer};",
+                      "  dingo::arena_allocator<char> allocator{arena};",
+                      f"  {self.type} c{{allocator}};"]
+        else:
+            lines.append(f"  {self.type} c;")
+        lines += ["  void populate() {",
+                  *[f"    {register};" for register in self.registers],
+                  "  }", "};", "constexpr int batch = 64;",
+                  "constexpr nbench::iterations batches{16};",
+                  "using batch_type = std::unique_ptr<instance>[batch];"]
+        cases = []
+        if not self.registers and not self.requests:
+            lines += ["void construct(nbench::State &s) {",
+                      "  while (s.keep_running()) {",
+                      "    instance made;", "    nbench::keep(made);",
+                      "  }", "}"]
+            cases.append(("construct", "construct"))
+        elif self.registers and not requested:
+            lines += ["void registers(nbench::State &s) {",
+                      "  batch_type made;",
+                      "  while (s.keep_running()) {",
+                      "    s.pause();",
+                      "    for (auto &each : made) {",
+                      "      each = std::make_unique<instance>();", "    }",
+                      "    s.resume();",
+                      "    for (auto &each : made) {",
+                      "      each->populate();", "      nbench::keep(each->c);",
+                      "    }",
+                      "    s.pause();",
+                      "    for (auto &each : made) {", "      each.reset();",
+                      "    }",
+                      "    s.resume();", "  }",
+                      f"  s.operations(batch * {len(self.registers)});", "}"]
+            cases.append(("registers", "register"))
+        for number, (request, spelled) in enumerate(self.requests[:requested]):
+            resolved = [f"nbench::keep({each.replace('c.', 'each->c.', 1)});"
+                        for each in spelled]
+            lines += [f"void first_{number}(nbench::State &s) {{",
+                      "  batch_type made;",
+                      "  while (s.keep_running()) {",
+                      "    s.pause();",
+                      "    for (auto &each : made) {",
+                      "      each = std::make_unique<instance>();",
+                      "      each->populate();", "    }",
+                      "    s.resume();",
+                      "    for (auto &each : made) {",
+                      *[f"      {line}" for line in resolved], "    }",
+                      "    s.pause();",
+                      "    for (auto &each : made) {", "      each.reset();",
+                      "    }",
+                      "    s.resume();", "  }",
+                      f"  s.operations(batch * {len(spelled)});", "}"]
+            warm = [f"nbench::keep({each.replace('c.', 'made.c.', 1)});"
+                    for each in spelled]
+            lines += [f"void again_{number}(nbench::State &s) {{",
+                      "  instance made;", "  made.populate();",
+                      *[f"  {line}" for line in warm],
+                      "  while (s.keep_running()) {",
+                      *[f"    {line}" for line in warm], "  }",
+                      f"  s.operations({len(spelled)});", "}"]
+            cases += [(f"first_{number}", f"resolve first {request}"),
+                      (f"again_{number}", f"resolve {request}")]
+        for function, name in cases:
+            fixed = ", batches" if function != "construct" and \
+                not function.startswith("again") else ""
+            lines.append(f'NBENCH({function}, "{scenario}/{name}"{fixed});')
+        lines.append("}")
+        return "\n".join(lines) + "\n"
+
+
+def scenario_names():
+    """Every scenario: the headers of each family, an empty container of each
+    container, and the registrations of each shape a container holds, 1 or
+    5, resolved by none of the requests of the shape or by each."""
+    names = ["headers/runtime", "headers/static"]
+    for container in CONTAINERS:
+        names.append(f"{container}/empty")
+        for shape, found in SHAPES.items():
+            if container in found.containers:
+                names += [f"{container}/{shape}/{registrations}/{requested}"
+                          for registrations in (1, 5)
+                          for requested in (0, len(found.requests))]
+    return names
+
+
+def program(scenario):
+    """The program of a scenario and the number of its requests of each
+    registration, or None for the headers alone."""
+    parts = scenario.split("/")
+    if parts[0] == "headers":
+        return None, 0
+    if parts[1] == "empty":
+        return Program(parts[0]), 0
+    container, shape, registrations, requested = parts
+    return Program(container, shape, int(registrations)), int(requested)
 
 
 def scenarios():
     """The scenarios by name: their source, and the flags they add."""
-    found = {
-        "headers/runtime": (HEADERS.format(container="runtime_container"), []),
-        "headers/static": (HEADERS.format(container="static_container"), []),
-        "runtime/empty": (HEADERS.format(container="runtime_container") +
-                          "int probe() { dingo::container<> c; return 0; }\n",
-                          []),
-        "codegen": (CODEGEN.read_text(), OPTIMIZED),
-    }
-    for shape in SHAPES:
-        for registrations in (1, 5):
-            for requested in (0, 2):
-                found[f"runtime/{shape}/{registrations}/{requested}"] = (
-                    runtime_program(shape, registrations, requested), [])
-                found[f"static/{shape}/{registrations}/{requested}"] = (
-                    static_program(shape, registrations, requested), [])
+    found = {"codegen": (CODEGEN.read_text(), OPTIMIZED)}
+    for name in scenario_names():
+        made, requested = program(name)
+        if made is None:
+            container = name.split("/")[1]
+            found[name] = (HEADERS.format(container=CONTAINERS[container]), [])
+        else:
+            found[name] = (made.compiled(requested), [])
     return found
+
+
+def run_source(scenario):
+    """The source of the cases the run suite measures of a scenario, or None:
+    of an empty container, and of five registrations; not of the headers
+    alone, nor of one registration, which runs as one of five does."""
+    made, requested = program(scenario)
+    if made is None or re.search(r"/1/\d+$", scenario):
+        return None
+    return made.run(scenario, requested)
 
 
 def metric(measured, *path):
@@ -248,31 +397,6 @@ def metric(measured, *path):
             return None
         measured = measured[key]
     return measured
-
-
-def performance(compiler, flags, directory):
-    """The instructions of the operations of each container and shape, by
-    the name of its program, where the processor counts them; none where it
-    does not."""
-    if not driver.counts_instructions():
-        return {}
-    base = [flag for flag in flags if not re.fullmatch(r"-O\d", flag)]
-
-    def run(container, shape):
-        name = f"run/{container}/{shape}"
-        records, stderr, crash = driver.run_program(
-            compiler, base + OPTIMIZED, directory, name.replace("/", "__"),
-            performance_program(container, shape))
-        if stderr or crash:
-            return name, {"failed": driver.first_error(stderr) if stderr
-                          else crash}
-        return name, {"operations": {record["operation"]:
-                                     record["instructions"]
-                                     for record in records}}
-
-    return dict(driver.concurrently(
-        [lambda container=container, shape=shape: run(container, shape)
-         for container in ("runtime", "static") for shape in SHAPES]))
 
 
 def costs(measured):
@@ -291,17 +415,20 @@ def costs(measured):
                 found.setdefault(what, {})[name] = round(
                     (b - a) / count, 2 if name == "cpu" else None)
 
-    difference("runtime container", "runtime/empty", "headers/runtime")
-    for container in ("runtime", "static"):
-        for shape in SHAPES:
+    for container in CONTAINERS:
+        difference(f"{container} container", f"{container}/empty",
+                   f"headers/{family(container)}")
+        for shape, found_shape in SHAPES.items():
+            if container not in found_shape.containers:
+                continue
             base = f"{container}/{shape}"
+            requests = len(found_shape.requests)
             difference(f"{base}: first registration", f"{base}/1/0",
-                       "runtime/empty" if container == "runtime"
-                       else "headers/static")
+                       f"{container}/empty")
             difference(f"{base}: further registration", f"{base}/5/0",
                        f"{base}/1/0", 4)
-            difference(f"{base}: request type", f"{base}/5/2", f"{base}/5/0",
-                       10)
+            difference(f"{base}: request type", f"{base}/5/{requests}",
+                       f"{base}/5/0", 5 * requests)
     return found
 
 
@@ -339,10 +466,6 @@ def changes(before, now):
             continue
         if path[1] == "drilldown" and abs(value - previous) < 5:
             continue
-        # A count of what runs differs by an instruction or two between
-        # runs of the same program.
-        if path[0] == "ran" and abs(value - previous) <= 2:
-            continue
         relative = abs(value - previous) / max(abs(previous), 1)
         if relative > noise(path):
             found.append((path, previous, value))
@@ -378,13 +501,9 @@ def main():
 
     measured = dict(zip(chosen, driver.concurrently(
         [lambda name=name: measure(name) for name in chosen])))
-    ran = {name: found for name, found in performance(
-        options.compiler, flags, options.work).items()
-        if re.search(options.only, name)}
     failed = [name for name, found in measured.items()
               if found["returncode"] != 0]
-    failed += [name for name, found in ran.items() if "failed" in found]
-    found = {"measured": measured, "costs": costs(measured), "ran": ran}
+    found = {"measured": measured, "costs": costs(measured)}
     options.output.write_text(json.dumps(found, indent=1, sort_keys=True))
 
     # The last measurement of every scenario for this compiler, which the
@@ -395,21 +514,12 @@ def main():
     before = (json.loads(latest.read_text()) if latest.exists() else {})
     print(f"{len(measured)} scenarios, {len(failed)} do not compile")
     for name in failed:
-        print(f"  {name}: " + (ran[name]["failed"] if name in ran else
-                                driver.first_error(measured[name]["stderr"])))
+        print(f"  {name}: " + driver.first_error(measured[name]["stderr"]))
     print("costs (code bytes, instructions, compiler memory in KiB):")
     for what, value in found["costs"].items():
         print(f"  {what:40} {value.get('code', '-'):>8} "
               f"{value.get('instructions', '-'):>14} "
               f"{value.get('memory', '-'):>8}")
-    if ran:
-        print("instructions of what the containers run:")
-        for name, value in ran.items():
-            for operation, count in value.get("operations", {}).items():
-                print(f"  {name:22} {operation:44} {count:>10}")
-    else:
-        print("the processor counts no instructions: what the containers run "
-              "is not measured")
     if before:
         changed = changes(before, found)
         print(f"{len(changed)} metrics changed since the last run:")

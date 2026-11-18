@@ -259,21 +259,24 @@ measures each:
   the events of `-ftime-trace` by kind and the templates it instantiated by the
   area of the library they are of
 
-The scenarios are the headers of each container alone, an empty runtime
-container, and one or five registrations of a shared handle, a unique value and
-an interface, requested twice or not at all, in each container. Their
-differences give the costs it prints: of the runtime container, and of a first
+The scenarios are the same programs for each container: the runtime container,
+the runtime container of an arena's memory, and the static container. They are
+the headers of each container alone, an empty container, and one or five
+registrations of each shape, resolved by every request of the shape or by none.
+The shapes are:
+
+- `shared`: a shared handle, requested by reference, as a handle and as a
+  reference to the handle
+- `unique`: a unique value, requested by value and as a `std::unique_ptr`
+- `interface`: a shared handle of an implementation, requested as its interface
+- `string`: a unique value that owns memory
+- `external`: an object the program owns; the static container holds none
+- `dependency`: a shared object constructed of another
+- `indexed`: implementations of one interface under keys a request selects
+
+Their differences give the costs it prints: of each container, and of a first
 registration, a further registration and a request type of each shape in each
 container.
-
-Where the processor counts the instructions of a process for its user, as `perf`
-reports, each container and each shape is also a program that runs, optimized as
-the code-generation probes are. It counts, with `perf_event_open`, the
-instructions of what the containers run: each of two registrations in the
-runtime container, the first resolution of each request type, which derives it,
-and the mean of a thousand resolutions after it. A count differs by an
-instruction or two between runs of one program. Where the processor counts no
-instructions, these programs are not run.
 
 The measurements are kept results, in `programs/` of its work directory, and the
 last of each scenario for each compiler beside them, in `programs/latest/`. A
@@ -287,12 +290,30 @@ To compare with another checkout, such as the main branch, and with each
 compiler, run the same measurements under
 [nbench](https://github.com/romanpauk/nbench) with
 [`benchmark/nbench_conf.py`](../benchmark/nbench_conf.py): each checkout and
-compiler is a variant, compared with this checkout under the same compiler. Its
-suites are the scenarios (`footprint`), their differences (`costs`), where the
-compiler spent its work (`compiler`: a phase, an event or an area of the library
-per case), the code-generation probes (`probes`), the instructions of each
-operation of the containers (`operations`) and the container benchmarks of a
-tree's Release build in its `build/bench` (`containers`).
+compiler is a variant, compared with this checkout under the same compiler.
+Every suite measures the same scenarios:
+
+- `footprint` and `release`: the scenarios at `-O0` and at `-O2`; `costs` and
+  `release-costs` are their differences
+- `callers`: the code another place that resolves adds
+- `headers`: the code by the header it is defined in
+- `compiler`: where the compiler spent its work, a phase, an event or an area of
+  the library per case
+- `probes`: the code-generation probes
+- `run`: what the containers run, measured by the harness of nbench: the time,
+  the instructions, the cycles and the cache misses of constructing an empty
+  container, of registering into a new one, and of the first resolution of each
+  request type, in a new container, and of those after it
+
+The `run` suite compiles the cases of every scenario
+([`footprint.run_source`](../spec/footprint.py)) with the variant's headers,
+optimized as the code-generation probes are, into one program per variant. With
+them are the transactions of the runtime container,
+[`benchmark/transaction.cpp`](../benchmark/transaction.cpp), and resolvers
+written by hand of no container, the least a resolution costs,
+[`benchmark/reference.cpp`](../benchmark/reference.cpp). A source a variant does
+not compile has no case in its program; its error is in `compile.log` of the
+variant's work directory.
 
 nbench is the submodule [`tools/nbench`](../tools/nbench), which `uv sync`
 installs. A worktree of the main branch in the build directory is a tree of its
@@ -302,15 +323,19 @@ own:
 git submodule update --init tools/nbench
 uv sync
 git worktree add --detach build/master master
-cmake -S build/master -B build/master/build/bench -DCMAKE_BUILD_TYPE=Release \
-  -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_TESTING_ENABLED=OFF
-cmake --build build/master/build/bench -t dingo_benchmark
 uv run nbench run -C benchmark/nbench_conf.py -v this=. -v master=build/master
 ```
 
-The container benchmarks of this checkout are built the same way, in
-`build/bench`. Where a benchmark of the main branch is named differently, its
-case is reported of one tree only.
+A tree that names the runtime container traits `dynamic_container_traits`, as
+the main branch does, compiles the scenarios with that name.
+
+A case of the `run` suite runs until its time per iteration is steady within 2%,
+50 ms at most, or a fixed number of batches of new containers. The command
+line's limits replace the suite's: `--budget 10s` divides ten seconds among the
+runs, `--min-iterations 64` is enough for the instructions, and
+`--in-process -r 3` runs three repetitions of a case in one process. The compile
+suites keep their results by what each program is, so a run compiles only the
+scenarios whose source or headers changed.
 
 The report is in `build/nbench/reports/`, with `explorer.html` of every run.
 
