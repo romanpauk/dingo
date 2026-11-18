@@ -52,6 +52,7 @@ runs:
           -B "${{ inputs.build_dir }}"
           -DDINGO_DEVELOPMENT_MODE=ON
           -DDINGO_TESTING_ENABLED=OFF
+          -DDINGO_BENCHMARK_ENABLED=OFF
           -DDINGO_EXAMPLES_ENABLED="$DINGO_EXAMPLES_ENABLED"
         )
         cmake "${CMAKE_ARGS[@]}"

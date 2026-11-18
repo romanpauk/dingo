@@ -66,7 +66,7 @@ runs:
         CC: ${{ inputs.compiler_cc }}
         CXX: ${{ inputs.compiler_cxx }}
       run: |
-        cmake -S "${{ inputs.source_dir }}" -B "${{ inputs.build_dir }}" -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DDINGO_SANITIZER=${{ inputs.sanitizer }} -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
+        cmake -S "${{ inputs.source_dir }}" -B "${{ inputs.build_dir }}" -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DDINGO_SANITIZER=${{ inputs.sanitizer }} -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
     - name: Build
       if: ${{ inputs.container_image == '' }}
       shell: bash
@@ -120,6 +120,7 @@ runs:
             cmake -S "/workspace/${{ inputs.source_dir }}" \
               -B "/workspace/${{ inputs.build_dir }}" \
               -DDINGO_DEVELOPMENT_MODE=ON \
+              -DDINGO_BENCHMARK_ENABLED=OFF \
               -DDINGO_CCACHE=ON \
               -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON \
               -DDINGO_SANITIZER=${{ inputs.sanitizer }} \

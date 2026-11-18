@@ -63,6 +63,14 @@ if(DINGO_DEVELOPMENT_MODE)
     endif()
 
     option(DINGO_TESTING_ENABLED "enable testing through googletest" ON)
+    if(WIN32)
+        set(dingo_benchmark_default OFF)
+    else()
+        set(dingo_benchmark_default ON)
+    endif()
+    option(DINGO_BENCHMARK_ENABLED
+        "enable the benchmarks of nbench (tools/nbench), which run on Linux"
+        ${dingo_benchmark_default})
     option(DINGO_EXAMPLES_ENABLED "enable building of dingo examples" ON)
     option(DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION
         "Run tests with a single representative dynamic container configuration." OFF)
@@ -224,6 +232,11 @@ if(DINGO_DEVELOPMENT_MODE)
 
     if(DINGO_EXAMPLES_ENABLED)
         add_subdirectory(examples)
+    endif()
+
+    if(DINGO_BENCHMARK_ENABLED)
+        include(cmake/benchmark.cmake)
+        configure_benchmark_targets()
     endif()
 
     set(DINGO_CHECK_TARGETS includes-compile)

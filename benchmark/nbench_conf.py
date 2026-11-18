@@ -1,7 +1,9 @@
 """dingo for nbench: checkouts and compilers are the variants.
 
-    uv run nbench run -C benchmark/nbench_conf.py -v this=. -v master=build/master
-    ... -s 'footprint|costs' --baseline latest   what changed since the last run
+    cmake --build build -t benchmark      (DINGO_BENCHMARK_ARGUMENTS)
+    uv run --with-editable tools/nbench nbench run -C benchmark/nbench_conf.py \\
+        -v this=. -v master=build/master
+    ... -s 'release|release-costs' --baseline latest   what changed since the last run
 
 A case is one measured thing, named by its parameters; a metric is a
 quantity of it. Every suite measures the scenarios of spec/footprint.py, the

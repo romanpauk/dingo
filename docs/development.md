@@ -5,7 +5,8 @@ header-only.
 
 ## Development Build
 
-`DINGO_DEVELOPMENT_MODE=ON` enables tests and runnable examples.
+`DINGO_DEVELOPMENT_MODE=ON` enables tests, runnable examples and, on Linux, the
+benchmarks.
 
 ```bash
 cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON
@@ -17,6 +18,9 @@ These CMake options control individual development features:
 
 - `DINGO_TESTING_ENABLED`
 - `DINGO_EXAMPLES_ENABLED`
+- `DINGO_BENCHMARK_ENABLED`: the `benchmark` target, which runs nbench of the
+  submodule `tools/nbench`; on by default except on Windows, which nbench does
+  not run on
 - `DINGO_LIT_TESTS_ENABLED`
 
 ## Quality Targets
@@ -319,15 +323,25 @@ written by hand of no container, the least a resolution costs,
 not compile has no case in its program; its error is in `compile.log` of the
 variant's work directory.
 
-nbench is the submodule [`tools/nbench`](../tools/nbench), which `uv sync`
-installs. A worktree of the main branch in the build directory is a tree of its
-own:
+nbench is the submodule [`tools/nbench`](../tools/nbench), which only the
+benchmarks need: it runs on top of the locked `uv` environment, which does not
+hold it. The `benchmark` target runs it with the arguments of
+`DINGO_BENCHMARK_ARGUMENTS`, `-v this=.` by default. A worktree of the main
+branch in the build directory is a tree of its own:
 
 ```bash
 git submodule update --init tools/nbench
-uv sync
 git worktree add --detach build/master master
-uv run nbench run -C benchmark/nbench_conf.py -v this=. -v master=build/master
+cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON \
+  "-DDINGO_BENCHMARK_ARGUMENTS=-v;this=.;-v;master=build/master"
+cmake --build build -t benchmark
+```
+
+nbench runs alike without CMake:
+
+```bash
+uv run --with-editable tools/nbench nbench run -C benchmark/nbench_conf.py \
+  -v this=. -v master=build/master
 ```
 
 A tree that names the runtime container traits `dynamic_container_traits`, as

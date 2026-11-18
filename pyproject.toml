@@ -14,11 +14,7 @@ dev = [
     "lizard>=1.17",
     "mdformat",
     "mdformat-gfm>=1.0.0",
-    "nbench",
 ]
 
 [tool.uv]
 package = false
-
-[tool.uv.sources]
-nbench = { path = "tools/nbench", editable = true }
