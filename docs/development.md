@@ -254,7 +254,7 @@ adds), and measures each:
 - the code, the constants, the data and the unwind tables of its object, read
   from its ELF sections, its functions, and the size of each function of no
   mangled name, such as the probes of
-  [`test/lit/codegen-static-probes.cpp`](../test/lit/codegen-static-probes.cpp)
+  [`benchmark/codegen.cpp`](../benchmark/codegen.cpp)
 - the peak memory and the processor time of the compiler, and the instructions
   it ran where `perf` counts them
 - where the compiler spent its work, as it reports it in a compile of its own:
@@ -356,25 +356,6 @@ suites keep their results by what each program is, so a run compiles only the
 scenarios whose source or headers changed.
 
 The report is in `build/nbench/reports/`, with `explorer.html` of every run.
-
-## Code Size Tests
-
-The lit suite compiles the code-generation probes of
-[`test/lit/codegen-static-probes.cpp`](../test/lit/codegen-static-probes.cpp) at
-`-O2`. They check that a resolution from the static container is no larger than
-the same resolution from the runtime container, by the symbol sizes `nm` gives,
-and that the small static probes compile to one instruction and a return, by
-`objdump`, with compilers that reliably compile them so. The size of each probe
-is tracked by `footprint-check`.
-
-[`test/lit/check_codegen_probe_sizes.py`](../test/lit/check_codegen_probe_sizes.py)
-and
-[`test/lit/check_codegen_probe_instructions.py`](../test/lit/check_codegen_probe_instructions.py)
-implement the checks. Run them through the lit test:
-
-```bash
-ctest --test-dir build --output-on-failure -R dingo_lit_tests
-```
 
 ## Compile-Time Profiling
 

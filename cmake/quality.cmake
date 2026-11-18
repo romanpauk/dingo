@@ -198,7 +198,7 @@ function(configure_quality_targets out_check_targets)
       --compiler ${CMAKE_CXX_COMPILER} "--flags=${footprint_flags}"
     COMMAND ${CMAKE_COMMAND} -E touch ${footprint_dir}/checked
     DEPENDS ${model_inputs} ${footprint_configuration}
-      ${PROJECT_SOURCE_DIR}/test/lit/codegen-static-probes.cpp
+      ${PROJECT_SOURCE_DIR}/benchmark/codegen.cpp
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     USES_TERMINAL
     VERBATIM

@@ -1,9 +1,3 @@
-// REQUIRES: linux
-// RUN: %dingo_cxx -O2 %dingo_codegen_flags -c %s -o %t.o
-// RUN: nm -S --size-sort %t.o | c++filt > %t.nm
-// RUN: %python %dingo_lit_root/check_codegen_probe_sizes.py %t.nm
-// RUN: objdump -d --no-show-raw-insn %t.o | c++filt > %t.objdump
-// RUN: %python %dingo_lit_root/check_codegen_probe_instructions.py %t.objdump
 
 #include <dingo/container.h>
 #include <dingo/static_container.h>

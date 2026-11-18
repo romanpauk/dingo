@@ -50,7 +50,7 @@ OPTIMIZED = ["-O2", "-fno-stack-protector", "-fcf-protection=none",
              "-D_FORTIFY_SOURCE=0", "-U_GLIBCXX_ASSERTIONS"]
 
 # The resolutions whose optimized code is measured.
-CODEGEN = ROOT / "test" / "lit" / "codegen-static-probes.cpp"
+CODEGEN = ROOT / "benchmark" / "codegen.cpp"
 
 LEAF = """template <int I> struct T {
   DINGO_CONSTRUCTOR(T()) {}
