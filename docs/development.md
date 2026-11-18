@@ -243,14 +243,14 @@ cover, one test for each behavior. A test is in the directory of what it tests:
 ## Footprint
 
 `footprint-check` ([`spec/footprint.py`](../spec/footprint.py)) compiles
-scenario programs of the library with the compiler CMake is configured with, and
-measures each:
+scenario programs of the library with the compiler CMake is configured with, as
+a release build compiles them (`-O2`, without the hardening a distribution
+adds), and measures each:
 
 - the code, the constants, the data and the unwind tables of its object, read
   from its ELF sections, its functions, and the size of each function of no
   mangled name, such as the probes of
   [`test/lit/codegen-static-probes.cpp`](../test/lit/codegen-static-probes.cpp)
-  at `-O2`
 - the peak memory and the processor time of the compiler, and the instructions
   it ran where `perf` counts them
 - where the compiler spent its work, as it reports it in a compile of its own:
@@ -258,17 +258,15 @@ measures each:
   the events of `-ftime-trace` by kind and the templates it instantiated by the
   area of the library they are of
 
-The scenarios are the same programs for each container: the runtime container,
-the runtime container of an arena's memory, and the static container. They are
-the headers of each container alone, an empty container, and one or five
-registrations of each shape, resolved by every request of the shape or by none.
+The scenarios are the same programs for each container, the runtime and the
+static one: the headers of each container alone, an empty container, and of each
+shape one registration, five, and five resolved by every request of the shape.
 The shapes are:
 
 - `shared`: a shared handle, requested by reference, as a handle and as a
   reference to the handle
 - `unique`: a unique value, requested by value and as a `std::unique_ptr`
 - `interface`: a shared handle of an implementation, requested as its interface
-- `string`: a unique value that owns memory
 - `external`: an object the program owns; the static container holds none
 - `dependency`: a shared object constructed of another
 - `indexed`: implementations of one interface under keys a request selects
@@ -290,24 +288,31 @@ compiler, run the same measurements under
 [nbench](https://github.com/romanpauk/nbench) with
 [`benchmark/nbench_conf.py`](../benchmark/nbench_conf.py): each checkout and
 compiler is a variant, compared with this checkout under the same compiler.
-Every suite measures the same scenarios:
+Every suite measures the same scenarios, as a release build compiles them. Of
+the compiler:
 
-- `footprint` and `release`: the scenarios at `-O0` and at `-O2`; `costs` and
-  `release-costs` are their differences
+- `release`: the code and the compiler's work of each scenario; `release-costs`
+  are their differences
 - `callers`: the code another place that resolves adds
 - `headers`: the code by the header it is defined in
 - `compiler`: where the compiler spent its work, a phase, an event or an area of
   the library per case
 - `probes`: the code-generation probes
+
+Of what runs:
+
 - `run`: what the containers run, measured by the harness of nbench: the time,
   the instructions, the cycles and the cache misses of constructing an empty
   container, of registering into a new one, and of the first resolution of each
-  request type, in a new container, and of those after it
+  request type, in a new container, and of those after it. A runtime container
+  allocates of an arena of its own, so that what runs is the container, not the
+  allocator of the process; what allocates is what the scenario's types make,
+  the object of a stored `std::shared_ptr` and a requested `std::unique_ptr`
 
 The `run` suite compiles the cases of every scenario
-([`footprint.run_source`](../spec/footprint.py)) with the variant's headers,
-optimized as the code-generation probes are, into one program per variant. With
-them are the transactions of the runtime container,
+([`footprint.run_source`](../spec/footprint.py)) with the variant's headers into
+one program per variant. With them are the transactions of the runtime
+container, of the memory of an arena,
 [`benchmark/transaction.cpp`](../benchmark/transaction.cpp), and resolvers
 written by hand of no container, the least a resolution costs,
 [`benchmark/reference.cpp`](../benchmark/reference.cpp). A source a variant does

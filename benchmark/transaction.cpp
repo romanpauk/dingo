@@ -7,6 +7,7 @@
 
 // The transaction of a runtime resolution apart from a container: one with
 // no action, and one that commits or rolls back the actions deferred to it.
+// Its memory is of an arena, as that of a container of the run suite is.
 // The run suite of benchmark/nbench_conf.py measures these cases with the
 // scenarios.
 
@@ -21,10 +22,16 @@
 
 namespace {
 
-using allocator_type = std::allocator<char>;
+using allocator_type = dingo::arena_allocator<char>;
 
-struct transaction_fixture {
-  allocator_type allocator;
+// The memory of a transaction's runtime: an arena of its own.
+struct memory_fixture {
+  unsigned char buffer[4096];
+  dingo::arena<> arena{buffer};
+  allocator_type allocator{arena};
+};
+
+struct transaction_fixture : memory_fixture {
   dingo::inline_arena<512> scratch;
   dingo::runtime_memory<allocator_type> runtime{allocator};
   dingo::runtime_transaction<allocator_type> transaction{runtime, scratch};
@@ -34,8 +41,8 @@ struct transaction_fixture {
 void deferred() noexcept { asm volatile("" : : : "memory"); }
 
 void empty_transaction(nbench::State &state) {
-  allocator_type allocator;
-  dingo::runtime_memory<allocator_type> runtime(allocator);
+  memory_fixture memory;
+  dingo::runtime_memory<allocator_type> runtime(memory.allocator);
   while (state.keep_running()) {
     dingo::execute_transaction(runtime,
                                [&](auto &context) { nbench::keep(context); });
@@ -77,8 +84,8 @@ template <bool Commit> void finish_transaction(nbench::State &state) {
 // argument, committed.
 void commit_transaction(nbench::State &state) {
   const std::uint64_t actions = state.arg(0);
-  allocator_type allocator;
-  dingo::runtime_memory<allocator_type> runtime(allocator);
+  memory_fixture memory;
+  dingo::runtime_memory<allocator_type> runtime(memory.allocator);
   while (state.keep_running()) {
     dingo::inline_arena<512> scratch;
     dingo::runtime_transaction<allocator_type> transaction(runtime, scratch);

@@ -7,8 +7,9 @@
 
 // Resolvers written by hand, of no container: the least a resolution of a
 // unique or a shared object costs, made by a virtual call, by a call through
-// a pointer, kept in a pointer, or found in a map. The run suite of
-// benchmark/nbench_conf.py measures these cases beside those of the
+// a pointer, kept in a pointer, or found in a map. The objects live in the
+// resolvers, as those of a container of the memory of an arena do. The run
+// suite of benchmark/nbench_conf.py measures these cases beside those of the
 // container.
 
 #include <nbench/bench.hpp>
@@ -18,7 +19,6 @@
 #include <memory>
 #include <new>
 #include <optional>
-#include <string>
 #include <type_traits>
 #include <typeindex>
 
@@ -31,7 +31,7 @@ struct reference_factory {
 
 template <typename T> struct reference_unique_factory : reference_factory {
   void *resolve() override { return make(); }
-  void *make() { return new (&storage_) T; }
+  void *make() { return new (&storage_) T(); }
 
 private:
   alignas(T) unsigned char storage_[sizeof(T)];
@@ -124,12 +124,6 @@ NBENCH((unique_resolve<int, &unique_of<int>::by_pointer>),
        "reference/unique/pointer/int");
 NBENCH((unique_resolve<int, &unique_of<int>::missed>),
        "reference/unique/map/int");
-NBENCH((unique_resolve<std::string, &unique_of<std::string>::by_virtual>),
-       "reference/unique/virtual/string");
-NBENCH((unique_resolve<std::string, &unique_of<std::string>::by_pointer>),
-       "reference/unique/pointer/string");
-NBENCH((unique_resolve<std::string, &unique_of<std::string>::missed>),
-       "reference/unique/map/string");
 NBENCH((shared_resolve<int, &shared_of<int>::by_virtual>),
        "reference/shared/virtual/int");
 NBENCH((shared_resolve<int, &shared_of<int>::by_pointer>),
@@ -138,13 +132,5 @@ NBENCH((shared_resolve<int, &shared_of<int>::kept>),
        "reference/shared/kept/int");
 NBENCH((shared_resolve<int, &shared_of<int>::mapped>),
        "reference/shared/map/int");
-NBENCH((shared_resolve<std::string, &shared_of<std::string>::by_virtual>),
-       "reference/shared/virtual/string");
-NBENCH((shared_resolve<std::string, &shared_of<std::string>::by_pointer>),
-       "reference/shared/pointer/string");
-NBENCH((shared_resolve<std::string, &shared_of<std::string>::kept>),
-       "reference/shared/kept/string");
-NBENCH((shared_resolve<std::string, &shared_of<std::string>::mapped>),
-       "reference/shared/map/string");
 
 } // namespace

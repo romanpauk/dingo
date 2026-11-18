@@ -5,22 +5,25 @@
 
 A case is one measured thing, named by its parameters; a metric is a
 quantity of it. Every suite measures the scenarios of spec/footprint.py, the
-same programs of each container (runtime, arena and static) and shape:
+same programs of each container (runtime and static) and shape, compiled as
+a release build compiles them. Of the compiler:
 
-  footprint   a scenario compiled at -O0 with the variant's headers: code,
-              constants, data and unwind bytes and functions of the object;
-              the compiler's instructions, peak memory and CPU time
-  release     the same at -O2, as a release build compiles it
-  costs       differences of footprint scenarios: a container, a first and a
-  release-costs  further registration, a request type; code bytes, compiler
-              instructions and memory
-  callers     the code another place that resolves adds, at -O2
-  headers     the code of a scenario at -O2 by the header it is defined in
+  release     the code, constants, data and unwind bytes and functions of a
+              scenario's object; the compiler's instructions, peak memory and
+              CPU time
+  release-costs  their differences: a container, a first and a further
+              registration, a request type
+  callers     the code another place that resolves adds
+  headers     the code of a scenario by the header it is defined in
   compiler    where the compiler spent its work in a scenario: a phase (gcc),
               an event or the instantiations of an area of the library
               (clang); time, memory collected, count
-  probes      the code-generation probes, optimized: code bytes of each
-  run         what a container runs, optimized, of nbench/bench.hpp:
+  probes      the code-generation probes: code bytes of each
+
+Of what runs:
+
+  run         what a container runs, of nbench/bench.hpp, a runtime
+              container of the memory of an arena:
               constructing an empty container, registering, and the first
               resolution of a request type and those after it; time,
               instructions, cycles and cache misses per operation. With it,
@@ -81,28 +84,26 @@ def spelling(variant):
     return []
 
 
-def flags(variant, optimized):
-    base = ["-std=c++17", f"-I{variant.values['tree']}/include",
-            *spelling(variant)]
-    return base + (optimized or ["-O0"])
+def flags(variant, *more):
+    """The flags of a scenario of a variant: a release build's
+    (footprint.OPTIMIZED), with its headers."""
+    return ["-std=c++17", f"-I{variant.values['tree']}/include",
+            *spelling(variant), *footprint.OPTIMIZED, *more]
 
 
-def compiled(scenario, variant, release=False):
-    """driver.measure of a scenario, or an error: at its own flags, or at -O2
-    as a release build compiles it."""
-    source, added = SCENARIOS[scenario]
-    name = scenario.replace("/", "__") + ("__release" if release else "")
-    found = driver.measure(variant.values["compiler"],
-                           flags(variant, ["-O2"] if release else added),
-                           work(variant), name, source)
+def compiled(scenario, variant):
+    """driver.measure of a scenario, or an error."""
+    source, _ = SCENARIOS[scenario]
+    found = driver.measure(variant.values["compiler"], flags(variant),
+                           work(variant), scenario.replace("/", "__"), source)
     if found.get("returncode"):
         return {"error": driver.first_error(found.get("stderr", ""))}
     return found
 
 
-def measure(scenario, variant, release=False):
+def measure(scenario, variant):
     """The object of a scenario and what the compiler took."""
-    found = compiled(scenario, variant, release)
+    found = compiled(scenario, variant)
     if "error" in found:
         return found
     sections = found.get("object", {}).get("sections", {})
@@ -143,7 +144,7 @@ def probes(scenario, variant):
                       found.get("object", {}).get("named", {}).items()}}
 
 
-def costs(results, variant, suite="footprint"):
+def costs(results, variant, suite="release"):
     """footprint.costs of the scenarios a suite measured."""
     measured = {case: {"object": {"sections": {"code": m.get("code")}},
                        "instructions": m.get("instructions"),
@@ -160,7 +161,7 @@ ATTRIBUTED = [name for name in footprint.scenario_names()
 
 
 def attribution(scenario, variant):
-    """The code of a scenario compiled at -O2, by the header of the library
+    """The code of a scenario, by the header of the library
     each function is defined in, by the debug information: the function of
     the scenario, probe(), is the caller, which the library inlines into;
     the standard library and the rest are apart."""
@@ -170,7 +171,7 @@ def attribution(scenario, variant):
     cpp, obj = directory / f"{name}.cpp", directory / f"{name}.o"
     cpp.write_text(source)
     compiled = subprocess.run(
-        [variant.values["compiler"], *flags(variant, ["-O2", "-g"]), "-c",
+        [variant.values["compiler"], *flags(variant, "-g"), "-c",
          str(cpp), "-o", str(obj)], capture_output=True, text=True)
     if compiled.returncode != 0:
         return {"error": driver.first_error(compiled.stderr)}
@@ -198,7 +199,7 @@ def attribution(scenario, variant):
 
 def callers(scenario, variant):
     """The code a place that resolves adds: of the scenario with each of its
-    requests resolved twice, less the scenario, at -O2, by the requests. A
+    requests resolved twice, less the scenario, by the requests. A
     function called once is inlined into its caller, so the size of the
     caller is not what another place pays."""
     source, _ = SCENARIOS[scenario]
@@ -209,7 +210,7 @@ def callers(scenario, variant):
     code = []
     for name, text in ((scenario, source), (scenario + "/twice", twice)):
         found = driver.measure(variant.values["compiler"],
-                               flags(variant, ["-O2"]), work(variant),
+                               flags(variant), work(variant),
                                name.replace("/", "__") + "__callers", text)
         if found.get("returncode"):
             return {"error": driver.first_error(found.get("stderr", ""))}
@@ -233,12 +234,8 @@ RUN_COMPILES = threading.BoundedSemaphore(8)
 
 
 def run_flags(variant):
-    """The flags of the run suite: those of a release build, without the
-    hardening a distribution adds, with the variant's headers and the
-    harness."""
-    return ["-std=c++17", *footprint.OPTIMIZED,
-            f"-I{variant.values['tree']}/include",
-            f"-I{ROOT}/tools/nbench/include", *spelling(variant)]
+    """The flags of the run suite: a scenario's, with the harness."""
+    return flags(variant, f"-I{ROOT}/tools/nbench/include")
 
 
 def run_object(compiler, run_flags_, directory, name, source):
@@ -364,29 +361,24 @@ config = Config(
     matrix={"compiler": ["g++", "clang++"]},
     repetitions=1,
     suites=[
-        Python("footprint", list(SCENARIOS), measure, title="Footprint",
-               primary="code", params=SCENARIO,
-               description="Each scenario compiled at -O0 with the "
-                           "variant's headers (spec/footprint.py).",
-               metrics=OBJECT_METRICS),
-        Python("release", [s for s in SCENARIOS if s != "codegen"],
-               lambda scenario, variant: measure(scenario, variant, True),
+        Python("release", [s for s in SCENARIOS if s != "codegen"], measure,
                title="Release footprint", primary="code", params=SCENARIO,
-               description="Each scenario compiled at -O2, as a release "
-                           "build compiles it.",
+               description="Each scenario of spec/footprint.py compiled with "
+                           "the variant's headers, as a release build "
+                           "compiles it.",
                metrics=OBJECT_METRICS),
         Python("callers", [s for s in SCENARIOS
                            if s.count("/") == 3 and not s.endswith("/0")],
                callers, title="Code of a place that resolves",
                primary="code", params=SCENARIO,
                description="The code another place that resolves a request "
-                           "adds, at -O2: of each request of a scenario "
+                           "adds: of each request of a scenario "
                            "resolved twice, less once, by the requests.",
                metrics=[Metric("code", "Code", **BYTES)]),
         Python("headers", ATTRIBUTED, attribution, title="Code by header",
                primary="code",
                params=r"^(?P<scenario>[a-z]+/\w+/\d+/\d+)/(?P<header>.+)$",
-               description="The code of a scenario at -O2 by the header of "
+               description="The code of a scenario by the header of "
                            "the library each function is defined in; caller "
                            "is the function of the scenario, std the "
                            "standard library.",
@@ -408,7 +400,8 @@ config = Config(
         Native("run", runner, title="Run", min_time="0.05s", stable="2%",
                repetitions=1,
                params=run_params,
-               description="What each scenario runs, optimized: "
+               description="What each scenario runs, a runtime container "
+                           "of the memory of an arena: "
                            "constructing an empty container, registering "
                            "into a new one, and the first resolution of a "
                            "request type of each registration, in a new "
@@ -419,17 +412,10 @@ config = Config(
                metrics=[Metric("instructions", "Instructions", "/op",
                                noise=0.01, section="cpu")]),
     ],
-    derive=[Derive("costs", costs, title="Costs", primary="code",
-                   params=cost_params,
-                   description="Differences of the footprint scenarios: a "
+    derive=[Derive("release-costs", costs, title="Release costs",
+                   primary="code", params=cost_params,
+                   description="The differences of the release footprint: a "
                                "container, a first and a further "
                                "registration and a request type.",
-                   metrics=COST_METRICS),
-            Derive("release-costs",
-                   lambda results, variant: costs(results, variant, "release"),
-                   title="Release costs", primary="code", params=cost_params,
-                   description="The costs of the release footprint: a "
-                               "container, a first and a further "
-                               "registration and a request type, at -O2.",
                    metrics=COST_METRICS)],
 )

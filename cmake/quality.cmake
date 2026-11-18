@@ -185,7 +185,8 @@ function(configure_quality_targets out_check_targets)
   # compiler, and reports what changed since the run before. It fails when a
   # scenario does not compile.
   set(footprint_dir ${PROJECT_BINARY_DIR}/footprint)
-  set(footprint_flags "-std=c++17 -O0 -I${PROJECT_SOURCE_DIR}/include")
+  # The scenarios compile as a release build does, whatever -O these give.
+  set(footprint_flags "-std=c++17 -I${PROJECT_SOURCE_DIR}/include")
   set(footprint_configuration ${footprint_dir}/configuration.txt)
   file(CONFIGURE OUTPUT ${footprint_configuration} CONTENT
     "${CMAKE_CXX_COMPILER} ${CMAKE_CXX_COMPILER_VERSION}\n${footprint_flags}\n")

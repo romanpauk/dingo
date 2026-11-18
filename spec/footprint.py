@@ -91,8 +91,7 @@ class Shape:
     containers the containers that hold it"""
 
     def __init__(self, binds, requests, includes="", types="", argument="",
-                 keyed=False, lookup="",
-                 containers=("runtime", "arena", "static")):
+                 keyed=False, lookup="", containers=("runtime", "static")):
         self.binds, self.requests = binds, requests
         self.includes, self.types = includes, types
         self.argument, self.keyed, self.lookup = argument, keyed, lookup
@@ -111,16 +110,6 @@ SHAPES = {
                         "dingo::interfaces<I<{i}>>"],
                        ["I<{i}> &", "std::shared_ptr<I<{i}>>",
                         "std::shared_ptr<I<{i}>> &"]),
-    # A value that owns memory, which a unique request moves out of what the
-    # container made, and destroys.
-    "string": Shape(["dingo::scope<dingo::unique>, dingo::storage<S<{i}>>"],
-                    ["S<{i}>", "std::unique_ptr<S<{i}>>"],
-                    includes="#include <string>\n",
-                    types="template <int I> struct S {\n"
-                          "  DINGO_CONSTRUCTOR(S()) {}\n"
-                          "  std::string value = \"longer than a string "
-                          "keeps in place\";\n"
-                          "};\n"),
     # An object the code of the program owns. A static container holds no
     # object made before it.
     "external": Shape(["dingo::scope<dingo::external>, "
@@ -129,7 +118,7 @@ SHAPES = {
                       includes="#include <dingo/storage/external.h>\n",
                       types="template <int I> T<I> owned;\n",
                       argument="owned<{i}>",
-                      containers=("runtime", "arena")),
+                      containers=("runtime",)),
     # A shared object constructed of another shared object.
     "dependency": Shape(["dingo::scope<dingo::shared>, dingo::storage<T<{i}>>",
                          "dingo::scope<dingo::shared>, dingo::storage<D<{i}>>"],
@@ -158,23 +147,18 @@ SHAPES = {
                             "P>>"),
 }
 
-# The containers: the header of each, and whether it is the runtime
-# container, which the program registers into, or the static one, whose
-# bindings are its type. The arena container is the runtime one, of the
-# memory of an arena the program gives it.
-CONTAINERS = {"runtime": "runtime_container", "arena": "runtime_container",
-              "static": "static_container"}
-# The bytes of the arena of a container of an arena container.
+# The containers, by the header of each: the runtime container, which the
+# program registers into, and the static one, whose bindings are its type.
+CONTAINERS = {"runtime": "runtime_container", "static": "static_container"}
+# The bytes of the arena a runtime container of the run suite allocates of,
+# which its registrations and resolutions fit: what runs is the container,
+# not the allocator of the process.
 ARENA = 16384
 
 
 def numbered(text, index):
     """A spelling of a registration of the index i, of the index."""
     return text.replace("{i}", str(index))
-
-
-def family(container):
-    return "static" if container == "static" else "runtime"
 
 
 class Program:
@@ -185,13 +169,10 @@ class Program:
     def __init__(self, container, shape=None, registrations=0):
         found = SHAPES[shape] if shape else Shape([], [])
         self.container = container
-        includes = [HEADERS.format(container=CONTAINERS[container])]
-        if container == "arena":
-            includes.append("#include <dingo/memory/arena_allocator.h>\n")
-        includes.append(found.includes)
-        self.includes = "".join(includes)
+        self.includes = (HEADERS.format(container=CONTAINERS[container]) +
+                         found.includes)
         lines = [LEAF, found.types]
-        traits = f"dingo::{family(container)}_container_traits"
+        traits = f"dingo::{container}_container_traits"
         if found.lookup:
             lines.append(f"struct traits : {traits} {{\n"
                          f"  using lookup_definition_type = {found.lookup};\n"
@@ -207,12 +188,12 @@ class Program:
             self.type = (f"dingo::static_container<bound, {traits}>"
                          if found.lookup else
                          "dingo::static_container<bound>")
-        elif container == "arena":
-            self.type = (f"dingo::container<{traits}, "
-                         "dingo::arena_allocator<char>>")
         else:
             self.type = ("dingo::container<traits>" if found.lookup else
                          "dingo::container<>")
+            # The container the run suite runs, of the memory of an arena.
+            self.run_type = (f"dingo::container<{traits}, "
+                             "dingo::arena_allocator<char>>")
         self.types = "\n".join(line for line in lines if line)
         argument = ("dingo::key_value{std::size_t({i})}" if found.keyed
                     else found.argument)
@@ -233,21 +214,12 @@ class Program:
                            for index in range(registrations)]
             self.requests.append((request.replace("{i}", "i"), spelled))
 
-    def made(self, indent):
-        """The lines that make the container c in a function."""
-        if self.container != "arena":
-            return [f"{indent}{self.type} c;"]
-        return [f"{indent}unsigned char buffer[{ARENA}];",
-                f"{indent}dingo::arena<> arena(buffer);",
-                f"{indent}dingo::arena_allocator<char> allocator(arena);",
-                f"{indent}{self.type} c(allocator);"]
-
     def compiled(self, requested):
         """The program the compile suites measure: a function that makes the
         container, registers into it and resolves the first requested of the
         requests of each registration."""
         lines = [self.includes + self.types, "void probe() {",
-                 *self.made("  ")]
+                 f"  {self.type} c;"]
         lines += [f"  {register};" for register in self.registers]
         count = len(self.requests[0][1]) if self.requests else 0
         for index in range(count):
@@ -261,18 +233,21 @@ class Program:
         namespace of the scenario: constructing an empty container;
         registering into a new container; the first resolution of a request
         of each registration, in a new container; and the resolutions after
-        it. Those of a new container are of a batch of containers made, and
+        it. A runtime container allocates of an arena of its own, so that
+        what runs is the container, not the allocator of the process. Those
+        of a new container are of a batch of containers made, and
         destroyed, apart from what is measured, a fixed number of times: the
         instructions of each are the same, and a time of a new container is
         of its first use, which repeating does not make steadier."""
         space = "scenario_" + re.sub(r"\W", "_", scenario)
         lines = ["#include <nbench/bench.hpp>", self.includes,
+                 "#include <dingo/memory/arena_allocator.h>",
                  f"namespace {space} {{", self.types, "struct instance {"]
-        if self.container == "arena":
+        if self.container == "runtime":
             lines += [f"  unsigned char buffer[{ARENA}];",
                       "  dingo::arena<> arena{buffer};",
                       "  dingo::arena_allocator<char> allocator{arena};",
-                      f"  {self.type} c{{allocator}};"]
+                      f"  {self.run_type} c{{allocator}};"]
         else:
             lines.append(f"  {self.type} c;")
         lines += ["  void populate() {",
@@ -341,17 +316,18 @@ class Program:
 
 
 def scenario_names():
-    """Every scenario: the headers of each family, an empty container of each
-    container, and the registrations of each shape a container holds, 1 or
-    5, resolved by none of the requests of the shape or by each."""
-    names = ["headers/runtime", "headers/static"]
+    """Every scenario, of each container: its headers alone, an empty
+    container, and of each shape it holds one registration, five, and five
+    resolved by every request of the shape. Their differences are the costs
+    (costs), of a container, a first and a further registration and a
+    request type."""
+    names = []
     for container in CONTAINERS:
-        names.append(f"{container}/empty")
+        names += [f"headers/{container}", f"{container}/empty"]
         for shape, found in SHAPES.items():
             if container in found.containers:
-                names += [f"{container}/{shape}/{registrations}/{requested}"
-                          for registrations in (1, 5)
-                          for requested in (0, len(found.requests))]
+                names += [f"{container}/{shape}/1/0", f"{container}/{shape}/5/0",
+                          f"{container}/{shape}/5/{len(found.requests)}"]
     return names
 
 
@@ -368,22 +344,24 @@ def program(scenario):
 
 
 def scenarios():
-    """The scenarios by name: their source, and the flags they add."""
+    """The scenarios by name: their source, and the flags they add, those of
+    a release build, which is what the measurements are of."""
     found = {"codegen": (CODEGEN.read_text(), OPTIMIZED)}
     for name in scenario_names():
         made, requested = program(name)
         if made is None:
             container = name.split("/")[1]
-            found[name] = (HEADERS.format(container=CONTAINERS[container]), [])
+            found[name] = (HEADERS.format(container=CONTAINERS[container]),
+                           OPTIMIZED)
         else:
-            found[name] = (made.compiled(requested), [])
+            found[name] = (made.compiled(requested), OPTIMIZED)
     return found
 
 
 def run_source(scenario):
     """The source of the cases the run suite measures of a scenario, or None:
     of an empty container, and of five registrations; not of the headers
-    alone, nor of one registration, which runs as one of five does."""
+    alone, nor of one registration, which registers as one of five does."""
     made, requested = program(scenario)
     if made is None or re.search(r"/1/\d+$", scenario):
         return None
@@ -417,7 +395,7 @@ def costs(measured):
 
     for container in CONTAINERS:
         difference(f"{container} container", f"{container}/empty",
-                   f"headers/{family(container)}")
+                   f"headers/{container}")
         for shape, found_shape in SHAPES.items():
             if container not in found_shape.containers:
                 continue
