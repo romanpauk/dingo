@@ -27,6 +27,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 
 import jinja2
 
@@ -207,15 +208,30 @@ def program_key(compiler, flags, directory, name, cpp):
 
 
 def load_result(key):
-    """The result kept of a program, or None."""
+    """The result kept of a program, or None. Its file is touched, so that
+    its time is when it was last used, which prune_unused reads."""
+    path = CACHE / key[:2] / f"{key}.zst"
     try:
-        with zstd.open(CACHE / key[:2] / f"{key}.zst", "rt") as entry:
+        with zstd.open(path, "rt") as entry:
             result = json.load(entry)
+        path.touch()
     except (OSError, ValueError, zstd.ZstdError):
         return None
     with CACHE_LOCK:
         NEEDED.add(key)
     return result
+
+
+def prune_unused(directory, days, pattern="??/*"):
+    """Removes the files of a cache that no run used for as many days: a
+    cache that runs of several trees share, which no one run uses all of."""
+    oldest = time.time() - days * 86400
+    for path in Path(directory).glob(pattern):
+        try:
+            if path.stat().st_mtime < oldest:
+                path.unlink()
+        except OSError:
+            pass
 
 
 def store_result(key, result):

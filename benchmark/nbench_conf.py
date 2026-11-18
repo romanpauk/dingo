@@ -52,8 +52,11 @@ ROOT = Path(__file__).resolve().parents[1]
 WORK = ROOT / "build" / "nbench" / "footprint"
 SCENARIOS = footprint.scenarios()
 # A program's results are kept by what it is (compiler and preprocessed
-# source), so a scenario of a tree is compiled once, for every suite.
+# source), so a scenario of a tree is compiled once, for every suite. Runs of
+# several trees share the cache, so what no run used for two weeks goes.
+KEPT_DAYS = 14
 driver.open_cache(WORK / "programs")
+driver.prune_unused(WORK / "programs", KEPT_DAYS)
 # Eight compilers at once, each within the driver's memory limit: within
 # 8 GB, as many as the machine the measurements run on holds beside them.
 driver.set_jobs(8)
@@ -164,15 +167,22 @@ def attribution(scenario, variant):
     """The code of a scenario, by the header of the library
     each function is defined in, by the debug information: the function of
     the scenario, probe(), is the caller, which the library inlines into;
-    the standard library and the rest are apart."""
+    the standard library and the rest are apart. It is kept by what the
+    program is, as the results of the driver are."""
     source, _ = SCENARIOS[scenario]
     directory = work(variant)
     name = scenario.replace("/", "__") + "__attributed"
     cpp, obj = directory / f"{name}.cpp", directory / f"{name}.o"
     cpp.write_text(source)
+    chosen = flags(variant, "-g")
+    key = driver.program_key(variant.values["compiler"], chosen, directory,
+                             name, cpp)
+    kept = driver.load_result(key) if key is not None else None
+    if kept is not None:
+        return kept
     compiled = subprocess.run(
-        [variant.values["compiler"], *flags(variant, "-g"), "-c",
-         str(cpp), "-o", str(obj)], capture_output=True, text=True)
+        [variant.values["compiler"], *chosen, "-c", str(cpp), "-o", str(obj)],
+        capture_output=True, text=True)
     if compiled.returncode != 0:
         return {"error": driver.first_error(compiled.stderr)}
     symbols = subprocess.run(["nm", "-S", "-l", str(obj)], capture_output=True,
@@ -193,8 +203,11 @@ def attribution(scenario, variant):
         else:
             where = "other"
         found[where] = found.get(where, 0) + size
-    return {"cases": {f"{scenario}/{where}": {"code": size}
-                      for where, size in found.items()}}
+    result = {"cases": {f"{scenario}/{where}": {"code": size}
+                        for where, size in found.items()}}
+    if key is not None:
+        driver.store_result(key, result)
+    return result
 
 
 def callers(scenario, variant):
@@ -226,6 +239,7 @@ MAIN = "#include <nbench/bench.hpp>\nNBENCH_MAIN();\n"
 # The objects of the run suite, by what the preprocessor makes of their
 # source, which every variant and run shares.
 OBJECTS = WORK / "objects"
+driver.prune_unused(OBJECTS, KEPT_DAYS)
 RUNNERS = {}
 RUNNERS_LOCK = threading.Lock()
 # The compilers that build the programs of the run suite at once, as many
@@ -255,6 +269,7 @@ def run_object(compiler, run_flags_, directory, name, source):
          hashlib.sha256(expanded.stdout).hexdigest()]).encode()).hexdigest()
     obj = OBJECTS / key[:2] / f"{key}.o"
     if obj.exists():
+        obj.touch()
         return obj, None
     obj.parent.mkdir(parents=True, exist_ok=True)
     made = obj.with_suffix(f".{threading.get_ident()}.o")
