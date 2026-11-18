@@ -151,6 +151,14 @@ struct binding_sources {
     return (Own::owned ? operation.owned : operation.borrowed) != nullptr;
   }
 
+  // The table a runtime resolution reads of a published state: the address
+  // what it points to is at, of no operation; a request takes its steps of
+  // the tables of the types it spells.
+  template <std::size_t State>
+  using published_table = operation_table<
+      typename class_carrier<classes.state_class[State]>::type::type, Leaf,
+      Interface, 0>;
+
   template <std::size_t... I>
   static constexpr auto publish(std::index_sequence<I...>) {
     struct table {
@@ -158,7 +166,7 @@ struct binding_sources {
       const type_table *tables[sizeof...(I)];
     };
     return table{{source<used.states[I]>()...},
-                 {&table_t<used.states[I]>::value...}};
+                 {&published_table<used.states[I]>::value...}};
   }
 
   static constexpr auto published =
@@ -167,7 +175,10 @@ struct binding_sources {
   // The carrier of each state of the closure, and whether C++ makes it: a
   // published state is of the class of its type; what a step of a request
   // makes of a state is, when the types of the step make it.
-  template <std::size_t State, bool Published = (State < used.count)>
+  // The stored object is of the carrier of its class, also of a binding of
+  // which no request takes anything.
+  template <std::size_t State,
+            bool Published = (State < used.count || State == 0)>
   struct closed_carrier {
     static constexpr bool possible = true;
     // MSVC does not parse a subscript in a subscript of a template argument.
@@ -303,41 +314,19 @@ struct binding_sources {
   static constexpr const auto &shapes = answer_table::shapes;
   static constexpr const auto &answers = answer_table::answers;
 
-  // Whether a request converts what a state of the closure reaches by an
-  // operation of its type, after the route of the state: a handle to the
-  // sharing one, or to one of an array of unknown bound, of a layer whose
-  // type the binding does not have. Wraps, observers and adopters are made of
-  // the types the request spells.
-  template <std::size_t State> static constexpr bool converts_unknown_layer() {
-    if constexpr (!closed_carrier<State>::possible) {
-      return false;
-    } else {
-      using own = typename closed_carrier<State>::type;
-      return operation_result<operation<semantics::step::transfer>, Leaf,
-                              Interface, typename own::type, true>::possible ||
-             operation_result<operation<semantics::step::unknown_bound>, Leaf,
-                              Interface, typename own::type,
-                              own::owned>::possible;
-    }
-  }
-
-  // The table of the type of each state the closure adds, of the steps a
-  // request takes of it; none of a state C++ does not make.
+  // The table of the type of each state of the closure an answer or an
+  // extension may give what it points to of; none of another.
   template <std::size_t State>
   static constexpr const type_table *closed_table() {
     if constexpr (State < used.count) {
       return published.tables[State];
     } else if constexpr (!closed_carrier<State>::possible ||
                          !(answer_table::pointed.entries[State] ||
-                           converts_unknown_layer<State>())) {
+                           answer_table::routed.through[State])) {
       return nullptr;
     } else {
       using own = typename closed_carrier<State>::type;
-      // A step from a state of the closure into another is the closure's.
-      constexpr std::uint32_t mask =
-          operation_mask(semantics::step::transfer) |
-          operation_mask(semantics::step::unknown_bound);
-      return &operation_table<typename own::type, Leaf, Interface, mask>::value;
+      return &operation_table<typename own::type, Leaf, Interface, 0>::value;
     }
   }
   template <std::size_t... I>
@@ -370,6 +359,40 @@ struct binding_sources {
   }
   static constexpr auto groups =
       make_groups(std::make_index_sequence<shapes.count>{});
+
+  // The key of the type of a layer source: of a pointer to the first element
+  // of an array apart from one to a single object.
+  template <typename T, bool FirstElement>
+  static constexpr const void *source_key() {
+    if constexpr (FirstElement && std::is_pointer_v<T>) {
+      return &shape_key<first_element<std::remove_pointer_t<T>>>;
+    } else {
+      return &shape_key<T>;
+    }
+  }
+
+  // The layer sources an extension of a request starts from: the key of the
+  // type of each, of no qualifiers of its own.
+  template <std::size_t Index> static constexpr layer_source layer_source_v() {
+    constexpr std::size_t state = answer_table::layer_sources.states[Index];
+    using type = typename closed_carrier<state>::type::type;
+    constexpr const semantics::state &each = closure.states[state];
+    return {each.reached.depth &&
+                    each.reached.layers[0] == semantics::array_pointer_layer
+                ? source_key<std::remove_cv_t<type>, true>()
+                : source_key<std::remove_cv_t<type>, false>(),
+            source_form(each.reached), static_cast<std::uint16_t>(state),
+            each.made, each.reached.absent};
+  }
+  template <std::size_t... I>
+  static constexpr auto make_layer_sources(std::index_sequence<I...>) {
+    struct list {
+      layer_source entries[sizeof...(I) + 1];
+    };
+    return list{{layer_source_v<I>()..., {}}};
+  }
+  static constexpr auto layer_sources = make_layer_sources(
+      std::make_index_sequence<answer_table::layer_sources.count>{});
 };
 
 } // namespace dingo::detail::execution

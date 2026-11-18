@@ -1282,15 +1282,6 @@ public:
       : allocator_base<Allocator>(alloc), root_(this),
         runtime_data_(get_allocator()), parent_(parent) {
     validate_lookup_definitions();
-    runtime_data_.get().derive = &detail::execution::make_runtime_conversions;
-  }
-
-  // The conversions of a request the closure of a binding has no answer for,
-  // by the search the root was made with.
-  detail::execution::runtime_conversions
-  derive(const detail::execution::binding_layout &binding,
-         const detail::execution::request_layout &request) {
-    return shared_runtime_data().derive(binding, request);
   }
 
   // A level of the local bindings of a registration made in owner. It borrows

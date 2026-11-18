@@ -133,13 +133,6 @@ struct runtime_registry_data {
       : runtime(allocator), bindings(allocator, runtime.persistent_arena()),
         scope_states(scope_pointer_allocator(allocator)) {}
 
-  // The search a request the closure of a binding has no answer for is
-  // derived by, which the root container names as it is made: a file that
-  // makes no container compiles none of it.
-  execution::runtime_conversions (*derive)(
-      const execution::binding_layout &binding,
-      const execution::request_layout &request) = nullptr;
-
   std::size_t create_scope(scope_state_type *state) {
     scope_states.push_back(state);
     return scope_states.size();

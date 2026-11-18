@@ -59,13 +59,13 @@ Container &resolution_container(runtime_binding_header &header) noexcept {
 
 // Selects the conversion a request of a binding is resolved by: the answer
 // of the closure of the binding for the request, of what lives as long as the
-// container when stable, when it has one; else the conversion of the request,
-// derived once, by the container the binding resolves in. A request the
-// binding does not convert to is rejected.
-template <typename Container, typename Node, typename Context>
+// container when stable, when it has one; else the extension of the request
+// of a layer source of the binding, of the fewest copies and moves of the
+// leaf. A request the binding does not convert to is rejected.
+template <typename Node, typename Context>
 DINGO_NOINLINE selected_conversion
-select_conversion(const Node &node, runtime_binding_header &header, bool stable,
-                  Context &context, const runtime_request &request) {
+select_conversion(const Node &node, bool stable, Context &context,
+                  const runtime_request &request) {
   if (node.layout == nullptr || !request.modeled ||
       request.interface_key != node.interface_key) {
     throw_type_not_convertible(request.requested, node.registered, context);
@@ -75,26 +75,23 @@ select_conversion(const Node &node, runtime_binding_header &header, bool stable,
     if (layout.groups[group].shape == request.shape) {
       const execution::closed_answers &answers =
           layout.answers[layout.groups[group].first +
-                         static_cast<std::size_t>(request.layout.category) * 4 +
-                         request.layout.goal.quals[0]];
+                         static_cast<std::size_t>(request.category) * 4 +
+                         request.quals];
       const execution::closed_answer &found =
           stable ? answers.stable : answers.transient;
       if (found.found) {
-        return {&found, nullptr};
+        return {&found, nullptr, 0, nullptr};
       }
       break;
     }
   }
-  const auto &conversions = request.conversions->find(&node, [&] {
-    return resolution_container<Container>(header).derive(layout,
-                                                          request.layout);
-  });
-  const execution::runtime_conversion &derived =
-      stable ? conversions.stable : conversions.transient;
-  if (!derived.found) {
-    throw_type_not_convertible(request.requested, node.registered, context);
+  if (request.extend != nullptr) {
+    const selected_conversion chosen = request.extend(layout, request, stable);
+    if (chosen.derived != nullptr) {
+      return chosen;
+    }
   }
-  return {nullptr, &derived};
+  throw_type_not_convertible(request.requested, node.registered, context);
 }
 
 // The record of a registration, in one allocation: the header the bindings
@@ -159,19 +156,15 @@ private:
         semantics_type, semantics_type::template shape<abstract>::sources,
         identities, stored_type, typename execution_type::leaf_type,
         typename execution_type::interface_type>;
-    using layers = detail::execution::runtime_layers<identities>;
     static constexpr detail::execution::binding_layout value{
-        sources::closed.states,
-        sources::used.count,
-        sources::closure.count,
-        semantics_type::context(abstract),
-        layers::value,
-        layers::count,
+        abstract,
         sources::closed_tables.entries,
         sources::route_finishes.entries,
         sources::groups.entries,
         sources::shapes.count,
-        sources::answers.entries};
+        sources::answers.entries,
+        sources::layer_sources.entries,
+        sources::answer_table::layer_sources.count};
   };
 
   static constexpr const detail::execution::binding_layout *layout() {
@@ -207,10 +200,8 @@ private:
            const typename node_type::request_type &request,
            const void *cache_key) {
     // What a request passes to the caller lives as long as the container.
-    const detail::selected_conversion selected =
-        detail::select_conversion<Container>(binding_node, binding.header(),
-                                             scope.is_caller(), context,
-                                             request);
+    const detail::selected_conversion selected = detail::select_conversion(
+        binding_node, scope.is_caller(), context, request);
     if constexpr (!execution_type::modeled) {
       (void)selected;
       (void)cache_key;
@@ -236,10 +227,10 @@ private:
                                                   execution_type::scope.makes>(
                 std::forward<decltype(source)>(source), store);
             if (selected.derived != nullptr) {
-              return detail::finish_derived(
-                  sources::template run_route<false>(selected.derived->route,
-                                                     start, store),
-                  *selected.derived, store);
+              return selected.finish(sources::template run_route<false>(
+                                         selected.route, start, store),
+                                     *selected.derived,
+                                     layout.tables[selected.route], store);
             }
             const detail::execution::closed_answer &answer = *selected.answer;
             if constexpr (sources::answer_table::any_value) {

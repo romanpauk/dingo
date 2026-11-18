@@ -450,22 +450,43 @@ struct closed_answer_table {
   static constexpr answer_list answers =
       make_answers(std::make_index_sequence<shapes.count * 7>{});
 
-  // Whether a step a request takes of what the binding has no type of may
-  // start from a state: a wrap of what it owns, a handle made of a raw
-  // pointer, or a handle it owns converted.
-  static constexpr bool starts_steps(const semantics::object &object) {
-    const semantics::context context = Semantic::context();
-    const bool wraps =
-        (object.origin == semantics::origin::made ||
-         (object.origin == semantics::origin::copied && object.instance)) &&
-        semantics::can_move(object, context) &&
-        object.depth < semantics::derivation_depth && !object.owns_pointee;
-    const bool pointer = object.depth && context.kind(object.layers[0]).adopted;
-    const bool handle = object.depth && semantics::owned(object.origin);
-    const bool bound =
-        object.depth >= 2 && context.kind(object.layers[1]).bounded;
-    return wraps || pointer || handle || bound;
+  // The layer sources an extension of a request the closure does not satisfy
+  // starts from: of each type and form, the state of the fewest copies and
+  // moves of the leaf, of the states C++ makes.
+  struct source_list {
+    std::uint16_t states[closure.count + 1] = {};
+    std::size_t count = 0;
+  };
+  static constexpr source_list make_layer_sources() {
+    source_list made;
+    for (std::size_t state = 0; state < closure.count; ++state) {
+      const semantics::state &each = closure.states[state];
+      if (!possible(state) || !extensible(each.reached)) {
+        continue;
+      }
+      const std::uint16_t code = source_form(each.reached);
+      std::size_t found = 0;
+      while (found < made.count) {
+        const semantics::state &other = closure.states[made.states[found]];
+        if (source_form(other.reached) == code &&
+            same_source_type(other.reached, each.reached)) {
+          break;
+        }
+        ++found;
+      }
+      if (found == made.count) {
+        made.states[made.count++] = static_cast<std::uint16_t>(state);
+      } else {
+        const semantics::state &other = closure.states[made.states[found]];
+        if (semantics::cheaper(each.made, each.reached.absent, other.made,
+                               other.reached.absent)) {
+          made.states[found] = static_cast<std::uint16_t>(state);
+        }
+      }
+    }
+    return made;
   }
+  static constexpr source_list layer_sources = make_layer_sources();
 
   // The states a route of the binding reaches, of a value (Value) or not: of
   // an answer, or of a derivation that takes steps of the request after it.
@@ -484,10 +505,8 @@ struct closed_answer_table {
         }
       }
     }
-    for (std::size_t index = 0; index < closure.count; ++index) {
-      if (possible(index) && starts_steps(closure.states[index].reached)) {
-        made.through[index] = true;
-      }
+    for (std::size_t index = 0; index < layer_sources.count; ++index) {
+      made.through[layer_sources.states[index]] = true;
     }
     return made;
   }

@@ -108,6 +108,21 @@ object, at the same cost, and is as defined when a layer is empty.
 [`semantics_test.py`](../spec/semantics_test.py) checks this for every cell of
 the conversion check.
 
+Both containers derive a request in two halves, each of one type:
+
+- The binding closes its layer sources under every step of a request but a wrap
+  and a conversion to a more qualified element, in the layers it stores and the
+  layers they convert to. A request that the closure satisfies resolves from it.
+- Any other request extends a state of the closure whose type the request
+  spells: the request below some of its outer layers, of its own qualifiers
+  below the outer layer or of none, or the pointer that a handle of it adopts or
+  observes. The extension depends only on that type and on the form of the
+  state: whether it is borrowed, made or a copy, whether it is an instance,
+  which of its levels live as long as the container, whether its outer layer was
+  made of what it holds, and whether it owns what its pointer points to. The
+  extension of each type and form is derived of the request type alone, and the
+  resolution takes the one of the fewest copies and moves of the leaf.
+
 ## Limitations
 
 A _limitation_ is a step or a reference that the semantics allow and the library

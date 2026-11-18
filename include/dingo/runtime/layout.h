@@ -16,83 +16,12 @@
 #include <type_traits>
 #include <utility>
 
-// What a runtime resolution records of a binding and of a request: the layers
-// of each in a universe, the answers of the closure of a binding, and the
-// types and tables of a request.
+// What a runtime resolution records of a binding and of a request: the answers
+// of the closure of a binding and its layer sources, and the types and tables
+// of a request.
 
 namespace dingo::detail::execution {
 
-// The identity of a layer, as an address both sides of a runtime resolution
-// compare: of the layers of C++, or of the identity of a wrapper.
-struct array_pointer_layer_tag {};
-
-template <typename T> inline constexpr char identity_tag_v = 0;
-
-template <typename Tag> constexpr const void *identity_v() {
-  if constexpr (is_language_tag_v<Tag> ||
-                std::is_same_v<Tag, array_pointer_layer_tag>) {
-    return &identity_tag_v<Tag>;
-  } else {
-    return &identity_tag_v<typename Tag::identity>;
-  }
-}
-
-// A wrapper layer of a universe as a runtime resolution merges it with
-// another: what it is, its identity, the identity of the layer an owned value
-// of it converts to, and that of the layer it converts to of an array of
-// unknown bound, or none.
-struct runtime_layer {
-  semantics::layer_kind kind;
-  const void *identity;
-  const void *sharing_identity;
-  const void *unknown_bound_identity;
-};
-
-// The identity tag of a layer, or none.
-template <typename Identity> constexpr const void *layer_identity_v() {
-  if constexpr (std::is_void_v<Identity>) {
-    return nullptr;
-  } else {
-    return &identity_tag_v<Identity>;
-  }
-}
-
-template <typename Identity> constexpr runtime_layer runtime_layer_v() {
-  semantics::layer_kind kind = wrapper_kind_v<Identity>;
-  kind.transfers = 0;
-  kind.converts_unknown_bound = 0;
-  using unknown_bound_target =
-      std::conditional_t<converts_unknown_bound<Identity>(),
-                         typename unknown_bound_layer<Identity>::type, void>;
-  return {kind, &identity_tag_v<Identity>,
-          layer_identity_v<typename shared_layer<Identity>::type>(),
-          layer_identity_v<unknown_bound_target>()};
-}
-
-// The wrapper layers of a universe, in its order.
-template <typename Identities> struct runtime_layers;
-template <typename... Identities>
-struct runtime_layers<type_list<Identities...>> {
-  static constexpr std::size_t count = sizeof...(Identities);
-  static constexpr runtime_layer value[count + 1] = {
-      runtime_layer_v<Identities>()..., {}};
-};
-
-// A request as a runtime resolution converts it: its layers in a universe of
-// its own, whose wrapper layers it gives, what it names, and the table of
-// each type it spells, from its shape to its element, which make the layers
-// it makes.
-struct request_layout {
-  const runtime_layer *layers;
-  std::size_t layer_count;
-  semantics::request goal;
-  semantics::category category;
-  const type_table *const *tables;
-};
-
-// A binding as a runtime resolution converts it: its layer sources, the states
-// of a search in its order, in a universe of its own, whose wrapper layers
-// it gives, and the table of the type of each.
 // How the route of a state of the closure of a binding gives a value the
 // request takes: whether it makes it of what the route reaches, a copy of
 // the qualifiers quals, rather than taking what the route reaches.
@@ -104,6 +33,11 @@ struct route_finish {
 // The key of a type a request is of, without its own qualifiers, which a
 // binding finds the answers of its closure for a request by.
 template <typename T> inline constexpr char shape_key = 0;
+
+// The type of the pointer to the first element of an array of T, which C++
+// spells as a pointer to one T: a layer source of each is apart, as a handle
+// adopts it as an array.
+template <typename T> struct first_element {};
 
 // How a state of the closure of a binding satisfies a request, as the code
 // compiles: its route, whether it is the one of a value, how the request
@@ -134,23 +68,31 @@ struct closed_group {
   std::uint16_t first;
 };
 
+// A layer source of a binding an extension of a request starts from: the key
+// of its type, its form, its state of the closure, the copies and the moves of
+// the leaf that reach it, and whether it may be absent.
+struct layer_source {
+  const void *shape = nullptr;
+  std::uint16_t code = 0;
+  std::uint16_t state = 0;
+  semantics::cost made;
+  bool absent = false;
+};
+
+// A binding as a runtime resolution converts it: whether it binds the
+// abstract interface of its leaf; the table of the type of each state of the
+// closure of its layer sources and how its route gives a value; the answers of
+// the closure by the type a request is of; and the layer sources an extension
+// of a request the closure does not satisfy starts from.
 struct binding_layout {
-  // The layer sources of the binding, closed under every step a request
-  // takes but a wrap: the first source_count are those the binding steps
-  // into, of which it has the table of the type of each.
-  const semantics::state *sources;
-  std::size_t source_count;
-  std::size_t state_count;
-  semantics::context context;
-  const runtime_layer *layers;
-  std::size_t layer_count;
+  bool abstract;
   const type_table *const *tables;
-  // How the route of each state gives a value.
   const route_finish *finishes;
-  // The answers of the closure, by the type a request is of.
   const closed_group *groups;
   std::size_t group_count;
   const closed_answers *answers;
+  const layer_source *layer_sources;
+  std::size_t layer_source_count;
 };
 
 // The types a request of Request spells, from its shape at depth 0 to its

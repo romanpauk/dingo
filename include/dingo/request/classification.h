@@ -417,24 +417,13 @@ template <typename Tag> constexpr semantics::layer_kind tag_kind() {
 // to among them.
 template <typename Tags> struct layer_universe;
 
-template <typename... Tags> struct layer_universe<type_list<Tags...>> {
-  using identities = typename wrapper_identities<type_list<>, Tags...>::type;
+// The universe of the layers of a list of identities, in its order: the
+// kinds of the layers, of the layers each converts to among them. Universes
+// of the same layers are one, so that what is derived in one is derived once.
+template <typename Identities> struct identity_universe;
+template <typename... Listed> struct identity_universe<type_list<Listed...>> {
+  using identities = type_list<Listed...>;
 
-  template <typename Tag> static constexpr semantics::layer index() {
-    if constexpr (std::is_same_v<Tag, pointer_layer_tag>) {
-      return semantics::pointer_layer;
-    } else if constexpr (std::is_same_v<Tag, array_layer_tag>) {
-      return semantics::array_layer;
-    } else if constexpr (std::is_same_v<Tag, bounded_array_layer_tag>) {
-      return semantics::bounded_array_layer;
-    } else {
-      return layer_index<typename Tag::identity>(identities{});
-    }
-  }
-
-  // Adds the layer of a wrapper, with the layer its owned value converts to,
-  // and the layer it converts to of an array of unknown bound, if they are in
-  // the universe.
   template <typename Identity>
   static constexpr void add(semantics::universe &made) {
     semantics::layer_kind kind = wrapper_kind_v<Identity>;
@@ -465,6 +454,29 @@ template <typename... Tags> struct layer_universe<type_list<Tags...>> {
   }
 
   static constexpr semantics::universe value = make(identities{});
+};
+
+template <typename... Tags> struct layer_universe<type_list<Tags...>> {
+  using identities = typename wrapper_identities<type_list<>, Tags...>::type;
+
+  template <typename Tag> static constexpr semantics::layer index() {
+    if constexpr (std::is_same_v<Tag, pointer_layer_tag>) {
+      return semantics::pointer_layer;
+    } else if constexpr (std::is_same_v<Tag, array_layer_tag>) {
+      return semantics::array_layer;
+    } else if constexpr (std::is_same_v<Tag, bounded_array_layer_tag>) {
+      return semantics::bounded_array_layer;
+    } else {
+      return layer_index<typename Tag::identity>(identities{});
+    }
+  }
+
+  // Adds the layer of a wrapper, with the layer its owned value converts to,
+  // and the layer it converts to of an array of unknown bound, if they are in
+  // the universe.
+  // Of the layers alone, which every universe of them shares.
+  static constexpr const semantics::universe &value =
+      identity_universe<identities>::value;
 };
 
 // What the leaf can do, as C++ defines it. A leaf that cannot be constructed

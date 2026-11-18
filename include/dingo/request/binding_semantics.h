@@ -100,6 +100,53 @@ struct joined<type_list<Items...>, type_list<Others...>> {
   using type = type_list<Items..., Others...>;
 };
 
+// The limitations of the library the semantics apply, as a mask: both a
+// binding and a request derive under them.
+inline constexpr std::uint8_t applied_limitations = static_cast<std::uint8_t>(
+    static_cast<unsigned>(semantics::limitation::made_holder_handover) |
+    static_cast<unsigned>(semantics::limitation::converted_copy_pointer) |
+    static_cast<unsigned>(semantics::limitation::qualified_below_element));
+
+// The layers a wrapper layer converts to: the one an owned value of it is
+// handed over to, and the one it converts to of an array of unknown bound,
+// each as its type traits name it, if any.
+template <typename Identity, typename = void> struct shared_target {
+  using type = type_list<>;
+};
+template <typename Identity>
+struct shared_target<Identity, std::void_t<typename type_traits<
+                                   Identity>::template share_t<layer_probe>>> {
+  using type = type_list<wrapper_layer_tag<
+      typename type_traits<Identity>::template share_t<layer_probe>>>;
+};
+template <typename Identity, typename = void> struct unknown_bound_target {
+  using type = type_list<>;
+};
+template <typename Identity>
+struct unknown_bound_target<
+    Identity, std::void_t<typename type_traits<
+                  Identity>::template unknown_bound_t<layer_probe>>> {
+  using type = type_list<wrapper_layer_tag<
+      typename type_traits<Identity>::template unknown_bound_t<layer_probe>>>;
+};
+template <typename Tag> struct layer_targets {
+  using type = type_list<>;
+};
+template <typename Wrapper> struct layer_targets<wrapper_layer_tag<Wrapper>> {
+  using identity = typename wrapper_layer_tag<Wrapper>::identity;
+  using type = type_list_cat_t<typename shared_target<identity>::type,
+                               typename unknown_bound_target<identity>::type>;
+};
+
+// The layers the layers of a stack convert to. A binding has their types, so
+// that what it converts is of a layer it has: a layer source an extension
+// starts from is of a type the request spells.
+template <typename Tags> struct stack_targets;
+template <typename... Tags> struct stack_targets<type_list<Tags...>> {
+  using type =
+      type_list_cat_t<type_list<>, typename layer_targets<Tags>::type...>;
+};
+
 // The layers of a stack in a universe.
 template <typename Universe, typename... Tags>
 constexpr void place_layers(semantics::layer *layers, type_list<Tags...>) {
@@ -300,24 +347,19 @@ template <typename Semantics, bool Abstract> struct encoded_shape {
 template <typename Stored, typename Leaf, bool Makes, bool Early>
 struct binding_semantics {
   using stored_stack = stack_t<Stored, Leaf>;
-  using layers = typename joined<
+  using layers = type_list_cat_t<
       typename stored_stack::layers,
+      typename stack_targets<typename stored_stack::layers>::type,
       typename owning_layers<typename owning_handles<
-          typename owning_handles_key<Leaf>::type>::type>::type>::type;
+          typename owning_handles_key<Leaf>::type>::type>::type>;
   using universe_type = layer_universe<layers>;
 
   static constexpr semantics::context context(bool abstract) {
-    return {
-        leaf_traits_v<Leaf>(),
-        {Makes, false, Early},
-        abstract,
-        static_cast<std::uint8_t>(
-            static_cast<unsigned>(semantics::limitation::made_holder_handover) |
-            static_cast<unsigned>(
-                semantics::limitation::converted_copy_pointer) |
-            static_cast<unsigned>(
-                semantics::limitation::qualified_below_element)),
-        &universe_type::value};
+    return {leaf_traits_v<Leaf>(),
+            {Makes, false, Early},
+            abstract,
+            applied_limitations,
+            &universe_type::value};
   }
 
   static constexpr semantics::object start() {

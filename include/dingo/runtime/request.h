@@ -17,7 +17,6 @@
 #include <dingo/runtime/conversion.h>
 #include <dingo/storage/retention.h>
 
-#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <memory>
@@ -112,68 +111,34 @@ private:
   const type_descriptor *registered_;
 };
 
-// The conversions of a request type, made once for each binding that resolves
-// it: for a request that needs what it refers to to live as long as the
-// container, and as long as the request. A conversion depends only on the types
-// of the binding and of the request, so that the conversions are shared by
-// every container, and a conversion made twice at once is the same.
-class conversion_cache {
-public:
-  using conversion_type = execution::runtime_conversion;
+struct runtime_request;
+struct selected_conversion;
 
-  struct entry {
-    const void *binding;
-    conversion_type stable;
-    conversion_type transient;
-    entry *next;
-  };
-
-  conversion_cache() = default;
-  conversion_cache(const conversion_cache &) = delete;
-  conversion_cache &operator=(const conversion_cache &) = delete;
-  ~conversion_cache() {
-    entry *current = head_.load(std::memory_order_acquire);
-    while (current != nullptr) {
-      entry *next = current->next;
-      delete current;
-      current = next;
-    }
-  }
-
-  template <typename Make> const entry &find(const void *binding, Make &&make) {
-    entry *head = head_.load(std::memory_order_acquire);
-    for (entry *current = head; current != nullptr; current = current->next) {
-      if (current->binding == binding) {
-        return *current;
-      }
-    }
-    execution::runtime_conversions conversions = make();
-    auto *made =
-        new entry{binding, conversions.stable, conversions.transient, head};
-    while (!head_.compare_exchange_weak(made->next, made,
-                                        std::memory_order_release,
-                                        std::memory_order_acquire)) {
-    }
-    return *made;
-  }
-
-private:
-  std::atomic<entry *> head_{nullptr};
-};
+// The selection of the extension of a request of the fewest copies and moves
+// of the leaf, of the layer sources of a binding, for a request that needs
+// what it refers to to live as long as the container (stable) or not.
+using extension_selection =
+    selected_conversion (*)(const execution::binding_layout &layout,
+                            const runtime_request &request, bool stable);
 
 // A request of type T as a runtime resolution converts it: the interface it
-// names, its layers, what it names and the tables of the types it spells,
-// and the address it is satisfied with of what a conversion reaches.
+// names, the type it is of, how it takes it, and its extensions of the layer
+// sources of a binding of the leaf, and of an abstract interface of it, with
+// their selection; none of a request that has no extension, so that a
+// program that resolves none compiles no selection.
 struct runtime_request {
   type_descriptor requested;
   // The key of the interface the request names, which only a binding of it
   // resolves.
   const void *interface_key;
   bool modeled;
-  // The key of the type the request is of, without its own qualifiers.
+  // The key of the type the request is of, without its own qualifiers, the
+  // category it takes it in and its own qualifiers.
   const void *shape;
-  execution::request_layout layout;
-  conversion_cache *conversions;
+  semantics::category category;
+  std::uint8_t quals;
+  const execution::extension_table *extensions[2];
+  extension_selection extend;
 };
 
 // The address of what satisfies a request of the shape Shape, of what a
@@ -183,7 +148,8 @@ struct runtime_request {
 // what the conversion reached before it.
 inline resolved_address
 finish_request(execution::erased_carrier reached,
-               const execution::runtime_conversion &conversion) {
+               const execution::runtime_conversion &conversion,
+               const execution::type_table *source_table) {
   using access = resolved_address::access_kind;
   using made_kind = resolved_address::made_kind;
   switch (conversion.last) {
@@ -198,7 +164,10 @@ finish_request(execution::erased_carrier reached,
   }
   switch (conversion.access) {
   case semantics::access::point:
-    return {conversion.reached->pointee(reached.object), access::borrow};
+    // What no step converted points of the type of the layer source.
+    return {(conversion.count ? conversion.reached : source_table)
+                ->pointee(reached.object),
+            access::borrow};
   case semantics::access::take:
   case semantics::access::move:
     return {reached.object, access::consume};
@@ -209,11 +178,18 @@ finish_request(execution::erased_carrier reached,
 
 // The conversion a request of a binding is resolved by: the answer of the
 // closure of the binding, as the code compiled it, when it has one for the
-// request; else the conversion of the request derived of what the binding
-// publishes.
+// request; else the extension of the request, as its code compiled it, of
+// a layer source of the binding.
 struct selected_conversion {
   const execution::closed_answer *answer;
   const execution::runtime_conversion *derived;
+  // The state of the closure of the binding a derived conversion extends, and
+  // how the request takes what its route reaches.
+  std::uint16_t route;
+  resolved_address (*finish)(execution::erased_carrier reached,
+                             const execution::runtime_conversion &derived,
+                             const execution::type_table *source_table,
+                             execution::runtime_store &store);
 
   bool stable_address() const noexcept {
     return derived != nullptr ? derived->stable_address
@@ -221,22 +197,62 @@ struct selected_conversion {
   }
 };
 
-// The address of what satisfies a request of a derived conversion, of what
-// its route reached: after the calls the conversion takes after the route, as
-// finish_request takes it.
+// The address of what satisfies a request of an extension, of what the route
+// of the binding reached: after the calls the extension takes after the
+// route, as finish_request takes it; of the table of the type of the layer
+// source, when it takes none.
 DINGO_NOINLINE inline resolved_address
 finish_derived(execution::erased_carrier reached,
                const execution::runtime_conversion &derived,
+               const execution::type_table *source_table,
                execution::runtime_store &store) {
-  // The closure covers a conversion of a value of no step after its route:
-  // a conversion takes steps after it.
-  assert(!derived.value_route);
   for (std::size_t index = 0; index < derived.count; ++index) {
     const auto &call = derived.calls[index];
     reached = (reached.owned ? call.owned : call.borrowed)(reached, call.stable,
                                                            store);
   }
-  return finish_request(reached, derived);
+  return finish_request(reached, derived, source_table);
+}
+
+// Selects the extension of a request of the fewest copies and moves of the
+// leaf, of the layer sources of a binding; none when no layer source of the
+// binding has one.
+DINGO_NOINLINE inline selected_conversion
+select_extension(const execution::binding_layout &layout,
+                 const runtime_request &request, bool stable) {
+  const std::size_t lifetime = stable ? 0 : 1;
+  const execution::extension_table &table =
+      *request.extensions[layout.abstract ? 1 : 0];
+  selected_conversion chosen{nullptr, nullptr, 0, &finish_derived};
+  semantics::cost fewest;
+  bool absent = false;
+  for (std::size_t group = 0; group < table.group_count; ++group) {
+    const execution::extension_group &nested = table.groups[group];
+    for (std::size_t index = 0; index < layout.layer_source_count; ++index) {
+      const execution::layer_source &source = layout.layer_sources[index];
+      if (source.shape != nested.shape) {
+        continue;
+      }
+      for (std::size_t entry = nested.first;
+           entry < nested.first + nested.count; ++entry) {
+        const execution::extension_entry &each = table.entries[entry];
+        if (each.form != source.code || each.conversions[lifetime] == nullptr) {
+          continue;
+        }
+        const semantics::cost made =
+            semantics::followed(source.made, each.fewest[lifetime]);
+        const bool made_absent = source.absent || each.absent[lifetime];
+        if (chosen.derived == nullptr ||
+            semantics::cheaper(made, made_absent, fewest, absent)) {
+          chosen.derived = each.conversions[lifetime];
+          chosen.route = source.state;
+          fewest = made;
+          absent = made_absent;
+        }
+      }
+    }
+  }
+  return chosen;
 }
 
 // The address of what satisfies a request of an answer of a closure, of the
@@ -264,39 +280,30 @@ template <typename T> struct request_execution {
   // stores the leaf of, or is the leaf as its interface.
   using element_type = execution::innermost_t<shape, void>;
   using stack = stack_t<shape, element_type>;
-  using universe_type = layer_universe<typename stack::layers>;
-  using layers = execution::runtime_layers<typename universe_type::identities>;
   static constexpr bool modeled =
       category::modeled && stack::element != stack_element::other;
-
-  static constexpr semantics::request goal() {
-    semantics::request made;
-    execution::place_layers<universe_type>(made.layers,
-                                           typename stack::layers{});
-    made.depth =
-        static_cast<std::uint8_t>(type_list_size_v<typename stack::layers>);
-    stack_quals<shape, element_type>::fill(made.quals);
-    return made;
-  }
 };
-
-template <typename T> inline conversion_cache request_conversions;
 
 template <typename T> constexpr runtime_request make_runtime_request() {
   using executed = request_execution<T>;
   if constexpr (!executed::modeled) {
-    return {type_descriptor_v<T>, nullptr, false, nullptr, {}, nullptr};
+    return {type_descriptor_v<T>, nullptr, false, nullptr, {}, 0, {}, nullptr};
   } else {
-    using tables =
-        execution::request_tables<T, typename executed::element_type>;
+    using shape = typename executed::shape;
     return {type_descriptor_v<T>,
-            &execution::shape_key<
-                execution::request_interface_t<typename executed::shape>>,
+            &execution::shape_key<execution::request_interface_t<shape>>,
             true,
-            &execution::shape_key<std::remove_cv_t<typename executed::shape>>,
-            {executed::layers::value, executed::layers::count, executed::goal(),
-             executed::category::value, tables::value.value},
-            &request_conversions<T>};
+            &execution::shape_key<std::remove_cv_t<shape>>,
+            executed::category::value,
+            quals_v<shape>,
+            {execution::runtime_extensions<T, false>::table(),
+             execution::runtime_extensions<T, true>::table()},
+            execution::runtime_extensions<T, false>::table() !=
+                        &execution::no_extensions ||
+                    execution::runtime_extensions<T, true>::table() !=
+                        &execution::no_extensions
+                ? &select_extension
+                : nullptr};
   }
 }
 

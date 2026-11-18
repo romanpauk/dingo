@@ -638,8 +638,8 @@ DINGO_COLD constexpr void unknown_bound_steps(const semantics::object &object,
 // that no limitation blocks. They are passed to a sink, out(kind, object), one
 // by one: a constant expression returns no list of them, which a compiler
 // would keep. A step but a conversion to a more qualified element makes an
-// object not converted to one. A runtime resolution takes them only as it
-// derives a request type, once.
+// object not converted to one. A resolution takes none of them as it runs:
+// the code compiles what they derive.
 template <typename Sink>
 DINGO_COLD constexpr void each_step(const semantics::object &given,
                                     const semantics::context &context,
@@ -892,6 +892,20 @@ constexpr cost affected(cost before, effect made) {
   return before;
 }
 
+// The cost of a derivation followed by another, of the cost of each from no
+// cost: the leaf is copied when either copies it, and moved when the first
+// moves it, or the second does and the first did not copy it; the objects of
+// both are kept and made.
+constexpr cost followed(cost first, cost second) {
+  cost made = first;
+  made.copies = static_cast<std::uint8_t>(first.copies | second.copies);
+  made.moves = static_cast<std::uint8_t>(first.moves |
+                                         (first.copies ? 0 : second.moves));
+  made.kept = static_cast<std::uint8_t>(first.kept + second.kept);
+  made.made = static_cast<std::uint8_t>(first.made + second.made);
+  return made;
+}
+
 // The cost after a step from an object to what it reaches: of the leaf, and of
 // the object it makes, kept when it lives as long as the container. Every
 // step but the element, the upcast of the leaf itself, and the qualifiers of
@@ -1030,8 +1044,11 @@ constexpr std::uint32_t state_hash(const semantics::state &state) {
 
 inline constexpr std::size_t search_slots = 2 * max_states;
 
-struct search {
-  state states[max_states] = {};
+// The states a search holds, at most Capacity of them.
+template <std::size_t Capacity> struct basic_search {
+  static constexpr std::size_t capacity = Capacity;
+  static constexpr std::size_t slot_count = 2 * Capacity;
+  state states[Capacity] = {};
   std::size_t count = 0;
   // Whether there were more states than the search holds: its answer is not
   // to be trusted.
@@ -1040,7 +1057,7 @@ struct search {
   // the search reached from, if any.
   std::size_t closed = 0;
   // The states by their hash, open addressed: an index, or none.
-  std::uint16_t slots[search_slots] = {};
+  std::uint16_t slots[slot_count] = {};
 
   // Holds no state again. A state past the count is never read, so only the
   // count and the slots are reset.
@@ -1056,15 +1073,15 @@ struct search {
   // Adds a state, unless one of its object and of no greater cost is found
   // already.
   DINGO_COLD constexpr bool add(const state &found) {
-    std::size_t slot = state_hash(found) % search_slots;
+    std::size_t slot = state_hash(found) % slot_count;
     while (slots[slot] != 0) {
       const state &other = states[slots[slot] - 1];
       if (dominates(other.made, found.made) && other.reached == found.reached) {
         return false;
       }
-      slot = (slot + 1) % search_slots;
+      slot = (slot + 1) % slot_count;
     }
-    if (count == max_states) {
+    if (count == Capacity) {
       overflow = true;
       return false;
     }
@@ -1073,6 +1090,9 @@ struct search {
     return true;
   }
 };
+
+// The states of a search of every object a derivation of the code reaches.
+using search = basic_search<max_states>;
 
 // Whether an object converted to a more qualified element may still become the
 // request: its layers may, or a raw pointer may become the observer of the
@@ -1109,8 +1129,8 @@ constexpr bool quals_satisfy(const semantics::object &object,
 // the request at its depth, and a pointer or a handle converted to a more
 // qualified element only as the qualifiers of the request at its depth. An
 // adopted handle may give its element.
-struct reached_sink {
-  search &found;
+template <typename Search> struct basic_reached_sink {
+  Search &found;
   const state &source;
   std::uint16_t index;
   const request &goal;
@@ -1147,6 +1167,8 @@ struct reached_sink {
                index, kind});
   }
 };
+
+using reached_sink = basic_reached_sink<search>;
 
 // What a closure passes a step to: every step, to the search.
 template <typename Search> struct any_sink {
@@ -1418,8 +1440,8 @@ satisfy_states(const state *states, std::size_t count, bool overflow,
 // What satisfies a request of what a search reached: of the closed layer
 // sources it reached from alone, when they satisfy it, as no derivation through
 // a wrap is cheaper than one of them; of every state otherwise.
-template <typename Finish>
-constexpr answer satisfy_closed(const search &found, const request &goal,
+template <typename Search, typename Finish>
+constexpr answer satisfy_closed(const Search &found, const request &goal,
                                 category taken, lifetime needed,
                                 const semantics::context &context,
                                 Finish finish) {
@@ -1435,7 +1457,8 @@ constexpr answer satisfy_closed(const search &found, const request &goal,
                         needed, context, finish);
 }
 
-constexpr answer satisfy(const search &found, const request &goal,
+template <typename Search>
+constexpr answer satisfy(const Search &found, const request &goal,
                          category taken, lifetime needed,
                          const semantics::context &context) {
   return satisfy_closed(found, goal, taken, needed, context, affected_cost{});
@@ -1461,7 +1484,8 @@ struct derivation {
 
 // The derivation of what satisfies a request: the states of the search from
 // it back to the stored object, in their order.
-DINGO_COLD constexpr derivation answer_derivation(const search &found,
+template <typename Search>
+DINGO_COLD constexpr derivation answer_derivation(const Search &found,
                                                   const answer &result) {
   derivation made;
   made.overflow = result.overflow;
@@ -1679,7 +1703,8 @@ enum class extension : std::uint8_t { closed, made, open };
 // does not have, which the request makes itself, of the types it spells. From
 // an open state: every step. One sink of all, so that the steps of an object
 // are compiled once for a runtime resolution.
-struct extending_sink : reached_sink {
+template <typename Search>
+struct basic_extending_sink : basic_reached_sink<Search> {
   // The layers whose types the binding has: those of a lower index.
   std::size_t known;
   extension standing;
@@ -1709,9 +1734,11 @@ struct extending_sink : reached_sink {
         return false;
       }
     }
-    return reached_sink::takes(kind, outer, depth);
+    return basic_reached_sink<Search>::takes(kind, outer, depth);
   }
 };
+
+using extending_sink = basic_extending_sink<search>;
 
 // What a request reaches from layer sources, by the steps it takes. The
 // sources may be of a universe the request's extends: a binding's, of the
@@ -1722,10 +1749,10 @@ struct extending_sink : reached_sink {
 // The states below closed are closed layer sources, of a binding that has the
 // types of the layers below known: a request steps from them only by a wrap or
 // into a layer whose type the binding does not have.
-DINGO_COLD constexpr void extend_reach(search &found, std::size_t closed,
-                                       std::size_t known,
-                                       const semantics::context &context,
-                                       const request &goal) {
+template <typename Search>
+DINGO_COLD constexpr void
+extend_reach(Search &found, std::size_t closed, std::size_t known,
+             const semantics::context &context, const request &goal) {
   const bool foreign = context.layers->count > known;
   for (std::size_t next = 0; next < found.count; ++next) {
     const state &current = found.states[next];
@@ -1756,7 +1783,7 @@ DINGO_COLD constexpr void extend_reach(search &found, std::size_t closed,
       }
     }
     const state source = current;
-    extending_sink extending{
+    basic_extending_sink<Search> extending{
         {found, source, static_cast<std::uint16_t>(next), goal, context},
         known,
         standing};
