@@ -92,7 +92,6 @@ jobs:
               -DCMAKE_C_COMPILER=${{ matrix.compiler.cc }} \
               -DCMAKE_CXX_COMPILER=${{ matrix.compiler.cxx }} \
               -DDINGO_DEVELOPMENT_MODE=ON \
-              -DDINGO_BENCHMARK_ENABLED=OFF \
               -DDINGO_CCACHE=ON && \
               cmake --build /workspace/${{ matrix.compiler.build_dir }} --target dingo_unit_test --verbose -j"$(nproc)" && \
               echo "::group::Smoke build ccache stats" && \
@@ -187,8 +186,7 @@ jobs:
       #         CC=cl CXX=cl cmake -S /workspace -B /workspace/build-msvc -G Ninja \
       #         -DCMAKE_SYSTEM_NAME=Windows \
       #         -DCMAKE_BUILD_TYPE=Release \
-      #         -DDINGO_DEVELOPMENT_MODE=ON \
-      #         -DDINGO_BENCHMARK_ENABLED=OFF && \
+      #         -DDINGO_DEVELOPMENT_MODE=ON && \
       #         cmake --build /workspace/build-msvc --verbose -j"$(nproc)" && \
       #         ctest --test-dir /workspace/build-msvc --output-on-failure'
       #

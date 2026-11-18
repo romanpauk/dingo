@@ -63,8 +63,6 @@ if(DINGO_DEVELOPMENT_MODE)
     endif()
 
     option(DINGO_TESTING_ENABLED "enable testing through googletest" ON)
-    option(DINGO_BENCHMARK_ENABLED "enable benchmarking through googlebenchmark" ON)
-    option(DINGO_BENCHMARK_FRUIT_ENABLED "enable fetching of google::fruit for benchmarks" OFF)
     option(DINGO_EXAMPLES_ENABLED "enable building of dingo examples" ON)
     option(DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION
         "Run tests with a single representative dynamic container configuration." OFF)
@@ -220,31 +218,8 @@ if(DINGO_DEVELOPMENT_MODE)
         FetchContent_MakeAvailable(googletest)
     endif()
 
-    if(DINGO_BENCHMARK_ENABLED)
-        FetchContent_Declare(googlebenchmark
-            GIT_REPOSITORY https://github.com/google/benchmark.git
-            GIT_TAG v1.8.3)
-
-        set(BENCHMARK_ENABLE_TESTING off)
-        set(BENCHMARK_ENABLE_WERROR OFF)
-        FetchContent_MakeAvailable(googlebenchmark)
-
-        if(DINGO_BENCHMARK_FRUIT_ENABLED)
-            set(FRUIT_USES_BOOST False)
-            FetchContent_Declare(googlefruit
-                GIT_REPOSITORY https://github.com/google/fruit.git
-                GIT_TAG v3.7.1)
-
-            FetchContent_MakeAvailable(googlefruit)
-        endif()
-    endif()
-
     if(DINGO_TESTING_ENABLED)
         add_subdirectory(test)
-    endif()
-
-    if(DINGO_BENCHMARK_ENABLED)
-        add_subdirectory(benchmark)
     endif()
 
     if(DINGO_EXAMPLES_ENABLED)
@@ -263,6 +238,5 @@ if(DINGO_DEVELOPMENT_MODE)
     if(WIN32)
         group_sources(include)
         group_sources(test)
-        group_sources(benchmark)
     endif()
 endif()

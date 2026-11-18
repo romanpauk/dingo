@@ -5,7 +5,7 @@ header-only.
 
 ## Development Build
 
-`DINGO_DEVELOPMENT_MODE=ON` enables tests, benchmarks and runnable examples.
+`DINGO_DEVELOPMENT_MODE=ON` enables tests and runnable examples.
 
 ```bash
 cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON
@@ -16,7 +16,6 @@ ctest --test-dir build --output-on-failure
 These CMake options control individual development features:
 
 - `DINGO_TESTING_ENABLED`
-- `DINGO_BENCHMARK_ENABLED`
 - `DINGO_EXAMPLES_ENABLED`
 - `DINGO_LIT_TESTS_ENABLED`
 
