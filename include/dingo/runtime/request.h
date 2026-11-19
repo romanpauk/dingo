@@ -214,18 +214,17 @@ finish_derived(execution::erased_carrier reached,
   return finish_request(reached, derived, source_table);
 }
 
-// Selects the extension of a request of the fewest copies and moves of the
-// leaf, of the layer sources of a binding; none when no layer source of the
-// binding has one.
-DINGO_NOINLINE inline selected_conversion
-select_extension(const execution::binding_layout &layout,
-                 const runtime_request &request, bool stable) {
+// The extension of a request of the fewest copies and moves of the leaf, of
+// the layer sources of a binding, and its cost (fewest); none when no layer
+// source of the binding has one.
+DINGO_ALWAYS_INLINE selected_conversion cheapest_extension(
+    const execution::binding_layout &layout, const runtime_request &request,
+    bool stable, semantics::extension_cost &fewest) {
   const semantics::lifetime needed =
       stable ? semantics::lifetime::stable : semantics::lifetime::request;
   const execution::extension_table &table =
       *request.extensions[layout.abstract ? 1 : 0];
   selected_conversion chosen{nullptr, nullptr, 0, &finish_derived};
-  semantics::extension_cost fewest;
   for (std::size_t group = 0; group < table.group_count; ++group) {
     const execution::extension_group &nested = table.groups[group];
     for (std::size_t index = 0; index < layout.layer_source_count; ++index) {
@@ -249,6 +248,64 @@ select_extension(const execution::binding_layout &layout,
   }
   return chosen;
 }
+
+// Selects the extension of a request of the fewest copies and moves of the
+// leaf, of the layer sources of a binding; none when no layer source of the
+// binding has one.
+DINGO_NOINLINE inline selected_conversion
+select_extension(const execution::binding_layout &layout,
+                 const runtime_request &request, bool stable) {
+  semantics::extension_cost fewest;
+  return cheapest_extension(layout, request, stable, fewest);
+}
+
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
+
+// The conversion a request of a binding is resolved by: the answer of the
+// closure of the binding for the request, of what lives as long as the
+// container when stable, when it has one; else the extension of the request
+// of a layer source of the binding, of the fewest copies and moves of the
+// leaf. The binding is of a layout, none when it is not modeled, and of the
+// key of its interface. A request the binding does not convert to is what
+// rejected gives.
+template <typename Rejected>
+DINGO_ALWAYS_INLINE selected_conversion find_conversion(
+    const execution::binding_layout *binding, const void *interface_key,
+    bool stable, const runtime_request &request, Rejected &&rejected) {
+  if (binding == nullptr || !request.modeled ||
+      request.interface_key != interface_key) {
+    return rejected();
+  }
+  const execution::binding_layout &layout = *binding;
+  for (std::size_t group = 0; group < layout.group_count; ++group) {
+    if (layout.groups[group].shape == request.shape) {
+      const execution::closed_answers &answers =
+          layout.answers[layout.groups[group].first +
+                         static_cast<std::size_t>(request.category) * 4 +
+                         request.quals];
+      const execution::closed_answer &found =
+          stable ? answers.stable : answers.transient;
+      if (found.found) {
+        return {&found, nullptr, 0, nullptr};
+      }
+      break;
+    }
+  }
+  if (request.extend != nullptr) {
+    const selected_conversion chosen = request.extend(layout, request, stable);
+    if (chosen.derived != nullptr) {
+      return chosen;
+    }
+  }
+  return rejected();
+}
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 // The address of what satisfies a request of an answer of a closure, of the
 // object the route of the answer reached, as the answer records it.

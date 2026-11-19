@@ -300,6 +300,60 @@ def make_program(compiler, flags, directory, name, source):
     return result
 
 
+def make_linked_program(compiler, flags, directory, name, parts):
+    """Compiles the parts of a program, each a source of its own, links and
+    runs it; returns (returncode, stderr, stdout, status) as make_program
+    does, of the first part that does not compile. Its result is kept under
+    a key of the keys of its parts, as each would be."""
+    sources = []
+    for part, source in parts:
+        cpp = directory / f"{name}_{part}.cpp"
+        cpp.write_text(source)
+        sources.append(cpp)
+    key = None
+    if CACHE is not None:
+        keys = [program_key(compiler, flags, directory, f"{name}_{part}", cpp)
+                for (part, _), cpp in zip(parts, sources)]
+        if None not in keys:
+            key = hashlib.sha256(json.dumps([name, keys]).encode()).hexdigest()
+    kept = load_result(key) if key is not None else None
+    if kept is not None:
+        return tuple(kept)
+    with CACHE_LOCK:
+        COMPILED.append(key)
+    ensure_precompiled_header()
+
+    def compile_part(cpp):
+        with COMPILES:
+            return run_compiler(compiler_command(
+                compiler, *flags, "-c", str(cpp), "-o",
+                str(cpp.with_suffix(".o"))))
+    compiled = concurrently([lambda cpp=cpp: compile_part(cpp)
+                             for cpp in sources])
+    made = [cpp.with_suffix(".o") for cpp in sources]
+    failed = next(((returncode, stderr) for returncode, stderr in compiled
+                   if returncode != 0), None)
+    exe = directory / name
+    if failed is None:
+        with COMPILES:
+            failed = run_compiler(compiler_command(
+                compiler, *[str(path) for path in made], "-o", str(exe)))
+        if failed[0] == 0:
+            failed = None
+    for path in made:
+        path.unlink(missing_ok=True)
+    if failed is not None:
+        result = (failed[0], failed[1], "", 0)
+    else:
+        run = subprocess.run([str(exe)], capture_output=True, text=True)
+        exe.unlink()
+        result = (0, "\n".join(stderr for _, stderr in compiled), run.stdout,
+                  run.returncode)
+    if key is not None:
+        store_result(key, result)
+    return result
+
+
 def program_headers(scopes, containers=()):
     """The headers a program includes after the header of its family: of each
     scope and each container its cells use, so that it reads no other; a
@@ -350,8 +404,10 @@ def run_compiler(command):
 def run_program(compiler, flags, directory, name, source):
     """Compiles and runs one program; returns (records, stderr, crash): the
     records it printed, the compiler output when it did not compile, and how
-    it exited when it crashed."""
-    returncode, stderr, stdout, status = make_program(
+    it exited when it crashed. A program of parts is a list of each part and
+    its source."""
+    make = make_linked_program if isinstance(source, list) else make_program
+    returncode, stderr, stdout, status = make(
         compiler, flags, directory, name, source)
     if returncode != 0:
         if EXHAUSTED.search(stderr):

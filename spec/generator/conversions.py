@@ -1,11 +1,13 @@
 """The conversion family: what the binding of every registration derives for
 every request of the grammar, decided as the code compiles, compared with the
-specification. A unit is a registration of the runtime container, selected
-plainly: both containers derive a request of a binding alike, and selection
-does not change it."""
+specification, and what the runtime container selects of its tables for it,
+compared with the derivation. A unit is a registration of the runtime
+container, selected plainly: selection does not change what a binding
+derives."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import multiprocessing
+import re
 
 from spec import semantics
 from spec.vocabulary import (Category, Container, Entry, InterfaceSet, Leaf,
@@ -13,7 +15,7 @@ from spec.vocabulary import (Category, Container, Entry, InterfaceSet, Leaf,
 
 from . import driver
 from .dimensions import Outcome
-from .model import grammar
+from .model import grammar, spell_request
 from .registrations import LEAVES, Registration
 
 
@@ -198,7 +200,148 @@ def compile_units(compiler, flags, directory, name, batch):
             for cell in batch[0].cells()]
 
 
-def apply_semantics(cells, units):
+# The properties of the conversion a container chooses for a request, for
+# each lifetime, as test/model/conversion.h prints them: whether it has one,
+# the copies and the moves of the leaf and the objects it keeps and makes,
+# whether what satisfies the request may be absent, how the request takes it,
+# whether its address lives as long as the container, and how the request
+# takes the value. Each is compared of the fields it is printed as.
+CHOSEN_FIELDS = 11
+CHOSEN_PROPERTIES = (("found", (0,)), ("cost", (1, 2)), ("objects", (3, 4)),
+                     ("absent", (5,)), ("access", (6,)), ("address", (7,)),
+                     ("finish", (8, 9, 10)))
+LIFETIMES = ("stable", "transient")
+
+
+def runtime_differences(cell):
+    """The properties, by lifetime, of the conversions the runtime container
+    selects for the request of a cell and the static container derives,
+    which differ; of a found conversion, its other properties too."""
+    derived, selected = cell["derived"], cell["selected"]
+    found = []
+    for index, lifetime in enumerate(LIFETIMES):
+        first = index * CHOSEN_FIELDS
+        if derived[first] != selected[first]:
+            found.append(f"{lifetime} found")
+            continue
+        if not derived[first]:
+            continue
+        found += [f"{lifetime} {name}"
+                  for name, fields in CHOSEN_PROPERTIES[1:]
+                  if any(derived[first + each] != selected[first + each]
+                         for each in fields)]
+    return found
+
+
+def runtime_outcome(cell):
+    """How the runtime container selects the request of a cell, compared
+    with the derivation: alike; unmodeled, where it models no request and
+    the derivation derives it neither; apart, where any property differs; or
+    unselected, where its program recorded nothing. None of a cell of no
+    comparison."""
+    if ("derived" not in cell or
+            cell["outcome"] == Outcome.SELECTS_ANOTHER.value):
+        return None
+    if "selected" not in cell:
+        return "unselected"
+    if runtime_differences(cell):
+        return "apart"
+    return "alike" if cell["modeled"] else "unmodeled"
+
+
+# The request types a part of a runtime program holds at most, and the
+# bindings: what the compiler takes of each grows with them.
+RUNTIME_REQUESTS = 40
+RUNTIME_BINDINGS = 25
+
+
+@dataclass
+class RuntimeProgram:
+    """A program of what the runtime container selects for the requests of
+    one interface type: the bindings of the interface, each a unit and the
+    index of the interface, the requests spelled of an interface I, and the
+    pairs of a binding and a request, each with its cell, by index."""
+    interface: str
+    bindings: dict = field(default_factory=dict)
+    requests: dict = field(default_factory=dict)
+    pairs: list = field(default_factory=list)
+
+
+def runtime_programs(units):
+    """The runtime programs of the cells of units: one of each interface
+    type, as the tables of a request type are of the type alone, and the
+    layout of a binding of the binding alone; each is compiled once, in a part
+    of its own of the program."""
+    found = {}
+    for unit in units:
+        bounds = unit.interfaces()
+        for name, request in unit.cells().items():
+            bound = bounds[request.index]
+            program = found.setdefault(bound.spelled,
+                                       RuntimeProgram(bound.spelled))
+            binding = program.bindings.setdefault(
+                (unit, request.index), len(program.bindings))
+            spelled = re.sub(r"\bI\d+\b", "I", spell_request(request))
+            requested = program.requests.setdefault(
+                spelled, len(program.requests))
+            program.pairs.append((binding, requested, name))
+    return list(found.values())
+
+
+def runtime_name(index):
+    return f"runtime_{index}"
+
+
+def runtime_parts(program):
+    """The parts of a runtime program, each with its source: of the
+    requests, of the bindings, and the main one of the pairs."""
+    requests = list(program.requests)
+    bindings = list(program.bindings)
+    parts = []
+    request_parts = []
+    for first in range(0, len(requests), RUNTIME_REQUESTS):
+        name = f"requests_{first // RUNTIME_REQUESTS}"
+        request_parts.append(name)
+        parts.append((name, driver.render(
+            "runtime.cpp.j2", part="requests", name=name,
+            interface=program.interface, headers=[],
+            requests=requests[first:first + RUNTIME_REQUESTS])))
+    binding_parts = []
+    for first in range(0, len(bindings), RUNTIME_BINDINGS):
+        name = f"bindings_{first // RUNTIME_BINDINGS}"
+        binding_parts.append(name)
+        chunk = bindings[first:first + RUNTIME_BINDINGS]
+        parts.append((name, driver.render(
+            "runtime.cpp.j2", part="bindings", name=name, bindings=chunk,
+            headers=driver.program_headers({unit.scope
+                                            for unit, _ in chunk}))))
+    pairs = [(f"bindings_{binding // RUNTIME_BINDINGS}"
+              f"[{binding % RUNTIME_BINDINGS}]",
+              f"requests_{requested // RUNTIME_REQUESTS}"
+              f"[{requested % RUNTIME_REQUESTS}]")
+             for binding, requested, _ in program.pairs]
+    parts.append(("main", driver.render(
+        "runtime.cpp.j2", part="main", headers=[],
+        requests=request_parts, bindings=binding_parts, pairs=pairs)))
+    return parts
+
+
+def compile_runtime(compiler, flags, directory, name, program):
+    """What the runtime container selects for the cells of a runtime
+    program, by cell: what it records of each, or the error of a program
+    that does not compile or crashes."""
+    records, stderr, crash = driver.run_program(
+        compiler, flags, directory, name, runtime_parts(program))
+    if stderr is not None or crash is not None:
+        error = driver.first_error(stderr) if stderr is not None else crash
+        return {cell: {"runtime_error": error}
+                for _, _, cell in program.pairs}
+    return {program.pairs[record["pair"]][2]: {
+        "selected": record["selected"], "modeled": record["modeled"]}
+        for record in records}
+
+
+def apply_semantics(cells, units, runtime=True):
     """A request a binding derives that the specification resolves nowhere,
     and one it does not derive for as long as the container that the
     specification resolves for the caller, are unexpected: what a request
@@ -206,7 +349,9 @@ def apply_semantics(cells, units):
     is a request C++ itself builds of what the binding holds, which the
     specification without the limitations of the library resolves nowhere,
     unless it rejects it on purpose; and one it rejects on purpose that it
-    resolves."""
+    resolves. So is a request the runtime container selects another
+    conversion of than the static container derives, when the runtime
+    container is compared."""
     recorded = {cell["cell"]: cell for cell in cells}
     # A unit at a time, as the specification searches what a unit stores
     # once for all its requests.
@@ -214,7 +359,27 @@ def apply_semantics(cells, units):
         for name, request in unit.cells().items():
             if name in recorded:
                 check_cell(recorded[name], unit, request)
+                if runtime:
+                    check_runtime(recorded[name])
     return cells
+
+
+def check_runtime(cell):
+    """Marks a cell unexpected where the runtime container selects another
+    conversion of its tables than the static container derives, or its
+    runtime program recorded nothing of it."""
+    outcome = runtime_outcome(cell)
+    if outcome == "unselected":
+        error = ("what the runtime container selects is not recorded: " +
+                 cell.get("runtime_error", "no record"))
+    elif outcome == "apart":
+        error = ("the runtime container selects otherwise: " +
+                 ", ".join(runtime_differences(cell)))
+    else:
+        return
+    if cell["outcome"] == Outcome.UNEXPECTED.value:
+        error = f"{cell['error']}; {error}"
+    cell.update(outcome=Outcome.UNEXPECTED.value, error=error)
 
 
 def check_cell(cell, unit, request):

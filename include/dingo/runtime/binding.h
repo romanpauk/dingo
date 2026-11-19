@@ -57,42 +57,28 @@ Container &resolution_container(runtime_binding_header &header) noexcept {
                                                            : header.container);
 }
 
-// Selects the conversion a request of a binding is resolved by: the answer
-// of the closure of the binding for the request, of what lives as long as the
-// container when stable, when it has one; else the extension of the request
-// of a layer source of the binding, of the fewest copies and moves of the
-// leaf. A request the binding does not convert to is rejected.
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
+
+// Selects the conversion a request of a binding is resolved by, as
+// find_conversion finds it. A request the binding does not convert to is
+// rejected.
 template <typename Node, typename Context>
 DINGO_NOINLINE selected_conversion
 select_conversion(const Node &node, bool stable, Context &context,
                   const runtime_request &request) {
-  if (node.layout == nullptr || !request.modeled ||
-      request.interface_key != node.interface_key) {
-    throw_type_not_convertible(request.requested, node.registered, context);
-  }
-  const execution::binding_layout &layout = *node.layout;
-  for (std::size_t group = 0; group < layout.group_count; ++group) {
-    if (layout.groups[group].shape == request.shape) {
-      const execution::closed_answers &answers =
-          layout.answers[layout.groups[group].first +
-                         static_cast<std::size_t>(request.category) * 4 +
-                         request.quals];
-      const execution::closed_answer &found =
-          stable ? answers.stable : answers.transient;
-      if (found.found) {
-        return {&found, nullptr, 0, nullptr};
-      }
-      break;
-    }
-  }
-  if (request.extend != nullptr) {
-    const selected_conversion chosen = request.extend(layout, request, stable);
-    if (chosen.derived != nullptr) {
-      return chosen;
-    }
-  }
-  throw_type_not_convertible(request.requested, node.registered, context);
+  return find_conversion(node.layout, node.interface_key, stable, request,
+                         [&]() -> selected_conversion {
+                           throw_type_not_convertible(request.requested,
+                                                      node.registered, context);
+                         });
 }
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 // The record of a registration, in one allocation: the header the bindings
 // of its interfaces share, the cell of its storage, and the binding of each
@@ -149,31 +135,7 @@ private:
   }
 
   // The layer sources the binding publishes, and the tables of their types.
-  struct published {
-    static constexpr bool abstract = execution_type::abstract;
-    using identities = typename semantics_type::universe_type::identities;
-    using sources = detail::execution::binding_sources<
-        semantics_type, semantics_type::template shape<abstract>::sources,
-        identities, stored_type, typename execution_type::leaf_type,
-        typename execution_type::interface_type>;
-    static constexpr detail::execution::binding_layout value{
-        abstract,
-        sources::closed_tables.entries,
-        sources::route_finishes.entries,
-        sources::groups.entries,
-        sources::shapes.count,
-        sources::answers.entries,
-        sources::layer_sources.entries,
-        sources::answer_table::layer_sources.count};
-  };
-
-  static constexpr const detail::execution::binding_layout *layout() {
-    if constexpr (execution_type::modeled) {
-      return &published::value;
-    } else {
-      return nullptr;
-    }
-  }
+  using published = detail::execution::published_sources<execution_type>;
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -283,7 +245,7 @@ public:
       registered_type(),
       &detail::execution::shape_key<
           detail::execution::request_interface_t<Type>>,
-      layout(),
+      detail::execution::published_layout<execution_type>(),
       detail::cache::is_stable_storage_v<Storage>,
       detail::runtime_cell_offset_v<cell_type>};
 };

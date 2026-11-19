@@ -76,8 +76,10 @@ function(configure_quality_targets out_check_targets)
 
   # The conversion check: conversion.py compiles, for the conversion layer of
   # every registration, what it publishes for every request, as the code compiles,
-  # and compares it with the specification. It resolves nothing, so it
-  # checks every registration; the model probes check what resolutions do.
+  # and compares it with the specification, and the conversion the runtime
+  # container selects for the request with that derivation. It resolves
+  # nothing, so it checks every registration; the model probes check what
+  # resolutions do.
   set(conversion_dir ${PROJECT_BINARY_DIR}/conversion)
   set(conversion_configuration ${conversion_dir}/configuration.txt)
   file(CONFIGURE OUTPUT ${conversion_configuration} CONTENT

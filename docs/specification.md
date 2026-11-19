@@ -289,8 +289,11 @@ registration, what it derives for every request of up to three wrappers, and of
 each array shape. The result comes from compilation only
 ([`test/model/conversion.h`](../test/model/conversion.h)). No container is made
 and nothing resolves, so the check covers every registration of the runtime
-container that the library accepts, several in one program. Both containers
-derive a request alike, so one result holds for both.
+container that the library accepts, several in one program. The outcome is the
+derivation of the static container, which runs it as the code compiles. The
+runtime container selects the conversion of the same request as it runs, of the
+tables of the binding and of the request, and the check compares that selection
+with the derivation ([Runtime Selection](#runtime-selection)).
 
 | Outcome           | Meaning                                                          |
 | ----------------- | ---------------------------------------------------------------- |
@@ -344,6 +347,46 @@ purpose, for every way that C++ builds it
 
 A request that the specification rejects on purpose and still resolves is a
 defect too.
+
+### Runtime Selection
+
+For each cell and each lifetime, stable and transient, the check compares the
+conversion that the runtime container selects with the derivation:
+
+- Whether there is one. This decides `published`, `placed` and `unpublished` for
+  both containers alike.
+- The copies and the moves of the leaf, and the objects that the conversion
+  keeps and makes. Of an answer of the closure of the binding, they are those of
+  the route to its state and of how the request takes it. Of an extension, they
+  are those of the route to the layer source and of the extension.
+- Whether what satisfies the request may be absent.
+- How the request takes what the conversion reaches: it refers to it, points to
+  it, takes it, moves it or copies it.
+- Whether the address that the conversion gives lives as long as the container.
+  The derivation does not record it; it lives as long as the container when the
+  object that the derivation reaches does, or what that object points to, for a
+  request that points to it.
+- How the request takes the value: as the conversion satisfies it, or made of a
+  copy, of its qualifiers, or of a run of wraps, of their number.
+
+The selection runs `detail::find_conversion`, which the runtime container runs
+too, without a container: of the layout of the binding, the key of its interface
+and the runtime request (`detail::runtime_request_v`). A cell where any of these
+differs is `unexpected`. A request whose binding or request type the runtime
+container does not model is `unmodeled`; the derivation of such a request finds
+nothing either, or the cell differs. A cell of which the program of the runtime
+container records nothing, as it does not compile, is `unexpected` too. The
+report counts the cells of each kind: `alike`, `unmodeled`, `apart` and
+`unselected`. No cell of the grammar is `unmodeled`. A request that selects the
+binding of another interface is not compared. The grammar spells no `volatile`
+request, and `const` is part of the category of a request, so the answers of a
+request of an object of its own qualifiers are not compared.
+
+The tables of a request type take the compiler the most, and are the same for
+every binding of its interface. So the selection is a program of its own for
+each interface type, apart from the derivation. Its parts are compiled apart and
+linked: the tables of up to 40 request types, the layouts of up to 25 bindings,
+and a part that selects the conversion of each cell.
 
 Another outcome is `unexpected`. The check fails on an `unexpected` cell and on
 a registration that does not compile. The [Model Probe](#model-probe) checks

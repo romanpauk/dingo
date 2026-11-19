@@ -415,4 +415,37 @@ struct binding_sources {
       std::make_index_sequence<answer_table::layer_sources.count>{});
 };
 
+// The layer sources a binding publishes, as its execution Execution derives
+// them, and the tables of their types: the layout a runtime resolution
+// selects a conversion of.
+template <typename Execution> struct published_sources {
+  using semantics_type = typename Execution::semantics_type;
+  static constexpr bool abstract = Execution::abstract;
+  using identities = typename semantics_type::universe_type::identities;
+  using sources = binding_sources<
+      semantics_type, semantics_type::template shape<abstract>::sources,
+      identities, typename Execution::stored_type,
+      typename Execution::leaf_type, typename Execution::interface_type>;
+  static constexpr binding_layout value{
+      abstract,
+      sources::closed_tables.entries,
+      sources::route_finishes.entries,
+      sources::groups.entries,
+      sources::shapes.count,
+      sources::answers.entries,
+      sources::layer_sources.entries,
+      sources::answer_table::layer_sources.count};
+};
+
+// The layout of a binding, as its execution Execution derives it: none of a
+// binding that is not modeled.
+template <typename Execution>
+constexpr const binding_layout *published_layout() {
+  if constexpr (Execution::modeled) {
+    return &published_sources<Execution>::value;
+  } else {
+    return nullptr;
+  }
+}
+
 } // namespace dingo::detail::execution

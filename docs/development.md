@@ -78,7 +78,9 @@ environment provides the development tools.
   define: 1,669,960 pairs. It is not part of `check`.
 
 - `conversion-check`: checks what the binding of each registration derives for
-  every request against the [Specification](specification.md#conversion-check).
+  every request against the [Specification](specification.md#conversion-check),
+  and the conversion that the runtime container selects for it against that
+  derivation.
 
 - `emptiness-check`: checks what each registration whose stored object holds no
   leaf gives the requests that are defined when a layer is empty, against the
@@ -119,6 +121,8 @@ changed after it was compiled, as the compiler took that header as it was. The
 key holds no path of the checkout, so a cache made in one checkout is valid in
 another. A run of every program of a check removes the results it did not use,
 and each run prints how many programs it compiled and how many results it used.
+A program of parts, which are compiled apart and linked, is kept under a key of
+the keys of its parts.
 
 A program includes only the container and the scopes of its cells, and holds
 cells of one container and one scope, so a change of one scope or one container
@@ -126,7 +130,10 @@ compiles only the programs of it again. The headers of the probes are split the
 same way: [`test/model/leaves.h`](../test/model/leaves.h) has the leaf types and
 no container, [`test/model/probe.h`](../test/model/probe.h) no container and no
 scope, and [`test/model/static.h`](../test/model/static.h) what a static
-container adds.
+container adds. The programs of the conversion check that compare the selection
+of the runtime container are the exception: each holds the cells of one
+interface type, of every scope, as the tables of a request type are of the type
+alone.
 
 ## Naming
 
