@@ -394,7 +394,9 @@ struct binding_sources {
     constexpr std::size_t state = answer_table::layer_sources.states[Index];
     using type = typename closed_carrier<state>::type::type;
     constexpr const semantics::state &each = closure.states[state];
-    static_assert(enumerated(each.reached),
+    // A constant of its own: MSVC 19.4x fails on the call in the assertion.
+    constexpr bool known_form = enumerated(each.reached);
+    static_assert(known_form,
                   "the tables of a request have every form of a layer source "
                   "a binding publishes: semantics::source_forms enumerates it");
     return {each.reached.depth &&
