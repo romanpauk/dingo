@@ -69,7 +69,8 @@ template <typename Request, bool Abstract> struct request_extension {
     if constexpr (modeled) {
       return semantics::nested_sources(goal(), context());
     } else {
-      return {};
+      // GCC 13 rejects copy-list-initialization of this aggregate from {}.
+      return semantics::nested_list{};
     }
   }
   static constexpr semantics::nested_list nested = make_nested();

@@ -307,7 +307,9 @@ constexpr shape_code encode_shape(const semantics::context &context,
 // sources of it closed under every step a request takes but a wrap, in the
 // layers whose types the binding has, which a request reaches from.
 template <std::uint64_t... Code> struct binding_shape {
-  static constexpr std::uint64_t code[] = {Code...};
+  // The bound is spelled: Clang before 22 does not index an array of a bound
+  // deduced from its initializer in a constant expression of the class.
+  static constexpr std::uint64_t code[sizeof...(Code)] = {Code...};
   static constexpr semantics::universe make_universe() {
     semantics::universe made;
     made.count = static_cast<std::size_t>(code[3]);
@@ -383,22 +385,18 @@ struct binding_semantics {
   }
 
   // The shape of the binding, for a request of the leaf, and for one of its
-  // abstract interface.
+  // abstract interface: what the binding publishes for each, its sources,
+  // and those closed under every step a request takes but a wrap, its closed
+  // sources. The shape is read directly: GCC 13 does not compile a reference
+  // variable template of them named through a dependent type.
   template <bool Abstract>
   using shape = typename encoded_shape<binding_semantics, Abstract>::type;
 
-  // What the binding publishes for a request of the leaf, and for one of its
-  // abstract interface, of its shape. Each is whole: a stored object of more
-  // layer sources than a search of them holds does not compile.
-  template <bool Abstract>
-  static constexpr const semantics::search &sources = shape<Abstract>::sources;
-  // The layer sources closed under every step a request takes but a wrap,
-  // in the layers whose types the binding has, which a request reaches
-  // from.
-  template <bool Abstract>
-  static constexpr const semantics::search &closed = shape<Abstract>::closed;
+  // Whether the shape is whole: a stored object of more layer sources than a
+  // search of them holds does not compile.
   template <bool Abstract> static constexpr bool whole() {
-    static_assert(!sources<Abstract>.overflow && !closed<Abstract>.overflow,
+    static_assert(!shape<Abstract>::sources.overflow &&
+                      !shape<Abstract>::closed.overflow,
                   "the stored object publishes more layer sources than "
                   "semantics::max_states");
     return true;

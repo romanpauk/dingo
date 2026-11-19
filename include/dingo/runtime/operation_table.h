@@ -91,11 +91,16 @@ struct type_table;
 
 // An operation on an object of a type: for one the request owns and for one
 // it does not, none where C++ does not apply it, and the table of the type
-// of what it makes.
+// of what it makes. Whether it has each function is held apart from the
+// function: GCC does not compare the address of a function to null in a
+// constant expression when it keeps null pointer checks, as -fsanitize=null
+// makes it.
 struct erased_operation {
   operation_function owned = nullptr;
   operation_function borrowed = nullptr;
   const type_table *made = nullptr;
+  bool has_owned = false;
+  bool has_borrowed = false;
 };
 
 inline constexpr std::size_t step_kinds =
@@ -191,7 +196,7 @@ constexpr const erased_operation &slot_operation(const full_table &table,
 }
 
 constexpr bool has(const erased_operation &operation) {
-  return operation.owned != nullptr || operation.borrowed != nullptr;
+  return operation.has_owned || operation.has_borrowed;
 }
 
 // The operations a table of a binding has: a bit for each kind of step from
@@ -331,10 +336,12 @@ struct table_maker : layer_types<T, Leaf, Interface> {
     if constexpr ((Mask & Bit) != 0 && Borrowed) {
       made.borrowed = &apply<Step, false, transient>;
       made.made = &operation_table<made_t<Step, false>, Leaf, Interface>::value;
+      made.has_borrowed = true;
     }
     if constexpr ((Mask & Bit) != 0 && Owned) {
       made.owned = owned_operation<Kind, Step, Borrowed, transient>();
       made.made = &operation_table<made_t<Step, true>, Leaf, Interface>::value;
+      made.has_owned = true;
     }
     return made;
   }
@@ -364,6 +371,7 @@ struct table_maker : layer_types<T, Leaf, Interface> {
     if constexpr (std::is_same_v<T, type> && facts::template runs<K>()) {
       using nested_type = std::remove_cv_t<typename nested<K>::type>;
       made.owned = &wrap_operation<type, Leaf, Interface, nested_type>;
+      made.has_owned = true;
     }
     return made;
   }
@@ -468,9 +476,11 @@ struct table_maker : layer_types<T, Leaf, Interface> {
           requalified_t<type, static_cast<std::uint8_t>(quals & ~Adds)>;
       if constexpr (std::is_constructible_v<type, source &&>) {
         made.owned = &qualified_operation<type, source, true>;
+        made.has_owned = true;
       }
       if constexpr (std::is_constructible_v<type, const source &>) {
         made.borrowed = &qualified_operation<type, source, false>;
+        made.has_borrowed = true;
       }
     }
     return made;
@@ -607,23 +617,23 @@ struct table_maker : layer_types<T, Leaf, Interface> {
             using pointer = std::remove_extent_t<element_type> *;
             if constexpr (std::is_constructible_v<type, pointer>) {
               made.adopted_array = {&adopted_operation<type, pointer>, nullptr,
-                                    nullptr};
+                                    nullptr, true, false};
               // A handle of an array of a known bound takes over a pointer to
               // a whole one too, as the pointer to its first element.
               if constexpr (std::extent_v<element_type> != 0) {
                 made.adopted = {&adopted_operation<type, element_type *, true>,
-                                nullptr, nullptr};
+                                nullptr, nullptr, true, false};
               }
             }
           } else if constexpr (std::is_constructible_v<type, element_type *>) {
             made.adopted = {&adopted_operation<type, element_type *>, nullptr,
-                            nullptr};
+                            nullptr, true, false};
           }
         } else if constexpr (wrapper_kind_v<layer_identity_t<type>>.observes &&
                              std::is_constructible_v<type, element_type *>) {
           made.observing = {&observing_operation<type, element_type *>,
-                            &observing_operation<type, element_type *>,
-                            nullptr};
+                            &observing_operation<type, element_type *>, nullptr,
+                            true, true};
         }
       }
     }

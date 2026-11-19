@@ -300,6 +300,15 @@ constexpr const execution::extension_table *abstract_extensions() {
   }
 }
 
+// Whether a request type has extensions of the abstract interface of a leaf.
+template <typename T> constexpr bool abstract_extended() {
+  if constexpr (request_execution<T>::abstract_possible()) {
+    return !execution::runtime_extensions<T, true>::empty();
+  } else {
+    return false;
+  }
+}
+
 template <typename T> constexpr runtime_request make_runtime_request() {
   using executed = request_execution<T>;
   if constexpr (!executed::modeled) {
@@ -314,9 +323,11 @@ template <typename T> constexpr runtime_request make_runtime_request() {
             quals_v<shape>,
             {execution::runtime_extensions<T, false>::table(),
              abstract_extensions<T>()},
-            execution::runtime_extensions<T, false>::table() !=
-                        &execution::no_extensions ||
-                    abstract_extensions<T>() != &execution::no_extensions
+            // The tables are not compared: GCC does not compare their
+            // addresses in a constant expression when it keeps null pointer
+            // checks, as -fsanitize=null makes it.
+            !execution::runtime_extensions<T, false>::empty() ||
+                    abstract_extended<T>()
                 ? &select_extension
                 : nullptr};
   }

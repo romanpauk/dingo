@@ -100,8 +100,7 @@ struct binding_sources {
         constexpr const semantics::object &reached =
             Sources.states[State].reached;
         static_assert(target.step == semantics::step::wrap
-                          ? made::full.wrap_runs[run_length(State)].owned !=
-                                nullptr
+                          ? made::full.wrap_runs[run_length(State)].has_owned
                       : target.step == semantics::step::observe
                           ? has(made::full.observing)
                           : has(reached.depth > 1 && reached.layers[1] ==
@@ -148,7 +147,7 @@ struct binding_sources {
     }
     const erased_operation &operation =
         table.operations[static_cast<std::size_t>(kind)];
-    return (Own::owned ? operation.owned : operation.borrowed) != nullptr;
+    return Own::owned ? operation.has_owned : operation.has_borrowed;
   }
 
   // The table a runtime resolution reads of a published state: the address

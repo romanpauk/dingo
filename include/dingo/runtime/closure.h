@@ -284,7 +284,10 @@ template <typename Shape> struct closed_semantics {
 // closure covers, of each category and qualifiers of the object it is of.
 template <typename Semantic, std::uint64_t... Possible>
 struct closed_answer_table {
-  static constexpr std::uint64_t possible_bits[] = {Possible..., 0};
+  // The bound is spelled: Clang before 22 does not index an array of a bound
+  // deduced from its initializer in a constant expression of the class.
+  static constexpr std::uint64_t possible_bits[sizeof...(Possible) + 1] = {
+      Possible..., 0};
   static constexpr bool possible(std::size_t state) {
     return ((possible_bits[state / 64] >> (state % 64)) & 1u) != 0;
   }

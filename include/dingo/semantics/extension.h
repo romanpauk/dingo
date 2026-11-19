@@ -436,7 +436,8 @@ split_derivation(const search &closed, const semantics::context &context,
     }
   }
   if (!fewest.found) {
-    return {};
+    // GCC 13 rejects copy-list-initialization of this aggregate from {}.
+    return derivation{};
   }
   const extension_derivations chosen_extension = nested_extension(
       nested.entries[chosen], chosen_code, own, own_goal, taken);

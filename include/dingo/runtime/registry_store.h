@@ -79,8 +79,10 @@ public:
 
   template <typename T> using node_allocator = arena_allocator<T, arena_type>;
 
-  lookup_allocator(const Allocator &allocator, arena_type &persistent)
-      : Allocator(allocator), persistent_(&persistent) {}
+  // The parameter is not named allocator: GCC 13 reports it as shadowing the
+  // injected class name of std::allocator.
+  lookup_allocator(const Allocator &base, arena_type &persistent)
+      : Allocator(base), persistent_(&persistent) {}
 
   template <typename T> operator node_allocator<T>() const {
     return node_allocator<T>(*persistent_);

@@ -53,26 +53,42 @@ struct runtime_conversion {
 };
 
 // The operation of a slot of a table, as a constant: none when the table has
-// none.
-constexpr erased_operation table_operation(const type_table *table,
+// none. A table holds only the operations it has.
+constexpr erased_operation table_operation(const type_table &table,
                                            std::uint8_t slot) {
-  if (table != nullptr) {
-    for (std::size_t index = 0; index < table->count; ++index) {
-      if (table->entries[index].slot == slot) {
-        return table->entries[index].operation;
-      }
+  for (std::size_t index = 0; index < table.count; ++index) {
+    if (table.entries[index].slot == slot) {
+      return table.entries[index].operation;
     }
   }
   return {};
 }
 
-// What compiling an extension gives: the conversion, whether it takes a
-// step of the type of the layer source, whose table only the binding has,
-// which no extension does, and whether a table it takes a step of has no
-// operation of it, as of a type incomplete where the request is compiled.
+// The table a call of an extension is taken of: of the type the request
+// spells at a depth, of the pointer in place of it, or of what the call
+// before made.
+enum class call_table : std::uint8_t { made, spelled, pointer };
+
+// A call of an extension as the tables give it: the table and the slot of its
+// operation. The calls of two extensions of the same keys are the same
+// functions, which are not compared themselves: GCC does not compare the
+// addresses of functions in a constant expression when it keeps null pointer
+// checks, as -fsanitize=null makes it.
+struct call_key {
+  call_table table = call_table::made;
+  std::uint8_t level = 0;
+  std::uint8_t slot = 0;
+};
+
+// What compiling an extension gives: the conversion, the key of each call,
+// whether it takes a step of the type of the layer source, whose table only
+// the binding has, which no extension does, and whether a table it takes a
+// step of has no operation of it, as of a type incomplete where the request
+// is compiled.
 struct compiled_extension {
   runtime_conversion conversion;
   conversion_call calls[max_calls] = {};
+  call_key keys[max_calls] = {};
   bool unknown = false;
   bool missing = false;
 };
@@ -82,63 +98,63 @@ struct compiled_extension {
 // the request's, made of a layer it spells or of what such a step made. A
 // pointer in place of a handle the request spells, which the request converts
 // to the qualifiers it spells below the pointer, is made of the table of
-// pointers at the depth of the handle.
+// pointers at the depth of the handle, where there is one (pointed).
 constexpr compiled_extension
 compile_extension(const semantics::derivation &derivation,
                   const type_table *const *tables,
-                  const type_table *const *pointers, std::size_t goal_depth) {
+                  const type_table *const *pointers, const bool *pointed,
+                  std::size_t goal_depth) {
   compiled_extension made;
   runtime_conversion &converted = made.conversion;
   const conversion compiled = compile_conversion(derivation, 1);
+  // The table of the type the call before made, none before the first.
   const type_table *table = nullptr;
   for (std::size_t index = 0; index < compiled.count; ++index) {
     const instruction &each = compiled.entries[index];
     const semantics::object &source = derivation.objects[each.first];
     const semantics::object &target = derivation.objects[each.last + 1];
     const std::size_t level = goal_depth - target.depth;
-    const bool pointer = target.depth && pointers[level] != nullptr &&
+    const bool pointer = target.depth && pointed[level] &&
                          (target.layers[0] == semantics::pointer_layer ||
                           target.layers[0] == semantics::array_pointer_layer);
-    const type_table *maker = pointer ? pointers[level] : tables[level];
-    erased_operation step;
-    bool makes = true;
+    const type_table &maker = pointer ? *pointers[level] : *tables[level];
+    call_key key{pointer ? call_table::pointer : call_table::spelled,
+                 static_cast<std::uint8_t>(level), 0};
     switch (each.kind) {
     case semantics::step::wrap:
-      step =
-          table_operation(maker, operation_slot(slot::wrap_runs, each.wraps));
+      key.slot = operation_slot(slot::wrap_runs, each.wraps);
       break;
     case semantics::step::adopt:
-      step = table_operation(
-          maker, target.layers[1] == semantics::array_layer && target.depth > 1
+      key.slot = target.layers[1] == semantics::array_layer && target.depth > 1
                      ? operation_slot(slot::adopted_array)
-                     : operation_slot(slot::adopted));
+                     : operation_slot(slot::adopted);
       break;
     case semantics::step::observe:
-      step = table_operation(maker, operation_slot(slot::observing));
+      key.slot = operation_slot(slot::observing);
       break;
     case semantics::step::qualify:
-      step = table_operation(
-          maker, operation_slot(slot::qualified,
-                                static_cast<std::uint8_t>(target.quals[1] &
-                                                          ~source.quals[1])));
+      key.slot = operation_slot(
+          slot::qualified,
+          static_cast<std::uint8_t>(target.quals[1] & ~source.quals[1]));
       break;
     case semantics::step::release:
-      makes = false;
-      step = table_operation(table,
-                             source.layers[0] == semantics::array_pointer_layer
-                                 ? operation_slot(slot::release_array)
-                                 : operation_slot(each.kind));
+      key = {call_table::made, 0,
+             source.layers[0] == semantics::array_pointer_layer
+                 ? operation_slot(slot::release_array)
+                 : operation_slot(each.kind)};
       break;
     default:
-      makes = false;
-      step = table_operation(table, operation_slot(each.kind));
+      key = {call_table::made, 0, operation_slot(each.kind)};
       break;
     }
-    if (!makes && table == nullptr) {
+    const bool makes = key.table != call_table::made;
+    if (!makes && converted.count == 0) {
       made.unknown = true;
       return made;
     }
-    if (step.owned == nullptr && step.borrowed == nullptr) {
+    const erased_operation step =
+        table_operation(makes ? maker : *table, key.slot);
+    if (!has(step)) {
       made.missing = true;
       return made;
     }
@@ -146,10 +162,11 @@ compile_extension(const semantics::derivation &derivation,
       made.unknown = true;
       return made;
     }
+    made.keys[converted.count] = key;
     made.calls[converted.count++] = {step.owned, step.borrowed,
                                      target.lifetimes[0] ==
                                          semantics::lifetime::stable};
-    table = makes ? maker : step.made;
+    table = makes ? &maker : step.made;
   }
   converted.last = compiled.last;
   converted.depth = compiled.depth;
@@ -265,8 +282,7 @@ template <typename Request, bool Abstract> struct runtime_extensions {
   // source, if the nested source is one.
   template <std::size_t Nested>
   static constexpr const type_table *pointer_table() {
-    if constexpr (extensions::nested.entries[Nested].kind ==
-                  semantics::nested_kind::unqualified_pointer) {
+    if constexpr (unqualified_pointer<Nested>()) {
       using type = typename nested_pointer<Nested>::type;
       return &operation_table<type, element_type, element_type,
                               tables::template type_mask<type>()>::value;
@@ -275,18 +291,30 @@ template <typename Request, bool Abstract> struct runtime_extensions {
     }
   }
 
+  // Whether a nested source of the request is an unqualified pointer, of
+  // which the request converts a pointer.
+  template <std::size_t Nested> static constexpr bool unqualified_pointer() {
+    return extensions::nested.entries[Nested].kind ==
+           semantics::nested_kind::unqualified_pointer;
+  }
+
   // The tables of pointers in place of the handles the request spells, by
   // their depth: of each one the request converts of an unqualified pointer
-  // nested source, none at another depth.
+  // nested source, none at another depth; and whether a depth has one.
+  struct pointer_list {
+    const type_table *tables[types::depth + 1] = {};
+    bool exists[types::depth + 1] = {};
+  };
   template <std::size_t... I>
-  static constexpr std::array<const type_table *, types::depth + 1>
-  make_pointers(std::index_sequence<I...>) {
-    std::array<const type_table *, types::depth + 1> made_pointers{};
+  static constexpr pointer_list make_pointers(std::index_sequence<I...>) {
+    pointer_list made_pointers;
     const type_table *each[] = {pointer_table<I>()..., nullptr};
+    const bool exists[] = {unqualified_pointer<I>()..., false};
     const std::size_t levels[] = {nested_level<I>()..., 0};
     for (std::size_t index = 0; index < sizeof...(I); ++index) {
-      if (each[index] != nullptr) {
-        made_pointers[levels[index]] = each[index];
+      if (exists[index]) {
+        made_pointers.tables[levels[index]] = each[index];
+        made_pointers.exists[levels[index]] = true;
       }
     }
     return made_pointers;
@@ -299,7 +327,7 @@ template <typename Request, bool Abstract> struct runtime_extensions {
       return 0;
     }
   }
-  static constexpr std::array<const type_table *, types::depth + 1> pointers =
+  static constexpr pointer_list pointers =
       make_pointers(std::make_index_sequence<extensions::nested.count>{});
 
   // An extension of the request as the code compiles it: the form of the layer
@@ -328,18 +356,21 @@ template <typename Request, bool Abstract> struct runtime_extensions {
     bool unknown = false;
   };
 
+  // Whether two extensions compile to the same conversion: of the same calls,
+  // by their keys, which reach the same table.
   static constexpr bool same(const compiled_extension &first,
                              const compiled_extension &second) {
     const runtime_conversion &a = first.conversion;
     const runtime_conversion &b = second.conversion;
     if (a.access != b.access || a.last != b.last || a.depth != b.depth ||
         a.quals != b.quals || a.stable_address != b.stable_address ||
-        a.reached != b.reached || a.count != b.count) {
+        a.count != b.count) {
       return false;
     }
     for (std::size_t index = 0; index < a.count; ++index) {
-      if (first.calls[index].owned != second.calls[index].owned ||
-          first.calls[index].borrowed != second.calls[index].borrowed ||
+      const call_key &x = first.keys[index];
+      const call_key &y = second.keys[index];
+      if (x.table != y.table || x.level != y.level || x.slot != y.slot ||
           first.calls[index].stable != second.calls[index].stable) {
         return false;
       }
@@ -369,8 +400,9 @@ template <typename Request, bool Abstract> struct runtime_extensions {
             if (!derived.found) {
               continue;
             }
-            const compiled_extension compiled = compile_extension(
-                derived, tables::value.value, pointers.data(), goal.depth);
+            const compiled_extension compiled =
+                compile_extension(derived, tables::value.value, pointers.tables,
+                                  pointers.exists, goal.depth);
             // An extension of a step no table has an operation of is none.
             if (compiled.missing) {
               continue;
@@ -485,10 +517,13 @@ template <typename Request, bool Abstract> struct runtime_extensions {
   static constexpr extension_table value{
       groups.data(), extensions::nested.count, entries.data()};
 
+  // Whether the request has no extension.
+  static constexpr bool empty() { return made.count == 0; }
+
   // The table of the request: one of no extension shared by every request
   // that has none.
   static constexpr const extension_table *table() {
-    if constexpr (made.count == 0) {
+    if constexpr (empty()) {
       return &no_extensions;
     } else {
       return &value;

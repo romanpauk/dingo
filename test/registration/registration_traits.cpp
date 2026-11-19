@@ -141,12 +141,12 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
                                               describe_type<const A **>()));
   constexpr type_descriptor optional_pointer_target =
       detail::type_descriptor_v<std::optional<A> *>;
-  static_assert(detail::qualification_converts(
+  EXPECT_TRUE(detail::qualification_converts(
       optional_pointer_target, detail::type_descriptor_v<std::optional<A> *>));
-  static_assert(detail::qualification_converts(
+  EXPECT_TRUE(detail::qualification_converts(
       optional_pointer_target,
       detail::type_descriptor_v<const std::optional<A> *>));
-  static_assert(!detail::qualification_converts(
+  EXPECT_FALSE(detail::qualification_converts(
       optional_pointer_target, detail::type_descriptor_v<std::optional<I> *>));
 }
 

@@ -751,11 +751,15 @@ DINGO_COLD constexpr void each_step(const semantics::object &given,
   }
   if (object.element == element::leaf && context.abstract &&
       out.takes(step::upcast, no_layer, object.depth)) {
+    // The depth, not the address of the kind, tells whether there is an outer
+    // layer: GCC does not compare the address of a layer kind to null in a
+    // constant expression when it keeps null pointer checks, as
+    // -fsanitize=null makes it.
     const layer_kind *outer =
         object.depth ? &context.kind(object.layers[0]) : nullptr;
     semantics::object upcast = object;
     upcast.element = element::abstract;
-    if (outer != nullptr && !outer->gives_element) {
+    if (object.depth && !outer->gives_element) {
       // The pointer to the first element of an array is a pointer to that
       // element as the interface, not to an array of the interface: the
       // request does not own what it points to.
@@ -765,7 +769,7 @@ DINGO_COLD constexpr void each_step(const semantics::object &given,
         upcast.owns_pointee = false;
         out(step::upcast, upcast);
       }
-    } else if (outer == nullptr) {
+    } else if (!object.depth) {
       // The leaf as the base it is: the same object.
       out(step::upcast, upcast);
     } else if (object.depth == 1 && outer->shares_element && outer->copyable &&

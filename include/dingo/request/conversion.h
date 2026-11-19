@@ -219,7 +219,8 @@ struct request_derivation {
       static_assert(binding::template whole<abstract>());
       constexpr semantics::context closed_context = context();
       const semantics::request request = goal();
-      const semantics::search &closed = binding::template closed<abstract>;
+      const semantics::search &closed =
+          binding::template shape<abstract>::closed;
       return {
           derive(closed, closed_context, request, semantics::lifetime::stable),
           derive(closed, closed_context, request,
@@ -233,7 +234,7 @@ struct request_derivation {
 
   // The conversions of the derivations.
   static constexpr std::size_t source_count =
-      binding::template sources<abstract>.count;
+      binding::template shape<abstract>::sources.count;
   static constexpr conversion stable_conversion =
       compile_conversion(stable, source_count);
   static constexpr conversion transient_conversion =

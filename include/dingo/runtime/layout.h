@@ -159,8 +159,8 @@ template <typename Request, typename Element> struct request_tables {
       constexpr bool copies = std::is_copy_constructible_v<type>;
       for (std::uint8_t adds = 1; adds < 4; ++adds) {
         if ((quals & adds) == adds &&
-            (maker::full.qualified[adds].owned == nullptr ||
-             (copies && maker::full.qualified[adds].borrowed == nullptr))) {
+            (!maker::full.qualified[adds].has_owned ||
+             (copies && !maker::full.qualified[adds].has_borrowed))) {
           return false;
         }
       }
