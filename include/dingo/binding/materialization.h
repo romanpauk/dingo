@@ -18,17 +18,15 @@ namespace detail {
 // storage and its scope: whether it is guarded against recursion on every
 // materialization or while its storage is unresolved, whether an unresolved
 // storage retains the source it materializes, whether the scope consumes what
-// it makes, whether the storage yields a value rather than what it keeps, and
-// whether what it stores is moved trivially. Both containers materialize a
-// source by the decisions of these facts below: the static container as it
-// compiles, the runtime engine as it resolves.
+// it makes, and whether the storage yields a value rather than what it keeps.
+// Both containers materialize a source by the decisions of these facts below:
+// the static container as it compiles, the runtime engine as it resolves.
 struct materialization_facts {
   bool guards_always;
   bool guards_unresolved;
   bool retains_unresolved;
   bool consumes;
   bool yields_value;
-  bool moves_trivially;
   // Whether the value yielded owns what an address request reaches apart
   // from itself, as the owner of an array a scope makes does: a request that
   // keeps the address takes the array over.
@@ -68,8 +66,8 @@ constexpr bool materialization_retains(const materialization_facts &facts,
 // Where the source of a request is materialized. A transactional context
 // places every source a scope consumes. Any other places a value the storage
 // yields for a request that refers to it, and the source of an rvalue request
-// to what a scope consumes, which refers to what it is converted to, unless it
-// is moved trivially, which costs nothing.
+// to what a scope consumes, which refers to what it is converted to and
+// outlives the materialization, also of a type moved trivially.
 constexpr source_placement
 materialization_placement(const materialization_facts &facts,
                           materialized_request request, bool transactional) {
@@ -80,7 +78,7 @@ materialization_placement(const materialization_facts &facts,
   if (request.refers && facts.yields_value) {
     return source_placement::context_value;
   }
-  if (facts.consumes && request.rvalue && !facts.moves_trivially) {
+  if (facts.consumes && request.rvalue) {
     return source_placement::context_source;
   }
   return source_placement::yielded;

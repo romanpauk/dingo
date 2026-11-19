@@ -175,7 +175,6 @@ constexpr materialization_facts materialization_facts_v() {
           policy::retains_unresolved_source,
           policy::consumes,
           yields_value,
-          std::is_trivially_move_constructible_v<typename Storage::type>,
           owns_pointee};
 }
 
