@@ -183,21 +183,15 @@ struct request_derivation {
   // The derivations of a request that needs what it refers to to live as long
   // as the container, and as long as the request: they differ in what
   // satisfies the request alone.
-  struct derivations {
-    semantics::derivation stable;
-    semantics::derivation transient;
-  };
+  using derivations = semantics::lifetime_pair<semantics::derivation>;
 
   // The extensions of the request, of its type alone, and the layer of the
   // universe of the binding each of its own layers is.
   using extensions = request_extension<Request, abstract>;
-  struct layer_map {
-    semantics::layer indices[semantics::max_kinds] = {};
-  };
   template <typename... Tags>
-  static constexpr layer_map make_layer_map(type_list<Tags...>) {
-    layer_map made;
-    for (std::size_t index = 0; index < 4; ++index) {
+  static constexpr semantics::layer_map make_layer_map(type_list<Tags...>) {
+    semantics::layer_map made;
+    for (std::size_t index = 0; index < semantics::language_layers; ++index) {
       made.indices[index] = static_cast<semantics::layer>(index);
     }
     ((made.indices[extensions::universe_type::template index<Tags>()] =
@@ -205,94 +199,17 @@ struct request_derivation {
      ...);
     return made;
   }
-  static constexpr layer_map layers_map =
+  static constexpr semantics::layer_map layers_map =
       make_layer_map(typename request_stack::layers{});
 
-  static constexpr semantics::object mapped(semantics::object object) {
-    for (std::size_t index = 0; index < object.depth; ++index) {
-      object.layers[index] = layers_map.indices[object.layers[index]];
-    }
-    if (object.contained != semantics::no_layer) {
-      object.contained = layers_map.indices[object.contained];
-    }
-    return object;
-  }
-
-  // The derivation of the request for a lifetime: of the closure of the
-  // binding, when it satisfies it; else of the state of the closure the
-  // request extends of the fewest copies and moves, followed by the
-  // extension of the request type of the type and the form of the state.
+  // The derivation of the request for a lifetime, in two halves: of the
+  // closure of the binding, and of the extensions of the request type.
   static constexpr semantics::derivation
   derive(const semantics::search &closed, const semantics::context &context,
          const semantics::request &request, semantics::lifetime needed) {
-    const semantics::answer direct = semantics::satisfy_states(
-        closed.states, closed.count, closed.overflow, request, category::value,
-        needed, context, semantics::affected_cost{});
-    if (direct.found || direct.overflow) {
-      return semantics::answer_derivation(closed, direct);
-    }
-    const bool lasting = needed == semantics::lifetime::stable;
-    const auto &nested = extensions::nested;
-    bool found = false;
-    semantics::cost fewest;
-    bool absent = false;
-    std::size_t state = 0;
-    std::size_t chosen = 0;
-    std::uint16_t chosen_code = 0;
-    for (std::size_t nested_index = 0; nested_index < nested.count;
-         ++nested_index) {
-      const semantics::object type = mapped(nested.entries[nested_index].type);
-      for (std::size_t source = 0; source < closed.count; ++source) {
-        const semantics::state &source_state = closed.states[source];
-        if (!same_source_type(source_state.reached, type) ||
-            !extensible(source_state.reached)) {
-          continue;
-        }
-        const std::uint16_t code = source_form(source_state.reached);
-        const extension_answers both =
-            extensions::answers(nested.entries[nested_index], code);
-        const semantics::answer &reached =
-            lasting ? both.stable : both.transient;
-        if (!reached.found) {
-          continue;
-        }
-        const semantics::cost made =
-            semantics::followed(source_state.made, reached.fewest);
-        const bool made_absent = source_state.reached.absent || reached.absent;
-        if (!found || semantics::cheaper(made, made_absent, fewest, absent)) {
-          found = true;
-          fewest = made;
-          absent = made_absent;
-          state = source;
-          chosen = nested_index;
-          chosen_code = code;
-        }
-      }
-    }
-    if (!found) {
-      return {};
-    }
-    const extension reached =
-        extensions::derived(nested.entries[chosen].type, chosen_code, needed);
-    semantics::answer route;
-    route.found = true;
-    route.state = static_cast<std::uint16_t>(state);
-    semantics::derivation made = semantics::answer_derivation(closed, route);
-    if (made.count + reached.derivation.count > semantics::max_steps) {
-      return {};
-    }
-    for (std::size_t index = 0; index < reached.derivation.count; ++index) {
-      made.steps[made.count] = reached.derivation.steps[index];
-      made.objects[made.count + 1] =
-          mapped(reached.derivation.objects[index + 1]);
-      made.states[made.count + 1] =
-          static_cast<std::uint16_t>(closed.count + index + 1);
-      ++made.count;
-    }
-    made.access = reached.derivation.access;
-    made.fewest = fewest;
-    made.overflow = reached.derivation.overflow;
-    return made;
+    return semantics::split_derivation(
+        closed, context, request, category::value, needed,
+        extensions::context(), extensions::goal(), layers_map);
   }
 
   static constexpr derivations make() {
@@ -330,7 +247,8 @@ template <typename Identities, typename Semantic> struct step_operation {
   static constexpr semantics::object reached = Semantic::reached();
 
   template <semantics::layer Layer>
-  using layer_type = type_list_element_t<Layer - 4, Identities>;
+  using layer_type =
+      type_list_element_t<Layer - semantics::language_layers, Identities>;
 
   static auto make() {
     if constexpr (kind == semantics::step::wrap) {

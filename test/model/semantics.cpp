@@ -19,6 +19,7 @@
 // them.
 
 #include <dingo/request/classification.h>
+#include <dingo/semantics/extension.h>
 #include <dingo/semantics/model.h>
 
 #include <cstdio>
@@ -94,17 +95,27 @@ bool same(const layer_kind &a, const layer_kind &b) {
          a.converts_unknown_bound == b.converts_unknown_bound;
 }
 
-// Whether a derivation replays: each of its steps is a step the semantics take
-// from the object before it, to the object after it, and the cost of the steps
-// and of how the last object satisfies the request is that of the answer.
-bool replays(const derivation &made, const context &with,
-             const answer &result) {
-  if (!made.found) {
-    return false;
-  }
+// The cost of the steps of a derivation, before how the last object satisfies
+// the request, if each of its steps is a step the semantics take from the
+// object before it, to the object after it. A derivation in two halves
+// continues the states of a closure (closure) by an extension: its first step
+// past them is from the layer source of the type and the form of the state
+// before it, which the extension starts from.
+struct stepped_cost {
+  bool steps = false;
+  cost fewest;
+};
+
+stepped_cost derivation_cost(const derivation &made, const context &with,
+                             std::size_t closure) {
   cost so_far;
   for (std::size_t index = 0; index < made.count; ++index) {
-    const object &from = made.objects[index];
+    const bool extended =
+        made.states[index] < closure && made.states[index + 1] >= closure;
+    const object from = extended
+                            ? source_object(made.objects[index],
+                                            object_form(made.objects[index]))
+                            : made.objects[index];
     // A step the semantics allow, or one a binding takes, as the release of
     // what a pointer it made points to.
     transitions_list taken = steps(from, with);
@@ -115,19 +126,142 @@ bool replays(const derivation &made, const context &with,
               taken.items[each].reached == made.objects[index + 1];
     }
     if (!found) {
-      return false;
+      return {};
     }
     so_far =
         stepped(so_far, made.steps[index], from, made.objects[index + 1], with);
   }
-  const object &last = made.objects[made.count];
-  const bool anew = makes_leaf_anew(last, with);
+  return {true, so_far};
+}
+
+// What how the last object of a derivation satisfies the request does to the
+// leaf.
+effect satisfied_effect(const derivation &made, const context &with) {
+  const bool anew = makes_leaf_anew(made.objects[made.count], with);
   if (made.access == access::move) {
-    so_far = affected(so_far, anew ? effect::move : effect::none);
-  } else if (made.access == access::copy) {
-    so_far = affected(so_far, anew ? effect::copy : effect::none);
+    return anew ? effect::move : effect::none;
   }
-  return so_far == result.fewest;
+  if (made.access == access::copy) {
+    return anew ? effect::copy : effect::none;
+  }
+  return effect::none;
+}
+
+// Whether a derivation replays: each of its steps is a step the semantics take
+// from the object before it, to the object after it, and the cost of the steps
+// and of how the last object satisfies the request is that of the derivation.
+bool replays(const derivation &made, const context &with,
+             std::size_t closure = no_state) {
+  if (!made.found) {
+    return false;
+  }
+  const stepped_cost steps = derivation_cost(made, with, closure);
+  return steps.steps &&
+         affected(steps.fewest, satisfied_effect(made, with)) == made.fewest;
+}
+
+// The layers of a universe, each the same layer of it: the request and the
+// binding are of one universe.
+layer_map same_layers() {
+  layer_map made;
+  for (std::size_t index = 0; index < max_kinds; ++index) {
+    made.indices[index] = static_cast<layer>(index);
+  }
+  return made;
+}
+
+// The context of a request type alone, as both containers derive its
+// extensions in: of no scope, and of no leaf traits of an interface.
+context request_context(const context &with) {
+  context made = with;
+  made.scope = {false, false, false};
+  if (with.abstract) {
+    made.leaf = {false, false};
+  }
+  return made;
+}
+
+// The derivations of a request in two halves, as both containers derive it,
+// for each category and lifetime.
+struct category_derivations {
+  lifetime_pair<derivation> categories[7];
+};
+
+category_derivations derive_halves(const search &closed, const context &with,
+                                   const request &goal) {
+  category_derivations made;
+  const context own = request_context(with);
+  const layer_map layers_map = same_layers();
+  for (unsigned taken = 0; taken < 7; ++taken) {
+    for (lifetime needed : {lifetime::request, lifetime::stable}) {
+      made.categories[taken][needed] =
+          split_derivation(closed, with, goal, static_cast<category>(taken),
+                           needed, own, goal, layers_map);
+    }
+  }
+  return made;
+}
+
+// The fewest copies and moves of the leaf a request resolves with, as
+// spec/semantics.py's fewest gives it: of the derivation both containers
+// choose, as a container hands it over; none when it does not resolve.
+// resolve<T &&>() and construct<T &&>() return the value moved out of what
+// the request refers to. construct<T>() of a value it cannot resolve makes T
+// of the leaf the container resolves by value: a new handle, optional or
+// array of it, the rest of a bounded array value-initialized. The value is
+// moved into it once it is resolved. The derivations of the request and of
+// the leaf by value are given, made once for every rule.
+answer resolve(const category_derivations &derived,
+               const derivation &leaf_value, std::size_t closure,
+               const context &with, const request &goal, category taken,
+               const request_rules &rules) {
+  const entry through =
+      request_entry(rules.through, rules.position, rules.selected, taken);
+  if (selector_rejects(goal, taken, rules.position, through, rules.selected,
+                       with)) {
+    return {};
+  }
+  const bool returned =
+      rules.position == position::direct &&
+      (through == entry::resolve || through == entry::construct) &&
+      taken == category::rvalue_reference;
+  const derivation &made =
+      derived.categories[static_cast<unsigned>(taken)]
+                        [required_lifetime(rules.position, through)];
+  answer result;
+  result.overflow = made.overflow;
+  if (made.found && !made.overflow) {
+    const stepped_cost steps = derivation_cost(made, with, closure);
+    const bool anew = makes_leaf_anew(made.objects[made.count], with);
+    result.found = steps.steps;
+    result.overflow = !steps.steps;
+    result.fewest = handed_over(steps.fewest,
+                                returned && anew ? effect::move
+                                                 : satisfied_effect(made, with),
+                                rules.runtime);
+  }
+  if (result.found || result.overflow) {
+    return result;
+  }
+  bool bounded = false;
+  for (std::size_t index = 0; index < goal.shape_depth; ++index) {
+    bounded = bounded || with.kind(goal.layers[index]).bounded;
+  }
+  if (rules.position == position::direct && through == entry::construct &&
+      goal.element == element::leaf && goal.shape_depth != 0 &&
+      (with.leaf.default_constructible || !bounded)) {
+    category_derivations leaf;
+    leaf.categories[static_cast<unsigned>(category::value)] = {leaf_value,
+                                                               leaf_value};
+    answer value = resolve(
+        leaf, leaf_value, closure, with, request{}, category::value,
+        {position::direct, entry::resolve, rules.selected, rules.runtime});
+    if (value.found) {
+      value.fewest.moves = static_cast<std::uint8_t>(value.fewest.moves + 1);
+    }
+    return value;
+  }
+  return result;
 }
 
 bool read_layers(layer *layers, std::uint8_t &depth) {
@@ -156,14 +290,14 @@ int main(int count, char **arguments) {
       count > 1 && arguments[1][0] == 'd' && arguments[1][1] == 'e';
   // With "rules", for each category, position, entry point, whether the
   // request is selected and whether the runtime container resolves it, the
-  // fewest copies and moves of resolve, or "-".
+  // fewest copies and moves of resolve, of the derivation in two halves, or
+  // "-".
   const bool rules =
       count > 1 && arguments[1][0] == 'r' && arguments[1][1] == 'u';
-  // With "split", the answers of the search of what the binding publishes,
-  // then of the steps the request takes from it.
-  const bool split =
-      count > 1 &&
-      ((arguments[1][0] == 's' && arguments[1][1] == 'p') || derivations);
+  // With "halves", the answers of the derivation in two halves, as both
+  // containers derive it: of the closure of what the binding publishes, else
+  // of the extension of a state of it of the request type alone.
+  const bool halves = (count > 1 && arguments[1][0] == 'h') || derivations;
   const universe language;
   unsigned language_count = 0;
   if (!read(language_count) || language_count != language.count) {
@@ -243,17 +377,26 @@ int main(int count, char **arguments) {
                        static_cast<std::uint8_t>(limits),
                        &layers};
     if (rules) {
-      const search searched = reach_split(start, with, goal);
+      const search closed =
+          closed_layer_sources(layer_sources(start, with), with);
+      if (closed.overflow) {
+        std::printf("overflow\n");
+        continue;
+      }
+      const category_derivations derived = derive_halves(closed, with, goal);
+      const derivation leaf_value = split_derivation(
+          closed, with, request{}, category::value, lifetime::stable,
+          request_context(with), request{}, same_layers());
       for (unsigned taken = 0; taken < 7; ++taken) {
         for (unsigned at = 0; at < 4; ++at) {
           for (unsigned through = 0; through < 3; ++through) {
             for (bool selected : {false, true}) {
               for (bool runtime : {false, true}) {
                 const answer result =
-                    resolve(start, with, goal, static_cast<category>(taken),
+                    resolve(derived, leaf_value, closed.count, with, goal,
+                            static_cast<category>(taken),
                             {static_cast<position>(at),
-                             static_cast<entry>(through), selected, runtime},
-                            &searched);
+                             static_cast<entry>(through), selected, runtime});
                 if (result.overflow) {
                   std::printf("overflow ");
                 } else if (result.found) {
@@ -270,41 +413,62 @@ int main(int count, char **arguments) {
       std::printf("\n");
       continue;
     }
-    const search found =
-        split ? reach_split(start, with, goal) : reach(start, with, goal);
-    if (found.overflow) {
-      std::printf("overflow\n");
-      continue;
-    }
-    if (derivations) {
+    if (halves) {
+      const search closed =
+          closed_layer_sources(layer_sources(start, with), with);
+      if (closed.overflow) {
+        std::printf("overflow\n");
+        continue;
+      }
+      const context own = request_context(with);
+      const layer_map layers_map = same_layers();
       for (unsigned taken = 0; taken < 7; ++taken) {
-        const answer result = satisfy(found, goal, static_cast<category>(taken),
-                                      lifetime::request, with);
-        const derivation made = answer_derivation(found, result);
-        if (!made.found) {
-          std::printf("- ");
-          continue;
+        for (lifetime needed : {lifetime::request, lifetime::stable}) {
+          // A derivation prints the lifetime of the request alone.
+          if (derivations && needed != lifetime::request) {
+            continue;
+          }
+          const derivation derived =
+              split_derivation(closed, with, goal, static_cast<category>(taken),
+                               needed, own, goal, layers_map);
+          if (derived.overflow) {
+            std::printf("overflow ");
+          } else if (!derived.found) {
+            std::printf("- ");
+          } else if (derivations) {
+            std::printf("%u:%u,%u", static_cast<unsigned>(derived.access),
+                        derived.fewest.copies, derived.fewest.moves);
+            for (std::size_t index = 0; index < derived.count; ++index) {
+              const object &next = derived.objects[index + 1];
+              std::printf(
+                  ":%u/%u/%u", static_cast<unsigned>(derived.steps[index]),
+                  next.depth ? static_cast<unsigned>(next.layers[0]) : 255u,
+                  next.depth > 1 ? static_cast<unsigned>(next.layers[1])
+                                 : 255u);
+            }
+            std::printf(" ");
+          } else if (!replays(derived, with, closed.count)) {
+            std::printf("replay ");
+          } else {
+            std::printf("%u,%u,%u,%u,%u ", derived.fewest.copies,
+                        derived.fewest.moves, derived.absent ? 1u : 0u,
+                        derived.fewest.kept, derived.fewest.made);
+          }
         }
-        std::printf("%u:%u,%u", static_cast<unsigned>(made.access),
-                    made.fewest.copies, made.fewest.moves);
-        for (std::size_t index = 0; index < made.count; ++index) {
-          const object &next = made.objects[index + 1];
-          std::printf(":%u/%u/%u", static_cast<unsigned>(made.steps[index]),
-                      next.depth ? static_cast<unsigned>(next.layers[0]) : 255u,
-                      next.depth > 1 ? static_cast<unsigned>(next.layers[1])
-                                     : 255u);
-        }
-        std::printf(" ");
       }
       std::printf("\n");
+      continue;
+    }
+    const search found = reach(start, with, goal);
+    if (found.overflow) {
+      std::printf("overflow\n");
       continue;
     }
     for (unsigned taken = 0; taken < 7; ++taken) {
       for (lifetime needed : {lifetime::request, lifetime::stable}) {
         const answer result =
             satisfy(found, goal, static_cast<category>(taken), needed, with);
-        if (result.found &&
-            !replays(answer_derivation(found, result), with, result)) {
+        if (result.found && !replays(answer_derivation(found, result), with)) {
           std::printf("replay ");
         } else if (result.found) {
           std::printf("%u,%u,%u,%u,%u ", result.fewest.copies,

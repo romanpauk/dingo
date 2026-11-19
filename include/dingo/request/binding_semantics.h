@@ -105,7 +105,8 @@ struct joined<type_list<Items...>, type_list<Others...>> {
 inline constexpr std::uint8_t applied_limitations = static_cast<std::uint8_t>(
     static_cast<unsigned>(semantics::limitation::made_holder_handover) |
     static_cast<unsigned>(semantics::limitation::converted_copy_pointer) |
-    static_cast<unsigned>(semantics::limitation::qualified_below_element));
+    static_cast<unsigned>(semantics::limitation::qualified_below_element) |
+    static_cast<unsigned>(semantics::limitation::qualified_handle_conversion));
 
 // The layers a wrapper layer converts to: the one an owned value of it is
 // handed over to, and the one it converts to of an array of unknown bound,

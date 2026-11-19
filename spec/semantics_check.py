@@ -58,7 +58,7 @@ ORIGINS = {semantics.Origin.BORROWED: 0, semantics.Origin.MADE: 1,
            semantics.Origin.COPIED: 2}
 OWNERS = {semantics.Owner.NONE: 0, semantics.Owner.SOLE: 1,
           semantics.Owner.SHARED: 2}
-LIMITS = {frozenset(): 0, semantics.LIMITATIONS: 7}
+LIMITS = {frozenset(): 0, semantics.LIMITATIONS: 15}
 SOURCE = Path(__file__).parents[1] / "test" / "model" / "semantics.cpp"
 # The standard layers, which the program classifies the standard wrappers as.
 STANDARD = tuple(semantics.LAYERS)
@@ -572,11 +572,12 @@ QUALS = (0, semantics.CONST, semantics.VOLATILE,
 INNER_QUALS = (0, semantics.CONST)
 
 
-def qualified():
+def qualified(limits=frozenset()):
     """The stored objects of the standard layers of at most one layer, of
     every qualifier of each level a scope stores, with a leaf that copies a
     volatile one or not, and the requests of them of every qualifier of the
-    object they are of and of each level below."""
+    object they are of and of each level below, under the limitations
+    given."""
     goals = []
     for shape in semantics.SHAPES:
         for bound in bounds():
@@ -599,7 +600,7 @@ def qualified():
                                              copies_volatile=copies_volatile)
                 for abstract in (False, True):
                     context = semantics.Context(
-                        traits, semantics.SCOPES[scope], abstract)
+                        traits, semantics.SCOPES[scope], abstract, limits)
                     if not semantics.makes_storage(form, context):
                         continue
                     depth = len(semantics.FORMS[form])
@@ -695,7 +696,7 @@ def domain_cases(domain, mode=None, kept=None):
         # What the stored object reaches, or, through what a binding
         # publishes, what a request reaches from that.
         reached = (None if kept is not None else
-                   semantics.requested(start, context) if mode == "split"
+                   semantics.requested(start, context) if mode == "halves"
                    else semantics.reachable(start, context))
         candidates = (semantics.shape_candidates(reached) if reached is not None
                       else None)
@@ -729,15 +730,17 @@ def compare_answers(program, mode, cases):
 
 
 # The domains compared in parts, by name: each made of no arguments, with
-# the mode the program resolves it in. The rules domain is made of its
-# stored objects instead.
+# the mode the program resolves it in. A domain through what a binding
+# publishes is resolved as both containers derive it, in two halves. The
+# rules domain is made of its stored objects instead.
 DOMAINS = {
     "standard": (standard, None),
     "swept": (swept, None),
-    "standard_split": (lambda: consistent(standard()), "split"),
-    "swept_split": (lambda: consistent(swept()), "split"),
+    "standard_split": (lambda: consistent(standard()), "halves"),
+    "swept_split": (lambda: consistent(swept()), "halves"),
     "qualified": (qualified, None),
-    "qualified_split": (lambda: consistent(qualified()), "split"),
+    "qualified_split": (lambda: consistent(
+        qualified(semantics.LIMITATIONS)), "halves"),
     "rules": (None, "rules"),
 }
 
@@ -860,7 +863,7 @@ def main():
          14, "swept_split"),
         ("standard layers of every qualifier", 14, "qualified"),
         ("standard layers of every qualifier, through what a binding "
-         "publishes", 14, "qualified_split"),
+         "publishes, under the limitations", 14, "qualified_split"),
         ("the rules of requests, every stored object", 336, "rules")]
     domains = [(title, answers,
                 lambda domain=domain: compare(program, domain, options.jobs,

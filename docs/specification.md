@@ -116,12 +116,15 @@ Both containers derive a request in two halves, each of one type:
 - Any other request extends a state of the closure whose type the request
   spells: the request below some of its outer layers, of its own qualifiers
   below the outer layer or of none, or the pointer that a handle of it adopts or
-  observes. The extension depends only on that type and on the form of the
-  state: whether it is borrowed, made or a copy, whether it is an instance,
-  which of its levels live as long as the container, whether its outer layer was
-  made of what it holds, and whether it owns what its pointer points to. The
-  extension of each type and form is derived of the request type alone, and the
-  resolution takes the one of the fewest copies and moves of the leaf.
+  observes, of the qualifiers of the request below the pointer or of none. The
+  extension depends only on that type and on the form of the state: whether it
+  is borrowed, made or a copy, whether it is an instance, which of its levels
+  live as long as the container, whether its outer layer was made of what it
+  holds, and whether it owns what its pointer points to. A borrowed object that
+  is not an instance extends as a copy that is not one, and a copy of a pointer
+  that owns what it points to extends as the pointer made. The extension of each
+  type and form is derived of the request type alone, and the resolution takes
+  the one of the fewest copies and moves of the leaf.
 
 ## Limitations
 
@@ -135,7 +138,7 @@ limitation keeps from resolving is `limited`. A cell that resolves although a
 limitation covers it is a `stale_limitation`. The [Model Probe](#model-probe)
 fails on a stale limitation.
 
-The library has two limitations.
+The library has these limitations.
 
 `POINTER_OUT_OF_MADE_HOLDER` is kept on purpose. The library gives no raw
 pointer out of a holder that the registration makes, such as the `T *` of a
@@ -151,6 +154,14 @@ into the `std::optional<std::shared_ptr<I>>` that a binding of `I` converts of a
 kept `std::optional<std::shared_ptr<T>>`. The library points to the handle that
 it converts of the element instead. That pointer is not null when the stored
 optional is empty: the resolution fails.
+
+`QUALIFIED_HANDLE_CONVERSION`: the library converts no pointer or handle of
+qualifiers of its own to one of a more qualified element. An example is the
+`std::shared_ptr<const L>` of a kept `const std::shared_ptr<L>`. Both containers
+extend a request only from a layer source of no qualifiers of its own, so the
+library copies the handle to a `std::shared_ptr<L>` first and converts the copy.
+The copies and the moves of the leaf are the same; the conversion makes one
+object more.
 
 ## Model Probe
 

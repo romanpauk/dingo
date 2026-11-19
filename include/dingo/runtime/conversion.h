@@ -15,6 +15,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <type_traits>
 #include <utility>
 
@@ -65,21 +66,27 @@ constexpr erased_operation table_operation(const type_table *table,
   return {};
 }
 
-// What compiling an extension gives: the conversion, and whether it takes a
+// What compiling an extension gives: the conversion, whether it takes a
 // step of the type of the layer source, whose table only the binding has,
-// which no extension does.
+// which no extension does, and whether a table it takes a step of has no
+// operation of it, as of a type incomplete where the request is compiled.
 struct compiled_extension {
   runtime_conversion conversion;
   conversion_call calls[max_calls] = {};
   bool unknown = false;
+  bool missing = false;
 };
 
 // The conversion of the derivation of an extension, of the tables of the
 // types the request spells, from its shape at depth 0: every step of it is
-// the request's, made of a layer it spells or of what such a step made.
+// the request's, made of a layer it spells or of what such a step made. A
+// pointer in place of a handle the request spells, which the request converts
+// to the qualifiers it spells below the pointer, is made of the table of
+// pointers at the depth of the handle.
 constexpr compiled_extension
 compile_extension(const semantics::derivation &derivation,
-                  const type_table *const *tables, std::size_t goal_depth) {
+                  const type_table *const *tables,
+                  const type_table *const *pointers, std::size_t goal_depth) {
   compiled_extension made;
   runtime_conversion &converted = made.conversion;
   const conversion compiled = compile_conversion(derivation, 1);
@@ -88,7 +95,11 @@ compile_extension(const semantics::derivation &derivation,
     const instruction &each = compiled.entries[index];
     const semantics::object &source = derivation.objects[each.first];
     const semantics::object &target = derivation.objects[each.last + 1];
-    const type_table *maker = tables[goal_depth - target.depth];
+    const std::size_t level = goal_depth - target.depth;
+    const bool pointer = target.depth && pointers[level] != nullptr &&
+                         (target.layers[0] == semantics::pointer_layer ||
+                          target.layers[0] == semantics::array_pointer_layer);
+    const type_table *maker = pointer ? pointers[level] : tables[level];
     erased_operation step;
     bool makes = true;
     switch (each.kind) {
@@ -127,6 +138,10 @@ compile_extension(const semantics::derivation &derivation,
       made.unknown = true;
       return made;
     }
+    if (step.owned == nullptr && step.borrowed == nullptr) {
+      made.missing = true;
+      return made;
+    }
     if (converted.count == max_calls) {
       made.unknown = true;
       return made;
@@ -155,9 +170,9 @@ compile_extension(const semantics::derivation &derivation,
 // what it reaches, whether that may be absent, and its conversion, if any.
 struct extension_entry {
   std::uint16_t form = 0;
-  semantics::cost fewest[2] = {};
-  bool absent[2] = {};
-  const runtime_conversion *conversions[2] = {};
+  semantics::lifetime_pair<semantics::cost> fewest;
+  semantics::lifetime_pair<bool> absent;
+  semantics::lifetime_pair<const runtime_conversion *> conversions;
 };
 
 // The entries of a nested source of a request, by the key of its type.
@@ -205,24 +220,40 @@ template <typename Request, bool Abstract> struct runtime_extensions {
   using types = request_types<Request, element_type>;
   using tables = request_tables<Request, element_type>;
 
+  // Of a pointer nested source of the request: whether it points to the first
+  // element of an array, the depth of the handle or the array it is in place
+  // of, the element it points to of the qualifiers the request spells, and
+  // the pointer of them.
+  template <std::size_t Nested> struct nested_pointer {
+    static constexpr auto group = extensions::nested.entries[Nested];
+    static constexpr semantics::request goal = extensions::goal();
+    static constexpr bool array =
+        group.offset + 1u < goal.depth &&
+        goal.layers[group.offset + 1] == semantics::array_layer;
+    static constexpr std::size_t level = group.offset + (array ? 1u : 0u);
+    using element =
+        typename types::template nested<group.offset + (array ? 2 : 1)>::type;
+    using type = element *;
+  };
+
   // The key of the type of a nested source of the request.
   template <std::size_t Nested> static constexpr const void *nested_key() {
     constexpr auto group = extensions::nested.entries[Nested];
-    if constexpr (group.kind == nested_kind::spelled) {
+    if constexpr (group.kind == semantics::nested_kind::spelled) {
       return &shape_key<std::remove_cv_t<
           typename types::template nested<group.offset>::type>>;
-    } else if constexpr (group.kind == nested_kind::unqualified) {
+    } else if constexpr (group.kind == semantics::nested_kind::unqualified) {
       return &shape_key<typename unqualified<
           typename types::template nested<group.offset>::type,
           element_type>::type>;
     } else {
-      constexpr semantics::request goal = extensions::goal();
-      constexpr bool array =
-          group.offset + 1u < goal.depth &&
-          goal.layers[group.offset + 1] == semantics::array_layer;
-      using element =
-          typename types::template nested<group.offset + (array ? 2 : 1)>::type;
-      if constexpr (array) {
+      using spelled_element = typename nested_pointer<Nested>::element;
+      // The pointer of no qualifiers below its own.
+      using element = std::conditional_t<
+          group.kind == semantics::nested_kind::unqualified_pointer,
+          typename unqualified<spelled_element, element_type>::type,
+          spelled_element>;
+      if constexpr (nested_pointer<Nested>::array) {
         return &shape_key<first_element<element>>;
       } else {
         return &shape_key<element *>;
@@ -230,15 +261,56 @@ template <typename Request, bool Abstract> struct runtime_extensions {
     }
   }
 
+  // The table of a pointer a request converts of an unqualified pointer nested
+  // source, if the nested source is one.
+  template <std::size_t Nested>
+  static constexpr const type_table *pointer_table() {
+    if constexpr (extensions::nested.entries[Nested].kind ==
+                  semantics::nested_kind::unqualified_pointer) {
+      using type = typename nested_pointer<Nested>::type;
+      return &operation_table<type, element_type, element_type,
+                              tables::template type_mask<type>()>::value;
+    } else {
+      return nullptr;
+    }
+  }
+
+  // The tables of pointers in place of the handles the request spells, by
+  // their depth: of each one the request converts of an unqualified pointer
+  // nested source, none at another depth.
+  template <std::size_t... I>
+  static constexpr std::array<const type_table *, types::depth + 1>
+  make_pointers(std::index_sequence<I...>) {
+    std::array<const type_table *, types::depth + 1> made_pointers{};
+    const type_table *each[] = {pointer_table<I>()..., nullptr};
+    const std::size_t levels[] = {nested_level<I>()..., 0};
+    for (std::size_t index = 0; index < sizeof...(I); ++index) {
+      if (each[index] != nullptr) {
+        made_pointers[levels[index]] = each[index];
+      }
+    }
+    return made_pointers;
+  }
+  template <std::size_t Nested> static constexpr std::size_t nested_level() {
+    if constexpr (semantics::pointer_kind(
+                      extensions::nested.entries[Nested].kind)) {
+      return nested_pointer<Nested>::level;
+    } else {
+      return 0;
+    }
+  }
+  static constexpr std::array<const type_table *, types::depth + 1> pointers =
+      make_pointers(std::make_index_sequence<extensions::nested.count>{});
+
   // An extension of the request as the code compiles it: the form of the layer
   // source, and for each lifetime whether it reaches the request, at what
   // cost, and the index of its conversion.
   struct entry {
     std::uint16_t form = 0;
-    bool found[2] = {};
-    semantics::cost fewest[2] = {};
-    bool absent[2] = {};
-    std::uint8_t conversion[2] = {};
+    semantics::lifetime_pair<bool> found;
+    semantics::lifetime_pair<semantics::cost> fewest;
+    semantics::lifetime_pair<bool> absent;
+    semantics::lifetime_pair<std::uint8_t> conversion;
   };
   static constexpr std::size_t max_entries = 256;
   static constexpr std::size_t max_conversions = 64;
@@ -247,8 +319,8 @@ template <typename Request, bool Abstract> struct runtime_extensions {
   struct extension_list {
     entry entries[max_entries] = {};
     std::size_t count = 0;
-    std::uint16_t first[extensions::max_nested] = {};
-    std::uint16_t counts[extensions::max_nested] = {};
+    std::uint16_t first[semantics::max_nested] = {};
+    std::uint16_t counts[semantics::max_nested] = {};
     compiled_extension conversions[max_conversions] = {};
     std::size_t conversion_count = 0;
     std::size_t call_count = 0;
@@ -284,24 +356,29 @@ template <typename Request, bool Abstract> struct runtime_extensions {
         const auto &group = extensions::nested.entries[nested_index];
         table_list.first[nested_index] =
             static_cast<std::uint16_t>(table_list.count);
-        const form_list forms = extensions::forms(group);
+        const semantics::form_list forms = extensions::forms(group);
         for (std::size_t index = 0; index < forms.count; ++index) {
           const auto reached = extensions::extended(group, forms.forms[index]);
           table_list.overflow = table_list.overflow || reached.overflow;
           entry each;
           each.form = forms.forms[index];
           bool any = false;
-          for (std::size_t lifetime = 0; lifetime < 2; ++lifetime) {
-            const semantics::answer &answer = reached.answers[lifetime];
-            if (!answer.found) {
+          for (const semantics::lifetime needed :
+               {semantics::lifetime::stable, semantics::lifetime::request}) {
+            const semantics::derivation &derived = reached.derivations[needed];
+            if (!derived.found) {
+              continue;
+            }
+            const compiled_extension compiled = compile_extension(
+                derived, tables::value.value, pointers.data(), goal.depth);
+            // An extension of a step no table has an operation of is none.
+            if (compiled.missing) {
               continue;
             }
             any = true;
-            each.found[lifetime] = true;
-            each.fewest[lifetime] = answer.fewest;
-            each.absent[lifetime] = answer.absent;
-            const compiled_extension compiled = compile_extension(
-                reached.derivations[lifetime], tables::value.value, goal.depth);
+            each.found[needed] = true;
+            each.fewest[needed] = derived.fewest;
+            each.absent[needed] = derived.absent;
             table_list.unknown = table_list.unknown || compiled.unknown;
             std::size_t found = 0;
             while (found < table_list.conversion_count &&
@@ -316,7 +393,7 @@ template <typename Request, bool Abstract> struct runtime_extensions {
               table_list.conversions[table_list.conversion_count++] = compiled;
               table_list.call_count += compiled.conversion.count;
             }
-            each.conversion[lifetime] = static_cast<std::uint8_t>(found);
+            each.conversion[needed] = static_cast<std::uint8_t>(found);
           }
           if (any) {
             if (table_list.count == max_entries) {
@@ -334,7 +411,8 @@ template <typename Request, bool Abstract> struct runtime_extensions {
   }
   static constexpr extension_list made = make();
   static_assert(!made.overflow,
-                "an extension reaches more states than extension_states");
+                "an extension reaches more states than extension_states, or "
+                "takes more steps than semantics::max_steps");
   static_assert(!made.unknown,
                 "an extension takes only steps of the types the request "
                 "spells, of no more conversions and entries than a table "
@@ -378,12 +456,12 @@ template <typename Request, bool Abstract> struct runtime_extensions {
     const entry &each = made.entries[index];
     extension_entry made_entry;
     made_entry.form = each.form;
-    for (std::size_t lifetime = 0; lifetime < 2; ++lifetime) {
-      made_entry.fewest[lifetime] = each.fewest[lifetime];
-      made_entry.absent[lifetime] = each.absent[lifetime];
-      made_entry.conversions[lifetime] =
-          each.found[lifetime] ? &conversions[each.conversion[lifetime]]
-                               : nullptr;
+    made_entry.fewest = each.fewest;
+    made_entry.absent = each.absent;
+    for (const semantics::lifetime needed :
+         {semantics::lifetime::stable, semantics::lifetime::request}) {
+      made_entry.conversions[needed] =
+          each.found[needed] ? &conversions[each.conversion[needed]] : nullptr;
     }
     return made_entry;
   }

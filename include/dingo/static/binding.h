@@ -153,18 +153,21 @@ template <typename Request, typename InterfaceBinding> struct static_execution {
   using interface_type = typename derivation::interface_type;
 
   // The derivation of a request for a lifetime: whole, as a request that
-  // reaches more states than a search holds does not compile.
+  // reaches more states than a search holds, or takes more steps than a
+  // derivation holds, does not compile.
   template <bool Stable>
   static constexpr const semantics::derivation &derived() {
     if constexpr (Stable) {
       static_assert(!derivation::stable.overflow,
-                    "a request reaches more states "
-                    "than semantics::max_states");
+                    "a request reaches more states than "
+                    "semantics::max_states, or takes more steps than "
+                    "semantics::max_steps");
       return derivation::stable;
     } else {
       static_assert(!derivation::transient.overflow,
-                    "a request reaches more states "
-                    "than semantics::max_states");
+                    "a request reaches more states than "
+                    "semantics::max_states, or takes more steps than "
+                    "semantics::max_steps");
       return derivation::transient;
     }
   }

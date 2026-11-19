@@ -813,6 +813,14 @@ class Limitation(Enum):
     # element alone: a level below it would take a conversion for every
     # qualifier of every level.
     QUALIFIED_BELOW_ELEMENT = "qualified_below_element"
+    # A pointer or a handle of qualifiers of its own converted to one of a
+    # more qualified element, such as the std::shared_ptr<const L> of a const
+    # std::shared_ptr<L>. The library copies it to one of no qualifiers of its
+    # own first, and converts that: both containers extend a request only
+    # from what a binding publishes of no qualifiers of its own. The copies
+    # and the moves of the leaf are the same; the conversion makes one object
+    # more.
+    QUALIFIED_HANDLE_CONVERSION = "qualified_handle_conversion"
 
 
 GAPS = (
@@ -823,6 +831,8 @@ GAPS = (
     Gap(Limitation.QUALIFIED_BELOW_ELEMENT, "qualify",
         lambda context, object, following:
         following.quals[2:] != object.quals[2:]),
+    Gap(Limitation.QUALIFIED_HANDLE_CONVERSION, "qualify",
+        lambda context, object, following: object.quals[0] != 0),
 )
 
 

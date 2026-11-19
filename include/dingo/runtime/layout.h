@@ -53,10 +53,7 @@ struct closed_answer {
 };
 
 // The answers of a request, for each lifetime it may need.
-struct closed_answers {
-  closed_answer stable;
-  closed_answer transient;
-};
+using closed_answers = semantics::lifetime_pair<closed_answer>;
 
 // The answers of the closure for the requests of the type of the key shape:
 // of each category, of an object of each qualifiers, at

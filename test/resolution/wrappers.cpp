@@ -480,6 +480,53 @@ TEST(wrappers_runtime_test, external_custom_wrappers_resolve_as_stored) {
 }
 
 namespace {
+// A handle that observes what a raw pointer points to, of no converting
+// constructor: a handle of a const element is made of a pointer to a const
+// one, not of a handle of the element.
+template <typename T> class observing_handle {
+public:
+  explicit observing_handle(T *pointer) : pointer_(pointer) {}
+  T *get() const { return pointer_; }
+
+private:
+  T *pointer_;
+};
+} // namespace
+
+namespace dingo {
+template <typename T>
+struct type_traits<observing_handle<T>> : semantics::observer {
+  using value_type = T;
+  template <typename U> using rebind_t = observing_handle<U>;
+
+  static T *get(const observing_handle<T> &handle) { return handle.get(); }
+  static bool empty(const observing_handle<T> &handle) {
+    return handle.get() == nullptr;
+  }
+};
+} // namespace dingo
+
+// A request of an observing handle of a const element is made of the pointer
+// the binding publishes, converted to a pointer to a const element.
+TYPED_TEST(wrappers_test, custom_const_observer_observes_instance) {
+  with_binding<TypeParam, scope<shared>, storage<std::shared_ptr<service_impl>>,
+               interfaces<service>>
+      fixture;
+  auto &container = fixture.container;
+  auto observer = container.template resolve<observing_handle<const service>>();
+  ASSERT_NE(observer.get(), nullptr);
+  EXPECT_EQ(observer.get(), container.template resolve<service *>());
+  EXPECT_EQ(observer.get()->marker(), 3);
+
+  with_binding<TypeParam, scope<shared>, storage<std::unique_ptr<regular>>>
+      leaf_fixture;
+  auto &leaf_container = leaf_fixture.container;
+  auto leaf_observer =
+      leaf_container.template resolve<observing_handle<const regular>>();
+  EXPECT_EQ(leaf_observer.get(), &leaf_container.template resolve<regular &>());
+}
+
+namespace {
 // Counts the live objects of a leaf a unique scope makes as a raw pointer.
 struct counted_pointee {
   counted_pointee() { ++live; }

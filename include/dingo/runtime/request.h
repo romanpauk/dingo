@@ -220,12 +220,12 @@ finish_derived(execution::erased_carrier reached,
 DINGO_NOINLINE inline selected_conversion
 select_extension(const execution::binding_layout &layout,
                  const runtime_request &request, bool stable) {
-  const std::size_t lifetime = stable ? 0 : 1;
+  const semantics::lifetime needed =
+      stable ? semantics::lifetime::stable : semantics::lifetime::request;
   const execution::extension_table &table =
       *request.extensions[layout.abstract ? 1 : 0];
   selected_conversion chosen{nullptr, nullptr, 0, &finish_derived};
-  semantics::cost fewest;
-  bool absent = false;
+  semantics::extension_cost fewest;
   for (std::size_t group = 0; group < table.group_count; ++group) {
     const execution::extension_group &nested = table.groups[group];
     for (std::size_t index = 0; index < layout.layer_source_count; ++index) {
@@ -236,18 +236,13 @@ select_extension(const execution::binding_layout &layout,
       for (std::size_t entry = nested.first;
            entry < nested.first + nested.count; ++entry) {
         const execution::extension_entry &each = table.entries[entry];
-        if (each.form != source.code || each.conversions[lifetime] == nullptr) {
+        if (each.form != source.code || each.conversions[needed] == nullptr) {
           continue;
         }
-        const semantics::cost made =
-            semantics::followed(source.made, each.fewest[lifetime]);
-        const bool made_absent = source.absent || each.absent[lifetime];
-        if (chosen.derived == nullptr ||
-            semantics::cheaper(made, made_absent, fewest, absent)) {
-          chosen.derived = each.conversions[lifetime];
+        if (fewest.consider(source.made, source.absent, each.fewest[needed],
+                            each.absent[needed])) {
+          chosen.derived = each.conversions[needed];
           chosen.route = source.state;
-          fewest = made;
-          absent = made_absent;
         }
       }
     }
@@ -282,7 +277,28 @@ template <typename T> struct request_execution {
   using stack = stack_t<shape, element_type>;
   static constexpr bool modeled =
       category::modeled && stack::element != stack_element::other;
+  // Whether a binding of a leaf of another type may bind the element as its
+  // abstract interface: not of a complete type that is no class or is a final
+  // one.
+  static constexpr bool abstract_possible() {
+    if constexpr (is_complete_v<element_type>) {
+      return std::is_class_v<element_type> && !std::is_final_v<element_type>;
+    } else {
+      return true;
+    }
+  }
 };
+
+// The extensions of a request type of the abstract interface of a leaf: none
+// of an element no leaf of another type is bound as.
+template <typename T>
+constexpr const execution::extension_table *abstract_extensions() {
+  if constexpr (request_execution<T>::abstract_possible()) {
+    return execution::runtime_extensions<T, true>::table();
+  } else {
+    return &execution::no_extensions;
+  }
+}
 
 template <typename T> constexpr runtime_request make_runtime_request() {
   using executed = request_execution<T>;
@@ -297,11 +313,10 @@ template <typename T> constexpr runtime_request make_runtime_request() {
             executed::category::value,
             quals_v<shape>,
             {execution::runtime_extensions<T, false>::table(),
-             execution::runtime_extensions<T, true>::table()},
+             abstract_extensions<T>()},
             execution::runtime_extensions<T, false>::table() !=
                         &execution::no_extensions ||
-                    execution::runtime_extensions<T, true>::table() !=
-                        &execution::no_extensions
+                    abstract_extensions<T>() != &execution::no_extensions
                 ? &select_extension
                 : nullptr};
   }

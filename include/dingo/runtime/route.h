@@ -371,18 +371,39 @@ struct binding_sources {
     }
   }
 
+  // Whether the tables of a request have the form of a layer source: every
+  // form source_forms enumerates of its type, of a pointer as a handle that
+  // adopts it and one that observes it would.
+  static constexpr bool enumerated(const semantics::object &object) {
+    const bool pointer =
+        object.depth && (object.layers[0] == semantics::pointer_layer ||
+                         object.layers[0] == semantics::array_pointer_layer);
+    const semantics::form_list forms =
+        semantics::source_forms(object, pointer, true, true);
+    const std::uint16_t code = semantics::object_form(object).code();
+    for (std::size_t index = 0; index < forms.count; ++index) {
+      if (forms.forms[index] == code) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // The layer sources an extension of a request starts from: the key of the
   // type of each, of no qualifiers of its own.
   template <std::size_t Index> static constexpr layer_source layer_source_v() {
     constexpr std::size_t state = answer_table::layer_sources.states[Index];
     using type = typename closed_carrier<state>::type::type;
     constexpr const semantics::state &each = closure.states[state];
+    static_assert(enumerated(each.reached),
+                  "the tables of a request have every form of a layer source "
+                  "a binding publishes: semantics::source_forms enumerates it");
     return {each.reached.depth &&
                     each.reached.layers[0] == semantics::array_pointer_layer
                 ? source_key<std::remove_cv_t<type>, true>()
                 : source_key<std::remove_cv_t<type>, false>(),
-            source_form(each.reached), static_cast<std::uint16_t>(state),
-            each.made, each.reached.absent};
+            semantics::object_form(each.reached).code(),
+            static_cast<std::uint16_t>(state), each.made, each.reached.absent};
   }
   template <std::size_t... I>
   static constexpr auto make_layer_sources(std::index_sequence<I...>) {

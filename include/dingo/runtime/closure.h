@@ -36,20 +36,7 @@ struct state_classes {
 
 constexpr bool same_type(const semantics::object &a,
                          const semantics::object &b) {
-  if (a.depth != b.depth || a.element != b.element || a.origin != b.origin) {
-    return false;
-  }
-  for (std::size_t index = 0; index < a.depth; ++index) {
-    if (a.layers[index] != b.layers[index]) {
-      return false;
-    }
-  }
-  for (std::size_t index = 0; index <= a.depth; ++index) {
-    if (a.quals[index] != b.quals[index]) {
-      return false;
-    }
-  }
-  return true;
+  return a.origin == b.origin && semantics::same_stack(a, b, true);
 }
 
 constexpr std::uint32_t type_hash(const semantics::object &object) {
@@ -314,28 +301,11 @@ struct closed_answer_table {
     bool pointee[shape_bound] = {};
     std::size_t count = 0;
   };
-  static constexpr bool same_goal(const semantics::request &a,
-                                  const semantics::request &b) {
-    if (a.depth != b.depth || a.element != b.element) {
-      return false;
-    }
-    for (std::size_t index = 0; index < a.depth; ++index) {
-      if (a.layers[index] != b.layers[index]) {
-        return false;
-      }
-    }
-    for (std::size_t index = 1; index <= a.depth; ++index) {
-      if (a.quals[index] != b.quals[index]) {
-        return false;
-      }
-    }
-    return true;
-  }
   static constexpr void add_shape(shape_list &made,
                                   const semantics::request &goal,
                                   std::uint16_t state, bool pointee) {
     for (std::size_t index = 0; index < made.count; ++index) {
-      if (same_goal(made.goals[index], goal)) {
+      if (semantics::same_stack(made.goals[index], goal, false)) {
         return;
       }
     }
@@ -353,27 +323,13 @@ struct closed_answer_table {
       }
       const semantics::object &object = closure.states[state].reached;
       semantics::request goal;
-      goal.depth = object.depth;
-      goal.element = object.element;
-      goal.shape_depth = object.depth;
-      for (std::size_t index = 0; index < object.depth; ++index) {
-        goal.layers[index] = object.layers[index];
-      }
-      for (std::size_t index = 1; index <= object.depth; ++index) {
-        goal.quals[index] = object.quals[index];
-      }
+      semantics::set_stack(goal, object);
+      goal.shape_depth = goal.depth;
       add_shape(made, goal, static_cast<std::uint16_t>(state), false);
       if (object.depth && context.kind(object.layers[0]).adopted) {
         semantics::request pointed_request;
-        pointed_request.depth = static_cast<std::uint8_t>(object.depth - 1);
-        pointed_request.element = object.element;
+        semantics::set_stack(pointed_request, object, 1);
         pointed_request.shape_depth = pointed_request.depth;
-        for (std::size_t index = 1; index < object.depth; ++index) {
-          pointed_request.layers[index - 1] = object.layers[index];
-        }
-        for (std::size_t index = 2; index <= object.depth; ++index) {
-          pointed_request.quals[index - 1] = object.quals[index];
-        }
         add_shape(made, pointed_request, static_cast<std::uint16_t>(state),
                   true);
       }
@@ -459,17 +415,18 @@ struct closed_answer_table {
   };
   static constexpr source_list make_layer_sources() {
     source_list made;
+    const semantics::context context = Semantic::context();
     for (std::size_t state = 0; state < closure.count; ++state) {
       const semantics::state &each = closure.states[state];
-      if (!possible(state) || !extensible(each.reached)) {
+      if (!possible(state) || !semantics::extensible(each.reached, context)) {
         continue;
       }
-      const std::uint16_t code = source_form(each.reached);
+      const std::uint16_t code = semantics::object_form(each.reached).code();
       std::size_t found = 0;
       while (found < made.count) {
         const semantics::state &other = closure.states[made.states[found]];
-        if (source_form(other.reached) == code &&
-            same_source_type(other.reached, each.reached)) {
+        if (semantics::object_form(other.reached).code() == code &&
+            semantics::same_stack(other.reached, each.reached, false)) {
           break;
         }
         ++found;

@@ -38,6 +38,9 @@ inline constexpr layer pointer_layer = 0;
 inline constexpr layer array_pointer_layer = 1;
 inline constexpr layer array_layer = 2;
 inline constexpr layer bounded_array_layer = 3;
+// How many layers C++ itself has: the layers of the types a universe is of
+// follow them.
+inline constexpr std::size_t language_layers = 4;
 
 // What a layer owns of what it holds.
 enum class owner : std::uint8_t { none, sole, shared };
@@ -142,7 +145,7 @@ struct universe {
       // A bounded array.
       {owner::sole, false, false, false, false, false, false, true, false,
        false, false, true, false, false}};
-  std::size_t count = 4;
+  std::size_t count = language_layers;
 
   constexpr layer add(const layer_kind &kind) {
     kinds[count] = kind;
@@ -176,6 +179,20 @@ struct scope_traits {
 // request.
 enum class lifetime : std::uint8_t { request = 1, stable = 2 };
 
+// What there is of something for each lifetime a request may need: as long as
+// the container, and as long as the request.
+template <typename T> struct lifetime_pair {
+  T stable{};
+  T transient{};
+
+  constexpr T &operator[](lifetime needed) {
+    return needed == lifetime::stable ? stable : transient;
+  }
+  constexpr const T &operator[](lifetime needed) const {
+    return needed == lifetime::stable ? stable : transient;
+  }
+};
+
 // Whose an object is: kept by another, made for the request, or a copy the
 // request made.
 enum class origin : std::uint8_t { borrowed, made, copied };
@@ -193,6 +210,7 @@ enum class limitation : std::uint8_t {
   made_holder_handover = 1 << 0,
   converted_copy_pointer = 1 << 1,
   qualified_below_element = 1 << 2,
+  qualified_handle_conversion = 1 << 3,
 };
 
 // The properties of its registration a derivation uses, and the layers it
@@ -578,6 +596,8 @@ DINGO_COLD constexpr void qualify_steps(const semantics::object &object,
                                         Sink &out) {
   if (!object.depth || !context.kind(object.layers[0]).qualifies ||
       object.qualified || object.owns_pointee ||
+      (object.quals[0] &&
+       context.limited(limitation::qualified_handle_conversion)) ||
       !out.takes(step::qualify, object.layers[0], object.depth)) {
     return;
   }
@@ -939,6 +959,43 @@ struct request {
   // outermost first.
   std::uint8_t quals[max_layers + 1] = {};
 };
+
+// Whether two stacks, each of an object or of a request, are of the same
+// type: of the same layers, element and qualifiers below their own, and of the
+// same qualifiers of their own when own is set.
+template <typename First, typename Second>
+constexpr bool same_stack(const First &first, const Second &second, bool own) {
+  if (first.depth != second.depth || first.element != second.element) {
+    return false;
+  }
+  for (std::size_t index = 0; index < first.depth; ++index) {
+    if (first.layers[index] != second.layers[index]) {
+      return false;
+    }
+  }
+  for (std::size_t index = own ? 0 : 1; index <= first.depth; ++index) {
+    if (first.quals[index] != second.quals[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Sets the stack of an object or a request to that of another below some of
+// its outer layers: its layers, its element and its qualifiers below its own,
+// from the layer below them on. The qualifiers of its own are kept.
+template <typename Target, typename Source>
+constexpr void set_stack(Target &target, const Source &source,
+                         std::size_t below = 0) {
+  target.depth = static_cast<std::uint8_t>(source.depth - below);
+  target.element = source.element;
+  for (std::size_t index = 0; index < target.depth; ++index) {
+    target.layers[index] = source.layers[below + index];
+  }
+  for (std::size_t index = 1; index <= target.depth; ++index) {
+    target.quals[index] = source.quals[below + index];
+  }
+}
 
 // Whether the layers of an object may still become the layers of a request:
 // those below its outermost are those of the request below the same depth,
@@ -1477,6 +1534,8 @@ struct derivation {
   std::size_t count = 0;
   semantics::access access = semantics::access::refer;
   cost fewest;
+  // Whether what satisfies the request may not exist, as the answer's.
+  bool absent = false;
   // Whether the search held fewer states than it reached: the derivation is not
   // to be trusted.
   bool overflow = false;
@@ -1504,6 +1563,7 @@ DINGO_COLD constexpr derivation answer_derivation(const Search &found,
   made.count = length - 1;
   made.access = result.access;
   made.fewest = result.fewest;
+  made.absent = result.absent;
   for (std::uint16_t index = result.state; index != no_state;
        index = found.states[index].parent) {
     const state &each = found.states[index];
@@ -1690,7 +1750,7 @@ constexpr search closed_layer_sources(const search &sources,
 // type the binding does not have; or open, reached by a conversion to a more
 // qualified element, which the closure leaves to the request, and by any step
 // after it but a wrap, as the closure would hold it.
-enum class extension : std::uint8_t { closed, made, open };
+enum class standing : std::uint8_t { closed, made, open };
 
 // What a sink of the steps a request takes from a state of a search passes
 // on to the search, as reached_sink does: no step a binding takes, and of the
@@ -1707,19 +1767,19 @@ template <typename Search>
 struct basic_extending_sink : basic_reached_sink<Search> {
   // The layers whose types the binding has: those of a lower index.
   std::size_t known;
-  extension standing;
+  semantics::standing standing;
 
   constexpr bool takes(step kind, layer outer, std::size_t depth) const {
     if (binding_kind(kind)) {
       return false;
     }
-    if (standing != extension::open) {
+    if (standing != semantics::standing::open) {
       switch (kind) {
       case step::wrap:
       case step::qualify:
         break;
       case step::unknown_bound:
-        if (standing != extension::made && outer < known) {
+        if (standing != semantics::standing::made && outer < known) {
           return false;
         }
         break;
@@ -1768,16 +1828,16 @@ extend_reach(Search &found, std::size_t closed, std::size_t known,
     // A state the request reached of the closure is open when a conversion to
     // a more qualified element reached it, or a step but a wrap of an open
     // one.
-    extension standing = extension::closed;
+    semantics::standing standing = semantics::standing::closed;
     if (next >= closed) {
-      standing = extension::made;
+      standing = semantics::standing::made;
       for (std::size_t each = next; each >= closed;
            each = found.states[each].parent) {
         if (found.states[each].step == step::wrap) {
           break;
         }
         if (found.states[each].step == step::qualify) {
-          standing = extension::open;
+          standing = semantics::standing::open;
           break;
         }
       }
@@ -1791,24 +1851,6 @@ extend_reach(Search &found, std::size_t closed, std::size_t known,
   }
 }
 
-// What a request reaches from the closed layer sources of a binding that
-// has the types of the layers below known.
-constexpr search reach_closed(const search &closed, std::size_t known,
-                              const semantics::context &context,
-                              const request &goal) {
-  search found = closed;
-  found.closed = closed.count;
-  extend_reach(found, closed.count, known, context, goal);
-  return found;
-}
-
-constexpr search reach_split(const object &start,
-                             const semantics::context &context,
-                             const request &goal) {
-  return reach_closed(
-      closed_layer_sources(layer_sources(start, context), context),
-      context.layers->count, context, goal);
-}
 // Where a request stands: itself, the dependency of an unregistered class,
 // or the dependency of a class a shared or a cyclical scope keeps.
 enum class position : std::uint8_t { direct, consumer, shared, cyclical };
@@ -1862,11 +1904,7 @@ constexpr entry request_entry(entry through, semantics::position position,
 // The layers of a request as an object, to query what its stack can do.
 constexpr object stack_type(const request &goal) {
   semantics::object object;
-  for (std::size_t index = 0; index < goal.depth; ++index) {
-    object.layers[index] = goal.layers[index];
-  }
-  object.depth = goal.depth;
-  object.element = goal.element;
+  set_stack(object, goal);
   return object;
 }
 
@@ -1940,70 +1978,6 @@ constexpr cost handed_over(cost before, effect made, bool runtime) {
     return before;
   }
   return affected(before, made);
-}
-
-// The cost of satisfying a request as a container hands it over:
-// resolve<T &&>() and construct<T &&>() return the value moved out of what
-// the request refers to.
-struct handed_cost {
-  bool returned;
-  bool runtime;
-  const semantics::context *context;
-
-  constexpr cost operator()(cost made, semantics::effect effect,
-                            const object &reached) const {
-    return handed_over(
-        made,
-        returned && makes_leaf_anew(reached, *context) ? effect::move : effect,
-        runtime);
-  }
-};
-
-// The fewest copies and moves of the leaf a request resolves with, as
-// spec/semantics.py's fewest gives it, and the derivation of it; none when it
-// does not resolve. construct<T>() of a value it cannot resolve makes T of the
-// leaf the container resolves by value: a new handle, optional or array of
-// it, the rest of a bounded array value-initialized. The value is moved into
-// it once it is resolved.
-// The search of the request may be given, made once for several rules.
-constexpr answer resolve(const object &start, const semantics::context &context,
-                         const request &goal, category taken,
-                         const request_rules &rules,
-                         const search *searched = nullptr) {
-  const entry through =
-      request_entry(rules.through, rules.position, rules.selected, taken);
-  if (selector_rejects(goal, taken, rules.position, through, rules.selected,
-                       context)) {
-    return {};
-  }
-  const bool returned =
-      rules.position == position::direct &&
-      (through == entry::resolve || through == entry::construct) &&
-      taken == category::rvalue_reference;
-  const search found = searched ? *searched : reach_split(start, context, goal);
-  answer result = satisfy_closed(
-      found, goal, taken, required_lifetime(rules.position, through), context,
-      handed_cost{returned, rules.runtime, &context});
-  if (result.found || found.overflow) {
-    return result;
-  }
-  bool bounded = false;
-  for (std::size_t index = 0; index < goal.shape_depth; ++index) {
-    bounded = bounded || context.kind(goal.layers[index]).bounded;
-  }
-  if (rules.position == position::direct && through == entry::construct &&
-      goal.element == element::leaf && goal.shape_depth != 0 &&
-      (context.leaf.default_constructible || !bounded)) {
-    request leaf;
-    answer value = resolve(
-        start, context, leaf, category::value,
-        {position::direct, entry::resolve, rules.selected, rules.runtime});
-    if (value.found) {
-      value.fewest.moves = static_cast<std::uint8_t>(value.fewest.moves + 1);
-    }
-    return value;
-  }
-  return result;
 }
 
 } // namespace dingo::semantics

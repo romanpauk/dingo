@@ -395,7 +395,8 @@ constexpr semantics::layer layer_index(type_list<Identities...>) {
   }
   return index == sizeof...(Identities)
              ? semantics::no_layer
-             : static_cast<semantics::layer>(4 + index);
+             : static_cast<semantics::layer>(semantics::language_layers +
+                                             index);
 }
 
 // The properties of the layer of a tag.
