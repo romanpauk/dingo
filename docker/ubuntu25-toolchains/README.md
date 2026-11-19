@@ -28,9 +28,10 @@ Every image contains:
 - `python3`
 - `uv`
 
-The checked-in `pyproject.toml` / `uv.lock` define the Python development tools.
-Run Markdown verification and the other helper scripts with `uv run ...`. Do not
-use a globally installed `mdformat`.
+The checked-in [`pyproject.toml`](../../pyproject.toml) /
+[`uv.lock`](../../uv.lock) define the Python development tools. Run Markdown
+verification and the other helper scripts with `uv run ...`. Do not use a
+globally installed `mdformat`.
 
 ## GCC image
 
