@@ -16,6 +16,10 @@ inputs:
     description: Source directory to configure
     required: false
     default: .
+  target:
+    description: Quality target to build
+    required: false
+    default: check
 runs:
   using: composite
   steps:
@@ -59,7 +63,7 @@ runs:
     - name: Check Quality Gate
       shell: bash
       run: |
-        cmake --build "${{ inputs.build_dir }}" -t check
+        cmake --build "${{ inputs.build_dir }}" -t "${{ inputs.target }}"
     - name: Upload Failure Artifacts
       if: ${{ failure() }}
       uses: actions/upload-artifact@v7.0.1

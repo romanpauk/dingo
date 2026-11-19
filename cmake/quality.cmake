@@ -31,8 +31,8 @@ function(configure_quality_targets out_check_targets)
   # summary as .md, and fails on a defect.
   # They read the diagnostics of GCC and clang. A size probes a cover of the
   # dimensions: small every pair of their values, medium every three, large
-  # every combination, which takes longest. model-check-small is
-  # part of check with those compilers.
+  # every combination, which takes longest. No size is part of
+  # check: the CI runs model-check-small as a job of its own.
   #
   # A check that passed is not made again until what it reads changes: the
   # library, the specification and its generator, the headers of the probes,
@@ -209,7 +209,7 @@ function(configure_quality_targets out_check_targets)
 
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     list(APPEND check_targets semantics-check conversion-check emptiness-check
-      storage-check resolution-check model-check-small footprint-check)
+      storage-check resolution-check footprint-check)
   endif()
 
   # A report, not a check: it ranks the headers and never fails.
