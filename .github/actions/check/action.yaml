@@ -17,7 +17,7 @@ inputs:
     required: false
     default: .
   target:
-    description: Quality target to build
+    description: Quality targets to build, separated by spaces
     required: false
     default: check
 runs:
@@ -63,7 +63,7 @@ runs:
     - name: Check Quality Gate
       shell: bash
       run: |
-        cmake --build "${{ inputs.build_dir }}" -t "${{ inputs.target }}"
+        cmake --build "${{ inputs.build_dir }}" -t ${{ inputs.target }}
     - name: Upload Failure Artifacts
       if: ${{ failure() }}
       uses: actions/upload-artifact@v7.0.1

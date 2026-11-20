@@ -103,9 +103,12 @@ environment provides the development tools.
 With GCC and clang, `check` includes `semantics-check`, `conversion-check`,
 `emptiness-check`, `storage-check`, `resolution-check` and `footprint-check`.
 The model checks are not part of `check`: the CI runs `model-check-small` as a
-job of its own. `includes-tidy` and `includes-check` are not available on
-Windows. The `sources-format*`, `includes-tidy` and `includes-check` targets
-need `DINGO_CLANG_TOOLS_ENABLED=ON` (the default).
+job of its own. `sources-check` runs the targets of `check` that compile no
+program of the specification; on Linux the CI runs it, `semantics-check`,
+`conversion-check` and the other checks of the specification as jobs of their
+own. `includes-tidy` and `includes-check` are not available on Windows. The
+`sources-format*`, `includes-tidy` and `includes-check` targets need
+`DINGO_CLANG_TOOLS_ENABLED=ON` (the default).
 
 ### Kept Results
 

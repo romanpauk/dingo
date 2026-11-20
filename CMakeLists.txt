@@ -248,6 +248,16 @@ if(DINGO_DEVELOPMENT_MODE)
         DEPENDS ${DINGO_CHECK_TARGETS}
     )
 
+    # The checks that compile no program of the specification, which the CI
+    # runs apart from the others.
+    set(DINGO_SOURCES_CHECK_TARGETS ${DINGO_CHECK_TARGETS})
+    list(REMOVE_ITEM DINGO_SOURCES_CHECK_TARGETS
+        semantics-check conversion-check emptiness-check storage-check
+        resolution-check footprint-check)
+    add_custom_target(sources-check
+        DEPENDS ${DINGO_SOURCES_CHECK_TARGETS}
+    )
+
     if(WIN32)
         group_sources(include)
         group_sources(test)

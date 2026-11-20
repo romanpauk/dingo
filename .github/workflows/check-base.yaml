@@ -9,7 +9,7 @@ on:
 
 jobs:
   check:
-    name: ${{ matrix.os }} / ${{ matrix.target }}
+    name: ${{ matrix.name }} / ${{ matrix.target }}
     timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
@@ -18,8 +18,23 @@ jobs:
           - name: linux
             os: ubuntu-24.04
             setup_msvc: 'false'
-            target: check
-            timeout: 40
+            target: sources-check
+            timeout: 20
+          - name: linux-conversion
+            os: ubuntu-24.04
+            setup_msvc: 'false'
+            target: conversion-check
+            timeout: 45
+          - name: linux-semantics
+            os: ubuntu-24.04
+            setup_msvc: 'false'
+            target: semantics-check
+            timeout: 45
+          - name: linux-resolution
+            os: ubuntu-24.04
+            setup_msvc: 'false'
+            target: emptiness-check storage-check resolution-check footprint-check
+            timeout: 60
           - name: linux-model
             os: ubuntu-24.04
             setup_msvc: 'false'
