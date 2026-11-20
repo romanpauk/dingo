@@ -1154,6 +1154,7 @@ private:
   // only when it has a lookup of its own, falling back to the normalized one
   // when that has one too. The lookups are of the types of the request.
   template <typename Request, typename LookupKey>
+  // NOLINTNEXTLINE(readability-function-size)
   level_selection select_request(const LookupKey &key) {
     static_assert(!std::is_const_v<typename Request::value_type>);
     using key_type = std::decay_t<LookupKey>;
@@ -1364,8 +1365,7 @@ private:
     if constexpr (!collection_traits<R>::is_collection) {
       const level_selection found = select_request<Request>(key);
       if constexpr (is_cacheable<Request, R>()) {
-        auto result =
-            this->lookup_cache(found, detail::cache::key<interface_type>());
+        auto result = lookup_cache(found, detail::cache::key<interface_type>());
         if (result.hit) {
           return detail::resolved_value<interface_type>(
               {result.address, resolved_address::access_kind::borrow});

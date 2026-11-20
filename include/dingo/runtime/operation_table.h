@@ -526,6 +526,7 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   };
 
   template <bool Owned> static constexpr bool converts_unknown_bound() {
+    // NOLINTBEGIN(bugprone-branch-clone)
     if constexpr (!std::is_same_v<T, type> || std::is_pointer_v<type> ||
                   std::is_array_v<type> || !is_complete_v<type>) {
       return false;
@@ -542,9 +543,11 @@ struct table_maker : layer_types<T, Leaf, Interface> {
       return std::is_constructible_v<typename unknown_bound_handle<type>::type,
                                      const type &>;
     }
+    // NOLINTEND(bugprone-branch-clone)
   }
 
   static constexpr bool transfers() {
+    // NOLINTBEGIN(bugprone-branch-clone)
     if constexpr (!std::is_same_v<T, type> || std::is_pointer_v<type> ||
                   std::is_array_v<type> || !is_complete_v<type>) {
       return false;
@@ -556,6 +559,7 @@ struct table_maker : layer_types<T, Leaf, Interface> {
     } else {
       return std::is_constructible_v<typename shared<type>::type, type &&>;
     }
+    // NOLINTEND(bugprone-branch-clone)
   }
 
   // Whether a stack holds the leaf apart from it, in a pointer or a handle
@@ -584,6 +588,7 @@ struct table_maker : layer_types<T, Leaf, Interface> {
   // Whether the leaf, or a pointer, a handle or a stack of them of it, is
   // upcast to the interface, of an object the request owns or does not.
   template <bool Owned> static constexpr bool upcasts() {
+    // NOLINTBEGIN(bugprone-branch-clone)
     if constexpr (std::is_same_v<Leaf, Interface>) {
       return false;
     } else if constexpr (std::is_same_v<type, Leaf>) {
@@ -600,10 +605,12 @@ struct table_maker : layer_types<T, Leaf, Interface> {
         return std::is_constructible_v<made_type, const T &>;
       }
     }
+    // NOLINTEND(bugprone-branch-clone)
   }
 
   // The handle the type is, made of a pointer it takes over, or the
   // observer, of one it does not.
+  // NOLINTNEXTLINE(readability-function-size)
   static constexpr void takes_pointers(full_table &made) {
     if constexpr (type_traits<type>::enabled && !std::is_pointer_v<type> &&
                   !is_alternative_type_v<type> && is_complete_v<type>) {

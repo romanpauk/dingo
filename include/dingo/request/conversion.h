@@ -403,6 +403,7 @@ struct typed_conversion {
   template <typename Request, typename T, bool Owned>
   static Request finished(carrier<T, Owned> reached) {
     using semantics::access;
+    // NOLINTNEXTLINE(bugprone-branch-clone)
     if constexpr (Conversion.last == finish::copy) {
       return Request(*reached.object);
     } else if constexpr (Conversion.last == finish::run) {

@@ -58,7 +58,7 @@ using closed_answers = semantics::lifetime_pair<closed_answer>;
 // The answers of the closure for the requests of the type of the key shape:
 // of each category, of an object of each qualifiers, at
 // first + category * 4 + qualifiers.
-inline constexpr std::size_t shape_answer_count = 7 * 4;
+inline constexpr std::size_t shape_answer_count = std::size_t{7} * 4;
 
 struct closed_group {
   const void *shape;

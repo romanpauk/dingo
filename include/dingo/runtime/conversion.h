@@ -378,6 +378,7 @@ template <typename Request, bool Abstract> struct runtime_extensions {
     return true;
   }
 
+  // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
   static constexpr extension_list make() {
     extension_list table_list;
     if constexpr (extensions::modeled) {

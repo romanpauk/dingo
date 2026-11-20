@@ -651,6 +651,7 @@ template <typename T, typename Leaf, typename Interface> struct layer_types {
   // Whether a value of U can be copied, of any qualifiers.
   template <typename U> static constexpr bool copyable() {
     using value_type = std::remove_cv_t<U>;
+    // NOLINTBEGIN(bugprone-branch-clone)
     if constexpr (!std::is_object_v<U> || std::is_array_v<U> ||
                   !is_complete_v<value_type>) {
       return false;
@@ -661,6 +662,7 @@ template <typename T, typename Leaf, typename Interface> struct layer_types {
     } else {
       return is_copy_constructible_v<value_type>;
     }
+    // NOLINTEND(bugprone-branch-clone)
   }
 
   // Whether a value of U can be moved into a layer made of it.
@@ -710,6 +712,7 @@ template <typename T, typename Leaf, typename Interface> struct layer_types {
   // Whether a layer of U is made of its element value.
   template <typename U> static constexpr bool wraps_value() {
     using layer_type = std::remove_cv_t<U>;
+    // NOLINTBEGIN(bugprone-branch-clone)
     if constexpr (std::is_pointer_v<layer_type> ||
                   std::is_array_v<layer_type> || !is_complete_v<layer_type>) {
       return false;
@@ -721,6 +724,7 @@ template <typename T, typename Leaf, typename Interface> struct layer_types {
     } else {
       return false;
     }
+    // NOLINTEND(bugprone-branch-clone)
   }
 
   // Whether every layer from this one down to the K-th nested type is made
@@ -751,6 +755,7 @@ template <typename Target, typename Value> constexpr bool emplaces_array() {
 // An object of type Target made of a value, Value: constructed of it, a
 // handle of an array of it, or a wrapper made of it at once.
 template <typename Target, typename Value> constexpr bool makes_target() {
+  // NOLINTBEGIN(bugprone-branch-clone)
   if constexpr (std::is_constructible_v<Target, Value &&>) {
     return true;
   } else if constexpr (emplaces_array<Target, Value>()) {
@@ -764,6 +769,7 @@ template <typename Target, typename Value> constexpr bool makes_target() {
     return depth != 0 &&
            layer_types<Target, Value, Value>::template runs<depth>();
   }
+  // NOLINTEND(bugprone-branch-clone)
 }
 
 // An object of type Target made of what a storage or a factory is given: a

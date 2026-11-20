@@ -661,6 +661,7 @@ DINGO_COLD constexpr void unknown_bound_steps(const semantics::object &object,
 // object not converted to one. A resolution takes none of them as it runs:
 // the code compiles what they derive.
 template <typename Sink>
+// NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
 DINGO_COLD constexpr void each_step(const semantics::object &given,
                                     const semantics::context &context,
                                     Sink &out) {
@@ -1427,6 +1428,7 @@ struct affected_cost {
 
 template <typename Finish>
 DINGO_COLD constexpr answer
+// NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
 satisfy_states(const state *states, std::size_t count, bool overflow,
                const request &goal, category taken, lifetime needed,
                const semantics::context &context, Finish finish) {

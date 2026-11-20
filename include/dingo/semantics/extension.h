@@ -220,6 +220,7 @@ struct form_list {
   std::size_t count = 0;
 };
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
 constexpr form_list source_forms(const semantics::object &type, bool pointer,
                                  bool adopts, bool observes) {
   form_list made;
