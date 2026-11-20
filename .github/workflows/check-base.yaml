@@ -9,8 +9,8 @@ on:
 
 jobs:
   check:
-    name: ${{ matrix.os }} / check
-    timeout-minutes: 20
+    name: ${{ matrix.name }} / ${{ matrix.target }}
+    timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
       matrix:
@@ -18,9 +18,33 @@ jobs:
           - name: linux
             os: ubuntu-24.04
             setup_msvc: 'false'
+            target: sources-check
+            timeout: 20
+          - name: linux-conversion
+            os: ubuntu-24.04
+            setup_msvc: 'false'
+            target: conversion-check
+            timeout: 45
+          - name: linux-semantics
+            os: ubuntu-24.04
+            setup_msvc: 'false'
+            target: semantics-check
+            timeout: 45
+          - name: linux-resolution
+            os: ubuntu-24.04
+            setup_msvc: 'false'
+            target: emptiness-check storage-check resolution-check footprint-check
+            timeout: 60
+          - name: linux-model
+            os: ubuntu-24.04
+            setup_msvc: 'false'
+            target: model-check-small
+            timeout: 180
           - name: windows-vs2026
             os: windows-2025-vs2026
             setup_msvc: 'true'
+            target: check
+            timeout: 20
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout workflow repo
@@ -51,4 +75,5 @@ jobs:
         with:
           artifact_name: check-failure-${{ matrix.name }}
           setup_msvc: ${{ matrix.setup_msvc }}
+          target: ${{ matrix.target }}
           source_dir: ${{ env.SOURCE_DIR }}

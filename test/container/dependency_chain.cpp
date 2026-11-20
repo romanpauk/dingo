@@ -6,6 +6,7 @@
 //
 
 #include <dingo/container.h>
+#include <dingo/static_container.h>
 #include <dingo/storage/shared.h>
 
 #include <gtest/gtest.h>
@@ -58,7 +59,7 @@ void register_chain(Container &container, std::index_sequence<Indexes...>) {
 } // namespace
 
 TEST(dependency_chain_test, static_chain) {
-  container<chain_bindings<std::make_index_sequence<chain_length>>::type>
+  static_container<chain_bindings<std::make_index_sequence<chain_length>>::type>
       container;
   last_link &link = container.resolve<last_link &>();
   ASSERT_EQ(&link, &container.resolve<last_link &>());

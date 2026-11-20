@@ -79,38 +79,30 @@ template <typename T, typename DetectionMode,
           size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS>
 struct constructor_detection_msvc
     : std::conditional_t<
-          std::is_same_v<DetectionMode, constructor_signature>,
-          constructor_detection_signature_impl<
-              constructor_detection_msvc_shape,
-              constructor_signature_recovery_msvc, T, IsConstructible, N>,
-          constructor_detection_msvc_shape<T, DetectionMode, IsConstructible,
-                                           N>> {};
-
-template <typename T, size_t Size, typename DetectionMode,
-          template <typename...> typename IsConstructible, size_t N>
-struct constructor_detection_msvc<std::array<T, Size>, DetectionMode,
-                                  IsConstructible, N>
-    : std::conditional_t<
-          (Size <= N), constructor_array_detection<T, Size, DetectionMode>,
+          declared_arity<T> <= N,
+          constructor_declared_detection<T, DetectionMode>,
           std::conditional_t<
               std::is_same_v<DetectionMode, constructor_signature>,
               constructor_detection_signature_impl<
                   constructor_detection_msvc_shape,
-                  constructor_signature_recovery_msvc, std::array<T, Size>,
-                  IsConstructible, N>,
-              constructor_detection_msvc_shape<
-                  std::array<T, Size>, DetectionMode, IsConstructible, N>>> {};
+                  constructor_signature_recovery_msvc, T, IsConstructible, N>,
+              constructor_detection_msvc_shape<T, DetectionMode,
+                                               IsConstructible, N>>> {};
 #else
-// Searches constructor arity in the inclusive range [0, N].
+// Searches constructor arity in the inclusive range [0, N], unless the type
+// declares its signature.
 template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible,
           size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS>
 using constructor_detection_msvc = std::conditional_t<
-    std::is_same_v<DetectionMode, constructor_signature>,
-    constructor_detection_signature_impl<constructor_detection_msvc_shape,
-                                         constructor_signature_recovery_msvc, T,
-                                         IsConstructible, N>,
-    constructor_detection_msvc_shape<T, DetectionMode, IsConstructible, N>>;
+    declared_arity<T> <= N, constructor_declared_detection<T, DetectionMode>,
+    std::conditional_t<
+        std::is_same_v<DetectionMode, constructor_signature>,
+        constructor_detection_signature_impl<
+            constructor_detection_msvc_shape,
+            constructor_signature_recovery_msvc, T, IsConstructible, N>,
+        constructor_detection_msvc_shape<T, DetectionMode, IsConstructible,
+                                         N>>>;
 #endif
 
 } // namespace detail

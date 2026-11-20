@@ -22,74 +22,29 @@ namespace dingo::detail {
 template <typename Value, typename Cardinality, typename Allocator>
 class static_key_lookup_storage;
 
+// The one value of a static key, found through a pointer to it.
 template <typename Value, typename Allocator>
 class static_key_lookup_storage<Value, ::dingo::one, Allocator> {
 public:
-  class iterator {
-  public:
-    iterator() = default;
-
-    Value &operator*() const { return *owner_->value_; }
-
-    bool operator==(const iterator &other) const {
-      return owner_ == other.owner_;
-    }
-
-    bool operator!=(const iterator &other) const { return !(*this == other); }
-
-  private:
-    friend class static_key_lookup_storage;
-
-    explicit iterator(static_key_lookup_storage *owner) : owner_(owner) {}
-
-    static_key_lookup_storage *owner_ = nullptr;
-  };
-
-  class const_iterator {
-  public:
-    const_iterator() = default;
-
-    const Value &operator*() const { return *owner_->value_; }
-
-    bool operator==(const const_iterator &other) const {
-      return owner_ == other.owner_;
-    }
-
-    bool operator!=(const const_iterator &other) const {
-      return !(*this == other);
-    }
-
-  private:
-    friend class static_key_lookup_storage;
-
-    explicit const_iterator(const static_key_lookup_storage *owner)
-        : owner_(owner) {}
-
-    const static_key_lookup_storage *owner_ = nullptr;
-  };
+  using iterator = Value *;
 
   explicit static_key_lookup_storage(Allocator &) {}
 
-  iterator find(::dingo::none_t) { return value_ ? iterator(this) : end(); }
+  iterator find(::dingo::none_t) { return value_ ? &*value_ : end(); }
 
-  const_iterator find(::dingo::none_t) const {
-    return value_ ? const_iterator(this) : end();
-  }
-
-  iterator end() { return iterator(); }
-  const_iterator end() const { return const_iterator(); }
+  iterator end() { return nullptr; }
 
   template <typename Inserted>
   std::pair<iterator, bool> try_emplace(::dingo::none_t, Inserted &&value) {
     if (value_) {
-      return {iterator(this), false};
+      return {&*value_, false};
     }
     value_.emplace(std::forward<Inserted>(value));
-    return {iterator(this), true};
+    return {&*value_, true};
   }
 
   void erase(iterator handle) {
-    if (handle.owner_ == this) {
+    if (value_ && handle == &*value_) {
       value_.reset();
     }
   }
@@ -105,7 +60,6 @@ class static_key_lookup_storage<Value, ::dingo::many, Allocator> {
 
 public:
   using iterator = typename storage_type::iterator;
-  using const_iterator = typename storage_type::const_iterator;
 
   explicit static_key_lookup_storage(Allocator &allocator)
       : values_(make_lookup_storage_allocator<value_allocator>(allocator)) {}
@@ -114,18 +68,9 @@ public:
     return values_.empty() ? values_.end() : values_.begin();
   }
 
-  const_iterator find(::dingo::none_t) const {
-    return values_.empty() ? values_.end() : values_.begin();
-  }
-
   iterator end() { return values_.end(); }
-  const_iterator end() const { return values_.end(); }
 
   std::pair<iterator, iterator> equal_range(::dingo::none_t) {
-    return {values_.begin(), values_.end()};
-  }
-
-  std::pair<const_iterator, const_iterator> equal_range(::dingo::none_t) const {
     return {values_.begin(), values_.end()};
   }
 
@@ -141,6 +86,32 @@ public:
 
 private:
   storage_type values_;
+};
+
+// Whether a backend allocates each value in a node of its own, which no
+// insert or erase moves.
+template <typename Backend, typename = void>
+struct is_node_based_backend : std::false_type {};
+
+template <typename Backend>
+struct is_node_based_backend<Backend,
+                             std::void_t<decltype(Backend::node_based)>>
+    : std::bool_constant<Backend::node_based> {};
+
+// The allocator a backend is made with: the allocator of the lookups, for a
+// backend that is node based, else the allocator of the container it is
+// made of.
+template <typename Backend, typename Allocator, typename = void>
+struct backend_allocator {
+  using type = Allocator;
+};
+
+template <typename Backend, typename Allocator>
+struct backend_allocator<Backend, Allocator,
+                         std::void_t<typename Allocator::base_allocator>> {
+  using type =
+      std::conditional_t<is_node_based_backend<Backend>::value, Allocator,
+                         typename Allocator::base_allocator>;
 };
 
 template <typename BackendKey, typename Backend, typename Value,
@@ -165,9 +136,15 @@ template <typename Interface, typename KeyDefinition, typename Cardinality,
 struct lookup_backend_storage<
     lookup_entry<Interface, KeyDefinition, Cardinality, Backend>, Value,
     Allocator> {
+  using allocator_type = typename backend_allocator<
+      std::conditional_t<
+          std::is_same_v<typename KeyDefinition::backend_key_type,
+                         ::dingo::none_t>,
+          void, Backend>,
+      Allocator>::type;
   using type = typename lookup_backend_storage_type<
       typename KeyDefinition::backend_key_type, Backend, Value, Cardinality,
-      Allocator>::type;
+      allocator_type>::type;
 };
 
 template <typename Entry, typename Value, typename Allocator>
@@ -175,10 +152,13 @@ class lookup_backend
     : public lookup_backend_storage<Entry, Value, Allocator>::type {
   using base_type =
       typename lookup_backend_storage<Entry, Value, Allocator>::type;
+  using allocator_type =
+      typename lookup_backend_storage<Entry, Value, Allocator>::allocator_type;
 
 public:
   explicit lookup_backend(Allocator &allocator)
-      : base_type(make_lookup_storage<base_type>(allocator)) {}
+      : base_type(make_lookup_storage<base_type>(
+            static_cast<allocator_type &>(allocator))) {}
 };
 
 template <typename Entry, typename Value, typename Allocator>

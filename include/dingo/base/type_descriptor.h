@@ -10,7 +10,6 @@
 #include <dingo/base/config.h>
 
 #include <cstdint>
-#include <string>
 #include <string_view>
 #include <type_traits>
 
@@ -32,7 +31,7 @@ struct type_descriptor {
   // translation unit, so identity is carried by `tag`, never by this text.
   std::string_view raw_name;
   // Address of the per-type detail::type_tag<T>; null for pointer levels.
-  const char *tag = nullptr;
+  const void *tag = nullptr;
   type_cv_flags cv = type_cv_flags::none;
   type_reference_kind reference = type_reference_kind::none;
   // Descriptor of the pointed-to type; null unless this is a pointer level.
@@ -54,14 +53,20 @@ constexpr bool operator==(type_descriptor lhs, type_descriptor rhs) {
 
 template <typename T> constexpr std::string_view raw_type_name();
 template <typename T> constexpr type_descriptor describe_type();
-inline void append_type_name(std::string &name, type_descriptor descriptor);
+template <typename Text>
+void append_type_name(Text &name, type_descriptor descriptor);
 
 namespace detail {
 
 // One object per type, merged across translation units by vague linkage, so
-// its address identifies the type regardless of how a compiler spells it.
-// Deliberately not const: identical read-only data may be folded by linkers.
-template <typename T> inline char type_tag = 0;
+// its address identifies the type regardless of how a compiler spells it. It
+// holds its own address: a linker may fold identical data, as MSVC's
+// /OPT:ICF does, and no two tags are identical.
+struct type_tag_object {
+  const void *self;
+};
+
+template <typename T> inline const type_tag_object type_tag{&type_tag<T>};
 
 constexpr bool same_type_shape(type_descriptor lhs, type_descriptor rhs) {
   if (lhs.reference != rhs.reference ||
@@ -76,29 +81,6 @@ constexpr bool same_type_shape(type_descriptor lhs, type_descriptor rhs) {
   return same_type_shape(*lhs.pointee, *rhs.pointee);
 }
 
-constexpr size_t type_name_not_found = static_cast<size_t>(-1);
-
-constexpr size_t type_name_find(std::string_view haystack,
-                                std::string_view needle, size_t offset = 0) {
-  if (needle.empty()) {
-    return offset <= haystack.size() ? offset : type_name_not_found;
-  }
-
-  for (size_t i = offset; i + needle.size() <= haystack.size(); ++i) {
-    size_t j = 0;
-    for (; j < needle.size(); ++j) {
-      if (haystack[i + j] != needle[j]) {
-        break;
-      }
-    }
-    if (j == needle.size()) {
-      return i;
-    }
-  }
-
-  return type_name_not_found;
-}
-
 template <typename T> constexpr std::string_view wrapped_type_name() {
 #if defined(__clang__) || defined(__GNUC__)
   return __PRETTY_FUNCTION__;
@@ -109,56 +91,56 @@ template <typename T> constexpr std::string_view wrapped_type_name() {
 #endif
 }
 
-constexpr std::string_view wrapped_type_name_prefix() {
+// The text a compiler's signature puts before and after T.
 #if defined(__clang__)
-  return "[T = ";
+inline constexpr std::string_view wrapped_type_name_prefix = "[T = ";
+inline constexpr std::string_view wrapped_type_name_suffix = "]";
 #elif defined(__GNUC__)
-  return "with T = ";
+inline constexpr std::string_view wrapped_type_name_prefix = "with T = ";
+inline constexpr std::string_view wrapped_type_name_suffix = ";";
 #elif defined(_MSC_VER)
-  return "wrapped_type_name<";
+inline constexpr std::string_view wrapped_type_name_prefix =
+    "wrapped_type_name<";
+inline constexpr std::string_view wrapped_type_name_suffix = ">(void)";
 #else
-  return "";
+inline constexpr std::string_view wrapped_type_name_prefix = "";
+inline constexpr std::string_view wrapped_type_name_suffix = "";
 #endif
-}
-
-constexpr std::string_view wrapped_type_name_suffix() {
-#if defined(__clang__)
-  return "]";
-#elif defined(__GNUC__)
-  return ";";
-#elif defined(_MSC_VER)
-  return ">(void)";
-#else
-  return "";
-#endif
-}
 
 // Compiler type-name signatures have fixed text around T. Locate that text
 // once instead of repeating two constexpr linear searches for every type.
 constexpr auto wrapped_type_name_sample = wrapped_type_name<void>();
 constexpr auto wrapped_type_name_prefix_pos =
-    type_name_find(wrapped_type_name_sample, wrapped_type_name_prefix());
+    wrapped_type_name_sample.find(wrapped_type_name_prefix);
 
-static_assert(wrapped_type_name_prefix_pos != type_name_not_found,
+static_assert(wrapped_type_name_prefix_pos != std::string_view::npos,
               "failed to parse compiler type name prefix");
 
 constexpr auto wrapped_type_name_start =
-    wrapped_type_name_prefix_pos + wrapped_type_name_prefix().size();
-constexpr auto wrapped_type_name_suffix_pos =
-    type_name_find(wrapped_type_name_sample, wrapped_type_name_suffix(),
-                   wrapped_type_name_start);
+    wrapped_type_name_prefix_pos + wrapped_type_name_prefix.size();
+constexpr auto wrapped_type_name_suffix_pos = wrapped_type_name_sample.find(
+    wrapped_type_name_suffix, wrapped_type_name_start);
 
-static_assert(wrapped_type_name_suffix_pos != type_name_not_found,
+static_assert(wrapped_type_name_suffix_pos != std::string_view::npos,
               "failed to parse compiler type name suffix");
 
 constexpr auto wrapped_type_name_trailer_size =
     wrapped_type_name_sample.size() - wrapped_type_name_suffix_pos;
 
+// The name of a type in a compiler's signature, without the text around it:
+// a function of no type, so that a type instantiates only its signature.
+constexpr std::string_view unwrapped_type_name(std::string_view wrapped) {
+  return wrapped.substr(wrapped_type_name_start,
+                        wrapped.size() - wrapped_type_name_trailer_size -
+                            wrapped_type_name_start);
+}
+
+template <typename T>
+inline constexpr std::string_view raw_type_name_v =
+    unwrapped_type_name(wrapped_type_name<T>());
+
 template <typename T> constexpr std::string_view raw_type_name() {
-  constexpr auto wrapped = wrapped_type_name<T>();
-  constexpr auto end = wrapped.size() - wrapped_type_name_trailer_size;
-  return std::string_view(wrapped.data() + wrapped_type_name_start,
-                          end - wrapped_type_name_start);
+  return raw_type_name_v<T>;
 }
 
 constexpr type_cv_flags operator|(type_cv_flags lhs, type_cv_flags rhs) {
@@ -206,8 +188,8 @@ constexpr bool is_qualification_conversion(type_descriptor source,
                                      depth + 1, next_intermediate_const);
 }
 
-constexpr bool matches_qualification_conversion(type_descriptor source,
-                                                type_descriptor target) {
+constexpr bool qualification_converts(type_descriptor source,
+                                      type_descriptor target) {
   if (!same_type_shape(source, target)) {
     return false;
   }
@@ -221,53 +203,24 @@ constexpr bool matches_qualification_conversion(type_descriptor source,
   return is_qualification_conversion(source, target, 0, true);
 }
 
-template <typename T> constexpr type_cv_flags make_type_cv_flags() {
+constexpr type_cv_flags make_type_cv_flags(bool is_const, bool is_volatile) {
   type_cv_flags flags = type_cv_flags::none;
-
-  if constexpr (std::is_const_v<T>) {
+  if (is_const) {
     flags = flags | type_cv_flags::is_const;
   }
-
-  if constexpr (std::is_volatile_v<T>) {
+  if (is_volatile) {
     flags = flags | type_cv_flags::is_volatile;
   }
-
   return flags;
 }
 
-template <typename T> constexpr type_reference_kind make_type_reference_kind() {
-  if constexpr (std::is_lvalue_reference_v<T>) {
-    return type_reference_kind::lvalue;
-  } else if constexpr (std::is_rvalue_reference_v<T>) {
-    return type_reference_kind::rvalue;
-  } else {
-    return type_reference_kind::none;
-  }
-}
-
-template <typename T> constexpr type_descriptor make_type_descriptor();
-
-// Pointer levels refer to the descriptor of their pointee as data, so
-// comparing descriptors at runtime never calls through a function pointer.
 template <typename T>
-inline constexpr type_descriptor type_descriptor_v = make_type_descriptor<T>();
+inline constexpr type_cv_flags type_cv_flags_v =
+    make_type_cv_flags(std::is_const_v<T>, std::is_volatile_v<T>);
 
-template <typename T> constexpr type_descriptor make_type_descriptor() {
-  if constexpr (std::is_pointer_v<T>) {
-    return {{},
-            nullptr,
-            make_type_cv_flags<T>(),
-            type_reference_kind::none,
-            &type_descriptor_v<std::remove_pointer_t<T>>};
-  } else {
-    return {raw_type_name<std::remove_cv_t<T>>(),
-            &type_tag<std::remove_cv_t<T>>, make_type_cv_flags<T>(),
-            type_reference_kind::none, nullptr};
-  }
-}
-
-inline void append_type_cv(std::string &name, type_cv_flags flags,
-                           std::string_view separator = " ") {
+template <typename Text>
+DINGO_COLD void append_type_cv(Text &name, type_cv_flags flags,
+                               std::string_view separator = " ") {
   if (has_cv_flag(flags, type_cv_flags::is_const)) {
     name += separator;
     name += "const";
@@ -280,8 +233,9 @@ inline void append_type_cv(std::string &name, type_cv_flags flags,
   }
 }
 
-inline void append_described_type_name(std::string &name,
-                                       type_descriptor descriptor) {
+template <typename Text>
+DINGO_COLD void append_described_type_name(Text &name,
+                                           type_descriptor descriptor) {
   if (descriptor.pointee != nullptr) {
     append_described_type_name(name, *descriptor.pointee);
     name += "*";
@@ -307,17 +261,50 @@ inline void append_described_type_name(std::string &name,
 
 } // namespace detail
 
-template <typename T> constexpr std::string_view raw_type_name() {
-  return detail::raw_type_name<T>();
-}
-
-template <typename T> constexpr type_descriptor describe_type() {
-  auto descriptor = detail::make_type_descriptor<std::remove_reference_t<T>>();
-  descriptor.reference = detail::make_type_reference_kind<T>();
+namespace detail {
+constexpr type_descriptor rereferenced(type_descriptor descriptor, bool lvalue,
+                                       bool rvalue) {
+  descriptor.reference = lvalue   ? type_reference_kind::lvalue
+                         : rvalue ? type_reference_kind::rvalue
+                                  : type_reference_kind::none;
   return descriptor;
 }
 
-inline void append_type_name(std::string &name, type_descriptor descriptor) {
+// The descriptor of a type, as constant data made once at compile time, of
+// one class for the type: a function computing it would be emitted for every
+// type a message names. A pointer refers to the descriptor of its pointee,
+// and a reference is the descriptor of what it refers to with its reference
+// kind, so comparing descriptors at runtime never calls through a function
+// pointer.
+template <typename T, typename = void>
+inline constexpr type_descriptor type_descriptor_v{
+    raw_type_name_v<std::remove_cv_t<T>>, &type_tag<std::remove_cv_t<T>>,
+    type_cv_flags_v<T>, type_reference_kind::none, nullptr};
+
+template <typename T>
+inline constexpr type_descriptor
+    type_descriptor_v<T, std::enable_if_t<std::is_pointer_v<T>>>{
+        {},
+        nullptr,
+        type_cv_flags_v<T>,
+        type_reference_kind::none,
+        &type_descriptor_v<std::remove_pointer_t<T>>};
+
+template <typename T>
+inline constexpr type_descriptor
+    type_descriptor_v<T, std::enable_if_t<std::is_reference_v<T>>> =
+        rereferenced(type_descriptor_v<std::remove_reference_t<T>>,
+                     std::is_lvalue_reference_v<T>,
+                     std::is_rvalue_reference_v<T>);
+} // namespace detail
+
+template <typename T> constexpr type_descriptor describe_type() {
+  return detail::type_descriptor_v<T>;
+}
+
+// Appends the name of a type to a text that appends a std::string_view.
+template <typename Text>
+void append_type_name(Text &name, type_descriptor descriptor) {
   detail::append_described_type_name(name, descriptor);
 }
 

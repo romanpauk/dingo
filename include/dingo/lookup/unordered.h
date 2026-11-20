@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <dingo/lookup/base.h>
 #include <dingo/lookup/storage.h>
 #include <dingo/lookup/tags.h>
 
@@ -16,39 +17,6 @@
 #include <utility>
 
 namespace dingo {
-namespace detail {
-
-template <typename Key, typename Value, typename Hash, typename Equal,
-          typename StorageAllocator, typename Allocator>
-struct lookup_storage_factory<
-    std::unordered_map<Key, Value, Hash, Equal, StorageAllocator>, Allocator> {
-  using storage_type =
-      std::unordered_map<Key, Value, Hash, Equal, StorageAllocator>;
-
-  static storage_type make(Allocator &allocator) {
-    return storage_type(
-        0, Hash{}, Equal{},
-        make_lookup_storage_allocator<StorageAllocator>(allocator));
-  }
-};
-
-template <typename Key, typename Value, typename Hash, typename Equal,
-          typename StorageAllocator, typename Allocator>
-struct lookup_storage_factory<
-    std::unordered_multimap<Key, Value, Hash, Equal, StorageAllocator>,
-    Allocator> {
-  using storage_type =
-      std::unordered_multimap<Key, Value, Hash, Equal, StorageAllocator>;
-
-  static storage_type make(Allocator &allocator) {
-    return storage_type(
-        0, Hash{}, Equal{},
-        make_lookup_storage_allocator<StorageAllocator>(allocator));
-  }
-};
-
-} // namespace detail
-
 struct unordered {
   template <typename Key, typename Value, typename Cardinality,
             typename Allocator>
@@ -63,3 +31,19 @@ struct unordered {
 };
 
 } // namespace dingo
+
+// The hash of the key of a base lookup, which an unordered backend keeps.
+namespace std {
+template <typename Rtti> struct hash<dingo::detail::base_lookup_key<Rtti>> {
+  std::size_t
+  operator()(const dingo::detail::base_lookup_key<Rtti> &key) const {
+    using lookup_type_index =
+        typename dingo::detail::base_lookup_key<Rtti>::type_index;
+    const auto interface_hash =
+        std::hash<lookup_type_index>{}(key.interface_type);
+    const auto key_hash = std::hash<lookup_type_index>{}(key.key_type);
+    return interface_hash ^ (key_hash + 0x9e3779b9U + (interface_hash << 6U) +
+                             (interface_hash >> 2U));
+  }
+};
+} // namespace std

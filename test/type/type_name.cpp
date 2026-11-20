@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 //
 
-#include <dingo/base/type_name.h>
+#include "support/type_name.h"
 
 #include <gtest/gtest.h>
 
@@ -49,12 +49,13 @@ void expect_type_name(std::string_view actual,
 }
 
 TEST(type_name_test, value_type_name) {
-  ASSERT_EQ(raw_type_name<type_name_test_types::value>(),
+  ASSERT_EQ(detail::raw_type_name<type_name_test_types::value>(),
             expected_type_name_value());
 }
 
 TEST(type_name_test, array_type_name_keeps_closing_bracket) {
-  ASSERT_NE(raw_type_name<int[3]>().find("[3]"), std::string_view::npos);
+  ASSERT_NE(detail::raw_type_name<int[3]>().find("[3]"),
+            std::string_view::npos);
 }
 
 TEST(type_name_test, const_reference_type_name) {
@@ -167,10 +168,7 @@ TEST(type_name_test, functor_operator_type_name) {
       {"void", "callable::", "*", expected_type_name_value(), "&", "const"});
 }
 
-static_assert(detail::type_name_find("abcdef", "cd") == 2);
-static_assert(detail::type_name_find("abcdef", "gh") ==
-              detail::type_name_not_found);
-static_assert(!raw_type_name<type_name_test_types::value>().empty());
+static_assert(!detail::raw_type_name<type_name_test_types::value>().empty());
 
 } // namespace
 } // namespace dingo

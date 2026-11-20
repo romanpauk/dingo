@@ -7,16 +7,19 @@
 
 #include "type_registration_common.h"
 
-TEST(type_registration_test, get_type) {
+TEST(type_registration_test, registration_arg) {
   struct A {};
-  using list = type_list<storage<A>, factory<A>, interfaces<A, A>>;
-  using storage_type = detail::get_type_t<storage<void>, list>;
+  using storage_type = detail::registration_arg_t<storage<void>, storage<A>,
+                                                  factory<A>, interfaces<A, A>>;
   static_assert(std::is_same_v<storage_type, storage<A>>);
 
-  using factory_type = detail::get_type_t<factory<void>, list>;
+  using factory_type = detail::registration_arg_t<factory<void>, storage<A>,
+                                                  factory<A>, interfaces<A, A>>;
   static_assert(std::is_same_v<factory_type, factory<A>>);
 
-  using interface_type = detail::get_type_t<interfaces<void>, list>;
+  using interface_type =
+      detail::registration_arg_t<interfaces<void>, storage<A>, factory<A>,
+                                 interfaces<A, A>>;
   static_assert(std::is_same_v<interface_type, interfaces<A, A>>);
 }
 
@@ -39,7 +42,6 @@ TEST(type_registration_test, registration_prefers_first_explicit_match) {
       type_registration<scope<int>, scope<float>, storage<double>,
                         storage<char>, factory<long>, factory<short>,
                         interfaces<unsigned>, interfaces<bool>,
-                        conversions<void *>, conversions<int *>,
                         dependencies<long>, dependencies<short>>;
 
   static_assert(std::is_same_v<typename registration::scope_type, scope<int>>);
@@ -49,8 +51,6 @@ TEST(type_registration_test, registration_prefers_first_explicit_match) {
       std::is_same_v<typename registration::factory_type, factory<long>>);
   static_assert(std::is_same_v<typename registration::interface_type,
                                interfaces<unsigned>>);
-  static_assert(std::is_same_v<typename registration::conversions_type,
-                               conversions<void *>>);
   static_assert(std::is_same_v<typename registration::dependencies_type,
                                dependencies<long>>);
 }
@@ -75,7 +75,7 @@ TEST(type_registration_test, registration_deduction) {
           factory<constructor<int>>>);
 }
 
-TEST(type_registration_test, registration_default_interface_and_conversions) {
+TEST(type_registration_test, registration_default_interface) {
   using registration_from_factory =
       type_registration<scope<shared>, factory<int>>;
   static_assert(std::is_same_v<typename registration_from_factory::storage_type,
@@ -83,18 +83,12 @@ TEST(type_registration_test, registration_default_interface_and_conversions) {
   static_assert(
       std::is_same_v<typename registration_from_factory::interface_type,
                      interfaces<int>>);
-  static_assert(std::is_same_v<
-                typename registration_from_factory::conversions_type,
-                conversions<detail::conversions<shared, int, runtime_type>>>);
 
   using registration_from_storage =
       type_registration<scope<shared>, storage<int>>;
   static_assert(
       std::is_same_v<typename registration_from_storage::interface_type,
                      interfaces<int>>);
-  static_assert(std::is_same_v<
-                typename registration_from_storage::conversions_type,
-                conversions<detail::conversions<shared, int, runtime_type>>>);
 }
 
 TEST(type_registration_test,
@@ -168,28 +162,24 @@ TEST(type_registration_test, factory_traits_report_dependencies) {
   static_assert(
       std::is_same_v<typename factory_traits<constructor_factory>::dependencies,
                      type_list<int, float>>);
-  static_assert(factory_traits<constructor_factory>::has_explicit_dependencies);
   static_assert(factory_traits<constructor_factory>::is_compile_time_bindable);
 
   using detected_factory = constructor<selected_service>;
   static_assert(
       std::is_same_v<typename factory_traits<detected_factory>::dependencies,
                      type_list<int, float>>);
-  static_assert(!factory_traits<detected_factory>::has_explicit_dependencies);
   static_assert(factory_traits<detected_factory>::is_compile_time_bindable);
 
   using defaulted_factory = constructor<defaulted_service>;
   static_assert(
       std::is_same_v<typename factory_traits<defaulted_factory>::dependencies,
                      type_list<>>);
-  static_assert(!factory_traits<defaulted_factory>::has_explicit_dependencies);
   static_assert(factory_traits<defaulted_factory>::is_compile_time_bindable);
 
   using function_factory = function<build_from_double_and_cstr>;
   static_assert(
       std::is_same_v<typename factory_traits<function_factory>::dependencies,
                      type_list<double, const char *>>);
-  static_assert(factory_traits<function_factory>::has_explicit_dependencies);
   static_assert(factory_traits<function_factory>::is_compile_time_bindable);
 
   auto callable_factory =
@@ -199,8 +189,6 @@ TEST(type_registration_test, factory_traits_report_dependencies) {
                 typename factory_traits<callable_factory_type>::dependencies,
                 type_list<short, long>>);
   static_assert(
-      factory_traits<callable_factory_type>::has_explicit_dependencies);
-  static_assert(
       !factory_traits<callable_factory_type>::is_compile_time_bindable);
 }
 
@@ -209,100 +197,40 @@ TEST(type_registration_test, registration_specialization) {
     virtual ~I() = default;
   };
   struct A : I {};
-  struct test_container {
-    using rtti_type = rtti<typeid_provider>;
-    using allocator_type = std::allocator<char>;
-
-    explicit test_container(test_container *,
-                            allocator_type allocator = allocator_type())
-        : allocator_(allocator) {}
-
-    allocator_type &get_allocator() { return allocator_; }
-
-  private:
-    allocator_type allocator_;
-  };
-
-  struct test_state_owner {
-    using allocator_type = test_container::allocator_type;
-    using parent_container_type = test_container;
-
-    explicit test_state_owner(test_container *parent)
-        : allocator_(parent->get_allocator()), runtime_(allocator_),
-          parent_(parent) {}
-
-    container_runtime<allocator_type> &runtime() { return runtime_; }
-    parent_container_type *parent() { return parent_; }
-    allocator_type &get_allocator() { return allocator_; }
-
-  private:
-    allocator_type allocator_;
-    container_runtime<allocator_type> runtime_;
-    parent_container_type *parent_;
-  };
-
   using shared_registration = type_registration<scope<shared>, storage<A>>;
-  using shared_storage = detail::storage<
-      typename shared_registration::scope_type::type,
-      typename shared_registration::storage_type::type,
-      rebind_type_t<
-          typename shared_registration::storage_type::type,
-          normalized_type_t<typename shared_registration::storage_type::type>>,
-      typename shared_registration::factory_type::type,
-      typename shared_registration::conversions_type::type>;
-  using shared_binding_data =
-      runtime_binding_state<test_state_owner, test_container, shared_storage>;
-  using shared_binding =
-      runtime_binding<test_container, A, shared_storage, shared_binding_data>;
+  using shared_storage =
+      detail::storage<typename shared_registration::scope_type::type,
+                      typename shared_registration::storage_type::type,
+                      typename shared_registration::storage_type::type,
+                      typename shared_registration::factory_type::type>;
+  using shared_cell = detail::binding_cell<shared_storage>;
 
   using shared_ptr_registration =
       type_registration<scope<shared>, storage<std::shared_ptr<A>>>;
-  using shared_ptr_storage = detail::storage<
-      typename shared_ptr_registration::scope_type::type,
-      typename shared_ptr_registration::storage_type::type,
-      rebind_type_t<typename shared_ptr_registration::storage_type::type,
-                    normalized_type_t<
-                        typename shared_ptr_registration::storage_type::type>>,
-      typename shared_ptr_registration::factory_type::type,
-      typename shared_ptr_registration::conversions_type::type>;
-  using shared_ptr_binding_data =
-      runtime_binding_state<test_state_owner, test_container,
-                            shared_ptr_storage>;
-  using shared_ptr_binding =
-      runtime_binding<test_container, A, shared_ptr_storage,
-                      shared_ptr_binding_data>;
+  using shared_ptr_storage =
+      detail::storage<typename shared_ptr_registration::scope_type::type,
+                      typename shared_ptr_registration::storage_type::type,
+                      typename shared_ptr_registration::storage_type::type,
+                      typename shared_ptr_registration::factory_type::type>;
+  using shared_ptr_cell = detail::binding_cell<shared_ptr_storage>;
 
   using external_registration =
       type_registration<scope<external>, storage<A &>>;
-  using external_storage = detail::storage<
-      typename external_registration::scope_type::type,
-      typename external_registration::storage_type::type,
-      rebind_type_t<typename external_registration::storage_type::type,
-                    normalized_type_t<
-                        typename external_registration::storage_type::type>>,
-      typename external_registration::factory_type::type,
-      typename external_registration::conversions_type::type>;
-  using external_binding_data =
-      runtime_binding_state<test_state_owner, test_container, external_storage>;
-  using external_binding = runtime_binding<test_container, A, external_storage,
-                                           external_binding_data>;
+  using external_storage =
+      detail::storage<typename external_registration::scope_type::type,
+                      typename external_registration::storage_type::type,
+                      typename external_registration::storage_type::type,
+                      typename external_registration::factory_type::type>;
+  using external_cell = detail::binding_cell<external_storage>;
 
   using external_shared_registration =
       type_registration<scope<external>, storage<std::shared_ptr<A>>>;
   using external_shared_storage = detail::storage<
       typename external_shared_registration::scope_type::type,
       typename external_shared_registration::storage_type::type,
-      rebind_type_t<typename external_shared_registration::storage_type::type,
-                    normalized_type_t<typename external_shared_registration::
-                                          storage_type::type>>,
-      typename external_shared_registration::factory_type::type,
-      typename external_shared_registration::conversions_type::type>;
-  using external_shared_binding_data =
-      runtime_binding_state<test_state_owner, test_container,
-                            external_shared_storage>;
-  using external_shared_binding =
-      runtime_binding<test_container, A, external_shared_storage,
-                      external_shared_binding_data>;
+      typename external_shared_registration::storage_type::type,
+      typename external_shared_registration::factory_type::type>;
+  using external_shared_cell = detail::binding_cell<external_shared_storage>;
 
   using nested_registration =
       type_registration<scope<shared>,
@@ -330,13 +258,14 @@ TEST(type_registration_test, registration_specialization) {
   static_assert(
       !is_interface_storage_rebindable_v<std::unique_ptr<std::shared_ptr<A>>,
                                          I>);
+  // A handle of an array is not rebound, so an array of the interface is
+  // not named: clang rejects it when the interface is abstract.
+  static_assert(!is_interface_storage_rebindable_v<std::shared_ptr<A[]>, I>);
+  static_assert(!is_interface_storage_rebindable_v<std::unique_ptr<A[]>, I>);
 
   static_assert(
       std::is_same_v<nested_stored_type, std::shared_ptr<std::unique_ptr<A>>>);
 
-  static_assert(std::is_empty_v<conversion_cache<type_list<>>>);
-  static_assert(
-      std::is_trivially_destructible_v<conversion_cache<type_list<>>>);
-  static_assert(sizeof(shared_binding) <= sizeof(shared_ptr_binding));
-  static_assert(sizeof(external_binding) <= sizeof(external_shared_binding));
+  static_assert(sizeof(shared_cell) <= sizeof(shared_ptr_cell));
+  static_assert(sizeof(external_cell) <= sizeof(external_shared_cell));
 }

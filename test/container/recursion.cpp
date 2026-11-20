@@ -30,6 +30,21 @@ struct recursion_b {
   recursion_b(recursion_a &) {}
 };
 
+// A cycle of values: each made for the request it is a dependency of.
+struct value_recursion_b;
+
+struct value_recursion_a {
+  value_recursion_a() {}
+  value_recursion_a(value_recursion_b);
+};
+
+struct value_recursion_b {
+  value_recursion_b() {}
+  value_recursion_b(value_recursion_a) {}
+};
+
+value_recursion_a::value_recursion_a(value_recursion_b) {}
+
 using recursion_bindings =
     bindings<dingo::bind<scope<shared>, storage<recursion_a>>,
              dingo::bind<scope<shared>, storage<recursion_b>>>;
@@ -61,17 +76,11 @@ TEST(recursion_test, container_default_constructible_cycle) {
 
 TEST(recursion_test, container_unique_default_constructible_cycle) {
   container<> container;
-  container.register_type<scope<unique>, storage<recursion_a>>();
-  container.register_type<scope<unique>, storage<recursion_b>>();
+  container.register_type<scope<unique>, storage<value_recursion_a>>();
+  container.register_type<scope<unique>, storage<value_recursion_b>>();
 
-  ASSERT_THROW(container.resolve<recursion_a>(), type_recursion_exception);
-}
-
-TEST(recursion_test, container_bindings_default_constructible_cycle) {
-  container<recursion_bindings> container;
-
-  ASSERT_THROW(container.resolve<recursion_a &>(), type_recursion_exception);
-  ASSERT_THROW(container.resolve<recursion_b &>(), type_recursion_exception);
+  ASSERT_THROW(container.resolve<value_recursion_a>(),
+               type_recursion_exception);
 }
 
 TEST(recursion_test, static_container_detected_constructor_cycle) {

@@ -9,7 +9,7 @@
 struct processor {};
 struct animal {};
 
-struct traits : dingo::dynamic_container_traits {
+struct traits : dingo::runtime_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::associative<std::size_t, animal>>;
 };

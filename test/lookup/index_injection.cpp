@@ -27,7 +27,7 @@ TEST(index_test, external_lookup_constructs_string_key_for_indexed_injection) {
     processor &selected_processor;
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type = lookups<associative<std::string, processor>>;
   };
 
@@ -43,7 +43,7 @@ TEST(index_test, external_lookup_constructs_string_key_for_indexed_injection) {
 #endif
 
 TEST(index_test, constructor_injects_fixed_indexed_enum_key) {
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type = lookups<
         associative<fixed_injection_processor_id, fixed_injection_processor>>;
   };
@@ -76,7 +76,7 @@ TEST(index_test, selected_type_selector_registers_and_injects_keyed_binding) {
 }
 
 TEST(index_test, selected_value_selector_injects_indexed_binding) {
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<std::size_t, fixed_injection_processor>>;
   };
@@ -100,7 +100,7 @@ TEST(index_test, annotated_interfaces_keep_independent_indexes) {
   using replica_processor =
       annotated<fixed_injection_processor &, annotated_index_replica_tag>;
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type = lookups<
         associative<std::size_t, annotated<fixed_injection_processor,
                                            annotated_index_primary_tag>>,
@@ -135,7 +135,7 @@ TEST(index_test, annotated_interfaces_keep_independent_indexes) {
 #ifdef DINGO_ENABLE_FUTURE_KEY_STRING_TESTS
 TEST(index_test,
      DISABLED_constructor_injects_string_literal_key_into_string_index) {
-  struct traits : dingo::dynamic_container_traits {
+  struct traits : dingo::runtime_container_traits {
     using lookup_definition_type = dingo::lookups<
         dingo::associative<std::string, dingo::interfaces<string_processor>>>;
   };

@@ -9,12 +9,12 @@
 
 #include <dingo/base/config.h>
 
-#include <dingo/base/complete_type.h>
+#include <dingo/base/meta.h>
 #include <dingo/base/type_list.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/storage/storage.h>
 #include <dingo/type/annotated.h>
-#include <dingo/type/normalized_type.h>
+#include <dingo/type/shape.h>
 
 #include <type_traits>
 
@@ -22,6 +22,29 @@ namespace dingo {
 template <typename... Args> struct interfaces;
 
 namespace detail {
+template <typename Base, typename Derived> struct is_virtual_base {
+#if defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winaccessible-base"
+#endif
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4250)
+#endif
+  struct Test : Derived, virtual Base {};
+#if defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+  // Adding Base as a virtual base does not grow a Derived that has it.
+  static constexpr bool value = sizeof(Test) == sizeof(Derived);
+};
+
+template <typename Base, typename Derived>
+inline constexpr bool is_virtual_base_v = is_virtual_base<Base, Derived>::value;
+
 template <typename Alternative, typename Interface, typename = void>
 struct alternative_provides_interface
     : std::bool_constant<std::is_same_v<
@@ -33,8 +56,8 @@ struct alternative_provides_interface<
     Alternative, Interface,
     std::enable_if_t<type_traits<std::remove_cv_t<
                          std::remove_reference_t<Alternative>>>::enabled &&
-                     type_traits<std::remove_cv_t<std::remove_reference_t<
-                         Alternative>>>::is_value_borrowable>>
+                     is_value_borrowable_v<std::remove_cv_t<
+                         std::remove_reference_t<Alternative>>>>>
     : std::bool_constant<
           std::is_same_v<
               std::remove_cv_t<std::remove_reference_t<Alternative>>,
@@ -71,7 +94,7 @@ struct alternative_type_provides_interface<
 
 template <typename Storage, typename TypeInterface, typename Type>
 struct interface_registration_requirements {
-  using interface_type = typename annotated_traits<TypeInterface>::type;
+  using interface_type = unannotated_t<TypeInterface>;
   using normalized_type = normalized_type_t<Type>;
   using normalized_interface_type = normalized_type_t<interface_type>;
   using interface_value_type =
@@ -127,12 +150,15 @@ struct interface_registration_requirements {
       std::is_convertible_v<normalized_type *, normalized_interface_type *> ||
       is_alternative_type_interface;
 
+  // A scope whose bindings may take part in a cycle publishes an object before
+  // it is constructed, when the address of a virtual base cannot be computed
+  // yet.
   static constexpr bool storage_supported = [] {
-    if constexpr (std::is_same_v<normalized_type, normalized_interface_type>) {
-      return true;
+    if constexpr (!std::is_same_v<normalized_type, normalized_interface_type> &&
+                  scope_allows_cycles_v<typename Storage::tag_type>) {
+      return !is_virtual_base_v<normalized_interface_type, normalized_type>;
     } else {
-      return storage_interface_requirements_v<Storage, normalized_type,
-                                              normalized_interface_type>;
+      return true;
     }
   }();
 
@@ -153,31 +179,18 @@ struct interface_registration_requirements {
                   "registered types must be complete");
     static_assert(interface_type_is_complete,
                   "registered interfaces must be complete");
-    if constexpr (detail::is_array_like_type_v<Type>) {
-      if constexpr (std::is_array_v<interface_type>) {
-        static_assert(array_shape_matches,
-                      "array registrations require matching "
-                      "array-shape interfaces");
-      } else {
-        static_assert(array_element_matches,
-                      "array registrations require matching "
-                      "element-type interfaces");
-      }
-    }
-
-    if constexpr (registered_type_is_complete) {
-      if constexpr ((!detail::is_array_like_type_v<Type>) ||
-                    (std::is_array_v<interface_type> && array_shape_matches) ||
-                    (!std::is_array_v<interface_type> &&
-                     array_element_matches)) {
-        static_assert(pointer_convertible,
-                      "registered type must be pointer-convertible to "
-                      "the interface");
-        if constexpr (pointer_convertible &&
-                      !std::is_same_v<normalized_type,
-                                      normalized_interface_type>) {
-          static_assert(storage_supported, "storage requirements not met");
-        }
+    // Each array check holds outside its own case.
+    static_assert(array_shape_matches, "array registrations require matching "
+                                       "array-shape interfaces");
+    static_assert(array_element_matches, "array registrations require matching "
+                                         "element-type interfaces");
+    if constexpr (registered_type_is_complete && array_shape_matches &&
+                  array_element_matches) {
+      static_assert(pointer_convertible,
+                    "registered type must be pointer-convertible to "
+                    "the interface");
+      if constexpr (pointer_convertible) {
+        static_assert(storage_supported, "storage requirements not met");
       }
     }
   }
@@ -190,14 +203,37 @@ inline constexpr bool has_explicit_void_interface_v =
 template <typename Storage, typename TypeList, typename Type>
 struct registration_requirements;
 
+} // namespace detail
+
+struct external;
+
+namespace detail {
+// An external scope keeps a copy of a value it is given, so the value has to
+// be copied or moved; a reference or a pointer is kept as itself.
+template <typename Storage, typename Type>
+inline constexpr bool given_value_is_kept_v = [] {
+  if constexpr (!std::is_same_v<typename Storage::tag_type, external> ||
+                std::is_reference_v<Type> || std::is_pointer_v<Type>) {
+    return true;
+  } else {
+    return std::is_move_constructible_v<Type> ||
+           std::is_copy_constructible_v<Type>;
+  }
+}();
+
 template <typename Storage, typename Type, typename... TypeInterfaces>
 struct registration_requirements<Storage, type_list<TypeInterfaces...>, Type> {
   static constexpr bool valid =
+      given_value_is_kept_v<Storage, Type> &&
       (interface_registration_requirements<Storage, TypeInterfaces,
                                            Type>::valid &&
        ...);
 
   static constexpr void assert_valid() {
+    static_assert(given_value_is_kept_v<Storage, Type>,
+                  "an external scope keeps a copy of the value it is given; "
+                  "a value that can be neither copied nor moved is given by "
+                  "reference, storage<T &>, or by pointer");
     (interface_registration_requirements<Storage, TypeInterfaces,
                                          Type>::assert_valid(),
      ...);

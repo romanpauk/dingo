@@ -6,6 +6,7 @@
 //
 
 #include <dingo/container.h>
+#include <dingo/lookup/unordered.h>
 #include <dingo/storage/shared.h>
 
 #include <gtest/gtest.h>
@@ -163,7 +164,7 @@ TEST(associative_backend_test, unordered_one_uses_key_value_lookup) {
     int id() const override { return 2; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<std::size_t, processor, one, unordered>>;
   };
@@ -203,7 +204,7 @@ TEST(associative_backend_test, unordered_many_resolves_duplicate_key_entries) {
     int id() const override { return 2; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<std::size_t, processor, many, unordered>>;
   };
@@ -242,7 +243,7 @@ TEST(associative_backend_test, array_one_uses_dense_key_lookup) {
     int id() const override { return 2; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<std::size_t, processor, one, array<4>>>;
   };
@@ -256,7 +257,7 @@ TEST(associative_backend_test, array_one_uses_dense_key_lookup) {
   EXPECT_THROW((container.template register_type<
                    scope<shared>, storage<out_of_range_processor>,
                    interfaces<processor>>(dingo::key_value{std::size_t(4)})),
-               std::out_of_range);
+               lookup_key_out_of_range_exception);
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(3)).id(), 1);
   EXPECT_THROW((container.template resolve<processor &>(std::size_t(4))),
                type_not_found_exception);
@@ -275,7 +276,7 @@ TEST(associative_backend_test,
     int id() const override { return 2; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<std::size_t, processor, one, array<1>>>;
   };
@@ -284,7 +285,7 @@ TEST(associative_backend_test,
   EXPECT_THROW((container.template register_type<
                    scope<shared>, storage<out_of_range_processor>,
                    interfaces<processor>>(dingo::key_value{std::size_t(1)})),
-               std::out_of_range);
+               lookup_key_out_of_range_exception);
   EXPECT_THROW((container.template resolve<processor &>(std::size_t(1))),
                type_not_found_exception);
 
@@ -311,7 +312,7 @@ TEST(associative_backend_test, array_many_uses_dense_key_rows) {
     int id() const override { return 3; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<std::size_t, processor, many, array<4>>>;
   };
@@ -355,7 +356,7 @@ TEST(associative_backend_test, array_many_uses_dense_key_rows) {
   EXPECT_THROW((container.template register_type<
                    scope<shared>, storage<out_of_range_processor>,
                    interfaces<processor>>(dingo::key_value{std::size_t(4)})),
-               std::out_of_range);
+               lookup_key_out_of_range_exception);
 }
 
 TEST(associative_backend_test,
@@ -371,7 +372,7 @@ TEST(associative_backend_test,
     int id() const override { return 2; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<std::size_t, processor, many, array<1>>>;
   };
@@ -380,7 +381,7 @@ TEST(associative_backend_test,
   EXPECT_THROW((container.template register_type<
                    scope<shared>, storage<out_of_range_processor>,
                    interfaces<processor>>(dingo::key_value{std::size_t(1)})),
-               std::out_of_range);
+               lookup_key_out_of_range_exception);
   ASSERT_TRUE(
       container.template resolve<std::vector<processor *>>(std::size_t(1))
           .empty());
@@ -406,7 +407,7 @@ TEST(associative_backend_test, custom_backend_uses_stl_like_try_emplace) {
     int id() const override { return 1; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<int, processor, one, custom_lookup_backend>>;
   };
@@ -433,7 +434,7 @@ TEST(associative_backend_test, parent_fallback_searches_each_container_once) {
   };
   struct processor_impl : processor {};
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<int, processor, one, custom_lookup_backend>>;
   };
@@ -515,7 +516,7 @@ TEST(associative_backend_test,
     int id() const override { return 1; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<int, processor, one, operator_lookup_backend>>;
   };

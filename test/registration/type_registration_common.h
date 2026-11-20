@@ -7,24 +7,23 @@
 
 #pragma once
 
-#include <dingo/binding/binding_model.h>
+#include <dingo/binding/model.h>
 #include <dingo/container.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/factory_traits.h>
 #include <dingo/registration/constructor.h>
 #include <dingo/registration/type_registration.h>
-#include <dingo/resolution/conversion_cache.h>
 #include <dingo/rtti/rtti.h>
 #include <dingo/rtti/typeid_provider.h>
-#include <dingo/runtime/container_runtime.h>
-#include <dingo/runtime/runtime_binding.h>
+#include <dingo/runtime/binding.h>
+#include <dingo/runtime/memory.h>
 #include <dingo/runtime/transaction.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/shared_cyclical.h>
 #include <dingo/storage/unique.h>
-#include <dingo/type/rebind_type.h>
+#include <dingo/type/shape.h>
 
 #include <gtest/gtest.h>
 
@@ -41,49 +40,6 @@ namespace {
 [[maybe_unused]] int build_from_double_and_cstr(double, const char *) {
   return 0;
 }
-
-struct runtime_binding_local_dependency {
-  explicit runtime_binding_local_dependency(int init_value)
-      : value(init_value) {}
-
-  int value;
-};
-
-[[maybe_unused]] runtime_binding_local_dependency
-make_runtime_binding_local_dependency() {
-  return runtime_binding_local_dependency{7};
-}
-
-struct runtime_binding_local_service {
-  explicit runtime_binding_local_service(
-      runtime_binding_local_dependency &dependency)
-      : value(dependency.value) {}
-
-  int value;
-};
-
-struct counting_runtime_binding_storage {};
-
-struct counting_runtime_binding_container {
-  using allocator_type = std::allocator<char>;
-  using parent_container_type = counting_runtime_binding_container;
-
-  explicit counting_runtime_binding_container(
-      counting_runtime_binding_container *,
-      allocator_type allocator = allocator_type())
-      : allocator_(allocator) {
-    ++constructions;
-  }
-
-  allocator_type &get_allocator() { return allocator_; }
-
-  static int constructions;
-
-private:
-  allocator_type allocator_;
-};
-
-int counting_runtime_binding_container::constructions = 0;
 
 struct runtime_arena_tracker {
   explicit runtime_arena_tracker(std::vector<int> *events, int value)
@@ -132,47 +88,13 @@ struct runtime_registration_lifetime_factory {
   int *destructions_;
 };
 
-struct runtime_unique_local_dependency {
-  explicit runtime_unique_local_dependency(int init_value) : value(init_value) {
-    ++live_count;
-  }
-
-  runtime_unique_local_dependency(const runtime_unique_local_dependency &other)
-      : runtime_unique_local_dependency(other.value) {}
-
-  runtime_unique_local_dependency(runtime_unique_local_dependency &&other)
-      : runtime_unique_local_dependency(other.value) {}
-
-  ~runtime_unique_local_dependency() { --live_count; }
-
-  int value;
-  static int live_count;
-};
-
-int runtime_unique_local_dependency::live_count = 0;
-
-[[maybe_unused]] runtime_unique_local_dependency
-make_runtime_unique_local_dependency() {
-  return runtime_unique_local_dependency{13};
-}
-
-struct runtime_unique_local_service {
-  explicit runtime_unique_local_service(
-      runtime_unique_local_dependency &dependency)
-      : value(dependency.value),
-        dependency_was_live(runtime_unique_local_dependency::live_count != 0) {}
-
-  int value;
-  bool dependency_was_live;
-};
-
 struct runtime_domain_dependency {
   explicit runtime_domain_dependency(int init_value = 0) : value(init_value) {}
 
   int value;
 };
 
-struct runtime_domain_traits : dynamic_container_traits {
+struct runtime_domain_traits : runtime_container_traits {
   using lookup_definition_type = lookups<base<many, ordered>>;
 };
 
@@ -194,7 +116,7 @@ struct runtime_domain_second_service {
 
 struct runtime_domain_retry_service {};
 
-struct runtime_domain_array_traits : dynamic_container_traits {
+struct runtime_domain_array_traits : runtime_container_traits {
   using lookup_definition_type = lookups<
       associative<std::size_t, runtime_domain_dependency, one, array<1>>>;
 };
@@ -233,7 +155,7 @@ struct runtime_domain_typed_dependency {
 
 struct runtime_domain_typed_key {};
 
-struct runtime_domain_collection_traits : dynamic_container_traits {
+struct runtime_domain_collection_traits : runtime_container_traits {
   using lookup_definition_type = lookups<
       associative<std::size_t, runtime_domain_associative_dependency, many,
                   ordered>,
@@ -252,61 +174,6 @@ struct runtime_domain_collection_service {
 
   std::vector<runtime_domain_associative_dependency *> associative_dependencies;
   std::vector<runtime_domain_typed_dependency *> typed_dependencies;
-};
-
-struct runtime_composed_static_dependency {
-  runtime_composed_static_dependency() : value(7) {}
-
-  int value;
-};
-
-struct runtime_composed_child_dependency {
-  explicit runtime_composed_child_dependency(int init_value = 0)
-      : value(init_value) {}
-
-  int value;
-};
-
-struct runtime_composed_root_dependency {
-  explicit runtime_composed_root_dependency(int init_value = 0)
-      : value(init_value) {}
-
-  int value;
-};
-
-struct runtime_composed_service {
-  runtime_composed_service(runtime_composed_static_dependency &static_value,
-                           runtime_composed_child_dependency &child_value,
-                           runtime_composed_root_dependency &root_value)
-      : static_result(static_value.value), child_result(child_value.value),
-        root_result(root_value.value) {}
-
-  int static_result;
-  int child_result;
-  int root_result;
-};
-
-struct runtime_composed_collection_dependency {
-  explicit runtime_composed_collection_dependency(int init_value = 0)
-      : value(init_value) {}
-
-  int value;
-};
-
-[[maybe_unused]] runtime_composed_collection_dependency
-make_runtime_composed_static_collection_dependency() {
-  return runtime_composed_collection_dependency{22};
-}
-
-struct runtime_composed_collection_service {
-  explicit runtime_composed_collection_service(
-      std::vector<runtime_composed_collection_dependency *> dependencies) {
-    for (auto *dependency : dependencies) {
-      values.push_back(dependency->value);
-    }
-  }
-
-  std::vector<int> values;
 };
 
 struct runtime_domain_retry_factory {
@@ -434,13 +301,14 @@ struct runtime_retained_source_pointer_dependency {
 
 int runtime_retained_source_pointer_dependency::live_count = 0;
 
+// Makes a new object for each request: a unique scope of a raw pointer owns
+// what it points to, which the resolution deletes when the request it is made
+// for ends.
 struct runtime_retained_source_pointer_factory {
   template <typename Type, typename Context, typename Container>
-  Type construct(construction_scope scope, Context &context,
-                 Container &) const {
+  Type construct(construction_scope, Context &, Container &) const {
     static_assert(std::is_pointer_v<Type>);
-    using object_type = std::remove_pointer_t<Type>;
-    return std::addressof(context.template construct<object_type>(scope));
+    return new std::remove_pointer_t<Type>();
   }
 
   template <typename Type, typename Context, typename Container>
@@ -655,12 +523,15 @@ struct runtime_cyclical_rollback_implementation
     if (should_throw) {
       throw std::runtime_error("cyclical construction failed");
     }
+    ++constructions;
   }
 
   static bool should_throw;
+  static int constructions;
 };
 
 bool runtime_cyclical_rollback_implementation::should_throw = true;
+int runtime_cyclical_rollback_implementation::constructions = 0;
 
 struct runtime_cyclical_rollback_consumer {
   explicit runtime_cyclical_rollback_consumer(

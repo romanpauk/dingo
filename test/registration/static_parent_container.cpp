@@ -10,6 +10,8 @@
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 
+#include <memory>
+
 #include <gtest/gtest.h>
 
 using namespace dingo;
@@ -42,21 +44,6 @@ struct parent_temporary {
   int value;
 };
 } // namespace
-
-TEST(static_parent_container_test,
-     child_dependency_ambiguity_does_not_fall_back_to_parent) {
-  using parent_bindings = bindings<dingo::bind<scope<shared>, storage<config>>>;
-  using child_bindings = bindings<
-      dingo::bind<scope<shared>, storage<child_config>, interfaces<config>>,
-      dingo::bind<scope<shared>, storage<second_child_config>,
-                  interfaces<config>>,
-      dingo::bind<scope<unique>, storage<service>>>;
-
-  container<parent_bindings> parent;
-  container<child_bindings, decltype(parent)> child(&parent);
-
-  EXPECT_THROW(child.resolve<service>(), type_ambiguous_exception);
-}
 
 TEST(static_parent_container_test,
      static_child_context_is_sized_for_parent_temporaries) {
@@ -173,4 +160,43 @@ TEST(static_parent_container_test,
   auto &resolved = child.resolve<retained_interface &>();
   EXPECT_EQ(resolved.value, 5);
   EXPECT_EQ(&resolved, &grandparent.resolve<retained_interface &>());
+}
+
+namespace {
+struct kept_part {
+  kept_part() { ++alive; }
+  kept_part(const kept_part &) { ++alive; }
+  ~kept_part() { --alive; }
+
+  int value = 6;
+  inline static int alive = 0;
+};
+
+struct kept_service {
+  explicit kept_service(kept_part &p) : used(p) {}
+
+  kept_part &used;
+};
+} // namespace
+
+// What a parent keeps for a request of its child lives as long as the parent.
+TEST(static_parent_container_test, parent_keeps_unique_dependency) {
+  using parent_bindings =
+      bindings<dingo::bind<scope<unique>, storage<kept_part>>,
+               dingo::bind<scope<shared>, storage<kept_service>,
+                           factory<constructor<kept_service(kept_part &)>>>>;
+  using child_bindings = bindings<>;
+
+  {
+    static_container<parent_bindings> parent;
+    {
+      auto child =
+          std::make_unique<static_container<child_bindings, decltype(parent)>>(
+              &parent);
+      EXPECT_EQ(child->resolve<kept_service &>().used.value, 6);
+    }
+    EXPECT_EQ(kept_part::alive, 1);
+    EXPECT_EQ(parent.resolve<kept_service &>().used.value, 6);
+  }
+  EXPECT_EQ(kept_part::alive, 0);
 }

@@ -8,53 +8,23 @@
 #pragma once
 
 #include <dingo/base/config.h>
-
+#include <dingo/base/type_descriptor.h>
 #include <dingo/rtti/rtti.h>
 
-#include <cstddef>
-#include <functional>
+#include <cstdint>
 
 namespace dingo {
 
 template <> class rtti<static_provider> {
-  template <typename T> struct type_index_tag {
-    // TODO: This will not work across modules.
-    // Should probably detect it first, handle it next.
-    static constexpr size_t tag{};
-  };
-
 public:
-  class type_index {
-    friend struct std::hash<type_index>;
+  // The address of a per-type tag. The tags are writable, so identical-data
+  // folding cannot merge them.
+  // TODO: This will not work across modules.
+  using type_index = std::uintptr_t;
 
-  public:
-    constexpr type_index(size_t value) : value_(value) {}
-
-    constexpr bool operator<(const type_index &other) const {
-      return value_ < other.value_;
-    }
-
-    constexpr bool operator==(const type_index &other) const {
-      return value_ == other.value_;
-    }
-
-  private:
-    size_t value_;
-  };
-
-  template <typename T> static constexpr type_index get_type_index() {
-    return reinterpret_cast<size_t>(&type_index_tag<T>::tag);
+  template <typename T> static type_index get_type_index() {
+    return reinterpret_cast<std::uintptr_t>(&detail::type_tag<T>);
   }
 };
+
 } // namespace dingo
-
-namespace std {
-template <>
-struct hash<typename dingo::rtti<dingo::static_provider>::type_index> {
-  size_t operator()(
-      const typename dingo::rtti<dingo::static_provider>::type_index &value)
-      const {
-    return hash<size_t>()(value.value_);
-  }
-};
-} // namespace std

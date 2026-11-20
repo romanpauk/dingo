@@ -67,7 +67,7 @@ struct exporter {
   explicit exporter(notifier &) { throw std::runtime_error("exporter"); }
 };
 
-struct replacing_traits : dynamic_container_traits {
+struct replacing_traits : runtime_container_traits {
   using duplicate_registration_policy = replace_until_resolved;
 };
 
@@ -431,7 +431,7 @@ TEST(replace_registration_test, failed_registration_restores_replaced_lookups) {
                                 interfaces<notifier>>(
                    key_value{std::string("primary")}, key_value{7},
                    key_value{std::size_t(5)})),
-               std::out_of_range);
+               lookup_key_out_of_range_exception);
 
   ASSERT_EQ(c.resolve<notifier &>(std::string("primary")).channel(), 1);
   ASSERT_EQ(c.resolve<notifier &>(7).channel(), 1);
@@ -447,7 +447,7 @@ TEST(replace_registration_test, registration_works_after_a_rolled_back_one) {
                                 interfaces<notifier>>(
                    key_value{std::string("primary")}, key_value{7},
                    key_value{std::size_t(5)})),
-               std::out_of_range);
+               lookup_key_out_of_range_exception);
 
   c.register_type<scope<shared>, storage<push_notifier>, interfaces<notifier>>(
       key_value{std::string("primary")}, key_value{7},
@@ -466,7 +466,7 @@ TEST(replace_registration_test, rolled_back_replacement_does_not_seal) {
                                 interfaces<notifier>>(
                    key_value{std::string("primary")}, key_value{7},
                    key_value{std::size_t(5)})),
-               std::out_of_range);
+               lookup_key_out_of_range_exception);
 
   c.register_type<scope<shared>, storage<sms_notifier>, interfaces<notifier>>(
       key_value{std::string("primary")}, key_value{7},

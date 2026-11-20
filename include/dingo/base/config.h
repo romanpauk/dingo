@@ -7,6 +7,10 @@
 
 #pragma once
 
+// Every header includes the configuration, so that a definition a user makes
+// before it applies to all of them.
+// IWYU pragma: always_keep
+
 #if !defined(DINGO_CONSTRUCTOR_DETECTION_ARGS)
 #define DINGO_CONSTRUCTOR_DETECTION_ARGS 32
 #endif
@@ -39,8 +43,37 @@
 #endif
 #endif
 
+// A function a resolution runs once of a type, at most: optimized for size
+// and kept out of line, as what runs it is not slowed by it.
+#if !defined(DINGO_COLD)
+#if defined(_MSC_VER)
+#define DINGO_COLD __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+#if defined(__clang__)
+#define DINGO_COLD __attribute__((cold, noinline, minsize))
+#else
+#define DINGO_COLD __attribute__((cold, noinline))
+#endif
+#else
+#define DINGO_COLD
+#endif
+#endif
+
 // MSVC applies the empty base optimization only to the first empty base class
 // unless the derived class opts in.
+// Whether the compiler has __type_pack_element, which selects a type of a pack
+// by its index.
+#if !defined(DINGO_HAS_TYPE_PACK_ELEMENT)
+#if defined(__has_builtin)
+#if __has_builtin(__type_pack_element)
+#define DINGO_HAS_TYPE_PACK_ELEMENT 1
+#endif
+#endif
+#endif
+#if !defined(DINGO_HAS_TYPE_PACK_ELEMENT)
+#define DINGO_HAS_TYPE_PACK_ELEMENT 0
+#endif
+
 #if !defined(DINGO_EMPTY_BASES)
 #if defined(_MSC_VER)
 #define DINGO_EMPTY_BASES __declspec(empty_bases)

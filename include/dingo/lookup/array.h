@@ -7,14 +7,13 @@
 
 #pragma once
 
+#include <dingo/base/exceptions.h>
 #include <dingo/lookup/storage.h>
 #include <dingo/lookup/tags.h>
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <optional>
-#include <stdexcept>
 #include <type_traits>
 #include <vector>
 
@@ -80,44 +79,15 @@ public:
     slot *slot_ = nullptr;
   };
 
-  class const_iterator {
-  public:
-    const_iterator() = default;
-
-    const Value &operator*() const { return *slot_->second; }
-
-    bool operator==(const const_iterator &other) const {
-      return slot_ == other.slot_;
-    }
-
-    bool operator!=(const const_iterator &other) const {
-      return !(*this == other);
-    }
-
-  private:
-    friend class array_lookup_storage;
-
-    explicit const_iterator(const slot *resolved_slot) : slot_(resolved_slot) {}
-
-    const slot *slot_ = nullptr;
-  };
-
   explicit array_lookup_storage(Allocator &) {}
 
   iterator find(const Key &key) {
-    const auto index = to_index(key);
+    const auto index = array_index(key);
     return index && entries_[*index].second ? iterator(&entries_[*index])
                                             : end();
   }
 
-  const_iterator find(const Key &key) const {
-    const auto index = to_index(key);
-    return index && entries_[*index].second ? const_iterator(&entries_[*index])
-                                            : end();
-  }
-
   iterator end() { return iterator(); }
-  const_iterator end() const { return const_iterator(); }
 
   template <typename Inserted>
   std::pair<iterator, bool> try_emplace(const Key &key, Inserted &&value) {
@@ -137,14 +107,14 @@ public:
   }
 
 private:
-  static std::optional<std::size_t> to_index(const Key &key) {
+  static std::optional<std::size_t> array_index(const Key &key) {
     return array_lookup_index(key, Size);
   }
 
   static std::size_t checked_index(const Key &key) {
-    auto index = to_index(key);
+    auto index = array_index(key);
     if (!index) {
-      throw std::out_of_range("dingo array lookup key out of range");
+      throw lookup_key_out_of_range_exception("array lookup key out of range");
     }
     return *index;
   }
@@ -192,40 +162,6 @@ public:
     typename bucket_type::iterator it_{};
   };
 
-  class const_iterator {
-  public:
-    const_iterator() = default;
-
-    const Value &operator*() const { return *it_; }
-
-    const_iterator &operator++() {
-      ++it_;
-      return *this;
-    }
-
-    bool operator==(const const_iterator &other) const {
-      return owner_ == other.owner_ && index_ == other.index_ &&
-             (is_end() || it_ == other.it_);
-    }
-
-    bool operator!=(const const_iterator &other) const {
-      return !(*this == other);
-    }
-
-  private:
-    friend class array_lookup_storage;
-
-    const_iterator(const array_lookup_storage *owner, std::size_t index,
-                   typename bucket_type::const_iterator it)
-        : owner_(owner), index_(index), it_(it) {}
-
-    bool is_end() const { return !owner_ || index_ == Size; }
-
-    const array_lookup_storage *owner_ = nullptr;
-    std::size_t index_ = Size;
-    typename bucket_type::const_iterator it_{};
-  };
-
   explicit array_lookup_storage(Allocator &allocator)
       : values_(make_lookup_storage_allocator<bucket_allocator>(allocator)),
         mapped_allocator_(
@@ -241,32 +177,16 @@ public:
     return range.first == range.second ? end() : range.first;
   }
 
-  const_iterator find(const Key &key) const {
-    const auto range = equal_range(key);
-    return range.first == range.second ? end() : range.first;
-  }
-
   iterator end() { return iterator(this, Size, {}); }
-  const_iterator end() const { return const_iterator(this, Size, {}); }
 
   std::pair<iterator, iterator> equal_range(const Key &key) {
-    const auto index = to_index(key);
+    const auto index = array_index(key);
     if (!index) {
       return {end(), end()};
     }
     auto &bucket = values_[*index];
     return {iterator(this, *index, bucket.begin()),
             iterator(this, *index, bucket.end())};
-  }
-
-  std::pair<const_iterator, const_iterator> equal_range(const Key &key) const {
-    const auto index = to_index(key);
-    if (!index) {
-      return {end(), end()};
-    }
-    const auto &bucket = values_[*index];
-    return {const_iterator(this, *index, bucket.begin()),
-            const_iterator(this, *index, bucket.end())};
   }
 
   template <typename Inserted>
@@ -282,14 +202,14 @@ public:
   void erase(iterator handle) { values_[handle.index_].erase(handle.it_); }
 
 private:
-  static std::optional<std::size_t> to_index(const Key &key) {
+  static std::optional<std::size_t> array_index(const Key &key) {
     return array_lookup_index(key, Size);
   }
 
   static std::size_t checked_index(const Key &key) {
-    auto index = to_index(key);
+    auto index = array_index(key);
     if (!index) {
-      throw std::out_of_range("dingo array lookup key out of range");
+      throw lookup_key_out_of_range_exception("array lookup key out of range");
     }
     return *index;
   }

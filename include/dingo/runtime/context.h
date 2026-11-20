@@ -7,24 +7,31 @@
 
 #pragma once
 
-#include <dingo/context/context_base.h>
+#include <dingo/context/resolution.h>
+#include <dingo/memory/object_layout.h>
 #include <dingo/memory/object_store.h>
 #include <dingo/runtime/transaction.h>
 
+#include <cassert>
+#include <cstddef>
+#include <exception>
 #include <memory>
+#include <optional>
 #include <type_traits>
 #include <utility>
 
 namespace dingo {
 
-template <typename Allocator>
-class runtime_context : public detail::context_path_state {
+template <typename Allocator> class runtime_context_backend {
   using transaction_type = runtime_transaction<Allocator>;
 
 public:
+  static constexpr bool is_transactional = true;
+
   class transaction_scope {
   public:
-    transaction_scope(runtime_context &context, transaction_type &transaction)
+    transaction_scope(runtime_context_backend &context,
+                      transaction_type &transaction)
         : context_(std::addressof(context)), previous_(context.transaction_) {
       context_->transaction_ = std::addressof(transaction);
     }
@@ -37,58 +44,22 @@ public:
     transaction_scope &operator=(transaction_scope &&) = delete;
 
   private:
-    runtime_context *context_;
+    runtime_context_backend *context_;
     transaction_type *previous_;
   };
 
-  runtime_context(arena<> &scratch, transaction_type &transaction)
+  runtime_context_backend(arena<> &scratch, transaction_type &transaction)
       : scratch_(std::addressof(scratch)),
         transaction_(std::addressof(transaction)) {}
 
-  ~runtime_context() noexcept { ephemeral_store_.destroy(*scratch_); }
+  ~runtime_context_backend() noexcept { ephemeral_store_.destroy(*scratch_); }
 
-  runtime_context(const runtime_context &) = delete;
-  runtime_context &operator=(const runtime_context &) = delete;
+  runtime_context_backend(const runtime_context_backend &) = delete;
+  runtime_context_backend &operator=(const runtime_context_backend &) = delete;
 
-  template <typename T, typename... Args>
-  T &construct(construction_scope scope, Args &&...args) {
-    return construct_with_scope<T>(
-        scope, [&](void *ptr) { new (ptr) T(std::forward<Args>(args)...); });
-  }
-
-// Resolution selects failure paths at runtime. For some instantiations MSVC
-// proves construction cannot return and reports the following delivery code as
-// unreachable even though the instantiated path is not selected.
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable : 4702)
-#endif
-  template <typename T, typename DetectionMode, typename Container>
-  T construct(construction_scope scope, Container &container) {
-    using temporary_type = normalized_type_t<T>;
-    auto &instance =
-        construct_with_scope<temporary_type>(scope, [&](void *ptr) {
-          constructor_detection<temporary_type, DetectionMode>()
-              .template construct<temporary_type>(ptr, scope, *this, container);
-        });
-
-    if constexpr (std::is_lvalue_reference_v<T>) {
-      return instance;
-    } else if constexpr (!std::is_rvalue_reference_v<T> &&
-                         std::is_copy_constructible_v<temporary_type> &&
-                         !std::is_move_constructible_v<temporary_type>) {
-      return static_cast<const temporary_type &>(instance);
-    } else {
-      return std::move(instance);
-    }
-  }
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
-
-  void on_rollback(void (*fn)(void *, void *) noexcept, void *first,
-                   void *second = nullptr) {
-    transaction_->on_rollback(fn, first, second);
+  void defer_rollback(void (*fn)(void *, void *) noexcept, void *first,
+                      void *second = nullptr) {
+    transaction_->defer_rollback(fn, first, second);
   }
 
   template <typename Runtime> bool owns(const Runtime &runtime) const noexcept {
@@ -99,49 +70,43 @@ public:
     return transaction_scope(*this, transaction);
   }
 
-  void add_runtime_destructor(void *instance, void (*dtor)(void *) noexcept) {
-    transaction_->add_runtime_destructor(instance, dtor);
+  void defer_reset(void (*fn)(void *, void *) noexcept, void *cell,
+                   void *argument, void (*reset)(void *) noexcept) {
+    transaction_->defer_reset(fn, cell, argument, reset);
   }
 
-  template <typename T, typename Container>
-  T resolve(construction_scope scope, Container &container) {
-    if constexpr (detail::is_selected_v<T>) {
-      using request_type = detail::selected_type_t<T>;
-      using selector_type = detail::selected_selector_t<T>;
-      if constexpr (detail::is_type_selector_v<selector_type>) {
-        using selector_key_type = detail::type_selector_type_t<selector_type>;
-        return T(container.template resolve<request_type, false>(
-            scope, *this,
-            detail::make_lookup_key(
-                detail::type_selector<selector_key_type>{})));
-      } else {
-        static_assert(detail::is_value_selector_v<selector_type>);
-        return T(container.template resolve<request_type, false>(
-            scope, *this, detail::make_lookup_key(selector_type{})));
-      }
-    } else {
-      return container.template resolve<T, false>(scope, *this,
-                                                  detail::no_lookup_key());
-    }
-  }
-
-private:
+protected:
   template <typename T, typename ConstructFn>
-  T &construct_with_scope(construction_scope scope,
-                          ConstructFn &&construct_fn) {
+  T &construct_storage(construction_scope scope, ConstructFn &&construct_fn) {
     if (scope.is_persistent()) {
-      return *transaction_->template construct_persistent_with<T>(
+      return *transaction_->template construct_persistent_made<T>(
           std::forward<ConstructFn>(construct_fn));
     }
 
-    return ephemeral_store_.template construct_at<T>(
+    return ephemeral_store_.template place<T>(
         *scratch_, std::forward<ConstructFn>(construct_fn));
   }
 
+  template <typename ConstructFn>
+  void *place_storage(construction_scope scope,
+                      const detail::object_layout &layout,
+                      ConstructFn &&construct_fn) {
+    if (scope.is_persistent()) {
+      return transaction_->place_persistent(
+          layout, std::forward<ConstructFn>(construct_fn));
+    }
+    return ephemeral_store_.place(*scratch_, layout,
+                                  std::forward<ConstructFn>(construct_fn));
+  }
+
+private:
   arena<> *scratch_;
   detail::object_store<arena<>> ephemeral_store_;
   transaction_type *transaction_;
 };
+
+template <typename Allocator>
+using runtime_context = resolution_context<runtime_context_backend<Allocator>>;
 
 namespace detail {
 
@@ -150,77 +115,135 @@ namespace detail {
 #pragma warning(disable : 4702)
 #endif
 
-// Commits a resolve transaction. The outermost successful resolve of a runtime
+// Commits a resolve transaction unless an exception leaves the resolve; the
+// transaction then rolls back. The outermost successful resolve of a runtime
 // seals it.
 template <typename Transaction, typename Runtime>
 class transaction_commit_guard {
 public:
   transaction_commit_guard(Transaction &transaction, Runtime &runtime) noexcept
-      : transaction_(std::addressof(transaction)),
-        runtime_(std::addressof(runtime)) {}
+      : transaction_(transaction), runtime_(runtime),
+        exceptions_(std::uncaught_exceptions()) {}
 
   ~transaction_commit_guard() noexcept {
-    if (transaction_ != nullptr) {
-      const bool outermost = transaction_->outermost();
-      transaction_->commit();
+    if (std::uncaught_exceptions() == exceptions_) {
+      const bool outermost = transaction_.outermost();
+      transaction_.commit();
       if (outermost) {
-        runtime_->seal();
+        runtime_.seal();
       }
     }
   }
 
-  void cancel() noexcept { transaction_ = nullptr; }
-
 private:
-  Transaction *transaction_;
-  Runtime *runtime_;
+  Transaction &transaction_;
+  Runtime &runtime_;
+  int exceptions_;
 };
 
 } // namespace detail
 
-template <typename Runtime, typename Fn>
-DINGO_NOINLINE decltype(auto) execute_transaction(Runtime &runtime, Fn &&fn) {
+namespace detail {
+// The frame of a transaction a request opens: its scratch memory, the
+// transaction and the context of the request. The request commits the
+// transaction once it is resolved; one an exception leaves is rolled back as
+// the frame ends.
+template <typename Runtime> class transaction_frame {
+public:
   using allocator_type = typename Runtime::allocator_type;
   using context_type = runtime_context<allocator_type>;
-  inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
-  runtime_transaction<allocator_type> transaction(runtime, scratch);
-  context_type context(scratch, transaction);
-  detail::transaction_commit_guard commit(transaction, runtime);
+  using transaction_type = runtime_transaction<allocator_type>;
 
-  try {
-    if constexpr (std::is_void_v<std::invoke_result_t<Fn, context_type &>>) {
-      std::forward<Fn>(fn)(context);
-    } else {
-      return std::forward<Fn>(fn)(context);
+  explicit transaction_frame(Runtime &runtime)
+      : runtime_(runtime), transaction_(runtime, scratch_),
+        context_(scratch_, transaction_) {}
+
+  ~transaction_frame() = default;
+
+  transaction_frame(const transaction_frame &) = delete;
+  transaction_frame &operator=(const transaction_frame &) = delete;
+
+  context_type &context() noexcept { return context_; }
+
+  // Commits the transaction of a request that resolved, and seals the
+  // runtime when it is the outermost one.
+  void commit() noexcept {
+    const bool outermost = transaction_.outermost();
+    transaction_.commit();
+    if (outermost) {
+      runtime_.seal();
     }
-  } catch (...) {
-    commit.cancel();
-    throw;
   }
-}
 
-template <typename Runtime, typename Allocator, typename Fn>
-auto execute_transaction(Runtime &runtime, runtime_context<Allocator> &context,
-                         Fn &&fn)
-    -> std::invoke_result_t<Fn, runtime_context<Allocator> &> {
-  using result_type = std::invoke_result_t<Fn, runtime_context<Allocator> &>;
-  assert(!context.owns(runtime));
-
-  inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
-  runtime_transaction<Allocator> transaction(runtime, scratch);
-  auto scope = context.use_transaction(transaction);
-  detail::transaction_commit_guard commit(transaction, runtime);
-
-  try {
-    if constexpr (std::is_void_v<result_type>) {
-      std::forward<Fn>(fn)(context);
-    } else {
-      return std::forward<Fn>(fn)(context);
+  // Runs fn of the context, and commits the transaction once it returns
+  // what it makes, which is returned as it is made: an exception that leaves
+  // fn leaves the transaction to roll back as the frame ends.
+  template <typename Fn> decltype(auto) run(Fn &&fn) {
+    struct committing {
+      transaction_frame &frame;
+      bool armed = true;
+      ~committing() {
+        if (armed) {
+          frame.commit();
+        }
+      }
+    } guard{*this};
+    try {
+      return std::forward<Fn>(fn)(context_);
+    } catch (...) {
+      guard.armed = false;
+      throw;
     }
-  } catch (...) {
-    commit.cancel();
-    throw;
   }
+
+private:
+  Runtime &runtime_;
+  inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch_;
+  transaction_type transaction_;
+  context_type context_;
+};
+
+// The frame of a request of a runtime in the context of a request: a
+// transaction of the runtime, which the context uses while the frame lives,
+// when the context is of another runtime; none when it is of this one.
+template <typename Runtime, typename Allocator> class nested_transaction_frame {
+public:
+  using context_type = runtime_context<Allocator>;
+  using transaction_type = runtime_transaction<Allocator>;
+
+  DINGO_NOINLINE nested_transaction_frame(Runtime &runtime,
+                                          context_type &context) {
+    if (!context.owns(runtime)) {
+      nested_.emplace(runtime, context);
+    }
+  }
+
+  DINGO_NOINLINE ~nested_transaction_frame() = default;
+
+  nested_transaction_frame(const nested_transaction_frame &) = delete;
+  nested_transaction_frame &
+  operator=(const nested_transaction_frame &) = delete;
+
+private:
+  struct nested {
+    nested(Runtime &runtime, context_type &context)
+        : transaction_(runtime, scratch_),
+          scope_(context.use_transaction(transaction_)),
+          commit_(transaction_, runtime) {}
+
+    inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch_;
+    transaction_type transaction_;
+    typename runtime_context_backend<Allocator>::transaction_scope scope_;
+    transaction_commit_guard<transaction_type, Runtime> commit_;
+  };
+  std::optional<nested> nested_;
+};
+} // namespace detail
+
+template <typename Runtime, typename Fn>
+DINGO_NOINLINE decltype(auto) execute_transaction(Runtime &runtime, Fn &&fn) {
+  detail::transaction_frame<Runtime> frame(runtime);
+  return frame.run(std::forward<Fn>(fn));
 }
 
 #ifdef _MSC_VER

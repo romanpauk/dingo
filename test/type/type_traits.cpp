@@ -5,16 +5,20 @@
 // SPDX-License-Identifier: MIT
 //
 
+#include <dingo/request/decomposition.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/collection_traits.h>
-#include <dingo/type/dependency.h>
-#include <dingo/type/dependency_traits.h>
 #include <dingo/type/type_traits.h>
 
 #include <gtest/gtest.h>
 
+#include <deque>
+#include <list>
 #include <map>
 #include <memory>
+#include <set>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "support/class.h"
@@ -34,8 +38,8 @@ struct non_default_copy_only {
 };
 } // namespace
 
-static_assert(!std::is_copy_constructible_v<detail::recursion_guard<int>>);
-static_assert(!std::is_move_constructible_v<detail::recursion_guard<int>>);
+static_assert(!std::is_copy_constructible_v<detail::recursion_guard>);
+static_assert(!std::is_move_constructible_v<detail::recursion_guard>);
 
 static_assert(is_interface_storage_rebindable_v<test_shared<Class>, IClass>);
 static_assert(is_interface_storage_rebindable_v<test_unique<Class>, IClass>);
@@ -50,11 +54,10 @@ static_assert(std::is_empty_v<request_type<int>>);
 static_assert(std::is_same_v<request_type<int>::user_type, int>);
 static_assert(std::is_same_v<request_type<int>::lookup_type, int>);
 static_assert(std::is_same_v<request_type<int>::interface_type, int>);
-static_assert(std::is_same_v<request_type<int>::result_type, int>);
+static_assert(std::is_same_v<request_type<int>::interface_type, int>);
 static_assert(std::is_same_v<request_type<int>::value_type, int>);
 static_assert(std::is_same_v<request_type<int>::exact_type, int>);
 static_assert(!request_type<int>::removes_rvalue_references);
-static_assert(!request_type<int>::is_rvalue_request);
 
 static_assert(std::is_same_v<request_type<int &>::lookup_type, int &>);
 static_assert(std::is_same_v<request_type<int &>::interface_type, int &>);
@@ -63,15 +66,13 @@ static_assert(std::is_same_v<request_type<int &>::exact_type, int>);
 
 static_assert(std::is_same_v<request_type<int &&>::lookup_type, int &&>);
 static_assert(std::is_same_v<request_type<int &&>::interface_type, int &&>);
-static_assert(std::is_same_v<request_type<int &&>::result_type, int &&>);
+static_assert(std::is_same_v<request_type<int &&>::interface_type, int &&>);
 static_assert(std::is_same_v<request_type<int &&>::value_type, int>);
 static_assert(std::is_same_v<request_type<int &&>::exact_type, int>);
-static_assert(request_type<int &&>::is_rvalue_request);
 static_assert(std::is_same_v<request_type<int &&, true>::lookup_type, int>);
 static_assert(std::is_same_v<request_type<int &&, true>::interface_type, int>);
-static_assert(std::is_same_v<request_type<int &&, true>::result_type, int>);
+static_assert(std::is_same_v<request_type<int &&, true>::interface_type, int>);
 static_assert(request_type<int &&, true>::removes_rvalue_references);
-static_assert(request_type<int &&, true>::is_rvalue_request);
 
 static_assert(std::is_same_v<request_type<int *>::lookup_type, int *>);
 static_assert(std::is_same_v<request_type<int *>::interface_type, int *>);
@@ -136,5 +137,23 @@ static_assert(std::is_same_v<
 static_assert(std::is_same_v<
               request_type<std::unique_ptr<request_type_service>>::value_type,
               request_type_service>);
+
+// A collection is recognised by the members of the standard containers: a
+// sequence by emplace_back, an associative collection by its key_type and
+// emplace, which resolves its mapped_type. A string is a value.
+static_assert(collection_traits<std::vector<int>>::is_collection);
+static_assert(collection_traits<std::vector<int>>::has_fixed_size_construct);
+static_assert(collection_traits<std::list<int>>::is_collection);
+static_assert(!collection_traits<std::list<int>>::has_fixed_size_construct);
+static_assert(collection_traits<std::deque<int>>::is_collection);
+static_assert(collection_traits<std::set<int>>::is_collection);
+static_assert(
+    std::is_same_v<collection_traits<std::map<int, long>>::resolve_type, long>);
+static_assert(
+    std::is_same_v<
+        collection_traits<std::unordered_map<int, long>>::resolve_type, long>);
+static_assert(!collection_traits<std::string>::is_collection);
+static_assert(!collection_traits<std::unique_ptr<int>>::is_collection);
+static_assert(!collection_traits<int>::is_collection);
 
 } // namespace dingo

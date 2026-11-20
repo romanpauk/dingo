@@ -1,144 +1,183 @@
 # Extending Dingo
 
-Dingo's extensibility is mostly trait-driven. The key is to specialize the trait
-that matches the problem actually being solved.
+Dingo is extended by traits, one for each kind of addition:
 
-Dingo's container and resolution pipeline do not hard-code a closed list of
-supported wrapper forms. Library support for standard smart pointers, arrays,
-variants, and similar shapes is implemented through the same traits and
-conversion hooks available to external code. Adding support for another wrapper
-or storage shape follows the same path as Dingo's built-in support.
+| Addition                                                | Trait                                            |
+| ------------------------------------------------------- | ------------------------------------------------ |
+| a wrapper or an alternative type                        | one `type_traits` specialization                 |
+| a storage scope                                         | a tag type and one `scope_traits` specialization |
+| a type that is not constructed as its constructors show | one `constructor_traits` specialization          |
 
-## The Three Main Extension Points
+The container and the resolution pipeline do not hard-code a closed list of
+wrapper forms. The library supports standard smart pointers, arrays, variants,
+and similar shapes through the same traits that external code uses.
+
+## The Extension Points
 
 ### 1. `type_traits`
 
 Specialize `type_traits` in
-[include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h) when
-introducing a new wrapper or handle type.
+[include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h) for a
+new wrapper or handle type.
 
-`type_traits` defines wrapper semantics:
+A specialization derives from the semantics of the wrapper and provides its
+operations. The standard wrappers are specialized the same way, so a user
+wrapper takes part in conversions and storage as `std::unique_ptr` does:
 
-- whether the type participates in Dingo's wrapper machinery
-- whether it behaves like a pointer-like handle
-- whether it owns the pointee
-- how to get or borrow the underlying object
-- how to reset it
-- how to rebind it to a different leaf type
-- whether Dingo may resolve references through it
-- how wrapper-shaped resolution should behave for that type
+```cpp
+template <typename T>
+struct type_traits<my_handle<T>> : semantics::shared_owner {
+  using value_type = T;
+  template <typename U> using rebind_t = my_handle<U>;
 
-If Dingo needs to understand a wrapper's shape, start here.
+  static T *get(const my_handle<T> &handle) { return handle.get(); }
+  static T &borrow(const my_handle<T> &handle) { return *handle; }
+  static bool empty(const my_handle<T> &handle) { return !handle; }
 
-Set `is_owning_handle` to `true` for adopting or shared-ownership handles and to
-`false` for observers. Dingo does not create an owning handle from a borrowed
-non-owning source through a default conversion. This rule applies to the leaf
-handle conversion. Alternative and optional-style conversions first select or
-unwrap their contained conversion, then inherit its `borrow` or `consume`
-requirement.
+  template <typename... Args> static my_handle<T> emplace(Args &&...args);
+};
+```
 
-An optional-style wrapper provides `value_type`, `get`, `empty`, `wrap`, and
-`make_empty`. These operations let Dingo preserve an empty source and construct
-the target wrapper around the converted contained value. An alternative provides
-`selected_type<Source>` and `wrap<Selected>` so Dingo can apply the same rule to
-the alternative selected by overload resolution.
+The semantics are:
 
-### 2. `storage_traits`
+- `semantics::observer`: a handle to an object that it does not own, such as a
+  raw pointer
+- `semantics::sole_owner`: the sole owner of an object, such as
+  `std::unique_ptr`; it also declares `share_t<U>`, the sharing handle that can
+  take over its object
+- `semantics::shared_owner`: a handle that shares ownership, such as
+  `std::shared_ptr`
+- `semantics::optional_value`: a value that holds an object or nothing, such as
+  `std::optional`
 
-Specialize `storage_traits` in
-[include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
-when defining which result forms a given storage/scope combination can expose.
+The semantics declare whether the wrapper is pointer-like and owns its element.
+They also select the storage form, which determines whether a scope stores the
+wrapper. From these properties, the [layered semantics](layered-semantics.md)
+define which requests a binding of the wrapper resolves.
 
-This trait defines whether a registration can service requests such as:
+A wrapper declares `borrow` when its element can be borrowed as an object. An
+owning handle without `borrow` holds an array. Such a handle declares `extent`,
+the bound of the array, when it holds an array of a known bound. Such a handle
+may also declare `unknown_bound_t<U>`, the handle of an array of unknown bound
+of `U` that it converts to, as a `std::shared_ptr<T[2]>` converts to a
+`std::shared_ptr<T[]>`. It converts when its converting constructor takes it:
+moved, and copied too when it can be copied. An owning handle is not made of an
+object that something else owns.
 
-- value
-- lvalue reference
-- rvalue reference
-- pointer
-- wrapper-to-wrapper conversion
+A pointer-like wrapper converts to one of a more qualified element, as a
+`std::shared_ptr<T>` converts to a `std::shared_ptr<const T>`, when its
+`rebind_t` of a `const` and of a `volatile` element can be constructed from it:
+moved, and copied too when the wrapper can be copied. Its converting constructor
+is all it takes.
 
-The same wrapper may have different exposure rules under `unique`, `shared`, or
-`external` storage.
+An optional wrapper provides `value_type`, `get`, `empty`, `wrap`, and
+`empty_value`. Dingo uses them to keep an empty source empty and to wrap the
+converted contained value.
 
-The built-in scopes do not specialize `storage_traits` per wrapper. Each scope
-is described once by a `storage_scope_policy` specialization (stability,
-consumed versus borrowed source, recursion guard, and the request lists it
-publishes for each `storage_form`), and
-[include/dingo/storage/storage_scope_policy.h](../../include/dingo/storage/storage_scope_policy.h)
-generates `storage_traits` and `storage_materialization_traits` from it. A
-(scope, form) cell that deviates from that rule specializes
-`detail::storage_cell`. A custom wrapper that the built-in forms do not classify
-still specializes `storage_traits` directly, as in the extension example below.
+An alternative type, such as `std::variant`, derives from
+`semantics::alternative_value` and provides `alternatives`,
+`selected_type<Source>`, `wrap<Selected>` and `get<Selected>`. Dingo applies the
+same rule to the alternative that overload resolution selects.
 
-Put a result shape in `value_types` when it is copied from borrowed storage;
-Dingo exposes it only when the resolved type is copy constructible. Put `T&&` in
-`rvalue_reference_types` when the storage produces `T` for consumption; Dingo
-derives the corresponding value request when `type_conversion_traits` accepts
-the concrete source category. A consumable result does not also need to appear
-in `value_types`. These declarations are converted into concrete `resolution`
-descriptors, so the downstream resolver no longer has to infer source ownership
-or exact lookup behavior from the request spelling.
+A handle converts to the handle of a base of its element through its converting
+constructor, as `std::shared_ptr` does. Such a wrapper needs no other trait.
 
-### 3. `type_conversion_traits`
+`emplace(args...)` returns a wrapper of an element constructed from `args`. Two
+optional members describe `emplace`:
 
-Specialize `type_conversion_traits` in
-[include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
-when two wrapper types need a concrete conversion step that is not covered by a
-direct converting constructor or pointer cast.
+- `static constexpr bool emplaces_element = true`: when the element is a wrapper
+  too, `emplace` passes its arguments to the element's `emplace`, as the
+  standard wrappers do. Dingo then emplaces a wrapper of such wrappers at once
+  from the arguments of its innermost element.
+- `template <typename... Args> static constexpr bool can_emplace`: whether
+  `emplace` takes `Args`. Declare it when `emplace` cannot take every argument
+  list. An example is a handle of an array, which initializes its elements from
+  the arguments.
 
-The `convert` function performs the last-mile "build target wrapper from source
-wrapper" step and is the availability signal. A conversion is available exactly
-when `convert(Source)` is well-formed and its result can construct the target.
-Restrict source categories through `convert` overloads or SFINAE.
+`owning_handles<>` lists the owning handle families that a scope makes of a
+value, a pointer or an array that it makes for a request. A handle of
+`handle_element` names each family. The default list is `std::unique_ptr` and
+`std::shared_ptr`. A scope rebinds each family with `rebind_t` to what it makes,
+and leaves out a handle that no `type_traits` describes. A listed user family
+works the same way, also for a handle of an interface:
 
-Every specialization also declares `required_access<Source>` as `borrow` or
-`consume`. Use `borrow` when conversion may read the source without transferring
-from it, including conversions that allocate an independent copy. Use `consume`
-when conversion can move from the source or acquire ownership represented by it.
-Route selection applies this declaration in the same way as requirements derived
-for built-in conversion operations, so request discovery and execution describe
-one conversion.
+```cpp
+template <> struct dingo::owning_handles<> {
+  using type = dingo::type_list<std::unique_ptr<dingo::handle_element>,
+                                std::shared_ptr<dingo::handle_element>,
+                                my_handle<dingo::handle_element>>;
+};
+```
 
-An applicable specialization that omits `required_access<Source>` is rejected
-instead of falling through to another conversion route. Default value
-construction from an lvalue is borrowable only when it accepts a const view of
-the source. Direct compatible lvalue-reference binding remains borrowable
-because it aliases the existing object rather than constructing a value.
+### 2. `scope_traits`
+
+A storage scope is a tag type, used as `scope<Tag>`, and one specialization of
+`scope_traits<Tag>` in
+[include/dingo/storage/scope_traits.h](../../include/dingo/storage/scope_traits.h).
+The built-in `unique`, `shared`, `external` and `shared_cyclical` scopes use the
+same kind of specialization. The specialization declares:
+
+| Member                               | Meaning                                                                                                                                                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`                            | `true`                                                                                                                                                                                                              |
+| `is_stable`                          | references and pointers that the scope hands out stay valid                                                                                                                                                         |
+| `consumes`                           | a request consumes a produced value instead of borrowing the stored instance                                                                                                                                        |
+| `guard`                              | the kind of recursion guard                                                                                                                                                                                         |
+| `retains_unresolved_source`          | an unresolved storage can keep source state across a resolution                                                                                                                                                     |
+| `exposed(storage_form)`              | whether the scope stores each form of stored type: any value other than `storage_exposure::none` stores it; `storage_form::reference` is a stored reference, which only a scope that is given its instance can hold |
+| `storage<Type, StoredType, Factory>` | the class that keeps the instance; it provides `resolve`, and also `is_resolved` and `reset` if it keeps the instance between requests                                                                              |
+| `allows_cycles`                      | optional: whether the bindings of the scope can be part of a dependency cycle                                                                                                                                       |
+
+Dingo derives from it the semantics of the scope (`scope_semantics_v`), of which
+a binding derives its requests, and the materialization of the scope.
+[test/registration/custom_scope.cpp](../../test/registration/custom_scope.cpp)
+defines a scope outside the library and registers it with both containers.
+
+### 3. `constructor_traits`
+
+Specialize `constructor_traits` in
+[include/dingo/factory/constructor_traits.h](../../include/dingo/factory/constructor_traits.h)
+when a type is constructed in a way that its constructors do not show. The
+specialization provides `construct(args...)` and `construct(ptr, args...)`. It
+can also declare how constructor detection treats the type:
+
+- `arguments`: the type list of its one signature. Detection uses it and does
+  not search for a constructor.
+- `initializable<Args...>`: whether the type is list-initialized from `Args`.
+  Use it where probing `T{args...}` gives no result.
+
+`std::array` uses both. It is made from its elements, with the braces that its
+nested array requires. MSVC does not elide these braces while probing.
 
 ## Extension Example
 
-The best example is already in
+The main example is in
 [test/type/type_traits.cpp](../../test/type/type_traits.cpp).
 
-That test adds:
+This test adds:
 
 - `test_shared<T>`
 - `test_unique<T>`
 - `test_optional<T>`
 
-and then specializes the exact traits Dingo needs:
-
-- `type_traits` for wrapper semantics
-- `storage_traits` for scope-specific exposure
-- `type_conversion_traits` for conversion availability and execution
-
-That file is worth treating as executable documentation.
+Each has one `type_traits` specialization with its semantics and operations. The
+handles convert to the handles of a base through their converting constructors.
+Their definitions are in
+[test/support/custom_wrappers.h](../../test/support/custom_wrappers.h), which is
+executable documentation.
 
 ## Interface Storage Rebinding
 
-One extra extension point is
+Registration rebinds a storage handle from a concrete leaf type to an interface
+leaf type when the handle of the interface can be constructed from it; see
 [include/dingo/storage/interface_storage_traits.h](../../include/dingo/storage/interface_storage_traits.h).
-
-The container uses it to decide whether a storage handle can be rebound from a
-concrete leaf type to an interface leaf type. That is the mechanism behind the
-single-interface storage rewrite in registration.
-
-In practice this means the wrapper must be rebindable in a way that preserves
-correct ownership and deletion semantics for interface use.
+This is not a trait to specialize. A wrapper takes part through its converting
+constructor.
 
 ## Good Source Companions
 
 - [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
-- [include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
-- [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
-- [test/type/type_traits.cpp](../../test/type/type_traits.cpp)
+- [include/dingo/storage/scope_traits.h](../../include/dingo/storage/scope_traits.h)
+- [include/dingo/request/operation.h](../../include/dingo/request/operation.h)
+- [test/support/custom_wrappers.h](../../test/support/custom_wrappers.h)
+- [test/registration/custom_scope.cpp](../../test/registration/custom_scope.cpp)

@@ -2,7 +2,6 @@
 // RUN: not %dingo_cxx -c %s 2>&1 | grep -F "static resolution cannot satisfy a request the storage does not publish"
 // clang-format on
 
-#include <dingo/container.h>
 #include <dingo/static_container.h>
 
 #include <dingo/factory/function.h>
@@ -28,9 +27,4 @@ using source = dingo::bindings<dingo::bind<
 void test_static() {
   dingo::static_container<source> container;
   (void)container.resolve<std::shared_ptr<iface> &&>();
-}
-
-void test_static_runtime() {
-  dingo::container<source> static_runtime;
-  (void)static_runtime.resolve<std::shared_ptr<iface> &&>();
 }

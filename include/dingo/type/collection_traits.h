@@ -9,76 +9,81 @@
 
 #include <dingo/base/config.h>
 
-#include <dingo/type/normalized_type.h>
+#include <dingo/type/shape.h>
 
-#include <list>
-#include <map>
-#include <set>
-#include <vector>
+#include <cstddef>
+#include <type_traits>
+#include <utility>
 
 namespace dingo {
 namespace detail {
-template <class T> struct collection_traits {
+// A collection is recognised by the members of the standard containers, not
+// by its name: a sequence appends with emplace_back, an associative
+// collection adds with emplace and has a key_type. Each resolves its
+// mapped_type, or its value_type. A sequence that reserves, is made of its
+// size and is indexed is made at its size and set by index.
+template <class T, class = void> struct has_emplace_back : std::false_type {};
+template <class T>
+struct has_emplace_back<
+    T, std::void_t<typename T::value_type,
+                   decltype(std::declval<T &>().emplace_back(
+                       std::declval<typename T::value_type &&>()))>>
+    : std::true_type {};
+
+template <class T, class = void> struct has_key_emplace : std::false_type {};
+template <class T>
+struct has_key_emplace<
+    T, std::void_t<typename T::key_type, typename T::value_type,
+                   decltype(std::declval<T &>().emplace(
+                       std::declval<typename T::value_type &&>()))>>
+    : std::true_type {};
+
+template <class T, class = void> struct is_sized_sequence : std::false_type {};
+template <class T>
+struct is_sized_sequence<
+    T, std::void_t<decltype(std::declval<T &>().reserve(std::size_t())),
+                   decltype(T(std::size_t())),
+                   decltype(std::declval<T &>()[std::size_t()])>>
+    : std::true_type {};
+
+template <class T, class = void> struct collection_element {
+  using type = typename T::value_type;
+};
+template <class T>
+struct collection_element<T, std::void_t<typename T::mapped_type>> {
+  using type = typename T::mapped_type;
+};
+
+template <class T, class = void> struct collection_traits {
   static const bool is_collection = false;
   static const bool has_fixed_size_construct = false;
 };
 
-template <class T, class Allocator>
-struct collection_traits<std::vector<T, Allocator>> {
+template <class T>
+struct collection_traits<T, std::enable_if_t<has_emplace_back<T>::value ||
+                                             has_key_emplace<T>::value>> {
   static const bool is_collection = true;
-  static const bool has_fixed_size_construct = true;
-  using resolve_type = T;
-  static void reserve(std::vector<T, Allocator> &collection, size_t size) {
-    collection.reserve(size);
+  static const bool has_fixed_size_construct =
+      has_emplace_back<T>::value && is_sized_sequence<T>::value;
+  using resolve_type = typename collection_element<T>::type;
+
+  static void reserve([[maybe_unused]] T &collection,
+                      [[maybe_unused]] std::size_t size) {
+    if constexpr (has_fixed_size_construct) {
+      collection.reserve(size);
+    }
   }
-  static std::vector<T, Allocator> make_fixed_size(size_t size) {
-    return std::vector<T, Allocator>(size);
+  static T make_fixed_size(std::size_t size) { return T(size); }
+  template <typename U> static void add(T &collection, U &&value) {
+    if constexpr (has_emplace_back<T>::value) {
+      collection.emplace_back(std::forward<U>(value));
+    } else {
+      collection.emplace(std::forward<U>(value));
+    }
   }
   template <typename U>
-  static void add(std::vector<T, Allocator> &collection, U &&value) {
-    collection.emplace_back(std::forward<U>(value));
-  }
-  template <typename U>
-  static void set(std::vector<T, Allocator> &collection, size_t index,
-                  U &&value) {
+  static void set(T &collection, std::size_t index, U &&value) {
     collection[index] = std::forward<U>(value);
-  }
-};
-
-template <class T, class Allocator>
-struct collection_traits<std::list<T, Allocator>> {
-  static const bool is_collection = true;
-  static const bool has_fixed_size_construct = false;
-  using resolve_type = T;
-  static void reserve(std::list<T, Allocator> &, size_t) {}
-  template <typename U>
-  static void add(std::list<T, Allocator> &collection, U &&value) {
-    collection.emplace_back(std::forward<U>(value));
-  }
-};
-
-template <class T, class Compare, class Allocator>
-struct collection_traits<std::set<T, Compare, Allocator>> {
-  static const bool is_collection = true;
-  static const bool has_fixed_size_construct = false;
-  using resolve_type = T;
-  static void reserve(std::set<T, Compare, Allocator> &, size_t) {}
-  template <typename U>
-  static void add(std::set<T, Compare, Allocator> &collection, U &&value) {
-    collection.emplace(std::forward<U>(value));
-  }
-};
-
-template <class Key, class Value, class Compare, class Allocator>
-struct collection_traits<std::map<Key, Value, Compare, Allocator>> {
-  static const bool is_collection = true;
-  static const bool has_fixed_size_construct = false;
-  using resolve_type = Value;
-  static void reserve(std::map<Key, Value, Compare, Allocator> &, size_t) {}
-  template <typename U>
-  static void add(std::map<Key, Value, Compare, Allocator> &collection,
-                  U &&value) {
-    collection.emplace(std::forward<U>(value));
   }
 };
 

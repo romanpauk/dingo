@@ -63,8 +63,14 @@ if(DINGO_DEVELOPMENT_MODE)
     endif()
 
     option(DINGO_TESTING_ENABLED "enable testing through googletest" ON)
-    option(DINGO_BENCHMARK_ENABLED "enable benchmarking through googlebenchmark" ON)
-    option(DINGO_BENCHMARK_FRUIT_ENABLED "enable fetching of google::fruit for benchmarks" OFF)
+    if(WIN32)
+        set(dingo_benchmark_default OFF)
+    else()
+        set(dingo_benchmark_default ON)
+    endif()
+    option(DINGO_BENCHMARK_ENABLED
+        "enable the benchmarks of nbench (tools/nbench), which run on Linux"
+        ${dingo_benchmark_default})
     option(DINGO_EXAMPLES_ENABLED "enable building of dingo examples" ON)
     option(DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION
         "Run tests with a single representative dynamic container configuration." OFF)
@@ -89,19 +95,26 @@ if(DINGO_DEVELOPMENT_MODE)
 
     set(DINGO_SOURCE_FILES
         base/config.h
+        base/flags.h
+        static/diagnostics.h
         static/graph.h
         static/registry.h
         container.h
-        type/auto_constructible.h
-        binding/binding_model.h
-        binding/binding_resolution.h
-        binding/binding_resolution_policy.h
-        binding/binding_selection.h
-        type/dependency.h
+        factory/auto_constructible.h
+        binding/model.h
+        binding/resolution.h
+        binding/selection.h
+        binding/activation.h
+        binding/materialization.h
+        request/classification.h
+        resolution/algorithm.h
+        resolution/entry_points.h
         factory/factory_traits.h
         type/key.h
+        lookup/lookup_key.h
         base/none.h
-        static/activation_set.h
+        static/binding.h
+        static/container.h
         static/container_traits.h
         base/exceptions.h
         factory/callable.h
@@ -116,23 +129,23 @@ if(DINGO_DEVELOPMENT_MODE)
         factory/constructor_typedef.h
         factory/constructor.h
         factory/function.h
-        factory/invoke.h
         memory/aligned_storage.h
         memory/allocator.h
         memory/arena_allocator.h
         memory/object_store.h
         memory/object_lifetime.h
-        type/access.h
         type/annotated.h
         type/collection_traits.h
         registration/constructor.h
         registration/type_registration.h
         runtime_container.h
+        runtime/container.h
         runtime/container_traits.h
-        runtime/registration_api.h
         runtime/lookup_index.h
-        runtime/registry.h
+        runtime/memory.h
+        runtime/registry_store.h
         runtime/transaction.h
+        semantics/model.h
         static_container.h
         lookup/array.h
         lookup/base.h
@@ -143,34 +156,37 @@ if(DINGO_DEVELOPMENT_MODE)
         lookup/storage.h
         lookup/tags.h
         lookup/unordered.h
-        resolution/cache.h
-        resolution/conversion_cache.h
-        resolution/conversion_resolution.h
-        binding/runtime_binding_interface.h
-        runtime/runtime_binding.h
+        binding/cache.h
+        binding/interface.h
+        runtime/binding.h
         storage/interface_storage_traits.h
-        context/context_base.h
+        context/resolution.h
         runtime/context.h
         static/context.h
         rtti/static_provider.h
         rtti/rtti.h
         rtti/typeid_provider.h
         storage/external.h
-        resolution/materialized_source.h
+        conversion/source.h
         storage/shared_cyclical.h
         storage/shared.h
         storage/storage.h
-        storage/storage_scope_policy.h
+        storage/retention.h
+        storage/scope_traits.h
         storage/type_storage_traits.h
         storage/unique.h
-        type/normalized_type.h
-        type/rebind_type.h
-        type/type_conversion_traits.h
+        type/shape.h
         base/type_descriptor.h
         base/type_list.h
-        base/type_name.h
         type/type_traits.h
-        resolution/resolution_operation.h
+        base/meta.h
+        base/construction_scope.h
+        base/selected.h
+        request/collection.h
+        context/recursion_guard.h
+        lookup/container_lookup_definition.h
+        registration/requirements.h
+        request/decomposition.h
     )
 
     set(DINGO_INTERFACE_SOURCES "")
@@ -210,35 +226,17 @@ if(DINGO_DEVELOPMENT_MODE)
         FetchContent_MakeAvailable(googletest)
     endif()
 
-    if(DINGO_BENCHMARK_ENABLED)
-        FetchContent_Declare(googlebenchmark
-            GIT_REPOSITORY https://github.com/google/benchmark.git
-            GIT_TAG v1.8.3)
-
-        set(BENCHMARK_ENABLE_TESTING off)
-        set(BENCHMARK_ENABLE_WERROR OFF)
-        FetchContent_MakeAvailable(googlebenchmark)
-
-        if(DINGO_BENCHMARK_FRUIT_ENABLED)
-            set(FRUIT_USES_BOOST False)
-            FetchContent_Declare(googlefruit
-                GIT_REPOSITORY https://github.com/google/fruit.git
-                GIT_TAG v3.7.1)
-
-            FetchContent_MakeAvailable(googlefruit)
-        endif()
-    endif()
-
     if(DINGO_TESTING_ENABLED)
         add_subdirectory(test)
     endif()
 
-    if(DINGO_BENCHMARK_ENABLED)
-        add_subdirectory(benchmark)
-    endif()
-
     if(DINGO_EXAMPLES_ENABLED)
         add_subdirectory(examples)
+    endif()
+
+    if(DINGO_BENCHMARK_ENABLED)
+        include(cmake/benchmark.cmake)
+        configure_benchmark_targets()
     endif()
 
     set(DINGO_CHECK_TARGETS includes-compile)
@@ -250,9 +248,18 @@ if(DINGO_DEVELOPMENT_MODE)
         DEPENDS ${DINGO_CHECK_TARGETS}
     )
 
+    # The checks that compile no program of the specification, which the CI
+    # runs apart from the others.
+    set(DINGO_SOURCES_CHECK_TARGETS ${DINGO_CHECK_TARGETS})
+    list(REMOVE_ITEM DINGO_SOURCES_CHECK_TARGETS
+        semantics-check conversion-check emptiness-check storage-check
+        resolution-check footprint-check)
+    add_custom_target(sources-check
+        DEPENDS ${DINGO_SOURCES_CHECK_TARGETS}
+    )
+
     if(WIN32)
         group_sources(include)
         group_sources(test)
-        group_sources(benchmark)
     endif()
 endif()

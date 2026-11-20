@@ -5,7 +5,6 @@
 // SPDX-License-Identifier: MIT
 //
 
-#include <dingo/container.h>
 #include <dingo/static_container.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
@@ -49,7 +48,7 @@ void compile_time_registration_example() {
       dingo::bind<scope<shared>, storage<std::unique_ptr<cache>>>,
       dingo::bind<scope<unique>, storage<job>>>;
 
-  container<app_bindings> container;
+  static_container<app_bindings> container;
 
   [[maybe_unused]] auto &cfg = container.resolve<settings &>();
   [[maybe_unused]] auto &cfg_handle =
@@ -59,9 +58,6 @@ void compile_time_registration_example() {
   assert(container.resolve<cache *>()->seed == 7);
   assert(container.resolve<job>().total == 14);
   assert(container.construct<report>().total == 21);
-
-  static_container<app_bindings> static_only;
-  assert(static_only.resolve<job>().total == 14);
 }
 ////
 

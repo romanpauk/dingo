@@ -27,7 +27,7 @@ TEST(index_test,
   test_allocator_state state;
   {
     test_allocator<char> allocator(&state);
-    container<dynamic_container_traits, test_allocator<char>> container(
+    container<runtime_container_traits, test_allocator<char>> container(
         allocator);
 
     container.template register_type<scope<shared>, storage<processor_impl>,
@@ -42,7 +42,7 @@ TEST(index_test,
   test_allocator_state large_state;
   {
     test_allocator<char> allocator(&large_state);
-    container<dynamic_container_traits, test_allocator<char>> container(
+    container<runtime_container_traits, test_allocator<char>> container(
         allocator);
 
     container.template register_type<
@@ -62,7 +62,7 @@ TEST(index_test, shared_resolution_without_local_bindings_avoids_allocation) {
   test_allocator_state state;
   {
     test_allocator<char> allocator(&state);
-    container<dynamic_container_traits, test_allocator<char>> container(
+    container<runtime_container_traits, test_allocator<char>> container(
         allocator);
     container.template register_type<scope<shared>, storage<service>>();
     const auto allocations_after_registration = state.allocations;
@@ -93,7 +93,7 @@ TEST(index_test, typed_key_singular_registration_uses_allocator_owned_storage) {
   test_allocator_state state;
   {
     test_allocator<char> allocator(&state);
-    container<dynamic_container_traits, test_allocator<char>> container(
+    container<runtime_container_traits, test_allocator<char>> container(
         allocator);
 
     container.template register_type<scope<shared>, storage<processor_impl>,
@@ -111,7 +111,7 @@ TEST(index_test, typed_key_singular_registration_uses_allocator_owned_storage) {
   test_allocator_state large_state;
   {
     test_allocator<char> allocator(&large_state);
-    container<dynamic_container_traits, test_allocator<char>> container(
+    container<runtime_container_traits, test_allocator<char>> container(
         allocator);
 
     container.template register_type<
@@ -188,7 +188,7 @@ TEST(index_test, normal_unkeyed_collection_uses_no_key_one_rows) {
 TEST(index_test, failed_normal_unkeyed_registration_preserves_binding) {
   typed_key_cached_processor_impl::constructions = 0;
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type = lookups<single<typed_key_cached_processor>>;
   };
 
@@ -250,7 +250,7 @@ TEST(index_test, key_valueed_collection_requires_associative_many_lookup) {
     int id() const override { return 1; }
   };
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type = lookups<associative<std::size_t, processor>>;
   };
 
@@ -348,7 +348,7 @@ TEST(index_test, key_value_one_lookup_uses_equal_distinct_key_object) {
       return value < other.value;
     }
   };
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<comparable_key, typed_key_cached_processor>>;
   };
@@ -397,7 +397,7 @@ TEST(index_test, key_value_many_lookup_uses_value_semantics) {
   struct third_processor : processor {
     int id() const override { return 3; }
   };
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<comparable_key, processor, many>>;
   };
@@ -442,7 +442,7 @@ TEST(index_test, associative_alias_behaves_like_key_value_one) {
                          processor, detail::lookup_key<key_value<std::size_t>>,
                          one, ordered>>);
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type = lookups<associative<std::size_t, processor>>;
   };
 
@@ -483,7 +483,7 @@ TEST(index_test, associative_many_alias_behaves_like_key_value_many) {
                          processor, detail::lookup_key<key_value<std::size_t>>,
                          many, ordered>>);
 
-  struct traits : dynamic_container_traits {
+  struct traits : runtime_container_traits {
     using lookup_definition_type =
         lookups<associative<std::size_t, processor, many>>;
   };

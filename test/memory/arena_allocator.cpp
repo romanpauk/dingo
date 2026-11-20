@@ -191,6 +191,26 @@ TEST(arena_allocator_test, oversized_block_does_not_change_following_size) {
   EXPECT_EQ(counting_allocator_stats::last_allocation_bytes, 128u);
 }
 
+TEST(arena_allocator_test, growing_blocks_double_unless_oversized) {
+  counting_allocator_stats::reset();
+  arena<counting_allocator<std::uint8_t>, true> arena(128);
+  constexpr auto alignment = alignof(std::max_align_t);
+
+  static_cast<void>(arena.allocate(88, alignment));
+  EXPECT_EQ(counting_allocator_stats::last_allocation_bytes, 128u);
+  static_cast<void>(arena.allocate(88, alignment));
+  EXPECT_EQ(counting_allocator_stats::last_allocation_bytes, 256u);
+  static_cast<void>(arena.allocate(200, alignment));
+  EXPECT_EQ(counting_allocator_stats::last_allocation_bytes, 512u);
+
+  // A block made for a larger allocation leaves the size of the next one.
+  static_cast<void>(arena.allocate(1500, alignment));
+  EXPECT_GT(counting_allocator_stats::last_allocation_bytes, 1024u);
+  static_cast<void>(arena.allocate(600, alignment));
+  EXPECT_EQ(counting_allocator_stats::last_allocation_bytes, 1024u);
+  EXPECT_EQ(counting_allocator_stats::allocations, 5u);
+}
+
 TEST(arena_allocator_test, allocation_rejects_block_size_overflow) {
   counting_allocator_stats::reset();
   arena<counting_allocator<std::uint8_t>> arena(128);

@@ -16,6 +16,10 @@ inputs:
     description: Source directory to configure
     required: false
     default: .
+  target:
+    description: Quality targets to build, separated by spaces
+    required: false
+    default: check
 runs:
   using: composite
   steps:
@@ -37,6 +41,9 @@ runs:
       run: |
         cd "${{ inputs.source_dir }}"
         uv run --locked python tools/release_flow_test.py
+        uv run --locked python tools/complexity_test.py
+        uv run --locked python tools/names_test.py
+        uv run --locked python spec/semantics_test.py
     - name: Configure
       shell: bash
       run: |
@@ -56,7 +63,7 @@ runs:
     - name: Check Quality Gate
       shell: bash
       run: |
-        cmake --build "${{ inputs.build_dir }}" -t check
+        cmake --build "${{ inputs.build_dir }}" -t ${{ inputs.target }}
     - name: Upload Failure Artifacts
       if: ${{ failure() }}
       uses: actions/upload-artifact@v7.0.1

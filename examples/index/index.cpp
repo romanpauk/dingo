@@ -24,7 +24,7 @@ int main() {
   using namespace dingo;
   ////
   // Declare traits with a std::string based lookup
-  struct container_traits : dynamic_container_traits {
+  struct container_traits : runtime_container_traits {
     using lookup_definition_type = lookups<associative<std::string, IAnimal>>;
   };
 
@@ -37,8 +37,8 @@ int main() {
       .template register_type<scope<shared>, storage<Cat>, interfaces<IAnimal>>(
           dingo::key_value{std::string("cat")});
 
-  // Resolve an instance of a dog
-  auto dog = container.template resolve<IAnimal>(std::string("dog"));
+  // Resolve the dog by its interface
+  IAnimal &dog = container.template resolve<IAnimal &>(std::string("dog"));
   ////
   (void)dog;
 }

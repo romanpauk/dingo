@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 
 namespace dingo {

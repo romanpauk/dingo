@@ -7,5 +7,5 @@ using alternatives = typename dingo::detail::alternative_type_alternatives<
 
 int main() { return sizeof(alternatives); }
 
-// CHECK: alternative_type_traits<T>::alternatives must not contain duplicate
+// CHECK: type_traits<T>::alternatives must not contain duplicate
 // types

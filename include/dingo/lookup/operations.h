@@ -59,7 +59,7 @@ lookup_singular_result<Value> lookup_find_singular(Backend &backend,
 }
 
 template <typename LookupEntry, typename Backend, typename Key, typename Fn>
-std::size_t lookup_for_each(Backend &backend, const Key &key, Fn &&fn) {
+std::size_t visit_entries(Backend &backend, const Key &key, Fn &&fn) {
   if constexpr (std::is_same_v<
                     typename lookup_entry_cardinality<LookupEntry>::type,
                     ::dingo::one>) {

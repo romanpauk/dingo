@@ -8,18 +8,26 @@
 #pragma once
 
 #include <dingo/base/config.h>
+#include <dingo/conversion/source.h>
 
 #include <dingo/factory/constructor.h>
 #include <dingo/factory/factory_traits.h>
+#include <dingo/storage/scope_traits.h>
 #include <dingo/storage/storage.h>
-#include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>
-#include <dingo/type/normalized_type.h>
+#include <dingo/type/shape.h>
+
+#include <type_traits>
 
 namespace dingo {
 struct unique {};
 
-template <> struct storage_scope_policy<unique> {
+namespace detail {
+template <typename Type, typename StoredType, typename Factory>
+class unique_storage;
+} // namespace detail
+
+template <> struct scope_traits<unique> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
   static constexpr bool consumes = true;
@@ -28,83 +36,57 @@ template <> struct storage_scope_policy<unique> {
 
   static constexpr storage_exposure exposed(storage_form form) {
     switch (form) {
-    case storage_form::plain:
-      return storage_exposure::lvalue | storage_exposure::rvalue;
     case storage_form::pointer:
     case storage_form::array:
     case storage_form::bounded_array:
       return storage_exposure::rvalue | storage_exposure::pointer;
+    case storage_form::shared_handle:
+      return storage_exposure::value | storage_exposure::lvalue |
+             storage_exposure::rvalue | storage_exposure::pointer;
+    case storage_form::plain:
     case storage_form::alternative:
     case storage_form::unique_handle:
     case storage_form::unique_array_handle:
-    case storage_form::shared_handle:
     case storage_form::shared_array_handle:
     case storage_form::optional:
-      return storage_exposure::rvalue;
+      return storage_exposure::lvalue | storage_exposure::rvalue |
+             storage_exposure::pointer;
+    case storage_form::reference:
     case storage_form::unknown:
       break;
     }
     return storage_exposure::none;
   }
-};
 
-// A plain value is additionally consumable as an optional. This is the only
-// resolution_traits specialization; it applies to the registered type itself,
-// not to a reference to it.
-template <typename Type, typename U>
-struct resolution_traits<
-    unique, Type, U,
-    std::enable_if_t<detail::storage_form_traits<Type>::form ==
-                     storage_form::plain>> {
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<>;
-  using rvalue_reference_types = type_list<std::optional<U> &&>;
-  using pointer_types = type_list<>;
+  template <typename Type, typename StoredType, typename Factory>
+  using storage = detail::unique_storage<Type, StoredType, Factory>;
 };
 
 namespace detail {
-template <typename Type, typename U>
-struct conversions<unique, Type, U> : type_storage_traits<unique, Type, U> {};
-
-template <typename Type, typename StoredType, typename Factory,
-          typename Conversions>
-class storage<unique, Type, StoredType, Factory, Conversions> : Factory {
+template <typename Type, typename StoredType, typename Factory>
+class unique_storage : Factory {
 public:
   template <typename... Args>
-  storage(Args &&...args) : Factory(std::forward<Args>(args)...) {}
+  unique_storage(Args &&...args) : Factory(std::forward<Args>(args)...) {}
 
-  using conversions = Conversions;
   using factory_type = Factory;
   using type = Type;
   using stored_type = StoredType;
-  using resolved_type = Type;
+  // A bounded array is resolved as a pointer to its first element.
+  using resolved_type = std::conditional_t<(std::extent_v<Type> > 0),
+                                           std::remove_extent_t<Type> *, Type>;
   using tag_type = unique;
 
-  template <typename Context, typename Container>
-  decltype(auto) resolve(construction_scope scope, Context &context,
-                         Container &container) {
-    return Factory::template construct<Type>(scope, context, container);
-  }
-};
-
-template <typename Type, size_t N, typename StoredType, typename Factory,
-          typename Conversions>
-class storage<unique, Type[N], StoredType, Factory, Conversions> : Factory {
-public:
-  template <typename... Args>
-  storage(Args &&...args) : Factory(std::forward<Args>(args)...) {}
-
-  using conversions = Conversions;
-  using factory_type = Factory;
-  using type = Type[N];
-  using stored_type = StoredType;
-  using resolved_type = Type *;
-  using tag_type = unique;
-
-  template <typename Context, typename Container>
-  decltype(auto) resolve(construction_scope scope, Context &context,
-                         Container &container) {
-    return Factory::template construct<Type[N]>(scope, context, container);
+  // A bounded array is made as the pointer to its first element, which the
+  // request owns.
+  template <typename Context, typename Container, typename Scope>
+  decltype(auto) resolve(Scope scope, Context &context, Container &container) {
+    if constexpr (std::extent_v<Type> > 0) {
+      return array_owner<std::remove_extent_t<Type>>(
+          Factory::template construct<Type>(scope, context, container));
+    } else {
+      return Factory::template construct<Type>(scope, context, container);
+    }
   }
 };
 } // namespace detail
